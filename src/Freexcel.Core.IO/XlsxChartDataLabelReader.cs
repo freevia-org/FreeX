@@ -42,6 +42,13 @@ internal static class XlsxChartDataLabelReader
         if (dataLabels is null)
             return;
 
+        var seriesFormat = ReadSeriesDataLabelFormat(dataLabels, seriesIndex);
+        if (HasSeriesDataLabelMetadata(seriesFormat))
+        {
+            chart.SeriesDataLabelFormats.RemoveAll(existing => existing.SeriesIndex == seriesIndex);
+            chart.SeriesDataLabelFormats.Add(seriesFormat);
+        }
+
         foreach (var label in dataLabels.Elements(ChartNs + "dLbl"))
         {
             if (!int.TryParse(label.Element(ChartNs + "idx")?.Attribute("val")?.Value, out var pointIndex) ||
@@ -145,6 +152,36 @@ internal static class XlsxChartDataLabelReader
         }
     }
 
+    private static ChartSeriesDataLabelFormat ReadSeriesDataLabelFormat(XElement dataLabels, int seriesIndex)
+    {
+        var pointStyle = ReadDataLabelStyle(dataLabels);
+        var numberFormat = dataLabels.Element(ChartNs + "numFmt");
+        var separator = dataLabels.Element(ChartNs + "separator");
+
+        return new ChartSeriesDataLabelFormat(
+            seriesIndex,
+            pointStyle.FillColor,
+            pointStyle.BorderColor,
+            pointStyle.BorderThickness,
+            pointStyle.TextColor,
+            pointStyle.FontSize,
+            pointStyle.FillThemeColor,
+            pointStyle.BorderThemeColor,
+            pointStyle.TextThemeColor,
+            dataLabels.Element(ChartNs + "dLblPos") is { } position
+                ? FromXlsxDataLabelPosition(position.Attribute("val")?.Value)
+                : null,
+            ReadNullableBool(dataLabels.Element(ChartNs + "showVal")?.Attribute("val")?.Value),
+            ReadNullableBool(dataLabels.Element(ChartNs + "showCatName")?.Attribute("val")?.Value),
+            ReadNullableBool(dataLabels.Element(ChartNs + "showSerName")?.Attribute("val")?.Value),
+            ReadNullableBool(dataLabels.Element(ChartNs + "showLegendKey")?.Attribute("val")?.Value),
+            ReadNullableBool(dataLabels.Element(ChartNs + "showPercent")?.Attribute("val")?.Value),
+            ReadNullableBool(dataLabels.Element(ChartNs + "showBubbleSize")?.Attribute("val")?.Value),
+            numberFormat?.Attribute("formatCode")?.Value,
+            ReadNullableBool(numberFormat?.Attribute("sourceLinked")?.Value),
+            separator?.Attribute("val")?.Value ?? separator?.Value);
+    }
+
     private static void ApplyDataLabelLeaderLineProperties(XElement? shapeProperties, ChartModel chart)
     {
         var line = shapeProperties?.Element(DrawingNs + "ln");
@@ -178,6 +215,38 @@ internal static class XlsxChartDataLabelReader
         int seriesIndex,
         int pointIndex)
     {
+        var style = ReadDataLabelStyle(label);
+        var numberFormat = label.Element(ChartNs + "numFmt");
+        var separator = label.Element(ChartNs + "separator");
+
+        return new ChartPointDataLabelFormat(
+            seriesIndex,
+            pointIndex,
+            style.FillColor,
+            style.BorderColor,
+            style.BorderThickness,
+            style.TextColor,
+            style.FontSize,
+            style.FillThemeColor,
+            style.BorderThemeColor,
+            style.TextThemeColor,
+            ReadNullableBool(label.Element(ChartNs + "delete")?.Attribute("val")?.Value),
+            label.Element(ChartNs + "dLblPos") is { } position
+                ? FromXlsxDataLabelPosition(position.Attribute("val")?.Value)
+                : null,
+            ReadNullableBool(label.Element(ChartNs + "showVal")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showCatName")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showSerName")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showLegendKey")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showPercent")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showBubbleSize")?.Attribute("val")?.Value),
+            numberFormat?.Attribute("formatCode")?.Value,
+            ReadNullableBool(numberFormat?.Attribute("sourceLinked")?.Value),
+            separator?.Attribute("val")?.Value ?? separator?.Value);
+    }
+
+    private static DataLabelStyle ReadDataLabelStyle(XElement label)
+    {
         CellColor? fillColor = null;
         WorkbookThemeColorReference? fillThemeColor = null;
         CellColor? borderColor = null;
@@ -186,9 +255,6 @@ internal static class XlsxChartDataLabelReader
         CellColor? textColor = null;
         WorkbookThemeColorReference? textThemeColor = null;
         double? fontSize = null;
-        var numberFormat = label.Element(ChartNs + "numFmt");
-        var separator = label.Element(ChartNs + "separator");
-
         var shapeProperties = label.Element(ChartNs + "spPr");
         var fill = shapeProperties?.Element(DrawingNs + "solidFill");
         if (fill is not null)
@@ -234,9 +300,7 @@ internal static class XlsxChartDataLabelReader
             }
         }
 
-        return new ChartPointDataLabelFormat(
-            seriesIndex,
-            pointIndex,
+        return new DataLabelStyle(
             fillColor,
             borderColor,
             borderThickness,
@@ -244,20 +308,7 @@ internal static class XlsxChartDataLabelReader
             fontSize,
             fillThemeColor,
             borderThemeColor,
-            textThemeColor,
-            ReadNullableBool(label.Element(ChartNs + "delete")?.Attribute("val")?.Value),
-            label.Element(ChartNs + "dLblPos") is { } position
-                ? FromXlsxDataLabelPosition(position.Attribute("val")?.Value)
-                : null,
-            ReadNullableBool(label.Element(ChartNs + "showVal")?.Attribute("val")?.Value),
-            ReadNullableBool(label.Element(ChartNs + "showCatName")?.Attribute("val")?.Value),
-            ReadNullableBool(label.Element(ChartNs + "showSerName")?.Attribute("val")?.Value),
-            ReadNullableBool(label.Element(ChartNs + "showLegendKey")?.Attribute("val")?.Value),
-            ReadNullableBool(label.Element(ChartNs + "showPercent")?.Attribute("val")?.Value),
-            ReadNullableBool(label.Element(ChartNs + "showBubbleSize")?.Attribute("val")?.Value),
-            numberFormat?.Attribute("formatCode")?.Value,
-            ReadNullableBool(numberFormat?.Attribute("sourceLinked")?.Value),
-            separator?.Attribute("val")?.Value ?? separator?.Value);
+            textThemeColor);
     }
 
     private static bool HasPointDataLabelMetadata(ChartPointDataLabelFormat format) =>
@@ -280,6 +331,36 @@ internal static class XlsxChartDataLabelReader
         || !string.IsNullOrEmpty(format.NumberFormatCode)
         || format.NumberFormatSourceLinked is not null
         || format.SeparatorText is not null;
+
+    private static bool HasSeriesDataLabelMetadata(ChartSeriesDataLabelFormat format) =>
+        format.FillColor is not null
+        || format.BorderColor is not null
+        || format.BorderThickness is not null
+        || format.TextColor is not null
+        || format.FontSize is not null
+        || format.FillThemeColor is not null
+        || format.BorderThemeColor is not null
+        || format.TextThemeColor is not null
+        || format.Position is not null
+        || format.ShowValue is not null
+        || format.ShowCategoryName is not null
+        || format.ShowSeriesName is not null
+        || format.ShowLegendKey is not null
+        || format.ShowPercentage is not null
+        || format.ShowBubbleSize is not null
+        || !string.IsNullOrEmpty(format.NumberFormatCode)
+        || format.NumberFormatSourceLinked is not null
+        || format.SeparatorText is not null;
+
+    private sealed record DataLabelStyle(
+        CellColor? FillColor,
+        CellColor? BorderColor,
+        double? BorderThickness,
+        CellColor? TextColor,
+        double? FontSize,
+        WorkbookThemeColorReference? FillThemeColor,
+        WorkbookThemeColorReference? BorderThemeColor,
+        WorkbookThemeColorReference? TextThemeColor);
 
     private static ChartDataLabelPosition FromXlsxDataLabelPosition(string? value) =>
         value switch

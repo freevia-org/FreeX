@@ -1,10 +1,12 @@
 using System.IO;
 using System.Text;
+using System.Printing;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using FluentAssertions;
+using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -185,6 +187,91 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeUnsupportedPdfPublishOptions()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfConformance: PdfConformance.PdfA1b,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is not supported; tagged PDF structure is not supported.");
+    }
+
+    [Fact]
+    public void TryValidatePublishOptions_RejectsUnsupportedPdfA()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfConformance: PdfConformance.PdfA1b);
+
+        ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("PDF/A compliance is not supported by the current PDF exporter.");
+    }
+
+    [Fact]
+    public void TryValidatePublishOptions_RejectsUnsupportedTaggedPdf()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Tagged PDF structure is not supported by the current PDF exporter.");
+    }
+
+    [Fact]
+    public void TryValidatePublishOptions_AllowsPdfOnlyChoicesForXpsSummary()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfConformance: PdfConformance.PdfA1b,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Xps, out var error)
+            .Should()
+            .BeTrue();
+
+        error.Should().BeNull();
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should()
+            .Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is PDF-only and not supported; tagged PDF structure is PDF-only and not supported.");
+    }
+
+    [Fact]
+    public void ResolveExportSheetIds_ActiveSheetUsesGroupedVisibleSheetsInWorkbookOrder()
+    {
+        var workbook = new Workbook("Book");
+        workbook.AddSheet("First");
+        var second = workbook.AddSheet("Second");
+        var third = workbook.AddSheet("Third");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+
+        var result = ExportSheetSelectionPlanner.ResolveSheetIds(
+            workbook,
+            new ExportOptions(ExportContentScope.ActiveSheet, false, false),
+            second.Id,
+            [third.Id, hidden.Id, second.Id]);
+
+        result.Should().Equal(second.Id, third.Id);
+    }
+
+    [Fact]
     public void ExportOptions_DescribeWithXpsFormatIncludesDocumentProperties()
     {
         var options = new ExportOptions(
@@ -286,6 +373,23 @@ public class ExportPlannerTests
                 PdfLanguage: "uk-UA"));
     }
 
+    [Fact]
+    public void ExportOptionsDialog_CreateResult_IgnoresBookmarkModeWhenBookmarksAreUnchecked()
+    {
+        ExportOptionsDialog.CreateResult(
+                ExportContentScope.ActiveSheet,
+                includeDocumentProperties: false,
+                openAfterPublish: false,
+                createBookmarks: false,
+                bookmarkMode: PdfBookmarkMode.PrintTitles)
+            .Should()
+            .Be(new ExportOptions(
+                ExportContentScope.ActiveSheet,
+                IncludeDocumentProperties: false,
+                OpenAfterPublish: false,
+                BookmarkMode: PdfBookmarkMode.None));
+    }
+
     [Theory]
     [InlineData(" uk_ua ", "uk-UA")]
     [InlineData("EN-us", "en-US")]
@@ -293,6 +397,24 @@ public class ExportPlannerTests
     public void NormalizePdfLanguage_CanonicalizesKnownCultureTags(string input, string expected)
     {
         ExportPlanner.NormalizePdfLanguage(input).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(" uk_ua ", true, "uk-UA", null)]
+    [InlineData("", true, "en-US", null)]
+    [InlineData("not a culture", false, "en-US", "Enter a valid PDF language tag, for example en-US.")]
+    public void TryNormalizePdfLanguage_ValidatesTypedLanguageTags(
+        string input,
+        bool expectedSuccess,
+        string expectedLanguage,
+        string? expectedError)
+    {
+        ExportPlanner.TryNormalizePdfLanguage(input, out var language, out var error)
+            .Should()
+            .Be(expectedSuccess);
+
+        language.Should().Be(expectedLanguage);
+        error.Should().Be(expectedError);
     }
 
     [Fact]
@@ -310,6 +432,8 @@ public class ExportPlannerTests
             "Content = \"_Ignore print areas\"",
             "Content = \"Create _PDF bookmarks using sheet names\"",
             "Content = \"_Bitmap text when fonts may not be embedded\"",
+            "Content = \"PDF/_A compliant (not supported)\"",
+            "Content = \"Document structure _tags (not supported)\"",
             "Content = \"PDF _language:\"",
             "Target = _pdfLanguageBox",
             "Content = \"_Standard\"",
@@ -337,6 +461,8 @@ public class ExportPlannerTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_activeSheetButton.Focus();");
         source.Should().Contain("Keyboard.Focus(_activeSheetButton);");
+        source.Should().Contain("SizeToContent = SizeToContent.Height;");
+        source.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
     }
 
     [Fact]
@@ -344,12 +470,30 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
 
-        source.Should().Contain("FocusInvalidPageRangeInput();");
-        source.Should().Contain("private void FocusInvalidPageRangeInput()");
+        source.Should().Contain("FocusInvalidPageRangeInput(error);");
+        source.Should().Contain("private void FocusInvalidPageRangeInput(string? error)");
         source.Should().Contain("_pagesRangeButton.IsChecked = true;");
-        source.Should().Contain("_fromPageBox.Focus();");
-        source.Should().Contain("_fromPageBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_fromPageBox);");
+        source.Should().Contain("var target = ResolveInvalidPageRangeInput(error);");
+        source.Should().Contain("private TextBox ResolveInvalidPageRangeInput(string? error)");
+        source.Should().Contain("return _toPageBox;");
+        source.Should().Contain("return _fromPageBox;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_InvalidPdfLanguage_RefocusesLanguageEntry()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError)");
+        source.Should().Contain("MessageBox.Show(this, pdfLanguageError, \"Export Options\", MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("FocusInvalidPdfLanguageInput();");
+        source.Should().Contain("private void FocusInvalidPdfLanguageInput()");
+        source.Should().Contain("_pdfLanguageBox.Focus();");
+        source.Should().Contain("_pdfLanguageBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_pdfLanguageBox);");
     }
 
     [Theory]
@@ -789,6 +933,66 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorksheetCells()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable worksheet export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Worksheet Cell PDF Text"));
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Worksheet Cell PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorkbookCells()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable workbook export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Workbook Cell PDF Text"));
+            var document = PrintRenderer.RenderWorkbook(workbook, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Workbook Cell PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForNestedTextBlocks()
     {
         StaTestRunner.Run(() =>
@@ -1131,6 +1335,144 @@ public class ExportPlannerTests
 
                 var bytes = File.ReadAllBytes(path);
                 Encoding.ASCII.GetString(bytes).Should().Contain("Glyph PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_DoesNotWriteSelectableTextOverlayForHiddenText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateHiddenTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Visible PDF Text");
+                pdfText.Should().NotContain("Hidden PDF Text");
+                pdfText.Should().NotContain("Collapsed PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForHeaderedContentControlHeaderAndContent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateHeaderedContentControlHeaderAndContentDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Header Body PDF Text");
+                pdfText.Should().Contain("Header Title PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForItemsControlElementItems()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateElementItemsControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Element Item PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForRichTextBoxes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateRichTextBoxDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Rich PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForFlowDocumentViewers()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateFlowDocumentViewerDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Flow PDF Text");
             }
             finally
             {
@@ -1598,6 +1940,119 @@ public class ExportPlannerTests
         return document;
     }
 
+    private static FixedDocument CreateHiddenTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(200, 120);
+        var page = new FixedPage
+        {
+            Width = 200,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var stack = new StackPanel { Margin = new System.Windows.Thickness(12) };
+        stack.Children.Add(new TextBlock { Text = "Visible PDF Text" });
+        stack.Children.Add(new TextBlock { Text = "Hidden PDF Text", Visibility = System.Windows.Visibility.Hidden });
+        stack.Children.Add(new TextBlock { Text = "Collapsed PDF Text", Visibility = System.Windows.Visibility.Collapsed });
+        page.Children.Add(stack);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateHeaderedContentControlHeaderAndContentDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(220, 120);
+        var page = new FixedPage
+        {
+            Width = 220,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new GroupBox
+        {
+            Header = "Header Title PDF Text",
+            Content = "Header Body PDF Text",
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateElementItemsControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(220, 120);
+        var page = new FixedPage
+        {
+            Width = 220,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var items = new ListBox
+        {
+            Margin = new System.Windows.Thickness(12),
+            BorderThickness = new System.Windows.Thickness(0)
+        };
+        items.Items.Add(new TextBlock { Text = "Element Item PDF Text" });
+        page.Children.Add(items);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateRichTextBoxDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var richText = new RichTextBox
+        {
+            Document = new FlowDocument(new Paragraph(new Run("Rich PDF Text"))),
+            Margin = new System.Windows.Thickness(12),
+            BorderThickness = new System.Windows.Thickness(0),
+            Padding = new System.Windows.Thickness(0)
+        };
+        page.Children.Add(richText);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateFlowDocumentViewerDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new FlowDocumentScrollViewer
+        {
+            Document = new FlowDocument(new Paragraph(new Run("Flow PDF Text"))),
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
     private static FixedDocument CreateDocument(int pageCount)
     {
         var document = new FixedDocument();
@@ -1628,17 +2083,18 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialog_ContainsNativePrintCommandButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = \"_Print...\"");
         source.Should().Contain("ShowNativePrintDialog");
-        source.Should().Contain("PrintDocument(document.DocumentPaginator");
+        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
+        source.Should().Contain("PrintDocument(paginator");
     }
 
     [Fact]
     public void PrintPreviewDialogOpenedFromKeyboard_FocusesPrintButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget(printButton);");
         source.Should().Contain("private static void FocusInitialKeyboardTarget(Button printButton)");
@@ -1647,15 +2103,73 @@ public class ExportPlannerTests
     }
 
     [Theory]
-    [InlineData(null, 1)]
-    [InlineData("", 1)]
-    [InlineData("0", 1)]
-    [InlineData("2", 2)]
-    [InlineData("1000", 999)]
-    [InlineData("not a number", 1)]
-    public void PrintPreviewDialog_NormalizeCopyCount_ClampsToExcelLikeCopiesRange(string? text, int expected)
+    [InlineData(null, false, 0)]
+    [InlineData("", false, 0)]
+    [InlineData("0", false, 0)]
+    [InlineData("2", true, 2)]
+    [InlineData("999", true, 999)]
+    [InlineData("1000", false, 0)]
+    [InlineData("not a number", false, 0)]
+    public void PrintPreviewDialog_TryParseCopyCount_ValidatesExcelCopiesRange(string? text, bool expectedResult, int expectedCopies)
     {
-        PrintPreviewDialog.NormalizeCopyCount(text).Should().Be(expected);
+        PrintPreviewDialog.TryParseCopyCount(text, out var copies).Should().Be(expectedResult);
+        copies.Should().Be(expectedCopies);
+    }
+
+    [Theory]
+    [InlineData(null, 5, false, 0)]
+    [InlineData("", 5, false, 0)]
+    [InlineData("0", 5, false, 0)]
+    [InlineData("1", 5, true, 1)]
+    [InlineData("5", 5, true, 5)]
+    [InlineData("6", 5, false, 0)]
+    [InlineData("2.5", 5, false, 0)]
+    [InlineData("not a number", 5, false, 0)]
+    public void PrintPreviewDialog_TryParsePageNumber_ValidatesPreviewPageRange(
+        string? text,
+        int totalPages,
+        bool expectedResult,
+        int expectedPage)
+    {
+        PrintPreviewDialog.TryParsePageNumber(text, totalPages, out var pageNumber).Should().Be(expectedResult);
+        pageNumber.Should().Be(expectedPage);
+    }
+
+    [Theory]
+    [InlineData(PrintPreviewSidesMode.OneSided, Duplexing.OneSided)]
+    [InlineData(PrintPreviewSidesMode.TwoSidedLongEdge, Duplexing.TwoSidedLongEdge)]
+    [InlineData(PrintPreviewSidesMode.TwoSidedShortEdge, Duplexing.TwoSidedShortEdge)]
+    public void PrintPreviewDialog_MapsExcelSidesChoicesToPrintTicketDuplexing(
+        PrintPreviewSidesMode mode,
+        Duplexing expected)
+    {
+        PrintPreviewDialog.ResolvePrintTicketDuplexing(mode).Should().Be(expected);
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ResolvesCurrentPagePaginatorForPrintRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var document = new FixedDocument();
+            document.Pages.Add(new PageContent());
+            document.Pages.Add(new PageContent());
+            document.Pages.Add(new PageContent());
+
+            var allPages = PrintPreviewDialog.ResolvePrintPaginator(document, PrintPreviewPageRangeMode.AllPages, currentPage: 2);
+            var currentPage = PrintPreviewDialog.ResolvePrintPaginator(document, PrintPreviewPageRangeMode.CurrentPage, currentPage: 2);
+            var pageRange = PrintPreviewDialog.ResolvePrintPaginator(
+                document,
+                PrintPreviewPageRangeMode.Pages,
+                currentPage: 1,
+                new ExportPageRange(2, 3));
+
+            allPages.PageCount.Should().Be(3);
+            currentPage.PageCount.Should().Be(1);
+            pageRange.PageCount.Should().Be(2);
+            currentPage.GetPage(1).Should().Be(DocumentPage.Missing);
+            pageRange.GetPage(2).Should().Be(DocumentPage.Missing);
+        });
     }
 
     [Fact]
@@ -1683,26 +2197,97 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PrintSettingsPlanner_SummarizesIgnoredPrintAreaForBackstagePreview()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sheet1")
+        {
+            PrintArea = GridRange.Parse("B2:D10", sheetId)
+        };
+
+        var normal = PrintSettingsPlanner.Build(sheet);
+        var ignored = PrintSettingsPlanner.Build(sheet, ignorePrintArea: true);
+
+        normal.Lines[0].Should().Be("Print selected print area");
+        ignored.Lines[0].Should().Be("Print active sheet (ignore print area)");
+    }
+
+    [Fact]
     public void PrintPreviewDialog_DisplaysPrintSettingsSummary()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         source.Should().Contain("PrintSettingsPlan settings");
         source.Should().Contain("Action? showMargins = null");
         source.Should().Contain("Action? showPageSetup = null");
         source.Should().Contain("Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null");
+        source.Should().Contain("Func<PrintPreviewSettings, (FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreviewWithSettings = null");
         source.Should().Contain("settings.Summary");
         printExport.Should().Contain("PrintSettingsPlanner.Build(sheet)");
         printExport.Should().Contain("showMargins: () => PageMarginsBtn_Click");
         printExport.Should().Contain("showPageSetup: () => PageSetupDialogBtn_Click");
-        printExport.Should().Contain("refreshPreview: BuildActiveSheetPrintPreview");
+        printExport.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
+        printExport.Should().Contain("PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ignorePrintArea: settings.IgnorePrintArea)");
+        printExport.Should().Contain("PrintSettingsPlanner.Build(sheet, settings.IgnorePrintArea)");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesKeyboardPrintGridlineAndHeadingToggles()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("Content = \"_Print gridlines\"");
+        source.Should().Contain("Content = \"Print row and column _headings\"");
+        source.Should().Contain("gridlinesBox.Checked +=");
+        source.Should().Contain("gridlinesBox.Unchecked +=");
+        source.Should().Contain("headingsBox.Checked +=");
+        source.Should().Contain("headingsBox.Unchecked +=");
+        source.Should().Contain("new SetPrintOptionsCommand(");
+        source.Should().Contain("refreshPreview();");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesIgnorePrintAreaBackstageSetting()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("Content = \"_Ignore print area\"");
+        source.Should().Contain("new PrintPreviewSettings(ignorePrintAreaBox.IsChecked == true)");
+        source.Should().Contain("ignorePrintAreaBox.Checked +=");
+        source.Should().Contain("ignorePrintAreaBox.Unchecked +=");
+        source.Should().Contain("ToolTip = \"Preview and print the active sheet instead of the stored print area.\"");
+        source.Should().Contain("AutomationProperties.SetName(ignorePrintAreaBox, \"Ignore print area\");");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_SettingsCombosHaveAccessKeyLabels()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("void AddLabel(string text, Control target)");
+        source.Should().Contain("Content = text");
+        source.Should().Contain("Target = target");
+        source.Should().Contain("AddLabel(\"_Orientation\", orientBox);");
+        source.Should().Contain("AddLabel(\"_Paper Size\", paperBox);");
+        source.Should().Contain("AddLabel(\"_Margins\", marginsBox);");
+        source.Should().Contain("AddLabel(\"_Scaling\", scaleBox);");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ToolbarZoomAccessKeyTargetsZoomCombo()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("var zoomBox = new ComboBox");
+        source.Should().Contain("Content = \"_Zoom:\"");
+        source.Should().Contain("Target = zoomBox");
     }
 
     [Fact]
     public void PrintPreviewDialog_WiresMarginsAndPageSetupToolbarCallbacks()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("showMargins?.Invoke()");
         source.Should().Contain("showPageSetup?.Invoke()");
@@ -1714,29 +2299,69 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialog_ExposesPageEntryAndStatus()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = \"_Page:\"");
         source.Should().Contain("pageNumberBox");
         source.Should().Contain("pageStatusText");
         source.Should().Contain("Page 1 of");
         source.Should().Contain("NavigationCommands.GoToPage");
+        source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
+        source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
+        source.Should().Contain("Enter a page number from 1 to");
+        source.Should().Contain("pageNumberBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(pageNumberBox);");
     }
 
     [Fact]
     public void PrintPreviewDialog_ExposesHonestPrinterCopiesAndStatusSurface()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = \"Pr_inter:\"");
         source.Should().Contain("Content = \"_Copies:\"");
+        source.Should().Contain("Content = \"C_ollated\"");
+        source.Should().Contain("Content = \"_Sides:\"");
+        source.Should().Contain("Print One Sided");
+        source.Should().Contain("Flip pages on long edge");
+        source.Should().Contain("Flip pages on short edge");
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
+        source.Should().Contain("collatedBox");
+        source.Should().Contain("sidesBox");
         source.Should().Contain("statusText");
-        source.Should().Contain("NormalizeCopyCount(copiesBox.Text)");
+        source.Should().Contain("TryParseCopyCount(copiesBox.Text, out var copies)");
+        source.Should().Contain("ShowInvalidCopiesWarning(copiesBox)");
         source.Should().Contain("dialog.PrintTicket.CopyCount = copies");
+        source.Should().Contain("dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated");
+        source.Should().Contain("dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode)");
+        source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
+        source.Should().Contain("collatedBox.IsChecked == true");
+        source.Should().Contain("MessageBox.Show(this, \"Enter a copy count from 1 to 999.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("copiesBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(copiesBox);");
         source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("RefreshPrintStatus");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesKeyboardPrintRangeChoices()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("Content = \"_All pages\"");
+        source.Should().Contain("Content = \"Current pa_ge\"");
+        source.Should().Contain("Content = \"Pa_ges\"");
+        source.Should().Contain("fromPageBox");
+        source.Should().Contain("toPageBox");
+        source.Should().Contain("PrintPreviewPageRangeMode.CurrentPage");
+        source.Should().Contain("PrintPreviewPageRangeMode.Pages");
+        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
+        source.Should().Contain("ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError)");
+        source.Should().Contain("ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError)");
+        source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage)");
+        source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
+        source.Should().Contain("ShowInvalidPageRangeWarning(fromPageBox, toPageBox, pageRangeError)");
     }
 
     [Fact]
@@ -1771,6 +2396,12 @@ public class ExportPlannerTests
         pdf.Internals.Catalog.Elements
             .GetDictionary("/ViewerPreferences")
             ?.Elements.GetBoolean("/DisplayDocTitle", false) == true;
+
+    private static string ReadPrintPreviewDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")));
 
     private static string? ReadPrintScaling(PdfDocument pdf) =>
         pdf.Internals.Catalog.Elements

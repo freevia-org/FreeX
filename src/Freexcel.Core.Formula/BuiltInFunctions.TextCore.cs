@@ -14,9 +14,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue formatError) return formatError;
-        var fmt = ToText(args[1]);
-        if (args[0] is RangeValue range) return MapTextFuncRange(range, fmt);
-        return TextFormatValue(args[0], fmt);
+        return MapBinaryMathArgs(args[0], args[1], TextScalarWithFormat);
+    }
+
+    private static ScalarValue TextScalarWithFormat(ScalarValue value, ScalarValue formatValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (formatValue is ErrorValue formatError) return formatError;
+        return TextFormatValue(value, ToText(formatValue));
     }
 
     private static RangeValue MapTextFuncRange(RangeValue range, string fmt)
@@ -258,22 +263,32 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue oldTextError) return oldTextError;
         if (args[2] is ErrorValue newTextError) return newTextError;
-        var oldText = ToText(args[1]);
-        var newText = ToText(args[2]);
+        var instanceArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        if (instanceArg is ErrorValue e3) return e3;
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], instanceArg, SubstituteScalarWithArgs);
+    }
 
+    private static ScalarValue SubstituteScalarWithArgs(
+        ScalarValue textValue,
+        ScalarValue oldTextValue,
+        ScalarValue newTextValue,
+        ScalarValue instanceValue)
+    {
+        if (textValue is ErrorValue textError) return textError;
+        if (oldTextValue is ErrorValue oldTextError) return oldTextError;
+        if (newTextValue is ErrorValue newTextError) return newTextError;
+        if (instanceValue is ErrorValue instanceError) return instanceError;
+        var oldText = ToText(oldTextValue);
+        var newText = ToText(newTextValue);
         int? instanceNum = null;
-        if (args.Count > 3 && args[3] is not BlankValue)
+        if (instanceValue is not BlankValue)
         {
-            if (args[3] is ErrorValue e3) return e3;
-            double rawInstanceNum = ToNumber(args[3]);
+            double rawInstanceNum = ToNumber(instanceValue);
             if (!double.IsFinite(rawInstanceNum) || rawInstanceNum > int.MaxValue) return ErrorValue.Value;
             instanceNum = (int)rawInstanceNum;
             if (instanceNum < 1) return ErrorValue.Value;
         }
-
-        if (args[0] is RangeValue range)
-            return MapUnaryTextRange(range, value => SubstituteText(ToText(value), oldText, newText, instanceNum));
-        return SubstituteText(ToText(args[0]), oldText, newText, instanceNum);
+        return SubstituteText(ToText(textValue), oldText, newText, instanceNum);
     }
 
     private static ScalarValue SubstituteText(string text, string oldText, string newText, int? instanceNum)
@@ -307,17 +322,22 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        var findText = ToText(args[0]);
-        int startNum = 1;
-        if (args.Count > 2 && args[2] is not BlankValue)
-        {
-            double rawStart = ToNumber(args[2]);
-            if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
-            startNum = (int)rawStart;
-        }
+        var startArg = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(1);
+        if (args[0] is RangeValue || args[1] is RangeValue || startArg is RangeValue)
+            return MapTernaryTextArgs(args[0], args[1], startArg, FindScalarWithArgs);
+        return FindScalarWithArgs(args[0], args[1], startArg);
+    }
+
+    private static ScalarValue FindScalarWithArgs(ScalarValue findValue, ScalarValue withinValue, ScalarValue startValue)
+    {
+        if (findValue is ErrorValue findError) return findError;
+        if (withinValue is ErrorValue withinError) return withinError;
+        if (startValue is ErrorValue startError) return startError;
+        double rawStart = ToNumber(startValue);
+        if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
+        int startNum = (int)rawStart;
         if (startNum < 1) return ErrorValue.Value;
-        if (args[1] is RangeValue range) return MapFindRange(findText, range, startNum);
-        return FindText(findText, ToText(args[1]), startNum);
+        return FindText(ToText(findValue), ToText(withinValue), startNum);
     }
 
     private static RangeValue MapFindRange(string findText, RangeValue range, int startNum)
@@ -356,17 +376,22 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        var findText = ToText(args[0]);
-        int startNum = 1;
-        if (args.Count > 2 && args[2] is not BlankValue)
-        {
-            double rawStart = ToNumber(args[2]);
-            if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
-            startNum = (int)rawStart;
-        }
+        var startArg = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(1);
+        if (args[0] is RangeValue || args[1] is RangeValue || startArg is RangeValue)
+            return MapTernaryTextArgs(args[0], args[1], startArg, SearchScalarWithArgs);
+        return SearchScalarWithArgs(args[0], args[1], startArg);
+    }
+
+    private static ScalarValue SearchScalarWithArgs(ScalarValue findValue, ScalarValue withinValue, ScalarValue startValue)
+    {
+        if (findValue is ErrorValue findError) return findError;
+        if (withinValue is ErrorValue withinError) return withinError;
+        if (startValue is ErrorValue startError) return startError;
+        double rawStart = ToNumber(startValue);
+        if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
+        int startNum = (int)rawStart;
         if (startNum < 1) return ErrorValue.Value;
-        if (args[1] is RangeValue range) return MapSearchRange(findText, range, startNum);
-        return SearchText(findText, ToText(args[1]), startNum);
+        return SearchText(ToText(findValue), ToText(withinValue), startNum);
     }
 
     private static RangeValue MapSearchRange(string findText, RangeValue range, int startNum)
@@ -408,6 +433,8 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue startError) return startError;
         if (args[2] is ErrorValue lengthError) return lengthError;
+        if (args[0] is RangeValue || args[1] is RangeValue || args[2] is RangeValue)
+            return MapTernaryTextArgs(args[0], args[1], args[2], MidScalarWithArgs);
         double rawStart = ToNumber(args[1]);
         double rawLen   = ToNumber(args[2]);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
@@ -431,6 +458,108 @@ public static partial class BuiltInFunctions
             {
                 var value = range.Cells[r, c];
                 cells[r, c] = value is ErrorValue e ? e : MidText(ToText(value), startNum, numChars);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue MidScalarWithArgs(ScalarValue value, ScalarValue startValue, ScalarValue lengthValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (startValue is ErrorValue startError) return startError;
+        if (lengthValue is ErrorValue lengthError) return lengthError;
+        double rawStart = ToNumber(startValue);
+        double rawLen = ToNumber(lengthValue);
+        if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
+        if (rawStart < 1 || rawLen < 0 || rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
+        return MidText(ToText(value), (int)rawStart, (int)rawLen);
+    }
+
+    private static ScalarValue MapTernaryTextArgs(
+        ScalarValue first,
+        ScalarValue second,
+        ScalarValue third,
+        Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue> map)
+    {
+        var firstRange = first as RangeValue;
+        var secondRange = second as RangeValue;
+        var thirdRange = third as RangeValue;
+        var shape = firstRange ?? secondRange ?? thirdRange;
+        if (shape is null) return map(first, second, third);
+        if ((firstRange is not null && (firstRange.RowCount != shape.RowCount || firstRange.ColCount != shape.ColCount)) ||
+            (secondRange is not null && (secondRange.RowCount != shape.RowCount || secondRange.ColCount != shape.ColCount)) ||
+            (thirdRange is not null && (thirdRange.RowCount != shape.RowCount || thirdRange.ColCount != shape.ColCount)))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[shape.RowCount, shape.ColCount];
+        for (int r = 0; r < shape.RowCount; r++)
+            for (int c = 0; c < shape.ColCount; c++)
+            {
+                var firstValue = firstRange is null ? first : firstRange.Cells[r, c];
+                var secondValue = secondRange is null ? second : secondRange.Cells[r, c];
+                var thirdValue = thirdRange is null ? third : thirdRange.Cells[r, c];
+                cells[r, c] = map(firstValue, secondValue, thirdValue);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue MapQuaternaryTextArgs(
+        ScalarValue first,
+        ScalarValue second,
+        ScalarValue third,
+        ScalarValue fourth,
+        Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue, ScalarValue> map)
+    {
+        var firstRange = first as RangeValue;
+        var secondRange = second as RangeValue;
+        var thirdRange = third as RangeValue;
+        var fourthRange = fourth as RangeValue;
+        var shape = firstRange ?? secondRange ?? thirdRange ?? fourthRange;
+        if (shape is null) return map(first, second, third, fourth);
+        if ((firstRange is not null && (firstRange.RowCount != shape.RowCount || firstRange.ColCount != shape.ColCount)) ||
+            (secondRange is not null && (secondRange.RowCount != shape.RowCount || secondRange.ColCount != shape.ColCount)) ||
+            (thirdRange is not null && (thirdRange.RowCount != shape.RowCount || thirdRange.ColCount != shape.ColCount)) ||
+            (fourthRange is not null && (fourthRange.RowCount != shape.RowCount || fourthRange.ColCount != shape.ColCount)))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[shape.RowCount, shape.ColCount];
+        for (int r = 0; r < shape.RowCount; r++)
+            for (int c = 0; c < shape.ColCount; c++)
+            {
+                var firstValue = firstRange is null ? first : firstRange.Cells[r, c];
+                var secondValue = secondRange is null ? second : secondRange.Cells[r, c];
+                var thirdValue = thirdRange is null ? third : thirdRange.Cells[r, c];
+                var fourthValue = fourthRange is null ? fourth : fourthRange.Cells[r, c];
+                cells[r, c] = map(firstValue, secondValue, thirdValue, fourthValue);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue MapScalarArgs(
+        IReadOnlyList<ScalarValue> args,
+        Func<IReadOnlyList<ScalarValue>, ScalarValue> map)
+    {
+        RangeValue? shape = null;
+        foreach (var arg in args)
+        {
+            if (arg is not RangeValue range) continue;
+            shape ??= range;
+            if (range.RowCount != shape.RowCount || range.ColCount != shape.ColCount)
+                return ErrorValue.Value;
+        }
+
+        if (shape is null) return map(args);
+
+        var cells = new ScalarValue[shape.RowCount, shape.ColCount];
+        var scalarArgs = new ScalarValue[args.Count];
+        for (int r = 0; r < shape.RowCount; r++)
+            for (int c = 0; c < shape.ColCount; c++)
+            {
+                for (int i = 0; i < args.Count; i++)
+                    scalarArgs[i] = args[i] is RangeValue range ? range.Cells[r, c] : args[i];
+                cells[r, c] = map(scalarArgs);
             }
 
         return new RangeValue(cells);
@@ -505,12 +634,18 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue repeatError) return repeatError;
-        var timesD = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], ReptScalarWithTimes);
+    }
+
+    private static ScalarValue ReptScalarWithTimes(ScalarValue value, ScalarValue timesValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (timesValue is ErrorValue timesError) return timesError;
+        var timesD = ToNumber(timesValue);
         if (!double.IsFinite(timesD) || timesD > int.MaxValue) return ErrorValue.Value;
         int times = (int)timesD;
         if (times < 0) return ErrorValue.Value;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ReptText(ToText(value), times));
-        return ReptText(ToText(args[0]), times);
+        return ReptText(ToText(value), times);
     }
 
     private static ScalarValue ReptText(string text, int times)

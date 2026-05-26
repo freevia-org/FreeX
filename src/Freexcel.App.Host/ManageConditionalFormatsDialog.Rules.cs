@@ -71,6 +71,11 @@ public sealed partial class ManageConditionalFormatsDialog
             DataBarMinLength = src.DataBarMinLength,
             DataBarMaxLength = src.DataBarMaxLength,
             DataBarGradient = src.DataBarGradient,
+            DataBarBorder = src.DataBarBorder,
+            DataBarAxisPosition = src.DataBarAxisPosition,
+            DataBarAxisColor = src.DataBarAxisColor,
+            DataBarNegativeFillColor = src.DataBarNegativeFillColor,
+            DataBarNegativeBorderColor = src.DataBarNegativeBorderColor,
             AboveAverage = src.AboveAverage,
             FormulaText = src.FormulaText,
             IconSetStyle = src.IconSetStyle,
@@ -81,8 +86,17 @@ public sealed partial class ManageConditionalFormatsDialog
             TextRuleText = src.TextRuleText,
             DateOccurringPeriod = src.DateOccurringPeriod,
             StopIfTrue = src.StopIfTrue,
+            NativeAttributes = src.NativeAttributes,
+            NativeChildXmls = id.HasValue && id.Value != src.Id
+                ? ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(src.NativeChildXmls)
+                : src.NativeChildXmls,
+            NativePayloadAttributes = src.NativePayloadAttributes,
+            NativePayloadChildXmls = src.NativePayloadChildXmls,
+            NativeContainerAttributes = src.NativeContainerAttributes,
+            NativeContainerChildXmls = src.NativeContainerChildXmls
         };
         cf.IconSetThresholds.AddRange(src.IconSetThresholds);
+        cf.IconOverrides.AddRange(src.IconOverrides);
         return cf;
     }
 

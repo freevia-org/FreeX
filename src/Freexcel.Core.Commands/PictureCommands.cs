@@ -127,6 +127,46 @@ public sealed class ResizePictureCommand : IWorkbookCommand
     }
 }
 
+public sealed class RepositionPictureCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _pictureId;
+    private readonly CellAddress _anchor;
+    private CellAddress _previousAnchor;
+    private bool _applied;
+
+    public string Label => "Move Picture";
+
+    public RepositionPictureCommand(SheetId sheetId, Guid pictureId, CellAddress anchor)
+    {
+        _sheetId = sheetId;
+        _pictureId = pictureId;
+        _anchor = anchor;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+        var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
+        if (picture is null) return new CommandOutcome(false, "Picture was not found.");
+        _previousAnchor = picture.Anchor;
+        picture.Anchor = _anchor;
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: [_previousAnchor, _anchor]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied) return;
+        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(p => p.Id == _pictureId);
+        if (picture is null) return;
+        picture.Anchor = _previousAnchor;
+        _applied = false;
+    }
+}
+
 public sealed class RotatePictureCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;

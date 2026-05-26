@@ -243,9 +243,19 @@ public sealed class MoveChartDialog : Window
 
     private void Accept()
     {
-        Result = _objectInSheet.IsChecked == true
-            ? CreateObjectResult(_targetBox.Text)
-            : CreateNewSheetResult(_targetBox.Text);
+        try
+        {
+            Result = _objectInSheet.IsChecked == true
+                ? CreateObjectResult(_targetBox.Text)
+                : CreateNewSheetResult(_targetBox.Text);
+        }
+        catch (ArgumentException ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidTargetName();
+            return;
+        }
+
         DialogResult = true;
     }
 
@@ -253,6 +263,13 @@ public sealed class MoveChartDialog : Window
     {
         _objectInSheet.Focus();
         Keyboard.Focus(_objectInSheet);
+    }
+
+    private void FocusInvalidTargetName()
+    {
+        _targetBox.Focus();
+        _targetBox.SelectAll();
+        Keyboard.Focus(_targetBox);
     }
 
     private static string RequireTargetName(string? name)

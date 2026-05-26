@@ -617,6 +617,43 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void RuleDialogInvalidRequiredInputs_ShowOwnedWarningsAndRefocusEditors()
+    {
+        var source = ReadConditionalFormatDialogSource();
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a formula for this conditional formatting rule.\", _formulaBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a value for this conditional formatting rule.\", _value1Box);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a maximum value for this conditional formatting rule.\", _value2Box);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter text for this conditional formatting rule.\", _value1Box);");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox? target)");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void RuleDialogInvalidAdvancedInputs_ShowWarningsAndRefocusEditors()
+    {
+        var source = ReadConditionalFormatDialogSource();
+
+        source.Should().Contain("TryParseOptionalPercent(_dataBarMinLengthBox.Text, out var minLength)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a minimum bar length from 0 to 100 percent, or leave it blank.\", _dataBarMinLengthBox);");
+        source.Should().Contain("TryParseOptionalPercent(_dataBarMaxLengthBox.Text, out var maxLength)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a maximum bar length from 0 to 100 percent, or leave it blank.\", _dataBarMaxLengthBox);");
+        source.Should().Contain("TryParseTopBottomRank(_topBottomRankBox.Text, out var topBottomRank)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a rank or percent from 1 to 1000.\", _topBottomRankBox);");
+        source.Should().Contain("TryParseRgbColor(_colorScaleMinColorBox.Text, out var minColor)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a minimum color as R, G, B.\", _colorScaleMinColorBox);");
+        source.Should().Contain("TryParseRgbColor(_colorScaleMidColorBox.Text, out var midColor)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a midpoint color as R, G, B.\", _colorScaleMidColorBox);");
+        source.Should().Contain("TryParseRgbColor(_colorScaleMaxColorBox.Text, out var maxColor)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a maximum color as R, G, B.\", _colorScaleMaxColorBox);");
+        source.Should().NotContain("Math.Clamp(value, 0, 100)");
+        source.Should().NotContain(": 10;");
+        source.Should().NotContain("ParseRgbOrFallback");
+    }
+
+    [Fact]
     public void ExistingDataBarRule_PrePopulatesDataBarFields()
     {
         StaTestRunner.Run(() =>
@@ -669,6 +706,37 @@ public sealed class ConditionalFormatDialogTests
 
             dialog.ResultRule.Should().NotBeNull();
             dialog.ResultRule!.DataBarColor.Should().Be(new RgbColor(12, 34, 56));
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ExistingRule_WhenRuleTypeChanges_DropsNativeMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.DataBar,
+                NativeChildXmls =
+                [
+                    """<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><ext uri="{B025F937-6E4E-48BE-B07C-B91C50BE2FA4}"><x14:id xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">{11111111-2222-3333-4444-555555555555}</x14:id></ext></extLst>"""
+                ],
+                NativePayloadChildXmls = ["""<axisColor xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" theme="1" />"""],
+                NativeContainerChildXmls = ["""<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />"""]
+            };
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(existing));
+
+            RefreshRuleDescriptionForTest(dialog, "Color Scale");
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.ColorScale);
+            dialog.ResultRule.NativeChildXmls.Should().BeNull();
+            dialog.ResultRule.NativePayloadChildXmls.Should().BeNull();
+            dialog.ResultRule.NativeContainerChildXmls.Should().BeNull();
 
             dialog.Close();
         });
@@ -789,6 +857,15 @@ public sealed class ConditionalFormatDialogTests
         });
     }
 
+    [Fact]
+    public void IconSetRule_ThresholdRows_IncludeIconOverrideDropdown()
+    {
+        var source = ReadConditionalFormatDialogSource();
+        source.Should().Contain("OverrideBox", "each threshold row should have an icon-override selector");
+        source.Should().Contain("CfIconOverride", "icon overrides use the model type");
+        source.Should().Contain("IconOverrides", "result should write back to IconOverrides");
+    }
+
     private static ConditionalFormatDialog ShowDialogForTest(ConditionalFormatDialog dialog)
     {
         dialog.Show();
@@ -800,7 +877,9 @@ public sealed class ConditionalFormatDialogTests
         {
             "ConditionalFormatDialog.cs",
             "ConditionalFormatDialog.ColorEditors.cs",
-            "ConditionalFormatDialog.IconSets.cs"
+            "ConditionalFormatDialog.IconSets.cs",
+            "ConditionalFormatDialog.Parsing.cs",
+            "ConditionalFormatDialog.Result.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static T GetControl<T>(ConditionalFormatDialog dialog, string name)
@@ -859,6 +938,118 @@ public sealed class ConditionalFormatDialogTests
             // The handler creates ResultRule before setting DialogResult. Direct modeless invocation in
             // tests reaches WPF's modal-only postcondition after the behavior under test runs.
         }
+    }
+
+    private static void RefreshRuleDescriptionForTest(ConditionalFormatDialog dialog, string ruleType)
+    {
+        var method = typeof(ConditionalFormatDialog).GetMethod("RefreshRuleDescription", BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(dialog, [ruleType]);
+    }
+
+    [Fact]
+    public void DataBarRule_ExposesAdvancedAxisAndNegativeColorOptions()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", RangeFor(SheetId.New())));
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").Content.Should().Be("Show _border:");
+            FindLabel(dialog.Content, "_Axis position:").Should().NotBeNull();
+            FindLabel(dialog.Content, "_Axis color:").Should().NotBeNull();
+            FindLabel(dialog.Content, "_Negative bar color:").Should().NotBeNull();
+            FindLabel(dialog.Content, "Negative _border color:").Should().NotBeNull();
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").Should().NotBeNull();
+            GetControl<ComboBox>(dialog, "_dataBarAxisPositionBox").Should().NotBeNull();
+            GetControl<TextBox>(dialog, "_dataBarAxisColorBox").Should().NotBeNull();
+            GetControl<TextBox>(dialog, "_dataBarNegativeFillColorBox").Should().NotBeNull();
+            GetControl<TextBox>(dialog, "_dataBarNegativeBorderColorBox").Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DataBarRule_AdvancedOptionsRoundTripThroughDialog()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var range = RangeFor(SheetId.New());
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", range));
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").IsChecked = true;
+            GetControl<ComboBox>(dialog, "_dataBarAxisPositionBox").SelectedItem = "Middle";
+            GetControl<TextBox>(dialog, "_dataBarAxisColorBox").Text = "1,2,3";
+            GetControl<TextBox>(dialog, "_dataBarNegativeFillColorBox").Text = "4,5,6";
+            GetControl<TextBox>(dialog, "_dataBarNegativeBorderColorBox").Text = "7,8,9";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.DataBarBorder.Should().BeTrue();
+            dialog.ResultRule.DataBarAxisPosition.Should().Be("middle");
+            dialog.ResultRule.DataBarAxisColor.Should().Be(new RgbColor(1, 2, 3));
+            dialog.ResultRule.DataBarNegativeFillColor.Should().Be(new RgbColor(4, 5, 6));
+            dialog.ResultRule.DataBarNegativeBorderColor.Should().Be(new RgbColor(7, 8, 9));
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DataBarRule_AdvancedOptions_DefaultsAreEmpty()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var range = RangeFor(SheetId.New());
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", range));
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").IsChecked.Should().BeFalse();
+            GetControl<ComboBox>(dialog, "_dataBarAxisPositionBox").SelectedItem.Should().Be("Automatic");
+            GetControl<TextBox>(dialog, "_dataBarAxisColorBox").Text.Should().BeEmpty();
+            GetControl<TextBox>(dialog, "_dataBarNegativeFillColorBox").Text.Should().BeEmpty();
+            GetControl<TextBox>(dialog, "_dataBarNegativeBorderColorBox").Text.Should().BeEmpty();
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.DataBarBorder.Should().BeFalse();
+            dialog.ResultRule.DataBarAxisPosition.Should().BeNull();
+            dialog.ResultRule.DataBarAxisColor.Should().BeNull();
+            dialog.ResultRule.DataBarNegativeFillColor.Should().BeNull();
+            dialog.ResultRule.DataBarNegativeBorderColor.Should().BeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ExistingDataBarRule_PrePopulatesAdvancedDataBarFields()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.DataBar,
+                DataBarBorder = true,
+                DataBarAxisPosition = "middle",
+                DataBarAxisColor = new RgbColor(10, 20, 30),
+                DataBarNegativeFillColor = new RgbColor(40, 50, 60),
+                DataBarNegativeBorderColor = new RgbColor(70, 80, 90)
+            };
+
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(existing));
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").IsChecked.Should().BeTrue();
+            GetControl<ComboBox>(dialog, "_dataBarAxisPositionBox").SelectedItem.Should().Be("Middle");
+            GetControl<TextBox>(dialog, "_dataBarAxisColorBox").Text.Should().Be("10,20,30");
+            GetControl<TextBox>(dialog, "_dataBarNegativeFillColorBox").Text.Should().Be("40,50,60");
+            GetControl<TextBox>(dialog, "_dataBarNegativeBorderColorBox").Text.Should().Be("70,80,90");
+
+            dialog.Close();
+        });
     }
 
     private static GridRange RangeFor(SheetId sheetId) =>

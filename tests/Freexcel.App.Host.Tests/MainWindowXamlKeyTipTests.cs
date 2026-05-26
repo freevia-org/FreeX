@@ -51,6 +51,73 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void EditableFontSizeBox_CommitsTypedKeyboardInputWithEnter()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var fontSizeBox = document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FontSizeBox");
+
+        fontSizeBox.Attribute("IsEditable")?.Value.Should().Be("True");
+        fontSizeBox.Attribute("KeyDown")?.Value.Should().Be("FontSizeBox_KeyDown");
+        source.Should().Contain("private void FontSizeBox_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("if (e.Key != Key.Enter) return;");
+        source.Should().Contain("private void CommitFontSizeBoxText(bool preferSelectedItem = false)");
+        source.Should().Contain("var text = preferSelectedItem ? GetSelectedFontSizeText() : FontSizeBox.Text;");
+        source.Should().Contain("WorksheetSizeInputParser.TryParsePositiveSize(text, out var size)");
+        source.Should().Contain("ApplyFontSizeAndFitRows(size);");
+    }
+
+    [Fact]
+    public void EditableFontNameBox_CommitsTypedKeyboardInputWithEnter()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var fontNameBox = document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FontNameBox");
+
+        fontNameBox.Attribute("IsEditable")?.Value.Should().Be("True");
+        fontNameBox.Attribute("IsTextSearchEnabled")?.Value.Should().Be("True");
+        fontNameBox.Attribute("KeyDown")?.Value.Should().Be("FontNameBox_KeyDown");
+        source.Should().Contain("private void FontNameBox_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("if (e.Key != Key.Enter) return;");
+        source.Should().Contain("private void CommitFontNameBoxText()");
+        source.Should().Contain("var name = FontNameBox.Text?.Trim();");
+        source.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name));");
+    }
+
+    [Fact]
+    public void EditableFontBoxes_CommitTypedKeyboardInputWhenFocusLeaves()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var fontNameBox = document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FontNameBox");
+        var fontSizeBox = document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FontSizeBox");
+
+        fontNameBox.Attribute("LostKeyboardFocus")?.Value.Should().Be("FontNameBox_LostKeyboardFocus");
+        fontSizeBox.Attribute("LostKeyboardFocus")?.Value.Should().Be("FontSizeBox_LostKeyboardFocus");
+        source.Should().Contain("private void FontNameBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)");
+        source.Should().Contain("private void FontSizeBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)");
+        source.Should().Contain("CommitFontNameBoxText();");
+        source.Should().Contain("CommitFontSizeBoxText();");
+    }
+
+    [Fact]
     public void RibbonKeyboardFocus_IsNotHijackedByWorksheetNavigation()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
@@ -91,6 +158,48 @@ public sealed class MainWindowXamlKeyTipTests
         f6Index.Should().BeLessThan(textBoxFilterIndex);
         commandSource.Should().Contain("KeyboardCommandShortcut.CycleShellFocus");
         keyboardFocusSource.Should().Contain("FocusShellRegion(");
+    }
+
+    [Fact]
+    public void F10KeyTips_AreHandledBeforeTextBoxPreviewKeyFiltering()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+
+        const string previewHandler = "private void MainWindow_PreviewKeyDown";
+        const string f10PreviewCall = "if (TryHandleShowKeyTipsPreview(e, sender))";
+        var previewHandlerIndex = selectionSource.IndexOf(previewHandler, StringComparison.Ordinal);
+        var f10Index = selectionSource.IndexOf(f10PreviewCall, previewHandlerIndex, StringComparison.Ordinal);
+        var textBoxFilterIndex = selectionSource.IndexOf(
+            "if (Keyboard.FocusedElement is TextBox or ComboBox)",
+            previewHandlerIndex,
+            StringComparison.Ordinal);
+
+        previewHandlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        f10Index.Should().BeGreaterThanOrEqualTo(0);
+        textBoxFilterIndex.Should().BeGreaterThanOrEqualTo(0);
+        f10Index.Should().BeLessThan(textBoxFilterIndex);
+        commandSource.Should().Contain("KeyboardCommandShortcut.ShowKeyTips");
+    }
+
+    [Fact]
+    public void StandaloneAltKeyTips_AreNotSuppressedByTextBoxFocus()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var keyUpStart = keyboardFocusSource.IndexOf(
+            "private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)",
+            StringComparison.Ordinal);
+        var deactivatedStart = keyboardFocusSource.IndexOf(
+            "private void MainWindow_Deactivated(object? sender, EventArgs e)",
+            StringComparison.Ordinal);
+
+        keyUpStart.Should().BeGreaterThanOrEqualTo(0);
+        deactivatedStart.Should().BeGreaterThan(keyUpStart);
+        var keyUpSource = keyboardFocusSource[keyUpStart..deactivatedStart];
+
+        keyUpSource.Should().Contain("_standaloneAltKeyTipTracker.ShouldToggleOnKeyUp(keyTipKey)");
+        keyUpSource.Should().NotContain("Keyboard.FocusedElement is TextBox or ComboBox");
+        keyUpSource.Should().Contain("EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);");
     }
 
     [Fact]
@@ -508,6 +617,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         var description = accessibilityButton.Attribute(local + "RibbonTooltip.Description")?.Value;
         description.Should().Contain("merged cells");
+        description.Should().Contain("blank table headers");
         description.Should().Contain("alternate text");
         description.Should().Contain("charts without titles");
     }
@@ -645,6 +755,7 @@ public sealed class MainWindowXamlKeyTipTests
         var missing = document
             .Descendants()
             .Where(element => element.Attribute(local + "RibbonTooltip.Title") is not null)
+            .Where(element => element.Attribute("Click")?.Value is not ("SsPinItem_Click" or "SsUnpinItem_Click"))
             .Where(element => element.Attribute(local + "RibbonTooltip.KeyTip") is null)
             .Select(element => element.Attribute(local + "RibbonTooltip.Title")?.Value ?? element.Name.LocalName)
             .ToList();
@@ -707,6 +818,19 @@ public sealed class MainWindowXamlKeyTipTests
             .ToList();
 
         collisions.Should().BeEmpty("command keytips in the same ribbon scope must not shadow longer sibling keytips");
+    }
+
+    [Fact]
+    public void TopLevelKeyTipHandling_WaitsForVisibleContextualTabPrefixes()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyTips.cs"));
+
+        var prefixGuardIndex = source.IndexOf("HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence)", StringComparison.Ordinal);
+        var topLevelRouteIndex = source.IndexOf("TryHandleTopLevelRibbonKeyTip(_ribbonKeyTipSequence)", StringComparison.Ordinal);
+
+        prefixGuardIndex.Should().BeGreaterThanOrEqualTo(0);
+        topLevelRouteIndex.Should().BeGreaterThanOrEqualTo(0);
+        prefixGuardIndex.Should().BeLessThan(topLevelRouteIndex, "Alt, J should wait for visible JA/JD contextual tabs before selecting Draw");
     }
 
     [Fact]
@@ -873,6 +997,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Where(button => button.Attribute("Click") is not null)
             .Where(button => button.Attribute("Click")?.Value != "SsRecentItem_Click")
+            .Where(button => button.Attribute("Click")?.Value is not ("SsPinItem_Click" or "SsUnpinItem_Click"))
             .Where(button => button.Attribute(local + "RibbonTooltip.KeyTip") is null)
             .Select(button =>
                 button.Attribute("Content")?.Value ??
@@ -1175,6 +1300,49 @@ public sealed class MainWindowXamlKeyTipTests
         helpText.Should().NotBeNull("formula bar text fields should announce their workflow role");
         name!.Value.Should().Be(expectedName);
         helpText!.Value.Should().Be(expectedHelpText);
+    }
+
+    [Fact]
+    public void FormulaBarTextFields_UseReadableExcelScaleSizing()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var formulaBar = document
+            .Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBar");
+        var nameBox = document
+            .Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "CellAddressBox");
+        var overlay = document
+            .Descendants(presentation + "TextBlock")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBarReferenceOverlay");
+
+        formulaBar.Attribute("FontSize")?.Value.Should().Be("18");
+        formulaBar.Attribute("MinHeight")?.Value.Should().Be("30");
+        formulaBar.Attribute("Padding")?.Value.Should().Be("6,3");
+        nameBox.Attribute("FontSize")?.Value.Should().Be("15");
+        nameBox.Attribute("MinHeight")?.Value.Should().Be("30");
+        overlay.Attribute("FontSize")?.Value.Should().Be("18");
+    }
+
+    [Theory]
+    [InlineData("StatusZoomOutButton")]
+    [InlineData("StatusZoomInButton")]
+    public void StatusBarZoomGlyphButtons_AreReadableAtExcelScale(string buttonName)
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var button = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == buttonName);
+
+        button.Attribute("Width")?.Value.Should().Be("22");
+        button.Attribute("Height")?.Value.Should().Be("22");
+        button.Attribute("FontSize")?.Value.Should().Be("18");
     }
 
     [Fact]

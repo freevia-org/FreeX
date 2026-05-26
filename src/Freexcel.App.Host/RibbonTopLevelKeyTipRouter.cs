@@ -18,9 +18,23 @@ public static class RibbonTopLevelKeyTipRouter
             "A" => RibbonTopLevelKeyTipAction.RibbonTab("Data"),
             "R" => RibbonTopLevelKeyTipAction.RibbonTab("Review"),
             "W" => RibbonTopLevelKeyTipAction.RibbonTab("View"),
+            "JA" => RibbonTopLevelKeyTipAction.RibbonTab("PivotTable Analyze"),
+            "JD" => RibbonTopLevelKeyTipAction.RibbonTab("Design"),
             "Y" => RibbonTopLevelKeyTipAction.RibbonTab("Help"),
             _ => null
         };
+    }
+
+    public static bool HasLongerKeyTipPrefix(string keyTipPrefix, IEnumerable<string?> keyTips)
+    {
+        if (string.IsNullOrWhiteSpace(keyTipPrefix))
+            return false;
+
+        return keyTips
+            .Where(keyTip => !string.IsNullOrWhiteSpace(keyTip))
+            .Any(keyTip =>
+                keyTip!.Length > keyTipPrefix.Length &&
+                keyTip.StartsWith(keyTipPrefix, StringComparison.OrdinalIgnoreCase));
     }
 }
 

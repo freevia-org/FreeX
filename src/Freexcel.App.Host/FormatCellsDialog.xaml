@@ -61,6 +61,7 @@
                     <ComboBox x:Name="DlgVAlignBox" Height="24"/>
                     <CheckBox x:Name="DlgWrapTextCheck" Content="_Wrap text" Margin="0,8,0,0"/>
                     <CheckBox x:Name="DlgShrinkToFitCheck" Content="S_hrink to fit" Margin="0,6,0,0"/>
+                    <CheckBox x:Name="DlgMergeCellsCheck" Content="_Merge cells" Margin="0,6,0,0"/>
                     <Label Content="_Indent level (0-15):" Target="{Binding ElementName=DlgIndentLevelBox}" Padding="0" Margin="0,8,0,2"/>
                     <TextBox x:Name="DlgIndentLevelBox" Height="24"/>
                     <Label Content="Text _rotation (-90 to 90, or 255):" Target="{Binding ElementName=DlgTextRotationBox}" Padding="0" Margin="0,8,0,2"/>
@@ -87,8 +88,9 @@
                     <Label Grid.Row="0" Grid.Column="0" Content="_Font:" Target="{Binding ElementName=DlgFontNameBox}" Padding="0" Margin="0,4,8,2"/>
                     <Label Grid.Row="0" Grid.Column="1" Content="Font _style:" Target="{Binding ElementName=DlgFontStyleList}" Padding="0" Margin="0,4,8,2"/>
                     <Label Grid.Row="0" Grid.Column="2" Content="_Size:" Target="{Binding ElementName=DlgFontSizeBox}" Padding="0" Margin="0,4,0,2"/>
-                    <ComboBox x:Name="DlgFontNameBox" Grid.Row="1" Grid.Column="0" Height="24" VerticalAlignment="Top" Margin="0,0,8,0"
-                              SelectionChanged="FontPreviewInput_Changed"/>
+                    <ComboBox x:Name="DlgFontNameBox" Grid.Row="1" Grid.Column="0" IsEditable="True" IsTextSearchEnabled="True"
+                              Height="24" VerticalAlignment="Top" Margin="0,0,8,0"
+                              SelectionChanged="FontPreviewInput_Changed" TextBoxBase.TextChanged="FontPreviewInput_Changed"/>
                     <ListBox x:Name="DlgFontStyleList" Grid.Row="1" Grid.Column="1" Height="96" Margin="0,0,8,0"
                              SelectionChanged="FontStyleList_SelectionChanged"/>
                     <ComboBox x:Name="DlgFontSizeBox" Grid.Row="1" Grid.Column="2" IsEditable="True" Height="24" VerticalAlignment="Top"
@@ -102,16 +104,27 @@
                         <Button x:Name="DlgFontColorPickerButton" DockPanel.Dock="Right" Content="_Pick" Width="54" Margin="6,0,0,0" Click="DlgFontColorPickerButton_Click"/>
                         <TextBox x:Name="DlgFontColorBox" Height="24" Text="0,0,0" TextChanged="FontPreviewInput_Changed"/>
                     </DockPanel>
+                    <UniformGrid x:Name="DlgFontColorPalettePanel" Grid.Row="4" Grid.Column="0" Columns="8" Rows="2" Margin="0,10,8,0" VerticalAlignment="Top">
+                        <Button Width="22" Height="18" ToolTip="Automatic font color" Tag="0,0,0" Click="DlgFontColorSwatchButton_Click" Background="Black" BorderBrush="Gray"/>
+                        <Button Width="22" Height="18" ToolTip="Gray font" Tag="128,128,128" Click="DlgFontColorSwatchButton_Click" Background="Gray" BorderBrush="Gray"/>
+                        <Button Width="22" Height="18" ToolTip="Red font" Tag="192,0,0" Click="DlgFontColorSwatchButton_Click" Background="#C00000" BorderBrush="Gray"/>
+                        <Button Width="22" Height="18" ToolTip="Orange font" Tag="237,125,49" Click="DlgFontColorSwatchButton_Click" Background="#ED7D31" BorderBrush="Gray"/>
+                        <Button Width="22" Height="18" ToolTip="Gold font" Tag="255,192,0" Click="DlgFontColorSwatchButton_Click" Background="#FFC000" BorderBrush="Gray"/>
+                        <Button Width="22" Height="18" ToolTip="Green font" Tag="0,176,80" Click="DlgFontColorSwatchButton_Click" Background="#00B050" BorderBrush="Gray"/>
+                        <Button Width="22" Height="18" ToolTip="Blue font" Tag="0,112,192" Click="DlgFontColorSwatchButton_Click" Background="#0070C0" BorderBrush="Gray"/>
+                        <Button Width="22" Height="18" ToolTip="Purple font" Tag="112,48,160" Click="DlgFontColorSwatchButton_Click" Background="#7030A0" BorderBrush="Gray"/>
+                    </UniformGrid>
+                    <CheckBox x:Name="DlgNormalFontCheck" Content="_Normal font" Grid.Row="4" Grid.Column="0" Margin="0,36,8,0" VerticalAlignment="Top" Checked="DlgNormalFontCheck_Checked"/>
 
-                    <GroupBox x:Name="DlgFontEffectsGroup" Grid.Row="4" Grid.Column="0" Margin="0,10,8,0">
+                    <GroupBox x:Name="DlgFontEffectsGroup" Grid.Row="4" Grid.Column="0" Margin="0,64,8,0">
                         <GroupBox.Header>
                             <TextBlock Text="Effects"/>
                         </GroupBox.Header>
                         <WrapPanel Margin="8,6,8,4">
                             <CheckBox x:Name="DlgDoubleUnderlineCheck" Content="_Double underline" Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
                             <CheckBox x:Name="DlgStrikeCheck"    Content="_Strikethrough"    Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
-                            <CheckBox x:Name="DlgSuperscriptCheck" Content="Super_script"     Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
-                            <CheckBox x:Name="DlgSubscriptCheck" Content="Su_bscript" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
+                            <CheckBox x:Name="DlgSuperscriptCheck" Content="Super_script"     Margin="0,0,12,6" Checked="DlgSuperscriptCheck_Checked" Unchecked="FontPreviewInput_Changed"/>
+                            <CheckBox x:Name="DlgSubscriptCheck" Content="Su_bscript" Checked="DlgSubscriptCheck_Checked" Unchecked="FontPreviewInput_Changed"/>
                         </WrapPanel>
                     </GroupBox>
 

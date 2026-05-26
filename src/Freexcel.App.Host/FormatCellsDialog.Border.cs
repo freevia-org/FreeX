@@ -124,6 +124,49 @@ public partial class FormatCellsDialog
     private CellBorder SelectedBorderLine() =>
         new(SelectedBorderLineStyle(), TryParseColor(DlgBorderLineColorBox.Text) ?? CellColor.Black);
 
+    private bool ValidateBorderInputs()
+    {
+        if (!TryParseRequiredColor(DlgBorderLineColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a border color as #RRGGBB or R, G, B.", DlgBorderLineColorBox);
+            return false;
+        }
+
+        if (BorderSideNeedsColor(DlgBorderTopStyleBox) && !TryParseRequiredColor(DlgBorderTopColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a top border color as #RRGGBB or R, G, B.", DlgBorderTopColorBox);
+            return false;
+        }
+
+        if (BorderSideNeedsColor(DlgBorderRightStyleBox) && !TryParseRequiredColor(DlgBorderRightColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a right border color as #RRGGBB or R, G, B.", DlgBorderRightColorBox);
+            return false;
+        }
+
+        if (BorderSideNeedsColor(DlgBorderBottomStyleBox) && !TryParseRequiredColor(DlgBorderBottomColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a bottom border color as #RRGGBB or R, G, B.", DlgBorderBottomColorBox);
+            return false;
+        }
+
+        if (BorderSideNeedsColor(DlgBorderLeftStyleBox) && !TryParseRequiredColor(DlgBorderLeftColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a left border color as #RRGGBB or R, G, B.", DlgBorderLeftColorBox);
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool BorderSideNeedsColor(ComboBox styleBox) =>
+        !string.Equals(styleBox.SelectedItem as string, nameof(BorderStyle.None), StringComparison.Ordinal);
+
     private void UpdateBorderPreview()
     {
         if (DlgBorderPreviewArea is null)

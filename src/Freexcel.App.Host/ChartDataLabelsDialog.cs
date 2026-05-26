@@ -157,6 +157,42 @@ public sealed class ChartDataLabelsDialog : Window
 
     private void Accept()
     {
+        if (!TryReadOptionalColor(_fillBox, out var fillColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _fillBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_borderBox, out var borderColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _borderBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_textBox, out var textColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _textBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_borderThicknessBox, min: 0, max: 10, out var borderThickness))
+        {
+            ShowInvalidInputWarning("Enter a data label border width from 0 to 10 points.", _borderThicknessBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_fontSizeBox, min: 6, max: 72, out var fontSize))
+        {
+            ShowInvalidInputWarning("Enter a data label font size from 6 to 72 points.", _fontSizeBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_angleBox, min: -90, max: 90, out var angle))
+        {
+            ShowInvalidInputWarning("Enter a data label angle from -90 to 90 degrees.", _angleBox);
+            return;
+        }
+
         Result = CreateResult(
             _showBox.IsChecked == true,
             ChartDialogHelpers.Selected(_positionBox, ChartDataLabelPosition.BestFit),
@@ -166,13 +202,43 @@ public sealed class ChartDataLabelsDialog : Window
             ChartDialogHelpers.Selected(_separatorBox, ChartDataLabelSeparator.Comma),
             ChartDialogHelpers.Selected(_numberFormatBox, ChartDataLabelNumberFormat.General),
             _calloutsBox.IsChecked == true,
-            ChartDialogHelpers.ParseColor(_fillBox.Text),
-            ChartDialogHelpers.ParseColor(_borderBox.Text),
-            ChartDialogHelpers.ParseColor(_textBox.Text),
-            ChartDialogHelpers.ParseDouble(_borderThicknessBox.Text, 0),
-            ChartDialogHelpers.ParseDouble(_fontSizeBox.Text, 11),
-            ChartDialogHelpers.ParseDouble(_angleBox.Text, 0));
+            fillColor,
+            borderColor,
+            textColor,
+            borderThickness,
+            fontSize,
+            angle);
         DialogResult = true;
+    }
+
+    private static bool TryReadOptionalColor(TextBox textBox, out CellColor? color) =>
+        ColorInputParser.TryParseOptionalHexColor(textBox.Text, out color);
+
+    private static bool TryReadClampedDouble(TextBox textBox, double min, double max, out double value)
+    {
+        value = 0;
+        return double.TryParse(
+                textBox.Text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value)
+            && double.IsFinite(value)
+            && value >= min
+            && value <= max;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
     }
 
     private void FocusInitialKeyboardTarget()

@@ -251,14 +251,20 @@ function Body($slug, [int]$n) {
         'spell|statistic|access|alt-text|comment|note|protect|share' { if ($slug -match 'protect') { return "  <path class=""f s"" d=""M$(S 5 $n) $(S 9 $n) H$(S 15 $n) V$(S 17 $n) H$(S 5 $n) Z M$(S 7 $n) $(S 9 $n) V$(S 6.7 $n) C$(S 7 $n) $(S 3.8 $n) $(S 13 $n) $(S 3.8 $n) $(S 13 $n) $(S 6.7 $n) V$(S 9 $n)"" stroke-width=""$(S 1 $n)""/>" }; if ($slug -match 'comment|note') { return "  <path class=""y s"" d=""M$(S 4 $n) $(S 5 $n) H$(S 16 $n) V$(S 13 $n) H$(S 10 $n) L$(S 6 $n) $(S 16 $n) V$(S 13 $n) H$(S 4 $n) Z"" stroke-width=""$(S 1 $n)""/>" }; return Doc $n }
         'rectangle|ellipse|line|shape|text-box|bring|send|size|rotate|selection-pane|outline|fill|crop|gradient' { if ($slug -match 'ellipse') { return "  <ellipse class=""f s"" cx=""$(S 10 $n)"" cy=""$(S 10 $n)"" rx=""$(S 7 $n)"" ry=""$(S 5.5 $n)"" stroke-width=""1""/>" }; if ($slug -eq 'line') { return L 3 17 17 3 $n 'r' 1 }; if ($slug -match 'text-box') { return (Rct 3 5 14 10 $n) + "`n" + (Txt 'T' 10 10 10 $n) }; if ($slug -match 'crop') { return "  <path class=""s"" d=""M$(S 6 $n) $(S 3 $n) V$(S 14 $n) H$(S 17 $n) M$(S 3 $n) $(S 6 $n) H$(S 14 $n) V$(S 17 $n)"" stroke-width=""1""/>" }; return Rct 3 5 14 10 $n }
         'normal|view|zoom|window|arrange|side-by-side|scrolling|freeze|ruler|headings' { if ($slug -match 'zoom') { return "  <circle class=""r"" cx=""$(S 8.5 $n)"" cy=""$(S 8.5 $n)"" r=""$(S 5 $n)"" stroke-width=""$(S 1.2 $n)""/>`n" + (L 12 12 17 17 $n 'r' 1.2) }; return Grid $n }
-        default { return Doc $n }
+        default { return $null }
     }
 }
 
 foreach ($file in $baseFiles) {
     foreach ($size in 20, 32) {
         $suffix = if ($size -eq 20) { 'small' } else { 'large' }
-        Set-Content -Path (Join-Path $iconDir "$($file.BaseName)-$suffix.svg") -Encoding UTF8 -Value (Svg $size (Body $file.BaseName $size))
+        $body = Body $file.BaseName $size
+        if ([string]::IsNullOrWhiteSpace($body)) {
+            Write-Warning "Skipping $($file.BaseName)-$suffix.svg because no explicit variant mapping exists."
+            continue
+        }
+
+        Set-Content -Path (Join-Path $iconDir "$($file.BaseName)-$suffix.svg") -Encoding UTF8 -Value (Svg $size $body)
     }
 }
 

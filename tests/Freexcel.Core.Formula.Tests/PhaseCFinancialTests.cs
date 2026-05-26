@@ -48,6 +48,24 @@ public class PhaseCFinancialTests
 
     // ── IPMT ─────────────────────────────────────────────────────────────
 
+    private ScalarValue EvalWithData(string formula, params (int row, int col, double val)[] cells)
+    {
+        var wb = new Workbook();
+        var sheet = wb.AddSheet("S");
+        foreach (var (r, c, v) in cells)
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)r, (uint)c), new NumberValue(v));
+        return _eval.Evaluate("=" + formula, sheet, wb);
+    }
+
+    private static void AssertApproxColumn(ScalarValue value, params double[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            ((NumberValue)range.At(row + 1, 1)).Value.Should().BeApproximately(expected[row], 1e-10);
+    }
+
     [Fact]
     public void Ipmt_Period1_ReturnsExpectedInterest()
     {
@@ -55,6 +73,81 @@ public class PhaseCFinancialTests
         // PMT = -879.159..., IPMT period 1 = 10000 * 0.1/12 = -83.333...
         double ipmt = Calc("IPMT(0.1/12,1,12,10000)");
         ipmt.Should().BeApproximately(-83.333333, 0.001);
+    }
+
+    [Fact]
+    public void PaymentFinancialFunctions_RangePeriodAndNperArguments_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("IPMT(0.1/12,A1:A2,12,10000)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("IPMT(0.1/12,1,12,10000)"),
+            Calc("IPMT(0.1/12,2,12,10000)"));
+        AssertApproxColumn(
+            EvalWithData("PPMT(0.1/12,A1:A2,12,10000)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("PPMT(0.1/12,1,12,10000)"),
+            Calc("PPMT(0.1/12,2,12,10000)"));
+        AssertApproxColumn(
+            EvalWithData("RATE(A1:A2,-188.71,10000)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("RATE(60,-188.71,10000)"),
+            Calc("RATE(72,-188.71,10000)"));
+    }
+
+    [Fact]
+    public void CorePaymentFunctions_TrailingRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        AssertApproxColumn(
+            EvalWithData("PMT(0.05/12,A1:A2,10000)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("PMT(0.05/12,60,10000)"),
+            Calc("PMT(0.05/12,72,10000)"));
+        AssertApproxColumn(
+            EvalWithData("PV(0.05/12,A1:A2,188.71)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("PV(0.05/12,60,188.71)"),
+            Calc("PV(0.05/12,72,188.71)"));
+        AssertApproxColumn(
+            EvalWithData("FV(0.05/12,A1:A2,-100)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("FV(0.05/12,60,-100)"),
+            Calc("FV(0.05/12,72,-100)"));
+        AssertApproxColumn(
+            EvalWithData("NPER(0.05/12,A1:A2,10000)", (1, 1, -188.71), (2, 1, -200.0)),
+            Calc("NPER(0.05/12,-188.71,10000)"),
+            Calc("NPER(0.05/12,-200,10000)"));
+        AssertApproxColumn(
+            EvalWithData("RATE(A1:A2,B1:B2,10000)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, -188.71), (2, 2, -200.0)),
+            Calc("RATE(60,-188.71,10000)"),
+            Calc("RATE(72,-200,10000)"));
+        AssertApproxColumn(
+            EvalWithData("PMT(0.05/12,60,10000,A1:A2,B1:B2)", (1, 1, 0.0), (2, 1, 500.0), (1, 2, 0.0), (2, 2, 1.0)),
+            Calc("PMT(0.05/12,60,10000,0,0)"),
+            Calc("PMT(0.05/12,60,10000,500,1)"));
+        AssertApproxColumn(
+            EvalWithData("RATE(60,-188.71,10000,0,0,A1:A2)", (1, 1, 0.01), (2, 1, 0.05)),
+            Calc("RATE(60,-188.71,10000,0,0,0.01)"),
+            Calc("RATE(60,-188.71,10000,0,0,0.05)"));
+
+        EvalWithData("PMT(0.05/12,A1:A2,B1:C1)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (1, 3, 12000.0)).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void IpmtAndPpmt_TrailingRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        AssertApproxColumn(
+            EvalWithData("IPMT(0.05/12,1,A1:A2,B1:B2)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (2, 2, 12000.0)),
+            Calc("IPMT(0.05/12,1,60,10000)"),
+            Calc("IPMT(0.05/12,1,72,12000)"));
+        AssertApproxColumn(
+            EvalWithData("PPMT(0.05/12,1,A1:A2,B1:B2)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (2, 2, 12000.0)),
+            Calc("PPMT(0.05/12,1,60,10000)"),
+            Calc("PPMT(0.05/12,1,72,12000)"));
+        AssertApproxColumn(
+            EvalWithData("IPMT(0.05/12,1,60,10000,A1:A2,B1:B2)", (1, 1, 0.0), (2, 1, 500.0), (1, 2, 0.0), (2, 2, 1.0)),
+            Calc("IPMT(0.05/12,1,60,10000,0,0)"),
+            Calc("IPMT(0.05/12,1,60,10000,500,1)"));
+        AssertApproxColumn(
+            EvalWithData("PPMT(0.05/12,1,60,10000,A1:A2,B1:B2)", (1, 1, 0.0), (2, 1, 500.0), (1, 2, 0.0), (2, 2, 1.0)),
+            Calc("PPMT(0.05/12,1,60,10000,0,0)"),
+            Calc("PPMT(0.05/12,1,60,10000,500,1)"));
+
+        EvalWithData("IPMT(0.05/12,1,A1:A2,B1:C1)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (1, 3, 12000.0)).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -116,6 +209,19 @@ public class PhaseCFinancialTests
     // ── CUMPRINC ──────────────────────────────────────────────────────────
 
     [Fact]
+    public void CumulativePaymentFunctions_RangeStartPeriodArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("CUMIPMT(0.1/12,12,10000,A1:A2,12,0)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("CUMIPMT(0.1/12,12,10000,1,12,0)"),
+            Calc("CUMIPMT(0.1/12,12,10000,2,12,0)"));
+        AssertApproxColumn(
+            EvalWithData("CUMPRINC(0.1/12,12,10000,A1:A2,12,0)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("CUMPRINC(0.1/12,12,10000,1,12,0)"),
+            Calc("CUMPRINC(0.1/12,12,10000,2,12,0)"));
+    }
+
+    [Fact]
     public void Cumprinc_AllPeriods_SumApproxNegativePV()
     {
         // Over all periods, total principal repaid = -PV
@@ -145,6 +251,54 @@ public class PhaseCFinancialTests
         => CalcError("EFFECT(0.1,0)").Should().Be("#NUM!");
 
     // ── NOMINAL ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void RateFinancialHelpers_RangeFirstArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("EFFECT(A1:A2,12)", (1, 1, 0.1), (2, 1, 0.2)),
+            Calc("EFFECT(0.1,12)"),
+            Calc("EFFECT(0.2,12)"));
+        AssertApproxColumn(
+            EvalWithData("NOMINAL(A1:A2,4)", (1, 1, 0.1), (2, 1, 0.2)),
+            Calc("NOMINAL(0.1,4)"),
+            Calc("NOMINAL(0.2,4)"));
+        AssertApproxColumn(
+            EvalWithData("EFFECT(A1:A2,B1:B2)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 12.0), (2, 2, 4.0)),
+            Calc("EFFECT(0.1,12)"),
+            Calc("EFFECT(0.2,4)"));
+        AssertApproxColumn(
+            EvalWithData("NOMINAL(A1:A2,B1:B2)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 4.0), (2, 2, 12.0)),
+            Calc("NOMINAL(0.1,4)"),
+            Calc("NOMINAL(0.2,12)"));
+        AssertApproxColumn(
+            EvalWithData("RRI(A1:A2,100,200)", (1, 1, 10.0), (2, 1, 20.0)),
+            Calc("RRI(10,100,200)"),
+            Calc("RRI(20,100,200)"));
+        AssertApproxColumn(
+            EvalWithData("RRI(10,A1:A2,200)", (1, 1, 100.0), (2, 1, 125.0)),
+            Calc("RRI(10,100,200)"),
+            Calc("RRI(10,125,200)"));
+        AssertApproxColumn(
+            EvalWithData("RRI(10,100,A1:A2)", (1, 1, 200.0), (2, 1, 250.0)),
+            Calc("RRI(10,100,200)"),
+            Calc("RRI(10,100,250)"));
+        AssertApproxColumn(
+            EvalWithData("PDURATION(A1:A2,100,200)", (1, 1, 0.1), (2, 1, 0.2)),
+            Calc("PDURATION(0.1,100,200)"),
+            Calc("PDURATION(0.2,100,200)"));
+        AssertApproxColumn(
+            EvalWithData("PDURATION(0.1,A1:A2,200)", (1, 1, 100.0), (2, 1, 125.0)),
+            Calc("PDURATION(0.1,100,200)"),
+            Calc("PDURATION(0.1,125,200)"));
+        AssertApproxColumn(
+            EvalWithData("PDURATION(0.1,100,A1:A2)", (1, 1, 200.0), (2, 1, 250.0)),
+            Calc("PDURATION(0.1,100,200)"),
+            Calc("PDURATION(0.1,100,250)"));
+
+        EvalWithData("RRI(A1:A2,B1:C1,200)", (1, 1, 10.0), (2, 1, 20.0), (1, 2, 100.0), (1, 3, 125.0)).Should().Be(ErrorValue.Value);
+        EvalWithData("PDURATION(A1:A2,B1:C1,200)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 100.0), (1, 3, 125.0)).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Nominal_RoundTrip()
@@ -338,11 +492,84 @@ public class PhaseCFinancialTests
     // ── DOLLARDE / DOLLARFR ───────────────────────────────────────────────
 
     [Fact]
+    public void DepreciationFunctions_RangePeriodArgument_SpillElementwise()
+    {
+        var periods = new[] { (1, 1, 1.0), (2, 1, 2.0) };
+
+        AssertApproxColumn(EvalWithData("SLN(2400,300,A1:A2)", (1, 1, 10.0), (2, 1, 20.0)), Calc("SLN(2400,300,10)"), Calc("SLN(2400,300,20)"));
+        AssertApproxColumn(EvalWithData("SYD(30000,7500,10,A1:A2)", periods), Calc("SYD(30000,7500,10,1)"), Calc("SYD(30000,7500,10,2)"));
+        AssertApproxColumn(EvalWithData("DDB(2400,300,10,A1:A2)", periods), Calc("DDB(2400,300,10,1)"), Calc("DDB(2400,300,10,2)"));
+        AssertApproxColumn(EvalWithData("DB(1000000,100000,6,A1:A2,7)", periods), Calc("DB(1000000,100000,6,1,7)"), Calc("DB(1000000,100000,6,2,7)"));
+        AssertApproxColumn(EvalWithData("VDB(2400,300,10,0,A1:A2)", periods), Calc("VDB(2400,300,10,0,1)"), Calc("VDB(2400,300,10,0,2)"));
+        AssertApproxColumn(EvalWithData("AMORDEGRC(2400,43831,44197,300,A1:A2,0.2,0)", periods), Calc("AMORDEGRC(2400,43831,44197,300,1,0.2,0)"), Calc("AMORDEGRC(2400,43831,44197,300,2,0.2,0)"));
+        AssertApproxColumn(EvalWithData("AMORLINC(2400,43831,44197,300,A1:A2,0.3,0)", periods), Calc("AMORLINC(2400,43831,44197,300,1,0.3,0)"), Calc("AMORLINC(2400,43831,44197,300,2,0.3,0)"));
+    }
+
+    [Fact]
+    public void DepreciationFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 2400.0), (2, 1, 3000.0),
+            (1, 2, 300.0), (2, 2, 500.0),
+            (1, 3, 10.0), (2, 3, 12.0),
+            (1, 4, 1.0), (2, 4, 2.0),
+            (1, 5, 2.0), (2, 5, 1.5),
+            (1, 6, 7.0), (2, 6, 12.0),
+            (1, 7, 0.0), (2, 7, 1.0),
+            (1, 8, 1.0), (2, 8, 2.0),
+            (1, 9, 0.0), (2, 9, 1.0),
+            (1, 10, 43831.0), (2, 10, 43862.0),
+            (1, 11, 44197.0), (2, 11, 44228.0),
+            (1, 12, 0.2), (2, 12, 0.25)
+        };
+
+        AssertApproxColumn(EvalWithData("SLN(A1:A2,B1:B2,C1:C2)", cells), Calc("SLN(2400,300,10)"), Calc("SLN(3000,500,12)"));
+        AssertApproxColumn(EvalWithData("SYD(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("SYD(2400,300,10,1)"), Calc("SYD(3000,500,12,2)"));
+        AssertApproxColumn(EvalWithData("DDB(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2)", cells), Calc("DDB(2400,300,10,1,2)"), Calc("DDB(3000,500,12,2,1.5)"));
+        AssertApproxColumn(EvalWithData("DB(A1:A2,B1:B2,C1:C2,D1:D2,F1:F2)", cells), Calc("DB(2400,300,10,1,7)"), Calc("DB(3000,500,12,2,12)"));
+        AssertApproxColumn(EvalWithData("VDB(A1:A2,B1:B2,C1:C2,G1:G2,H1:H2,E1:E2,I1:I2)", cells), Calc("VDB(2400,300,10,0,1,2,0)"), Calc("VDB(3000,500,12,1,2,1.5,1)"));
+        AssertApproxColumn(EvalWithData("AMORDEGRC(A1:A2,J1:J2,K1:K2,B1:B2,D1:D2,L1:L2,I1:I2)", cells), Calc("AMORDEGRC(2400,43831,44197,300,1,0.2,0)"), Calc("AMORDEGRC(3000,43862,44228,500,2,0.25,1)"));
+        AssertApproxColumn(EvalWithData("AMORLINC(A1:A2,J1:J2,K1:K2,B1:B2,D1:D2,L1:L2,I1:I2)", cells), Calc("AMORLINC(2400,43831,44197,300,1,0.2,0)"), Calc("AMORLINC(3000,43862,44228,500,2,0.25,1)"));
+
+        EvalWithData("DDB(A1:A2,B1:C1,10,1)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("AMORLINC(A1:A2,J1:K1,44197,300,1,0.2,0)", cells).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Dollarde_FractionalDollar()
     {
         // DOLLARDE(1.02, 32) = 1 + 2/32 = 1.0625
         double result = Calc("DOLLARDE(1.02,32)");
         result.Should().BeApproximately(1.0625, 0.0001);
+    }
+
+    [Fact]
+    public void DollarFractionHelpers_RangeFirstArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("DOLLARDE(A1:A2,32)", (1, 1, 1.02), (2, 1, 2.16)),
+            Calc("DOLLARDE(1.02,32)"),
+            Calc("DOLLARDE(2.16,32)"));
+        AssertApproxColumn(
+            EvalWithData("DOLLARFR(A1:A2,32)", (1, 1, 1.0625), (2, 1, 2.5)),
+            Calc("DOLLARFR(1.0625,32)"),
+            Calc("DOLLARFR(2.5,32)"));
+    }
+
+    [Fact]
+    public void DollarFractionHelpers_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        AssertApproxColumn(
+            EvalWithData("DOLLARDE(A1:A2,B1:B2)", (1, 1, 1.02), (2, 1, 2.16), (1, 2, 32.0), (2, 2, 16.0)),
+            Calc("DOLLARDE(1.02,32)"),
+            Calc("DOLLARDE(2.16,16)"));
+        AssertApproxColumn(
+            EvalWithData("DOLLARFR(A1:A2,B1:B2)", (1, 1, 1.0625), (2, 1, 2.5), (1, 2, 32.0), (2, 2, 16.0)),
+            Calc("DOLLARFR(1.0625,32)"),
+            Calc("DOLLARFR(2.5,16)"));
+
+        EvalWithData("DOLLARDE(A1:A2,B1:C1)", (1, 1, 1.02), (2, 1, 2.16), (1, 2, 32.0), (1, 3, 16.0)).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -381,6 +608,44 @@ public class PhaseCFinancialTests
     }
 
     // ── INTRATE ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DiscountSettlementFunctions_RangeValueArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("DISC(43831,44197,A1:A2,100,0)", (1, 1, 97.0), (2, 1, 98.0)),
+            Calc("DISC(43831,44197,97,100,0)"),
+            Calc("DISC(43831,44197,98,100,0)"));
+        AssertApproxColumn(
+            EvalWithData("INTRATE(43831,44197,A1:A2,100,0)", (1, 1, 90.0), (2, 1, 95.0)),
+            Calc("INTRATE(43831,44197,90,100,0)"),
+            Calc("INTRATE(43831,44197,95,100,0)"));
+        AssertApproxColumn(
+            EvalWithData("RECEIVED(43831,44197,100,A1:A2,0)", (1, 1, 0.05), (2, 1, 0.04)),
+            Calc("RECEIVED(43831,44197,100,0.05,0)"),
+            Calc("RECEIVED(43831,44197,100,0.04,0)"));
+    }
+
+    [Fact]
+    public void DiscountSettlementFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 44197.0), (2, 2, 44228.0),
+            (1, 3, 97.0), (2, 3, 98.0),
+            (1, 4, 100.0), (2, 4, 110.0),
+            (1, 5, 0.0), (2, 5, 1.0),
+            (1, 6, 90.0), (2, 6, 95.0),
+            (1, 7, 0.05), (2, 7, 0.04)
+        };
+
+        AssertApproxColumn(EvalWithData("DISC(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2)", cells), Calc("DISC(43831,44197,97,100,0)"), Calc("DISC(43862,44228,98,110,1)"));
+        AssertApproxColumn(EvalWithData("INTRATE(A1:A2,B1:B2,F1:F2,D1:D2,E1:E2)", cells), Calc("INTRATE(43831,44197,90,100,0)"), Calc("INTRATE(43862,44228,95,110,1)"));
+        AssertApproxColumn(EvalWithData("RECEIVED(A1:A2,B1:B2,D1:D2,G1:G2,E1:E2)", cells), Calc("RECEIVED(43831,44197,100,0.05,0)"), Calc("RECEIVED(43862,44228,110,0.04,1)"));
+
+        EvalWithData("DISC(A1:A2,B1:C1,97,100,0)", cells).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Disc_InvalidBasis_ReturnsNumError()
@@ -459,6 +724,41 @@ public class PhaseCFinancialTests
     // ── COUPNUM ───────────────────────────────────────────────────────────
 
     [Fact]
+    public void TreasuryBillFunctions_RangeValueArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("TBILLEQ(43831,43921,A1:A2)", (1, 1, 0.05), (2, 1, 0.04)),
+            Calc("TBILLEQ(43831,43921,0.05)"),
+            Calc("TBILLEQ(43831,43921,0.04)"));
+        AssertApproxColumn(
+            EvalWithData("TBILLPRICE(43831,43921,A1:A2)", (1, 1, 0.05), (2, 1, 0.04)),
+            Calc("TBILLPRICE(43831,43921,0.05)"),
+            Calc("TBILLPRICE(43831,43921,0.04)"));
+        AssertApproxColumn(
+            EvalWithData("TBILLYIELD(43831,43921,A1:A2)", (1, 1, 98.75), (2, 1, 99.0)),
+            Calc("TBILLYIELD(43831,43921,98.75)"),
+            Calc("TBILLYIELD(43831,43921,99)"));
+    }
+
+    [Fact]
+    public void TreasuryBillFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 43921.0), (2, 2, 43952.0),
+            (1, 3, 0.05), (2, 3, 0.04),
+            (1, 4, 98.75), (2, 4, 99.0)
+        };
+
+        AssertApproxColumn(EvalWithData("TBILLEQ(A1:A2,B1:B2,C1:C2)", cells), Calc("TBILLEQ(43831,43921,0.05)"), Calc("TBILLEQ(43862,43952,0.04)"));
+        AssertApproxColumn(EvalWithData("TBILLPRICE(A1:A2,B1:B2,C1:C2)", cells), Calc("TBILLPRICE(43831,43921,0.05)"), Calc("TBILLPRICE(43862,43952,0.04)"));
+        AssertApproxColumn(EvalWithData("TBILLYIELD(A1:A2,B1:B2,D1:D2)", cells), Calc("TBILLYIELD(43831,43921,98.75)"), Calc("TBILLYIELD(43862,43952,99)"));
+
+        EvalWithData("TBILLEQ(A1:A2,B1:C1,0.05)", cells).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Coupnum_SemiAnnual_FiveYearBond()
     {
         // Settlement ~2020-01-15 (43845), Maturity ~2025-01-15 (45672), freq=2
@@ -489,6 +789,19 @@ public class PhaseCFinancialTests
     }
 
     // ── PRICE / YIELD round-trip ──────────────────────────────────────────
+
+    [Fact]
+    public void CouponFunctions_RangeSettlementArgument_SpillElementwise()
+    {
+        var cells = new[] { (1, 1, 43831.0), (2, 1, 43845.0) };
+
+        AssertApproxColumn(EvalWithData("COUPDAYBS(A1:A2,44197,2)", cells), Calc("COUPDAYBS(43831,44197,2)"), Calc("COUPDAYBS(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPDAYS(A1:A2,44197,2)", cells), Calc("COUPDAYS(43831,44197,2)"), Calc("COUPDAYS(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPDAYSNC(A1:A2,44197,2)", cells), Calc("COUPDAYSNC(43831,44197,2)"), Calc("COUPDAYSNC(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPNCD(A1:A2,44197,2)", cells), Calc("COUPNCD(43831,44197,2)"), Calc("COUPNCD(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPNUM(A1:A2,44197,2)", cells), Calc("COUPNUM(43831,44197,2)"), Calc("COUPNUM(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPPCD(A1:A2,44197,2)", cells), Calc("COUPPCD(43831,44197,2)"), Calc("COUPPCD(43845,44197,2)"));
+    }
 
     [Fact]
     public void CouponFunctions_InvalidBasis_ReturnNumError()
@@ -610,6 +923,21 @@ public class PhaseCFinancialTests
     // ── EFFECT/NOMINAL edge cases ─────────────────────────────────────────
 
     [Fact]
+    public void BondPriceYieldFunctions_RangeValueArgument_SpillElementwise()
+    {
+        var cells = new[] { (1, 1, 0.05), (2, 1, 0.06) };
+
+        AssertApproxColumn(EvalWithData("PRICE(43831,45658,0.08,A1:A2,100,2)", cells), Calc("PRICE(43831,45658,0.08,0.05,100,2)"), Calc("PRICE(43831,45658,0.08,0.06,100,2)"));
+        AssertApproxColumn(EvalWithData("YIELD(43831,45658,0.08,A1:A2,100,2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("YIELD(43831,45658,0.08,99,100,2)"), Calc("YIELD(43831,45658,0.08,101,100,2)"));
+        AssertApproxColumn(EvalWithData("PRICEDISC(43831,44197,A1:A2,100)", cells), Calc("PRICEDISC(43831,44197,0.05,100)"), Calc("PRICEDISC(43831,44197,0.06,100)"));
+        AssertApproxColumn(EvalWithData("YIELDDISC(43831,44197,A1:A2,100)", (1, 1, 95.0), (2, 1, 96.0)), Calc("YIELDDISC(43831,44197,95,100)"), Calc("YIELDDISC(43831,44197,96,100)"));
+        AssertApproxColumn(EvalWithData("PRICEMAT(43831,44197,43831,0.05,A1:A2)", cells), Calc("PRICEMAT(43831,44197,43831,0.05,0.05)"), Calc("PRICEMAT(43831,44197,43831,0.05,0.06)"));
+        AssertApproxColumn(EvalWithData("YIELDMAT(43831,44197,43831,0.05,A1:A2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("YIELDMAT(43831,44197,43831,0.05,99)"), Calc("YIELDMAT(43831,44197,43831,0.05,101)"));
+        AssertApproxColumn(EvalWithData("DURATION(43831,45656,0.08,A1:A2,2)", cells), Calc("DURATION(43831,45656,0.08,0.05,2)"), Calc("DURATION(43831,45656,0.08,0.06,2)"));
+        AssertApproxColumn(EvalWithData("MDURATION(43831,45656,0.08,A1:A2,2)", cells), Calc("MDURATION(43831,45656,0.08,0.05,2)"), Calc("MDURATION(43831,45656,0.08,0.06,2)"));
+    }
+
+    [Fact]
     public void BondAndAccrualFunctions_InvalidBasis_ReturnNumError()
     {
         CalcError("PRICE(43831,45658,0.1,0.1,100,1,5)").Should().Be("#NUM!");
@@ -729,6 +1057,40 @@ public class PhaseCFinancialTests
 
         result.Should().BeGreaterThan(0);
         result.Should().BeLessThanOrEqualTo(1000 * 0.05);
+    }
+
+    [Fact]
+    public void OddCouponAndAccrualFunctions_RangeValueArgument_SpillElementwise()
+    {
+        var rates = new[] { (1, 1, 0.05), (2, 1, 0.06) };
+
+        AssertApproxColumn(EvalWithData("ACCRINT(43831,43831,44197,A1:A2,1000,2)", rates), Calc("ACCRINT(43831,43831,44197,0.05,1000,2)"), Calc("ACCRINT(43831,43831,44197,0.06,1000,2)"));
+        AssertApproxColumn(EvalWithData("ODDFPRICE(43900,44562,43831,44197,0.05,A1:A2,100,2)", rates), Calc("ODDFPRICE(43900,44562,43831,44197,0.05,0.05,100,2)"), Calc("ODDFPRICE(43900,44562,43831,44197,0.05,0.06,100,2)"));
+        AssertApproxColumn(EvalWithData("ODDFYIELD(43900,44562,43831,44197,0.05,A1:A2,100,2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("ODDFYIELD(43900,44562,43831,44197,0.05,99,100,2)"), Calc("ODDFYIELD(43900,44562,43831,44197,0.05,101,100,2)"));
+        AssertApproxColumn(EvalWithData("ODDLPRICE(43900,44197,43831,0.05,A1:A2,100,2)", rates), Calc("ODDLPRICE(43900,44197,43831,0.05,0.05,100,2)"), Calc("ODDLPRICE(43900,44197,43831,0.05,0.06,100,2)"));
+        AssertApproxColumn(EvalWithData("ODDLYIELD(43900,44197,43831,0.05,A1:A2,100,2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("ODDLYIELD(43900,44197,43831,0.05,99,100,2)"), Calc("ODDLYIELD(43900,44197,43831,0.05,101,100,2)"));
+    }
+
+    [Fact]
+    public void Accrint_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 43831.0), (2, 2, 43862.0),
+            (1, 3, 44197.0), (2, 3, 44228.0),
+            (1, 4, 0.05), (2, 4, 0.06),
+            (1, 5, 1000.0), (2, 5, 1200.0),
+            (1, 6, 2.0), (2, 6, 4.0),
+            (1, 7, 0.0), (2, 7, 1.0)
+        };
+
+        AssertApproxColumn(
+            EvalWithData("ACCRINT(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2,F1:F2,G1:G2)", cells),
+            Calc("ACCRINT(43831,43831,44197,0.05,1000,2,0)"),
+            Calc("ACCRINT(43862,43862,44228,0.06,1200,4,1)"));
+
+        EvalWithData("ACCRINT(A1:A2,B1:C1,44197,0.05,1000,2,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

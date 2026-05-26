@@ -51,11 +51,20 @@ public static partial class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
-        var decSep = args.Count > 1 ? ToText(args[1]) : ".";
-        var grpSep = args.Count > 2 ? ToText(args[2]) : ",";
-        if (args[0] is RangeValue range)
-            return MapUnaryTextRange(range, value => NumbervalueScalar(value, decSep, grpSep));
-        return NumbervalueScalar(args[0], decSep, grpSep);
+        var decSep = args.Count > 1 ? args[1] : new TextValue(".");
+        var grpSep = args.Count > 2 ? args[2] : new TextValue(",");
+        return MapTernaryTextArgs(args[0], decSep, grpSep, NumbervalueScalarWithSeparators);
+    }
+
+    private static ScalarValue NumbervalueScalarWithSeparators(
+        ScalarValue value,
+        ScalarValue decimalSeparator,
+        ScalarValue groupSeparator)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (decimalSeparator is ErrorValue decimalError) return decimalError;
+        if (groupSeparator is ErrorValue groupError) return groupError;
+        return NumbervalueScalar(value, ToText(decimalSeparator), ToText(groupSeparator));
     }
 
     private static ScalarValue NumbervalueScalar(ScalarValue value, string decSep, string grpSep)

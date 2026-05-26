@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -24,7 +25,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
                 continue;
             }
 
-            properties.Add(new WorksheetCustomProperty(name, id));
+            properties.Add(new WorksheetCustomProperty(name, id, ReadMetadata(customProperty)));
         }
 
         return properties;
@@ -74,10 +75,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
             root.Element(workbookNs + "customProperties")?.Remove();
             InsertCustomPropertiesInOrder(root, workbookNs, new XElement(
                 workbookNs + "customProperties",
-                properties.Select(property => new XElement(
-                    workbookNs + "customPr",
-                    new XAttribute("name", property.Name),
-                    new XAttribute("id", property.Id.ToString(CultureInfo.InvariantCulture))))));
+                properties.Select(property => ToXml(property, workbookNs))));
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
     }
@@ -123,5 +121,80 @@ internal static class XlsxWorksheetCustomPropertyMapper
             worksheetRoot.Add(customProperties);
         else
             insertionPoint.AddBeforeSelf(customProperties);
+    }
+
+    private static WorksheetCustomPropertyMetadataModel? ReadMetadata(XElement customProperty)
+    {
+        var metadata = new WorksheetCustomPropertyMetadataModel
+        {
+            NativeChildXmls = customProperty.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in customProperty.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledAttribute(attribute.Name.LocalName))
+                continue;
+
+            metadata.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return metadata.NativeAttributes.Count == 0 && metadata.NativeChildXmls.Count == 0
+            ? null
+            : metadata;
+    }
+
+    private static XElement ToXml(WorksheetCustomProperty property, XNamespace workbookNs)
+    {
+        var element = new XElement(
+            workbookNs + "customPr",
+            new XAttribute("name", property.Name),
+            new XAttribute("id", property.Id.ToString(CultureInfo.InvariantCulture)));
+
+        foreach (var attribute in property.Metadata?.NativeAttributes ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledAttribute(attribute.Key))
+                continue;
+
+            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
+        }
+
+        foreach (var childXml in property.Metadata?.NativeChildXmls ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(childXml))
+                continue;
+
+            try
+            {
+                element.Add(XElement.Parse(childXml, LoadOptions.PreserveWhitespace));
+            }
+            catch
+            {
+                // Native child XML is best-effort; skip malformed authored metadata.
+            }
+        }
+
+        return element;
+    }
+
+    private static bool IsModeledAttribute(string name) =>
+        name is "name" or "id";
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 }

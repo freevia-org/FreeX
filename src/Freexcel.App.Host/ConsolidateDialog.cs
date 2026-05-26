@@ -116,6 +116,14 @@ public sealed partial class ConsolidateDialog : Window
     {
         RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
+        FocusRangeSelectionInput(request.Target);
+    }
+
+    private static void FocusRangeSelectionInput(TextBox target)
+    {
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 
     private void FocusInitialKeyboardTarget()
@@ -134,8 +142,7 @@ public sealed partial class ConsolidateDialog : Window
                 out var error))
         {
             MessageBox.Show(this, error ?? "Enter a valid source range.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-            _referenceBox.Focus();
-            _referenceBox.SelectAll();
+            FocusReferenceInput();
             return;
         }
 
@@ -157,6 +164,13 @@ public sealed partial class ConsolidateDialog : Window
 
     private void Accept()
     {
+        if (HasPendingReferenceText(_referencesList.Items.Cast<string>(), _referenceBox.Text))
+        {
+            MessageBox.Show(this, "Add the reference before clicking OK.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusPendingReferenceInput();
+            return;
+        }
+
         var sourceRangesText = JoinSourceRanges(_referencesList.Items.Cast<string>());
         if (!TryParse(
                 _sheetId,
@@ -198,6 +212,13 @@ public sealed partial class ConsolidateDialog : Window
             return;
         }
 
+        _referenceBox.Focus();
+        Keyboard.Focus(_referenceBox);
+        _referenceBox.SelectAll();
+    }
+
+    private void FocusPendingReferenceInput()
+    {
         _referenceBox.Focus();
         Keyboard.Focus(_referenceBox);
         _referenceBox.SelectAll();

@@ -22,6 +22,7 @@ public partial class MainWindow
         _ribbonKeyTipScope = scope;
         _ribbonKeyTipSequence = "";
         _activeRibbonKeyTipMenu = null;
+        _activeRibbonKeyTipItemsControl = null;
         ShowKeyTipOverlay(scope);
     }
 
@@ -34,6 +35,7 @@ public partial class MainWindow
         _ribbonKeyTipScope = RibbonKeyTipScope.None;
         _ribbonKeyTipSequence = "";
         _activeRibbonKeyTipMenu = null;
+        _activeRibbonKeyTipItemsControl = null;
         ClearKeyTipOverlay();
     }
 
@@ -56,6 +58,9 @@ public partial class MainWindow
 
         if (_ribbonKeyTipScope == RibbonKeyTipScope.TopLevel)
         {
+            if (HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence))
+                return;
+
             if (TryHandleTopLevelRibbonKeyTip(_ribbonKeyTipSequence))
                 EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
             else if (TryInvokeTopLevelQatKeyTip(_ribbonKeyTipSequence))
@@ -67,10 +72,10 @@ public partial class MainWindow
 
         if (_ribbonKeyTipScope == RibbonKeyTipScope.Menu)
         {
-            if (TryInvokeActiveMenuItemKeyTip(_ribbonKeyTipSequence))
-                ExitRibbonKeyTipMode();
-            else if (RibbonTooltip.TryOpenSubmenuForKeyTip(_activeRibbonKeyTipMenu!, _ribbonKeyTipSequence))
+            if (TryOpenActiveMenuItemSubmenuKeyTip(_ribbonKeyTipSequence))
                 return;
+            else if (TryInvokeActiveMenuItemKeyTip(_ribbonKeyTipSequence))
+                ExitRibbonKeyTipMode();
             else if (!HasActiveMenuItemKeyTipPrefix(_ribbonKeyTipSequence))
                 ExitRibbonKeyTipMode();
 
@@ -90,11 +95,16 @@ public partial class MainWindow
     private bool TryHandleDirectRibbonKeyTip(Key key)
     {
         var token = RibbonKeyTipMode.ToKeyTipToken(key);
-        if (token is null || !TryHandleTopLevelRibbonKeyTip(token))
+        if (token is null)
             return false;
 
-        EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
-        return true;
+        if (TryHandleTopLevelRibbonKeyTip(token))
+        {
+            EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+            return true;
+        }
+
+        return TryInvokeTopLevelQatKeyTip(token);
     }
 
     private void ShowKeyTipOverlay(RibbonKeyTipScope scope)
@@ -243,6 +253,8 @@ public partial class MainWindow
 
         if (match is ComboBox comboBox)
         {
+            comboBox.Focus();
+            Keyboard.Focus(comboBox);
             comboBox.IsDropDownOpen = true;
             return true;
         }
@@ -276,17 +288,32 @@ public partial class MainWindow
     private void EnterRibbonMenuKeyTipScope(ContextMenu menu)
     {
         _activeRibbonKeyTipMenu = menu;
+        _activeRibbonKeyTipItemsControl = menu;
         _ribbonKeyTipScope = RibbonKeyTipScope.Menu;
         _ribbonKeyTipSequence = "";
         ClearKeyTipOverlay();
     }
 
+    private bool TryOpenActiveMenuItemSubmenuKeyTip(string keyTip)
+    {
+        if (_activeRibbonKeyTipItemsControl is null ||
+            !RibbonTooltip.TryOpenSubmenuForKeyTip(_activeRibbonKeyTipItemsControl, keyTip, out var submenu) ||
+            submenu is null)
+        {
+            return false;
+        }
+
+        _activeRibbonKeyTipItemsControl = submenu;
+        _ribbonKeyTipSequence = "";
+        return true;
+    }
+
     private bool TryInvokeActiveMenuItemKeyTip(string keyTip)
     {
-        if (_activeRibbonKeyTipMenu is null)
+        if (_activeRibbonKeyTipItemsControl is null)
             return false;
 
-        var match = RibbonKeyTipRouting.ResolveMenuItem(GetMenuItems(_activeRibbonKeyTipMenu), keyTip);
+        var match = RibbonKeyTipRouting.ResolveMenuItem(GetMenuItems(_activeRibbonKeyTipItemsControl), keyTip);
         if (match is null)
             return false;
 
@@ -295,8 +322,8 @@ public partial class MainWindow
     }
 
     private bool HasActiveMenuItemKeyTipPrefix(string keyTipPrefix) =>
-        _activeRibbonKeyTipMenu is not null &&
-        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetMenuItems(_activeRibbonKeyTipMenu), keyTipPrefix);
+        _activeRibbonKeyTipItemsControl is not null &&
+        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetMenuItems(_activeRibbonKeyTipItemsControl), keyTipPrefix);
 
     private static IEnumerable<MenuItem> GetMenuItems(ItemsControl itemsControl)
     {
@@ -328,6 +355,12 @@ public partial class MainWindow
 
     private bool HasVisibleCommandKeyTipPrefix(string keyTipPrefix) =>
         RibbonKeyTipRouting.HasKeyTipPrefix(GetRoutableKeyTipElements(RibbonKeyTipScope.Commands), keyTipPrefix);
+
+    private bool HasVisibleTopLevelKeyTipLongerPrefix(string keyTipPrefix) =>
+        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(
+            keyTipPrefix,
+            GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)
+                .Select(RibbonTooltip.GetKeyTip));
 
     private IEnumerable<FrameworkElement> GetRoutableKeyTipElements(RibbonKeyTipScope scope)
     {

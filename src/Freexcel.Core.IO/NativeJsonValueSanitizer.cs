@@ -54,6 +54,9 @@ internal static class NativeJsonValueSanitizer
     public static int ValidZoomPercentOrDefault(int? zoomPercent) =>
         zoomPercent is >= 10 and <= 400 ? zoomPercent.Value : 100;
 
+    public static int? ValidNonNegativeIntOrNull(int? value, int max) =>
+        value is >= 0 && value <= max ? value.Value : null;
+
     public static uint? ValidRowPaneOrNull(uint? row) =>
         row is >= 1 and <= CellAddress.MaxRow ? row : null;
 

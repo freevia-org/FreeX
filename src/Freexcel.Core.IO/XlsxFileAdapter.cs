@@ -33,11 +33,33 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var workbookTheme = XlsxWorkbookThemeReader.Load(packageStream);
         packageStream.Position = 0;
+        var uses1904DateSystem = XlsxWorkbookMetadataReader.LoadUses1904DateSystem(packageStream);
+        packageStream.Position = 0;
+        var workbookProperties = XlsxWorkbookMetadataReader.LoadWorkbookProperties(packageStream);
+        packageStream.Position = 0;
+        var workbookViewProperties = XlsxWorkbookMetadataReader.LoadWorkbookViewProperties(packageStream);
+        packageStream.Position = 0;
+        var fileSharing = XlsxWorkbookMetadataReader.LoadFileSharing(packageStream);
+        packageStream.Position = 0;
+        var fileRecoveryProperties = XlsxWorkbookMetadataReader.LoadFileRecoveryProperties(packageStream);
+        packageStream.Position = 0;
+        var fileVersion = XlsxWorkbookMetadataReader.LoadFileVersion(packageStream);
+        packageStream.Position = 0;
+        var functionGroups = XlsxWorkbookMetadataReader.LoadFunctionGroups(packageStream);
+        packageStream.Position = 0;
+        var smartTags = XlsxWorkbookMetadataReader.LoadSmartTags(packageStream);
+        packageStream.Position = 0;
+        var additionalViews = XlsxWorkbookAdditionalViewMapper.Read(packageStream);
+        packageStream.Position = 0;
         var workbookProtection = XlsxWorkbookMetadataReader.LoadProtection(packageStream);
+        packageStream.Position = 0;
+        var workbookProtectionMetadata = XlsxWorkbookMetadataReader.LoadProtectionMetadata(packageStream);
         packageStream.Position = 0;
         var calculationProperties = XlsxWorkbookMetadataReader.LoadCalculationProperties(packageStream);
         packageStream.Position = 0;
         var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(packageStream);
+        packageStream.Position = 0;
+        var indexedColors = XlsxIndexedColorPaletteMapper.Load(packageStream);
         packageStream.Position = 0;
         var pivotMetadata = XlsxPivotTableReader.Load(packageStream, numberFormatCatalog);
         packageStream.Position = 0;
@@ -59,8 +81,25 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         SourcePackages.Remove(workbook);
         SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream));
         workbook.Theme = workbookTheme;
+        workbook.Uses1904DateSystem = uses1904DateSystem;
+        workbook.Properties = workbookProperties;
+        workbook.ShowSheetTabs = workbookViewProperties.ShowSheetTabs;
+        workbook.SheetTabRatio = workbookViewProperties.SheetTabRatio is { } tabRatio ? Math.Clamp(tabRatio, 0, 1000) : null;
+        workbook.FirstVisibleSheetIndex = workbookViewProperties.FirstVisibleSheetIndex is { } firstSheet
+            ? Math.Clamp(firstSheet, 0, Math.Max(0, xlWorkbook.Worksheets.Count - 1))
+            : null;
+        workbook.ActiveSheetIndex = workbookViewProperties.ActiveSheetIndex is { } activeTab
+            ? Math.Clamp(activeTab, 0, Math.Max(0, xlWorkbook.Worksheets.Count - 1))
+            : null;
+        workbook.FileSharing = fileSharing;
+        workbook.FileRecoveryProperties.AddRange(fileRecoveryProperties);
+        workbook.FileVersion = fileVersion;
+        workbook.FunctionGroups = functionGroups;
+        workbook.SmartTags = smartTags;
+        workbook.AdditionalViews = additionalViews;
         workbook.IsStructureProtected = workbookProtection.IsStructureProtected;
         workbook.StructureProtectionPassword = workbookProtection.PasswordHash;
+        workbook.ProtectionMetadata = workbookProtectionMetadata;
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
             ? WorkbookCalculationMode.Manual
             : WorkbookCalculationMode.Automatic;
@@ -73,6 +112,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         workbook.MaxCalculationChange = calculationProperties.MaxChange;
         foreach (var (numberFormatId, formatCode) in numberFormatCatalog)
             workbook.NumberFormatCatalog[numberFormatId] = formatCode;
+        foreach (var (index, color) in indexedColors.Colors)
+            workbook.IndexedColors.SetColor(index, color);
         foreach (var pivotCache in pivotMetadata.PivotCaches)
             workbook.PivotCaches.Add(pivotCache);
         foreach (var slicer in slicerTimelineMetadata.Slicers)
@@ -368,6 +409,25 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
     private static MemoryStream CreateLoadPackageStream(Stream stream)
     {
+        if (stream is MemoryStream memoryStream &&
+            memoryStream.CanSeek &&
+            memoryStream.TryGetBuffer(out var sourceBuffer))
+        {
+            var memoryRemainingLength = memoryStream.Length - memoryStream.Position;
+            if (memoryRemainingLength is >= 0 and <= int.MaxValue)
+            {
+                var memoryPackageStream = new MemoryStream(
+                    sourceBuffer.Array!,
+                    sourceBuffer.Offset + (int)memoryStream.Position,
+                    (int)memoryRemainingLength,
+                    writable: false,
+                    publiclyVisible: true);
+                memoryStream.Position = memoryStream.Length;
+                memoryPackageStream.Position = memoryPackageStream.Length;
+                return memoryPackageStream;
+            }
+        }
+
         var remainingLength = stream.CanSeek
             ? Math.Max(0, stream.Length - stream.Position)
             : 0;

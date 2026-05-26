@@ -72,8 +72,37 @@ public sealed class PivotCalculatedFieldDialog : Window
 
     private void Accept()
     {
+        if (!ValidateInputs())
+            return;
+
         Result = CreateResult(_nameBox.Text, _formulaBox.Text);
         DialogResult = true;
+    }
+
+    private bool ValidateInputs()
+    {
+        if (string.IsNullOrWhiteSpace(_nameBox.Text))
+        {
+            ShowInvalidInputWarning("Enter a calculated field name.", _nameBox);
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_formulaBox.Text))
+        {
+            ShowInvalidInputWarning("Enter a calculated field formula.", _formulaBox);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return false;
     }
 
     private void FocusInitialKeyboardTarget()
@@ -214,6 +243,9 @@ public sealed class PivotCalculatedItemDialog : Window
 
     private void Accept()
     {
+        if (!ValidateInputs())
+            return;
+
         var selectedField = _fieldBox.SelectedItem as PivotCalculatedItemSourceFieldOption;
         Result = CreateResult(
             selectedField?.Name ?? "",
@@ -221,6 +253,32 @@ public sealed class PivotCalculatedItemDialog : Window
             _nameBox.Text,
             _formulaBox.Text);
         DialogResult = true;
+    }
+
+    private bool ValidateInputs()
+    {
+        if (string.IsNullOrWhiteSpace(_nameBox.Text))
+        {
+            ShowInvalidInputWarning("Enter a calculated item name.", _nameBox);
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_formulaBox.Text))
+        {
+            ShowInvalidInputWarning("Enter a calculated item formula.", _formulaBox);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return false;
     }
 
     private void FocusInitialKeyboardTarget()

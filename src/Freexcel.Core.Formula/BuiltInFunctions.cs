@@ -661,12 +661,19 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var rawCount = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, LeftScalarWithCount);
+    }
+
+    private static ScalarValue LeftScalarWithCount(ScalarValue value, ScalarValue countValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (countValue is ErrorValue countError) return countError;
+        var rawCount = ToNumber(countValue);
         if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
-        if (args[0] is RangeValue range) return MapTextSliceRange(range, count, fromRight: false);
-        return LeftScalar(args[0], count);
+        return LeftScalar(value, count);
     }
 
     private static ScalarValue LeftScalar(ScalarValue value, int count)
@@ -682,12 +689,19 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var rawCount = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, RightScalarWithCount);
+    }
+
+    private static ScalarValue RightScalarWithCount(ScalarValue value, ScalarValue countValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (countValue is ErrorValue countError) return countError;
+        var rawCount = ToNumber(countValue);
         if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
-        if (args[0] is RangeValue range) return MapTextSliceRange(range, count, fromRight: true);
-        return RightScalar(args[0], count);
+        return RightScalar(value, count);
     }
 
     private static ScalarValue RightScalar(ScalarValue value, int count)
@@ -1289,9 +1303,21 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], ReplaceScalarWithArgs);
+    }
 
-        double rawStart = ToNumber(args[1]);
-        double rawNumChars = ToNumber(args[2]);
+    private static ScalarValue ReplaceScalarWithArgs(
+        ScalarValue value,
+        ScalarValue startValue,
+        ScalarValue numCharsValue,
+        ScalarValue newTextValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (startValue is ErrorValue startError) return startError;
+        if (numCharsValue is ErrorValue numCharsError) return numCharsError;
+        if (newTextValue is ErrorValue newTextError) return newTextError;
+        double rawStart = ToNumber(startValue);
+        double rawNumChars = ToNumber(numCharsValue);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawNumChars)) return ErrorValue.Value;
         if (rawStart > int.MaxValue || rawNumChars > int.MaxValue) return ErrorValue.Value;
 
@@ -1299,9 +1325,7 @@ public static partial class BuiltInFunctions
         int numChars = (int)rawNumChars;
         if (startNum < 1 || numChars < 0) return ErrorValue.Value;
 
-        var newText = ToText(args[3]);
-        if (args[0] is RangeValue range) return MapReplaceRange(range, startNum, numChars, newText);
-        return ReplaceText(ToText(args[0]), startNum, numChars, newText);
+        return ReplaceText(ToText(value), startNum, numChars, ToText(newTextValue));
     }
 
     private static RangeValue MapReplaceRange(RangeValue range, int startNum, int numChars, string newText)
@@ -1389,8 +1413,19 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count > 1 && args[0] is RangeValue && args[1] is RangeValue)
+            return MapBinaryMathArgs(args[0], args[1], HyperlinkScalar);
+        if (args.Count > 1 && args[1] is RangeValue friendlyRange)
+            return MapUnaryTextRange(friendlyRange, value => HyperlinkScalar(args[0], value));
+        if (args[0] is RangeValue linkRange)
+            return MapUnaryTextRange(linkRange, value => HyperlinkScalar(value, args.Count > 1 ? args[1] : null));
 
-        var display = args.Count > 1 && args[1] is not BlankValue ? ToText(args[1]) : ToText(args[0]);
+        return HyperlinkScalar(args[0], args.Count > 1 ? args[1] : null);
+    }
+
+    private static ScalarValue HyperlinkScalar(ScalarValue link, ScalarValue? friendlyName)
+    {
+        var display = friendlyName is not null && friendlyName is not BlankValue ? ToText(friendlyName) : ToText(link);
         return TextResult(display);
     }
 
@@ -1399,16 +1434,23 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
+        var decimalsArg = args.Count > 1 ? args[1] : new NumberValue(2);
+        return MapBinaryMathArgs(args[0], decimalsArg, (value, decimalsValue) => FixedScalarWithDecimals(value, decimalsValue, noCommas));
+    }
+
+    private static ScalarValue FixedScalarWithDecimals(ScalarValue value, ScalarValue decimalsValue, bool noCommas)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (decimalsValue is ErrorValue decimalsError) return decimalsError;
         int dec = 2;
-        if (args.Count > 1 && args[1] is not BlankValue)
+        if (decimalsValue is not BlankValue)
         {
-            double rawDec = ToNumber(args[1]);
+            double rawDec = ToNumber(decimalsValue);
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
-        bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => FixedScalar(value, dec, noCommas));
-        return FixedScalar(args[0], dec, noCommas);
+        return FixedScalar(value, dec, noCommas);
     }
 
     private static ScalarValue FixedScalar(ScalarValue value, int dec, bool noCommas)
@@ -1436,19 +1478,26 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        var decimalsArg = args.Count > 1 ? args[1] : new NumberValue(2);
+        return MapBinaryMathArgs(args[0], decimalsArg, DollarScalarWithDecimals);
+    }
+
+    private static ScalarValue DollarScalarWithDecimals(ScalarValue value, ScalarValue decimalsValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (decimalsValue is ErrorValue decimalsError) return decimalsError;
         int dec = 2;
-        if (args.Count > 1 && args[1] is BlankValue)
+        if (decimalsValue is BlankValue)
         {
             dec = 0;
         }
-        else if (args.Count > 1)
+        else
         {
-            double rawDec = ToNumber(args[1]);
+            double rawDec = ToNumber(decimalsValue);
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => DollarScalar(value, dec));
-        return DollarScalar(args[0], dec);
+        return DollarScalar(value, dec);
     }
 
     private static ScalarValue DollarScalar(ScalarValue value, int dec)

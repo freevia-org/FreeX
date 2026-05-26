@@ -325,4 +325,32 @@ public class SheetCloneTests
         copy.GroupHiddenRows.Should().Contain(5u);
         copy.GroupHiddenCols.Should().Contain(3u);
     }
+
+    [Fact]
+    public void Sheet_Clone_DropsExistingConditionalFormatX14IdNativeChild()
+    {
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("S");
+        src.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(src.Id, 1, 1), new CellAddress(src.Id, 5, 1)),
+            RuleType = CfRuleType.DataBar,
+            NativeChildXmls =
+            [
+                """<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><ext uri="{B025F937-6E4E-48BE-B07C-B91C50BE2FA4}"><x14:id xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">{11111111-2222-3333-4444-555555555555}</x14:id></ext><ext uri="{FUTURE}" /></extLst>""",
+                """<future xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />"""
+            ],
+            NativePayloadChildXmls = ["""<axisColor xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" theme="1" />"""]
+        });
+
+        var copy = src.Clone(SheetId.New(), "Copy");
+
+        var clonedRule = copy.ConditionalFormats.Should().ContainSingle().Subject;
+        clonedRule.Id.Should().NotBe(src.ConditionalFormats.Single().Id);
+        clonedRule.NativeChildXmls.Should().HaveCount(2);
+        clonedRule.NativeChildXmls.Should().Contain(xml => xml.Contains("{FUTURE}", StringComparison.Ordinal));
+        clonedRule.NativeChildXmls.Should().Contain(xml => xml.Contains("future", StringComparison.Ordinal));
+        clonedRule.NativeChildXmls.Should().NotContain(xml => xml.Contains("11111111-2222-3333-4444-555555555555", StringComparison.Ordinal));
+        clonedRule.NativePayloadChildXmls.Should().BeEquivalentTo(src.ConditionalFormats.Single().NativePayloadChildXmls);
+    }
 }

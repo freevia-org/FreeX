@@ -28,8 +28,12 @@ internal static class XlsxPivotXmlReferencePreserver
             return;
         }
 
+        var pivotWorksheetPaths = GetWorksheetPathsWithPivotTableRelationships(sourceArchive, context);
+        if (pivotWorksheetPaths.Count == 0)
+            return;
+
         PreserveWorkbookPivotCaches(targetArchive, context);
-        PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context);
+        PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths);
     }
 
     private static void PreserveWorkbookPivotCaches(
@@ -149,13 +153,14 @@ internal static class XlsxPivotXmlReferencePreserver
     private static void PreserveWorksheetPivotTableDefinitions(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
-        XlsxSourcePackagePreservationContext context)
+        XlsxSourcePackagePreservationContext context,
+        IReadOnlySet<string> pivotWorksheetPaths)
     {
-        if (!HasWorksheetPivotTableRelationships(sourceArchive, context))
-            return;
-
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
+            if (!pivotWorksheetPaths.Contains(sourceWorksheetPath))
+                continue;
+
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 
@@ -184,8 +189,14 @@ internal static class XlsxPivotXmlReferencePreserver
 
     private static bool HasWorksheetPivotTableRelationships(
         ZipArchive sourceArchive,
+        XlsxSourcePackagePreservationContext context) =>
+        GetWorksheetPathsWithPivotTableRelationships(sourceArchive, context).Count > 0;
+
+    private static HashSet<string> GetWorksheetPathsWithPivotTableRelationships(
+        ZipArchive sourceArchive,
         XlsxSourcePackagePreservationContext context)
     {
+        var worksheetPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceWorksheetPath in context.SourceSheets.Values)
         {
             var relationshipsEntry = sourceArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath));
@@ -195,9 +206,9 @@ internal static class XlsxPivotXmlReferencePreserver
             using var relationshipsStream = relationshipsEntry.Open();
             using var reader = new StreamReader(relationshipsStream);
             if (reader.ReadToEnd().Contains(PivotTableRelationshipType, StringComparison.OrdinalIgnoreCase))
-                return true;
+                worksheetPaths.Add(sourceWorksheetPath);
         }
 
-        return false;
+        return worksheetPaths;
     }
 }

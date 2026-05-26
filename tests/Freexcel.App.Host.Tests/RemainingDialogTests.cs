@@ -19,6 +19,39 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ConditionalFormatThresholdDialog_TryCreateResult_RejectsBlankThreshold()
+    {
+        ConditionalFormatThresholdDialog.TryCreateResult(" ", out _, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a threshold value.");
+    }
+
+    [Fact]
+    public void ConditionalFormatThresholdDialog_TryCreateResult_AcceptsTrimmedThreshold()
+    {
+        ConditionalFormatThresholdDialog.TryCreateResult("  100  ", out var result, out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Should().Be(new ConditionalFormatThresholdDialogResult("100"));
+    }
+
+    [Fact]
+    public void ConditionalFormatThresholdDialog_AcceptWarnsAndRefocusesBlankThreshold()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
+
+        source.Should().Contain("if (!TryCreateResult(_thresholdBox.Text, out var result, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter a threshold value.\");");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("_thresholdBox.Focus();");
+        source.Should().Contain("_thresholdBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_thresholdBox);");
+    }
+
+    [Fact]
     public void ConditionalFormatThresholdDialogOpenedFromKeyboard_FocusesThresholdBox()
     {
         var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
@@ -71,7 +104,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void ColumnWidthDialogOpenedFromKeyboard_FocusesWidthBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public enum PageBreakDialogAction");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record __NoNextRemainingDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -131,6 +164,46 @@ public sealed class RemainingDialogTests
         FillSeriesStepDialog.TryCreateResult(input, out _, out var error).Should().BeFalse();
 
         error.Should().Contain("numeric");
+    }
+
+    [Fact]
+    public void FillSeriesStepDialogInvalidStep_ShowsOwnedWarningAndRefocusesInput()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("error ?? \"Enter a numeric step value.\"");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidStepInput();");
+        source.Should().Contain("private void FocusInvalidStepInput()");
+    }
+
+    [Fact]
+    public void FillSeriesStepDialog_TryCreateResult_RejectsInvalidNonBlankStopValue()
+    {
+        FillSeriesStepDialog.TryCreateResult(
+                FillSeriesDirection.Columns,
+                FillSeriesType.Linear,
+                FillSeriesDateUnit.Day,
+                "1",
+                "not-a-number",
+                out _,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Contain("stop");
+    }
+
+    [Fact]
+    public void FillSeriesStepDialogInvalidStop_ShowsOwnedWarningAndRefocusesStopInput()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("FocusInvalidStopInput();");
+        source.Should().Contain("private void FocusInvalidStopInput()");
+        source.Should().Contain("Enter a numeric stop value or leave it blank.");
     }
 
     [Fact]
@@ -206,6 +279,15 @@ public sealed class RemainingDialogTests
         columnResult.Should().Be(new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, 5));
     }
 
+    [Theory]
+    [InlineData("row 0")]
+    [InlineData("col 0")]
+    [InlineData("column 0")]
+    public void PageBreakDialog_TryCreateResult_RejectsZeroBreakEntries(string input)
+    {
+        PageBreakDialog.TryCreateResult(input, out _).Should().BeFalse();
+    }
+
     [Fact]
     public void PageBreakDialog_ExposesExplicitExcelStyleActionsInsteadOfCommandText()
     {
@@ -223,7 +305,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void PageBreakDialogOpenedFromKeyboard_FocusesSelectedBreakEntry()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class PageBreakDialog", "public sealed record ForecastSheetDialogResult");
+        var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -233,6 +315,23 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_columnBreakBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_columnBreakBox);");
         source.Should().Contain("_resetAllButton.Focus();");
+    }
+
+    [Fact]
+    public void PageBreakDialogInvalidBreakEntry_ShowsOwnedWarningAndRefocusesEntry()
+    {
+        var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("Enter a positive row number for the page break.");
+        source.Should().Contain("Enter a positive column number for the page break.");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("rowBreak == 0");
+        source.Should().Contain("columnBreak == 0");
+        source.Should().Contain("FocusInvalidBreakInput(_rowBreakBox);");
+        source.Should().Contain("FocusInvalidBreakInput(_columnBreakBox);");
+        source.Should().Contain("private static void FocusInvalidBreakInput(TextBox textBox)");
     }
 
     [Fact]
@@ -371,7 +470,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SingleInputMiniDialogs_UseAccessKeyedLabelsAndSharedButtonRows()
     {
-        var remainingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var remainingSource = ReadRemainingDialogSources();
         var objectSource = ReadObjectDialogSources();
 
         remainingSource.Should().Contain("Format cells greater _than:");
@@ -402,13 +501,47 @@ public sealed class RemainingDialogTests
     [Fact]
     public void ForecastSheetDialogOpenedFromKeyboard_FocusesPeriodsBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ForecastSheetDialog", "public sealed record SheetNameDialogResult");
+        var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_periodsBox.Focus();");
         source.Should().Contain("_periodsBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_periodsBox);");
+    }
+
+    [Fact]
+    public void ForecastSheetDialogInvalidPeriods_ShowsOwnedWarningAndRefocusesInput()
+    {
+        var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("error ?? \"Enter a positive whole number of forecast periods.\"");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidPeriodsInput();");
+        source.Should().Contain("private void FocusInvalidPeriodsInput()");
+    }
+
+    [Fact]
+    public void RowAndColumnSizeDialogsInvalidInput_ShowOwnedWarningsAndRefocusInputs()
+    {
+        var rowSource = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
+        var columnSource = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record SheetNameDialogResult");
+
+        rowSource.Should().Contain("MessageBox.Show(");
+        rowSource.Should().Contain("this,");
+        rowSource.Should().Contain("error ?? \"Enter a positive row height.\"");
+        rowSource.Should().Contain("MessageBoxImage.Warning");
+        rowSource.Should().Contain("FocusInvalidHeightInput();");
+        rowSource.Should().Contain("private void FocusInvalidHeightInput()");
+
+        columnSource.Should().Contain("MessageBox.Show(");
+        columnSource.Should().Contain("this,");
+        columnSource.Should().Contain("error ?? \"Enter a positive column width.\"");
+        columnSource.Should().Contain("MessageBoxImage.Warning");
+        columnSource.Should().Contain("FocusInvalidWidthInput();");
+        columnSource.Should().Contain("private void FocusInvalidWidthInput()");
     }
 
     [Fact]
@@ -494,11 +627,31 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SparklineDialogRangePicker_RefocusesSelectedInputWithKeyboardFocus()
     {
-        var source = ReadClassSource("SparklineDialog.cs", "private void RequestRangeSelection", "}");
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs"));
+        var handlerSource = source[source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..];
 
+        handlerSource.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest);");
+        handlerSource.Should().Contain("FocusRangeSelectionInput(textBox);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox textBox)");
         source.Should().Contain("textBox.Focus();");
         source.Should().Contain("textBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(textBox);");
+    }
+
+    [Fact]
+    public void SparklineDialogInvalidRanges_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs"));
+        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("SparklineInputParser.TryParseDataRange(_dataRangeBox.Text, _sheetId, out _)");
+        source.Should().Contain("SparklineInputParser.TryParseLocation(_locationBox.Text, _sheetId, out _)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Invalid data range.\", _dataRangeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Invalid location cell.\", _locationBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("FocusRangeSelectionInput(textBox);");
+        insertSource.Should().Contain("_currentSheetId,");
     }
 
     [Fact]
@@ -507,10 +660,47 @@ public sealed class RemainingDialogTests
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
     }
 
+    [Theory]
+    [InlineData("", "Sheet name is invalid: it cannot be blank.")]
+    [InlineData("   ", "Sheet name is invalid: it cannot be blank.")]
+    [InlineData("This sheet name is far too long for Excel", "Sheet name is invalid: it cannot exceed 31 characters.")]
+    [InlineData("Bad/Name", "Sheet name is invalid: it cannot contain : \\ / ? * [ or ].")]
+    public void SheetNameDialog_TryCreateResult_RejectsInvalidExcelSheetNames(string input, string expectedError)
+    {
+        SheetNameDialog.TryCreateResult(input, out _, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be(expectedError);
+    }
+
+    [Fact]
+    public void SheetNameDialog_TryCreateResult_AcceptsTrimmedValidSheetName()
+    {
+        SheetNameDialog.TryCreateResult("  Report  ", out var result, out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Should().Be(new SheetNameDialogResult("Report"));
+    }
+
+    [Fact]
+    public void SheetNameDialog_AcceptWarnsAndRefocusesInvalidName()
+    {
+        var source = ReadClassSource("SheetNameDialog.cs", "public sealed class SheetNameDialog", "public sealed record __NoNextSheetNameDialog");
+
+        source.Should().Contain("Content = ObjectSizeDialog.CreateSingleInputContent(\"Sheet _name:\", _nameBox, Accept);");
+        source.Should().Contain("if (!TryCreateResult(_nameBox.Text, out var result, out var error))");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("_nameBox.Focus();");
+        source.Should().Contain("_nameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_nameBox);");
+    }
+
     [Fact]
     public void SheetNameDialogOpenedFromKeyboard_FocusesNameBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class SheetNameDialog", "public sealed record UnhideSheetDialogResult");
+        var source = ReadClassSource("SheetNameDialog.cs", "public sealed class SheetNameDialog", "public sealed record __NoNextSheetNameDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -547,7 +737,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void UnhideSheetDialogOpenedFromKeyboard_FocusesSheetList()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class UnhideSheetDialog", "public sealed record FillSeriesStepDialogResult");
+        var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -642,7 +832,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void PrintPreviewDialog_ExposesExcelLikePreviewToolbarAffordances()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = \"_Previous Page\"");
         source.Should().Contain("Content = \"_Next Page\"");
@@ -663,11 +853,21 @@ public sealed class RemainingDialogTests
         return string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageBreakDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ForecastSheetDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SheetNameDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "UnhideSheetDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FillSeriesStepDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ZoomDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckDialog.cs")));
     }
+
+    private static string ReadPrintPreviewDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")));
 
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)
     {

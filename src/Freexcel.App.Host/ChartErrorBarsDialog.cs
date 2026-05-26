@@ -98,12 +98,45 @@ public sealed class ChartErrorBarsDialog : Window
 
     private void Accept()
     {
+        if (!TryReadClampedDouble(_valueBox, min: 0, max: 1000, out var value))
+        {
+            ShowInvalidInputWarning("Enter an error amount from 0 to 1000.", _valueBox);
+            return;
+        }
+
         Result = CreateResult(
             _showBox.IsChecked == true,
             ChartDialogHelpers.Selected(_kindBox, ChartErrorBarKind.StandardError),
             ChartDialogHelpers.Selected(_directionBox, ChartErrorBarDirection.Both),
-            ChartDialogHelpers.ParseDouble(_valueBox.Text, 5),
+            value,
             _endCapsBox.IsChecked == true);
         DialogResult = true;
+    }
+
+    private static bool TryReadClampedDouble(TextBox textBox, double min, double max, out double value)
+    {
+        value = 0;
+        return double.TryParse(
+                textBox.Text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value)
+            && double.IsFinite(value)
+            && value >= min
+            && value <= max;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
     }
 }

@@ -21,10 +21,17 @@ internal static partial class XlsxChartXmlWriter
             .OrderBy(format => format.PointIndex)
             .Select(format => ToPointDataLabelXml(format, chartNs, drawingNs))
             .ToArray();
+        var seriesDefaults = chart.SeriesDataLabelFormats
+            .Where(format => format.SeriesIndex == seriesIndex)
+            .GroupBy(format => format.SeriesIndex)
+            .Select(group => group.Last())
+            .FirstOrDefault(HasSeriesDataLabelFormatting);
 
-        return labels.Length == 0
+        return labels.Length == 0 && seriesDefaults is null
             ? null
-            : new XElement(chartNs + "dLbls", labels);
+            : new XElement(chartNs + "dLbls",
+                seriesDefaults is null ? null : ToSeriesDataLabelDefaultsXml(seriesDefaults, chartNs, drawingNs),
+                labels);
     }
 
     private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
@@ -47,6 +54,55 @@ internal static partial class XlsxChartXmlWriter
         || !string.IsNullOrEmpty(format.NumberFormatCode)
         || format.NumberFormatSourceLinked is not null
         || format.SeparatorText is not null;
+
+    private static bool HasSeriesDataLabelFormatting(ChartSeriesDataLabelFormat format) =>
+        format.FillColor is not null
+        || format.BorderColor is not null
+        || format.BorderThickness is not null
+        || format.TextColor is not null
+        || format.FontSize is not null
+        || format.FillThemeColor is not null
+        || format.BorderThemeColor is not null
+        || format.TextThemeColor is not null
+        || format.Position is not null
+        || format.ShowValue is not null
+        || format.ShowCategoryName is not null
+        || format.ShowSeriesName is not null
+        || format.ShowLegendKey is not null
+        || format.ShowPercentage is not null
+        || format.ShowBubbleSize is not null
+        || !string.IsNullOrEmpty(format.NumberFormatCode)
+        || format.NumberFormatSourceLinked is not null
+        || format.SeparatorText is not null;
+
+    private static IEnumerable<XElement?> ToSeriesDataLabelDefaultsXml(
+        ChartSeriesDataLabelFormat format,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        yield return format.Position is { } position
+            ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
+            : null;
+        yield return ToSeriesDataLabelNumberFormatXml(format, chartNs);
+        yield return ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs);
+        yield return ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs);
+        yield return ToPointDataLabelBoolXml("showCatName", format.ShowCategoryName, chartNs);
+        yield return ToPointDataLabelBoolXml("showSerName", format.ShowSeriesName, chartNs);
+        yield return ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs);
+        yield return ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs);
+        yield return format.SeparatorText is { } separator
+            ? new XElement(chartNs + "separator", new XAttribute("val", separator))
+            : null;
+        yield return ToShapeProperties(
+            chartNs,
+            drawingNs,
+            format.FillThemeColor,
+            format.FillColor,
+            format.BorderThemeColor,
+            format.BorderColor,
+            format.BorderThickness);
+        yield return ToSeriesDataLabelTextProperties(format, chartNs, drawingNs);
+    }
 
     private static XElement ToPointDataLabelXml(
         ChartPointDataLabelFormat format,
@@ -86,6 +142,17 @@ internal static partial class XlsxChartXmlWriter
             : null;
 
     private static XElement? ToPointDataLabelNumberFormatXml(ChartPointDataLabelFormat format, XNamespace chartNs) =>
+        string.IsNullOrEmpty(format.NumberFormatCode) && format.NumberFormatSourceLinked is null
+            ? null
+            : new XElement(chartNs + "numFmt",
+                string.IsNullOrEmpty(format.NumberFormatCode)
+                    ? null
+                    : new XAttribute("formatCode", format.NumberFormatCode),
+                format.NumberFormatSourceLinked is { } sourceLinked
+                    ? new XAttribute("sourceLinked", sourceLinked ? "1" : "0")
+                    : null);
+
+    private static XElement? ToSeriesDataLabelNumberFormatXml(ChartSeriesDataLabelFormat format, XNamespace chartNs) =>
         string.IsNullOrEmpty(format.NumberFormatCode) && format.NumberFormatSourceLinked is null
             ? null
             : new XElement(chartNs + "numFmt",
@@ -195,6 +262,25 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(drawingNs + "pPr",
                     new XElement(drawingNs + "defRPr",
                         chart.TrendlineLabelFontSize is { } fontSize
+                            ? new XAttribute("sz", Math.Clamp((int)Math.Round(fontSize * 100), 600, 7200))
+                            : null,
+                        textFill))));
+    }
+
+    private static XElement? ToSeriesDataLabelTextProperties(
+        ChartSeriesDataLabelFormat format,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var textFill = ToSolidFill(format.TextThemeColor, format.TextColor, drawingNs);
+        if (textFill is null && format.FontSize is null)
+            return null;
+
+        return new XElement(chartNs + "txPr",
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        format.FontSize is { } fontSize
                             ? new XAttribute("sz", Math.Clamp((int)Math.Round(fontSize * 100), 600, 7200))
                             : null,
                         textFill))));

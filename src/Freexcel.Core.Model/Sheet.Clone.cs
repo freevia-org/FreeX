@@ -32,6 +32,19 @@ public sealed partial class Sheet
             FullCalculationOnLoad         = FullCalculationOnLoad,
             PhoneticProperties            = PhoneticProperties,
             PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
+            AutoFilter                    = AutoFilter,
+            SmartTags                     = SmartTags,
+            DataConsolidation             = DataConsolidation,
+            SortState                     = SortState,
+            SingleXmlCells                = CloneSingleXmlCells(SingleXmlCells),
+            AdditionalViews               = AdditionalViews,
+            PrimaryViewMetadata           = PrimaryViewMetadata is null
+                ? null
+                : new WorksheetPrimaryViewMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PrimaryViewMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PrimaryViewMetadata.NativeChildXmls]
+                },
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
             PageMargins                   = PageMargins,
@@ -70,8 +83,36 @@ public sealed partial class Sheet
             PrintDraftQuality             = PrintDraftQuality,
             PrintQualityDpi               = PrintQualityDpi,
             PrintQualityVerticalDpi       = PrintQualityVerticalDpi,
+            PageMarginsMetadata           = PageMarginsMetadata is null
+                ? null
+                : new WorksheetPageMarginsMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PageMarginsMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PageMarginsMetadata.NativeChildXmls]
+                },
             PrintErrorValue               = PrintErrorValue,
             PrintComments                 = PrintComments,
+            PrintOptionsMetadata          = PrintOptionsMetadata is null
+                ? null
+                : new WorksheetPrintOptionsMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PrintOptionsMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PrintOptionsMetadata.NativeChildXmls]
+                },
+            HeaderFooterMetadata          = HeaderFooterMetadata is null
+                ? null
+                : new WorksheetHeaderFooterMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(HeaderFooterMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. HeaderFooterMetadata.NativeChildXmls]
+                },
+            PageSetupMetadata             = PageSetupMetadata is null
+                ? null
+                : new WorksheetPageSetupMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PageSetupMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PageSetupMetadata.NativeChildXmls]
+                },
             ViewMode                      = ViewMode,
             IsHidden                      = false,
             IsVeryHidden                  = IsVeryHidden,
@@ -81,10 +122,39 @@ public sealed partial class Sheet
             OutlineSummaryRight           = OutlineSummaryRight,
             ShowOutlineSymbols            = ShowOutlineSymbols,
             ApplyOutlineStyles            = ApplyOutlineStyles,
+            SheetFormatMetadata           = SheetFormatMetadata is null
+                ? null
+                : new WorksheetSheetFormatMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(SheetFormatMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. SheetFormatMetadata.NativeChildXmls]
+                },
+            DimensionMetadata             = DimensionMetadata is null
+                ? null
+                : new WorksheetDimensionMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(DimensionMetadata.NativeAttributes, StringComparer.Ordinal)
+                },
+            SheetPropertiesMetadata       = SheetPropertiesMetadata is null
+                ? null
+                : new WorksheetSheetPropertiesMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(SheetPropertiesMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. SheetPropertiesMetadata.NativeChildXmls]
+                },
             IsProtected                   = IsProtected,
             ProtectionPassword            = ProtectionPassword,
+            ProtectionMetadata            = ProtectionMetadata is null
+                ? null
+                : new WorksheetProtectionMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(ProtectionMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. ProtectionMetadata.NativeChildXmls]
+                },
             // Previously missed fields:
             BackgroundImage               = BackgroundImage,
+            RowPageBreaksMetadata         = ClonePageBreaksMetadata(RowPageBreaksMetadata),
+            ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
         };
 
         // Collections: column/row dimensions
@@ -288,6 +358,11 @@ public sealed partial class Sheet
                 DataBarMinLength     = cf.DataBarMinLength,
                 DataBarMaxLength     = cf.DataBarMaxLength,
                 DataBarGradient      = cf.DataBarGradient,
+                DataBarBorder        = cf.DataBarBorder,
+                DataBarAxisPosition  = cf.DataBarAxisPosition,
+                DataBarAxisColor     = cf.DataBarAxisColor,
+                DataBarNegativeFillColor = cf.DataBarNegativeFillColor,
+                DataBarNegativeBorderColor = cf.DataBarNegativeBorderColor,
                 AboveAverage         = cf.AboveAverage,
                 FormulaText          = cf.FormulaText,
                 IconSetStyle         = cf.IconSetStyle,
@@ -299,13 +374,14 @@ public sealed partial class Sheet
                 DateOccurringPeriod  = cf.DateOccurringPeriod,
                 StopIfTrue           = cf.StopIfTrue,
                 NativeAttributes     = cf.NativeAttributes,
-                NativeChildXmls      = cf.NativeChildXmls,
+                NativeChildXmls      = ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(cf.NativeChildXmls),
                 NativePayloadAttributes = cf.NativePayloadAttributes,
                 NativePayloadChildXmls = cf.NativePayloadChildXmls,
                 NativeContainerAttributes = cf.NativeContainerAttributes,
                 NativeContainerChildXmls = cf.NativeContainerChildXmls
             };
             clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
+            clonedFormat.IconOverrides.AddRange(cf.IconOverrides);
             copy.ConditionalFormats.Add(clonedFormat);
         }
 
@@ -341,5 +417,37 @@ public sealed partial class Sheet
         static CellAddress RemapAddress       (CellAddress a, SheetId id) => new(id, a.Row, a.Col);
         static GridRange   RemapRange         (GridRange   r, SheetId id) =>
             new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
+    }
+
+    private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)
+    {
+        if (metadata is null)
+            return null;
+
+        return new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
+            BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
+                pair => pair.Key,
+                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
+        };
+    }
+
+    private static WorksheetSingleXmlCellsModel? CloneSingleXmlCells(WorksheetSingleXmlCellsModel? model)
+    {
+        if (model is null)
+            return null;
+
+        return new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string>(model.NativeAttributes, StringComparer.Ordinal),
+            Cells = model.Cells.Select(cell => new WorksheetSingleXmlCellModel
+            {
+                Id = cell.Id,
+                Reference = cell.Reference,
+                XmlCellPropertyId = cell.XmlCellPropertyId,
+                NativeAttributes = new Dictionary<string, string>(cell.NativeAttributes, StringComparer.Ordinal)
+            }).ToList()
+        };
     }
 }

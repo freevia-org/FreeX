@@ -143,6 +143,35 @@ public sealed class GridViewSelectionLayoutTests
         rect.Should().Be(new Rect(94, 38, 128, 40));
     }
 
+    [Fact]
+    public void CalculateQuickAnalysisDataBarPreviewRects_ReturnsProportionalBarsForVisibleNumericCells()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 2, 2));
+        var viewport = new ViewportModel(
+            [
+                new DisplayCell(1, 1, new NumberValue(10), "10", null, StyleId.Default, null),
+                new DisplayCell(1, 2, new NumberValue(20), "20", null, StyleId.Default, null),
+                new DisplayCell(2, 1, new TextValue("n/a"), "n/a", null, StyleId.Default, null),
+                new DisplayCell(2, 2, new NumberValue(0), "0", null, StyleId.Default, null)
+            ],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)]);
+
+        var rects = GridView.CalculateQuickAnalysisDataBarPreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rects.Should().Equal(
+            new Rect(33, 22, 29, 12),
+            new Rect(97, 22, 58, 12),
+            new Rect(97, 42, 0, 12));
+    }
+
     private static ViewportModel Viewport() =>
         new(
             [],

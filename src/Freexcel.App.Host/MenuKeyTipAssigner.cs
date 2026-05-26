@@ -7,13 +7,21 @@ public static class MenuKeyTipAssigner
     public static void AssignUniqueKeyTips(IEnumerable<MenuItem> menuItems)
     {
         var items = menuItems.ToList();
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var used = new List<string>();
 
         foreach (var item in items)
         {
             var existing = RibbonTooltip.GetKeyTip(item);
-            if (!string.IsNullOrWhiteSpace(existing))
+            if (string.IsNullOrWhiteSpace(existing))
+                continue;
+
+            if (IsAvailable(existing, used))
+            {
                 used.Add(existing);
+                continue;
+            }
+
+            RibbonTooltip.SetKeyTip(item, "");
         }
 
         foreach (var item in items)
@@ -27,27 +35,30 @@ public static class MenuKeyTipAssigner
         }
     }
 
-    private static string CreateKeyTip(string? header, HashSet<string> used)
+    private static string CreateKeyTip(string? header, IReadOnlyCollection<string> used)
     {
         foreach (var character in EnumerateCandidateCharacters(header))
         {
             var candidate = character.ToString().ToUpperInvariant();
-            if (used.Add(candidate))
-            {
-                used.Remove(candidate);
+            if (IsAvailable(candidate, used))
                 return candidate;
-            }
         }
 
         for (var index = 1; index <= 99; index++)
         {
             var candidate = index.ToString();
-            if (!used.Contains(candidate))
+            if (IsAvailable(candidate, used))
                 return candidate;
         }
 
         return Guid.NewGuid().ToString("N")[..2].ToUpperInvariant();
     }
+
+    private static bool IsAvailable(string candidate, IEnumerable<string> used) =>
+        used.All(existing =>
+            !string.Equals(existing, candidate, StringComparison.OrdinalIgnoreCase) &&
+            !existing.StartsWith(candidate, StringComparison.OrdinalIgnoreCase) &&
+            !candidate.StartsWith(existing, StringComparison.OrdinalIgnoreCase));
 
     private static IEnumerable<char> EnumerateCandidateCharacters(string? header)
     {

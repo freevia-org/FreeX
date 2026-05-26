@@ -73,6 +73,7 @@ public sealed class CreateTableDialog : Window
     {
         RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
+        FocusRangeBox();
     }
 
     private void FocusInitialKeyboardTarget()

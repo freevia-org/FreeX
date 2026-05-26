@@ -338,7 +338,7 @@ public partial class MainWindow
     {
         if (_formulaBarExpanded)
         {
-            FormulaBar.Height       = 72;
+            FormulaBar.Height       = 84;
             FormulaBar.AcceptsReturn = true;
             FormulaBarExpandBtn.Content = "▲";
         }

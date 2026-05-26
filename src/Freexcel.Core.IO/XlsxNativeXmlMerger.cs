@@ -5,10 +5,19 @@ namespace Freexcel.Core.IO;
 internal static class XlsxNativeXmlMerger
 {
     public static bool MergeElementNativeAttributesAndChildren(XElement sourceElement, XElement targetElement)
+        => MergeElementNativeAttributesAndChildren(sourceElement, targetElement, []);
+
+    public static bool MergeElementNativeAttributesAndChildren(
+        XElement sourceElement,
+        XElement targetElement,
+        IReadOnlyCollection<XName> modeledAttributeNames)
     {
         var changed = false;
         foreach (var attribute in sourceElement.Attributes())
         {
+            if (modeledAttributeNames.Contains(attribute.Name))
+                continue;
+
             if (targetElement.Attribute(attribute.Name) is not null)
                 continue;
 

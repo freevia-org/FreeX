@@ -7,13 +7,15 @@ public sealed record PrintSettingsPlan(IReadOnlyList<string> Lines)
     public string Summary => string.Join("; ", Lines);
 }
 
+public sealed record PrintPreviewSettings(bool IgnorePrintArea = false);
+
 public static class PrintSettingsPlanner
 {
-    public static PrintSettingsPlan Build(Sheet sheet)
+    public static PrintSettingsPlan Build(Sheet sheet, bool ignorePrintArea = false)
     {
         var lines = new List<string>
         {
-            sheet.PrintArea is null ? "Print active sheet" : "Print selected print area",
+            DescribeScope(sheet, ignorePrintArea),
             $"Orientation: {sheet.PageOrientation}",
             $"Paper size: {sheet.PaperSize}",
             $"Scaling: {DescribeScaling(sheet.ScaleToFit)}",
@@ -22,6 +24,16 @@ public static class PrintSettingsPlanner
         };
 
         return new PrintSettingsPlan(lines);
+    }
+
+    private static string DescribeScope(Sheet sheet, bool ignorePrintArea)
+    {
+        if (sheet.PrintArea is null)
+            return "Print active sheet";
+
+        return ignorePrintArea
+            ? "Print active sheet (ignore print area)"
+            : "Print selected print area";
     }
 
     private static string DescribeScaling(WorksheetScaleToFit scale)

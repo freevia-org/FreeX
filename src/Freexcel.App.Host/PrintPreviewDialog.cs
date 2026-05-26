@@ -5,10 +5,14 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
+using HorizontalAlignment = System.Windows.HorizontalAlignment;
+using VerticalAlignment = System.Windows.VerticalAlignment;
 
 namespace Freexcel.App.Host;
 
-public sealed class PrintPreviewDialog : Window
+public sealed partial class PrintPreviewDialog : Window
 {
     public PrintPreviewDialog(string workbookName, FixedDocument document)
         : this(workbookName, document, new PrintSettingsPlan(["Print active sheet"]))
@@ -21,14 +25,23 @@ public sealed class PrintPreviewDialog : Window
         PrintSettingsPlan settings,
         Action? showMargins = null,
         Action? showPageSetup = null,
-        Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null)
+        Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null,
+        Func<PrintPreviewSettings, (FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreviewWithSettings = null,
+        SheetId sheetId = default,
+        Sheet? sheet = null,
+        Action<IWorkbookCommand>? executeCommand = null)
     {
         Title = CreateTitle(workbookName);
-        Width = 900;
+        Width = 1120;
         Height = 700;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        var root = new DockPanel();
+        var root = new Grid();
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
         var toolbar = new ToolBar
         {
             Padding = new Thickness(4),
@@ -57,6 +70,29 @@ public sealed class PrintPreviewDialog : Window
         };
         AutomationProperties.SetName(copiesBox, "Copies");
         AutomationProperties.SetHelpText(copiesBox, "Enter a copy count from 1 to 999.");
+        var collatedBox = new CheckBox
+        {
+            Content = "C_ollated",
+            IsChecked = true,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Print multiple copies as collated sets when the printer supports collation."
+        };
+        AutomationProperties.SetName(collatedBox, "Collated");
+        AutomationProperties.SetHelpText(collatedBox, "When checked, multiple copies print as collated sets.");
+        var sidesBox = new ComboBox
+        {
+            Width = 178,
+            SelectedIndex = 0,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            ToolTip = "Choose one-sided or duplex printing when the printer supports it."
+        };
+        sidesBox.Items.Add("Print One Sided");
+        sidesBox.Items.Add("Flip pages on long edge");
+        sidesBox.Items.Add("Flip pages on short edge");
+        AutomationProperties.SetName(sidesBox, "Sides");
+        AutomationProperties.SetHelpText(sidesBox, "Selects one-sided or two-sided duplex printing for the Windows print dialog.");
         var statusText = new TextBlock
         {
             Margin = new Thickness(4, 0, 8, 0),
@@ -66,6 +102,10 @@ public sealed class PrintPreviewDialog : Window
         };
         AutomationProperties.SetName(statusText, "Print status");
         AutomationProperties.SetHelpText(statusText, "Shows the selected printer, copy count, and preview page count.");
+        var selectedPageRangeMode = PrintPreviewPageRangeMode.AllPages;
+        TextBox pageNumberBox = null!;
+        TextBox fromPageBox = null!;
+        TextBox toPageBox = null!;
         var firstButton = new Button
         {
             Content = "_First Page",
@@ -110,9 +150,40 @@ public sealed class PrintPreviewDialog : Window
         AutomationProperties.SetHelpText(printButton, "Opens the Windows print dialog and applies the selected printer and copies when possible.");
         printButton.Click += (_, _) =>
         {
-            var copies = NormalizeCopyCount(copiesBox.Text);
+            if (!TryParseCopyCount(copiesBox.Text, out var copies))
+            {
+                ShowInvalidCopiesWarning(copiesBox);
+                return;
+            }
+
             copiesBox.Text = copies.ToString(CultureInfo.InvariantCulture);
-            ShowNativePrintDialog(previewDocument, printerBox.SelectedItem as PrintQueue, copies);
+            var currentPrintPage = 1;
+            ExportPageRange? selectedPageRange = null;
+            if (selectedPageRangeMode == PrintPreviewPageRangeMode.CurrentPage &&
+                !TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage))
+            {
+                ShowInvalidPageNumberWarning(pageNumberBox, totalPages);
+                return;
+            }
+            if (selectedPageRangeMode == PrintPreviewPageRangeMode.Pages &&
+                !ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError))
+            {
+                ShowInvalidPageRangeWarning(fromPageBox, toPageBox, pageRangeError);
+                return;
+            }
+            if (selectedPageRangeMode == PrintPreviewPageRangeMode.Pages &&
+                !ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError))
+            {
+                ShowInvalidPageRangeWarning(fromPageBox, toPageBox, validatedPageRangeError);
+                return;
+            }
+
+            ShowNativePrintDialog(
+                ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange),
+                printerBox.SelectedItem as PrintQueue,
+                copies,
+                collatedBox.IsChecked == true,
+                ResolveSelectedSidesMode(sidesBox));
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
         };
         closeButton.Click += (_, _) => Close();
@@ -134,14 +205,91 @@ public sealed class PrintPreviewDialog : Window
             VerticalAlignment = VerticalAlignment.Center
         });
         toolbar.Items.Add(copiesBox);
+        toolbar.Items.Add(collatedBox);
+        toolbar.Items.Add(new Label
+        {
+            Content = "_Sides:",
+            Target = sidesBox,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        toolbar.Items.Add(sidesBox);
         toolbar.Items.Add(statusText);
+        toolbar.Items.Add(new Separator());
+        var allPagesButton = new RadioButton
+        {
+            Content = "_All pages",
+            IsChecked = true,
+            GroupName = "PrintPageRange",
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Print every page in the preview."
+        };
+        var currentPageButton = new RadioButton
+        {
+            Content = "Current pa_ge",
+            GroupName = "PrintPageRange",
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Print only the page number shown in the Page box."
+        };
+        var pagesButton = new RadioButton
+        {
+            Content = "Pa_ges",
+            GroupName = "PrintPageRange",
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Print only the entered page range."
+        };
+        fromPageBox = new TextBox
+        {
+            Width = 34,
+            Text = "1",
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            IsEnabled = false
+        };
+        toPageBox = new TextBox
+        {
+            Width = 34,
+            Text = totalPages.ToString(CultureInfo.InvariantCulture),
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            IsEnabled = false
+        };
+        void SetPageRangeBoxesEnabled(bool enabled)
+        {
+            fromPageBox.IsEnabled = enabled;
+            toPageBox.IsEnabled = enabled;
+        }
+
+        allPagesButton.Checked += (_, _) => selectedPageRangeMode = PrintPreviewPageRangeMode.AllPages;
+        currentPageButton.Checked += (_, _) => selectedPageRangeMode = PrintPreviewPageRangeMode.CurrentPage;
+        pagesButton.Checked += (_, _) =>
+        {
+            selectedPageRangeMode = PrintPreviewPageRangeMode.Pages;
+            SetPageRangeBoxesEnabled(true);
+        };
+        allPagesButton.Unchecked += (_, _) => SetPageRangeBoxesEnabled(pagesButton.IsChecked == true);
+        currentPageButton.Unchecked += (_, _) => SetPageRangeBoxesEnabled(pagesButton.IsChecked == true);
+        pagesButton.Unchecked += (_, _) => SetPageRangeBoxesEnabled(false);
+        AutomationProperties.SetName(allPagesButton, "All pages");
+        AutomationProperties.SetName(currentPageButton, "Current page");
+        AutomationProperties.SetName(pagesButton, "Pages");
+        AutomationProperties.SetName(fromPageBox, "From page");
+        AutomationProperties.SetName(toPageBox, "To page");
+        toolbar.Items.Add(allPagesButton);
+        toolbar.Items.Add(currentPageButton);
+        toolbar.Items.Add(pagesButton);
+        toolbar.Items.Add(fromPageBox);
+        toolbar.Items.Add(new TextBlock { Text = "to", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+        toolbar.Items.Add(toPageBox);
         toolbar.Items.Add(new Separator());
         toolbar.Items.Add(firstButton);
         toolbar.Items.Add(previousButton);
         toolbar.Items.Add(nextButton);
         toolbar.Items.Add(lastButton);
         toolbar.Items.Add(new Separator());
-        var pageNumberBox = new TextBox
+        pageNumberBox = new TextBox
         {
             Width = 44,
             Text = "1",
@@ -179,16 +327,17 @@ public sealed class PrintPreviewDialog : Window
         toolbar.Items.Add(pageNumberBox);
         toolbar.Items.Add(pageStatusText);
         toolbar.Items.Add(new Separator());
-        toolbar.Items.Add(new Label
-        {
-            Content = "_Zoom:",
-            VerticalAlignment = VerticalAlignment.Center
-        });
         var zoomBox = new ComboBox
         {
             Width = 82,
             SelectedIndex = 2
         };
+        toolbar.Items.Add(new Label
+        {
+            Content = "_Zoom:",
+            Target = zoomBox,
+            VerticalAlignment = VerticalAlignment.Center
+        });
         foreach (var zoom in new[] { "50%", "75%", "100%", "125%", "Page Width" })
             zoomBox.Items.Add(zoom);
         zoomBox.SelectionChanged += (_, _) =>
@@ -204,16 +353,20 @@ public sealed class PrintPreviewDialog : Window
         toolbar.Items.Add(zoomBox);
         toolbar.Items.Add(new Separator());
         TextBlock? settingsSummaryText = null;
+        var currentPrintPreviewSettings = new PrintPreviewSettings();
         void RefreshPreviewDocument()
         {
-            if (refreshPreview is null)
+            if (refreshPreview is null && refreshPreviewWithSettings is null)
                 return;
 
-            var refreshed = refreshPreview();
+            var refreshed = refreshPreviewWithSettings is not null
+                ? refreshPreviewWithSettings(currentPrintPreviewSettings)
+                : refreshPreview!();
             previewDocument = refreshed.Document;
             viewer.Document = previewDocument;
             totalPages = Math.Max(1, previewDocument.Pages.Count);
             pageNumberBox.Text = "1";
+            toPageBox.Text = totalPages.ToString(CultureInfo.InvariantCulture);
             pageStatusText.Text = $"Page 1 of {totalPages}";
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
             if (settingsSummaryText is not null)
@@ -256,96 +409,35 @@ public sealed class PrintPreviewDialog : Window
             MaxWidth = 620
         };
         toolbar.Items.Add(settingsSummaryText);
-        DockPanel.SetDock(toolbar, Dock.Top);
-        root.Children.Add(toolbar);
+
+        // Left settings panel
+        var settingsScroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Background = System.Windows.Media.Brushes.WhiteSmoke
+        };
+        settingsScroll.Content = BuildPrintSettingsPanel(
+            sheetId,
+            sheet,
+            executeCommand,
+            RefreshPreviewDocument,
+            refreshPreviewWithSettings is not null
+                ? settings => currentPrintPreviewSettings = settings
+                : null);
+        Grid.SetRow(settingsScroll, 1);
+        Grid.SetColumn(settingsScroll, 0);
+        root.Children.Add(settingsScroll);
+
+        Grid.SetRow(viewer, 1);
+        Grid.SetColumn(viewer, 1);
         root.Children.Add(viewer);
+
+        Grid.SetRow(toolbar, 0);
+        Grid.SetColumnSpan(toolbar, 2);
+        root.Children.Add(toolbar);
+
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget(printButton);
-    }
-
-    public static string CreateTitle(string workbookName) =>
-        $"Print Preview - {workbookName.Trim()}";
-
-    public static int NormalizeCopyCount(string? text)
-    {
-        if (!int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var copies))
-            return 1;
-
-        return Math.Clamp(copies, 1, 999);
-    }
-
-    private static void ShowNativePrintDialog(FixedDocument document, PrintQueue? printQueue, int copies)
-    {
-        var dialog = new PrintDialog();
-        if (printQueue is not null)
-            dialog.PrintQueue = printQueue;
-
-        copies = NormalizeCopyCount(copies.ToString(CultureInfo.InvariantCulture));
-        if (dialog.PrintTicket is not null)
-            dialog.PrintTicket.CopyCount = copies;
-
-        if (dialog.ShowDialog() == true)
-            dialog.PrintDocument(document.DocumentPaginator, "Freexcel worksheet");
-    }
-
-    private static void PopulatePrinterBox(ComboBox printerBox)
-    {
-        try
-        {
-            using var server = new LocalPrintServer();
-            foreach (var queue in server.GetPrintQueues())
-                printerBox.Items.Add(queue);
-
-            if (printerBox.Items.Count > 0)
-            {
-                printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
-                printerBox.SelectedItem = printerBox.Items
-                    .OfType<PrintQueue>()
-                    .FirstOrDefault(queue => string.Equals(
-                        queue.FullName,
-                        server.DefaultPrintQueue.FullName,
-                        StringComparison.OrdinalIgnoreCase));
-                if (printerBox.SelectedItem is null)
-                    printerBox.SelectedIndex = 0;
-
-                return;
-            }
-        }
-        catch (PrintSystemException)
-        {
-        }
-
-        printerBox.IsEnabled = false;
-        printerBox.ToolTip = "No installed printers were detected. Print opens the Windows print dialog so a printer can be chosen there.";
-        AutomationProperties.SetHelpText(printerBox, "No installed printers were detected. Use Print to choose a printer in the Windows print dialog.");
-    }
-
-    private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
-    {
-        var copies = NormalizeCopyCount(copiesBox.Text);
-        var pages = totalPages == 1 ? "1 page" : $"{totalPages} pages";
-        var copyText = copies == 1 ? "1 copy" : $"{copies} copies";
-        var printerName = printerBox.SelectedItem is PrintQueue queue
-            ? queue.FullName
-            : "Windows print dialog";
-
-        statusText.Text = $"Ready: {printerName}; {copyText}; {pages}";
-    }
-
-    private static void NavigateToPage(DocumentViewer viewer, TextBox pageNumberBox, TextBlock pageStatusText, int totalPages)
-    {
-        if (!int.TryParse(pageNumberBox.Text.Trim(), out var pageNumber))
-            return;
-
-        pageNumber = Math.Clamp(pageNumber, 1, totalPages);
-        viewer.GoToPage(pageNumber);
-        pageNumberBox.Text = pageNumber.ToString(CultureInfo.InvariantCulture);
-        pageStatusText.Text = $"Page {pageNumber} of {totalPages}";
-    }
-
-    private static void FocusInitialKeyboardTarget(Button printButton)
-    {
-        printButton.Focus();
-        Keyboard.Focus(printButton);
     }
 }

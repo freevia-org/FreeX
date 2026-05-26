@@ -123,6 +123,37 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDialogRangePicker_RefocusesSelectedInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private void UpdateDestinationState", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotTableDialogInvalidRanges_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid PivotTable source range.\", _sourceRangeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a destination cell on the active worksheet.\", _destinationRangeBox);");
+        source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sourceSheetId, _sourceRangeBox.Text, ResolveSheetIdByName, out _)");
+        source.Should().Contain("destinationRange.Start.Sheet != _sourceSheetId");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void PivotTableRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         PivotTableDialog.CreateRangeSelectionRequest(PivotTableRangeSelectionTarget.DestinationRange, " Report!F3 ")
@@ -215,6 +246,38 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDataSourceRangePicker_RefocusesSourceInputAfterRequest()
+    {
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+
+        source.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceDialogInvalidRange_ShowsOwnedWarningAndRefocusesSource()
+    {
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sheetId, _sourceBox.Text, ResolveSheetIdByName, out _)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid PivotTable source range.\", _sourceBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("FocusRangeSelectionInput(target);");
+        commandSource.Should().Contain("sheetId: sheet.Id");
+    }
+
+    [Fact]
     public void PivotTableDataSourceReferencePicker_RaisesRangeSelectionRequest()
     {
         StaTestRunner.Run(() =>
@@ -282,6 +345,35 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void InsertSlicerDialog_TryCreateResult_RejectsBlankFieldOrCaption()
+    {
+        InsertSlicerDialog.TryCreateResult(" ", "Region Slicer", out _, out var fieldError)
+            .Should()
+            .BeFalse();
+        fieldError.Should().Be("Select a field to connect.");
+
+        InsertSlicerDialog.TryCreateResult("Region", " ", out _, out var captionError)
+            .Should()
+            .BeFalse();
+        captionError.Should().Be("Enter a slicer caption.");
+    }
+
+    [Fact]
+    public void InsertSlicerDialog_AcceptWarnsAndRefocusesInvalidInput()
+    {
+        var source = ReadClassSource(
+            "PivotSlicerTimelineDialogs.cs",
+            "public sealed class InsertSlicerDialog",
+            "public sealed record InsertTimelineDialogResult");
+
+        source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter slicer options.\"");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("textBox.SelectAll();");
+    }
+
+    [Fact]
     public void InsertSlicerDialog_ExposesExcelLikeFieldSelectionShell()
     {
         var source = ReadPivotWorkflowSource();
@@ -313,6 +405,35 @@ public sealed class PivotWorkflowDialogTests
         InsertTimelineDialog.CreateResult("  Order Date  ", "  Order Date Timeline  ")
             .Should()
             .Be(new InsertTimelineDialogResult("Order Date", "Order Date Timeline"));
+    }
+
+    [Fact]
+    public void InsertTimelineDialog_TryCreateResult_RejectsBlankDateFieldOrCaption()
+    {
+        InsertTimelineDialog.TryCreateResult(" ", "Order Date Timeline", out _, out var fieldError)
+            .Should()
+            .BeFalse();
+        fieldError.Should().Be("Select a date field to connect.");
+
+        InsertTimelineDialog.TryCreateResult("Order Date", " ", out _, out var captionError)
+            .Should()
+            .BeFalse();
+        captionError.Should().Be("Enter a timeline caption.");
+    }
+
+    [Fact]
+    public void InsertTimelineDialog_AcceptWarnsAndRefocusesInvalidInput()
+    {
+        var source = ReadClassSource(
+            "PivotSlicerTimelineDialogs.cs",
+            "public sealed class InsertTimelineDialog",
+            "");
+
+        source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter timeline options.\"");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("textBox.SelectAll();");
     }
 
     [Fact]
@@ -699,6 +820,24 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableOptionsDialogInvalidNumericOptions_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotTableOptionsDialog.cs",
+            "public sealed partial class PivotTableOptionsDialog",
+            "");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a compact row label indent from 0 to 15.\", _compactIndentBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter page fields per column from 0 to 255.\", _pageWrapBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("_tabs.SelectedItem = _layoutTab;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void PivotTableOptionsDialog_ExposesAccessKeysForModeledCheckboxes()
     {
         var source = ReadPivotWorkflowSource();
@@ -891,6 +1030,40 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotFieldGroupingDialogInvalidNumberRangeIntervals_ShowOwnedWarningAndRefocusByBox()
+    {
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotFieldGroupingDialog",
+            "");
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive grouping interval.\", _intervalBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
+        source.Should().Contain("string.IsNullOrWhiteSpace(value)");
+        source.Should().Contain("!double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out interval)");
+        source.Should().Contain("interval <= 0");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialogInvalidBounds_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotFieldGroupingDialog",
+            "");
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid starting value or leave it blank.\", _startBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid ending value or leave it blank.\", _endBox);");
+        source.Should().Contain("TryParseOptionalFiniteDouble(_startBox.Text, out _)");
+        source.Should().Contain("TryParseOptionalFiniteDouble(_endBox.Text, out _)");
+        source.Should().Contain("double.IsFinite(parsed)");
+    }
+
+    [Fact]
     public void PivotCalculatedFieldDialog_CreateResult_TrimsAndBuildsModel()
     {
         var result = PivotCalculatedFieldDialog.CreateResult("  Revenue  ", "  Sales-Cost  ");
@@ -925,6 +1098,23 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Insert _Field");
         source.Should().Contain("InsertSelectedField");
         source.Should().Contain("InsertFormulaReference");
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialogInvalidRequiredInputs_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotCalculatedDialogs.cs",
+            "public sealed class PivotCalculatedFieldDialog",
+            "public sealed record PivotCalculatedItemDialogResult");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated field name.\", _nameBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated field formula.\", _formulaBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
@@ -976,6 +1166,23 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Insert _Item");
         source.Should().Contain("RefreshItemList");
         source.Should().Contain("InsertSelectedItem");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialogInvalidRequiredInputs_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotCalculatedDialogs.cs",
+            "public sealed class PivotCalculatedItemDialog",
+            "");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated item name.\", _nameBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated item formula.\", _formulaBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]

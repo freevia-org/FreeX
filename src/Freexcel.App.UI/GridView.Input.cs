@@ -10,6 +10,24 @@ public partial class GridView
     {
         var pos = e.GetPosition(this);
 
+        if (_objectDragKind != ObjectDragKind.None)
+        {
+            var dx = pos.X - _objectDragStartPos.X;
+            var dy = pos.Y - _objectDragStartPos.Y;
+            _objectDragCurrentRect = _objectDragKind switch
+            {
+                ObjectDragKind.Move     => new Rect(_objectDragStartRect.X + dx, _objectDragStartRect.Y + dy, _objectDragStartRect.Width, _objectDragStartRect.Height),
+                ObjectDragKind.ResizeSE => new Rect(_objectDragStartRect.X, _objectDragStartRect.Y, Math.Max(8, _objectDragStartRect.Width + dx), Math.Max(8, _objectDragStartRect.Height + dy)),
+                ObjectDragKind.ResizeE  => new Rect(_objectDragStartRect.X, _objectDragStartRect.Y, Math.Max(8, _objectDragStartRect.Width + dx), _objectDragStartRect.Height),
+                ObjectDragKind.ResizeS  => new Rect(_objectDragStartRect.X, _objectDragStartRect.Y, _objectDragStartRect.Width, Math.Max(8, _objectDragStartRect.Height + dy)),
+                _ => _objectDragStartRect
+            };
+            Cursor = ObjectDragCursor(_objectDragKind);
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
         if (_marginDragEdge.HasValue)
         {
             if (GetPageMarginsForDraggedGuide(pos) is { } margins)
@@ -133,6 +151,53 @@ public partial class GridView
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         var pos = e.GetPosition(this);
+
+        // Check if clicking on an already-selected object's handles
+        if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
+        {
+            var selRect = GetSelectedObjectRect();
+            var dragKind = HitTestObjectHandle(pos, selRect);
+            if (dragKind != ObjectDragKind.None)
+            {
+                _objectDragKind = dragKind;
+                _objectDragStartPos = pos;
+                _objectDragStartRect = selRect;
+                _objectDragCurrentRect = selRect;
+                Cursor = ObjectDragCursor(dragKind);
+                CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Check if clicking on a new drawing object
+        var hit = HitTestDrawingObject(pos);
+        if (hit.Id != Guid.Empty)
+        {
+            SelectedObjectId = hit.Id;
+            SelectedObjectKind = hit.Kind;
+            _selectedObjectId = hit.Id;
+            _selectedObjectKind = hit.Kind;
+            _objectDragKind = ObjectDragKind.Move;
+            _objectDragStartPos = pos;
+            _objectDragStartRect = hit.Rect;
+            _objectDragCurrentRect = hit.Rect;
+            _objectDragStartAnchor = HitTestAnchorCell(pos) ?? default;
+            Cursor = Cursors.SizeAll;
+            CaptureMouse();
+            e.Handled = true;
+            return;
+        }
+
+        // Clicking empty space deselects
+        if (SelectedObjectId != Guid.Empty)
+        {
+            SelectedObjectId = Guid.Empty;
+            SelectedObjectKind = ObjectKind.None;
+            _selectedObjectId = Guid.Empty;
+            _selectedObjectKind = ObjectKind.None;
+            InvalidateVisual();
+        }
 
         if (HitTestPivotChartFieldButton(Charts, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } pivotButton)
         {
@@ -262,6 +327,39 @@ public partial class GridView
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
+        if (_objectDragKind != ObjectDragKind.None)
+        {
+            var pos = e.GetPosition(this);
+            var dragKind = _objectDragKind;
+            var id = _selectedObjectId;
+            var kind = _selectedObjectKind;
+            var startRect = _objectDragStartRect;
+            var currentRect = _objectDragCurrentRect;
+
+            _objectDragKind = ObjectDragKind.None;
+            _objectDragCurrentRect = Rect.Empty;
+            Cursor = null;
+            ReleaseMouseCapture();
+
+            if (dragKind == ObjectDragKind.Move)
+            {
+                var newAnchor = HitTestAnchorCell(pos);
+                if (newAnchor.HasValue && newAnchor.Value != _objectDragStartAnchor)
+                    ObjectMoved?.Invoke(id, kind, newAnchor.Value);
+            }
+            else
+            {
+                var newWidth  = Math.Max(8, currentRect.Width);
+                var newHeight = Math.Max(8, currentRect.Height);
+                if (Math.Abs(newWidth - startRect.Width) > 1 || Math.Abs(newHeight - startRect.Height) > 1)
+                    ObjectResized?.Invoke(id, kind, newWidth, newHeight);
+            }
+
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
         if (_marginDragEdge.HasValue)
         {
             var pos = e.GetPosition(this);

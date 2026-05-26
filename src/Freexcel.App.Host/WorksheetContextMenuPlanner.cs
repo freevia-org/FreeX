@@ -63,12 +63,13 @@ public static class WorksheetContextMenuPlanner
         WorksheetContextMenuCommand.Separator,
         new("New Comment", WorksheetContextMenuAction.NewComment, AccessHeader: "New Co_mment"),
         new("Edit Comment...", WorksheetContextMenuAction.EditComment, AccessHeader: "_Edit Comment...", IsEnabled: state.HasThreadedComment),
+        BuildThreadedCommentResolveCommand(state),
         new("Delete Comment", WorksheetContextMenuAction.DeleteComment, AccessHeader: "Delete _Comment", IsEnabled: state.HasThreadedComment),
         new("New Note", WorksheetContextMenuAction.NewNote, AccessHeader: "New No_te"),
         new("Edit Note...", WorksheetContextMenuAction.EditNote, AccessHeader: "_Edit Note...", IsEnabled: state.HasNote),
         new("Delete Note", WorksheetContextMenuAction.DeleteNote, AccessHeader: "De_lete Note", IsEnabled: state.HasNote),
         new("Show Notes", WorksheetContextMenuAction.ShowNotes, AccessHeader: "_Show Notes", IsEnabled: state.HasNote || state.HasThreadedComment),
-        new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink..."),
+        .. BuildHyperlinkCommands(state),
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         WorksheetContextMenuCommand.Separator,
@@ -102,8 +103,15 @@ public static class WorksheetContextMenuPlanner
         new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
         new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws"),
         WorksheetContextMenuCommand.Separator,
+        new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
+        WorksheetContextMenuCommand.Separator,
         new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
     ];
+
+    private static WorksheetContextMenuCommand BuildThreadedCommentResolveCommand(WorksheetContextMenuState state) =>
+        state.IsThreadedCommentResolved
+            ? new("Unresolve Comment", WorksheetContextMenuAction.UnresolveComment, AccessHeader: "Un_resolve Comment", IsEnabled: state.HasThreadedComment)
+            : new("Resolve Comment", WorksheetContextMenuAction.ResolveComment, AccessHeader: "Resol_ve Comment", IsEnabled: state.HasThreadedComment);
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildColumnSelectionCommands() =>
     [
@@ -117,6 +125,8 @@ public static class WorksheetContextMenuPlanner
         new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth"),
         new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
         new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns"),
+        WorksheetContextMenuCommand.Separator,
+        new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         WorksheetContextMenuCommand.Separator,
         new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
     ];
@@ -146,6 +156,17 @@ public static class WorksheetContextMenuPlanner
 
         return commands;
     }
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildHyperlinkCommands(WorksheetContextMenuState state) =>
+        state.HasHyperlink
+            ? [
+                new("Open Hyperlink", WorksheetContextMenuAction.OpenHyperlink, AccessHeader: "_Open Hyperlink"),
+                new("Edit Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Edit Hyperlink..."),
+                new("Remove Hyperlink", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "_Remove Hyperlink")
+            ]
+            : [
+                new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink...")
+            ];
 }
 
 public sealed record WorksheetContextMenuCommand(
@@ -163,6 +184,7 @@ public sealed record WorksheetContextMenuCommand(
 
 public sealed record WorksheetContextMenuState(
     bool HasThreadedComment = false,
+    bool IsThreadedCommentResolved = false,
     bool HasNote = false,
     bool HasHyperlink = false)
 {
@@ -209,11 +231,14 @@ public enum WorksheetContextMenuAction
     AutoFitColumnWidth,
     NewComment,
     EditComment,
+    ResolveComment,
+    UnresolveComment,
     DeleteComment,
     NewNote,
     EditNote,
     DeleteNote,
     ShowNotes,
+    OpenHyperlink,
     Hyperlink,
     FormatCells,
     ClearAll,

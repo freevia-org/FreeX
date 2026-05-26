@@ -96,13 +96,26 @@ public sealed partial class TextToColumnsDialog
         grid.Children.Add(textBox);
     }
 
-    private TextToColumnsAdvancedOptions BuildAdvancedOptions() =>
-        new(NormalizeSeparator(_decimalSeparatorBox.Text, "."),
-            NormalizeSeparator(_thousandsSeparatorBox.Text, ","),
+    private TextToColumnsAdvancedOptions BuildAdvancedOptions()
+    {
+        TryParseAdvancedSeparator(_decimalSeparatorBox.Text, out var decimalSeparator);
+        TryParseAdvancedSeparator(_thousandsSeparatorBox.Text, out var thousandsSeparator);
+        return new(
+            decimalSeparator,
+            thousandsSeparator,
             _trailingMinusBox.IsChecked == true);
+    }
 
-    private static string NormalizeSeparator(string? value, string fallback) =>
-        string.IsNullOrEmpty(value) ? fallback : value;
+    public static bool TryParseAdvancedSeparator(string? value, out string separator)
+    {
+        separator = string.Empty;
+        var trimmed = value?.Trim() ?? string.Empty;
+        if (trimmed.Length != 1)
+            return false;
+
+        separator = trimmed;
+        return true;
+    }
 
     private TextToColumnsTextQualifier SelectedTextQualifier() =>
         _textQualifierBox.SelectedIndex switch

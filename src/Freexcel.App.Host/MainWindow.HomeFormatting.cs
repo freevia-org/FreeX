@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
@@ -144,13 +145,58 @@ public partial class MainWindow
             ApplyStyleDiff(new StyleDiff(FontName: name));
     }
 
+    private void FontNameBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (_suppressToolbarSync) return;
+
+        CommitFontNameBoxText();
+        e.Handled = true;
+    }
+
+    private void FontNameBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        CommitFontNameBoxText();
+    }
+
+    private void CommitFontNameBoxText()
+    {
+        var name = FontNameBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(name))
+            ApplyStyleDiff(new StyleDiff(FontName: name));
+    }
+
     private void FontSizeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        var text = FontSizeBox.Text;
-        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))
-            ApplyStyleDiff(new StyleDiff(FontSize: size));
+        CommitFontSizeBoxText(preferSelectedItem: true);
     }
+
+    private void FontSizeBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (_suppressToolbarSync) return;
+
+        CommitFontSizeBoxText();
+        e.Handled = true;
+    }
+
+    private void FontSizeBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        CommitFontSizeBoxText();
+    }
+
+    private void CommitFontSizeBoxText(bool preferSelectedItem = false)
+    {
+        var text = preferSelectedItem ? GetSelectedFontSizeText() : FontSizeBox.Text;
+        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))
+            ApplyFontSizeAndFitRows(size);
+    }
+
+    private string GetSelectedFontSizeText() =>
+        FontSizeBox.SelectedItem as string ?? FontSizeBox.Text;
 
     private void FontColorBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -238,6 +284,7 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+        RefreshToolbar();
     }
 
     // ── Border picker ────────────────────────────────────────────────────────

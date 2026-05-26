@@ -17,7 +17,9 @@ public sealed record PivotTableDataSourceRangeSelectionRequest(
 
 public sealed class PivotTableDataSourceDialog : Window
 {
+    private readonly SheetId _sheetId;
     private readonly TextBox _sourceBox = new();
+    private readonly Func<string, SheetId?> _resolveSheetId;
     private readonly Action<PivotTableDataSourceRangeSelectionRequest>? _requestRangeSelection;
 
     public PivotTableDataSourceDialogResult Result { get; private set; }
@@ -25,8 +27,12 @@ public sealed class PivotTableDataSourceDialog : Window
 
     public PivotTableDataSourceDialog(
         string sourceRangeText,
-        Action<PivotTableDataSourceRangeSelectionRequest>? requestRangeSelection = null)
+        Action<PivotTableDataSourceRangeSelectionRequest>? requestRangeSelection = null,
+        SheetId sheetId = default,
+        Func<string, SheetId?>? resolveSheetId = null)
     {
+        _sheetId = sheetId;
+        _resolveSheetId = resolveSheetId ?? (_ => null);
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(sourceRangeText);
         Title = "Change PivotTable Data Source";
@@ -57,6 +63,9 @@ public sealed class PivotTableDataSourceDialog : Window
             new Thickness(0, 0, 0, 16));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(() =>
         {
+            if (!ValidateInputs())
+                return;
+
             Result = CreateResult(_sourceBox.Text);
             DialogResult = true;
         }));
@@ -71,7 +80,35 @@ public sealed class PivotTableDataSourceDialog : Window
             {
                 RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
                 _requestRangeSelection?.Invoke(RangeSelectionRequest);
+                FocusRangeSelectionInput(request.Target);
             });
+
+    private bool ValidateInputs()
+    {
+        if (!WorkbookRangeTextCodec.TryParse(_sheetId, _sourceBox.Text, ResolveSheetIdByName, out _))
+        {
+            ShowInvalidInputWarning("Enter a valid PivotTable source range.", _sourceBox);
+            return false;
+        }
+
+        return true;
+    }
+
+    private SheetId? ResolveSheetIdByName(string sheetName) => _resolveSheetId(sheetName);
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        FocusRangeSelectionInput(target);
+        return false;
+    }
+
+    private static void FocusRangeSelectionInput(TextBox target)
+    {
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
 
     private void FocusInitialKeyboardTarget()
     {
@@ -325,17 +362,50 @@ public sealed class PivotFieldGroupingDialog : Window
 
     private void Accept()
     {
+        var grouping = _groupingBox.SelectedItem is PivotFieldGrouping selectedGrouping
+            ? selectedGrouping
+            : PivotFieldGrouping.None;
+        if (_ungroupBox.IsChecked != true && !TryParseOptionalFiniteDouble(_startBox.Text, out _))
+        {
+            ShowInvalidInputWarning("Enter a valid starting value or leave it blank.", _startBox);
+            return;
+        }
+
+        if (_ungroupBox.IsChecked != true && !TryParseOptionalFiniteDouble(_endBox.Text, out _))
+        {
+            ShowInvalidInputWarning("Enter a valid ending value or leave it blank.", _endBox);
+            return;
+        }
+
+        var groupInterval = 0d;
+        if (_ungroupBox.IsChecked != true
+            && grouping == PivotFieldGrouping.NumberRange
+            && !TryParsePositiveInterval(_intervalBox.Text, out groupInterval))
+        {
+            ShowInvalidInputWarning("Enter a positive grouping interval.", _intervalBox);
+            return;
+        }
+
         var selectedField = _fieldBox.SelectedItem as PivotSourceFieldOption
             ?? _fields.FirstOrDefault(field => string.Equals(field.Name, _fieldBox.Text, StringComparison.OrdinalIgnoreCase));
         Result = CreateResult(
             selectedField?.Name ?? _fieldBox.Text,
             selectedField?.Index ?? 0,
-            _groupingBox.SelectedItem is PivotFieldGrouping grouping ? grouping : PivotFieldGrouping.None,
+            grouping,
             _startBox.Text,
             _endBox.Text,
-            _intervalBox.Text,
+            grouping == PivotFieldGrouping.NumberRange ? FormatDouble(groupInterval) : _intervalBox.Text,
             _ungroupBox.IsChecked == true);
         DialogResult = true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return false;
     }
 
     private void FocusInitialKeyboardTarget()
@@ -354,6 +424,36 @@ public sealed class PivotFieldGroupingDialog : Window
         double.TryParse(value?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+
+    private static bool TryParseOptionalFiniteDouble(string? value, out double? parsedValue)
+    {
+        parsedValue = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        if (!double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            || !double.IsFinite(parsed))
+        {
+            return false;
+        }
+
+        parsedValue = parsed;
+        return true;
+    }
+
+    private static bool TryParsePositiveInterval(string? value, out double interval)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || !double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out interval)
+            || !double.IsFinite(interval)
+            || interval <= 0)
+        {
+            interval = 0;
+            return false;
+        }
+
+        return true;
+    }
 
     private static string FormatDouble(double? value) =>
         value?.ToString("G", CultureInfo.InvariantCulture) ?? "";

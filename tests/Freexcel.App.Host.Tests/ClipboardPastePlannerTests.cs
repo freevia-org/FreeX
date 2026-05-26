@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
+using System.Windows;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -89,5 +90,58 @@ public sealed class ClipboardPastePlannerTests
         ClipboardPastePlanner.ShouldUseInternalClipboard(internalText, currentClipboardText)
             .Should()
             .Be(expected);
+    }
+
+    [Theory]
+    [InlineData(PasteMode.All, "A\tB\r\n1\t2", true, false)]
+    [InlineData(PasteMode.All, "Single cell", true, false)]
+    [InlineData(PasteMode.All, "", true, true)]
+    [InlineData(PasteMode.All, "   ", true, true)]
+    [InlineData(PasteMode.All, null, true, true)]
+    [InlineData(PasteMode.Values, null, true, false)]
+    [InlineData(PasteMode.Formats, null, true, false)]
+    [InlineData(PasteMode.Formulas, null, true, false)]
+    public void ShouldPasteClipboardImageForNormalPaste_PrefersTabularTextOverImage(
+        PasteMode mode,
+        string? clipboardText,
+        bool hasImage,
+        bool expected)
+    {
+        ClipboardPastePlanner.ShouldPasteClipboardImageForNormalPaste(mode, clipboardText, hasImage)
+            .Should()
+            .Be(expected);
+    }
+
+    [Fact]
+    public void ExternalPaste_UsesRealWindowsClipboardTextAndRejectsStaleInternalCopy()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var previousText = Clipboard.ContainsText() ? Clipboard.GetText() : null;
+            try
+            {
+                Clipboard.SetText("alpha\t42\r\nbeta\t99");
+                var clipboardText = Clipboard.GetText();
+
+                ClipboardPastePlanner.ShouldUseInternalClipboard("old internal copy", clipboardText)
+                    .Should()
+                    .BeFalse("real OS clipboard text changed after the internal copy was captured");
+
+                ClipboardSerializer.Deserialize(clipboardText)
+                    .Should()
+                    .BeEquivalentTo(new[]
+                    {
+                        new[] { "alpha", "42" },
+                        new[] { "beta", "99" }
+                    });
+            }
+            finally
+            {
+                if (previousText is not null)
+                    Clipboard.SetText(previousText);
+                else
+                    Clipboard.Clear();
+            }
+        });
     }
 }

@@ -127,16 +127,82 @@ public sealed class ChartTrendlineOptionsDialog : Window
 
     private void Accept()
     {
+        if (!TryReadIntInRange(_periodBox, min: 2, max: 255, out var period))
+        {
+            ShowInvalidInputWarning("Enter a moving average period from 2 to 255.", _periodBox);
+            return;
+        }
+
+        if (!TryReadIntInRange(_orderBox, min: 2, max: 6, out var order))
+        {
+            ShowInvalidInputWarning("Enter a polynomial order from 2 to 6.", _orderBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_colorBox, out var color))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _colorBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_thicknessBox, min: 0.5, max: 10, out var thickness))
+        {
+            ShowInvalidInputWarning("Enter a trendline width from 0.5 to 10 points.", _thicknessBox);
+            return;
+        }
+
         Result = CreateResult(
             _showBox.IsChecked == true,
             ChartDialogHelpers.Selected(_typeBox, ChartTrendlineType.Linear),
-            (int)ChartDialogHelpers.ParseDouble(_periodBox.Text, 2),
-            (int)ChartDialogHelpers.ParseDouble(_orderBox.Text, 2),
+            period,
+            order,
             _equationBox.IsChecked == true,
             _rSquaredBox.IsChecked == true,
-            ChartDialogHelpers.ParseColor(_colorBox.Text),
-            ChartDialogHelpers.ParseDouble(_thicknessBox.Text, 1.5),
+            color,
+            thickness,
             ChartDialogHelpers.Selected(_dashBox, ChartLineDashStyle.Solid));
         DialogResult = true;
+    }
+
+    private static bool TryReadIntInRange(TextBox textBox, int min, int max, out int value)
+    {
+        value = 0;
+        return int.TryParse(
+                textBox.Text,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value)
+            && value >= min
+            && value <= max;
+    }
+
+    private static bool TryReadOptionalColor(TextBox textBox, out CellColor? color) =>
+        ColorInputParser.TryParseOptionalHexColor(textBox.Text, out color);
+
+    private static bool TryReadClampedDouble(TextBox textBox, double min, double max, out double value)
+    {
+        value = 0;
+        return double.TryParse(
+                textBox.Text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value)
+            && double.IsFinite(value)
+            && value >= min
+            && value <= max;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
     }
 }

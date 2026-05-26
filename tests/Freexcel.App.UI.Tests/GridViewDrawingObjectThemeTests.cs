@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Reflection;
+using System.Threading;
+using System.Windows;
 using FluentAssertions;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
@@ -57,6 +60,36 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void TryCreateDrawingAnchorRect_MapsTwoCellAnchorToViewportPixels()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(3, 20, 0),
+                new RowMetric(4, 20, 20),
+                new RowMetric(5, 20, 40)
+            ],
+            [
+                new ColMetric(2, 80, 0),
+                new ColMetric(3, 80, 80),
+                new ColMetric(4, 80, 160)
+            ]);
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 95250, 2, 190500),
+            new DrawingAnchorPoint(3, 47625, 4, 95250));
+
+        var created = GridView.TryCreateDrawingAnchorRect(
+            viewport,
+            anchor,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            out var rect);
+
+        created.Should().BeTrue();
+        rect.Should().Be(new Rect(40, 38, 155, 30));
+    }
+
+    [Fact]
     public void GridView_ExposesObjectDisplayModeForExcelPlaceholderRendering()
     {
         var source =
@@ -78,6 +111,116 @@ public sealed class GridViewDrawingObjectThemeTests
         source.Should().Contain("DrawPictureSelectionAdorner");
         source.Should().Contain("SelectedRange?.Start != picture.Anchor");
         source.Should().Contain("dc.DrawRectangle(null, selectedPen, rect);");
+    }
+
+    [Fact]
+    public void CommentMarkerRenderer_PaintsRedTriangleAtCellTopRight()
+    {
+        RunOnStaThread(() =>
+        {
+            var visual = new System.Windows.Media.DrawingVisual();
+            using (var drawingContext = visual.RenderOpen())
+            {
+                var drawCommentIndicator = typeof(GridView).GetMethod(
+                    "DrawCommentIndicator",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+                drawCommentIndicator!.Invoke(null, [drawingContext, new Rect(30, 18, 60, 24)]);
+            }
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                120,
+                80,
+                96,
+                96,
+                System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+
+            var pixels = new byte[120 * 80 * 4];
+            bitmap.CopyPixels(pixels, stride: 120 * 4, offset: 0);
+
+            var redPixels = 0;
+            for (var y = 18; y <= 26; y++)
+            {
+                for (var x = 82; x <= 90; x++)
+                {
+                    var offset = (y * 120 + x) * 4;
+                    var blue = pixels[offset];
+                    var green = pixels[offset + 1];
+                    var red = pixels[offset + 2];
+                    var alpha = pixels[offset + 3];
+                    if (red > 180 && green < 110 && blue < 110 && alpha > 128)
+                        redPixels++;
+                }
+            }
+
+            redPixels.Should().BeGreaterThan(4, "commented cells must show a visible red top-right marker");
+        });
+    }
+
+    [Fact]
+    public void PictureHitTesting_MapsPictureBodyAndResizeHandleToObjectCommands()
+    {
+        RunOnStaThread(() =>
+        {
+            var sheetId = SheetId.New();
+            var picture = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = new CellAddress(sheetId, 1, 1),
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
+                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                Pictures = [picture]
+            };
+
+            grid.TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect)
+                .Should().BeTrue();
+
+            var hitTestDrawingObject = typeof(GridView).GetMethod(
+                "HitTestDrawingObject",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var hit = hitTestDrawingObject!.Invoke(grid, [new Point(rect.Left + 10, rect.Top + 10)]);
+            hit!.GetType().GetField("Item1")!.GetValue(hit).Should().Be(picture.Id);
+            hit.GetType().GetField("Item2")!.GetValue(hit).Should().Be(ObjectKind.Picture);
+
+            var hitTestObjectHandle = typeof(GridView).GetMethod(
+                "HitTestObjectHandle",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            hitTestObjectHandle!.Invoke(grid, [new Point(rect.Right, rect.Bottom), rect])
+                .Should()
+                .Match<object>(value => value.ToString() == "ResizeSE");
+            hitTestObjectHandle.Invoke(grid, [new Point(rect.Left + 10, rect.Top + 10), rect])
+                .Should()
+                .Match<object>(value => value.ToString() == "Move");
+        });
+    }
+
+    private static void RunOnStaThread(Action action)
+    {
+        Exception? exception = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                exception = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (exception is not null)
+            throw exception;
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)

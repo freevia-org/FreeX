@@ -29,6 +29,51 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ViewportScrollbarMaximums_UsesUsedRangeWithoutMaterializingUsedCells()
+    {
+        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+
+        viewportSource.Should().Contain("GetUsedRange()");
+        viewportSource.Should().NotContain("sheet.GetUsedCells()");
+    }
+
+    [Fact]
+    public void MainWindowFileDrop_WiresWindowDropToWorkbookPlannerAndOpenFile()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var xaml = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml"));
+        var source = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.FileDrop.cs"));
+        var planner = File.ReadAllText(Path.Combine(appHostDirectory, "WorkbookDropPlanner.cs"));
+
+        xaml.Should().Contain("AllowDrop=\"True\"");
+        xaml.Should().Contain("DragOver=\"MainWindow_DragOver\"");
+        xaml.Should().Contain("Drop=\"MainWindow_Drop\"");
+        source.Should().Contain("WorkbookDropPlanner.SelectOpenableFile(paths, _fileAdapters)");
+        source.Should().Contain("await OpenFileAsync(path)");
+        planner.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, extension, out _)");
+    }
+
+    [Fact]
+    public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
+    {
+        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+        const string assignment = "SheetGrid.SparklineValues = sheet is null";
+        const string cacheRoute = "_sparklineValueCache.GetOrCreate(";
+        const string directRoute = "SheetGrid.SparklineValues = SparklineValuePlanner.BuildValues(sheet)";
+        const string plannerCall = "SparklineValuePlanner.BuildValues(sheet)";
+        const string cacheCallback = "() => SparklineValuePlanner.BuildValues(sheet)";
+
+        viewportSource.Should().Contain(assignment);
+        viewportSource.Should().Contain(cacheRoute);
+        viewportSource.Should().NotContain(directRoute);
+        viewportSource.Should().Contain(cacheCallback);
+        CountOccurrences(viewportSource, plannerCall).Should().Be(1);
+        viewportSource.IndexOf(cacheRoute, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(viewportSource.IndexOf(plannerCall, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void BackstageAndFileController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -477,6 +522,16 @@ public sealed class MainWindowSourceHygieneTests
         clipboardSource.Should().Contain("private void ExecutePaste(");
         clipboardSource.Should().Contain("private void PasteSpecialBtn_Click(");
         clipboardSource.Should().Contain("private void ExecutePasteLink(");
+    }
+
+    [Fact]
+    public void PasteSpecialExternalText_RoutesToLiteralTextPaste()
+    {
+        var clipboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ClipboardCommands.cs"));
+
+        clipboardSource.Should().Contain("case PasteSpecialAction.ExternalText:");
+        clipboardSource.Should().Contain("externalTextAsText: true");
+        clipboardSource.Should().Contain("preserveText: externalTextAsText");
     }
 
     [Fact]
@@ -959,6 +1014,15 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void KeyboardShortcuts_RegisterExcelNameManagerCommands()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+
+        source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NameManager, NamedRangesButton_Click);");
+        source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CreateNamesFromSelection, CreateNamesFromSelectionBtn_Click);");
+    }
+
+    [Fact]
     public void FormulaBarTextChanged_SkipsFormulaHighlightWorkForSelectionDisplayUpdates()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
@@ -1257,20 +1321,20 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void AdvancedChartFamilies_ArePresentedAsDeferredInsteadOfAuthored()
+    public void AdvancedChartFamilies_RouteRenderableFamiliesToAuthoringAndKeepMapDeferred()
     {
         var source = ReadChartCommandSource();
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
         source.Should().Contain("retained when opening XLSX files");
-        source.Should().NotContain("InsertChartOfType(ChartType.Treemap)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Sunburst)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Histogram)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Pareto)");
-        source.Should().NotContain("InsertChartOfType(ChartType.BoxAndWhisker)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Waterfall)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Funnel)");
+        source.Should().Contain("ChartTreemapMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Treemap)");
+        source.Should().Contain("ChartSunburstMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Sunburst)");
+        source.Should().Contain("ChartHistogramMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Histogram)");
+        source.Should().Contain("ChartParetoMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Pareto)");
+        source.Should().Contain("ChartBoxAndWhiskerMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.BoxAndWhisker)");
+        source.Should().Contain("ChartWaterfallMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Waterfall)");
+        source.Should().Contain("ChartFunnelMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Funnel)");
         source.Should().NotContain("InsertChartOfType(ChartType.Map)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDPie)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDLine)");
@@ -1279,7 +1343,14 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDBar)");
         source.Should().Contain("InsertChartOfType(ChartType.Surface)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDSurface)");
-        xaml.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        AssertChartButtonRoutesTo(xaml, "Treemap", "ChartTreemapMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Sunburst", "ChartSunburstMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Histogram", "ChartHistogramMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Pareto", "ChartParetoMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Box Plot", "ChartBoxAndWhiskerMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Waterfall", "ChartWaterfallMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Funnel", "ChartFunnelMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Map", "DeferredChartFamilyMenuItem_Click", isDeferred: true);
         xaml.Should().Contain("Click=\"Chart3DPieMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DLineMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DAreaMenuItem_Click\"");
@@ -1311,6 +1382,55 @@ public sealed class MainWindowSourceHygieneTests
 
         source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertEmbeddedChart, (_, _) => InsertEmbeddedChart())");
         source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertChartSheet, (_, _) => InsertChartSheet())");
+    }
+
+    [Fact]
+    public void RibbonChartButtons_RouteThroughRenderableChartInsertionCommandPath()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = ReadChartCommandSource();
+
+        xaml.Should().Contain("Click=\"InsertChartPickerBtn_Click\"");
+        xaml.Should().Contain("Click=\"ChartColumnMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"ChartLineMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"ChartPieMenuItem_Click\"");
+        source.Should().Contain("private void InsertChartOfType(ChartType type)");
+        source.Should().Contain("ChartTypeSupport.IsRenderable(type)");
+        source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
+        source.Should().Contain("UpdateViewport();");
+    }
+
+    [Fact]
+    public void HyperlinkDialogAndCtrlClick_RouteThroughSetAndNavigatePlans()
+    {
+        var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "KeyboardShortcutMatcher.CommandRules.cs"));
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        keyboardSource.Should().Contain("KeyboardCommandShortcut.InsertHyperlink");
+        commandSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertHyperlink, InsertLinkBtn_Click)");
+        insertSource.Should().Contain("new HyperlinkDialog(prefill.Target, prefill.DisplayText) { Owner = this }");
+        insertSource.Should().Contain("new SetHyperlinkCommand(");
+        insertSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan");
+        insertSource.Should().Contain("TryNavigateToWorkbookReference(plan.Target)");
+        selectionSource.Should().Contain("(Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryOpenHyperlink(newAddr)");
+    }
+
+    [Fact]
+    public void FontDropdownSelection_SyncsThroughStyleDiffToolbarStateAndGridTypeface()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        var uiStateSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var renderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.UI", "GridView.Rendering.CellStyles.cs"));
+
+        xaml.Should().Contain("x:Name=\"FontNameBox\"");
+        xaml.Should().Contain("SelectionChanged=\"FontNameBox_SelectionChanged\"");
+        formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
+        uiStateSource.Should().Contain("FontNameBox.SelectedItem = state.FontName");
+        renderSource.Should().Contain("var fontName = string.IsNullOrWhiteSpace(style?.FontName)");
+        renderSource.Should().Contain("new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true)");
     }
 
     [Fact]
@@ -1433,6 +1553,44 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void F6ShellFocusCycle_IncludesVisiblePivotFieldListTaskPane()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        keyboardFocusSource.Should().Contain("ShellFocusTarget.TaskPane");
+        keyboardFocusSource.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        keyboardFocusSource.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
+        keyboardFocusSource.Should().Contain("IsDescendantOf(focusedElement, PivotFieldListPane)");
+        keyboardFocusSource.Should().Contain("return FocusVisibleTaskPane();");
+        keyboardFocusSource.Should().Contain("private bool FocusPivotFieldListPane()");
+        keyboardFocusSource.Should().Contain("PivotFieldListPane?.Visibility != Visibility.Visible");
+        keyboardFocusSource.Should().Contain("PivotFieldListSearchBox.Focus()");
+        xaml.Should().Contain("x:Name=\"PivotFieldListPane\"");
+        xaml.Should().Contain("x:Name=\"PivotFieldListSearchBox\"");
+        xaml.Should().Contain("x:Name=\"PivotFieldListCloseBtn\"");
+    }
+
+    [Fact]
+    public void F6ShellFocusCycle_IncludesVisibleSlicerTimelineTaskPane()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        keyboardFocusSource.Should().Contain("IsDescendantOf(focusedElement, SlicerTimelinePane)");
+        keyboardFocusSource.Should().Contain("private bool FocusVisibleTaskPane()");
+        keyboardFocusSource.Should().Contain("FocusPivotFieldListPane() ||");
+        keyboardFocusSource.Should().Contain("FocusSlicerTimelinePane();");
+        keyboardFocusSource.Should().Contain("private bool FocusSlicerTimelinePane()");
+        keyboardFocusSource.Should().Contain("SlicerTimelinePane?.Visibility != Visibility.Visible");
+        keyboardFocusSource.Should().Contain("SlicerTimelinePaneCloseBtn.Focus()");
+        xaml.Should().Contain("x:Name=\"SlicerTimelinePane\"");
+        xaml.Should().Contain("x:Name=\"SlicerTimelinePaneCloseBtn\"");
+        xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
+        xaml.Should().Contain("KeyboardNavigation.ControlTabNavigation=\"Cycle\"");
+    }
+
+    [Fact]
     public void FocusedStatusBar_TabTraversalIsNotHijackedByWorksheetMovement()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
@@ -1446,6 +1604,46 @@ public sealed class MainWindowSourceHygieneTests
         keyboardFocusSource.Should().Contain("FocusNavigationDirection.Previous");
         keyboardFocusSource.Should().Contain("FocusNavigationDirection.Next");
         keyboardFocusSource.Should().Contain("focusedElement.MoveFocus(request);");
+    }
+
+    [Fact]
+    public void FocusedPivotFieldListTaskPane_TabTraversalIsNotHijackedByWorksheetMovement()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        selectionSource.Should().Contain("if (TryHandleFocusedTaskPaneKeyboardNavigation(e))");
+        keyboardFocusSource.Should().Contain("private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
+        keyboardFocusSource.Should().Contain("!IsDescendantOf(focusedElement, PivotFieldListPane)");
+        keyboardFocusSource.Should().Contain("Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift");
+        keyboardFocusSource.Should().Contain("e.Key != Key.Tab");
+        keyboardFocusSource.Should().Contain("focusedElement.MoveFocus(request);");
+        keyboardFocusSource.Should().Contain("e.Handled = true;");
+        xaml.Should().Contain("x:Name=\"PivotFieldListPane\"");
+        xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
+        xaml.Should().Contain("KeyboardNavigation.ControlTabNavigation=\"Cycle\"");
+    }
+
+    [Fact]
+    public void FocusedPivotFieldListTaskPane_EscapeReturnsFocusToWorksheet()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var taskPaneNavigationStart = keyboardFocusSource.IndexOf(
+            "private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)",
+            StringComparison.Ordinal);
+        var ribbonNavigationStart = keyboardFocusSource.IndexOf(
+            "private bool IsInsideRibbonSurface(DependencyObject element)",
+            StringComparison.Ordinal);
+
+        taskPaneNavigationStart.Should().BeGreaterThanOrEqualTo(0);
+        ribbonNavigationStart.Should().BeGreaterThan(taskPaneNavigationStart);
+        var taskPaneNavigationSource = keyboardFocusSource[taskPaneNavigationStart..ribbonNavigationStart];
+
+        taskPaneNavigationSource.Should().Contain("if (e.Key == Key.Escape)");
+        taskPaneNavigationSource.Should().Contain("FocusSheetGridIfNeeded();");
+        taskPaneNavigationSource.Should().Contain("e.Handled = true;");
+        taskPaneNavigationSource.Should().Contain("return true;");
     }
 
     [Fact]
@@ -1507,6 +1705,8 @@ public sealed class MainWindowSourceHygieneTests
         keyboard.Should().NotContain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewCommentBtn_Click)");
         source.Should().Contain("private void ReviewNewThreadedCommentBtn_Click");
         source.Should().Contain("new SetThreadedCommentCommand(");
+        source.Should().Contain("new UpdateThreadedCommentTextCommand(");
+        source.Should().Contain("result.RootText is not null");
     }
 
     [Fact]
@@ -1532,6 +1732,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenuResolveComment_UsesThreadedCommentResolveCommand()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.ResolveComment:");
+        source.Should().Contain("case WorksheetContextMenuAction.UnresolveComment:");
+        source.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
+        source.Should().Contain("range => new ResolveThreadedCommentCommand(_currentSheetId, range.Start, resolved)");
+        source.Should().Contain("sheet.ThreadedComments.TryGetValue(address, out var threadedComment)");
+        source.Should().Contain("IsThreadedCommentResolved: threadedComment?.IsResolved == true");
+    }
+
+    [Fact]
     public void ReviewCommentNavigation_IncludesThreadedComments()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
@@ -1539,6 +1752,29 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0");
+    }
+
+    [Fact]
+    public void Selection_UpdatesVisibleCommentPreviewForSelectionAndHover()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        source.Should().Contain("UpdateCommentPreview(addr)");
+        source.Should().Contain("UpdateCommentPreview(hitAddr.Value)");
+        source.Should().Contain("ClearCommentPreview()");
+        source.Should().Contain("CommentNavigationPlanner.FormatCellCommentPreview(");
+        source.Should().Contain("SheetGrid.ToolTip = preview");
+    }
+
+    [Fact]
+    public void FontSizeDropdown_UsesSharedFontSizeApplyPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("GetSelectedFontSizeText()");
+        source.Should().Contain("ApplyFontSizeAndFitRows(size)");
+        source.Should().NotContain("FontSizeBox.Text;\r\n        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))\r\n            ApplyStyleDiff(new StyleDiff(FontSize: size));");
+        source.Should().Contain("RefreshToolbar();");
     }
 
     [Fact]
@@ -1815,6 +2051,7 @@ public sealed class MainWindowSourceHygieneTests
 
         backstageSource.Should().Contain("private void OpenPrintBackstage()");
         backstageSource.Should().Contain("SsPrintNavBtn.Focus();");
+        backstageSource.Should().Contain("PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs())");
         keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage()");
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
         xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
@@ -1844,6 +2081,39 @@ public sealed class MainWindowSourceHygieneTests
         scenarioSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         scenarioSource.Should().Contain("SetActiveCell(first);");
         scenarioSource.Should().Contain("EnsureCellVisible(first);");
+    }
+
+    [Fact]
+    public void AdvancedFilterDialogApply_IsRepeatableForF4WithoutReopeningDialog()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        dataSource.Should().Contain("var result = dialog.Result;");
+        dataSource.Should().Contain("_commandBus.ExecuteRepeatable(");
+        dataSource.Should().Contain("() => new AdvancedFilterCommand(");
+        dataSource.Should().Contain("result.ListRange");
+        dataSource.Should().Contain("result.CriteriaRange");
+        dataSource.Should().Contain("result.CopyToCell");
+        dataSource.Should().Contain("result.UniqueRecordsOnly");
+        dataSource.Should().Contain("result.CopyToRange");
+        dataSource.Should().NotContain("_commandBus.Execute(\r\n            _workbook.Id,\r\n            new AdvancedFilterCommand(");
+    }
+
+    [Fact]
+    public void RowAndColumnDimensionDialogs_AreRepeatableForF4AgainstCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
+
+        source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
+        source.Should().Contain("\"Row Height\",");
+        source.Should().Contain("\"Column Width\",");
+        source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
+        source.Should().Contain("var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);");
+        source.Should().Contain("var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);");
+        source.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, dialog.Result.Height)");
+        source.Should().Contain("new SetColumnWidthCommand(sheetId, startCol, endCol, dialog.Result.Width)");
+        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Row Height\"");
+        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Column Width\"");
     }
 
     [Fact]
@@ -1971,6 +2241,38 @@ public sealed class MainWindowSourceHygieneTests
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
 
+    private static void AssertChartButtonRoutesTo(string xaml, string content, string clickHandler, bool isDeferred)
+    {
+        var button = ExtractButtonElementByContent(xaml, content);
+
+        button.Should().Contain($"Click=\"{clickHandler}\"");
+        button.Should().Contain("Style=\"{StaticResource RibbonBtn}\"");
+        button.Should().Contain("local:RibbonTooltip.Title=");
+
+        if (isDeferred)
+        {
+            button.Should().Contain("local:RibbonTooltip.Description=\"Deferred:");
+        }
+        else
+        {
+            button.Should().NotContain("local:RibbonTooltip.Description=\"Deferred:");
+        }
+    }
+
+    private static string ExtractButtonElementByContent(string xaml, string content)
+    {
+        var contentIndex = xaml.IndexOf($"Content=\"{content}\"", StringComparison.Ordinal);
+        contentIndex.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should be present");
+
+        var start = xaml.LastIndexOf("<Button", contentIndex, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should have a Button start tag");
+
+        var end = xaml.IndexOf("/>", contentIndex, StringComparison.Ordinal);
+        end.Should().BeGreaterThanOrEqualTo(contentIndex, $"the {content} chart button should be self-closing");
+
+        return xaml.Substring(start, end - start + 2);
+    }
+
     private static string ReadPivotCommandSource()
     {
         return string.Join(
@@ -1983,5 +2285,18 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.PivotDesignCommands.cs",
                 "MainWindow.PivotSlicerTimeline.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static int CountOccurrences(string source, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = source.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
     }
 }

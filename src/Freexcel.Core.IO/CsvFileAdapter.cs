@@ -39,14 +39,15 @@ public sealed class CsvFileAdapter : IFileAdapter
         using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
         for (uint r = startRow; r <= endRow; r++)
         {
-            var parts = new string[endCol - startCol + 1];
             for (uint c = startCol; c <= endCol; c++)
             {
-                usedCells.TryGetValue((r, c), out var cell);
-                var raw = cell is null ? "" : FormatCell(cell);
-                parts[c - startCol] = EscapeCsvField(raw, cell?.Value is TextValue);
+                if (c > startCol)
+                    writer.Write(',');
+
+                if (usedCells.TryGetValue((r, c), out var cell))
+                    WriteCsvField(writer, FormatCell(cell), cell.Value is TextValue);
             }
-            writer.Write(string.Join(',', parts));
+
             writer.Write("\r\n");
         }
     }
@@ -55,14 +56,29 @@ public sealed class CsvFileAdapter : IFileAdapter
         row is >= 1 and <= CellAddress.MaxRow &&
         col is >= 1 and <= CellAddress.MaxCol;
 
-    private static string EscapeCsvField(string value, bool isTextValue)
+    private static void WriteCsvField(TextWriter writer, string value, bool isTextValue)
     {
-        if (value.Length == 0) return value;
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r') ||
-            (isTextValue && IsFormulaLikeText(value)))
-            return $"\"{value.Replace("\"", "\"\"")}\"";
-        return value;
+        if (value.Length == 0) return;
+        if (!ShouldQuoteCsvField(value, isTextValue))
+        {
+            writer.Write(value);
+            return;
+        }
+
+        writer.Write('"');
+        foreach (var ch in value)
+        {
+            if (ch == '"')
+                writer.Write("\"\"");
+            else
+                writer.Write(ch);
+        }
+        writer.Write('"');
     }
+
+    private static bool ShouldQuoteCsvField(string value, bool isTextValue) =>
+        value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r') ||
+        (isTextValue && IsFormulaLikeText(value));
 
     private static bool IsFormulaLikeText(string value) =>
         value[0] is '=' or '+' or '-' or '@';

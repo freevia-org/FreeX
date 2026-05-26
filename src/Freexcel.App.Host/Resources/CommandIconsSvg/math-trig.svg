@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Math &amp; Trig">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><text x="27" y="33.48" text-anchor="middle" font-size="22.68" font-style="italic" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" dominant-baseline="central">fx</text>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Math &amp; Trig">
+  <rect width="32" height="32" fill="none"/>
+  <text x="10" y="21" font-size="22" fill="#242424" font-family="Georgia, 'Times New Roman', serif" font-weight="700" text-anchor="middle">&#x03C0;</text>
+  <text x="23" y="21" font-size="21" fill="#107c41" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">&#x03A3;</text>
+  <path d="M15 25C20 20 24 20 29 25" fill="none" stroke="#0078d4" stroke-width="1.4" stroke-linecap="round"/>
 </svg>
-

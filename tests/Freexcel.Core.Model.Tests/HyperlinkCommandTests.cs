@@ -36,6 +36,24 @@ public sealed class HyperlinkCommandTests
     }
 
     [Fact]
+    public void SetHyperlinkCommand_AppliesVisibleHyperlinkStyle()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var addr = new CellAddress(sheet.Id, 1, 1);
+
+        new SetHyperlinkCommand(sheet.Id, addr, "https://example.com", "Example").Apply(ctx)
+            .Success
+            .Should()
+            .BeTrue();
+
+        var style = wb.GetStyle(sheet.GetCell(addr)!.StyleId);
+        style.Underline.Should().BeTrue();
+        style.FontColor.Should().Be(wb.Theme.ResolveColor(WorkbookThemeColorSlot.Hyperlink));
+    }
+
+    [Fact]
     public void ClearHyperlinksCommand_RemovesHyperlinksButKeepsDisplayText()
     {
         var wb = new Workbook("test");

@@ -101,6 +101,30 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void DataValidationDialog_OrdersAllowTypesLikeExcel()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
+        var expectedOrder = new[]
+        {
+            "Content=\"Any Value\"",
+            "Content=\"Whole Number\"",
+            "Content=\"Decimal\"",
+            "Content=\"List\"",
+            "Content=\"Date\"",
+            "Content=\"Time\"",
+            "Content=\"Text Length\"",
+            "Content=\"Custom\""
+        };
+
+        var positions = expectedOrder
+            .Select(marker => xaml.IndexOf(marker, StringComparison.Ordinal))
+            .ToArray();
+
+        positions.Should().OnlyContain(position => position >= 0);
+        positions.Should().BeInAscendingOrder();
+    }
+
+    [Fact]
     public void DataValidationDialog_ExposesKeyboardAccessKeysForOptionsAndButtons()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
@@ -475,6 +499,22 @@ public sealed class DataValidationDialogTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void RangePickerButtons_RefocusFormulaInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private static void SelectComboItemByTag", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest);");
+        handlerSource.Should().Contain("FocusRangeSelectionInput(textBox);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox textBox)");
+        source.Should().Contain("textBox.Focus();");
+        source.Should().Contain("textBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(textBox);");
     }
 
     [Fact]

@@ -45,6 +45,12 @@ internal enum PdfOpenMode
     FullScreen
 }
 
+internal enum PdfConformance
+{
+    Standard,
+    PdfA1b
+}
+
 internal sealed record ExportPageRange(int FromPage, int ToPage)
 {
     public override string ToString() =>
@@ -65,7 +71,9 @@ internal sealed record ExportOptions(
     PdfInitialView InitialView = PdfInitialView.SinglePage,
     PdfOpenMode OpenMode = PdfOpenMode.Normal,
     bool BitmapTextWhenFontsMayNotBeEmbedded = false,
-    string PdfLanguage = ExportPlanner.DefaultPdfLanguage)
+    string PdfLanguage = ExportPlanner.DefaultPdfLanguage,
+    PdfConformance PdfConformance = PdfConformance.Standard,
+    bool IncludeDocumentStructureTags = false)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
@@ -129,20 +137,32 @@ internal static partial class ExportPlanner
 
     public static string NormalizePdfLanguage(string? pdfLanguage)
     {
-        if (string.IsNullOrWhiteSpace(pdfLanguage))
-            return DefaultPdfLanguage;
+        return TryNormalizePdfLanguage(pdfLanguage, out var normalized, out _)
+            ? normalized
+            : DefaultPdfLanguage;
+    }
 
-        var normalized = pdfLanguage.Trim().Replace('_', '-');
+    public static bool TryNormalizePdfLanguage(string? pdfLanguage, out string normalized, out string? error)
+    {
+        normalized = DefaultPdfLanguage;
+        error = null;
+        if (string.IsNullOrWhiteSpace(pdfLanguage))
+            return true;
+
+        var candidate = pdfLanguage.Trim().Replace('_', '-');
         try
         {
-            var culture = CultureInfo.GetCultureInfo(normalized);
-            return string.IsNullOrWhiteSpace(culture.Name)
-                ? DefaultPdfLanguage
-                : culture.Name;
+            var culture = CultureInfo.GetCultureInfo(candidate);
+            if (string.IsNullOrWhiteSpace(culture.Name))
+                return true;
+
+            normalized = culture.Name;
+            return true;
         }
         catch (CultureNotFoundException)
         {
-            return DefaultPdfLanguage;
+            error = "Enter a valid PDF language tag, for example en-US.";
+            return false;
         }
     }
 
@@ -194,6 +214,28 @@ internal static partial class ExportPlanner
 
         error = $"Page range starts after the last exportable page ({pageCount}).";
         return false;
+    }
+
+    public static bool TryValidatePublishOptions(ExportOptions options, ExportFormat format, out string? error)
+    {
+        error = null;
+
+        if (format == ExportFormat.Xps)
+            return true;
+
+        if (options.PdfConformance != PdfConformance.Standard)
+        {
+            error = "PDF/A compliance is not supported by the current PDF exporter.";
+            return false;
+        }
+
+        if (options.IncludeDocumentStructureTags)
+        {
+            error = "Tagged PDF structure is not supported by the current PDF exporter.";
+            return false;
+        }
+
+        return true;
     }
 
 }

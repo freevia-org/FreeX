@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Calc;
 
@@ -88,6 +89,9 @@ public static partial class NumberFormatter
     }
 
     private static ParsedSection ParseSection(string section)
+        => ParseSection(section, null);
+
+    private static ParsedSection ParseSection(string section, WorkbookIndexedColorPalette? indexedColors)
     {
         string? color = null;
         FormatCondition? condition = null;
@@ -100,7 +104,7 @@ public static partial class NumberFormatter
                 break;
 
             string token = section[(index + 1)..close];
-            if (NumberFormatColorMapper.TryMapColor(token, out var tokenColor))
+            if (NumberFormatColorMapper.TryMapColor(token, indexedColors, out var tokenColor))
             {
                 color = tokenColor;
                 index = SkipInterDirectiveWhitespace(section, close + 1);

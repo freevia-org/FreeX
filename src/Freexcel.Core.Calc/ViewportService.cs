@@ -44,7 +44,7 @@ public sealed partial class ViewportService : IViewportService
                     var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfContext);
                     var displayText = cfIcon?.ShowValue == false
                         ? ""
-                        : GetDisplayText(sheet, cell, style, EstimateCharacterWidth(colMetric.Width));
+                        : GetDisplayText(workbook, sheet, cell, ref style, EstimateCharacterWidth(colMetric.Width));
 
                     cells.Add(new DisplayCell(
                         rowMetric.Row, colMetric.Col,
@@ -126,7 +126,56 @@ public sealed partial class ViewportService : IViewportService
                 bottomLeftRows)
             : null;
 
-        return new ViewportModel(cells, rowMetrics, colMetrics, frozenPanes, [], splitPanes);
+        var chartDataCells = request.IncludeObjects
+            ? BuildChartDataCells(workbook, sheet)
+            : [];
+
+        return new ViewportModel(cells, rowMetrics, colMetrics, frozenPanes, [], splitPanes, chartDataCells);
+    }
+
+    private static IReadOnlyList<ChartDataCell> BuildChartDataCells(Workbook workbook, Sheet sheet)
+    {
+        if (sheet.Charts.Count == 0)
+            return [];
+
+        var chartCells = new List<ChartDataCell>();
+        var seen = new HashSet<(SheetId SheetId, uint Row, uint Col)>();
+        foreach (var chart in sheet.Charts)
+        {
+            var sourceSheet = workbook.GetSheet(chart.DataRange.Start.Sheet);
+            if (sourceSheet is null)
+                continue;
+
+            for (uint row = chart.DataRange.Start.Row; row <= chart.DataRange.End.Row; row++)
+            {
+                for (uint col = chart.DataRange.Start.Col; col <= chart.DataRange.End.Col; col++)
+                {
+                    if (!seen.Add((sourceSheet.Id, row, col)))
+                        continue;
+
+                    var cell = sourceSheet.GetCell(row, col);
+                    if (cell is null)
+                    {
+                        chartCells.Add(new ChartDataCell(sourceSheet.Id, row, col, ""));
+                        continue;
+                    }
+
+                    var style = workbook.GetStyle(cell.StyleId);
+                    chartCells.Add(new ChartDataCell(
+                        sourceSheet.Id,
+                        row,
+                        col,
+                        GetDisplayText(
+                            workbook,
+                            sourceSheet,
+                            cell,
+                            ref style,
+                            EstimateCharacterWidth(sourceSheet.ColumnWidths.GetValueOrDefault(col, sourceSheet.DefaultColumnWidth)))));
+                }
+            }
+        }
+
+        return chartCells;
     }
 
 
@@ -396,7 +445,7 @@ public sealed partial class ViewportService : IViewportService
         var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfContext);
         var displayText = cfIcon?.ShowValue == false
             ? ""
-            : GetDisplayText(sheet, cell, style, targetWidthCharacters);
+            : GetDisplayText(workbook, sheet, cell, ref style, targetWidthCharacters);
 
         cells.Add(new DisplayCell(
             row,
@@ -423,10 +472,43 @@ public sealed partial class ViewportService : IViewportService
     /// Priority ascending = highest precedence first). Returns the first matching rule's style,
     /// or null when no rule fires.
     /// </summary>
-    private static string GetDisplayText(Sheet sheet, Cell cell, CellStyle style, int targetWidthCharacters) =>
-        sheet.ShowFormulas && cell.FormulaText is not null
-            ? "=" + cell.FormulaText
-            : NumberFormatter.Format(cell.Value, style.NumberFormat, targetWidthCharacters);
+    private static string GetDisplayText(
+        Workbook workbook,
+        Sheet sheet,
+        Cell cell,
+        ref CellStyle style,
+        int targetWidthCharacters)
+    {
+        if (sheet.ShowFormulas && cell.FormulaText is not null)
+            return "=" + cell.FormulaText;
+
+        var result = NumberFormatter.FormatWithColor(
+            cell.Value,
+            style.NumberFormat,
+            targetWidthCharacters,
+            workbook.IndexedColors);
+        if (TryParseHexColor(result.ColorHex, out var color))
+            style.FontColor = color;
+
+        return result.Text;
+    }
+
+    private static bool TryParseHexColor(string? hex, out CellColor color)
+    {
+        color = default;
+        if (hex is null ||
+            hex.Length != 7 ||
+            hex[0] != '#' ||
+            !byte.TryParse(hex.AsSpan(1, 2), System.Globalization.NumberStyles.HexNumber, null, out var r) ||
+            !byte.TryParse(hex.AsSpan(3, 2), System.Globalization.NumberStyles.HexNumber, null, out var g) ||
+            !byte.TryParse(hex.AsSpan(5, 2), System.Globalization.NumberStyles.HexNumber, null, out var b))
+        {
+            return false;
+        }
+
+        color = CellColor.FromArgb(r, g, b);
+        return true;
+    }
 
     private static int EstimateCharacterWidth(double pixelWidth) =>
         Math.Max(1, (int)Math.Round(pixelWidth / 8.0, MidpointRounding.AwayFromZero));

@@ -35,6 +35,12 @@ public partial class FormatCellsDialog
     private void DlgFontColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgFontColorBox, allowNoColor: false, "Font Color");
 
+    private void DlgFontColorSwatchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string colorText })
+            DlgFontColorBox.Text = colorText;
+    }
+
     private void DlgFillColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgFillColorBox, allowNoColor: true, "Fill Color");
 
@@ -97,9 +103,25 @@ public partial class FormatCellsDialog
     private static CellColor? TryParseColor(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
-        return ColorInputParser.TryParseRgbColorText(text, out var color)
+        return ColorInputParser.TryParseColorText(text, out var color)
             ? color
             : null;
+    }
+
+    private static bool TryParseRequiredColor(string text, out CellColor color) =>
+        ColorInputParser.TryParseColorText(text, out color);
+
+    private static bool TryParseOptionalColor(string text, out CellColor? color)
+    {
+        color = null;
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+
+        if (!ColorInputParser.TryParseColorText(text, out var parsed))
+            return false;
+
+        color = parsed;
+        return true;
     }
 
     private static Brush BrushForColor(CellColor? color, Brush fallback)

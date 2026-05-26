@@ -21,6 +21,7 @@ public sealed partial class NativeJsonAdapter
         public string? Language { get; set; }
         public ChartColorMapOverrideModel? ColorMapOverride { get; set; }
         public ChartExternalDataModel? ExternalData { get; set; }
+        public ChartUserShapesModel? UserShapes { get; set; }
         public ChartManualLayoutModel? PlotAreaLayout { get; set; }
         public ChartManualLayoutModel? LegendLayout { get; set; }
         public bool RoundedCorners { get; set; }
@@ -51,6 +52,9 @@ public sealed partial class NativeJsonAdapter
         public bool HideYAxis { get; set; }
         public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
         public ChartAxisPosition YAxisPosition { get; set; } = ChartAxisPosition.Left;
+        public CellColor? ChartDefaultTextColor { get; set; }
+        public ThemeColorReferenceDto? ChartDefaultTextThemeColor { get; set; }
+        public double ChartDefaultFontSize { get; set; } = 11;
         public CellColor? ChartTitleTextColor { get; set; }
         public ThemeColorReferenceDto? ChartTitleTextThemeColor { get; set; }
         public double ChartTitleFontSize { get; set; } = 16;
@@ -255,6 +259,7 @@ public sealed partial class NativeJsonAdapter
         public List<int>? SecondaryAxisSeriesIndexes { get; set; }
         public List<int>? ComboLineSeriesIndexes { get; set; }
         public List<ChartSeriesFormat>? SeriesFormats { get; set; }
+        public List<ChartSeriesDataLabelFormat>? SeriesDataLabelFormats { get; set; }
         public List<ChartPointDataLabelFormat>? PointDataLabelFormats { get; set; }
         public bool UseComboLineForSecondarySeries { get; set; }
         public double Left { get; set; } = 50;

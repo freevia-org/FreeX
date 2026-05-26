@@ -184,6 +184,18 @@ public sealed class HeaderFooterDialogXamlTests
     }
 
     [Fact]
+    public void FormatPictureWithoutPicture_ReturnsFocusToActiveSection()
+    {
+        var source = ReadHeaderFooterDialogSource();
+
+        source.Should().Contain("FocusActiveTextBox();");
+        source.Should().Contain("private void FocusActiveTextBox()");
+        source.Should().Contain("var target = _activeTextBox ?? HeaderCenterBox;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void HeaderFooterDialogsOpenedFromKeyboard_FocusInitialTextFields()
     {
         var source = ReadHeaderFooterDialogSource();
@@ -203,9 +215,11 @@ public sealed class HeaderFooterDialogXamlTests
     {
         var source = ReadHeaderFooterDialogSource();
 
-        source.Should().Contain("FocusInvalidSizeInput();");
-        source.Should().Contain("private void FocusInvalidSizeInput()");
-        source.Should().Contain("FocusAndSelect(string.IsNullOrWhiteSpace(_widthBox.Text) ? _widthBox : _heightBox);");
+        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text, out var width))");
+        source.Should().Contain("FocusAndSelect(_widthBox);");
+        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text, out var height))");
+        source.Should().Contain("FocusAndSelect(_heightBox);");
+        source.Should().Contain("private static bool TryParsePositiveSize(string text, out double value)");
         source.Should().Contain("private static void FocusAndSelect(TextBox box)");
         source.Should().Contain("Keyboard.Focus(box);");
     }
@@ -345,6 +359,7 @@ public sealed class HeaderFooterDialogXamlTests
             "HeaderFooterDialog.xaml.cs",
             "HeaderFooterDialog.TextHelpers.cs",
             "HeaderFooterDialog.Result.cs",
+            "HeaderFooterDialog.Pictures.cs",
             "HeaderFooterPictureFormatDialog.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 

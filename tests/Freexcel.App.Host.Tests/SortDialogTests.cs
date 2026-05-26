@@ -377,6 +377,7 @@ public sealed class SortDialogTests
         string.Join(Environment.NewLine, new[]
         {
             "SortDialog.cs",
+            "SortDialog.Types.cs",
             "SortOptionsDialog.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 }

@@ -150,6 +150,17 @@ internal static partial class XlsxChartXmlWriter
                 : null);
     }
 
+    private static XElement? ToChartUserShapesXml(ChartModel chart, XNamespace chartNs, XNamespace relNs)
+    {
+        if (chart.UserShapes is not { } userShapes ||
+            string.IsNullOrWhiteSpace(userShapes.RelationshipId))
+        {
+            return null;
+        }
+
+        return new XElement(chartNs + "userShapes", new XAttribute(relNs + "id", userShapes.RelationshipId));
+    }
+
     private static XElement? ToChartColorMapOverrideXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
         if (chart.ColorMapOverride is not { } colorMapOverride)

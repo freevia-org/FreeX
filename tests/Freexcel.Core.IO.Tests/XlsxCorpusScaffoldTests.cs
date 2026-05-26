@@ -71,15 +71,64 @@ public class XlsxCorpusScaffoldTests
     [Fact]
     public void CorpusReport_PublishesWorkbookAndFeatureBucketPassRates()
     {
+        var manifestRows = ReadManifestRows();
         var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var generatedSupportedCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-pass");
+        var generatedMetadataCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-metadata-pass");
+        var generatedKnownGapCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-known-gap");
+        var publicCount = manifestRows.Count(row => row.SourceType == "public");
+        var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
+        var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
 
+        report.Should().Contain($"Total manifest rows: {manifestRows.Count}.");
+        report.Should().Contain($"| Generated deterministic supported-pass fixtures | {generatedSupportedCount} |");
+        report.Should().Contain($"| Generated deterministic supported-metadata-pass fixtures | {generatedMetadataCount} |");
+        report.Should().Contain($"| Generated deterministic known-gap fixtures | {generatedKnownGapCount} |");
+        report.Should().Contain($"| Public redistributed workbooks | {publicCount} |");
+        report.Should().Contain($"| Local private workbooks | {localPrivateCount} |");
+        report.Should().Contain($"| Regression workbooks | {regressionCount} |");
         report.Should().Contain("## Pass Rate Summary");
         report.Should().Contain("| Workbook set | Executed | Passing | Pass rate |");
-        report.Should().Contain("| Generated supported-pass workbooks | 27 | 27 | 100% |");
-        report.Should().Contain("| Public redistributed workbooks | 25 | 25 | 100% |");
+        report.Should().Contain($"| Generated supported-pass workbooks | {generatedSupportedCount} | {generatedSupportedCount} | 100% |");
+        report.Should().Contain($"| Generated supported-metadata-pass workbooks | {generatedMetadataCount} | {generatedMetadataCount} | 100% |");
+        report.Should().Contain($"| Generated known-gap warning workbooks | {generatedKnownGapCount} | {generatedKnownGapCount} | 100% |");
+        report.Should().Contain($"| Generated known-gap retention workbooks | {generatedKnownGapCount} | {generatedKnownGapCount} | 100% |");
+        report.Should().Contain($"| Public redistributed workbooks | {publicCount} | {publicCount} | 100% |");
+        report.Should().Contain($"| Regression cached-result workbooks | {regressionCount} | {regressionCount} | 100% |");
         report.Should().Contain("| Feature bucket | Evidence | Pass rate |");
         report.Should().Contain("| PivotTables, pivot caches, and PivotChart binding |");
         report.Should().Contain("| Slicers, timelines, external links, printer settings, custom XML |");
+    }
+
+    [Fact]
+    public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
+    {
+        var manifestRows = ReadManifestRows();
+        var outstandingBuild = File.ReadAllText(FindWorkspaceFile("docs", "OUTSTANDING_BUILD.md"));
+        var generatedCount = manifestRows.Count(row => row.SourceType == "generated");
+        var publicCount = manifestRows.Count(row => row.SourceType == "public");
+        var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
+        var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
+
+        outstandingBuild.Should().Contain(
+            $"Current manifest has {manifestRows.Count} rows: {generatedCount} generated rows, {publicCount} public Tealeg rows, {localPrivateCount} optional local-private rows, and {regressionCount} regression formula-cache workbooks.");
+    }
+
+    private static IReadOnlyList<ManifestRow> ReadManifestRows()
+    {
+        var manifestPath = FindWorkspaceFile("test-corpus", "manifest.csv");
+        return File.ReadAllLines(manifestPath)
+            .Skip(1)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(ParseManifestRow)
+            .ToArray();
+    }
+
+    private static ManifestRow ParseManifestRow(string line)
+    {
+        var columns = line.Split(',');
+        columns.Should().HaveCount(ExpectedManifestHeader.Length);
+        return new ManifestRow(columns[2], columns[8]);
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
@@ -96,4 +145,6 @@ public class XlsxCorpusScaffoldTests
 
         throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
+
+    private sealed record ManifestRow(string SourceType, string ExpectedStatus);
 }

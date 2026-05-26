@@ -129,6 +129,7 @@ public sealed partial class NamedRangeDialog : Window
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         RefersToBox.Focus();
         RefersToBox.SelectAll();
+        Keyboard.Focus(RefersToBox);
     }
 
     private void NewButton_Click(object sender, RoutedEventArgs e)
@@ -146,7 +147,7 @@ public sealed partial class NamedRangeDialog : Window
     {
         if (NamesList.SelectedItem is not NamedRangeViewModel vm)
         {
-            MessageBox.Show("Select a named range to edit.", "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Select a named range to edit.", "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusNamesListOrNewButton();
             return;
         }
@@ -171,7 +172,7 @@ public sealed partial class NamedRangeDialog : Window
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            MessageBox.Show("Please enter a name.", "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Please enter a name.", "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusNamesListOrNewButton();
             return;
         }
@@ -179,6 +180,7 @@ public sealed partial class NamedRangeDialog : Window
         if (!NamedRangeInputParser.TryParseRange(_workbook, rangeText, out var range))
         {
             MessageBox.Show(
+                this,
                 "Invalid range format. Use: SheetName!A1:B10 or A1:B10",
                 "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusRefersToSummary();
@@ -192,7 +194,7 @@ public sealed partial class NamedRangeDialog : Window
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
         {
-            MessageBox.Show(outcome.ErrorMessage ?? "Could not define named range.",
+            MessageBox.Show(this, outcome.ErrorMessage ?? "Could not define named range.",
                 "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusNamesListOrNewButton();
             return;
@@ -211,7 +213,7 @@ public sealed partial class NamedRangeDialog : Window
     {
         if (NamesList.SelectedItem is not NamedRangeViewModel vm)
         {
-            MessageBox.Show("Select a named range to delete.", "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Select a named range to delete.", "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusNamesListOrNewButton();
             return;
         }
@@ -230,7 +232,7 @@ public sealed partial class NamedRangeDialog : Window
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
         {
-            MessageBox.Show(outcome.ErrorMessage ?? "Could not delete.", "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, outcome.ErrorMessage ?? "Could not delete.", "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusNamesListOrNewButton();
         }
         else

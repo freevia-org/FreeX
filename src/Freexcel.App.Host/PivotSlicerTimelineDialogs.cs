@@ -33,9 +33,38 @@ public sealed class InsertSlicerDialog : Window
     public static InsertSlicerDialogResult CreateResult(string fieldName, string slicerName) =>
         new(fieldName.Trim(), slicerName.Trim());
 
+    public static bool TryCreateResult(
+        string? fieldName,
+        string? slicerName,
+        out InsertSlicerDialogResult result,
+        out string? error)
+    {
+        result = CreateResult(fieldName ?? "", slicerName ?? "");
+        if (string.IsNullOrWhiteSpace(result.FieldName))
+        {
+            error = "Select a field to connect.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(result.SlicerName))
+        {
+            error = "Enter a slicer caption.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
     private void Accept()
     {
-        Result = CreateResult(_fieldBox.Text, _nameBox.Text);
+        if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))
+        {
+            ShowInvalidInputWarning(error ?? "Enter slicer options.", string.IsNullOrWhiteSpace(_fieldBox.Text) ? _fieldBox : _nameBox);
+            return;
+        }
+
+        Result = result;
         DialogResult = true;
     }
 
@@ -59,6 +88,15 @@ public sealed class InsertSlicerDialog : Window
     {
         _fieldBox.Focus();
         Keyboard.Focus(_fieldBox);
+    }
+
+    private void ShowInvalidInputWarning(string message, Control target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        if (target is TextBox textBox)
+            textBox.SelectAll();
+        Keyboard.Focus(target);
     }
 }
 
@@ -103,9 +141,38 @@ public sealed class InsertTimelineDialog : Window
     public static InsertTimelineDialogResult CreateResult(string dateFieldName, string timelineName) =>
         new(dateFieldName.Trim(), timelineName.Trim());
 
+    public static bool TryCreateResult(
+        string? dateFieldName,
+        string? timelineName,
+        out InsertTimelineDialogResult result,
+        out string? error)
+    {
+        result = CreateResult(dateFieldName ?? "", timelineName ?? "");
+        if (string.IsNullOrWhiteSpace(result.DateFieldName))
+        {
+            error = "Select a date field to connect.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(result.TimelineName))
+        {
+            error = "Enter a timeline caption.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
     private void Accept()
     {
-        Result = CreateResult(_fieldBox.Text, _nameBox.Text);
+        if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))
+        {
+            ShowInvalidInputWarning(error ?? "Enter timeline options.", string.IsNullOrWhiteSpace(_fieldBox.Text) ? _fieldBox : _nameBox);
+            return;
+        }
+
+        Result = result;
         DialogResult = true;
     }
 
@@ -113,5 +180,14 @@ public sealed class InsertTimelineDialog : Window
     {
         _fieldBox.Focus();
         Keyboard.Focus(_fieldBox);
+    }
+
+    private void ShowInvalidInputWarning(string message, Control target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        if (target is TextBox textBox)
+            textBox.SelectAll();
+        Keyboard.Focus(target);
     }
 }

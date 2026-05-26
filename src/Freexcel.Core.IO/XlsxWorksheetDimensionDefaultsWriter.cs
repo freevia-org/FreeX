@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -9,7 +10,8 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
 {
     public static bool HasNonDefaultDimensions(Sheet sheet) =>
         IsNonDefaultColumnWidth(sheet.DefaultColumnWidth) ||
-        IsNonDefaultRowHeight(sheet.DefaultRowHeight);
+        IsNonDefaultRowHeight(sheet.DefaultRowHeight) ||
+        sheet.SheetFormatMetadata is not null;
 
     public static void Save(Stream packageStream, Workbook workbook)
     {
@@ -63,10 +65,54 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
                 changed |= SetAttributeIfDifferent(sheetFormat, "customHeight", "1");
             }
 
+            changed |= ApplyNativeSheetFormatMetadata(sheetFormat, sheet.SheetFormatMetadata);
+
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
     }
+
+    private static bool ApplyNativeSheetFormatMetadata(
+        XElement sheetFormat,
+        WorksheetSheetFormatMetadataModel? metadata)
+    {
+        if (metadata is null)
+            return false;
+
+        var changed = false;
+        foreach (var attribute in metadata.NativeAttributes)
+        {
+            if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetFormatAttribute(attribute.Key))
+                continue;
+
+            changed |= TrySetNativeAttributeIfDifferent(sheetFormat, attribute.Key, attribute.Value);
+        }
+
+        if (metadata.NativeChildXmls.Count > 0)
+        {
+            sheetFormat.Elements().Remove();
+            changed = true;
+            foreach (var childXml in metadata.NativeChildXmls)
+            {
+                if (string.IsNullOrWhiteSpace(childXml))
+                    continue;
+
+                try
+                {
+                    sheetFormat.Add(XElement.Parse(childXml));
+                }
+                catch
+                {
+                    // Skip malformed native payloads in authored native JSON files.
+                }
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool IsModeledSheetFormatAttribute(string name) =>
+        name is "defaultColWidth" or "defaultRowHeight";
 
     private static bool IsNonDefaultColumnWidth(double value) =>
         double.IsFinite(value) && value > 0 && Math.Abs(value - 8.43) >= 0.01;
@@ -84,5 +130,21 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
 
         element.SetAttributeValue(name, value);
         return true;
+    }
+
+    private static bool TrySetNativeAttributeIfDifferent(XElement element, string name, string value)
+    {
+        try
+        {
+            return SetAttributeIfDifferent(element, XName.Get(name), value);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 }

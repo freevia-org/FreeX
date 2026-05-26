@@ -60,7 +60,7 @@ public static partial class ChartRenderer
         if (!ChartTypeSupport.IsRenderable(chart.Type))
             return null;
 
-        var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
+        var cellLookup = BuildChartCellLookup(chart, viewport);
 
         uint startRow = chart.DataRange.Start.Row;
         uint endRow   = chart.DataRange.End.Row;
@@ -175,6 +175,27 @@ public static partial class ChartRenderer
             return surfaceModel;
         }
 
+        if (chart.Type == ChartType.Waterfall)
+            return BuildWaterfallModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
+        if (chart.Type == ChartType.Histogram)
+            return BuildHistogramModel(chart, model, cellLookup, dataStartRow, endRow, dataStartCol, theme);
+
+        if (chart.Type == ChartType.Pareto)
+            return BuildParetoModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
+        if (chart.Type == ChartType.BoxAndWhisker)
+            return BuildBoxAndWhiskerModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+
+        if (chart.Type == ChartType.Treemap)
+            return BuildTreemapModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
+        if (chart.Type == ChartType.Sunburst)
+            return BuildSunburstModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
+        if (chart.Type == ChartType.Funnel)
+            return BuildFunnelModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
         // Column / Line: one series per data column
         List<DataPoint>? firstSeriesPoints = null;
         for (uint col = dataStartCol; col <= endCol; col++)
@@ -228,13 +249,14 @@ public static partial class ChartRenderer
                 ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
                 ApplyNativeDataLabelStyle(series, chart, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
+                var colHalfWidth = ColumnBarHalfWidth(chart);
                 var i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
                     if (cellLookup.TryGetValue((r, col), out var cell)
                         && double.TryParse(cell.DisplayText, out var v))
                     {
-                        series.Items.Add(new RectangleBarItem(i - 0.35, Math.Min(0, v), i + 0.35, Math.Max(0, v)));
+                        series.Items.Add(new RectangleBarItem(i - colHalfWidth, Math.Min(0, v), i + colHalfWidth, Math.Max(0, v)));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
@@ -243,7 +265,7 @@ public static partial class ChartRenderer
                         && cellLookup.TryGetValue((r, col), out cell)
                         && string.IsNullOrWhiteSpace(cell.DisplayText))
                     {
-                        series.Items.Add(new RectangleBarItem(i - 0.35, 0, i + 0.35, 0));
+                        series.Items.Add(new RectangleBarItem(i - colHalfWidth, 0, i + colHalfWidth, 0));
                         trendPoints?.Add(new DataPoint(i, 0));
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
@@ -447,6 +469,30 @@ public static partial class ChartRenderer
         ApplyAxisBounds(model, chart, theme);
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
         return model;
+    }
+
+    private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup(ChartModel chart, ViewportModel viewport)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>();
+        if (viewport.ChartDataCells is { Count: > 0 })
+        {
+            foreach (var cell in viewport.ChartDataCells.Where(cell => cell.SheetId == chart.DataRange.Start.Sheet))
+            {
+                lookup[(cell.Row, cell.Col)] = new DisplayCell(
+                    cell.Row,
+                    cell.Col,
+                    null,
+                    cell.DisplayText,
+                    null,
+                    StyleId.Default,
+                    null);
+            }
+        }
+
+        foreach (var cell in viewport.Cells)
+            lookup.TryAdd((cell.Row, cell.Col), cell);
+
+        return lookup;
     }
 
     private static LineSeries CreateLineSeries(ChartModel chart, string title, int seriesIndex, WorkbookTheme theme)

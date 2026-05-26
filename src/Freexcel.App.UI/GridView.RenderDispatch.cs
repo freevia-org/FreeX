@@ -37,8 +37,18 @@ public partial class GridView
         {
             RenderCharts(dc);
             RenderDrawingShapes(dc);
+            RenderNativeSlicerTimelineControls(dc);
             RenderPictures(dc);
             RenderTextBoxes(dc);
+        }
+
+        var selectedRect = GetSelectedObjectRect();
+        if (!selectedRect.IsEmpty)
+        {
+            if (_objectDragKind != ObjectDragKind.None)
+                RenderObjectDragPreview(dc, selectedRect);
+            else
+                DrawObjectSelectionHandles(dc, selectedRect);
         }
 
         dc.Pop();

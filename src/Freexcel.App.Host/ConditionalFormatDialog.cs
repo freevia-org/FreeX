@@ -31,6 +31,14 @@ public partial class ConditionalFormatDialog : Window
     private Button _dataBarColorButton;
     private TextBox _dataBarMinLengthBox;
     private TextBox _dataBarMaxLengthBox;
+    private CheckBox _dataBarBorderBox;
+    private ComboBox _dataBarAxisPositionBox;
+    private TextBox _dataBarAxisColorBox;
+    private Button _dataBarAxisColorButton;
+    private TextBox _dataBarNegativeFillColorBox;
+    private Button _dataBarNegativeFillColorButton;
+    private TextBox _dataBarNegativeBorderColorBox;
+    private Button _dataBarNegativeBorderColorButton;
     private ComboBox _colorScaleMinTypeBox;
     private TextBox _colorScaleMinValueBox;
     private TextBox _colorScaleMinColorBox;
@@ -50,7 +58,19 @@ public partial class ConditionalFormatDialog : Window
     private CellStyle? _customFormatStyle;
     private ConditionalFormat? _existingRule;
     private StackPanel _iconSetThresholdPanel = new();
-    private List<(ComboBox TypeBox, TextBox ValueBox)> _iconSetThresholdRows = [];
+    private List<(ComboBox TypeBox, TextBox ValueBox, ComboBox? OverrideBox)> _iconSetThresholdRows = [];
+    private ComboBox? _formatStyleBox;
+    private bool _ignoreFormatStyleChange;
+
+    private static readonly string[] FormatStyleLabels =
+        ["Data Bar", "2-Color Scale", "3-Color Scale", "Icon Set"];
+
+    private string CurrentFormatStyleLabel => _ruleType switch
+    {
+        "Icon Set"    => "Icon Set",
+        "Color Scale" => _colorScaleUseThreeColorBox?.IsChecked == true ? "3-Color Scale" : "2-Color Scale",
+        _             => "Data Bar"
+    };
 
     private static readonly (string Label, Color FillColor, Color? FontColor, bool Bold)[] ColorOptions =
     [
@@ -130,7 +150,17 @@ public partial class ConditionalFormatDialog : Window
         _dataBarGradientBox = new CheckBox { Content = "_Gradient fill", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
         _dataBarColorButton = CreateDataBarColorButton();
         _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
+        _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarBorderBox = new CheckBox { Content = "Show _border:", Margin = new Thickness(0, 0, 0, 6) };
+        _dataBarAxisPositionBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
+        foreach (var p in new[] { "Automatic", "Middle", "None" }) _dataBarAxisPositionBox.Items.Add(p);
+        _dataBarAxisPositionBox.SelectedItem = "Automatic";
+        _dataBarAxisColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarAxisColorButton = CreateDataBarOptionalColorButton(_dataBarAxisColorBox, "Choose axis color");
+        _dataBarNegativeFillColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarNegativeFillColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeFillColorBox, "Choose negative bar color");
+        _dataBarNegativeBorderColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
+        _dataBarNegativeBorderColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeBorderColorBox, "Choose negative bar border color");
         _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
         _colorScaleMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _colorScaleMinColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(99, 190, 123)) };
@@ -167,7 +197,7 @@ public partial class ConditionalFormatDialog : Window
         }
         else if (isDataBar)
         {
-            Height = 430;
+            Height = 600;
             inner.Children.Add(CreateAccessLabel("_Minimum type:", _dataBarMinTypeBox));
             inner.Children.Add(_dataBarMinTypeBox);
             inner.Children.Add(CreateAccessLabel("Minimum _value:", _dataBarMinValueBox));
@@ -182,6 +212,15 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(_dataBarMinLengthBox);
             inner.Children.Add(CreateAccessLabel("Ma_ximum bar length (%):", _dataBarMaxLengthBox));
             inner.Children.Add(_dataBarMaxLengthBox);
+            inner.Children.Add(_dataBarBorderBox);
+            inner.Children.Add(CreateAccessLabel("_Axis position:", _dataBarAxisPositionBox));
+            inner.Children.Add(_dataBarAxisPositionBox);
+            inner.Children.Add(CreateAccessLabel("_Axis color:", _dataBarAxisColorBox));
+            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarAxisColorBox, _dataBarAxisColorButton));
+            inner.Children.Add(CreateAccessLabel("_Negative bar color:", _dataBarNegativeFillColorBox));
+            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeFillColorBox, _dataBarNegativeFillColorButton));
+            inner.Children.Add(CreateAccessLabel("Negative _border color:", _dataBarNegativeBorderColorBox));
+            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeBorderColorBox, _dataBarNegativeBorderColorButton));
 
             _value1Box  = new TextBox();
             _value2Box  = new TextBox();
@@ -348,7 +387,8 @@ public partial class ConditionalFormatDialog : Window
                 _iconSetShowValueBox.IsChecked = existingRule.IconSetShowValue;
                 _iconSetReverseBox.IsChecked = existingRule.IconSetReverse;
                 var thresholds = existingRule.IconSetThresholds.Count > 0 ? existingRule.IconSetThresholds : null;
-                BuildIconSetThresholdPanel(style, thresholds);
+                var overrides = existingRule.IconOverrides.Count > 0 ? existingRule.IconOverrides : null;
+                BuildIconSetThresholdPanel(style, thresholds, overrides);
             }
             else if (existingRule.RuleType == CfRuleType.DataBar)
             {
@@ -360,6 +400,11 @@ public partial class ConditionalFormatDialog : Window
                 _dataBarGradientBox.IsChecked = existingRule.DataBarGradient;
                 _dataBarMinLengthBox.Text = existingRule.DataBarMinLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
                 _dataBarMaxLengthBox.Text = existingRule.DataBarMaxLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                _dataBarBorderBox.IsChecked = existingRule.DataBarBorder;
+                _dataBarAxisPositionBox.SelectedItem = AxisPositionToLabel(existingRule.DataBarAxisPosition);
+                _dataBarAxisColorBox.Text = existingRule.DataBarAxisColor is { } ac ? FormatRgb(ac) : "";
+                _dataBarNegativeFillColorBox.Text = existingRule.DataBarNegativeFillColor is { } nf ? FormatRgb(nf) : "";
+                _dataBarNegativeBorderColorBox.Text = existingRule.DataBarNegativeBorderColor is { } nb ? FormatRgb(nb) : "";
             }
             else if (existingRule.RuleType == CfRuleType.ColorScale)
             {
@@ -426,6 +471,27 @@ public partial class ConditionalFormatDialog : Window
         Keyboard.Focus(target);
     }
 
+    private void FormatStyleBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_ignoreFormatStyleChange || sender is not ComboBox cb || cb.SelectedItem is not string label)
+            return;
+
+        var newType = label switch
+        {
+            "2-Color Scale" => "Color Scale",
+            "3-Color Scale" => "Color Scale",
+            "Icon Set"      => "Icon Set",
+            _               => "Data Bar"
+        };
+        RefreshRuleDescription(newType);
+        if (label == "3-Color Scale" && _colorScaleUseThreeColorBox is not null)
+        {
+            _ignoreFormatStyleChange = true;
+            _colorScaleUseThreeColorBox.IsChecked = true;
+            _ignoreFormatStyleChange = false;
+        }
+    }
+
     private static Label CreateAccessLabel(string content, Control target) =>
         new() { Content = content, Target = target, Padding = new Thickness(0) };
 
@@ -444,6 +510,23 @@ public partial class ConditionalFormatDialog : Window
         var isDuplicateValues = ruleType is "Duplicate Values";
         var isDateOccurring = ruleType is "Date Occurring";
 
+        if (isDataBar || isColorScale || isIconSet)
+        {
+            _formatStyleBox = new ComboBox
+            {
+                Margin = new Thickness(0, 4, 0, 12),
+                ItemsSource = FormatStyleLabels,
+                SelectedItem = CurrentFormatStyleLabel
+            };
+            _formatStyleBox.SelectionChanged += FormatStyleBox_SelectionChanged;
+            inner.Children.Add(CreateAccessLabel("_Format Style:", _formatStyleBox));
+            inner.Children.Add(_formatStyleBox);
+        }
+        else
+        {
+            _formatStyleBox = null;
+        }
+
         if (isFormula)
         {
             Height = 200;
@@ -456,7 +539,7 @@ public partial class ConditionalFormatDialog : Window
         }
         else if (isDataBar)
         {
-            Height = 430;
+            Height = 600;
             _dataBarMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
             _dataBarMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
             _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
@@ -465,7 +548,17 @@ public partial class ConditionalFormatDialog : Window
             _dataBarGradientBox = new CheckBox { Content = "_Gradient fill", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
             _dataBarColorButton = CreateDataBarColorButton();
             _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
+            _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+            _dataBarBorderBox = new CheckBox { Content = "Show _border:", Margin = new Thickness(0, 0, 0, 6) };
+            _dataBarAxisPositionBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
+            foreach (var p in new[] { "Automatic", "Middle", "None" }) _dataBarAxisPositionBox.Items.Add(p);
+            _dataBarAxisPositionBox.SelectedItem = "Automatic";
+            _dataBarAxisColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+            _dataBarAxisColorButton = CreateDataBarOptionalColorButton(_dataBarAxisColorBox, "Choose axis color");
+            _dataBarNegativeFillColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+            _dataBarNegativeFillColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeFillColorBox, "Choose negative bar color");
+            _dataBarNegativeBorderColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
+            _dataBarNegativeBorderColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeBorderColorBox, "Choose negative bar border color");
             inner.Children.Add(CreateAccessLabel("_Minimum type:", _dataBarMinTypeBox));
             inner.Children.Add(_dataBarMinTypeBox);
             inner.Children.Add(CreateAccessLabel("Minimum _value:", _dataBarMinValueBox));
@@ -480,6 +573,15 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(_dataBarMinLengthBox);
             inner.Children.Add(CreateAccessLabel("Ma_ximum bar length (%):", _dataBarMaxLengthBox));
             inner.Children.Add(_dataBarMaxLengthBox);
+            inner.Children.Add(_dataBarBorderBox);
+            inner.Children.Add(CreateAccessLabel("_Axis position:", _dataBarAxisPositionBox));
+            inner.Children.Add(_dataBarAxisPositionBox);
+            inner.Children.Add(CreateAccessLabel("_Axis color:", _dataBarAxisColorBox));
+            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarAxisColorBox, _dataBarAxisColorButton));
+            inner.Children.Add(CreateAccessLabel("_Negative bar color:", _dataBarNegativeFillColorBox));
+            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeFillColorBox, _dataBarNegativeFillColorButton));
+            inner.Children.Add(CreateAccessLabel("Negative _border color:", _dataBarNegativeBorderColorBox));
+            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeBorderColorBox, _dataBarNegativeBorderColorButton));
             _value1Box = new TextBox();
             _value2Box = new TextBox();
             _value2Label = new Label();

@@ -122,14 +122,77 @@ public sealed class ChartSeriesFormatDialog : Window
 
     private void Accept()
     {
+        if (!TryReadOptionalColor(_fillBox, out var fillColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _fillBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_strokeBox, out var strokeColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _strokeBox);
+            return;
+        }
+
+        if (!TryReadNullablePositiveDouble(_strokeThicknessBox, out var strokeThickness))
+        {
+            ShowInvalidInputWarning("Enter a positive line width or leave it blank.", _strokeThicknessBox);
+            return;
+        }
+
+        if (!TryReadNullablePositiveDouble(_markerSizeBox, out var markerSize))
+        {
+            ShowInvalidInputWarning("Enter a positive marker size or leave it blank.", _markerSizeBox);
+            return;
+        }
+
         Result = CreateResult(
             _seriesBox.SelectedIndex < 0 ? 0 : _seriesBox.SelectedIndex,
-            ChartDialogHelpers.ParseColor(_fillBox.Text),
-            ChartDialogHelpers.ParseColor(_strokeBox.Text),
-            ChartDialogHelpers.ParseNullableDouble(_strokeThicknessBox.Text),
+            fillColor,
+            strokeColor,
+            strokeThickness,
             _dashBox.SelectedItem is ChartLineDashStyle dash ? dash : null,
             _markerBox.SelectedItem is ChartMarkerStyle marker ? marker : null,
-            ChartDialogHelpers.ParseNullableDouble(_markerSizeBox.Text));
+            markerSize);
         DialogResult = true;
+    }
+
+    private static bool TryReadOptionalColor(TextBox textBox, out CellColor? color) =>
+        ColorInputParser.TryParseOptionalHexColor(textBox.Text, out color);
+
+    private static bool TryReadNullablePositiveDouble(TextBox textBox, out double? value)
+    {
+        value = null;
+        var text = textBox.Text.Trim();
+        if (string.IsNullOrEmpty(text) || text.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!double.TryParse(
+                text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed)
+            || !double.IsFinite(parsed)
+            || parsed <= 0)
+        {
+            return false;
+        }
+
+        value = parsed;
+        return true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
     }
 }

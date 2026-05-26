@@ -288,10 +288,17 @@ public partial class DataValidationDialog : Window
 
     private void RequestRangeSelection(DataValidationRangeSelectionTarget target, TextBox textBox)
     {
-        textBox.Focus();
-        textBox.SelectAll();
+        FocusRangeSelectionInput(textBox);
         RangeSelectionRequest = CreateRangeSelectionRequest(target, textBox.Text);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
+        FocusRangeSelectionInput(textBox);
+    }
+
+    private static void FocusRangeSelectionInput(TextBox textBox)
+    {
+        textBox.Focus();
+        textBox.SelectAll();
+        Keyboard.Focus(textBox);
     }
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)

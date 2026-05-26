@@ -13,6 +13,9 @@ internal static partial class XlsxChartXmlWriter
 
     public static XDocument ToChartXml(ChartModel chart, Sheet sheet)
     {
+        if (IsChartExChart(chart.Type))
+            return ToChartExXml(chart, sheet);
+
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -23,7 +26,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "chartSpace",
                     new XAttribute(XNamespace.Xmlns + "c", chartNs),
                     new XAttribute(XNamespace.Xmlns + "a", drawingNs),
-                    chart.ExternalData?.RelationshipId is null ? null : new XAttribute(XNamespace.Xmlns + "r", relNs),
+                    chart.ExternalData?.RelationshipId is null && chart.UserShapes?.RelationshipId is null ? null : new XAttribute(XNamespace.Xmlns + "r", relNs),
                     chart.Uses1904DateSystem ? new XElement(chartNs + "date1904", new XAttribute("val", "1")) : null,
                     string.IsNullOrWhiteSpace(chart.Language) ? null : new XElement(chartNs + "lang", new XAttribute("val", chart.Language)),
                     chart.ChartStyleId is { } styleId ? new XElement(chartNs + "style", new XAttribute("val", styleId.ToString(CultureInfo.InvariantCulture))) : null,
@@ -31,7 +34,9 @@ internal static partial class XlsxChartXmlWriter
                     chart.RoundedCorners ? new XElement(chartNs + "roundedCorners", new XAttribute("val", "1")) : null,
                     ToChartProtectionXml(chart, chartNs),
                     ToChartExternalDataXml(chart, chartNs, relNs),
+                    ToChartUserShapesXml(chart, chartNs, relNs),
                     ToChartPrintSettingsXml(chart, chartNs),
+                    ToChartDefaultTextPropertiesXml(chart, chartNs, drawingNs),
                     ToChartAreaShapeProperties(chart, chartNs, drawingNs),
                 ToPivotSourceXml(chart, sheet, chartNs),
                 new XElement(chartNs + "chart",
@@ -410,7 +415,14 @@ internal static partial class XlsxChartXmlWriter
                 or ChartType.Surface
                 or ChartType.ThreeDSurface
                 or ChartType.ThreeDColumn
-                or ChartType.ThreeDBar);
+                or ChartType.ThreeDBar
+                or ChartType.Treemap
+                or ChartType.Sunburst
+                or ChartType.Histogram
+                or ChartType.Pareto
+                or ChartType.BoxAndWhisker
+                or ChartType.Waterfall
+                or ChartType.Funnel);
 
     private static string ToXlsxBarDirection(ChartType chartType) =>
         chartType is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar

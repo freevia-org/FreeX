@@ -32,6 +32,8 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenFormatCells, (_, _) => OpenFormatCellsDialog());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.Find, FindButton_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.Replace, ReplaceButton_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NameManager, NamedRangesButton_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CreateNamesFromSelection, CreateNamesFromSelectionBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertFunction, InsertFunctionBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SpellCheck, SpellCheckBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CloseWorkbook, (_, _) => Close());

@@ -101,7 +101,15 @@ public static partial class BuiltInFunctions
         basis = 0;
         if (args.Count <= index || args[index] is BlankValue) return true;
 
-        double rawBasis = ToNumber(args[index]);
+        return TryGetFinancialBasis(args[index], out basis);
+    }
+
+    private static bool TryGetFinancialBasis(ScalarValue value, out int basis)
+    {
+        basis = 0;
+        if (value is BlankValue) return true;
+
+        double rawBasis = ToNumber(value);
         if (!double.IsFinite(rawBasis)) return false;
         basis = (int)Math.Truncate(rawBasis);
         return basis is >= 0 and <= 4;
@@ -158,12 +166,25 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ipmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate  = ToNumber(args[0]);
-        double per   = ToNumber(args[1]);
-        double nper  = ToNumber(args[2]);
-        double pv    = ToNumber(args[3]);
-        double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
+        var fvArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        var typeArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], args[3], fvArg, typeArg], values => IpmtScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue IpmtScalar(ScalarValue rateValue, ScalarValue periodValue, ScalarValue nperValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (periodValue is ErrorValue periodError) return periodError;
+        if (nperValue is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return IpmtScalar(ToNumber(rateValue), periodValue, ToNumber(nperValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
+    }
+
+    private static ScalarValue IpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)
+    {
+        double per = ToNumber(periodValue);
         if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) ||
             !double.IsFinite(pv)   || !double.IsFinite(fv)  || !double.IsFinite(type))
             return ErrorValue.Num;
@@ -178,12 +199,25 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ppmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate  = ToNumber(args[0]);
-        double per   = ToNumber(args[1]);
-        double nper  = ToNumber(args[2]);
-        double pv    = ToNumber(args[3]);
-        double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
+        var fvArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        var typeArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], args[3], fvArg, typeArg], values => PpmtScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue PpmtScalar(ScalarValue rateValue, ScalarValue periodValue, ScalarValue nperValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (periodValue is ErrorValue periodError) return periodError;
+        if (nperValue is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return PpmtScalar(ToNumber(rateValue), periodValue, ToNumber(nperValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
+    }
+
+    private static ScalarValue PpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)
+    {
+        double per = ToNumber(periodValue);
         if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) ||
             !double.IsFinite(pv)   || !double.IsFinite(fv)  || !double.IsFinite(type))
             return ErrorValue.Num;
@@ -203,9 +237,15 @@ public static partial class BuiltInFunctions
         double rate  = ToNumber(args[0]);
         double nper  = ToNumber(args[1]);
         double pv    = ToNumber(args[2]);
-        double start = ToNumber(args[3]);
         double end   = ToNumber(args[4]);
         double type  = ToNumber(args[5]);
+        if (args[3] is RangeValue startRange) return MapUnaryTextRange(startRange, value => CumipmtScalar(rate, nper, pv, value, end, type));
+        return CumipmtScalar(rate, nper, pv, args[3], end, type);
+    }
+
+    private static ScalarValue CumipmtScalar(double rate, double nper, double pv, ScalarValue startValue, double end, double type)
+    {
+        double start = ToNumber(startValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pv) ||
             !double.IsFinite(start) || !double.IsFinite(end) || !double.IsFinite(type))
             return ErrorValue.Num;
@@ -226,9 +266,15 @@ public static partial class BuiltInFunctions
         double rate  = ToNumber(args[0]);
         double nper  = ToNumber(args[1]);
         double pv    = ToNumber(args[2]);
-        double start = ToNumber(args[3]);
         double end   = ToNumber(args[4]);
         double type  = ToNumber(args[5]);
+        if (args[3] is RangeValue startRange) return MapUnaryTextRange(startRange, value => CumprincScalar(rate, nper, pv, value, end, type));
+        return CumprincScalar(rate, nper, pv, args[3], end, type);
+    }
+
+    private static ScalarValue CumprincScalar(double rate, double nper, double pv, ScalarValue startValue, double end, double type)
+    {
+        double start = ToNumber(startValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pv) ||
             !double.IsFinite(start) || !double.IsFinite(end) || !double.IsFinite(type))
             return ErrorValue.Num;
@@ -247,8 +293,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Effect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nomRate = ToNumber(args[0]);
-        double npery   = Math.Truncate(ToNumber(args[1]));
+        return MapBinaryMathArgs(args[0], args[1], EffectScalar);
+    }
+
+    private static ScalarValue EffectScalar(ScalarValue rateValue, ScalarValue nperyValue)
+    {
+        double npery = Math.Truncate(ToNumber(nperyValue));
+        double nomRate = ToNumber(rateValue);
         if (!double.IsFinite(nomRate) || !double.IsFinite(npery)) return ErrorValue.Num;
         if (nomRate <= 0 || npery < 1) return ErrorValue.Num;
         return NumberResult(Math.Pow(1 + nomRate / npery, npery) - 1);
@@ -257,8 +308,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Nominal(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double effectRate = ToNumber(args[0]);
-        double npery      = Math.Truncate(ToNumber(args[1]));
+        return MapBinaryMathArgs(args[0], args[1], NominalScalar);
+    }
+
+    private static ScalarValue NominalScalar(ScalarValue rateValue, ScalarValue nperyValue)
+    {
+        double npery = Math.Truncate(ToNumber(nperyValue));
+        double effectRate = ToNumber(rateValue);
         if (!double.IsFinite(effectRate) || !double.IsFinite(npery)) return ErrorValue.Num;
         if (effectRate <= 0 || npery < 1) return ErrorValue.Num;
         return NumberResult((Math.Pow(1 + effectRate, 1.0 / npery) - 1) * npery);
@@ -364,9 +420,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Rri(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nper = ToNumber(args[0]);
-        double pv   = ToNumber(args[1]);
-        double fv   = ToNumber(args[2]);
+        return MapTernaryTextArgs(args[0], args[1], args[2], RriScalar);
+    }
+
+    private static ScalarValue RriScalar(ScalarValue nperValue, ScalarValue pvValue, ScalarValue fvValue)
+    {
+        double pv = ToNumber(pvValue);
+        double fv = ToNumber(fvValue);
+        return RriScalar(nperValue, pv, fv);
+    }
+
+    private static ScalarValue RriScalar(ScalarValue nperValue, double pv, double fv)
+    {
+        double nper = ToNumber(nperValue);
         if (!double.IsFinite(nper) || !double.IsFinite(pv) || !double.IsFinite(fv)) return ErrorValue.Num;
         if (nper <= 0 || pv == 0) return ErrorValue.Num;
         if ((pv > 0 && fv < 0) || (pv < 0 && fv > 0)) return ErrorValue.Num;
@@ -377,9 +443,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pduration(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
-        double pv   = ToNumber(args[1]);
-        double fv   = ToNumber(args[2]);
+        return MapTernaryTextArgs(args[0], args[1], args[2], PdurationScalar);
+    }
+
+    private static ScalarValue PdurationScalar(ScalarValue rateValue, ScalarValue pvValue, ScalarValue fvValue)
+    {
+        double pv = ToNumber(pvValue);
+        double fv = ToNumber(fvValue);
+        return PdurationScalar(rateValue, pv, fv);
+    }
+
+    private static ScalarValue PdurationScalar(ScalarValue rateValue, double pv, double fv)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || !double.IsFinite(pv) || !double.IsFinite(fv)) return ErrorValue.Num;
         if (rate <= 0 || pv <= 0 || fv <= 0) return ErrorValue.Num;
         return NumberResult((Math.Log(fv) - Math.Log(pv)) / Math.Log(1 + rate));
@@ -409,11 +485,22 @@ public static partial class BuiltInFunctions
     private static ScalarValue Db(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
-        double period  = ToNumber(args[3]);
-        double month   = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 12;
+        var monthArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], monthArg], values => DbScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue DbScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue periodValue, ScalarValue monthValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        double month = monthValue is BlankValue ? 12 : ToNumber(monthValue);
+        return DbScalar(cost, salvage, life, periodValue, month);
+    }
+
+    private static ScalarValue DbScalar(double cost, double salvage, double life, ScalarValue periodValue, double month)
+    {
+        double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) ||
             !double.IsFinite(period) || !double.IsFinite(month))
             return ErrorValue.Num;
@@ -442,11 +529,22 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ddb(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
-        double period  = ToNumber(args[3]);
-        double factor  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 2.0;
+        var factorArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], factorArg], values => DdbScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue DdbScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue periodValue, ScalarValue factorValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        double factor = factorValue is BlankValue ? 2.0 : ToNumber(factorValue);
+        return DdbScalar(cost, salvage, life, periodValue, factor);
+    }
+
+    private static ScalarValue DdbScalar(double cost, double salvage, double life, ScalarValue periodValue, double factor)
+    {
+        double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) ||
             !double.IsFinite(period) || !double.IsFinite(factor))
             return ErrorValue.Num;
@@ -467,13 +565,25 @@ public static partial class BuiltInFunctions
     private static ScalarValue Vdb(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost        = ToNumber(args[0]);
-        double salvage     = ToNumber(args[1]);
-        double life        = ToNumber(args[2]);
-        double startPeriod = ToNumber(args[3]);
-        double endPeriod   = ToNumber(args[4]);
-        double factor      = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 2.0;
-        bool noSwitch      = args.Count > 6 && args[6] is not BlankValue && ToBool(args[6]);
+        var factorArg = args.Count > 5 ? args[5] : BlankValue.Instance;
+        var noSwitchArg = args.Count > 6 ? args[6] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], factorArg, noSwitchArg], values => VdbScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
+    }
+
+    private static ScalarValue VdbScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue startPeriodValue, ScalarValue endPeriodValue, ScalarValue factorValue, ScalarValue noSwitchValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        double startPeriod = ToNumber(startPeriodValue);
+        double factor = factorValue is BlankValue ? 2.0 : ToNumber(factorValue);
+        bool noSwitch = noSwitchValue is not BlankValue && ToBool(noSwitchValue);
+        return VdbScalar(cost, salvage, life, startPeriod, endPeriodValue, factor, noSwitch);
+    }
+
+    private static ScalarValue VdbScalar(double cost, double salvage, double life, double startPeriod, ScalarValue endPeriodValue, double factor, bool noSwitch)
+    {
+        double endPeriod = ToNumber(endPeriodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) ||
             !double.IsFinite(startPeriod) || !double.IsFinite(endPeriod) || !double.IsFinite(factor))
             return ErrorValue.Num;
@@ -510,10 +620,20 @@ public static partial class BuiltInFunctions
     private static ScalarValue Syd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
-        double per     = ToNumber(args[3]);
+        return MapScalarArgs([args[0], args[1], args[2], args[3]], values => SydScalar(values[0], values[1], values[2], values[3]));
+    }
+
+    private static ScalarValue SydScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue periodValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        return SydScalar(cost, salvage, life, periodValue);
+    }
+
+    private static ScalarValue SydScalar(double cost, double salvage, double life, ScalarValue periodValue)
+    {
+        double per = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) || !double.IsFinite(per))
             return ErrorValue.Num;
         if (life <= 0 || per <= 0 || per > life) return ErrorValue.Num;
@@ -524,15 +644,26 @@ public static partial class BuiltInFunctions
     private static ScalarValue Amordegrc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost          = ToNumber(args[0]);
-        double datePurchased = ToNumber(args[1]);
-        double firstPeriod   = ToNumber(args[2]);
-        double salvage       = ToNumber(args[3]);
-        double period        = ToNumber(args[4]);
-        double rate          = ToNumber(args[5]);
+        var basisArg = args.Count > 6 ? args[6] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], basisArg], values => AmordegrcScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
+    }
+
+    private static ScalarValue AmordegrcScalar(ScalarValue costValue, ScalarValue datePurchasedValue, ScalarValue firstPeriodValue, ScalarValue salvageValue, ScalarValue periodValue, ScalarValue rateValue, ScalarValue basisValue)
+    {
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        double cost = ToNumber(costValue);
+        double datePurchased = ToNumber(datePurchasedValue);
+        double firstPeriod = ToNumber(firstPeriodValue);
+        double salvage = ToNumber(salvageValue);
+        double rate = ToNumber(rateValue);
+        return AmordegrcScalar(cost, datePurchased, firstPeriod, salvage, periodValue, rate, basis);
+    }
+
+    private static ScalarValue AmordegrcScalar(double cost, double datePurchased, double firstPeriod, double salvage, ScalarValue periodValue, double rate, int basis)
+    {
+        double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(rate) || !double.IsFinite(period))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (cost <= 0 || salvage < 0 || rate <= 0) return ErrorValue.Num;
         // Compute life in years
         double life = 1.0 / rate;
@@ -568,15 +699,26 @@ public static partial class BuiltInFunctions
     private static ScalarValue Amorlinc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost          = ToNumber(args[0]);
-        double datePurchased = ToNumber(args[1]);
-        double firstPeriod   = ToNumber(args[2]);
-        double salvage       = ToNumber(args[3]);
-        double period        = ToNumber(args[4]);
-        double rate          = ToNumber(args[5]);
+        var basisArg = args.Count > 6 ? args[6] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], basisArg], values => AmorlincScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
+    }
+
+    private static ScalarValue AmorlincScalar(ScalarValue costValue, ScalarValue datePurchasedValue, ScalarValue firstPeriodValue, ScalarValue salvageValue, ScalarValue periodValue, ScalarValue rateValue, ScalarValue basisValue)
+    {
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        double cost = ToNumber(costValue);
+        double datePurchased = ToNumber(datePurchasedValue);
+        double firstPeriod = ToNumber(firstPeriodValue);
+        double salvage = ToNumber(salvageValue);
+        double rate = ToNumber(rateValue);
+        return AmorlincScalar(cost, datePurchased, firstPeriod, salvage, periodValue, rate, basis);
+    }
+
+    private static ScalarValue AmorlincScalar(double cost, double datePurchased, double firstPeriod, double salvage, ScalarValue periodValue, double rate, int basis)
+    {
+        double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(rate) || !double.IsFinite(period))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (cost <= 0 || salvage < 0 || rate <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(datePurchased, out DateTime dp) ||
             !TryGetFinancialDate(firstPeriod, out DateTime fp)) return ErrorValue.Num;
@@ -605,8 +747,18 @@ public static partial class BuiltInFunctions
     private static ScalarValue Dollarde(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double d = ToNumber(args[0]);
-        double f = Math.Truncate(ToNumber(args[1]));
+        return MapBinaryMathArgs(args[0], args[1], DollardeScalar);
+    }
+
+    private static ScalarValue DollardeScalar(ScalarValue dollarValue, ScalarValue fractionValue)
+    {
+        double f = Math.Truncate(ToNumber(fractionValue));
+        return DollardeScalar(dollarValue, f);
+    }
+
+    private static ScalarValue DollardeScalar(ScalarValue dollarValue, double f)
+    {
+        double d = ToNumber(dollarValue);
         if (!double.IsFinite(d) || !double.IsFinite(f)) return ErrorValue.Num;
         if (f < 0) return ErrorValue.Num;
         if (f == 0) return ErrorValue.DivByZero;
@@ -620,8 +772,18 @@ public static partial class BuiltInFunctions
     private static ScalarValue Dollarfr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double d = ToNumber(args[0]);
-        double f = Math.Truncate(ToNumber(args[1]));
+        return MapBinaryMathArgs(args[0], args[1], DollarfrScalar);
+    }
+
+    private static ScalarValue DollarfrScalar(ScalarValue dollarValue, ScalarValue fractionValue)
+    {
+        double f = Math.Truncate(ToNumber(fractionValue));
+        return DollarfrScalar(dollarValue, f);
+    }
+
+    private static ScalarValue DollarfrScalar(ScalarValue dollarValue, double f)
+    {
+        double d = ToNumber(dollarValue);
         if (!double.IsFinite(d) || !double.IsFinite(f)) return ErrorValue.Num;
         if (f < 0) return ErrorValue.Num;
         if (f == 0) return ErrorValue.DivByZero;
@@ -637,13 +799,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Disc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement  = ToNumber(args[0]);
-        double maturity    = ToNumber(args[1]);
-        double pr          = ToNumber(args[2]);
-        double redemption  = ToNumber(args[3]);
+        var basisArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], basisArg], values => DiscScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue DiscScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue priceValue, ScalarValue redemptionValue, ScalarValue basisValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double pr = ToNumber(priceValue);
+        double redemption = ToNumber(redemptionValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         if (pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -656,13 +824,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Intrate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement  = ToNumber(args[0]);
-        double maturity    = ToNumber(args[1]);
-        double investment  = ToNumber(args[2]);
-        double redemption  = ToNumber(args[3]);
+        var basisArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], basisArg], values => IntrateScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue IntrateScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue investmentValue, ScalarValue redemptionValue, ScalarValue basisValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double investment = ToNumber(investmentValue);
+        double redemption = ToNumber(redemptionValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(investment) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         if (investment <= 0 || redemption <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -675,13 +849,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Received(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
-        double maturity   = ToNumber(args[1]);
-        double investment = ToNumber(args[2]);
-        double discount   = ToNumber(args[3]);
+        var basisArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], basisArg], values => ReceivedScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue ReceivedScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue investmentValue, ScalarValue discountValue, ScalarValue basisValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double investment = ToNumber(investmentValue);
+        double discount = ToNumber(discountValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(investment) || !double.IsFinite(discount))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         if (investment <= 0 || discount <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -695,16 +875,23 @@ public static partial class BuiltInFunctions
     private static ScalarValue Accrint(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double issue         = ToNumber(args[0]);
-        double firstInterest = ToNumber(args[1]);
-        double settlement    = ToNumber(args[2]);
-        double rate          = ToNumber(args[3]);
-        double par           = ToNumber(args[4]);
-        double frequency     = ToNumber(args[5]);
+        var basisArg = args.Count > 6 ? args[6] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], basisArg], values => AccrintScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
+    }
+
+    private static ScalarValue AccrintScalar(ScalarValue issueValue, ScalarValue firstInterestValue, ScalarValue settlementValue, ScalarValue rateValue, ScalarValue parValue, ScalarValue frequencyValue, ScalarValue basisValue)
+    {
+        double issue = ToNumber(issueValue);
+        double firstInterest = ToNumber(firstInterestValue);
+        double settlement = ToNumber(settlementValue);
+        double par = ToNumber(parValue);
+        double frequency = ToNumber(frequencyValue);
+        _ = firstInterest;
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(issue) || !double.IsFinite(settlement) || !double.IsFinite(rate) ||
             !double.IsFinite(par) || !double.IsFinite(frequency))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         if (rate <= 0 || par <= 0 || frequency <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(issue, out DateTime sd) ||
             !TryGetFinancialDate(settlement, out DateTime sett)) return ErrorValue.Num;
@@ -716,9 +903,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Tbilleq(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
-        double maturity   = ToNumber(args[1]);
-        double discount   = ToNumber(args[2]);
+        return MapTernaryTextArgs(args[0], args[1], args[2], TbilleqScalar);
+    }
+
+    private static ScalarValue TbilleqScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue discountValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double discount = ToNumber(discountValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount))
             return ErrorValue.Num;
         if (discount <= 0 || discount >= 1) return ErrorValue.Num;
@@ -732,9 +924,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Tbillprice(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
-        double maturity   = ToNumber(args[1]);
-        double discount   = ToNumber(args[2]);
+        return MapTernaryTextArgs(args[0], args[1], args[2], TbillpriceScalar);
+    }
+
+    private static ScalarValue TbillpriceScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue discountValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double discount = ToNumber(discountValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount))
             return ErrorValue.Num;
         if (discount <= 0) return ErrorValue.Num;
@@ -748,9 +945,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Tbillyield(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
-        double maturity   = ToNumber(args[1]);
-        double pr         = ToNumber(args[2]);
+        return MapTernaryTextArgs(args[0], args[1], args[2], TbillyieldScalar);
+    }
+
+    private static ScalarValue TbillyieldScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue priceValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(pr))
             return ErrorValue.Num;
         if (pr <= 0) return ErrorValue.Num;
@@ -766,11 +968,18 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupdaybs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out int basis)) return ErrorValue.Num;
+        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupdaybsScalar(value, maturity, frequency, basis));
+        return CoupdaybsScalar(args[0], maturity, frequency, basis);
+    }
+
+    private static ScalarValue CoupdaybsScalar(ScalarValue settlementValue, double maturity, int frequency, int basis)
+    {
+        _ = basis;
+        double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
@@ -781,11 +990,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupdays(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out int basis)) return ErrorValue.Num;
+        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupdaysScalar(value, maturity, frequency, basis));
+        return CoupdaysScalar(args[0], maturity, frequency, basis);
+    }
+
+    private static ScalarValue CoupdaysScalar(ScalarValue settlementValue, double maturity, int frequency, int basis)
+    {
+        double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
@@ -800,11 +1015,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupdaysnc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
+        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupdaysncScalar(value, maturity, frequency));
+        return CoupdaysncScalar(args[0], maturity, frequency);
+    }
+
+    private static ScalarValue CoupdaysncScalar(ScalarValue settlementValue, double maturity, int frequency)
+    {
+        double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
@@ -815,11 +1036,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupncd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
+        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupncdScalar(value, maturity, frequency));
+        return CoupncdScalar(args[0], maturity, frequency);
+    }
+
+    private static ScalarValue CoupncdScalar(ScalarValue settlementValue, double maturity, int frequency)
+    {
+        double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
@@ -830,11 +1057,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupnum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
+        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupnumScalar(value, maturity, frequency));
+        return CoupnumScalar(args[0], maturity, frequency);
+    }
+
+    private static ScalarValue CoupnumScalar(ScalarValue settlementValue, double maturity, int frequency)
+    {
+        double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
@@ -848,11 +1081,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Couppcd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
+        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CouppcdScalar(value, maturity, frequency));
+        return CouppcdScalar(args[0], maturity, frequency);
+    }
+
+    private static ScalarValue CouppcdScalar(ScalarValue settlementValue, double maturity, int frequency)
+    {
+        double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
@@ -868,13 +1107,19 @@ public static partial class BuiltInFunctions
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
         double rate        = ToNumber(args[2]);
-        double yld         = ToNumber(args[3]);
         double redemption  = ToNumber(args[4]);
         int frequency      = (int)Math.Truncate(ToNumber(args[5]));
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
+        if (args[3] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => PriceScalar(settlement, maturity, rate, value, redemption, frequency, basis));
+        return PriceScalar(settlement, maturity, rate, args[3], redemption, frequency, basis);
+    }
+
+    private static ScalarValue PriceScalar(double settlement, double maturity, double rate, ScalarValue yieldValue, double redemption, int frequency, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
             !double.IsFinite(yld) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate < 0 || yld < 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
@@ -890,13 +1135,19 @@ public static partial class BuiltInFunctions
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
         double rate        = ToNumber(args[2]);
-        double pr          = ToNumber(args[3]);
         double redemption  = ToNumber(args[4]);
         int frequency      = (int)Math.Truncate(ToNumber(args[5]));
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
+        if (args[3] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => YieldScalar(settlement, maturity, rate, value, redemption, frequency, basis));
+        return YieldScalar(settlement, maturity, rate, args[3], redemption, frequency, basis);
+    }
+
+    private static ScalarValue YieldScalar(double settlement, double maturity, double rate, ScalarValue priceValue, double redemption, int frequency, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
             !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate < 0 || pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
@@ -923,11 +1174,17 @@ public static partial class BuiltInFunctions
         if (FirstError(args) is { } e) return e;
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
-        double discount    = ToNumber(args[2]);
         double redemption  = ToNumber(args[3]);
+        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
+        if (args[2] is RangeValue discountRange) return MapUnaryTextRange(discountRange, value => PricediscScalar(settlement, maturity, value, redemption, basis));
+        return PricediscScalar(settlement, maturity, args[2], redemption, basis);
+    }
+
+    private static ScalarValue PricediscScalar(double settlement, double maturity, ScalarValue discountValue, double redemption, int basis)
+    {
+        double discount = ToNumber(discountValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
         if (discount <= 0 || redemption <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -943,11 +1200,17 @@ public static partial class BuiltInFunctions
         double maturity    = ToNumber(args[1]);
         double issue       = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
-        double yld         = ToNumber(args[4]);
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
+        if (args[4] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => PricematScalar(settlement, maturity, issue, rate, value, basis));
+        return PricematScalar(settlement, maturity, issue, rate, args[4], basis);
+    }
+
+    private static ScalarValue PricematScalar(double settlement, double maturity, double issue, double rate, ScalarValue yieldValue, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(rate) || !double.IsFinite(yld))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (rate < 0 || yld < 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md) ||
@@ -964,11 +1227,17 @@ public static partial class BuiltInFunctions
         if (FirstError(args) is { } e) return e;
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
-        double pr          = ToNumber(args[2]);
         double redemption  = ToNumber(args[3]);
+        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
+        if (args[2] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => YielddiscScalar(settlement, maturity, value, redemption, basis));
+        return YielddiscScalar(settlement, maturity, args[2], redemption, basis);
+    }
+
+    private static ScalarValue YielddiscScalar(double settlement, double maturity, ScalarValue priceValue, double redemption, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
         if (pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -985,11 +1254,17 @@ public static partial class BuiltInFunctions
         double maturity    = ToNumber(args[1]);
         double issue       = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
-        double pr          = ToNumber(args[4]);
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
+        if (args[4] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => YieldmatScalar(settlement, maturity, issue, rate, value, basis));
+        return YieldmatScalar(settlement, maturity, issue, rate, args[4], basis);
+    }
+
+    private static ScalarValue YieldmatScalar(double settlement, double maturity, double issue, double rate, ScalarValue priceValue, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(rate) || !double.IsFinite(pr))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (rate < 0 || pr <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md) ||
@@ -1008,12 +1283,18 @@ public static partial class BuiltInFunctions
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
         double coupon      = ToNumber(args[2]);
-        double yld         = ToNumber(args[3]);
         int frequency      = (int)Math.Truncate(ToNumber(args[4]));
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
+        if (args[3] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => DurationScalar(settlement, maturity, coupon, value, frequency, basis));
+        return DurationScalar(settlement, maturity, coupon, args[3], frequency, basis);
+    }
+
+    private static ScalarValue DurationScalar(double settlement, double maturity, double coupon, ScalarValue yieldValue, int frequency, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(coupon) ||
             !double.IsFinite(yld))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (coupon < 0 || yld < 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
@@ -1050,10 +1331,21 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Mduration(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        var dur = Duration(args, ctx);
+        if (FirstError(args) is { } e) return e;
+        double settlement  = ToNumber(args[0]);
+        double maturity    = ToNumber(args[1]);
+        double coupon      = ToNumber(args[2]);
+        int frequency      = (int)Math.Truncate(ToNumber(args[4]));
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
+        if (args[3] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => MdurationScalar(settlement, maturity, coupon, value, frequency, basis));
+        return MdurationScalar(settlement, maturity, coupon, args[3], frequency, basis);
+    }
+
+    private static ScalarValue MdurationScalar(double settlement, double maturity, double coupon, ScalarValue yieldValue, int frequency, int basis)
+    {
+        var dur = DurationScalar(settlement, maturity, coupon, yieldValue, frequency, basis);
         if (dur is not NumberValue dv) return dur;
-        double yld = ToNumber(args[3]);
-        double frequency = Math.Truncate(ToNumber(args[4]));
+        double yld = ToNumber(yieldValue);
         if (frequency <= 0) return ErrorValue.Num;
         return NumberResult(dv.Value / (1 + yld / frequency));
     }
@@ -1069,10 +1361,16 @@ public static partial class BuiltInFunctions
         double issue       = ToNumber(args[2]);
         double firstCoupon = ToNumber(args[3]);
         double rate        = ToNumber(args[4]);
-        double yld         = ToNumber(args[5]);
         double redemption  = ToNumber(args[6]);
         int frequency      = (int)Math.Truncate(ToNumber(args[7]));
         int basis = args.Count > 8 && args[8] is not BlankValue ? (int)Math.Truncate(ToNumber(args[8])) : 0;
+        if (args[5] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => OddfpriceScalar(settlement, maturity, issue, firstCoupon, rate, value, redemption, frequency, basis));
+        return OddfpriceScalar(settlement, maturity, issue, firstCoupon, rate, args[5], redemption, frequency, basis);
+    }
+
+    private static ScalarValue OddfpriceScalar(double settlement, double maturity, double issue, double firstCoupon, double rate, ScalarValue yieldValue, double redemption, int frequency, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(firstCoupon) || !double.IsFinite(rate) || !double.IsFinite(yld) ||
             !double.IsFinite(redemption))
@@ -1098,10 +1396,16 @@ public static partial class BuiltInFunctions
         double issue       = ToNumber(args[2]);
         double firstCoupon = ToNumber(args[3]);
         double rate        = ToNumber(args[4]);
-        double pr          = ToNumber(args[5]);
         double redemption  = ToNumber(args[6]);
         int frequency      = (int)Math.Truncate(ToNumber(args[7]));
         int basis = args.Count > 8 && args[8] is not BlankValue ? (int)Math.Truncate(ToNumber(args[8])) : 0;
+        if (args[5] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => OddfyieldScalar(settlement, maturity, issue, firstCoupon, rate, value, redemption, frequency, basis));
+        return OddfyieldScalar(settlement, maturity, issue, firstCoupon, rate, args[5], redemption, frequency, basis);
+    }
+
+    private static ScalarValue OddfyieldScalar(double settlement, double maturity, double issue, double firstCoupon, double rate, ScalarValue priceValue, double redemption, int frequency, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(firstCoupon) || !double.IsFinite(rate) || !double.IsFinite(pr) ||
             !double.IsFinite(redemption))
@@ -1138,10 +1442,16 @@ public static partial class BuiltInFunctions
         double maturity    = ToNumber(args[1]);
         double lastInterest = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
-        double yld         = ToNumber(args[4]);
         double redemption  = ToNumber(args[5]);
         int frequency      = (int)Math.Truncate(ToNumber(args[6]));
         int basis = args.Count > 7 && args[7] is not BlankValue ? (int)Math.Truncate(ToNumber(args[7])) : 0;
+        if (args[4] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => OddlpriceScalar(settlement, maturity, lastInterest, rate, value, redemption, frequency, basis));
+        return OddlpriceScalar(settlement, maturity, lastInterest, rate, args[4], redemption, frequency, basis);
+    }
+
+    private static ScalarValue OddlpriceScalar(double settlement, double maturity, double lastInterest, double rate, ScalarValue yieldValue, double redemption, int frequency, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(lastInterest) ||
             !double.IsFinite(rate) || !double.IsFinite(yld) || !double.IsFinite(redemption))
             return ErrorValue.Num;
@@ -1163,10 +1473,16 @@ public static partial class BuiltInFunctions
         double maturity    = ToNumber(args[1]);
         double lastInterest = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
-        double pr          = ToNumber(args[4]);
         double redemption  = ToNumber(args[5]);
         int frequency      = (int)Math.Truncate(ToNumber(args[6]));
         int basis = args.Count > 7 && args[7] is not BlankValue ? (int)Math.Truncate(ToNumber(args[7])) : 0;
+        if (args[4] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => OddlyieldScalar(settlement, maturity, lastInterest, rate, value, redemption, frequency, basis));
+        return OddlyieldScalar(settlement, maturity, lastInterest, rate, args[4], redemption, frequency, basis);
+    }
+
+    private static ScalarValue OddlyieldScalar(double settlement, double maturity, double lastInterest, double rate, ScalarValue priceValue, double redemption, int frequency, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(lastInterest) ||
             !double.IsFinite(rate) || !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
@@ -1271,11 +1587,24 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
-        double nperValue = ToNumber(args[1]);
-        double pv   = ToNumber(args[2]);
-        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg], values => PmtScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue PmtScalar(ScalarValue rateValue, ScalarValue nperValueArg, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return PmtScalar(rateValue, ToNumber(nperValueArg), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
+    }
+
+    private static ScalarValue PmtScalar(ScalarValue rateValue, double nperValue, double pv, double fv, double type)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
@@ -1291,11 +1620,24 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
-        double nperValue = ToNumber(args[1]);
-        double pmt  = ToNumber(args[2]);
-        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg], values => PvScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue PvScalar(ScalarValue rateValue, ScalarValue nperValueArg, ScalarValue pmtValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return PvScalar(rateValue, ToNumber(nperValueArg), ToNumber(pmtValue), ToNumber(fvValue), ToNumber(typeValue));
+    }
+
+    private static ScalarValue PvScalar(ScalarValue rateValue, double nperValue, double pmt, double fv, double type)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
@@ -1311,11 +1653,24 @@ public static partial class BuiltInFunctions
     private static ScalarValue Fv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
-        double nperValue = ToNumber(args[1]);
-        double pmt  = ToNumber(args[2]);
-        double pv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        var pvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], pvArg, typeArg], values => FvScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue FvScalar(ScalarValue rateValue, ScalarValue nperValueArg, ScalarValue pmtValue, ScalarValue pvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return FvScalar(rateValue, ToNumber(nperValueArg), ToNumber(pmtValue), ToNumber(pvValue), ToNumber(typeValue));
+    }
+
+    private static ScalarValue FvScalar(ScalarValue rateValue, double nperValue, double pmt, double pv, double type)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
@@ -1329,11 +1684,24 @@ public static partial class BuiltInFunctions
     private static ScalarValue Nper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
-        double pmt  = ToNumber(args[1]);
-        double pv   = ToNumber(args[2]);
-        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg], values => NperScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue NperScalar(ScalarValue rateValue, ScalarValue pmtValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return NperScalar(rateValue, ToNumber(pmtValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
+    }
+
+    private static ScalarValue NperScalar(ScalarValue rateValue, double pmt, double pv, double fv, double type)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
@@ -1351,12 +1719,26 @@ public static partial class BuiltInFunctions
     private static ScalarValue Rate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nperValue = ToNumber(args[0]);
-        double pmt   = ToNumber(args[1]);
-        double pv    = ToNumber(args[2]);
-        double fv    = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        double guess = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0.1;
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        var guessArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0.1);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg, guessArg], values => RateScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue RateScalar(ScalarValue nperValueArg, ScalarValue pmtValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue, ScalarValue guessValue)
+    {
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        if (guessValue is ErrorValue guessError) return guessError;
+        return RateScalar(nperValueArg, ToNumber(pmtValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue), ToNumber(guessValue));
+    }
+
+    private static ScalarValue RateScalar(ScalarValue nperValueArg, double pmt, double pv, double fv, double type, double guess)
+    {
+        double nperValue = ToNumber(nperValueArg);
         if (!double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type) || !double.IsFinite(guess))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
@@ -1446,9 +1828,19 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
+        return MapScalarArgs([args[0], args[1], args[2]], values => SlnScalar(values[0], values[1], values[2]));
+    }
+
+    private static ScalarValue SlnScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        return SlnScalar(cost, salvage, lifeValue);
+    }
+
+    private static ScalarValue SlnScalar(double cost, double salvage, ScalarValue lifeValue)
+    {
+        double life = ToNumber(lifeValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life))
             return ErrorValue.Num;
         if (life == 0) return ErrorValue.DivByZero;

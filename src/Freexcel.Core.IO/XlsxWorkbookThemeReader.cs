@@ -62,9 +62,12 @@ public static class XlsxWorkbookThemeReader
                 ReadThemeTypeface(fontScheme.Element(drawingNs + "minorFont"), drawingNs) ?? theme.MinorFontName);
         }
 
-        var effectsName = themeElements.Element(drawingNs + "fmtScheme")?.Attribute("name")?.Value;
+        var formatScheme = themeElements.Element(drawingNs + "fmtScheme");
+        var effectsName = formatScheme?.Attribute("name")?.Value;
         if (!string.IsNullOrWhiteSpace(effectsName))
             theme = theme.WithEffects(effectsName);
+        if (formatScheme is not null)
+            theme = theme.WithNativeFormatSchemeXml(formatScheme.ToString(SaveOptions.DisableFormatting));
 
         var colorScheme = themeElements.Element(drawingNs + "clrScheme");
         if (colorScheme is null)

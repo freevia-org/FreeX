@@ -86,6 +86,19 @@ public sealed class CustomViewsDialogXamlTests
     }
 
     [Fact]
+    public void DialogCommandFailure_UsesOwnedMessageBoxes()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal)..
+            source.IndexOf("internal sealed class CustomViewViewModel", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not apply custom view.\",");
+        dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not save custom view.\",");
+        dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not delete custom view.\",");
+    }
+
+    [Fact]
     public void DialogSelectionGuards_FocusViewsListWhenNoViewIsSelected()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));

@@ -8,6 +8,7 @@ public static class ShellFocusCyclePlanner
         ShellFocusTarget.Ribbon,
         ShellFocusTarget.FormulaBar,
         ShellFocusTarget.SheetTabs,
+        ShellFocusTarget.TaskPane,
         ShellFocusTarget.StatusBar
     ];
 
@@ -21,6 +22,21 @@ public static class ShellFocusCyclePlanner
         var nextIndex = (index + offset + Cycle.Length) % Cycle.Length;
         return Cycle[nextIndex];
     }
+
+    public static ShellFocusTarget GetNextAvailable(
+        ShellFocusTarget current,
+        bool reverse,
+        Predicate<ShellFocusTarget> isAvailable)
+    {
+        for (var attempt = 0; attempt < Cycle.Length; attempt++)
+        {
+            current = GetNext(current, reverse);
+            if (isAvailable(current))
+                return current;
+        }
+
+        return ShellFocusTarget.Worksheet;
+    }
 }
 
 public enum ShellFocusTarget
@@ -29,5 +45,6 @@ public enum ShellFocusTarget
     Ribbon,
     FormulaBar,
     SheetTabs,
+    TaskPane,
     StatusBar
 }

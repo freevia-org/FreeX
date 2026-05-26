@@ -414,6 +414,13 @@ public sealed class FormulaEvaluator
 
         bool isStructured = IsStructuredRangeFunction(node.FunctionName);
 
+        if (node.Arguments.Count == 1 &&
+            IsSingleDirectRangeFastAggregate(node.FunctionName) &&
+            TryAsRangeRef(node.Arguments[0], out var directAggregateRange))
+        {
+            return EvaluateSingleDirectRangeAggregate(node.FunctionName, directAggregateRange, context);
+        }
+
         // Expand range arguments into individual values for aggregate functions,
         // or wrap as RangeValue for structured functions that need 2-D access.
         var expandedArgs = new List<ScalarValue>();
@@ -449,6 +456,16 @@ public sealed class FormulaEvaluator
             else if (arg is StringNode directText && IsDirectTextCoercingAggregate(node.FunctionName))
             {
                 expandedArgs.Add(new DirectTextLiteralValue(directText.Value));
+            }
+            else if (arg is CellRefNode structuredCell && IsConditionalAggregateRangeArgument(node.FunctionName, argIndex))
+            {
+                if (structuredCell.SheetName is not null && !context.SheetExists(structuredCell.SheetName))
+                {
+                    expandedArgs.Add(ErrorValue.Ref);
+                    continue;
+                }
+
+                expandedArgs.Add(BuildRangeValue(new RangeRefNode(structuredCell, structuredCell, structuredCell.SheetName), context));
             }
             else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(node.FunctionName, argIndex))
             {
@@ -575,6 +592,200 @@ public sealed class FormulaEvaluator
             expandedArgs.AddRange(values.Select(v => new ReferencedScalarValue(v)));
         else
             expandedArgs.AddRange(values);
+    }
+
+    private static bool IsSingleDirectRangeFastAggregate(string functionName)
+        => functionName is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "COUNTBLANK";
+
+    private static ScalarValue EvaluateSingleDirectRangeAggregate(string functionName, RangeRefNode range, IEvalContext context)
+    {
+        if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+            return ErrorValue.Ref;
+
+        uint r0 = Math.Min(range.Start.Row, range.End.Row);
+        uint r1 = Math.Max(range.Start.Row, range.End.Row);
+        uint c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+
+        return functionName switch
+        {
+            "SUM" => EvaluateSingleDirectRangeSum(range.SheetName, r0, c0, r1, c1, context),
+            "AVERAGE" => EvaluateSingleDirectRangeAverage(range.SheetName, r0, c0, r1, c1, context),
+            "MIN" => EvaluateSingleDirectRangeMinMax(range.SheetName, r0, c0, r1, c1, context, findMax: false),
+            "MAX" => EvaluateSingleDirectRangeMinMax(range.SheetName, r0, c0, r1, c1, context, findMax: true),
+            "COUNTBLANK" => EvaluateSingleDirectRangeCountBlank(range.SheetName, r0, c0, r1, c1, context),
+            _ => EvaluateSingleDirectRangeCount(range.SheetName, r0, c0, r1, c1, context)
+        };
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeSum(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context)
+    {
+        double total = 0;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+                if (TryDirectRangeNumber(value, out var number, out var error))
+                {
+                    total += number;
+                }
+                else if (error is not null)
+                {
+                    return error;
+                }
+            }
+        }
+
+        return double.IsFinite(total) ? new NumberValue(total) : ErrorValue.Num;
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeAverage(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context)
+    {
+        double total = 0;
+        var count = 0;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+                if (TryDirectRangeNumber(value, out var number, out var error))
+                {
+                    total += number;
+                    count++;
+                }
+                else if (error is not null)
+                {
+                    return error;
+                }
+            }
+        }
+
+        return count == 0
+            ? ErrorValue.DivByZero
+            : double.IsFinite(total / count) ? new NumberValue(total / count) : ErrorValue.Num;
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeMinMax(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context,
+        bool findMax)
+    {
+        double? result = null;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+                if (TryDirectRangeNumber(value, out var number, out var error))
+                {
+                    if (result is null ||
+                        (findMax ? number > result.Value : number < result.Value))
+                    {
+                        result = number;
+                    }
+                }
+                else if (error is not null)
+                {
+                    return error;
+                }
+            }
+        }
+
+        return result is null
+            ? new NumberValue(0)
+            : double.IsFinite(result.Value) ? new NumberValue(result.Value) : ErrorValue.Num;
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeCount(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context)
+    {
+        var count = 0;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+                if (value is NumberValue or DateTimeValue)
+                    count++;
+            }
+        }
+
+        return new NumberValue(count);
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeCountBlank(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context)
+    {
+        var count = 0;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+
+                if (value is BlankValue || value is TextValue { Value.Length: 0 })
+                    count++;
+            }
+        }
+
+        return new NumberValue(count);
+    }
+
+    private static bool TryDirectRangeNumber(ScalarValue value, out double number, out ErrorValue? error)
+    {
+        number = 0;
+        error = null;
+        switch (value)
+        {
+            case ErrorValue e:
+                error = e;
+                return false;
+            case NumberValue n:
+                number = n.Value;
+                return true;
+            case DateTimeValue d:
+                number = d.Value;
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static RangeValue BuildRangeValue(RangeRefNode range, IEvalContext context)
@@ -920,13 +1131,13 @@ public sealed class FormulaEvaluator
                 width = (int)Math.Truncate(dw);
             }
         }
+        if (height < 0 || width < 0) return ErrorValue.Value;
         if (height == 0 || width == 0) return ErrorValue.Ref;
 
         long startRow = (long)baseRow + rowsOff;
         long startCol = (long)baseCol + colsOff;
-        // Allow negative height/width: range extends upward/leftward from base
-        long endRow = startRow + (height > 0 ? height - 1 : height + 1);
-        long endCol = startCol + (width  > 0 ? width  - 1 : width  + 1);
+        long endRow = startRow + height - 1;
+        long endCol = startCol + width - 1;
         long r0Final = Math.Min(startRow, endRow);
         long r1Final = Math.Max(startRow, endRow);
         long c0Final = Math.Min(startCol, endCol);
@@ -1036,13 +1247,23 @@ public sealed class FormulaEvaluator
              or "T.TEST" or "F.TEST" or "CHISQ.TEST"
              or "FREQUENCY"
              or "MIRR" or "XIRR" or "XNPV" or "FVSCHEDULE"
+             or "PMT" or "PV" or "FV" or "NPER" or "RATE" or "IPMT" or "PPMT"
+             or "CUMIPMT" or "CUMPRINC"
+             or "EFFECT" or "NOMINAL" or "RRI" or "PDURATION"
+             or "SLN" or "SYD" or "DB" or "DDB" or "VDB" or "AMORDEGRC" or "AMORLINC"
+             or "DOLLARDE" or "DOLLARFR"
+             or "DISC" or "INTRATE" or "RECEIVED"
+             or "ACCRINT" or "ODDFPRICE" or "ODDFYIELD" or "ODDLPRICE" or "ODDLYIELD"
+             or "TBILLEQ" or "TBILLPRICE" or "TBILLYIELD"
+             or "COUPDAYBS" or "COUPDAYS" or "COUPDAYSNC" or "COUPNCD" or "COUPNUM" or "COUPPCD"
+             or "PRICE" or "YIELD" or "PRICEDISC" or "PRICEMAT" or "YIELDDISC" or "YIELDMAT" or "DURATION" or "MDURATION"
              or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
              or "TEXTJOIN" or "EXACT" or "CODE" or "CHAR" or "LEN" or "LEFT" or "RIGHT" or "MID" or "REPLACE"
              or "FIND" or "SEARCH"
              or "TRIM" or "UPPER" or "LOWER" or "PROPER" or "CLEAN"
              or "TEXT" or "VALUE"
              or "SUBSTITUTE" or "REPT" or "CONCATENATE"
-             or "FIXED" or "DOLLAR" or "T" or "ENCODEURL" or "BAHTTEXT"
+             or "FIXED" or "DOLLAR" or "T" or "HYPERLINK" or "ENCODEURL" or "FILTERXML" or "BAHTTEXT"
              or "ASC" or "DBCS"
              or "UNICHAR" or "UNICODE" or "NUMBERVALUE"
              or "ABS" or "SQRT" or "INT" or "SIGN"
@@ -1052,19 +1273,42 @@ public sealed class FormulaEvaluator
              or "ROUND" or "ROUNDUP" or "ROUNDDOWN" or "TRUNC"
              or "ISBLANK" or "ISNUMBER" or "ISTEXT" or "ISERROR" or "ISNA" or "ISLOGICAL"
              or "ISEVEN" or "ISODD" or "ODD" or "EVEN"
+             or "DATE" or "TIME"
              or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND"
-             or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH"
+             or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH" or "DATEDIF"
              or "DATEVALUE" or "TIMEVALUE"
              or "DAYS" or "DAYS360" or "YEARFRAC"
+             or "SQRTPI" or "SERIESSUM"
              or "N" or "ERROR.TYPE"
              or "COMBIN" or "PERMUT"
              or "BITAND" or "BITOR" or "BITXOR" or "BITLSHIFT" or "BITRSHIFT"
              or "BIN2DEC" or "HEX2DEC" or "OCT2DEC"
              or "DEC2BIN" or "DEC2HEX" or "DEC2OCT"
-             or "BIN2HEX" or "BIN2OCT" or "HEX2BIN" or "HEX2OCT" or "OCT2BIN" or "OCT2HEX";
+             or "BIN2HEX" or "BIN2OCT" or "HEX2BIN" or "HEX2OCT" or "OCT2BIN" or "OCT2HEX"
+             or "CONVERT"
+             or "NORM.DIST" or "NORM.INV" or "NORM.S.DIST" or "NORM.S.INV" or "STANDARDIZE"
+             or "GAMMA" or "GAMMALN" or "GAMMALN.PRECISE" or "GAMMA.DIST" or "GAMMA.INV"
+             or "LOGNORM.DIST" or "LOGNORM.INV"
+             or "BETA.DIST" or "BETA.INV"
+             or "EXPON.DIST" or "WEIBULL.DIST" or "POISSON.DIST"
+             or "T.DIST" or "T.DIST.RT" or "T.DIST.2T" or "T.INV" or "T.INV.2T"
+             or "F.DIST" or "F.DIST.RT" or "F.INV" or "F.INV.RT"
+             or "CHISQ.DIST" or "CHISQ.DIST.RT" or "CHISQ.INV" or "CHISQ.INV.RT"
+             or "BINOM.DIST" or "BINOM.DIST.RANGE" or "BINOM.INV" or "NEGBINOM.DIST" or "HYPERGEOM.DIST"
+             or "CONFIDENCE" or "CONFIDENCE.NORM" or "CONFIDENCE.T";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
+
+    private static bool IsConditionalAggregateRangeArgument(string name, int argIndex) =>
+        name switch
+        {
+            "SUMIF" or "AVERAGEIF" => argIndex is 0 or 2,
+            "COUNTIF" => argIndex == 0,
+            "SUMIFS" or "AVERAGEIFS" => argIndex == 0 || (argIndex > 0 && (argIndex & 1) == 1),
+            "COUNTIFS" => (argIndex & 1) == 0,
+            _ => false
+        };
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {

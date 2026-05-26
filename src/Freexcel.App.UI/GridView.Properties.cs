@@ -7,6 +7,24 @@ public partial class GridView
 {
     // Dependency properties
 
+    public static readonly DependencyProperty SelectedObjectIdProperty =
+        DependencyProperty.Register(nameof(SelectedObjectId), typeof(Guid), typeof(GridView),
+            new FrameworkPropertyMetadata(Guid.Empty, FrameworkPropertyMetadataOptions.AffectsRender));
+    public Guid SelectedObjectId
+    {
+        get => (Guid)GetValue(SelectedObjectIdProperty);
+        set => SetValue(SelectedObjectIdProperty, value);
+    }
+
+    public static readonly DependencyProperty SelectedObjectKindProperty =
+        DependencyProperty.Register(nameof(SelectedObjectKind), typeof(ObjectKind), typeof(GridView),
+            new FrameworkPropertyMetadata(ObjectKind.None, FrameworkPropertyMetadataOptions.AffectsRender));
+    public ObjectKind SelectedObjectKind
+    {
+        get => (ObjectKind)GetValue(SelectedObjectKindProperty);
+        set => SetValue(SelectedObjectKindProperty, value);
+    }
+
     public static readonly DependencyProperty ViewportProperty =
         DependencyProperty.Register(nameof(Viewport), typeof(ViewportModel), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -32,6 +50,15 @@ public partial class GridView
     {
         get => (GridRange?)GetValue(QuickAnalysisPreviewRangeProperty);
         set => SetValue(QuickAnalysisPreviewRangeProperty, value);
+    }
+
+    public static readonly DependencyProperty QuickAnalysisPreviewVisualProperty =
+        DependencyProperty.Register(nameof(QuickAnalysisPreviewVisual), typeof(GridQuickAnalysisPreviewVisualKind), typeof(GridView),
+            new FrameworkPropertyMetadata(GridQuickAnalysisPreviewVisualKind.None, FrameworkPropertyMetadataOptions.AffectsRender));
+    public GridQuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual
+    {
+        get => (GridQuickAnalysisPreviewVisualKind)GetValue(QuickAnalysisPreviewVisualProperty);
+        set => SetValue(QuickAnalysisPreviewVisualProperty, value);
     }
 
     public static readonly DependencyProperty EditingCellProperty =
@@ -113,6 +140,24 @@ public partial class GridView
     {
         get => (IReadOnlyList<PictureModel>?)GetValue(PicturesProperty);
         set => SetValue(PicturesProperty, value);
+    }
+
+    public static readonly DependencyProperty NativeSlicersProperty =
+        DependencyProperty.Register(nameof(NativeSlicers), typeof(IReadOnlyList<SlicerModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<SlicerModel>? NativeSlicers
+    {
+        get => (IReadOnlyList<SlicerModel>?)GetValue(NativeSlicersProperty);
+        set => SetValue(NativeSlicersProperty, value);
+    }
+
+    public static readonly DependencyProperty NativeTimelinesProperty =
+        DependencyProperty.Register(nameof(NativeTimelines), typeof(IReadOnlyList<TimelineModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<TimelineModel>? NativeTimelines
+    {
+        get => (IReadOnlyList<TimelineModel>?)GetValue(NativeTimelinesProperty);
+        set => SetValue(NativeTimelinesProperty, value);
     }
 
     public static readonly DependencyProperty ObjectDisplayModeProperty =

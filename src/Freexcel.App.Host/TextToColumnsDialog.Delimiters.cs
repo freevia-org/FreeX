@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -90,7 +91,7 @@ public sealed partial class TextToColumnsDialog
         if (_commaBox.IsChecked == true)
             kinds.Add(TextToColumnsDelimiterKind.Comma);
 
-        return kinds.Count == 0 ? [TextToColumnsDelimiterKind.Comma] : kinds;
+        return kinds;
     }
 
     public static TextToColumnsRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
@@ -104,5 +105,13 @@ public sealed partial class TextToColumnsDialog
             {
                 RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
                 _requestRangeSelection?.Invoke(RangeSelectionRequest);
+                FocusRangeSelectionInput(request.Target);
             });
+
+    private static void FocusRangeSelectionInput(TextBox target)
+    {
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
 }

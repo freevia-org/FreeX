@@ -133,7 +133,7 @@ public sealed class RecalcEngine
     {
         var refs = new HashSet<CellAddress>();
         CollectReferences(ast, sheetId, formulaCell, workbook, refs);
-        _graph.SetDependencies(formulaCell, refs);
+        _graph.SetDependenciesFromOwnedSet(formulaCell, refs);
 
         if (ContainsVolatileFunction(ast))
             _volatileCells.Add(formulaCell);
@@ -163,8 +163,12 @@ public sealed class RecalcEngine
 
                 try
                 {
-                    var ast = new Parser(new Lexer("=" + cell.FormulaText).Tokenize()).Parse();
-                    cell.CachedAst = ast;
+                    if (cell.CachedAst is not FormulaNode ast)
+                    {
+                        ast = new Parser(new Lexer("=" + cell.FormulaText).Tokenize()).Parse();
+                        cell.CachedAst = ast;
+                    }
+
                     RegisterFormulaDependencies(addr, ast, sheet.Id, workbook);
                 }
                 catch (FormulaParseException)

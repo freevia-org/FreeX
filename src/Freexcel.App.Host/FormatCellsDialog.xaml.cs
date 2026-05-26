@@ -11,16 +11,22 @@ public partial class FormatCellsDialog : Window
 {
     public StyleDiff? ResultDiff { get; private set; }
     public FormatCellsBorderSelection ResultBorderSelection { get; private set; } = FormatCellsBorderSelection.None;
+    public bool? ResultMergeCells { get; private set; }
 
     private readonly CellStyle _current;
+    private readonly bool _initialMergeCells;
     private bool _syncingNumberControls;
     private bool _borderPresetClearRequested;
     private CellBorder? _borderPresetOutline;
     private CellBorder? _borderPresetInside;
 
-    public FormatCellsDialog(CellStyle current, FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
+    public FormatCellsDialog(
+        CellStyle current,
+        FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number,
+        bool mergeCells = false)
     {
         _current = current.Clone();
+        _initialMergeCells = mergeCells;
         InitializeComponent();
         Loaded += (_, _) =>
         {
@@ -74,7 +80,7 @@ public partial class FormatCellsDialog : Window
         DlgFontSizeBox.Text         = s.FontSize.ToString("0.#");
         DlgFontStyleList.ItemsSource = new[] { "Regular", "Italic", "Bold", "Bold Italic" };
         DlgFontStyleList.SelectedItem = FontStyleLabel(s.Bold, s.Italic);
-        DlgUnderlineStyleBox.ItemsSource = new[] { "None", "Single", "Double" };
+        DlgUnderlineStyleBox.ItemsSource = new[] { "None", "Single", "Double", "Single Accounting", "Double Accounting" };
         DlgDoubleUnderlineCheck.IsChecked = s.DoubleUnderline;
         DlgUnderlineStyleBox.SelectedItem = s.DoubleUnderline ? "Double" : s.Underline ? "Single" : "None";
         DlgStrikeCheck.IsChecked    = s.Strikethrough;
@@ -98,6 +104,7 @@ public partial class FormatCellsDialog : Window
         DlgVAlignBox.SelectedItem = s.VerticalAlignment.ToString();
         DlgWrapTextCheck.IsChecked = s.WrapText;
         DlgShrinkToFitCheck.IsChecked = s.ShrinkToFit;
+        DlgMergeCellsCheck.IsChecked = _initialMergeCells;
         DlgIndentLevelBox.Text = s.IndentLevel.ToString();
         DlgTextRotationBox.Text = s.TextRotation.ToString();
 
@@ -167,7 +174,7 @@ public partial class FormatCellsDialog : Window
         if (DlgUnderlineStyleBox.SelectedItem is not string underline)
             return;
 
-        DlgDoubleUnderlineCheck.IsChecked = underline == "Double";
+        DlgDoubleUnderlineCheck.IsChecked = underline is "Double" or "Double Accounting";
         UpdateFontPreview();
     }
 
@@ -201,15 +208,42 @@ public partial class FormatCellsDialog : Window
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        CellColor? fontColor = TryParseColor(DlgFontColorBox.Text);
-        CellColor? fillColor = TryParseColor(DlgFillColorBox.Text);
-        CellColor? fillPatternColor = TryParseColor(DlgFillPatternColorBox.Text);
+        if (!TryParseRequiredColor(DlgFontColorBox.Text, out var fontColor))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;
+            ShowInvalidInputWarning("Enter a font color as #RRGGBB or R, G, B.", DlgFontColorBox);
+            return;
+        }
+
+        if (!TryParseOptionalColor(DlgFillColorBox.Text, out var fillColor))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;
+            ShowInvalidInputWarning("Enter a fill color as #RRGGBB or R, G, B, or leave it blank.", DlgFillColorBox);
+            return;
+        }
+
+        if (!TryParseOptionalColor(DlgFillPatternColorBox.Text, out var fillPatternColor))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;
+            ShowInvalidInputWarning("Enter a pattern color as #RRGGBB or R, G, B, or leave it blank.", DlgFillPatternColorBox);
+            return;
+        }
+
         var fillPatternStyle = SelectedFillPatternStyle();
         bool clearFill = DlgClearFillCheck.IsChecked == true;
+
+        if (!ValidateNumberInputs())
+            return;
 
         string? numFmt = ResolveSelectedNumberFormat();
 
         double? fontSize = FormatCellsInputParser.TryParseFontSize(DlgFontSizeBox.Text);
+        if (fontSize is null)
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;
+            ShowInvalidInputWarning("Enter a positive font size.", DlgFontSizeBox);
+            return;
+        }
 
         CellHAlign? hAlign = null;
         if (DlgHAlignBox.SelectedItem is string ha && Enum.TryParse(ha, out CellHAlign h)) hAlign = h;
@@ -217,8 +251,23 @@ public partial class FormatCellsDialog : Window
         if (DlgVAlignBox.SelectedItem is string va && Enum.TryParse(va, out CellVAlign v)) vAlign = v;
 
         int? indentLevel = FormatCellsInputParser.TryParseIndentLevel(DlgIndentLevelBox.Text);
+        if (indentLevel is null)
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;
+            ShowInvalidInputWarning("Enter an indent level from 0 to 15.", DlgIndentLevelBox);
+            return;
+        }
 
         int? textRotation = FormatCellsInputParser.TryParseSupportedTextRotation(DlgTextRotationBox.Text);
+        if (textRotation is null)
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;
+            ShowInvalidInputWarning("Enter a text rotation from -90 to 90 degrees, or 255 for vertical text.", DlgTextRotationBox);
+            return;
+        }
+
+        if (!ValidateBorderInputs())
+            return;
 
         CellBorder borderTop = ParseBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, _current.BorderTop);
         CellBorder borderRight = ParseBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, _current.BorderRight);
@@ -232,7 +281,7 @@ public partial class FormatCellsDialog : Window
             Strikethrough:   DlgStrikeCheck.IsChecked,
             Superscript:     DlgSuperscriptCheck.IsChecked,
             Subscript:       DlgSubscriptCheck.IsChecked,
-            FontName:        DlgFontNameBox.SelectedItem as string,
+            FontName:        ResolveSelectedFontName(),
             FontSize:        fontSize,
             FontColor:       fontColor,
             FillColor:       clearFill ? null : fillColor,
@@ -258,8 +307,38 @@ public partial class FormatCellsDialog : Window
             _borderPresetClearRequested,
             _borderPresetOutline,
             _borderPresetInside);
+        ResultMergeCells = DlgMergeCellsCheck.IsChecked == _initialMergeCells
+            ? null
+            : DlgMergeCellsCheck.IsChecked == true;
 
         DialogResult = true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, ComboBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
+        Keyboard.Focus(target);
+        return true;
     }
 }
 

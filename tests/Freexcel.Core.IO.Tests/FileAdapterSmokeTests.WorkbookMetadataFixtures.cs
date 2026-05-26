@@ -193,7 +193,8 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("showSheetTabs", "0"),
                 new XAttribute("tabRatio", "700"),
                 new XAttribute("firstSheet", "0"),
-                new XAttribute("activeTab", "0")));
+                new XAttribute("activeTab", "0"),
+                new XAttribute("customWorkbookViewFlag", "kept")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -255,7 +256,8 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("appName", "xl"),
                 new XAttribute("lastEdited", "7"),
                 new XAttribute("lowestEdited", "7"),
-                new XAttribute("rupBuild", "28129")));
+                new XAttribute("rupBuild", "28129"),
+                new XAttribute("customVersionFlag", "keep")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -272,7 +274,8 @@ public partial class FileAdapterSmokeTests
             workbookXml.Root!.AddFirst(new XElement(
                 workbookNs + "fileSharing",
                 new XAttribute("readOnlyRecommended", "1"),
-                new XAttribute("userName", "FreexcelTest")));
+                new XAttribute("userName", "FreexcelTest"),
+                new XAttribute("revisionsPassword", "1234")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -290,7 +293,32 @@ public partial class FileAdapterSmokeTests
                 workbookNs + "fileRecoveryPr",
                 new XAttribute("autoRecover", "1"),
                 new XAttribute("crashSave", "1"),
+                new XAttribute("customRecoveryFlag", "keep"),
                 new XAttribute("repairLoad", "0")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorkbookWebPublishObjects(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Elements(workbookNs + "extLst").Remove();
+            workbookXml.Root!.Elements(workbookNs + "webPublishObjects").Remove();
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "webPublishObjects",
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "webPublishObject",
+                    new XAttribute("id", "1"),
+                    new XAttribute("divId", "FreexcelPublishObject"),
+                    new XAttribute("destinationFile", "publish.htm"),
+                    new XAttribute("sourceObject", "Sheet1!A1"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -308,13 +336,35 @@ public partial class FileAdapterSmokeTests
                 new XElement(
                     workbookNs + "smartTagPr",
                     new XAttribute("embed", "1"),
-                    new XAttribute("show", "all")),
+                    new XAttribute("show", "all"),
+                    new XAttribute("customSmartTagFlag", "keep")),
                 new XElement(
                     workbookNs + "smartTagTypes",
+                    new XAttribute("customSmartTagTypesFlag", "keep"),
                     new XElement(
                         workbookNs + "smartTagType",
                         new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
-                        new XAttribute("name", "place"))));
+                        new XAttribute("name", "place"),
+                        new XAttribute("customSmartTagTypeFlag", "keep"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorkbookExtensionList(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Elements(workbookNs + "extLst").Remove();
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "extLst",
+                new XElement(
+                    workbookNs + "ext",
+                    new XAttribute("uri", "{FREEXCEL-WORKBOOK-EXT}"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -331,9 +381,11 @@ public partial class FileAdapterSmokeTests
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "functionGroups",
                 new XAttribute("builtInGroupCount", "16"),
+                new XAttribute("customFunctionGroupFlag", "keep"),
                 new XElement(
                     workbookNs + "functionGroup",
-                    new XAttribute("name", "FreexcelNativeFunctions"))));
+                    new XAttribute("name", "FreexcelNativeFunctions"),
+                    new XAttribute("customGroupFlag", "keep"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

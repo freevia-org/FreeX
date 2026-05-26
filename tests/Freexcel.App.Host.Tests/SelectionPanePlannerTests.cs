@@ -114,9 +114,47 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_CreateDragMoveChanges_PlansAdjacentMovesToDroppedPosition()
+    {
+        var front = Guid.NewGuid();
+        var middle = Guid.NewGuid();
+        var back = Guid.NewGuid();
+
+        var moves = SelectionPaneDialog.CreateDragMoveChanges(
+            [
+                (SelectionPaneObjectKind.Picture, front),
+                (SelectionPaneObjectKind.Picture, middle),
+                (SelectionPaneObjectKind.Picture, back)
+            ],
+            draggedId: back,
+            targetId: front);
+
+        moves.Should().Equal(
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back, Forward: true),
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back, Forward: true));
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_CreateDragMoveChanges_RejectsCrossKindDrops()
+    {
+        var picture = Guid.NewGuid();
+        var shape = Guid.NewGuid();
+
+        var moves = SelectionPaneDialog.CreateDragMoveChanges(
+            [
+                (SelectionPaneObjectKind.Picture, picture),
+                (SelectionPaneObjectKind.Shape, shape)
+            ],
+            draggedId: picture,
+            targetId: shape);
+
+        moves.Should().BeEmpty();
+    }
+
+    [Fact]
     public void SelectionPaneDialog_ExposesShowAllAndHideAllBulkButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+        var source = ReadSelectionPaneDialogSources();
 
         source.Should().Contain("_showAllButton");
         source.Should().Contain("_hideAllButton");
@@ -127,7 +165,7 @@ public sealed class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_ExposesKeyboardAccessKeysForCommandButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+        var source = ReadSelectionPaneDialogSources();
 
         source.Should().Contain("Content = \"_Bring Forward\"");
         source.Should().Contain("Content = \"Send _Backward\"");
@@ -140,7 +178,7 @@ public sealed class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_ExposesSearchFilterRenameAndEyeLikeVisibilityAffordances()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+        var source = ReadSelectionPaneDialogSources();
 
         source.Should().Contain("_searchBox");
         source.Should().Contain("_filterBox");
@@ -159,7 +197,7 @@ public sealed class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialogOpenedFromKeyboard_FocusesSearchBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+        var source = ReadSelectionPaneDialogSources();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -171,7 +209,7 @@ public sealed class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_AllowsInlineRenameInObjectList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+        var source = ReadSelectionPaneDialogSources();
 
         source.Should().Contain("new FrameworkElementFactory(typeof(TextBox))");
         source.Should().Contain("TextBox.TextProperty");
@@ -182,7 +220,7 @@ public sealed class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_AccumulatesMoveChangesInsteadOfClosingOnMove()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+        var source = ReadSelectionPaneDialogSources();
         var hostSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
 
         source.Should().Contain("private readonly List<SelectionPaneMoveChange> _moveChanges = [];");
@@ -196,4 +234,24 @@ public sealed class SelectionPanePlannerTests
         hostSource.Should().Contain("result.MoveChanges.Select");
         hostSource.Should().NotContain("SelectionPaneDialogAction.MoveUp when dialog.Result.Target");
     }
+
+    [Fact]
+    public void SelectionPaneDialog_SupportsDragDropReorder()
+    {
+        var source = ReadSelectionPaneDialogSources();
+
+        source.Should().Contain("_list.AllowDrop = true");
+        source.Should().Contain("_list.PreviewMouseLeftButtonDown");
+        source.Should().Contain("_list.MouseMove");
+        source.Should().Contain("_list.DragOver");
+        source.Should().Contain("_list.Drop");
+        source.Should().Contain("DragDrop.DoDragDrop");
+        source.Should().Contain("CreateDragMoveChanges");
+    }
+
+    private static string ReadSelectionPaneDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.State.cs")));
 }

@@ -92,7 +92,30 @@ public sealed class CommentNavigationPlannerTests
 
         CommentNavigationPlanner.FormatCommentList(comments, threadedComments)
             .Should()
-            .Be(string.Join(Environment.NewLine, "A1: First thread", "B3: Later note"));
+            .Be(string.Join(Environment.NewLine, "A1: Freexcel: First thread", "B3: Later note"));
+    }
+
+    [Fact]
+    public void FormatCommentList_IncludesThreadedAuthorsRepliesAndResolvedState()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 1, 1);
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [address] = new("Please review total", "Quinn")
+            {
+                Replies =
+                [
+                    new CommentReply("Updated", "Codex"),
+                    new CommentReply("Looks good", "Quinn")
+                ],
+                IsResolved = true
+            }
+        };
+
+        CommentNavigationPlanner.FormatCommentList(new Dictionary<CellAddress, string>(), threadedComments)
+            .Should()
+            .Be("A1: Quinn: Please review total | Codex: Updated | Quinn: Looks good | Resolved");
     }
 
     [Fact]
@@ -106,12 +129,12 @@ public sealed class CommentNavigationPlannerTests
         };
         var threadedComments = new Dictionary<CellAddress, ThreadedComment>
         {
-            [address] = new("Threaded reply")
+            [address] = new("Threaded reply", "Codex")
         };
 
         CommentNavigationPlanner.FormatCommentList(comments, threadedComments)
             .Should()
-            .Be(string.Join(Environment.NewLine, "B2: Note: Local note", "B2: Threaded: Threaded reply"));
+            .Be(string.Join(Environment.NewLine, "B2: Note: Local note", "B2: Threaded: Codex: Threaded reply"));
     }
 
     [Fact]
@@ -130,5 +153,30 @@ public sealed class CommentNavigationPlannerTests
         CommentNavigationPlanner.GetDefaultCommentText(comments, new CellAddress(sheetId, 3, 3))
             .Should()
             .BeEmpty();
+    }
+
+    [Fact]
+    public void FormatCellCommentPreview_ShowsNotesAndThreadedCommentsForHoveredCell()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 2, 2);
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [address] = "Local note"
+        };
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [address] = new("Please review total", "Quinn")
+            {
+                Replies = [new CommentReply("Updated", "Codex")]
+            }
+        };
+
+        CommentNavigationPlanner.FormatCellCommentPreview(comments, threadedComments, address)
+            .Should()
+            .Be(string.Join(Environment.NewLine, "Note: Local note", "Quinn: Please review total | Codex: Updated"));
+        CommentNavigationPlanner.FormatCellCommentPreview(comments, threadedComments, new CellAddress(sheetId, 3, 3))
+            .Should()
+            .BeNull();
     }
 }

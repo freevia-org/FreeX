@@ -42,6 +42,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private const string ScopeSheet     = "This Worksheet";
     private const string ScopeSelection = "Current Selection";
+    private const string DefaultNewRuleType = "Data Bar";
 
     public ConditionalFormatAppliesToRangeSelectionRequest? AppliesToRangeSelectionRequest { get; private set; }
 
@@ -146,107 +147,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             SelectionMode = SelectionMode.Single
         };
         _listView.SelectionChanged += ListView_SelectionChanged;
+        _listView.MouseDoubleClick += EditRule_Click;
+        _listView.KeyDown += ListView_KeyDown;
 
-        var gridView = new GridView();
-
-        // Column 1 — priority number (#)
-        var priorityCol = new GridViewColumn
-        {
-            Header = "#",
-            Width  = 30,
-            DisplayMemberBinding = new Binding("Priority")
-        };
-        gridView.Columns.Add(priorityCol);
-
-        // Column 2 — rule description (custom cell template)
-        var descCol = new GridViewColumn { Header = "Rule (Type)", Width = 200 };
-        var descTemplate = new DataTemplate();
-        var descFactory  = new FrameworkElementFactory(typeof(TextBlock));
-        descFactory.SetBinding(TextBlock.TextProperty, new Binding(".") { Converter = new RuleDescriptionConverter() });
-        descFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
-        descTemplate.VisualTree = descFactory;
-        descCol.CellTemplate = descTemplate;
-        gridView.Columns.Add(descCol);
-
-        // Column 3 — format preview (colored rectangle)
-        var fmtCol = new GridViewColumn { Header = "Format", Width = 95 };
-        var fmtTemplate = new DataTemplate();
-        var previewBorderFactory = new FrameworkElementFactory(typeof(Border));
-        previewBorderFactory.SetValue(Border.WidthProperty, 82.0);
-        previewBorderFactory.SetValue(Border.HeightProperty, 20.0);
-        previewBorderFactory.SetValue(Border.MarginProperty, new Thickness(0, 2, 0, 2));
-        previewBorderFactory.SetValue(Border.BorderBrushProperty, Brushes.DarkGray);
-        previewBorderFactory.SetValue(Border.BorderThicknessProperty, new Thickness(0.5));
-        previewBorderFactory.SetBinding(Border.BackgroundProperty, new Binding(".") { Converter = new PreviewBrushConverter() });
-        var previewTextFactory = new FrameworkElementFactory(typeof(TextBlock));
-        previewTextFactory.SetValue(TextBlock.TextProperty, "AaBbCcYyZz");
-        previewTextFactory.SetValue(TextBlock.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
-        previewTextFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
-        previewTextFactory.SetValue(TextBlock.FontSizeProperty, 10.0);
-        previewTextFactory.SetBinding(TextBlock.ForegroundProperty, new Binding(".") { Converter = new PreviewForegroundBrushConverter() });
-        previewTextFactory.SetBinding(TextBlock.FontWeightProperty, new Binding(".") { Converter = new PreviewFontWeightConverter() });
-        previewTextFactory.SetBinding(TextBlock.FontStyleProperty, new Binding(".") { Converter = new PreviewFontStyleConverter() });
-        previewTextFactory.SetBinding(TextBlock.TextDecorationsProperty, new Binding(".") { Converter = new PreviewTextDecorationsConverter() });
-        previewBorderFactory.AppendChild(previewTextFactory);
-        fmtTemplate.VisualTree = previewBorderFactory;
-        fmtCol.CellTemplate = fmtTemplate;
-        gridView.Columns.Add(fmtCol);
-
-        // Column 4 — AppliesTo range
-        var appliesToCol = new GridViewColumn { Header = "Applies To", Width = 170 };
-        var appliesToTemplate = new DataTemplate();
-        var appliesToPanelFactory = new FrameworkElementFactory(typeof(DockPanel));
-        appliesToPanelFactory.SetValue(DockPanel.LastChildFillProperty, true);
-        var rangePickerFactory = new FrameworkElementFactory(typeof(Button));
-        rangePickerFactory.SetValue(ContentControl.ContentProperty, "...");
-        rangePickerFactory.SetValue(FrameworkElement.WidthProperty, 24.0);
-        rangePickerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
-        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Collapse dialog and select Applies To range");
-        rangePickerFactory.SetValue(AutomationProperties.NameProperty, "Select Applies To range");
-        rangePickerFactory.SetValue(AutomationProperties.HelpTextProperty, "Collapse dialog and select a worksheet range for this conditional format rule.");
-        rangePickerFactory.SetValue(DockPanel.DockProperty, Dock.Right);
-        rangePickerFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("IsSelected")
-        {
-            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1)
-        });
-        rangePickerFactory.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(RangePickerButton_Click));
-        var appliesToFactory = new FrameworkElementFactory(typeof(TextBox));
-        appliesToFactory.SetValue(Control.PaddingProperty, new Thickness(2, 0, 2, 0));
-        appliesToFactory.SetValue(Control.VerticalContentAlignmentProperty, System.Windows.VerticalAlignment.Center);
-        appliesToFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("IsSelected")
-        {
-            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1)
-        });
-        appliesToFactory.SetBinding(TextBox.TextProperty, new Binding(nameof(ConditionalFormat.AppliesTo))
-        {
-            Converter = new AppliesToRangeConverter(_sheet.Id),
-            Mode = BindingMode.TwoWay,
-            UpdateSourceTrigger = UpdateSourceTrigger.LostFocus
-        });
-        appliesToPanelFactory.AppendChild(rangePickerFactory);
-        appliesToPanelFactory.AppendChild(appliesToFactory);
-        appliesToTemplate.VisualTree = appliesToPanelFactory;
-        appliesToCol.CellTemplate = appliesToTemplate;
-        gridView.Columns.Add(appliesToCol);
-
-        // Column 5 - Stop If True
-        var stopIfTrueCol = new GridViewColumn { Header = "Stop If True", Width = 85 };
-        var stopIfTrueTemplate = new DataTemplate();
-        var stopIfTrueFactory  = new FrameworkElementFactory(typeof(CheckBox));
-        stopIfTrueFactory.SetValue(CheckBox.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
-        stopIfTrueFactory.SetValue(CheckBox.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
-        stopIfTrueFactory.SetBinding(
-            System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
-            new Binding(nameof(ConditionalFormat.StopIfTrue))
-            {
-                Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
-            });
-        stopIfTrueTemplate.VisualTree = stopIfTrueFactory;
-        stopIfTrueCol.CellTemplate = stopIfTrueTemplate;
-        gridView.Columns.Add(stopIfTrueCol);
-
-        _listView.View = gridView;
+        _listView.View = CreateRulesGridView();
         root.Children.Add(_listView);
 
         Content = root;
@@ -305,7 +209,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
                 new CellAddress(_sheet.Id, 1, 1),
                 new CellAddress(_sheet.Id, 1, 1));
 
-        var dlg = new NewConditionalFormatRuleDialog("Greater Than", defaultRange);
+        var dlg = new NewConditionalFormatRuleDialog(DefaultNewRuleType, defaultRange);
         dlg.Owner = this;
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } newRule)
         {
@@ -389,6 +293,20 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         var idx = _listView.SelectedIndex;
         _moveUpBtn.IsEnabled   = hasSelection && idx > 0;
         _moveDownBtn.IsEnabled = hasSelection && idx < _rules.Count - 1;
+    }
+
+    private void ListView_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            EditRule_Click(sender, e);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete)
+        {
+            DeleteRule_Click(sender, e);
+            e.Handled = true;
+        }
     }
 
     // ── OK / Apply ─────────────────────────────────────────────────────────────

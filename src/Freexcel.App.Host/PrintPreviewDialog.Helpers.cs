@@ -1,0 +1,387 @@
+using System.Globalization;
+using System.Printing;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Input;
+using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
+
+namespace Freexcel.App.Host;
+
+internal enum PrintPreviewPageRangeMode
+{
+    AllPages,
+    CurrentPage,
+    Pages
+}
+
+public enum PrintPreviewSidesMode
+{
+    OneSided,
+    TwoSidedLongEdge,
+    TwoSidedShortEdge
+}
+
+public sealed partial class PrintPreviewDialog
+{
+    public static string CreateTitle(string workbookName) =>
+        $"Print Preview - {workbookName.Trim()}";
+
+    public static bool TryParseCopyCount(string? text, out int copies)
+    {
+        copies = 0;
+        if (!int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            || parsed is < 1 or > 999)
+            return false;
+
+        copies = parsed;
+        return true;
+    }
+
+    public static bool TryParsePageNumber(string? text, int totalPages, out int pageNumber)
+    {
+        pageNumber = 0;
+        if (totalPages < 1
+            || !int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            || parsed < 1
+            || parsed > totalPages)
+            return false;
+
+        pageNumber = parsed;
+        return true;
+    }
+
+    private void ShowInvalidCopiesWarning(TextBox copiesBox)
+    {
+        MessageBox.Show(this, "Enter a copy count from 1 to 999.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        copiesBox.Focus();
+        copiesBox.SelectAll();
+        Keyboard.Focus(copiesBox);
+    }
+
+    private void ShowInvalidPageNumberWarning(TextBox pageNumberBox, int totalPages)
+    {
+        MessageBox.Show(this, $"Enter a page number from 1 to {totalPages}.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        pageNumberBox.Focus();
+        pageNumberBox.SelectAll();
+        Keyboard.Focus(pageNumberBox);
+    }
+
+    internal static DocumentPaginator ResolvePrintPaginator(
+        FixedDocument document,
+        PrintPreviewPageRangeMode pageRangeMode,
+        int currentPage,
+        ExportPageRange? pageRange = null) =>
+        pageRangeMode switch
+        {
+            PrintPreviewPageRangeMode.CurrentPage => new PageRangeDocumentPaginator(
+                document.DocumentPaginator,
+                new ExportPageRange(currentPage, currentPage)),
+            PrintPreviewPageRangeMode.Pages when pageRange is not null => new PageRangeDocumentPaginator(
+                document.DocumentPaginator,
+                pageRange),
+            _ => document.DocumentPaginator
+        };
+
+    internal static Duplexing ResolvePrintTicketDuplexing(PrintPreviewSidesMode mode) =>
+        mode switch
+        {
+            PrintPreviewSidesMode.TwoSidedLongEdge => Duplexing.TwoSidedLongEdge,
+            PrintPreviewSidesMode.TwoSidedShortEdge => Duplexing.TwoSidedShortEdge,
+            _ => Duplexing.OneSided
+        };
+
+    private static PrintPreviewSidesMode ResolveSelectedSidesMode(ComboBox sidesBox) =>
+        sidesBox.SelectedIndex switch
+        {
+            1 => PrintPreviewSidesMode.TwoSidedLongEdge,
+            2 => PrintPreviewSidesMode.TwoSidedShortEdge,
+            _ => PrintPreviewSidesMode.OneSided
+        };
+
+    private void ShowInvalidPageRangeWarning(TextBox fromPageBox, TextBox toPageBox, string? error)
+    {
+        MessageBox.Show(
+            this,
+            error ?? "Enter a valid page range.",
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        var target = string.Equals(error, "From page must be less than or equal to To page.", StringComparison.OrdinalIgnoreCase)
+            ? toPageBox
+            : fromPageBox;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private static void ShowNativePrintDialog(
+        DocumentPaginator paginator,
+        PrintQueue? printQueue,
+        int copies,
+        bool collated,
+        PrintPreviewSidesMode sidesMode)
+    {
+        var dialog = new PrintDialog();
+        if (printQueue is not null)
+            dialog.PrintQueue = printQueue;
+
+        if (dialog.PrintTicket is not null)
+        {
+            dialog.PrintTicket.CopyCount = copies;
+            dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated;
+            dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode);
+        }
+
+        if (dialog.ShowDialog() == true)
+            dialog.PrintDocument(paginator, "Freexcel worksheet");
+    }
+
+    private static void PopulatePrinterBox(ComboBox printerBox)
+    {
+        try
+        {
+            using var server = new LocalPrintServer();
+            foreach (var queue in server.GetPrintQueues())
+                printerBox.Items.Add(queue);
+
+            if (printerBox.Items.Count > 0)
+            {
+                printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
+                printerBox.SelectedItem = printerBox.Items
+                    .OfType<PrintQueue>()
+                    .FirstOrDefault(queue => string.Equals(
+                        queue.FullName,
+                        server.DefaultPrintQueue.FullName,
+                        StringComparison.OrdinalIgnoreCase));
+                if (printerBox.SelectedItem is null)
+                    printerBox.SelectedIndex = 0;
+
+                return;
+            }
+        }
+        catch (PrintSystemException)
+        {
+        }
+
+        printerBox.IsEnabled = false;
+        printerBox.ToolTip = "No installed printers were detected. Print opens the Windows print dialog so a printer can be chosen there.";
+        AutomationProperties.SetHelpText(printerBox, "No installed printers were detected. Use Print to choose a printer in the Windows print dialog.");
+    }
+
+    private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
+    {
+        var copyText = TryParseCopyCount(copiesBox.Text, out var copies)
+            ? copies == 1 ? "1 copy" : $"{copies} copies"
+            : "invalid copies";
+        var pages = totalPages == 1 ? "1 page" : $"{totalPages} pages";
+        var printerName = printerBox.SelectedItem is PrintQueue queue
+            ? queue.FullName
+            : "Windows print dialog";
+
+        statusText.Text = $"Ready: {printerName}; {copyText}; {pages}";
+    }
+
+    private void NavigateToPage(DocumentViewer viewer, TextBox pageNumberBox, TextBlock pageStatusText, int totalPages)
+    {
+        if (!TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber))
+        {
+            ShowInvalidPageNumberWarning(pageNumberBox, totalPages);
+            return;
+        }
+
+        viewer.GoToPage(pageNumber);
+        pageNumberBox.Text = pageNumber.ToString(CultureInfo.InvariantCulture);
+        pageStatusText.Text = $"Page {pageNumber} of {totalPages}";
+    }
+
+    private static void FocusInitialKeyboardTarget(Button printButton)
+    {
+        printButton.Focus();
+        Keyboard.Focus(printButton);
+    }
+
+    private static StackPanel BuildPrintSettingsPanel(
+        SheetId sheetId,
+        Sheet? sheet,
+        Action<IWorkbookCommand>? executeCommand,
+        Action refreshPreview,
+        Action<PrintPreviewSettings>? setPrintPreviewSettings = null)
+    {
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(10, 10, 10, 10),
+            Orientation = Orientation.Vertical
+        };
+
+        void AddSectionLabel(string text) =>
+            panel.Children.Add(new TextBlock
+            {
+                Text = text,
+                Margin = new Thickness(0, 10, 0, 2),
+                FontWeight = FontWeights.SemiBold
+            });
+
+        void AddLabel(string text, Control target) =>
+            panel.Children.Add(new Label
+            {
+                Content = text,
+                Target = target,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 10, 0, 2),
+                FontWeight = FontWeights.SemiBold
+            });
+
+        ComboBox MakeComboBox(string[] items, int selectedIndex)
+        {
+            var box = new ComboBox { Margin = new Thickness(0, 0, 0, 2) };
+            foreach (var item in items)
+                box.Items.Add(item);
+            box.SelectedIndex = selectedIndex;
+            return box;
+        }
+
+        void ApplyPrintOptions(bool printGridlines, bool printHeadings)
+        {
+            if (executeCommand is null)
+                return;
+
+            executeCommand(new SetPrintOptionsCommand(sheetId, printGridlines, printHeadings));
+            refreshPreview();
+        }
+
+        // Orientation
+        var orientIndex = sheet?.PageOrientation == WorksheetPageOrientation.Landscape ? 1 : 0;
+        var orientBox = MakeComboBox(["Portrait", "Landscape"], orientIndex);
+        AddLabel("_Orientation", orientBox);
+        orientBox.SelectionChanged += (_, _) =>
+        {
+            if (orientBox.SelectedIndex < 0 || executeCommand is null) return;
+            var orient = orientBox.SelectedIndex == 1
+                ? WorksheetPageOrientation.Landscape
+                : WorksheetPageOrientation.Portrait;
+            executeCommand(new SetPageOrientationCommand(sheetId, orient));
+            refreshPreview();
+        };
+        panel.Children.Add(orientBox);
+
+        // Paper Size
+        var paperIndex = sheet?.PaperSize switch
+        {
+            WorksheetPaperSize.Letter => 1,
+            WorksheetPaperSize.Legal  => 2,
+            _                         => 0
+        };
+        var paperBox = MakeComboBox(["A4", "Letter", "Legal"], paperIndex);
+        AddLabel("_Paper Size", paperBox);
+        paperBox.SelectionChanged += (_, _) =>
+        {
+            if (paperBox.SelectedIndex < 0 || executeCommand is null) return;
+            var size = paperBox.SelectedIndex switch
+            {
+                1 => WorksheetPaperSize.Letter,
+                2 => WorksheetPaperSize.Legal,
+                _ => WorksheetPaperSize.A4
+            };
+            executeCommand(new SetPaperSizeCommand(sheetId, size));
+            refreshPreview();
+        };
+        panel.Children.Add(paperBox);
+
+        // Margins
+        int marginsIndex;
+        if (sheet?.PageMargins == WorksheetPageMargins.Normal)
+            marginsIndex = 1;
+        else if (sheet?.PageMargins == WorksheetPageMargins.Wide)
+            marginsIndex = 2;
+        else
+            marginsIndex = 0;
+        var marginsBox = MakeComboBox(["Narrow", "Normal", "Wide"], marginsIndex);
+        AddLabel("_Margins", marginsBox);
+        marginsBox.SelectionChanged += (_, _) =>
+        {
+            if (marginsBox.SelectedIndex < 0 || executeCommand is null) return;
+            var margins = marginsBox.SelectedIndex switch
+            {
+                1 => WorksheetPageMargins.Normal,
+                2 => WorksheetPageMargins.Wide,
+                _ => WorksheetPageMargins.Narrow
+            };
+            executeCommand(new SetPageMarginsCommand(sheetId, margins));
+            refreshPreview();
+        };
+        panel.Children.Add(marginsBox);
+
+        // Scaling
+        var stf = sheet?.ScaleToFit ?? WorksheetScaleToFit.Default;
+        int scaleIndex;
+        if (stf.FitToPagesWide == 1 && stf.FitToPagesTall == 1)
+            scaleIndex = 1;
+        else if (stf.FitToPagesWide == 1 && stf.FitToPagesTall is null)
+            scaleIndex = 2;
+        else
+            scaleIndex = 0;
+        var scaleBox = MakeComboBox(["100%", "Fit to 1 Page", "Fit to 1 Page Wide"], scaleIndex);
+        AddLabel("_Scaling", scaleBox);
+        scaleBox.SelectionChanged += (_, _) =>
+        {
+            if (scaleBox.SelectedIndex < 0 || executeCommand is null) return;
+            var scale = scaleBox.SelectedIndex switch
+            {
+                1 => new WorksheetScaleToFit(null, 1, 1),
+                2 => new WorksheetScaleToFit(null, 1, null),
+                _ => WorksheetScaleToFit.Default
+            };
+            executeCommand(new SetScaleToFitCommand(sheetId, scale));
+            refreshPreview();
+        };
+        panel.Children.Add(scaleBox);
+
+        var ignorePrintAreaBox = new CheckBox
+        {
+            Content = "_Ignore print area",
+            IsChecked = false,
+            IsEnabled = sheet?.PrintArea is not null && setPrintPreviewSettings is not null,
+            Margin = new Thickness(0, 6, 0, 4),
+            ToolTip = "Preview and print the active sheet instead of the stored print area."
+        };
+        AutomationProperties.SetName(ignorePrintAreaBox, "Ignore print area");
+        AutomationProperties.SetHelpText(ignorePrintAreaBox, "When checked, the preview prints the active sheet instead of the stored print area.");
+        void ApplyPrintPreviewSettings()
+        {
+            if (setPrintPreviewSettings is null)
+                return;
+
+            setPrintPreviewSettings(new PrintPreviewSettings(ignorePrintAreaBox.IsChecked == true));
+            refreshPreview();
+        }
+
+        ignorePrintAreaBox.Checked += (_, _) => ApplyPrintPreviewSettings();
+        ignorePrintAreaBox.Unchecked += (_, _) => ApplyPrintPreviewSettings();
+        panel.Children.Add(ignorePrintAreaBox);
+
+        AddSectionLabel("Print Options");
+        var gridlinesBox = new CheckBox
+        {
+            Content = "_Print gridlines",
+            IsChecked = sheet?.PrintGridlines ?? false,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        var headingsBox = new CheckBox
+        {
+            Content = "Print row and column _headings",
+            IsChecked = sheet?.PrintHeadings ?? false,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        gridlinesBox.Checked += (_, _) => ApplyPrintOptions(true, headingsBox.IsChecked == true);
+        gridlinesBox.Unchecked += (_, _) => ApplyPrintOptions(false, headingsBox.IsChecked == true);
+        headingsBox.Checked += (_, _) => ApplyPrintOptions(gridlinesBox.IsChecked == true, true);
+        headingsBox.Unchecked += (_, _) => ApplyPrintOptions(gridlinesBox.IsChecked == true, false);
+        panel.Children.Add(gridlinesBox);
+        panel.Children.Add(headingsBox);
+
+        return panel;
+    }
+}

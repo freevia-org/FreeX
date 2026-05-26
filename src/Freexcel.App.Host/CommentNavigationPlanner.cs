@@ -49,13 +49,29 @@ public static class CommentNavigationPlanner
             ? comment
             : string.Empty;
 
-    private static string GetCommentText(
+    public static string FormatThreadedComment(ThreadedComment thread)
+    {
+        var parts = new List<string> { FormatCommentPart(thread.Author, thread.Text) };
+        parts.AddRange(thread.Replies.Select(reply => FormatCommentPart(reply.Author, reply.Text)));
+        if (thread.IsResolved)
+            parts.Add("Resolved");
+
+        return string.Join(" | ", parts);
+    }
+
+    public static string? FormatCellCommentPreview(
         IReadOnlyDictionary<CellAddress, string> comments,
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
-        CellAddress address) =>
-        comments.TryGetValue(address, out var comment)
-            ? comment
-            : threadedComments[address].Text;
+        CellAddress address)
+    {
+        var parts = new List<string>();
+        if (comments.TryGetValue(address, out var note))
+            parts.Add($"Note: {note}");
+        if (threadedComments.TryGetValue(address, out var thread))
+            parts.Add(FormatThreadedComment(thread));
+
+        return parts.Count == 0 ? null : string.Join(Environment.NewLine, parts);
+    }
 
     private static IEnumerable<string> GetCommentListLines(
         IReadOnlyDictionary<CellAddress, string> comments,
@@ -68,7 +84,7 @@ public static class CommentNavigationPlanner
             threadedComments.TryGetValue(address, out var thread))
         {
             yield return $"{prefix}: Note: {note}";
-            yield return $"{prefix}: Threaded: {thread.Text}";
+            yield return $"{prefix}: Threaded: {FormatThreadedComment(thread)}";
             yield break;
         }
 
@@ -79,6 +95,11 @@ public static class CommentNavigationPlanner
         }
 
         if (threadedComments.TryGetValue(address, out thread))
-            yield return $"{prefix}: {thread.Text}";
+            yield return $"{prefix}: {FormatThreadedComment(thread)}";
     }
+
+    private static string FormatCommentPart(string author, string text) =>
+        string.IsNullOrWhiteSpace(author)
+            ? text
+            : $"{author.Trim()}: {text}";
 }

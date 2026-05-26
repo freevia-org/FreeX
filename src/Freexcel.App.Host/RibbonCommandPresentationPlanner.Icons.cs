@@ -6,6 +6,7 @@ public static partial class RibbonCommandPresentationPlanner
     {
         var name = commandName.ToLowerInvariant();
 
+        if (name.Contains("diagnostics")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("save")) return new(RibbonCommandIconKind.Save);
         if (name == "insert") return new(RibbonCommandIconKind.Insert);
         if (name.Contains("undo")) return new(RibbonCommandIconKind.Undo);
@@ -47,7 +48,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name == "table") return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
         if (name.Contains("add-ins")) return new(RibbonCommandIconKind.GetData);
         if (name.Contains("3d map")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Data);
-        if (name.Contains("column chart") || name.Contains("bar chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
+        if (name.Contains("column chart") || name.Contains("bar chart") || name.Contains("bar/column") || name.Contains("gap width") || name.Contains("bar overlap")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("line chart") || name.Contains("trendline") || name.Contains("moving average") || name.Contains("polynomial") || name.Contains("r-squared")) return new(RibbonCommandIconKind.ChartLine, RibbonCommandIconAccent.Chart);
         if (name.Contains("pie chart") || name.Contains("doughnut") || name.Contains("slice")) return new(RibbonCommandIconKind.ChartPie, RibbonCommandIconAccent.Chart);
         if (name.Contains("scatter") || name.Contains("bubble")) return new(RibbonCommandIconKind.ChartScatter, RibbonCommandIconAccent.Chart);
@@ -188,7 +189,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("mobile")) return new(RibbonCommandIconKind.Window);
         if (name.Contains("help")) return new(RibbonCommandIconKind.Help, RibbonCommandIconAccent.Help);
         if (name.Contains("about")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
-        if (name.Contains("feedback")) return new(RibbonCommandIconKind.Feedback, RibbonCommandIconAccent.Help);
+        if (name.Contains("feedback") || name.Contains("report issue")) return new(RibbonCommandIconKind.Feedback, RibbonCommandIconAccent.Help);
         if (name.Contains("report layout")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("blank row")) return new(RibbonCommandIconKind.PageBreak);
         if (name.Contains("grand total")) return new(RibbonCommandIconKind.Sum);

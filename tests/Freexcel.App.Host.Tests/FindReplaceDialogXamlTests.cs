@@ -65,6 +65,41 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_SharesFindWhatTextAcrossFindAndReplaceTabs()
+    {
+        var document = LoadDialogXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        AssertNamedElementHasAttribute(document, presentation, xaml, "TextBox", "FindBox", "TextChanged", "FindBox_TextChanged");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "TextBox", "ReplaceFindBox", "TextChanged", "FindBox_TextChanged");
+
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            workbook.AddSheet("Sheet1");
+            var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+            var dialog = new FindReplaceDialog(() => workbook, commandBus, _ => { });
+            dialog.Show();
+            try
+            {
+                var findBox = GetPrivateControl<TextBox>(dialog, "FindBox");
+                var replaceFindBox = GetPrivateControl<TextBox>(dialog, "ReplaceFindBox");
+
+                findBox.Text = "budget";
+                replaceFindBox.Text.Should().Be("budget");
+
+                replaceFindBox.Text = "forecast";
+                findBox.Text.Should().Be("forecast");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void Dialog_ExposesExcelLikeOptionsAndFindAllSurface()
     {
         var document = LoadDialogXaml();
@@ -169,6 +204,29 @@ public sealed class FindReplaceDialogXamlTests
         replaced.Should().BeTrue();
         sheet.GetCell(a1)!.Value.Should().Be(new TextValue("foo one"));
         sheet.GetCell(a2)!.Value.Should().Be(new TextValue("bar two"));
+    }
+
+    [Fact]
+    public void TryReplaceSingleMatch_ReturnsCommandFailureInsteadOfReportingReplacement()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var commandBus = new RejectingCommandBus("The sheet is protected.");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("foo"));
+
+        var result = FindReplaceDialogPlanner.TryReplaceSingleMatch(
+            workbook,
+            commandBus,
+            new FindResult(a1, "foo"),
+            "foo",
+            "bar",
+            matchCase: false,
+            matchEntireCell: false);
+
+        result.Replaced.Should().BeFalse();
+        result.Failure.Should().Be(new CommandOutcome(false, "The sheet is protected."));
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("foo"));
     }
 
     [Fact]
@@ -301,13 +359,13 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
-    public void DialogBlankSearch_ShowsStatusAndFocusesFindWhatBox()
+    public void DialogBlankSearch_ShowsOwnedWarningAndFocusesFindWhatBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
 
         source.Should().Contain("ShowBlankSearchWarning()");
         source.Should().Contain("private bool ShowBlankSearchWarning()");
-        source.Should().Contain("StatusLabel.Text = \"Enter text in Find what.\";");
+        source.Should().Contain("MessageBox.Show(this, \"Enter text in Find what.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         source.Should().Contain("FocusSearchBox();");
         source.Should().Contain("private void FocusSearchBox()");
         source.Should().Contain("var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");
@@ -419,4 +477,16 @@ file sealed class SimpleCommandContext : ICommandContext
 
     public Sheet GetSheet(SheetId sheetId) =>
         Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
+}
+
+file sealed class RejectingCommandBus(string message) : ICommandBus
+{
+    public CommandOutcome Execute(WorkbookId workbookId, IWorkbookCommand command) => new(false, message);
+    public CommandOutcome ExecuteRepeatable(WorkbookId workbookId, Func<IWorkbookCommand> commandFactory) => new(false, message);
+    public CommandOutcome Undo(WorkbookId workbookId) => new(false, message);
+    public CommandOutcome Redo(WorkbookId workbookId) => new(false, message);
+    public bool CanUndo(WorkbookId workbookId) => false;
+    public bool CanRedo(WorkbookId workbookId) => false;
+    public CommandOutcome RepeatLast(WorkbookId workbookId) => new(false, message);
+    public bool CanRepeat(WorkbookId workbookId) => false;
 }

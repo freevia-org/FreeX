@@ -127,7 +127,14 @@ public partial class MainWindow
         var dialog = new RowHeightDialog { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, dialog.Result.Height)))
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Row Height",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);
+                    return new SetRowHeightCommand(sheetId, startRow, endRow, dialog.Result.Height);
+                }))
             return;
         UpdateViewport();
     }
@@ -144,7 +151,14 @@ public partial class MainWindow
         var dialog = new ColumnWidthDialog { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        if (!TryExecuteGroupedSheetCommand("Column Width", sheetId => new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, dialog.Result.Width)))
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Column Width",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);
+                    return new SetColumnWidthCommand(sheetId, startCol, endCol, dialog.Result.Width);
+                }))
             return;
         UpdateViewport();
     }
@@ -566,17 +580,19 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
         var currentStyle = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
-        var dlg = new FormatCellsDialog(currentStyle, initialTab) { Owner = this };
+        var mergeCells = FormatCellsMergePlanner.IsSelectionMerged(sheet, range);
+        var dlg = new FormatCellsDialog(currentStyle, initialTab, mergeCells) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
-        ApplyFormatCellsDialogResult(range, dlg.ResultDiff, dlg.ResultBorderSelection);
+        ApplyFormatCellsDialogResult(range, dlg.ResultDiff, dlg.ResultBorderSelection, dlg.ResultMergeCells);
     }
 
     private void ApplyFormatCellsDialogResult(
         GridRange range,
         StyleDiff diff,
-        FormatCellsBorderSelection borderSelection)
+        FormatCellsBorderSelection borderSelection,
+        bool? mergeCells)
     {
-        if (!borderSelection.HasRangeOperations)
+        if (!borderSelection.HasRangeOperations && mergeCells is null)
         {
             ApplyStyleDiff(diff);
             return;
@@ -593,9 +609,13 @@ public partial class MainWindow
         IWorkbookCommand CreateSheetCommand(SheetId sheetId)
         {
             var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+            var sheet = _workbook.GetSheet(sheetId);
             var commands = new List<IWorkbookCommand>
             {
-                new ApplyStyleCommand(sheetId, sheetRange, nonBorderDiff)
+                new ApplyStyleCommand(
+                    sheetId,
+                    sheetRange,
+                    borderSelection.HasRangeOperations ? nonBorderDiff : diff)
             };
 
             if (borderSelection.Clear)
@@ -626,6 +646,9 @@ public partial class MainWindow
                         inside.Style,
                         inside.Color)));
             }
+
+            if (mergeCells is { } shouldMerge && sheet is not null)
+                commands.AddRange(FormatCellsMergePlanner.CreateMergeCommands(sheet, sheetId, sheetRange, shouldMerge));
 
             return commands.Count == 1
                 ? commands[0]

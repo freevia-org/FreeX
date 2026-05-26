@@ -32,8 +32,10 @@ internal static class XlsxChartMetadataReader
 
         chart.ColorMapOverride = ReadColorMapOverride(chartXml.Root?.Element(ChartNs + "clrMapOvr"));
         chart.ExternalData = ReadExternalData(chartXml.Root?.Element(ChartNs + "externalData"));
+        chart.UserShapes = ReadUserShapes(chartXml.Root?.Element(ChartNs + "userShapes"));
         chart.Protection = ReadProtection(chartXml.Root?.Element(ChartNs + "protection"));
         chart.PrintSettings = ReadPrintSettings(chartXml.Root?.Element(ChartNs + "printSettings"));
+        ApplyDefaultTextProperties(chartXml.Root?.Element(ChartNs + "txPr"), chart);
         ApplyPivotChartFieldButtonMetadata(chartXml.Root?.Element(ChartNs + "chart"), chart);
 
         chart.RoundedCorners = XlsxChartScalarReader.IsTrue(chartXml.Root?
@@ -197,9 +199,44 @@ internal static class XlsxChartMetadataReader
         };
     }
 
+    private static ChartUserShapesModel? ReadUserShapes(XElement? userShapes)
+    {
+        if (userShapes is null)
+            return null;
+
+        var relationshipId = userShapes.Attribute(OfficeRelNs + "id")?.Value;
+        return string.IsNullOrWhiteSpace(relationshipId)
+            ? null
+            : new ChartUserShapesModel { RelationshipId = relationshipId };
+    }
+
     private static string? ReadOptionalTextElement(XElement parent, string localName)
     {
         var value = parent.Element(ChartNs + localName)?.Value;
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static void ApplyDefaultTextProperties(XElement? textPropertiesRoot, ChartModel chart)
+    {
+        var runProperties = textPropertiesRoot?
+            .Descendants(DrawingNs + "defRPr")
+            .FirstOrDefault();
+        if (runProperties is null)
+            return;
+
+        if (int.TryParse(runProperties.Attribute("sz")?.Value, out var size))
+            chart.ChartDefaultFontSize = Math.Clamp(size / 100.0, 6, 72);
+
+        var solidFill = runProperties.Element(DrawingNs + "solidFill");
+        if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+        {
+            chart.ChartDefaultTextThemeColor = themeColor;
+            chart.ChartDefaultTextColor = null;
+        }
+        else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+        {
+            chart.ChartDefaultTextColor = color;
+            chart.ChartDefaultTextThemeColor = null;
+        }
     }
 }

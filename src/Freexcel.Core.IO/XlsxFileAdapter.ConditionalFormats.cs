@@ -77,6 +77,7 @@ public sealed partial class XlsxFileAdapter
                         FormatIfTrue = formatIfTrue
                     };
                     format.IconSetThresholds.AddRange(ReadCfvoThresholds(iconSet, worksheetNs));
+                    format.IconOverrides.AddRange(ReadCfIconOverrides(iconSet, worksheetNs));
                     ApplyNativeConditionalFormatPayloadMetadata(format, iconSet, worksheetNs);
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
@@ -169,6 +170,23 @@ public sealed partial class XlsxFileAdapter
                             var gradientVal = x14DataBar.Attribute("gradient")?.Value;
                             if (gradientVal is not null)
                                 format.DataBarGradient = !IsFalse(gradientVal);
+                            format.DataBarMinLength = ReadIntAttribute(x14DataBar, "minLength") ?? format.DataBarMinLength;
+                            format.DataBarMaxLength = ReadIntAttribute(x14DataBar, "maxLength") ?? format.DataBarMaxLength;
+                            var borderVal = x14DataBar.Attribute("border")?.Value;
+                            if (borderVal is not null)
+                                format.DataBarBorder = IsTruthy(borderVal);
+                            var axisPosition = x14DataBar.Attribute("axisPosition")?.Value;
+                            if (!string.IsNullOrWhiteSpace(axisPosition))
+                                format.DataBarAxisPosition = axisPosition;
+                            if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "axisColor"), out var axisColor))
+                                format.DataBarAxisColor = axisColor;
+                            if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "negativeFillColor"), out var negativeFillColor))
+                                format.DataBarNegativeFillColor = negativeFillColor;
+                            if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "negativeBorderColor"), out var negativeBorderColor))
+                                format.DataBarNegativeBorderColor = negativeBorderColor;
+                            var nativeX14Children = ReadNativeX14DataBarPayloadChildXmls(x14DataBar, x14Ns);
+                            if (nativeX14Children.Count > 0)
+                                format.NativePayloadChildXmls = AppendNativePayloadChildXmls(format.NativePayloadChildXmls, nativeX14Children);
                         }
                     }
                 }
@@ -263,7 +281,7 @@ public sealed partial class XlsxFileAdapter
     {
         string[] modeledAttributes = ruleType switch
         {
-            CfRuleType.DataBar => ["showValue", "minLength", "maxLength"],
+            CfRuleType.DataBar => ["showValue", "minLength", "maxLength", "border", "axisPosition"],
             CfRuleType.IconSet => ["iconSet", "showValue", "reverse"],
             _ => []
         };
@@ -280,14 +298,46 @@ public sealed partial class XlsxFileAdapter
         XName[] modeledChildren = ruleType switch
         {
             CfRuleType.ColorScale => [worksheetNs + "cfvo", worksheetNs + "color"],
-            CfRuleType.DataBar => [worksheetNs + "cfvo", worksheetNs + "color"],
-            CfRuleType.IconSet => [worksheetNs + "cfvo"],
+            CfRuleType.DataBar => [],
+            CfRuleType.IconSet => [worksheetNs + "cfvo", worksheetNs + "cfIcon"],
             _ => []
         };
         return payload.Elements()
             .Where(element => !modeledChildren.Contains(element.Name))
+            .Where(element => ruleType != CfRuleType.DataBar || !IsModeledDataBarPayloadChild(element, worksheetNs))
             .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
             .ToList();
+    }
+
+    private static bool IsModeledDataBarPayloadChild(XElement element, XNamespace worksheetNs) =>
+        element.Name == worksheetNs + "cfvo" ||
+        element.Name == worksheetNs + "color" ||
+        (IsAdvancedDataBarColorChild(element, worksheetNs) && XlsxColorReader.TryReadRgbColor(element, out _));
+
+    private static List<string> ReadNativeX14DataBarPayloadChildXmls(XElement x14DataBar, XNamespace x14Ns) =>
+        x14DataBar.Elements()
+            .Where(element =>
+                IsNativeOnlyX14DataBarColorChild(element, x14Ns) ||
+                (IsAdvancedDataBarColorChild(element, x14Ns) && !XlsxColorReader.TryReadRgbColor(element, out _)))
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
+
+    private static bool IsAdvancedDataBarColorChild(XElement element, XNamespace dataBarNs) =>
+        element.Name == dataBarNs + "axisColor" ||
+        element.Name == dataBarNs + "negativeFillColor" ||
+        element.Name == dataBarNs + "negativeBorderColor";
+
+    private static bool IsNativeOnlyX14DataBarColorChild(XElement element, XNamespace x14Ns) =>
+        element.Name == x14Ns + "fillColor" ||
+        element.Name == x14Ns + "borderColor";
+
+    private static IReadOnlyList<string> AppendNativePayloadChildXmls(
+        IReadOnlyList<string>? existing,
+        IReadOnlyList<string> additions)
+    {
+        var result = existing?.ToList() ?? [];
+        result.AddRange(additions);
+        return result;
     }
 
     private static bool TryMapLongTailConditionalFormatRule(string? type, out CfRuleType ruleType)
@@ -396,6 +446,18 @@ public sealed partial class XlsxFileAdapter
         });
         if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "color"), out var color))
             format.DataBarColor = color;
+        var borderVal = dataBar.Attribute("border")?.Value;
+        if (borderVal is not null)
+            format.DataBarBorder = IsTruthy(borderVal);
+        var axisPosition = dataBar.Attribute("axisPosition")?.Value;
+        if (!string.IsNullOrWhiteSpace(axisPosition))
+            format.DataBarAxisPosition = axisPosition;
+        if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "axisColor"), out var axisColor))
+            format.DataBarAxisColor = axisColor;
+        if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "negativeFillColor"), out var negativeFillColor))
+            format.DataBarNegativeFillColor = negativeFillColor;
+        if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "negativeBorderColor"), out var negativeBorderColor))
+            format.DataBarNegativeBorderColor = negativeBorderColor;
         ApplyNativeConditionalFormatPayloadMetadata(format, dataBar, worksheetNs);
         return format;
     }
@@ -414,6 +476,17 @@ public sealed partial class XlsxFileAdapter
                 FromCfvoType(element.Attribute("type")?.Value),
                 element.Attribute("val")?.Value))
             .ToList();
+
+    private static IEnumerable<CfIconOverride> ReadCfIconOverrides(XElement iconSet, XNamespace worksheetNs)
+    {
+        foreach (var cfIcon in iconSet.Elements(worksheetNs + "cfIcon"))
+        {
+            var iconSetAttr = cfIcon.Attribute("iconSet")?.Value;
+            var iconId = ReadIntAttribute(cfIcon, "iconId") ?? 0;
+            if (iconSetAttr is not null)
+                yield return new CfIconOverride(iconSetAttr, iconId);
+        }
+    }
 
     private static ConditionalFormat RemapConditionalFormat(ConditionalFormat source, SheetId sheetId)
     {
@@ -447,6 +520,11 @@ public sealed partial class XlsxFileAdapter
             DataBarMinLength = source.DataBarMinLength,
             DataBarMaxLength = source.DataBarMaxLength,
             DataBarGradient  = source.DataBarGradient,
+            DataBarBorder = source.DataBarBorder,
+            DataBarAxisPosition = source.DataBarAxisPosition,
+            DataBarAxisColor = source.DataBarAxisColor,
+            DataBarNegativeFillColor = source.DataBarNegativeFillColor,
+            DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
             AboveAverage = source.AboveAverage,
             FormulaText = source.FormulaText,
             IconSetStyle = source.IconSetStyle,
@@ -465,6 +543,7 @@ public sealed partial class XlsxFileAdapter
             NativeContainerChildXmls = source.NativeContainerChildXmls
         };
         format.IconSetThresholds.AddRange(source.IconSetThresholds);
+        format.IconOverrides.AddRange(source.IconOverrides);
         return format;
     }
 }

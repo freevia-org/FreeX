@@ -71,7 +71,17 @@ public sealed class ObjectSizeDialog : Window
     private void Accept()
     {
         if (!TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var result))
+        {
+            MessageBox.Show(
+                this,
+                "Enter positive width and height values.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInvalidSizeInput(ResolveInvalidSizeInput());
             return;
+        }
+
         Result = result;
         DialogResult = true;
     }
@@ -81,6 +91,28 @@ public sealed class ObjectSizeDialog : Window
         _heightBox.Focus();
         _heightBox.SelectAll();
         Keyboard.Focus(_heightBox);
+    }
+
+    private TextBox ResolveInvalidSizeInput()
+    {
+        if (!TryParsePositiveSize(_heightBox.Text))
+            return _heightBox;
+
+        if (!TryParsePositiveSize(_widthBox.Text))
+            return _widthBox;
+
+        return _heightBox;
+    }
+
+    private static bool TryParsePositiveSize(string text) =>
+        DrawingInputParser.TryParseSize($"{text}x{text}", out var value, out _)
+        && value > 0;
+
+    private static void FocusInvalidSizeInput(TextBox textBox)
+    {
+        textBox.Focus();
+        textBox.SelectAll();
+        Keyboard.Focus(textBox);
     }
 
     private void WidthBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -187,12 +219,27 @@ public sealed class RotationDialog : Window
     private void Accept()
     {
         if (!TryParseRotation(_rotationBox.Text, out var result))
+        {
+            MessageBox.Show(
+                this,
+                "Enter a numeric rotation value.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInvalidRotationInput();
             return;
+        }
+
         Result = result;
         DialogResult = true;
     }
 
     private void FocusInitialKeyboardTarget()
+    {
+        FocusInvalidRotationInput();
+    }
+
+    private void FocusInvalidRotationInput()
     {
         _rotationBox.Focus();
         _rotationBox.SelectAll();
@@ -245,8 +292,18 @@ public sealed class PictureCropDialog : Window
     private void Accept()
     {
         var input = string.Join(", ", _cropLeftBox.Text, _cropTopBox.Text, _cropRightBox.Text, _cropBottomBox.Text);
-        if (!TryCreateResult(input, out var result, out _))
+        if (!TryCreateResult(input, out var result, out var error))
+        {
+            MessageBox.Show(
+                this,
+                error ?? "Enter four crop percentages.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInvalidCropInput(ResolveInvalidCropInput(error));
             return;
+        }
+
         Result = result;
         DialogResult = true;
     }
@@ -256,6 +313,30 @@ public sealed class PictureCropDialog : Window
         _cropLeftBox.Focus();
         _cropLeftBox.SelectAll();
         Keyboard.Focus(_cropLeftBox);
+    }
+
+    private TextBox ResolveInvalidCropInput(string? error)
+    {
+        if (string.Equals(error, "Enter four crop percentages.", StringComparison.Ordinal))
+        {
+            if (!DrawingInputParser.TryParseCropPercent(_cropLeftBox.Text, out _))
+                return _cropLeftBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropTopBox.Text, out _))
+                return _cropTopBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropRightBox.Text, out _))
+                return _cropRightBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropBottomBox.Text, out _))
+                return _cropBottomBox;
+        }
+
+        return _cropLeftBox;
+    }
+
+    private static void FocusInvalidCropInput(TextBox textBox)
+    {
+        textBox.Focus();
+        textBox.SelectAll();
+        Keyboard.Focus(textBox);
     }
 
     private StackPanel CreateCropContent(Action accept)

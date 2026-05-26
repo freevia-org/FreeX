@@ -43,6 +43,41 @@ public sealed class MenuKeyTipAssignerTests
         });
     }
 
+    [Fact]
+    public void RepairsDuplicateExistingKeyTipsWithinDynamicMenuScope()
+    {
+        RunSta(() =>
+        {
+            var copy = new MenuItem { Header = "Copy" };
+            RibbonTooltip.SetKeyTip(copy, "C");
+            var cut = new MenuItem { Header = "Cut" };
+            RibbonTooltip.SetKeyTip(cut, "C");
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([copy, cut]);
+
+            RibbonTooltip.GetKeyTip(copy).Should().Be("C");
+            RibbonTooltip.GetKeyTip(cut).Should().Be("U");
+            new[] { copy, cut }.Select(RibbonTooltip.GetKeyTip).Should().OnlyHaveUniqueItems();
+        });
+    }
+
+    [Fact]
+    public void RepairsPrefixConflictingExistingKeyTipsWithinDynamicMenuScope()
+    {
+        RunSta(() =>
+        {
+            var copy = new MenuItem { Header = "Copy" };
+            RibbonTooltip.SetKeyTip(copy, "C");
+            var clear = new MenuItem { Header = "Clear Contents" };
+            RibbonTooltip.SetKeyTip(clear, "CL");
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([copy, clear]);
+
+            RibbonTooltip.GetKeyTip(copy).Should().Be("C");
+            RibbonTooltip.GetKeyTip(clear).Should().Be("L");
+        });
+    }
+
     private static void RunSta(Action action)
     {
         Exception? exception = null;

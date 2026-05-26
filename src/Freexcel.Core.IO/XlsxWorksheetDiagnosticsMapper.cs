@@ -7,22 +7,21 @@ namespace Freexcel.Core.IO;
 internal static class XlsxWorksheetDiagnosticsMapper
 {
     private const long MaxExpandedIgnoredErrorCells = 16384;
+    private static readonly string[] SupportedIgnoredErrorFlags =
+    [
+        "numberStoredAsText",
+        "evalError",
+        "formula",
+        "formulaRange",
+        "unlockedFormula",
+        "emptyCellReference",
+        "listDataValidation",
+        "calculatedColumn",
+        "twoDigitTextYear"
+    ];
 
     public static IgnoredErrorLayout ReadIgnoredErrors(XDocument worksheetXml, XNamespace worksheetNs)
     {
-        string[] supportedFlags =
-        [
-            "numberStoredAsText",
-            "evalError",
-            "formula",
-            "formulaRange",
-            "unlockedFormula",
-            "emptyCellReference",
-            "listDataValidation",
-            "calculatedColumn",
-            "twoDigitTextYear"
-        ];
-
         var cells = new List<CellAddress>();
         var existingCellOnlyRanges = new List<GridRange>();
         var tempSheet = SheetId.New();
@@ -30,7 +29,7 @@ internal static class XlsxWorksheetDiagnosticsMapper
                      .Element(worksheetNs + "ignoredErrors")?
                      .Elements(worksheetNs + "ignoredError") ?? [])
         {
-            if (!supportedFlags.Any(flag => IsTruthy(ignoredError.Attribute(flag)?.Value)))
+            if (!IsSupportedIgnoredErrorElement(ignoredError))
                 continue;
 
             var sqref = ignoredError.Attribute("sqref")?.Value;
@@ -50,6 +49,48 @@ internal static class XlsxWorksheetDiagnosticsMapper
         }
 
         return new IgnoredErrorLayout(cells, existingCellOnlyRanges);
+    }
+
+    public static WorksheetIgnoredErrorsMetadataModel? ReadIgnoredErrorsMetadata(XDocument worksheetXml, XNamespace worksheetNs)
+    {
+        var ignoredErrors = worksheetXml.Root?.Element(worksheetNs + "ignoredErrors");
+        if (ignoredErrors is null)
+            return null;
+
+        var model = new WorksheetIgnoredErrorsMetadataModel();
+        foreach (var attribute in ignoredErrors.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration)
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        foreach (var ignoredError in ignoredErrors.Elements(worksheetNs + "ignoredError"))
+        {
+            var sqref = ignoredError.Attribute("sqref")?.Value;
+            if (string.IsNullOrWhiteSpace(sqref) || !IsSupportedIgnoredErrorElement(ignoredError))
+                continue;
+
+            var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var attribute in ignoredError.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration ||
+                    string.Equals(attribute.Name.LocalName, "sqref", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                attributes[attribute.Name.ToString()] = attribute.Value;
+            }
+
+            if (attributes.Count > 0)
+                model.ErrorNativeAttributes[sqref] = attributes;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.ErrorNativeAttributes.Count == 0
+            ? null
+            : model;
     }
 
     public static IReadOnlyList<CellAddress> ReadCellWatches(XDocument worksheetXml, XNamespace worksheetNs)
@@ -73,6 +114,48 @@ internal static class XlsxWorksheetDiagnosticsMapper
         }
 
         return watchedCells;
+    }
+
+    public static WorksheetCellWatchesMetadataModel? ReadCellWatchesMetadata(XDocument worksheetXml, XNamespace worksheetNs)
+    {
+        var cellWatches = worksheetXml.Root?.Element(worksheetNs + "cellWatches");
+        if (cellWatches is null)
+            return null;
+
+        var model = new WorksheetCellWatchesMetadataModel();
+        foreach (var attribute in cellWatches.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration)
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        foreach (var cellWatch in cellWatches.Elements(worksheetNs + "cellWatch"))
+        {
+            var reference = cellWatch.Attribute("r")?.Value;
+            if (!IsSupportedCellWatchReference(reference))
+                continue;
+
+            var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var attribute in cellWatch.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration ||
+                    string.Equals(attribute.Name.LocalName, "r", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                attributes[attribute.Name.ToString()] = attribute.Value;
+            }
+
+            if (attributes.Count > 0)
+                model.WatchNativeAttributes[reference!] = attributes;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.WatchNativeAttributes.Count == 0
+            ? null
+            : model;
     }
 
     public static void SaveIgnoredErrors(Stream packageStream, Workbook workbook)
@@ -108,15 +191,43 @@ internal static class XlsxWorksheetDiagnosticsMapper
                 continue;
 
             root.Element(workbookNs + "ignoredErrors")?.Remove();
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
-                workbookNs + "ignoredErrors",
-                ignoredCells.Select(pair => new XElement(
+            var ignoredErrors = new XElement(workbookNs + "ignoredErrors");
+            foreach (var attribute in sheet.IgnoredErrorsMetadata?.NativeAttributes ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(attribute.Key))
+                    continue;
+
+                ignoredErrors.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            }
+
+            foreach (var pair in ignoredCells)
+            {
+                var reference = pair.Address.ToA1();
+                var ignoredError = new XElement(
                     workbookNs + "ignoredError",
-                    new XAttribute("sqref", pair.Address.ToA1()),
+                    new XAttribute("sqref", reference),
                     new XAttribute("numberStoredAsText", "1"),
                     new XAttribute("evalError", "1"),
                     new XAttribute("formula", "1"),
-                    new XAttribute("emptyCellReference", "1")))));
+                    new XAttribute("emptyCellReference", "1"));
+                if (TryGetIgnoredErrorNativeAttributes(sheet.IgnoredErrorsMetadata, reference, out var attributes))
+                {
+                    foreach (var attribute in attributes)
+                    {
+                        if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                            string.Equals(attribute.Key, "sqref", StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        ignoredError.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                    }
+                }
+
+                ignoredErrors.Add(ignoredError);
+            }
+
+            InsertWorksheetMetadataElementInOrder(root, workbookNs, ignoredErrors);
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
@@ -160,22 +271,60 @@ internal static class XlsxWorksheetDiagnosticsMapper
                 continue;
 
             root.Element(workbookNs + "cellWatches")?.Remove();
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
-                workbookNs + "cellWatches",
-                watchedCells.Select(address => new XElement(
-                    workbookNs + "cellWatch",
-                    new XAttribute("r", address.ToA1())))));
+            var cellWatches = new XElement(workbookNs + "cellWatches");
+            foreach (var attribute in sheet.CellWatchesMetadata?.NativeAttributes ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(attribute.Key))
+                    continue;
+
+                cellWatches.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            }
+
+            foreach (var address in watchedCells)
+            {
+                var reference = address.ToA1();
+                var cellWatch = new XElement(workbookNs + "cellWatch", new XAttribute("r", reference));
+                if (sheet.CellWatchesMetadata?.WatchNativeAttributes.TryGetValue(reference, out var attributes) == true)
+                {
+                    foreach (var attribute in attributes)
+                    {
+                        if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                            string.Equals(attribute.Key, "r", StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        cellWatch.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                    }
+                }
+
+                cellWatches.Add(cellWatch);
+            }
+
+            InsertWorksheetMetadataElementInOrder(root, workbookNs, cellWatches);
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
     }
 
-    public static bool MergeIgnoredErrors(XElement sourceIgnoredErrors, XElement targetRoot, XNamespace workbookNs)
+    public static bool MergeIgnoredErrors(
+        XElement sourceIgnoredErrors,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        HashSet<CellAddress> modeledCells)
     {
         var targetIgnoredErrors = targetRoot.Element(workbookNs + "ignoredErrors");
         if (targetIgnoredErrors is null)
         {
-            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, new XElement(sourceIgnoredErrors));
+            var retained = sourceIgnoredErrors
+                .Elements(workbookNs + "ignoredError")
+                .Where(element => !IsSupportedIgnoredErrorElement(element))
+                .Select(element => new XElement(element))
+                .ToList();
+            if (retained.Count == 0)
+                return false;
+
+            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, new XElement(workbookNs + "ignoredErrors", retained));
             return true;
         }
 
@@ -200,6 +349,13 @@ internal static class XlsxWorksheetDiagnosticsMapper
         foreach (var sourceIgnoredError in sourceIgnoredErrors.Elements(workbookNs + "ignoredError"))
         {
             var sqref = sourceIgnoredError.Attribute("sqref")?.Value;
+            if (IsSupportedIgnoredErrorElement(sourceIgnoredError) &&
+                TryParseSqrefCells(sqref, tempSheet, out var parsedSourceCells) &&
+                !parsedSourceCells.Overlaps(modeledCells))
+            {
+                continue;
+            }
+
             if (!string.IsNullOrWhiteSpace(sqref) &&
                 targetBySqref.TryGetValue(sqref, out var targetIgnoredError))
             {
@@ -242,6 +398,19 @@ internal static class XlsxWorksheetDiagnosticsMapper
         }
 
         return changed;
+    }
+
+    public static HashSet<CellAddress> GetModeledIgnoredErrorCells(Workbook workbook, string sheetName)
+    {
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return [];
+
+        var tempSheet = SheetId.New();
+        return sheet.EnumerateCells()
+            .Where(pair => pair.Cell.IgnoreFormulaError)
+            .Select(pair => new CellAddress(tempSheet, pair.Address.Row, pair.Address.Col))
+            .ToHashSet();
     }
 
     public static bool MergeCellWatches(
@@ -377,6 +546,40 @@ internal static class XlsxWorksheetDiagnosticsMapper
         }
 
         return cells.Count > 0;
+    }
+
+    private static bool IsSupportedIgnoredErrorElement(XElement ignoredError) =>
+        SupportedIgnoredErrorFlags.Any(flag => IsTruthy(ignoredError.Attribute(flag)?.Value));
+
+    private static bool TryGetIgnoredErrorNativeAttributes(
+        WorksheetIgnoredErrorsMetadataModel? metadata,
+        string reference,
+        out Dictionary<string, string> attributes)
+    {
+        attributes = [];
+        if (metadata is null)
+            return false;
+
+        if (metadata.ErrorNativeAttributes.TryGetValue(reference, out attributes!))
+            return true;
+
+        var tempSheet = SheetId.New();
+        if (!CellAddress.TryParse(reference, tempSheet, out var address))
+            return false;
+
+        foreach (var pair in metadata.ErrorNativeAttributes)
+        {
+            foreach (var token in pair.Key.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (TryParseSqrefToken(token, tempSheet, out var range) && range.Contains(address))
+                {
+                    attributes = pair.Value;
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static bool IsSupportedCellWatchReference(string? reference)

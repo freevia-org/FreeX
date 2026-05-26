@@ -46,4 +46,24 @@ public sealed partial class XlsxFileAdapter
         chart.ExternalData.TargetMode = relationship.Attribute("TargetMode")?.Value;
     }
 
+    private static void ApplyChartUserShapesRelationshipMetadata(ChartModel chart, XlsxChartPackagePart chartPart)
+    {
+        if (chart.UserShapes?.RelationshipId is not { Length: > 0 } relationshipId)
+            return;
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationship = chartPart.Relationships?.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(element => string.Equals(
+                element.Attribute("Id")?.Value,
+                relationshipId,
+                StringComparison.Ordinal));
+        if (relationship is null)
+            return;
+
+        chart.UserShapes.RelationshipType = relationship.Attribute("Type")?.Value;
+        chart.UserShapes.Target = relationship.Attribute("Target")?.Value;
+        chart.UserShapes.TargetMode = relationship.Attribute("TargetMode")?.Value;
+    }
+
 }

@@ -163,23 +163,107 @@ public sealed class ChartAreaLegendDialog : Window
 
     private void Accept()
     {
+        if (!TryReadOptionalColor(_chartAreaFillBox, out var chartAreaFillColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _chartAreaFillBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_plotAreaFillBox, out var plotAreaFillColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _plotAreaFillBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_plotAreaBorderBox, out var plotAreaBorderColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _plotAreaBorderBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_plotAreaBorderThicknessBox, min: 0, max: 10, out var plotAreaBorderThickness))
+        {
+            ShowInvalidInputWarning("Enter a plot area border width from 0 to 10 points.", _plotAreaBorderThicknessBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_legendTextBox, out var legendTextColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _legendTextBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_legendFillBox, out var legendFillColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _legendFillBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_legendBorderBox, out var legendBorderColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _legendBorderBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_legendBorderThicknessBox, min: 0, max: 10, out var legendBorderThickness))
+        {
+            ShowInvalidInputWarning("Enter a legend border width from 0 to 10 points.", _legendBorderThicknessBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_legendFontSizeBox, min: 6, max: 72, out var legendFontSize))
+        {
+            ShowInvalidInputWarning("Enter a legend font size from 6 to 72 points.", _legendFontSizeBox);
+            return;
+        }
+
         Result = CreateResult(
-            ChartDialogHelpers.ParseColor(_chartAreaFillBox.Text),
-            ChartDialogHelpers.ParseColor(_plotAreaFillBox.Text),
-            ChartDialogHelpers.ParseColor(_plotAreaBorderBox.Text),
-            ChartDialogHelpers.ParseDouble(_plotAreaBorderThicknessBox.Text, 1),
+            chartAreaFillColor,
+            plotAreaFillColor,
+            plotAreaBorderColor,
+            plotAreaBorderThickness,
             _showLegendBox.IsChecked == true,
             ChartDialogHelpers.Selected(_legendPositionBox, ChartLegendPosition.Right),
             _legendOverlayBox.IsChecked == true,
-            ChartDialogHelpers.ParseColor(_legendTextBox.Text),
-            ChartDialogHelpers.ParseColor(_legendFillBox.Text),
-            ChartDialogHelpers.ParseColor(_legendBorderBox.Text),
-            ChartDialogHelpers.ParseDouble(_legendBorderThicknessBox.Text, 0),
-            ChartDialogHelpers.ParseDouble(_legendFontSizeBox.Text, 12));
+            legendTextColor,
+            legendFillColor,
+            legendBorderColor,
+            legendBorderThickness,
+            legendFontSize);
         DialogResult = true;
     }
 
     private static double FiniteOrDefault(double value, double fallback) =>
         double.IsFinite(value) ? value : fallback;
+
+    private static bool TryReadOptionalColor(TextBox textBox, out CellColor? color) =>
+        ColorInputParser.TryParseOptionalHexColor(textBox.Text, out color);
+
+    private static bool TryReadClampedDouble(TextBox textBox, double min, double max, out double value)
+    {
+        value = 0;
+        return double.TryParse(
+                textBox.Text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value)
+            && double.IsFinite(value)
+            && value >= min
+            && value <= max;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
+    }
 }
 

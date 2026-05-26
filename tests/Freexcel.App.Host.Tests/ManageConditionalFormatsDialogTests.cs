@@ -126,7 +126,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void AppliesToColumn_UsesEditableRangeTextAndPickerButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("typeof(TextBox)");
         source.Should().Contain("typeof(Button)");
@@ -183,7 +183,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void StopIfTrueColumn_UsesEditableTwoWayCheckbox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("typeof(CheckBox)");
         source.Should().Contain("nameof(ConditionalFormat.StopIfTrue)");
@@ -194,7 +194,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void FormatPreviewColumn_ShowsExcelStyleSampleText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("Header = \"Format\"");
         source.Should().Contain("typeof(Border)");
@@ -226,7 +226,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         foreach (var content in new[]
         {
@@ -251,7 +251,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void ScopeSelector_UsesExcelWorksheetLabelAndDefaultsToSelectionWhenAvailable()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("ScopeSheet     = \"This Worksheet\"");
         source.Should().Contain("ScopeSelection = \"Current Selection\"");
@@ -261,7 +261,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesScopeSelector()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -331,7 +331,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void SelectionGuardCommands_FocusRulesListWhenNoRuleIsSelected()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("FocusRulesList();");
         source.Should().Contain("private void FocusRulesList()");
@@ -372,12 +372,14 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
-    public void NewRuleCommand_OpensSingleExcelStyleRuleDialogEntryPoint()
+    public void NewRuleCommand_OpensExcelStyleRuleTypeShellOnFirstCategory()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("Content = \"_New Rule...\"");
-        source.Should().Contain("new NewConditionalFormatRuleDialog(\"Greater Than\", defaultRange)");
+        source.Should().Contain("DefaultNewRuleType = \"Data Bar\"");
+        source.Should().Contain("new NewConditionalFormatRuleDialog(DefaultNewRuleType, defaultRange)");
+        source.Should().NotContain("new NewConditionalFormatRuleDialog(\"Greater Than\", defaultRange)");
         source.Should().NotContain("new ConditionalFormatDialog(\"Greater Than\", defaultRange)");
         source.Should().NotContain("_newRuleTypeBox");
         source.Should().NotContain("toolBar.Children.Add(_newRuleTypeBox)");
@@ -423,7 +425,13 @@ public sealed class ManageConditionalFormatsDialogTests
             TopBottomPercent = true,
             TextRuleText = "urgent",
             DateOccurringPeriod = "last7Days",
-            StopIfTrue = true
+            StopIfTrue = true,
+            NativeAttributes = new Dictionary<string, string> { ["nativeAttr"] = "x" },
+            NativeChildXmls = ["<extLst />"],
+            NativePayloadAttributes = new Dictionary<string, string> { ["payloadAttr"] = "y" },
+            NativePayloadChildXmls = ["<axisColor theme=\"1\" />"],
+            NativeContainerAttributes = new Dictionary<string, string> { ["containerAttr"] = "z" },
+            NativeContainerChildXmls = ["<extLst />"]
         };
 
         var clone = CloneWithPriority(source, 2);
@@ -437,12 +445,58 @@ public sealed class ManageConditionalFormatsDialogTests
         clone.FormatIfTrue.Should().Be(source.FormatIfTrue);
     }
 
-    private static ConditionalFormat CloneWithPriority(ConditionalFormat source, int priority)
+    [Fact]
+    public void CloneWithPriority_WithNewId_DropsExistingX14IdNativeChild()
+    {
+        var source = new ConditionalFormat
+        {
+            Id = Guid.NewGuid(),
+            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 1, 1), new CellAddress(SheetId.New(), 5, 1)),
+            RuleType = CfRuleType.DataBar,
+            NativeChildXmls =
+            [
+                """<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><ext uri="{B025F937-6E4E-48BE-B07C-B91C50BE2FA4}"><x14:id xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">{11111111-2222-3333-4444-555555555555}</x14:id></ext><ext uri="{FUTURE}" /></extLst>""",
+                """<future xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />"""
+            ],
+            NativePayloadChildXmls = ["""<axisColor xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" theme="1" />"""]
+        };
+        var newId = Guid.NewGuid();
+
+        var clone = CloneWithPriority(source, 2, newId);
+
+        clone.Id.Should().Be(newId);
+        clone.NativeChildXmls.Should().HaveCount(2);
+        clone.NativeChildXmls.Should().Contain(xml => xml.Contains("{FUTURE}", StringComparison.Ordinal));
+        clone.NativeChildXmls.Should().Contain(xml => xml.Contains("future", StringComparison.Ordinal));
+        clone.NativeChildXmls.Should().NotContain(xml => xml.Contains("11111111-2222-3333-4444-555555555555", StringComparison.Ordinal));
+        clone.NativePayloadChildXmls.Should().BeEquivalentTo(source.NativePayloadChildXmls);
+    }
+
+    [Fact]
+    public void RulesListView_DoubleClickOnRowOpensEditRule()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("MouseDoubleClick += EditRule_Click");
+    }
+
+    [Fact]
+    public void RulesListView_EnterKeyOpensEditRuleAndDeleteKeyDeletesSelectedRule()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("_listView.KeyDown += ListView_KeyDown");
+        source.Should().Contain("private void ListView_KeyDown");
+        source.Should().Contain("Key.Enter");
+        source.Should().Contain("Key.Delete");
+    }
+
+    private static ConditionalFormat CloneWithPriority(ConditionalFormat source, int priority, Guid? id = null)
     {
         var method = typeof(ManageConditionalFormatsDialog)
             .GetMethod("CloneWithPriority", BindingFlags.Static | BindingFlags.NonPublic);
         method.Should().NotBeNull();
-        return method!.Invoke(null, [source, priority, null]).Should().BeOfType<ConditionalFormat>().Subject;
+        return method!.Invoke(null, [source, priority, id]).Should().BeOfType<ConditionalFormat>().Subject;
     }
 
     private static T GetControl<T>(ManageConditionalFormatsDialog dialog, string name)
@@ -452,6 +506,12 @@ public sealed class ManageConditionalFormatsDialogTests
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
+
+    private static string ReadManageConditionalFormatsDialogSource() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.Columns.cs")));
 
     private static ConditionalFormat CreateRule(
         SheetId sheetId,

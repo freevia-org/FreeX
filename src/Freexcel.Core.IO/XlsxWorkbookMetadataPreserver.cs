@@ -64,7 +64,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeChildBlock(sourceFileVersion, targetRoot, workbookNs + "fileVersion"))
             changed = true;
-        if (MergeChildBlock(sourceFileSharing, targetRoot, workbookNs + "fileSharing"))
+        if (MergeFileSharing(sourceFileSharing, targetRoot, workbookNs, workbook.FileSharing is not null))
             changed = true;
         if (MergeChildBlocks(sourceFileRecoveryProperties, targetRoot, workbookNs + "fileRecoveryPr"))
             changed = true;
@@ -116,6 +116,46 @@ internal static class XlsxWorkbookMetadataPreserver
         foreach (var sourceBlock in sourceBlocks)
             targetRoot.Add(new XElement(sourceBlock));
         return true;
+    }
+
+    private static bool MergeFileSharing(
+        XElement? sourceFileSharing,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        bool hasModeledFileSharing)
+    {
+        if (sourceFileSharing is null)
+            return false;
+
+        var targetFileSharing = targetRoot.Element(workbookNs + "fileSharing");
+        if (targetFileSharing is null)
+        {
+            if (!hasModeledFileSharing)
+            {
+                targetRoot.Add(new XElement(sourceFileSharing));
+                return true;
+            }
+
+            var cloned = new XElement(sourceFileSharing);
+            RemoveModeledFileSharingAttributes(cloned);
+            if (!cloned.HasAttributes && !cloned.HasElements)
+                return false;
+
+            targetRoot.Add(cloned);
+            return true;
+        }
+
+        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+            sourceFileSharing,
+            targetFileSharing,
+            [XName.Get("readOnlyRecommended"), XName.Get("userName"), XName.Get("reservationPassword")]);
+    }
+
+    private static void RemoveModeledFileSharingAttributes(XElement fileSharing)
+    {
+        fileSharing.Attribute("readOnlyRecommended")?.Remove();
+        fileSharing.Attribute("userName")?.Remove();
+        fileSharing.Attribute("reservationPassword")?.Remove();
     }
 
     private static bool MergeCustomWorkbookViews(
@@ -247,16 +287,25 @@ internal static class XlsxWorkbookMetadataPreserver
         if (sourceWorkbookProperties is null)
             return false;
 
+        XName[] modeledAttributes = [workbookNs + "date1904"];
         var targetWorkbookProperties = targetRoot.Element(workbookNs + "workbookPr");
         if (targetWorkbookProperties is null)
         {
-            targetRoot.AddFirst(new XElement(sourceWorkbookProperties));
+            var cloned = new XElement(sourceWorkbookProperties);
+            foreach (var attribute in modeledAttributes)
+                cloned.Attribute(attribute)?.Remove();
+
+            if (!cloned.HasAttributes && !cloned.HasElements)
+                return false;
+
+            targetRoot.AddFirst(cloned);
             return true;
         }
 
         return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
             sourceWorkbookProperties,
-            targetWorkbookProperties);
+            targetWorkbookProperties,
+            modeledAttributes);
     }
 
     private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
@@ -299,7 +348,14 @@ internal static class XlsxWorkbookMetadataPreserver
                 : null;
             if (targetView is not null)
             {
-                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView))
+                XName[] modeledPrimaryViewAttributes =
+                [
+                    "showSheetTabs",
+                    "tabRatio",
+                    "firstSheet",
+                    "activeTab"
+                ];
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView, modeledPrimaryViewAttributes))
                     changed = true;
                 mergedTargetViewKeys.Add(sourceViewKey);
                 continue;

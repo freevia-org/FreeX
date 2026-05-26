@@ -154,6 +154,9 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             HideYAxis = chart.HideYAxis,
             XAxisPosition = chart.XAxisPosition,
             YAxisPosition = chart.YAxisPosition,
+            ChartDefaultTextColor = chart.ChartDefaultTextColor,
+            ChartDefaultTextThemeColor = chart.ChartDefaultTextThemeColor,
+            ChartDefaultFontSize = chart.ChartDefaultFontSize,
             ChartTitleTextColor = chart.ChartTitleTextColor,
             ChartTitleTextThemeColor = chart.ChartTitleTextThemeColor,
             ChartTitleFontSize = chart.ChartTitleFontSize,
@@ -265,6 +268,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             SideWallFormat = CloneSurfaceFormat(chart.SideWallFormat),
             BackWallFormat = CloneSurfaceFormat(chart.BackWallFormat),
             PrintSettings = ClonePrintSettings(chart.PrintSettings),
+            UserShapes = CloneUserShapes(chart.UserShapes),
             BarGapWidth = chart.BarGapWidth,
             BarOverlap = chart.BarOverlap,
             VaryColorsByPoint = chart.VaryColorsByPoint,
@@ -372,6 +376,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes.ToList(),
             ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes.ToList(),
             SeriesFormats = chart.SeriesFormats.ToList(),
+            SeriesDataLabelFormats = chart.SeriesDataLabelFormats.ToList(),
             PointDataLabelFormats = chart.PointDataLabelFormats.ToList(),
             UseComboLineForSecondarySeries = chart.UseComboLineForSecondarySeries,
             Left = chart.Left,
@@ -446,6 +451,17 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                         FirstHeader = printSettings.HeaderFooter.FirstHeader,
                         FirstFooter = printSettings.HeaderFooter.FirstFooter
                     }
+            };
+
+    private static ChartUserShapesModel? CloneUserShapes(ChartUserShapesModel? userShapes) =>
+        userShapes is null
+            ? null
+            : new ChartUserShapesModel
+            {
+                RelationshipId = userShapes.RelationshipId,
+                RelationshipType = userShapes.RelationshipType,
+                Target = userShapes.Target,
+                TargetMode = userShapes.TargetMode
             };
 }
 

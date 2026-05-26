@@ -162,7 +162,14 @@ public sealed partial class SymbolPickerDialog : Window
         codeSelect.Click += (_, _) =>
         {
             if (TryParseCharacterCode(selectedCode.Text, out var symbol))
+            {
                 SelectSymbolText(symbol);
+            }
+            else
+            {
+                ShowInvalidCharacterCodeWarning(selectedCode);
+                return;
+            }
 
             selectedCode.Focus();
             selectedCode.SelectAll();
@@ -208,6 +215,14 @@ public sealed partial class SymbolPickerDialog : Window
         outer.Children.Add(leftPanel);
 
         Content = outer;
+    }
+
+    private void ShowInvalidCharacterCodeWarning(TextBox selectedCode)
+    {
+        MessageBox.Show(this, "Enter a valid Unicode character code.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        selectedCode.Focus();
+        selectedCode.SelectAll();
+        Keyboard.Focus(selectedCode);
     }
 
 }

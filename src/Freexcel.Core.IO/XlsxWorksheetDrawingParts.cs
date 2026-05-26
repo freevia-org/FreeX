@@ -78,6 +78,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
     {
         var charts = new List<XlsxChartPackagePart>();
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
@@ -86,8 +87,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return charts;
 
         var (drawingPath, drawingXml) = drawingContext.Value;
-        var chartElements = drawingXml
-            .Descendants(chartNs + "chart")
+        var chartElements = drawingXml.Descendants()
+            .Where(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart")
             .ToList();
         if (chartElements.Count == 0)
             return charts;
@@ -311,10 +312,11 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return charts;
 
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        foreach (var chartElement in drawingXml.Descendants(chartNs + "chart"))
+        foreach (var chartElement in drawingXml.Descendants().Where(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart"))
         {
             var chartRelId = chartElement.Attribute(relNs + "id")?.Value;
             if (string.IsNullOrWhiteSpace(chartRelId))

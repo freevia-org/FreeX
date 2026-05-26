@@ -1,5 +1,85 @@
 namespace Freexcel.Core.Model;
 
+public sealed class WorkbookFileSharingModel
+{
+    public bool? ReadOnlyRecommended { get; set; }
+    public string? UserName { get; set; }
+    public string? ReservationPassword { get; set; }
+}
+
+public sealed class WorkbookFileRecoveryPropertiesModel
+{
+    public bool? AutoRecover { get; set; }
+    public bool? CrashSave { get; set; }
+    public bool? DataExtractLoad { get; set; }
+    public bool? RepairLoad { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorkbookFileVersionModel
+{
+    public string? AppName { get; set; }
+    public string? LastEdited { get; set; }
+    public string? LowestEdited { get; set; }
+    public string? RupBuild { get; set; }
+    public string? CodeName { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorkbookPropertiesModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorkbookProtectionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorkbookFunctionGroupsModel
+{
+    public string? BuiltInGroupCount { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorkbookFunctionGroupModel> Groups { get; set; } = [];
+}
+
+public sealed class WorkbookFunctionGroupModel
+{
+    public string? Name { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorkbookSmartTagMetadataModel
+{
+    public bool? Embed { get; set; }
+    public string? Show { get; set; }
+    public Dictionary<string, string> PropertiesNativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> TypesNativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorkbookSmartTagTypeModel> Types { get; set; } = [];
+}
+
+public sealed class WorkbookSmartTagTypeModel
+{
+    public string? NamespaceUri { get; set; }
+    public string? Name { get; set; }
+    public string? Url { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorkbookAdditionalViewsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorkbookAdditionalViewModel> Views { get; set; } = [];
+}
+
+public sealed class WorkbookAdditionalViewModel
+{
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a workbook containing one or more worksheets.
 /// This is the top-level domain object.
@@ -62,6 +142,21 @@ public sealed class Workbook
     /// <summary>Workbook calculation mode.</summary>
     public WorkbookCalculationMode CalculationMode { get; set; } = WorkbookCalculationMode.Automatic;
 
+    /// <summary>Whether workbook date serials use Excel's 1904 date system.</summary>
+    public bool Uses1904DateSystem { get; set; }
+
+    /// <summary>Whether the workbook sheet-tab strip is visible in Excel.</summary>
+    public bool? ShowSheetTabs { get; set; }
+
+    /// <summary>Excel workbook-view sheet tab ratio. Null means Excel/default.</summary>
+    public int? SheetTabRatio { get; set; }
+
+    /// <summary>Zero-based index of the first sheet visible in the sheet-tab strip.</summary>
+    public int? FirstVisibleSheetIndex { get; set; }
+
+    /// <summary>Zero-based index of the active sheet recorded in the workbook view.</summary>
+    public int? ActiveSheetIndex { get; set; }
+
     /// <summary>Whether Excel should fully recalculate the workbook when it is opened.</summary>
     public bool FullCalculationOnLoad { get; set; }
 
@@ -80,6 +175,30 @@ public sealed class Workbook
     /// <summary>Workbook-level theme definition for Excel-style theme colors, fonts, and effects.</summary>
     public WorkbookTheme Theme { get; set; } = WorkbookTheme.Office;
 
+    /// <summary>Workbook-level indexed color overrides loaded from XLSX styles.xml.</summary>
+    public WorkbookIndexedColorPalette IndexedColors { get; } = new();
+
+    /// <summary>Excel workbook file-sharing/read-only recommendation metadata.</summary>
+    public WorkbookFileSharingModel? FileSharing { get; set; }
+
+    /// <summary>Excel workbook file recovery metadata records.</summary>
+    public List<WorkbookFileRecoveryPropertiesModel> FileRecoveryProperties { get; } = [];
+
+    /// <summary>Excel workbook file-version metadata.</summary>
+    public WorkbookFileVersionModel? FileVersion { get; set; }
+
+    /// <summary>Excel workbook property metadata loaded from XLSX workbookPr.</summary>
+    public WorkbookPropertiesModel? Properties { get; set; }
+
+    /// <summary>Excel workbook function-group metadata.</summary>
+    public WorkbookFunctionGroupsModel? FunctionGroups { get; set; }
+
+    /// <summary>Excel workbook smart-tag metadata.</summary>
+    public WorkbookSmartTagMetadataModel? SmartTags { get; set; }
+
+    /// <summary>Additional native Excel workbook-window view metadata loaded from XLSX.</summary>
+    public WorkbookAdditionalViewsModel? AdditionalViews { get; set; }
+
     /// <summary>Last requested workbook-window arrangement.</summary>
     public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;
 
@@ -88,6 +207,9 @@ public sealed class Workbook
 
     /// <summary>Password hash/text for workbook structure protection. Null means no password required.</summary>
     public string? StructureProtectionPassword { get; set; }
+
+    /// <summary>Native Excel workbook protection metadata not yet modeled as editable fields.</summary>
+    public WorkbookProtectionMetadataModel? ProtectionMetadata { get; set; }
 
     /// <summary>Define or replace a named range.</summary>
     public void DefineNamedRange(string name, GridRange range)
@@ -299,7 +421,13 @@ public sealed record WorkbookCustomView(
     bool IncludePrintSettings = true,
     bool IncludeHiddenRowsColumnsAndFilterSettings = true);
 
-public sealed record WorkbookScenario(string Name, IReadOnlyList<ScenarioCellValue> ChangingCells, string? Comment = null);
+public sealed record WorkbookScenario(
+    string Name,
+    IReadOnlyList<ScenarioCellValue> ChangingCells,
+    string? Comment = null,
+    bool Hidden = false,
+    bool Locked = false,
+    string? User = null);
 
 public sealed record ScenarioCellValue(CellAddress Address, ScalarValue Value);
 

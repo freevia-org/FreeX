@@ -16,12 +16,29 @@ public static partial class NumberFormatter
         => FormatWithColor(value, formatString, targetWidthCharacters).Text;
 
     public static FormatResult FormatWithColor(ScalarValue value, string formatString)
-        => FormatWithColor(value, formatString, null);
+        => FormatWithColor(value, formatString, (int?)null);
 
     public static FormatResult FormatWithColor(ScalarValue value, string formatString, int targetWidthCharacters)
         => FormatWithColor(value, formatString, (int?)targetWidthCharacters);
 
-    private static FormatResult FormatWithColor(ScalarValue value, string formatString, int? targetWidthCharacters)
+    public static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        WorkbookIndexedColorPalette indexedColors)
+        => FormatWithColor(value, formatString, (int?)null, indexedColors);
+
+    public static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        int targetWidthCharacters,
+        WorkbookIndexedColorPalette indexedColors)
+        => FormatWithColor(value, formatString, (int?)targetWidthCharacters, indexedColors);
+
+    private static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        int? targetWidthCharacters,
+        WorkbookIndexedColorPalette? indexedColors = null)
     {
         if (string.IsNullOrEmpty(formatString) || IsGeneralFormat(formatString))
             return new FormatResult(FormatGeneral(value));
@@ -41,9 +58,9 @@ public static partial class NumberFormatter
 
         return value switch
         {
-            NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters),
-            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections),
-            TextValue t     => FormatTextWithColor(t.Value, sections),
+            NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters, indexedColors),
+            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections, indexedColors),
+            TextValue t     => FormatTextWithColor(t.Value, sections, indexedColors),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
             ErrorValue e    => new FormatResult(e.Code),
             BlankValue      => new FormatResult(""),
@@ -57,9 +74,13 @@ public static partial class NumberFormatter
 
     // ── Number formatting ─────────────────────────────────────────────────────
 
-    private static FormatResult FormatNumber(double value, string[] sections, int? targetWidthCharacters)
+    private static FormatResult FormatNumber(
+        double value,
+        string[] sections,
+        int? targetWidthCharacters,
+        WorkbookIndexedColorPalette? indexedColors)
     {
-        var parsedSections = sections.Select(ParseSection).ToArray();
+        var parsedSections = sections.Select(section => ParseSection(section, indexedColors)).ToArray();
         bool hasConditions = parsedSections.Any(section => section.Condition is not null);
 
         ParsedSection section;
@@ -113,9 +134,52 @@ public static partial class NumberFormatter
 
         int fillIndex = FindAccountingFillInsertionIndex(text);
         if (fillIndex < 0)
-            return text.PadLeft(targetWidthCharacters.Value);
+        {
+            var trailingSkipSpaces = CountTrailingSkipDirectives(format);
+            return trailingSkipSpaces > 0
+                ? text + new string(' ', trailingSkipSpaces)
+                : text;
+        }
 
         return text.Insert(fillIndex, new string(' ', targetWidthCharacters.Value - text.Length));
+    }
+
+    private static int CountTrailingSkipDirectives(string format)
+    {
+        bool inQuote = false;
+        var lastNumericPlaceholder = -1;
+        var skipDirectivesAfterValue = 0;
+
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && IsNumericPlaceholder(c))
+            {
+                lastNumericPlaceholder = i;
+                skipDirectivesAfterValue = 0;
+                continue;
+            }
+
+            if (!inQuote && lastNumericPlaceholder >= 0 && c == '_' && i + 1 < format.Length)
+            {
+                skipDirectivesAfterValue++;
+                i++;
+            }
+        }
+
+        return skipDirectivesAfterValue;
     }
 
     private static bool HasAccountingLayoutDirective(string format)
@@ -404,12 +468,11 @@ public static partial class NumberFormatter
                 continue;
             }
 
-            if (!inQuote && IsCurrencySymbol(c) &&
-                i + 2 < format.Length && format[i + 1] == '*' && format[i + 2] == ' ')
+            if (!inQuote && TryReadAccountingFillSymbol(format, i, out var symbol, out var fillIndex))
             {
-                sb.Append(c);
+                sb.Append(symbol);
                 sb.Append(' ');
-                i += 2;
+                i = fillIndex + 1;
                 continue;
             }
 
@@ -421,6 +484,37 @@ public static partial class NumberFormatter
 
     private static bool IsCurrencySymbol(char c)
         => c is '$' or '\u00A3' or '\u20AC' or '\u00A5';
+
+    private static bool TryReadAccountingFillSymbol(
+        string format,
+        int start,
+        out string symbol,
+        out int fillIndex)
+    {
+        symbol = "";
+        fillIndex = -1;
+        if (!IsAccountingSymbolChar(format[start]))
+            return false;
+
+        int cursor = start;
+        while (cursor < format.Length && IsAccountingSymbolChar(format[cursor]))
+            cursor++;
+
+        if (cursor == start ||
+            cursor + 1 >= format.Length ||
+            format[cursor] != '*' ||
+            format[cursor + 1] != ' ')
+        {
+            return false;
+        }
+
+        symbol = format[start..cursor];
+        fillIndex = cursor;
+        return true;
+    }
+
+    private static bool IsAccountingSymbolChar(char c)
+        => char.IsLetter(c) || IsCurrencySymbol(c);
 
     private static (string Format, double Value) ApplyTrailingCommaScaling(string format, double value)
     {

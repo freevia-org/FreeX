@@ -1,6 +1,12 @@
 namespace Freexcel.Core.Model;
 
-public sealed record ThreadedComment(string Text, string Author = "Freexcel");
+public sealed record CommentReply(string Text, string Author = "Freexcel");
+
+public sealed record ThreadedComment(string Text, string Author = "Freexcel")
+{
+    public IReadOnlyList<CommentReply> Replies { get; init; } = [];
+    public bool IsResolved { get; init; } = false;
+}
 
 public enum HyperlinkTargetKind
 {
@@ -14,6 +20,176 @@ public sealed record HyperlinkMetadata(
     HyperlinkTargetKind LinkType = HyperlinkTargetKind.ExistingFileOrWebPage,
     string ScreenTip = "",
     string Bookmark = "");
+
+public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml);
+
+public sealed class WorksheetProtectionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetPageSetupMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetPrintOptionsMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetSheetFormatMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetDimensionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetSheetPropertiesMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetPrimaryViewMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetPageBreaksMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
+}
+
+public sealed class WorksheetCellWatchesMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed class WorksheetIgnoredErrorsMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, Dictionary<string, string>> ErrorNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed class WorksheetSingleXmlCellsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetSingleXmlCellModel> Cells { get; set; } = [];
+}
+
+public sealed class WorksheetSingleXmlCellModel
+{
+    public int? Id { get; set; }
+    public string? Reference { get; set; }
+    public int? XmlCellPropertyId { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetPageMarginsMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetHeaderFooterMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetSmartTagsModel
+{
+    public string? NativeXml { get; set; }
+    public List<WorksheetCellSmartTagsModel> Cells { get; set; } = [];
+}
+
+public sealed class WorksheetCellSmartTagsModel
+{
+    public string? Reference { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetCellSmartTagModel> Tags { get; set; } = [];
+}
+
+public sealed class WorksheetCellSmartTagModel
+{
+    public string? Type { get; set; }
+    public bool? Deleted { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetCellSmartTagPropertyModel> Properties { get; set; } = [];
+}
+
+public sealed class WorksheetCellSmartTagPropertyModel
+{
+    public string? Key { get; set; }
+    public string? Value { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetDataConsolidationModel
+{
+    public string? Function { get; set; }
+    public bool? LeftLabels { get; set; }
+    public bool? TopLabels { get; set; }
+    public bool? Link { get; set; }
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetDataConsolidationReferenceModel> References { get; set; } = [];
+}
+
+public sealed class WorksheetDataConsolidationReferenceModel
+{
+    public string? Reference { get; set; }
+    public string? Sheet { get; set; }
+    public string? Name { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetSortStateModel
+{
+    public string? Reference { get; set; }
+    public bool? ColumnSort { get; set; }
+    public bool? CaseSensitive { get; set; }
+    public string? SortMethod { get; set; }
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetSortConditionModel> Conditions { get; set; } = [];
+}
+
+public sealed class WorksheetSortConditionModel
+{
+    public string? Reference { get; set; }
+    public bool? Descending { get; set; }
+    public string? SortBy { get; set; }
+    public string? CustomList { get; set; }
+    public string? DxfId { get; set; }
+    public string? IconSet { get; set; }
+    public string? IconId { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetAdditionalViewsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetAdditionalViewModel> Views { get; set; } = [];
+}
+
+public sealed class WorksheetAdditionalViewModel
+{
+    public string? WorkbookViewId { get; set; }
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
 
 /// <summary>
 /// Represents a worksheet within a workbook.
@@ -45,6 +221,15 @@ public sealed partial class Sheet
     /// <summary>Default row height in pixels.</summary>
     public double DefaultRowHeight { get; set; } = 20.0;
 
+    /// <summary>Native Excel sheetFormatPr metadata not yet modeled as editable fields.</summary>
+    public WorksheetSheetFormatMetadataModel? SheetFormatMetadata { get; set; }
+
+    /// <summary>Native Excel dimension metadata not yet modeled as editable fields.</summary>
+    public WorksheetDimensionMetadataModel? DimensionMetadata { get; set; }
+
+    /// <summary>Native Excel sheetPr metadata not yet modeled as editable fields.</summary>
+    public WorksheetSheetPropertiesMetadataModel? SheetPropertiesMetadata { get; set; }
+
     /// <summary>Number of rows frozen at the top (0 = none).</summary>
     public uint FrozenRows { get; set; } = 0;
 
@@ -72,6 +257,33 @@ public sealed partial class Sheet
     /// <summary>Optional worksheet print area. Null means print the used range.</summary>
     public GridRange? PrintArea { get; set; }
 
+    /// <summary>Worksheet-level Excel AutoFilter metadata loaded from XLSX.</summary>
+    public WorksheetAutoFilterModel? AutoFilter { get; set; }
+
+    /// <summary>Worksheet-level Excel smart-tag metadata loaded from XLSX.</summary>
+    public WorksheetSmartTagsModel? SmartTags { get; set; }
+
+    /// <summary>Worksheet-level Excel data-consolidation metadata loaded from XLSX.</summary>
+    public WorksheetDataConsolidationModel? DataConsolidation { get; set; }
+
+    /// <summary>Worksheet-level Excel sort-state metadata loaded from XLSX.</summary>
+    public WorksheetSortStateModel? SortState { get; set; }
+
+    /// <summary>Worksheet XML-map single-cell mapping metadata loaded from XLSX.</summary>
+    public WorksheetSingleXmlCellsModel? SingleXmlCells { get; set; }
+
+    /// <summary>Native Excel cell watch metadata not yet modeled as editable fields.</summary>
+    public WorksheetCellWatchesMetadataModel? CellWatchesMetadata { get; set; }
+
+    /// <summary>Native Excel ignored-errors metadata not yet modeled as editable fields.</summary>
+    public WorksheetIgnoredErrorsMetadataModel? IgnoredErrorsMetadata { get; set; }
+
+    /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
+    public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
+
+    /// <summary>Native Excel primary sheetView metadata not yet modeled as editable fields.</summary>
+    public WorksheetPrimaryViewMetadataModel? PrimaryViewMetadata { get; set; }
+
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;
 
@@ -87,11 +299,17 @@ public sealed partial class Sheet
     /// <summary>Distance from the page bottom to the printed footer, in inches.</summary>
     public double FooterMargin { get; set; } = 0.3;
 
+    /// <summary>Native Excel pageMargins metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageMarginsMetadataModel? PageMarginsMetadata { get; set; }
+
     /// <summary>Whether gridlines are printed for this worksheet.</summary>
     public bool PrintGridlines { get; set; }
 
     /// <summary>Whether row and column headings are printed for this worksheet.</summary>
     public bool PrintHeadings { get; set; }
+
+    /// <summary>Native Excel printOptions metadata not yet modeled as editable fields.</summary>
+    public WorksheetPrintOptionsMetadataModel? PrintOptionsMetadata { get; set; }
 
     /// <summary>Worksheet print scaling settings.</summary>
     public WorksheetScaleToFit ScaleToFit { get; set; } = WorksheetScaleToFit.Default;
@@ -156,6 +374,9 @@ public sealed partial class Sheet
     /// <summary>Whether headers and footers align with the configured page margins.</summary>
     public bool HeaderFooterAlignWithMargins { get; set; } = true;
 
+    /// <summary>Native Excel headerFooter metadata not yet modeled as editable fields.</summary>
+    public WorksheetHeaderFooterMetadataModel? HeaderFooterMetadata { get; set; }
+
     /// <summary>Whether the printed grid is centered horizontally within the printable page area.</summary>
     public bool CenterHorizontallyOnPage { get; set; }
 
@@ -192,11 +413,20 @@ public sealed partial class Sheet
     /// <summary>How cell comments are included in printed output.</summary>
     public WorksheetPrintComments PrintComments { get; set; } = WorksheetPrintComments.None;
 
+    /// <summary>Native Excel pageSetup metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageSetupMetadataModel? PageSetupMetadata { get; set; }
+
     /// <summary>Manual row page breaks, stored as the first row after each break.</summary>
     public SortedSet<uint> RowPageBreaks { get; } = [];
 
+    /// <summary>Native Excel rowBreaks metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata { get; set; }
+
     /// <summary>Manual column page breaks, stored as the first column after each break.</summary>
     public SortedSet<uint> ColumnPageBreaks { get; } = [];
+
+    /// <summary>Native Excel colBreaks metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageBreaksMetadataModel? ColumnPageBreaksMetadata { get; set; }
 
     /// <summary>Display-only tiled worksheet background image. It is not printed, matching Excel behavior.</summary>
     public WorksheetBackgroundImage? BackgroundImage { get; set; }
@@ -327,6 +557,9 @@ public sealed partial class Sheet
 
     /// <summary>Password hash for sheet protection. Null means no password required.</summary>
     public string? ProtectionPassword { get; set; }
+
+    /// <summary>Native Excel sheet protection metadata not yet modeled as editable fields.</summary>
+    public WorksheetProtectionMetadataModel? ProtectionMetadata { get; set; }
 
     /// <summary>Actions that remain available while the sheet is protected.</summary>
     public List<SheetProtectionPermission> ProtectionPermissions { get; } =
@@ -481,6 +714,22 @@ public sealed partial class Sheet
         return GetValue(address.Row, address.Col);
     }
 
+    /// <summary>Enumerate positions whose effective value is not blank, including spill values.</summary>
+    public IEnumerable<CellAddress> EnumerateValueBearingCells()
+    {
+        foreach (var ((row, col), cell) in _cells)
+        {
+            if (cell.Value is not BlankValue)
+                yield return new CellAddress(Id, row, col);
+        }
+
+        foreach (var ((row, col), value) in _spillValues)
+        {
+            if (value is not BlankValue && !_cells.ContainsKey((row, col)))
+                yield return new CellAddress(Id, row, col);
+        }
+    }
+
     /// <summary>Get all non-empty cell positions.</summary>
     public IReadOnlyCollection<(uint Row, uint Col)> GetOccupiedCells()
     {
@@ -532,7 +781,16 @@ public sealed partial class Sheet
 
 }
 
-public sealed record WorksheetCustomProperty(string Name, int Id);
+public sealed class WorksheetCustomPropertyMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed record WorksheetCustomProperty(
+    string Name,
+    int Id,
+    WorksheetCustomPropertyMetadataModel? Metadata = null);
 
 public sealed record WorksheetPhoneticProperties(string? FontId, string? Type, string? Alignment);
 

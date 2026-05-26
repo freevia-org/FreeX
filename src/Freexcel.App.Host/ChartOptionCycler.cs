@@ -120,6 +120,13 @@ public static class ChartOptionCycler
             "3d area" or "three d area" or "three-dimensional area" => ChartType.ThreeDArea,
             "surface" or "surface chart" => ChartType.Surface,
             "3d surface" or "3d surface chart" or "three d surface" or "three-dimensional surface" => ChartType.ThreeDSurface,
+            "treemap" or "treemap chart" => ChartType.Treemap,
+            "sunburst" or "sunburst chart" => ChartType.Sunburst,
+            "histogram" or "histogram chart" => ChartType.Histogram,
+            "pareto" or "pareto chart" => ChartType.Pareto,
+            "box plot" or "boxplot" or "box and whisker" or "box-and-whisker" or "box and whisker chart" => ChartType.BoxAndWhisker,
+            "waterfall" or "waterfall chart" => ChartType.Waterfall,
+            "funnel" or "funnel chart" => ChartType.Funnel,
             "radar" => ChartType.Radar,
             "stock" => ChartType.Stock,
             _ => ChartType.Column

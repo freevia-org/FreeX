@@ -48,7 +48,7 @@ public sealed class RibbonTabParityTests
             "Comments");
 
         ExtractGroupXaml(insertTab, "Tables").Should().Contain("Recommended PivotTables");
-        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Insert Picture\"");
+        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Pictures\"");
         ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Shapes\"");
         ExtractGroupXaml(insertTab, "Charts").Should().Contain("local:RibbonTooltip.Title=\"Recommended Charts\"");
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
@@ -73,6 +73,7 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Shape\"");
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Math\"");
+        ExtractGroupXaml(drawTab, "Format").Should().Contain("local:RibbonTooltip.Title=\"Shape Fill\"");
     }
 
     [Fact]
@@ -215,6 +216,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var analyzeTab = ExtractTabXaml(xaml, "PivotTable Analyze", "Design");
+        var dataGroup = ExtractGroupXaml(analyzeTab, "Data");
 
         ExtractGroupLabels(analyzeTab).Should().Equal(
             "PivotTable",
@@ -229,7 +231,9 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(analyzeTab, "Group").Should().Contain("local:RibbonTooltip.Title=\"Group Field\"");
         ExtractGroupXaml(analyzeTab, "Filter").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
-        ExtractGroupXaml(analyzeTab, "Data").Should().Contain("local:RibbonTooltip.Title=\"Refresh\"");
+        dataGroup.Should().Contain("local:RibbonTooltip.Title=\"Refresh\"");
+        dataGroup.Should().Contain("Content=\"Change Data Source\"");
+        dataGroup.Should().NotContain("Content=\"Change Source\"");
         ExtractGroupXaml(analyzeTab, "Calculations").Should().Contain("local:RibbonTooltip.Title=\"Calculated Field\"");
         ExtractGroupXaml(analyzeTab, "Tools").Should().Contain("local:RibbonTooltip.Title=\"PivotChart\"");
         ExtractGroupXaml(analyzeTab, "Show").Should().Contain("local:RibbonTooltip.Title=\"Field List\"");
@@ -248,6 +252,7 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(designTab, "Layout").Should().Contain("local:RibbonTooltip.Title=\"Report Layout\"");
         ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("local:RibbonTooltip.Title=\"Banded Rows\"");
+        ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("Content=\"Banded Columns\"");
         ExtractGroupXaml(designTab, "PivotTable Styles").Should().Contain("local:RibbonTooltip.Title=\"PivotTable Styles\"");
     }
 
@@ -262,7 +267,8 @@ public sealed class RibbonTabParityTests
         ExtractTooltipTitles(helpGroup).Should().ContainInOrder(
             "Help Online",
             "Contact Support",
-            "Send Feedback",
+            "Feedback",
+            "Copy Diagnostics",
             "Show Training",
             "What's New",
             "About Freexcel");
