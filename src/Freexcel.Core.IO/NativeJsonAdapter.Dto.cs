@@ -610,6 +610,11 @@ public sealed partial class NativeJsonAdapter
         public RgbColor? DataBarNegativeBorderColor { get; set; }
         public bool AboveAverage { get; set; } = true;
         public string? FormulaText { get; set; }
+        public string? IconSetStyle { get; set; }
+        public bool IconSetShowValue { get; set; } = true;
+        public bool IconSetReverse { get; set; }
+        public List<CfThresholdModel> IconSetThresholds { get; set; } = [];
+        public List<CfIconOverride> IconOverrides { get; set; } = [];
         public int TopBottomRank { get; set; } = 10;
         public bool TopBottomPercent { get; set; }
         public string? TextRuleText { get; set; }

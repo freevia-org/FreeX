@@ -47,7 +47,7 @@ public enum CfThresholdType
     Formula
 }
 
-public sealed record CfThresholdModel(CfThresholdType Type, string? Value = null);
+public sealed record CfThresholdModel(CfThresholdType Type, string? Value = null, bool? GreaterThanOrEqual = null);
 
 /// <summary>
 /// Per-threshold icon override. <see cref="IconSet"/> = "NoIcons" suppresses the icon for that bucket.

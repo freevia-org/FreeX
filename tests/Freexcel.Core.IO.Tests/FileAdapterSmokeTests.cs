@@ -4894,8 +4894,8 @@ public partial class FileAdapterSmokeTests
         });
         sheet.ConditionalFormats.Single().IconSetThresholds.AddRange(
         [
-            new CfThresholdModel(CfThresholdType.Number, "0"),
-            new CfThresholdModel(CfThresholdType.Percentile, "50"),
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true),
             new CfThresholdModel(CfThresholdType.Formula, "AVERAGE($A$1:$A$5)")
         ]);
 
@@ -4907,8 +4907,8 @@ public partial class FileAdapterSmokeTests
         {
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             var xml = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
-            xml.Should().Contain("type=\"num\" val=\"0\"");
-            xml.Should().Contain("type=\"percentile\" val=\"50\"");
+            xml.Should().Contain("type=\"num\" val=\"0\" gte=\"0\"");
+            xml.Should().Contain("type=\"percentile\" val=\"50\" gte=\"1\"");
             xml.Should().Contain("type=\"formula\" val=\"AVERAGE($A$1:$A$5)\"");
         }
 
@@ -4921,8 +4921,8 @@ public partial class FileAdapterSmokeTests
         iconSet.IconSetShowValue.Should().BeFalse();
         iconSet.IconSetReverse.Should().BeTrue();
         iconSet.IconSetThresholds.Should().Equal(
-            new CfThresholdModel(CfThresholdType.Number, "0"),
-            new CfThresholdModel(CfThresholdType.Percentile, "50"),
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true),
             new CfThresholdModel(CfThresholdType.Formula, "AVERAGE($A$1:$A$5)"));
     }
 
@@ -5671,6 +5671,44 @@ public partial class FileAdapterSmokeTests
         rule.FormatIfTrue.NativeDifferentialAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("dxf-native");
         rule.FormatIfTrue.NativeDifferentialChildXmls.Should().ContainSingle().Which.Should().Contain("{FREEXCEL-DXF-NATIVE}");
         rule.FormatIfTrue.NativeDifferentialElementXmls.Should().ContainKey("font").WhoseValue.Should().Contain("customFontAttr");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_ConditionalFormat_IconSetThresholdGte_Survives()
+    {
+        var workbook = new Workbook("CfIconSetNativeJson");
+        var sheet = workbook.AddSheet("S1");
+        var cf = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3TrafficLights1",
+            IconSetShowValue = false,
+            IconSetReverse = true
+        };
+        cf.IconSetThresholds.AddRange(
+        [
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true)
+        ]);
+        sheet.ConditionalFormats.Add(cf);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.IconSetStyle.Should().Be("3TrafficLights1");
+        rule.IconSetShowValue.Should().BeFalse();
+        rule.IconSetReverse.Should().BeTrue();
+        rule.IconSetThresholds.Should().Equal(
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true));
     }
 
     [Fact]
