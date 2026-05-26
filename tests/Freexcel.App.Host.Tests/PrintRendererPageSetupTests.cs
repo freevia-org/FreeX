@@ -311,6 +311,114 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_AttachesTextOverlaysToCommentSummaryPage()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Comment summary overlays");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var b2 = new CellAddress(sheet.Id, 2, 2);
+            sheet.SetCell(a1, new TextValue("Total"));
+            sheet.Comments[a1] = "Visible note";
+            sheet.ThreadedComments[b2] = new ThreadedComment("Review total", "Quinn");
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var summaryPage = document.Pages[1].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(summaryPage);
+
+            overlays.Select(overlay => overlay.Text)
+                .Should()
+                .ContainInOrder(
+                    "Comments",
+                    "A1: Visible note",
+                    "B2: Quinn: Review total");
+
+            overlays.Should().ContainEquivalentOf(
+                new { Text = "Comments", X = 48.0, Y = 48.0, FontSize = 14.0, Bold = true });
+            overlays.Should().ContainEquivalentOf(
+                new { Text = "A1: Visible note", X = 48.0, Y = 82.0, FontSize = 9.0, Bold = false });
+            overlays.Should().ContainEquivalentOf(
+                new { Text = "B2: Quinn: Review total", X = 48.0, Y = 100.0, FontSize = 9.0, Bold = false });
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_BoundsLongCommentSummaryTextOverlaysToRenderedLines()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Long comment summary overlays");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Total"));
+            sheet.Comments[a1] = string.Join(
+                " ",
+                Enumerable.Repeat("visible-comment-text", 80).Append("hidden-tail-token"));
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var summaryPage = document.Pages[1].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(summaryPage)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlays.Should().StartWith("Comments");
+            overlays.Where(text => text != "Comments").Should().HaveCount(3);
+            overlays.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
+            overlays[^1].Should().EndWith("\u2026");
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_BoundsMultilineCommentSummaryTextOverlaysToRenderedLines()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Multiline comment summary overlays");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Total"));
+            sheet.Comments[a1] = "line one\nline two\nline three\nhidden-tail-token";
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var summaryPage = document.Pages[1].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(summaryPage)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlays.Should().ContainInOrder("Comments", "A1: line one", "line two", "line three\u2026");
+            overlays.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_BoundsLongUnbrokenCommentSummaryTokenBeforeLaterWords()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Long token comment summary overlays");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Total"));
+            sheet.Comments[a1] = $"{new string('x', 400)} hidden-tail-token";
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var summaryPage = document.Pages[1].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(summaryPage)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlays.Should().StartWith("Comments");
+            overlays.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
+            overlays[^1].Should().EndWith("\u2026");
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_PrintsCommentsAtEndAcrossMultipleSummaryPages()
     {
         StaTestRunner.Run(() =>

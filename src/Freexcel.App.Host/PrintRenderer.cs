@@ -180,14 +180,14 @@ public static partial class PrintRenderer
 
         void AddCommentSummaryPage(IReadOnlyList<KeyValuePair<CellAddress, string>> commentsForPage)
         {
-            var visual = RenderCommentSummaryPageVisual(
+            var (visual, textOverlays) = RenderCommentSummaryPageVisual(
                 pageW,
                 pageH,
                 marginLeft,
                 marginTop,
                 commentsForPage);
 
-            var container = new VisualHost { Visual = visual };
+            var container = new VisualHost { Visual = visual, TextOverlays = textOverlays };
             var fixedPage = new FixedPage { Width = pageW, Height = pageH };
             fixedPage.Children.Add(container);
             FixedPage.SetLeft(container, 0);
