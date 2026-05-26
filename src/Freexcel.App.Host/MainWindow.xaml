@@ -4312,7 +4312,7 @@
                                     <TextBlock FontSize="12" Foreground="#555"
                                                TextWrapping="Wrap" LineHeight="20"
                                                Margin="0,0,0,6">Freexcel is a lightweight, open-format spreadsheet built on .NET 10 and WPF. Supports XLSX, formula calculation, cell styling, charts, and freeze panes.</TextBlock>
-                                    <TextBlock Text="Version 0.5 (Phase 5)"
+                                    <TextBlock Text="Version 0.5 (Tester Release)"
                                                FontSize="11" Foreground="#888"/>
                                 </StackPanel>
                             </Border>
