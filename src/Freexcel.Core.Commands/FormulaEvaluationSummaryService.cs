@@ -29,6 +29,7 @@ public sealed class FormulaEvaluationSession
     public int StepCount => Summary.Steps.Count;
     public bool CanMovePrevious => CurrentStepIndex > 0;
     public bool CanMoveNext => CurrentStepIndex < Summary.Steps.Count - 1;
+    public bool CanStepIn => false;
     public FormulaEvaluationStep? CurrentStep =>
         Summary.Steps.Count == 0 ? null : Summary.Steps[CurrentStepIndex];
     public FormulaEvaluationHighlight CurrentHighlight => BuildCurrentHighlight();
@@ -51,6 +52,11 @@ public sealed class FormulaEvaluationSession
 
         CurrentStepIndex--;
         return true;
+    }
+
+    public bool StepIn()
+    {
+        return false;
     }
 
     public bool StepOut()
