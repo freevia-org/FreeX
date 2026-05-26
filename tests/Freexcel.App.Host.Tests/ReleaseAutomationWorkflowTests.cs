@@ -14,6 +14,7 @@ public sealed class ReleaseAutomationWorkflowTests
         var workflow = File.ReadAllText(workflowPath);
 
         workflow.Should().Contain("workflow_dispatch:");
+        workflow.Should().Contain("release_notes:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: write");
         workflow.Should().NotContain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24");
@@ -48,7 +49,17 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile");
         workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-msix");
         workflow.Should().Contain("path: artifacts/upload/freexcel-*-win-x64-msix.msix");
-        workflow.Should().Contain("gh release upload $tag artifacts/upload/*.exe artifacts/upload/*.msix --clobber");
+        workflow.Should().Contain("path: artifacts/upload/*.msix.sha256");
+        workflow.Should().Contain("$assetPaths = @(");
+        workflow.Should().Contain("\"artifacts/upload/*.msix.sha256\"");
+        workflow.Should().Contain("gh release create $tag @assetPaths --target $env:GITHUB_SHA --title $title --notes $notes --draft @prereleaseArgs");
+        workflow.Should().Contain("gh release edit $tag --draft=false @latestArgs");
+        workflow.Should().Contain("gh release upload $tag @assetPaths --clobber");
+        workflow.Should().NotContain("gh release create $tag --target $env:GITHUB_SHA --title $title --notes $notes @prereleaseArgs");
+        workflow.Should().Contain("$latestArgs += \"--latest\"");
+        workflow.Should().Contain("Additional tester notes:");
+        workflow.Should().Contain("FREEXCEL_RELEASE_NOTES: ${{ inputs.release_notes }}");
+        workflow.Should().Contain("$extraNotes = $env:FREEXCEL_RELEASE_NOTES");
     }
 
     [Fact]
