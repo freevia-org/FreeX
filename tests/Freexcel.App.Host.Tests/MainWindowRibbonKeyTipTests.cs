@@ -360,7 +360,7 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.HandleKeyTip(Key.W);
             harness.HandleKeyTip(Key.Z);
 
-            harness.KeyTipScope.Should().Be("Commands", "Z is a visible prefix for Zoom Out, 100%, Zoom In, and Zoom to Selection");
+            harness.KeyTipScope.Should().Be("Commands", "Z is a visible prefix for 100% and Zoom to Selection");
 
             harness.HandleKeyTip(Key.D1);
 

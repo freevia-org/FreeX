@@ -7442,6 +7442,32 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_PadWithOneCellRange_UsesScalarValue()
+    {
+        var rowSheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(9)));
+        var rows = _eval.Evaluate("=WRAPROWS(A1:A1,2,B1:B1)", rowSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rows.RowCount.Should().Be(1);
+        rows.ColCount.Should().Be(2);
+        rows.Cells[0, 0].Should().Be(new NumberValue(1));
+        rows.Cells[0, 1].Should().Be(new NumberValue(9));
+
+        var colSheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 2, new TextValue("z")));
+        var cols = _eval.Evaluate("=WRAPCOLS(A1:A1,2,B1:B1)", colSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        cols.RowCount.Should().Be(2);
+        cols.ColCount.Should().Be(1);
+        cols.Cells[0, 0].Should().Be(new TextValue("a"));
+        cols.Cells[1, 0].Should().Be(new TextValue("z"));
+    }
+
+    [Fact]
     public void WraprowsAndWrapcols_OmittedPadWith_DefaultsToNA()
     {
         var rowSheet = MakeSheet(
@@ -7568,6 +7594,22 @@ public class FunctionLibraryTests
         rv.Cells[0, 0].Should().Be(new NumberValue(1));
         rv.Cells[0, 1].Should().Be(new TextValue("x"));
         rv.Cells[1, 0].Should().Be(new TextValue("x"));
+    }
+
+    [Fact]
+    public void Expand_PadWithOneCellRange_UsesScalarValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(9)));
+
+        var result = _eval.Evaluate("=EXPAND(A1:A1,2,2,B1:B1)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[0, 1].Should().Be(new NumberValue(9));
+        rv.Cells[1, 0].Should().Be(new NumberValue(9));
+        rv.Cells[1, 1].Should().Be(new NumberValue(9));
     }
 
     [Fact]

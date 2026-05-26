@@ -99,8 +99,8 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         states.Should().Equal(
             RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed,
-            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed);
@@ -116,7 +116,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
 
         states.Should().Equal(
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed);
     }
@@ -131,7 +131,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
 
         states.Should().Equal(
             RibbonAdaptiveGroupState.SmallWithLabels,
-            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Collapsed,
@@ -172,7 +172,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_KeepsDataSortAndFilterBeforeConnectionsAtMediumWidths()
     {
-        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1120,
             groupNames,
@@ -180,11 +180,25 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
 
         states[Array.IndexOf(groupNames, "Sort & Filter")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Queries & Connections")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Data Types")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_KeepsReviewCommentsBeforeAccessibilityAtMediumWidths()
+    {
+        var groupNames = new[] { "Proofing", "Accessibility", "Comments", "Notes", "Protect" };
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1120,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
+
+        states[Array.IndexOf(groupNames, "Proofing")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Comments")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Accessibility")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Theory]
     [InlineData(1120, new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" }, 2)]
-    [InlineData(1120, new[] { "Proofing", "Accessibility", "Comments", "Protect" }, 2)]
     [InlineData(1120, new[] { "Draw", "Arrange", "Format" }, 1)]
     public void ApplyBreakpointOverrides_AppliesExcelLikeTabSpecificCollapseOrder(
         double availableWidth,
