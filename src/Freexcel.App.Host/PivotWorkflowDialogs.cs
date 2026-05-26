@@ -52,6 +52,12 @@ public sealed class PivotTableDataSourceDialog : Window
     public static PivotTableDataSourceRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
         new(currentText.Trim(), CollapseDialog: true);
 
+    public void ApplyRangeSelection(string rangeText)
+    {
+        _sourceBox.Text = rangeText;
+        FocusRangeSelectionInput(_sourceBox);
+    }
+
     private StackPanel CreateContent()
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
