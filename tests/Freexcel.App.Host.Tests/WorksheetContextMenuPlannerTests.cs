@@ -304,8 +304,20 @@ public sealed class WorksheetContextMenuPlannerTests
             "AutoFit Row Height",
             "Hide Rows",
             "Unhide Rows",
+            "Group",
+            "Ungroup",
             "Format Cells...",
             "Clear Contents");
+        commands.Single(command => command.Header == "Group").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Group",
+                WorksheetContextMenuAction.Group,
+                AccessHeader: "_Group"));
+        commands.Single(command => command.Header == "Ungroup").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Ungroup",
+                WorksheetContextMenuAction.Ungroup,
+                AccessHeader: "_Ungroup"));
         commands.Single(command => command.Header == "Format Cells...").Should().BeEquivalentTo(
             new WorksheetContextMenuCommand(
                 "Format Cells...",
@@ -336,8 +348,20 @@ public sealed class WorksheetContextMenuPlannerTests
             "AutoFit Column Width",
             "Hide Columns",
             "Unhide Columns",
+            "Group",
+            "Ungroup",
             "Format Cells...",
             "Clear Contents");
+        commands.Single(command => command.Header == "Group").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Group",
+                WorksheetContextMenuAction.Group,
+                AccessHeader: "_Group"));
+        commands.Single(command => command.Header == "Ungroup").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Ungroup",
+                WorksheetContextMenuAction.Ungroup,
+                AccessHeader: "_Ungroup"));
         commands.Single(command => command.Header == "Format Cells...").Should().BeEquivalentTo(
             new WorksheetContextMenuCommand(
                 "Format Cells...",
