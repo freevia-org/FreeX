@@ -371,7 +371,7 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("FindClearFormatButton_Click");
         source.Should().Contain("ReplaceWithClearFormatButton_Click");
         source.Should().Contain("UpdateFormatStateButtons");
-        source.Should().Contain("Format Set...");
+        source.Should().Contain("For_mat Set...");
         source.Should().Contain("replacementFormat: _replaceFormatDiff");
         source.Should().Contain("FindResultsGrid_SelectionChanged");
         source.Should().Contain("_navigateTo(row.Address)");
