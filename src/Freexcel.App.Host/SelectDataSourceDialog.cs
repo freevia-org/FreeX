@@ -14,6 +14,9 @@ public sealed partial class SelectDataSourceDialog : Window
     private readonly ListBox _seriesList = new() { Height = 72 };
     private readonly ListBox _axisLabelsList = new() { Height = 72 };
     private readonly Action<SelectDataSourceRangeSelectionRequest>? _requestRangeSelection;
+    private Button? _editSeriesButton;
+    private Button? _removeSeriesButton;
+    private Button? _editAxisLabelsButton;
 
     public SelectDataSourceDialogResult Result { get; private set; }
     public SelectDataSourceRangeSelectionRequest? RangeSelectionRequest { get; private set; }
@@ -41,7 +44,9 @@ public sealed partial class SelectDataSourceDialog : Window
         _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
         stack.Children.Add(_switchRowColumnBox);
         _seriesList.MouseDoubleClick += EditSeriesButton_Click;
+        _seriesList.SelectionChanged += (_, _) => UpdateActionButtonState();
         _axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;
+        _axisLabelsList.SelectionChanged += (_, _) => UpdateActionButtonState();
         stack.Children.Add(CreateSourceListPanel(
             "Legend Entries (Series)",
             "Series list",

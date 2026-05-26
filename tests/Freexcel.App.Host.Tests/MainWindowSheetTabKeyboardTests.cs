@@ -36,6 +36,33 @@ public sealed class MainWindowSheetTabKeyboardTests
         });
     }
 
+    [Fact]
+    public void AddSheetGhostTab_SitsBetweenVisibleTabsAndRightNavigation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var window = harness.Window;
+
+            window.UpdateLayout();
+            PumpDispatcher();
+            window.UpdateLayout();
+
+            var scroller = (FrameworkElement)window.FindName("SheetTabsScroller");
+            var addSheet = (FrameworkElement)window.FindName("AddSheetButton");
+            var rightNav = (FrameworkElement)window.FindName("SheetNavRightBtn");
+
+            var scrollerBounds = BoundsRelativeToWindow(scroller, window);
+            var addBounds = BoundsRelativeToWindow(addSheet, window);
+            var rightNavBounds = BoundsRelativeToWindow(rightNav, window);
+
+            addBounds.Left.Should().BeApproximately(scrollerBounds.Right + 2, 1.0);
+            rightNavBounds.Left.Should().BeGreaterThan(addBounds.Right);
+            rightNavBounds.Left.Should().BeGreaterThan(addBounds.Right + 20);
+            addSheet.Height.Should().Be(22);
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -60,6 +87,8 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         public string? FocusedSheetTabName =>
             FocusedSheetTabTarget?.DataContext?.GetType().GetProperty("Name")?.GetValue(FocusedSheetTabTarget.DataContext)?.ToString();
+
+        public MainWindow Window => _window;
 
         public bool SheetTabContextMenuIsOpen => RoutedOrActiveSheetTabTarget?.ContextMenu?.IsOpen == true;
 
@@ -204,6 +233,9 @@ public sealed class MainWindowSheetTabKeyboardTests
             new Action(() => frame.Continue = false));
         System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
+
+    private static Rect BoundsRelativeToWindow(FrameworkElement element, Window window) =>
+        element.TransformToAncestor(window).TransformBounds(new Rect(new Size(element.ActualWidth, element.ActualHeight)));
 
     private sealed class TestCommandContext(Workbook workbook) : ICommandContext
     {

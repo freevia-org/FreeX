@@ -1297,11 +1297,20 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("HorizontalScrollBarVisibility=\"Hidden\"");
         xaml.Should().Contain("ScrollChanged=\"SheetTabsScroller_ScrollChanged\"");
         xaml.Should().Contain("SizeChanged=\"SheetTabsScroller_SizeChanged\"");
-        xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"2\"");
+        xaml.Should().Contain("x:Name=\"AddSheetButton\" Grid.Column=\"2\"");
+        xaml.Should().Contain("CornerRadius=\"3,3,0,0\"");
+        xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"4\"");
+        xaml.Should().Contain("HorizontalAlignment=\"Right\"");
+        xaml.Should().Contain("<ScrollBar x:Name=\"HorizontalScroll\" Grid.Column=\"5\"");
+        xaml.IndexOf("x:Name=\"AddSheetButton\"", StringComparison.Ordinal)
+            .Should().BeLessThan(xaml.IndexOf("x:Name=\"SheetNavRightBtn\"", StringComparison.Ordinal));
         xaml.Should().Contain("Visibility=\"Hidden\"");
         xaml.Should().NotContain("HorizontalScrollBarVisibility=\"Auto\"\r\n                              VerticalScrollBarVisibility=\"Disabled\">\r\n                    <StackPanel Orientation=\"Horizontal\">");
 
         source.Should().Contain("UpdateSheetTabNavigation();");
+        source.Should().Contain("private void UpdateSheetTabViewportWidth()");
+        source.Should().Contain("Math.Min(tabContentWidth, available)");
+        source.Should().NotContain("available * 2 / 3");
         navigationSource.Should().Contain("SheetNavLeftBtn.Visibility");
         navigationSource.Should().Contain("SheetNavRightBtn.Visibility");
         navigationSource.Should().Contain(": Visibility.Hidden;");

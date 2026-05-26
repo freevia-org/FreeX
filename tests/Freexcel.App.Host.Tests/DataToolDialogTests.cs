@@ -436,11 +436,38 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialogResultFactory.cs"));
 
+        source.Should().Contain("TextToColumnsDialogPlanner.BuildPreviewRows");
+        source.Should().Contain("TextToColumnsDialogPlanner.TryParseDestination");
+        source.Should().Contain("TextToColumnsDialogPlanner.NormalizeColumnFormats");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.AddBreakPosition");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.MoveBreakPosition");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.RemoveBreakPosition");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.ParseBreakPositions");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.TryParseBreakPositions");
+    }
+
+    [Fact]
+    public void TextToColumnsDialogPlanner_MapsColumnFormatState()
+    {
+        TextToColumnsDialogPlanner.TextQualifierFromSelectedIndex(1)
+            .Should().Be(TextToColumnsTextQualifier.SingleQuote);
+        TextToColumnsDialogPlanner.TextQualifierFromSelectedIndex(99)
+            .Should().Be(TextToColumnsTextQualifier.DoubleQuote);
+        TextToColumnsDialogPlanner.DateColumnFormatFromLabel("YDM")
+            .Should().Be(TextToColumnsColumnFormat.DateYDM);
+        TextToColumnsDialogPlanner.DateColumnFormatLabel(TextToColumnsColumnFormat.DateDYM)
+            .Should().Be("DYM");
+        TextToColumnsDialogPlanner.IsDateColumnFormat(TextToColumnsColumnFormat.Text)
+            .Should().BeFalse();
+        TextToColumnsDialogPlanner.BuildColumnFormats(
+                4,
+                new Dictionary<int, TextToColumnsColumnFormat>
+                {
+                    [1] = TextToColumnsColumnFormat.Text,
+                    [2] = TextToColumnsColumnFormat.General,
+                    [3] = TextToColumnsColumnFormat.General
+                })
+            .Should().Equal(TextToColumnsColumnFormat.General, TextToColumnsColumnFormat.Text);
     }
 
     [Fact]
@@ -540,6 +567,47 @@ public sealed class DataToolDialogTests
             ]);
 
         selected.SelectedColumnOffsets.Should().Equal(0u, 2u);
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialog_BulkButtonsReflectCurrentColumnSelectionState()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new RemoveDuplicatesDialog(
+                [
+                    new RemoveDuplicateColumnChoice(0, "Region", true),
+                    new RemoveDuplicateColumnChoice(1, "Sales", true)
+                ]);
+            dialog.Show();
+            try
+            {
+                var buttons = FindVisualChildren<Button>(dialog)
+                    .Where(button => button.Content is string)
+                    .ToDictionary(button => (string)button.Content);
+                var boxes = FindVisualChildren<CheckBox>(dialog)
+                    .Where(box => box.Content is "Region" or "Sales")
+                    .ToList();
+
+                buttons["_Select All"].IsEnabled.Should().BeFalse();
+                buttons["_Unselect All"].IsEnabled.Should().BeTrue();
+
+                buttons["_Unselect All"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                boxes.Should().AllSatisfy(box => box.IsChecked.Should().BeFalse());
+                buttons["_Select All"].IsEnabled.Should().BeTrue();
+                buttons["_Unselect All"].IsEnabled.Should().BeFalse();
+
+                boxes[0].IsChecked = true;
+
+                buttons["_Select All"].IsEnabled.Should().BeTrue();
+                buttons["_Unselect All"].IsEnabled.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]

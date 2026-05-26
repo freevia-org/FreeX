@@ -59,6 +59,39 @@ public sealed partial class NativeJsonAdapter
                             column.DynamicFilter.ValueRaw,
                             column.DynamicFilter.MaxValueRaw,
                             CleanNativeAttributes(column.DynamicFilter.NativeAttributes)),
+                    column.ColorFilter is null
+                        ? null
+                        : new WorksheetAutoFilterColorFilterModel(
+                            column.ColorFilter.DifferentialFormatId,
+                            column.ColorFilter.CellColor,
+                            column.ColorFilter.DifferentialFormatIdRaw,
+                            column.ColorFilter.CellColorRaw,
+                            CleanNativeAttributes(column.ColorFilter.NativeAttributes)),
+                    column.IconFilter is null
+                        ? null
+                        : new WorksheetAutoFilterIconFilterModel(
+                            column.IconFilter.IconSet,
+                            column.IconFilter.IconId,
+                            column.IconFilter.IconIdRaw,
+                            CleanNativeAttributes(column.IconFilter.NativeAttributes)),
+                    column.DateGroups?
+                        .Select(dateGroup => new WorksheetAutoFilterDateGroupItemModel(
+                            dateGroup.Year,
+                            dateGroup.Month,
+                            dateGroup.Day,
+                            dateGroup.Hour,
+                            dateGroup.Minute,
+                            dateGroup.Second,
+                            dateGroup.DateTimeGrouping,
+                            dateGroup.YearRaw,
+                            dateGroup.MonthRaw,
+                            dateGroup.DayRaw,
+                            dateGroup.HourRaw,
+                            dateGroup.MinuteRaw,
+                            dateGroup.SecondRaw,
+                            CleanNativeAttributes(dateGroup.NativeAttributes)))
+                        .ToArray() ?? [],
+                    CleanNativeAttributes(column.NativeFiltersAttributes),
                     column.NativeFilterXmls?.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToArray() ?? [],
                     CleanNativeAttributes(column.NativeAttributes)));
             }
@@ -83,6 +116,24 @@ public sealed partial class NativeJsonAdapter
                     ColumnId = column.ColumnId,
                     Values = column.Values.Where(value => !string.IsNullOrWhiteSpace(value)).ToList(),
                     IncludeBlank = column.IncludeBlank,
+                    DateGroups = column.DateGroups.Select(dateGroup => new WorksheetAutoFilterDateGroupItemDto
+                    {
+                        Year = dateGroup.Year,
+                        Month = dateGroup.Month,
+                        Day = dateGroup.Day,
+                        Hour = dateGroup.Hour,
+                        Minute = dateGroup.Minute,
+                        Second = dateGroup.Second,
+                        DateTimeGrouping = dateGroup.DateTimeGrouping,
+                        YearRaw = dateGroup.YearRaw,
+                        MonthRaw = dateGroup.MonthRaw,
+                        DayRaw = dateGroup.DayRaw,
+                        HourRaw = dateGroup.HourRaw,
+                        MinuteRaw = dateGroup.MinuteRaw,
+                        SecondRaw = dateGroup.SecondRaw,
+                        NativeAttributes = CleanNativeAttributesForSave(dateGroup.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
+                    }).ToList(),
+                    NativeFiltersAttributes = CleanNativeAttributesForSave(column.NativeFiltersAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)),
                     CustomFilters = column.CustomFilters.Select(filter => new WorksheetAutoFilterCustomFilterDto
                     {
                         Operator = filter.Operator,
@@ -116,6 +167,25 @@ public sealed partial class NativeJsonAdapter
                             ValueRaw = column.DynamicFilter.ValueRaw,
                             MaxValueRaw = column.DynamicFilter.MaxValueRaw,
                             NativeAttributes = CleanNativeAttributesForSave(column.DynamicFilter.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
+                        },
+                    ColorFilter = column.ColorFilter is null
+                        ? null
+                        : new WorksheetAutoFilterColorFilterDto
+                        {
+                            DifferentialFormatId = column.ColorFilter.DifferentialFormatId,
+                            CellColor = column.ColorFilter.CellColor,
+                            DifferentialFormatIdRaw = column.ColorFilter.DifferentialFormatIdRaw,
+                            CellColorRaw = column.ColorFilter.CellColorRaw,
+                            NativeAttributes = CleanNativeAttributesForSave(column.ColorFilter.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
+                        },
+                    IconFilter = column.IconFilter is null
+                        ? null
+                        : new WorksheetAutoFilterIconFilterDto
+                        {
+                            IconSet = column.IconFilter.IconSet,
+                            IconId = column.IconFilter.IconId,
+                            IconIdRaw = column.IconFilter.IconIdRaw,
+                            NativeAttributes = CleanNativeAttributesForSave(column.IconFilter.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
                         },
                     NativeFilterXmls = column.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToList(),
                     NativeAttributes = CleanNativeAttributesForSave(column.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))

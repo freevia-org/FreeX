@@ -13,7 +13,8 @@ public static partial class BuiltInFunctions
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
         if (args.Count > 2 && args[2] is ErrorValue sumRangeError) return sumRangeError;
-        RangeValue? sumRange = args.Count > 2 ? args[2] as RangeValue : null;
+        if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
+        RangeValue? sumRange = args.Count > 2 ? (RangeValue)args[2] : null;
 
         double total = 0;
         int len = FlatCount(rangeArg);
@@ -54,7 +55,8 @@ public static partial class BuiltInFunctions
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
         if (args.Count > 2 && args[2] is ErrorValue avgRangeError) return avgRangeError;
-        RangeValue? avgRange = args.Count > 2 ? args[2] as RangeValue : null;
+        if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
+        RangeValue? avgRange = args.Count > 2 ? (RangeValue)args[2] : null;
 
         double total = 0;
         int count = 0;

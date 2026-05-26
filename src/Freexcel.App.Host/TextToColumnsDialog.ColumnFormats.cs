@@ -107,23 +107,10 @@ public sealed partial class TextToColumnsDialog
     }
 
     public static bool TryParseAdvancedSeparator(string? value, out string separator)
-    {
-        separator = string.Empty;
-        var trimmed = value?.Trim() ?? string.Empty;
-        if (trimmed.Length != 1)
-            return false;
-
-        separator = trimmed;
-        return true;
-    }
+        => TextToColumnsDialogPlanner.TryParseAdvancedSeparator(value, out separator);
 
     private TextToColumnsTextQualifier SelectedTextQualifier() =>
-        _textQualifierBox.SelectedIndex switch
-        {
-            1 => TextToColumnsTextQualifier.SingleQuote,
-            2 => TextToColumnsTextQualifier.None,
-            _ => TextToColumnsTextQualifier.DoubleQuote
-        };
+        TextToColumnsDialogPlanner.TextQualifierFromSelectedIndex(_textQualifierBox.SelectedIndex);
 
     private void RefreshColumnFormatChoices(int columnCount)
     {
@@ -159,8 +146,8 @@ public sealed partial class TextToColumnsDialog
         {
             _formatGeneralButton.IsChecked = format == TextToColumnsColumnFormat.General;
             _formatTextButton.IsChecked = format == TextToColumnsColumnFormat.Text;
-            _formatDateButton.IsChecked = IsDateColumnFormat(format);
-            _dateFormatBox.SelectedItem = DateColumnFormatLabel(format);
+            _formatDateButton.IsChecked = TextToColumnsDialogPlanner.IsDateColumnFormat(format);
+            _dateFormatBox.SelectedItem = TextToColumnsDialogPlanner.DateColumnFormatLabel(format);
             _formatSkipButton.IsChecked = format == TextToColumnsColumnFormat.Skip;
         }
         finally
@@ -182,42 +169,8 @@ public sealed partial class TextToColumnsDialog
     }
 
     private TextToColumnsColumnFormat SelectedDateColumnFormat() =>
-        (_dateFormatBox.SelectedItem as string) switch
-        {
-            "DMY" => TextToColumnsColumnFormat.DateDMY,
-            "YMD" => TextToColumnsColumnFormat.DateYMD,
-            "MYD" => TextToColumnsColumnFormat.DateMYD,
-            "DYM" => TextToColumnsColumnFormat.DateDYM,
-            "YDM" => TextToColumnsColumnFormat.DateYDM,
-            _ => TextToColumnsColumnFormat.DateMDY
-        };
-
-    private static bool IsDateColumnFormat(TextToColumnsColumnFormat format) =>
-        format is TextToColumnsColumnFormat.DateMDY
-            or TextToColumnsColumnFormat.DateDMY
-            or TextToColumnsColumnFormat.DateYMD
-            or TextToColumnsColumnFormat.DateMYD
-            or TextToColumnsColumnFormat.DateDYM
-            or TextToColumnsColumnFormat.DateYDM;
-
-    private static string DateColumnFormatLabel(TextToColumnsColumnFormat format) =>
-        format switch
-        {
-            TextToColumnsColumnFormat.DateDMY => "DMY",
-            TextToColumnsColumnFormat.DateYMD => "YMD",
-            TextToColumnsColumnFormat.DateMYD => "MYD",
-            TextToColumnsColumnFormat.DateDYM => "DYM",
-            TextToColumnsColumnFormat.DateYDM => "YDM",
-            _ => "MDY"
-        };
+        TextToColumnsDialogPlanner.DateColumnFormatFromLabel(_dateFormatBox.SelectedItem as string);
 
     private IReadOnlyList<TextToColumnsColumnFormat> BuildColumnFormats(int columnCount)
-    {
-        var formats = Enumerable.Range(0, columnCount)
-            .Select(index => _columnFormats.TryGetValue(index, out var format)
-                ? format
-                : TextToColumnsColumnFormat.General)
-            .ToList();
-        return NormalizeColumnFormats(formats);
-    }
+        => TextToColumnsDialogPlanner.BuildColumnFormats(columnCount, _columnFormats);
 }

@@ -702,6 +702,14 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sumif_ScalarSumRange_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+
+        _eval.Evaluate("=SUMIF(A1:A1,1,5)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Sumif_ShorterSumRange_ExpandsFromTopLeftCell()
     {
         var sheet = MakeSheet(
@@ -879,6 +887,14 @@ public class FunctionLibraryTests
             (2, 1, new NumberValue(2)), (2, 2, new NumberValue(20)),
             (3, 1, new NumberValue(3)), (3, 2, new NumberValue(30)));
         _eval.Evaluate("=AVERAGEIF(A1:A3,\">1\",B1:B3)", sheet).Should().Be(new NumberValue(25));
+    }
+
+    [Fact]
+    public void Averageif_ScalarAverageRange_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+
+        _eval.Evaluate("=AVERAGEIF(A1:A1,1,5)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -5692,6 +5708,17 @@ public class FunctionLibraryTests
 
         _eval.Evaluate("=TEXTJOIN(\"|\",TRUE,A1:C1)", sheet).Should().Be(new TextValue("a|b"));
         _eval.Evaluate("=TEXTJOIN(\"|\",FALSE,A1:C1)", sheet).Should().Be(new TextValue("a||b"));
+    }
+
+    [Fact]
+    public void Textjoin_IgnoreEmptyOneCellRange_CoercesToScalarBoolean()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (3, 1, new TextValue("b")),
+            (1, 2, new BoolValue(true)));
+
+        _eval.Evaluate("=TEXTJOIN(\"|\",B1:B1,A1:A3)", sheet).Should().Be(new TextValue("a|b"));
     }
 
     [Fact]

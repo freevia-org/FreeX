@@ -24,7 +24,8 @@ public enum GridQuickAnalysisPreviewVisualKind
     Table,
     LineSparkline,
     ColumnSparkline,
-    WinLossSparkline
+    WinLossSparkline,
+    ColumnChart
 }
 
 /// <summary>
@@ -100,6 +101,8 @@ public partial class GridView : FrameworkElement
     private static readonly Pen QuickAnalysisSparklinePreviewPen = new(MakeBrush(68, 114, 196), 1.5);
     private static readonly Brush QuickAnalysisWinLossPositiveBrush = MakeBrushAlpha(180, 84, 130, 53);
     private static readonly Brush QuickAnalysisWinLossNegativeBrush = MakeBrushAlpha(180, 192, 80, 77);
+    private static readonly Brush QuickAnalysisColumnChartPreviewBrush = MakeBrushAlpha(170, 68, 114, 196);
+    private static readonly Pen QuickAnalysisColumnChartAxisPen = new(MakeBrush(89, 89, 89), 1);
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
     private static readonly Pen FreezePen = MakeFreezePen();
     private static readonly Brush PageBreakPreviewBrush = MakeBrushAlpha(28, 0, 103, 192);
