@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(21, "the generated metadata-pass manifest currently declares twenty-one deterministic package-retention rows");
+        rows.Should().HaveCount(22, "the generated metadata-pass manifest currently declares twenty-two deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -496,6 +496,24 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-workbook-smart-tags-001");
         AssertWorkbookSmartTags(saved, "generated-workbook-smart-tags-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookFunctionGroupsRow_RetainsFunctionGroupsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-function-groups-001");
+        AssertWorkbookFunctionGroups(source, "generated-workbook-function-groups-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 13, 1), new TextValue("freexcel-workbook-function-groups-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-function-groups-001");
+        AssertWorkbookFunctionGroups(saved, "generated-workbook-function-groups-001 saved");
     }
 
     [Fact]
@@ -928,6 +946,24 @@ public class XlsxCorpusRunnerTests
         smartTagType.Attribute("namespaceUri")!.Value.Should().Be("urn:schemas-microsoft-com:office:smarttags", because);
         smartTagType.Attribute("name")!.Value.Should().Be("place", because);
         smartTagType.Attribute("customSmartTagTypeFlag")!.Value.Should().Be("keep", because);
+    }
+
+    private static void AssertWorkbookFunctionGroups(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups");
+        functionGroups.Should().NotBeNull(because);
+        functionGroups!.Attribute("builtInGroupCount")!.Value.Should().Be("16", because);
+        functionGroups.Attribute("customFunctionGroupFlag")!.Value.Should().Be("keep", because);
+        var functionGroup = functionGroups.Elements(workbookNs + "functionGroup")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        functionGroup.Attribute("name")!.Value.Should().Be("FreexcelNativeFunctions", because);
+        functionGroup.Attribute("customGroupFlag")!.Value.Should().Be("keep", because);
     }
 
     private static void AssertHeaderFooterLegacyDrawingPackageGraph(Stream package, string because)
