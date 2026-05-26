@@ -521,6 +521,31 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void DepreciationFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 2400.0), (2, 1, 3000.0),
+            (1, 2, 300.0), (2, 2, 500.0),
+            (1, 3, 10.0), (2, 3, 12.0),
+            (1, 4, 1.0), (2, 4, 2.0),
+            (1, 5, 2.0), (2, 5, 1.5),
+            (1, 6, 7.0), (2, 6, 12.0),
+            (1, 7, 0.0), (2, 7, 1.0),
+            (1, 8, 1.0), (2, 8, 2.0),
+            (1, 9, 0.0), (2, 9, 1.0)
+        };
+
+        AssertApproxColumn(EvalWithData("SLN(A1:A2,B1:B2,C1:C2)", cells), Calc("SLN(2400,300,10)"), Calc("SLN(3000,500,12)"));
+        AssertApproxColumn(EvalWithData("SYD(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("SYD(2400,300,10,1)"), Calc("SYD(3000,500,12,2)"));
+        AssertApproxColumn(EvalWithData("DDB(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2)", cells), Calc("DDB(2400,300,10,1,2)"), Calc("DDB(3000,500,12,2,1.5)"));
+        AssertApproxColumn(EvalWithData("DB(A1:A2,B1:B2,C1:C2,D1:D2,F1:F2)", cells), Calc("DB(2400,300,10,1,7)"), Calc("DB(3000,500,12,2,12)"));
+        AssertApproxColumn(EvalWithData("VDB(A1:A2,B1:B2,C1:C2,G1:G2,H1:H2,E1:E2,I1:I2)", cells), Calc("VDB(2400,300,10,0,1,2,0)"), Calc("VDB(3000,500,12,1,2,1.5,1)"));
+
+        EvalWithData("DDB(A1:A2,B1:C1,10,1)", cells).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Dollarde_FractionalDollar()
     {
         // DOLLARDE(1.02, 32) = 1 + 2/32 = 1.0625
