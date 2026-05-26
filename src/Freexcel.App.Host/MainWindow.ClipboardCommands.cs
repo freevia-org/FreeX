@@ -21,6 +21,7 @@ public partial class MainWindow
         ClearClipboardVisualState();
         _internalClipboard = null;
         CancelFormatPainter();
+        _borderDrawMode = BorderDrawMode.None;
         SetSelectionMode(ExcelSelectionMode.Normal);
         SetEndMode(false);
     }
