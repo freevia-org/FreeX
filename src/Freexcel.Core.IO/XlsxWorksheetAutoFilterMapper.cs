@@ -1,11 +1,60 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
+using System.Globalization;
 
 namespace Freexcel.Core.IO;
 
 internal static class XlsxWorksheetAutoFilterMapper
 {
+    public static WorksheetAutoFilterModel? Read(XElement? autoFilter)
+    {
+        if (autoFilter is null)
+            return null;
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var model = new WorksheetAutoFilterModel(
+            autoFilter.Attribute("ref")?.Value,
+            autoFilter.ToString(SaveOptions.DisableFormatting))
+        {
+            NativeAttributes = ReadNativeAttributes(autoFilter),
+            NativeChildXmls = autoFilter
+                .Elements()
+                .Where(element => element.Name != worksheetNs + "filterColumn")
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToArray()
+        };
+        model.FilterColumns.AddRange(ReadFilterColumns(autoFilter, worksheetNs));
+        return model;
+    }
+
+    public static void MaterializeFilters(Sheet sheet)
+    {
+        var autoFilter = sheet.AutoFilter;
+        if (autoFilter is null || autoFilter.FilterColumns.Count == 0 || string.IsNullOrWhiteSpace(autoFilter.Reference))
+            return;
+
+        GridRange range;
+        try
+        {
+            range = GridRange.Parse(autoFilter.Reference, sheet.Id);
+        }
+        catch
+        {
+            return;
+        }
+
+        var filters = BuildFilters(autoFilter, range).ToList();
+        if (filters.Count != autoFilter.FilterColumns.Count)
+            return;
+
+        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
+        {
+            if (!RowMatchesAllFilters(sheet, row, filters))
+                sheet.FilterHiddenRows.Add(row);
+        }
+    }
+
     public static void Save(Stream xlsxStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
     {
         if (worksheetPathMap is null)
@@ -41,7 +90,11 @@ internal static class XlsxWorksheetAutoFilterMapper
         if (autoFilter is null)
             return null;
 
-        if (!string.IsNullOrWhiteSpace(autoFilter.NativeXml))
+        var hasModeledMetadata =
+            autoFilter.FilterColumns.Count > 0 ||
+            autoFilter.NativeAttributes?.Count > 0 ||
+            autoFilter.NativeChildXmls?.Count > 0;
+        if (!hasModeledMetadata && !string.IsNullOrWhiteSpace(autoFilter.NativeXml))
         {
             try
             {
@@ -56,7 +109,147 @@ internal static class XlsxWorksheetAutoFilterMapper
 
         return string.IsNullOrWhiteSpace(autoFilter.Reference)
             ? null
-            : new XElement(worksheetNs + "autoFilter", new XAttribute("ref", autoFilter.Reference));
+            : ToModeledAutoFilterXml(autoFilter, worksheetNs);
+    }
+
+    private static XElement ToModeledAutoFilterXml(WorksheetAutoFilterModel autoFilter, XNamespace worksheetNs)
+    {
+        var element = new XElement(
+            worksheetNs + "autoFilter",
+            new XAttribute("ref", autoFilter.Reference!),
+            autoFilter.FilterColumns.Select(filterColumn => ToFilterColumnXml(filterColumn, worksheetNs)));
+        foreach (var (name, value) in autoFilter.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
+                element.SetAttributeValue(name, value);
+        }
+
+        foreach (var nativeChildXml in autoFilter.NativeChildXmls ?? [])
+        {
+            if (TryParseNativeWorksheetChild(nativeChildXml, worksheetNs, "filterColumn") is { } nativeChild)
+                element.Add(nativeChild);
+        }
+
+        return element;
+    }
+
+    private static XElement ToFilterColumnXml(WorksheetAutoFilterColumnModel filterColumn, XNamespace worksheetNs)
+    {
+        var element = new XElement(
+            worksheetNs + "filterColumn",
+            new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
+        foreach (var (name, value) in filterColumn.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
+                element.SetAttributeValue(name, value);
+        }
+
+        if (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank)
+        {
+            element.Add(new XElement(
+                worksheetNs + "filters",
+                filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
+                filterColumn.Values.Select(value => new XElement(worksheetNs + "filter", new XAttribute("val", value)))));
+        }
+
+        foreach (var nativeFilterXml in filterColumn.NativeFilterXmls)
+        {
+            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters") is { } nativeFilter)
+                element.Add(nativeFilter);
+        }
+
+        return element;
+    }
+
+    private static XElement? TryParseNativeWorksheetChild(string? nativeXml, XNamespace worksheetNs, string modeledLocalName)
+    {
+        if (string.IsNullOrWhiteSpace(nativeXml))
+            return null;
+
+        try
+        {
+            var nativeChild = XElement.Parse(nativeXml);
+            return nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != modeledLocalName
+                ? nativeChild
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string>? ReadNativeAttributes(XElement autoFilter)
+    {
+        var attributes = autoFilter.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "ref")
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+        return attributes.Count == 0 ? null : attributes;
+    }
+
+    private static IEnumerable<WorksheetAutoFilterColumnModel> ReadFilterColumns(XElement autoFilter, XNamespace worksheetNs)
+    {
+        foreach (var column in autoFilter.Elements(worksheetNs + "filterColumn"))
+        {
+            var filters = column.Element(worksheetNs + "filters");
+            var nativeFilters = column.Elements()
+                .Where(element => element.Name != worksheetNs + "filters")
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToArray();
+            var nativeAttributes = column.Attributes()
+                .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "colId")
+                .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+            var filterColumn = new WorksheetAutoFilterColumnModel(
+                XlsxXmlAttributeReader.ReadIntAttribute(column, "colId") ?? -1,
+                filters?
+                    .Elements(worksheetNs + "filter")
+                    .Select(filter => filter.Attribute("val")?.Value)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value!)
+                    .ToArray() ?? [],
+                XlsxXmlAttributeReader.ReadBoolAttribute(filters, "blank"),
+                nativeFilters,
+                nativeAttributes.Count == 0 ? null : nativeAttributes);
+            if (filterColumn.ColumnId >= 0 &&
+                (filterColumn.Values.Count > 0 ||
+                 filterColumn.IncludeBlank ||
+                 filterColumn.NativeFilterXmls.Count > 0 ||
+                 filterColumn.NativeAttributes?.Count > 0))
+            {
+                yield return filterColumn;
+            }
+        }
+    }
+
+    private static IEnumerable<WorksheetAutoFilterState> BuildFilters(WorksheetAutoFilterModel autoFilter, GridRange range)
+    {
+        foreach (var filterColumn in autoFilter.FilterColumns)
+        {
+            if (filterColumn.ColumnId < 0)
+                continue;
+
+            yield return new WorksheetAutoFilterState(
+                range.Start.Col + (uint)filterColumn.ColumnId,
+                new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
+                filterColumn.IncludeBlank);
+        }
+    }
+
+    private static bool RowMatchesAllFilters(
+        Sheet sheet,
+        uint row,
+        IReadOnlyList<WorksheetAutoFilterState> filters)
+    {
+        foreach (var filter in filters)
+        {
+            var text = ToFilterText(sheet.GetValue(row, filter.Column));
+            if (text.Length == 0 && filter.IncludeBlank)
+                continue;
+            if (!filter.AllowedValues.Contains(text))
+                return false;
+        }
+
+        return true;
     }
 
     private static void InsertAutoFilter(XElement root, XNamespace worksheetNs, XElement autoFilter)
@@ -101,4 +294,19 @@ internal static class XlsxWorksheetAutoFilterMapper
         else
             root.Add(autoFilter);
     }
+
+    private static string ToFilterText(ScalarValue value) => value switch
+    {
+        TextValue text => text.Value,
+        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+        DateTimeValue dateTime => dateTime.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        ErrorValue error => error.Code,
+        _ => string.Empty
+    };
+
+    private sealed record WorksheetAutoFilterState(
+        uint Column,
+        HashSet<string> AllowedValues,
+        bool IncludeBlank);
 }
