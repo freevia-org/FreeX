@@ -1,6 +1,8 @@
 using System.IO;
+using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
+using Freexcel.App.Host;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -180,6 +182,73 @@ public sealed class MainWindowXamlKeyTipTests
         textBoxFilterIndex.Should().BeGreaterThanOrEqualTo(0);
         f10Index.Should().BeLessThan(textBoxFilterIndex);
         commandSource.Should().Contain("KeyboardCommandShortcut.ShowKeyTips");
+    }
+
+    [Fact]
+    public void ShortcutAndKeyTipRoutingSnapshot_CoversRepresentativeEntryPoints()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var cellsCommandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var worksheetContextSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+                Key.F10,
+                Key.None,
+                ModifierKeys.None,
+                out var f10Shortcut)
+            .Should()
+            .BeTrue();
+        f10Shortcut.Should().Be(KeyboardCommandShortcut.ShowKeyTips);
+        commandSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ShowKeyTips, (_, _) => EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel));");
+        selectionSource.Should().Contain("private bool TryHandleShowKeyTipsPreview(System.Windows.Input.KeyEventArgs e, object sender)");
+
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+                Key.F10,
+                Key.None,
+                ModifierKeys.Shift,
+                out var shiftF10Shortcut)
+            .Should()
+            .BeTrue();
+        shiftF10Shortcut.Should().Be(KeyboardCommandShortcut.OpenContextMenu);
+        commandSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenContextMenu, (_, _) => OpenKeyboardContextMenu());");
+        worksheetContextSource.Should().Contain("foreach (var command in WorksheetContextMenuPlanner.BuildCommands(targetKind, state))");
+        WorksheetContextMenuPlanner.BuildCommands()
+            .Should()
+            .Contain(command => command.Header == "Format Cells..." && command.Action == WorksheetContextMenuAction.FormatCells);
+
+        var fileRoute = RibbonTopLevelKeyTipRouter.Resolve("F");
+        fileRoute.Should().Be(RibbonTopLevelKeyTipAction.BackstageFile);
+        editingSource.Should().Contain("{ Kind: RibbonTopLevelKeyTipActionKind.BackstageFile } => OpenFileBackstageFromKeyTip()");
+        FindTab(document, "File").Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("F");
+
+        FindTab(document, "Home").Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("H");
+        var conditionalFormattingButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(local + "RibbonTooltip.Title")?.Value == "Conditional Formatting");
+        conditionalFormattingButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("L");
+        var greaterThanRule = document
+            .Descendants(presentation + "MenuItem")
+            .Single(element => element.Attribute("Click")?.Value == "CfGtMenuItem_Click");
+        greaterThanRule.Attribute("Header")?.Value.Should().Be("Greater Than...");
+        greaterThanRule.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("HG");
+        formattingSource.Should().Contain("private void CfGtMenuItem_Click(object sender, RoutedEventArgs e)       => ShowCfDialog(\"Greater Than\");");
+
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+                Key.D1,
+                Key.None,
+                ModifierKeys.Control,
+                out var formatCellsShortcut)
+            .Should()
+            .BeTrue();
+        formatCellsShortcut.Should().Be(KeyboardCommandShortcut.OpenFormatCells);
+        commandSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenFormatCells, (_, _) => OpenFormatCellsDialog());");
+        cellsCommandSource.Should().Contain("private void OpenFormatCellsDialog");
     }
 
     [Fact]
@@ -2155,6 +2224,15 @@ public sealed class MainWindowXamlKeyTipTests
 
     private static bool ContainsExcludedStatus(string? value) =>
         value?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static XElement FindTab(XDocument document, string header)
+    {
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        return document
+            .Descendants(presentation + "TabItem")
+            .Single(element => element.Attribute("Header")?.Value == header);
+    }
 
     private static string ReadPivotCommandSource()
     {
