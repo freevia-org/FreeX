@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(7, "the generated metadata-pass manifest currently declares seven deterministic package-retention rows");
+        rows.Should().HaveCount(8, "the generated metadata-pass manifest currently declares eight deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -406,6 +406,69 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-document-properties-001");
         AssertStableDocumentProperties(saved, "generated-document-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedHeaderFooterLegacyDrawingRow_RetainsPackageGraphAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-header-footer-legacy-drawing-001");
+        AssertHeaderFooterLegacyDrawingPackageGraph(source, "generated-header-footer-legacy-drawing-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-header-footer-legacy-drawing-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-header-footer-legacy-drawing-001");
+        AssertHeaderFooterLegacyDrawingPackageGraph(saved, "generated-header-footer-legacy-drawing-001 saved");
+    }
+
+    private static void AssertHeaderFooterLegacyDrawingPackageGraph(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace officeNs = "urn:schemas-microsoft-com:office:office";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull(because);
+        archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels").Should().NotBeNull(because);
+        archive.GetEntry("xl/media/headerFooterImage1.png").Should().NotBeNull(because);
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var legacyDrawing = worksheetXml.Root!.Element(worksheetNs + "legacyDrawingHF");
+        legacyDrawing.Should().NotBeNull(because);
+        var relId = legacyDrawing!.Attribute(officeRelNs + "id")?.Value;
+        relId.Should().NotBeNullOrWhiteSpace(because);
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, relId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../drawings/vmlDrawing1.vml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+
+        var vmlDrawing = LoadPackageXml(archive.GetEntry("xl/drawings/vmlDrawing1.vml")!);
+        vmlDrawing.Descendants()
+            .Where(element => element.Attribute(officeNs + "relid")?.Value == "rIdImage1")
+            .Should()
+            .ContainSingle(because);
+
+        var vmlRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels")!);
+        vmlRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, "rIdImage1", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../media/headerFooterImage1.png", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
     }
 
     private static void AssertStableDocumentProperties(Stream package, string because)
