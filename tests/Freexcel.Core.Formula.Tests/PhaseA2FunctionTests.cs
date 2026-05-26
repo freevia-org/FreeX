@@ -109,11 +109,11 @@ public class PhaseA2FunctionTests
     // ── FORMULATEXT ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void FormulaText_FormulaCell_ReturnsFormulaWithoutEquals()
+    public void FormulaText_FormulaCell_ReturnsFormulaWithEquals()
     {
         var (wb, sheet) = MakeWb();
         sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "SUM(B1:B3)");
-        _eval.Evaluate("=FORMULATEXT(A1)", sheet, wb).Should().Be(new TextValue("SUM(B1:B3)"));
+        _eval.Evaluate("=FORMULATEXT(A1)", sheet, wb).Should().Be(new TextValue("=SUM(B1:B3)"));
     }
 
     [Fact]
