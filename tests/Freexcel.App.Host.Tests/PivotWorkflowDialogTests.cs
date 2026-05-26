@@ -638,36 +638,81 @@ public sealed class PivotWorkflowDialogTests
             pageWrap: 4,
             compactRowLabelIndent: 3);
 
-        result.Should().Be(new PivotTableOptionsDialogResult(
-            true,
-            false,
-            true,
-            PivotSubtotalPlacement.Top,
-            false,
-            true,
-            "PivotStyleMedium9",
-            false,
-            true,
-            true,
-            false,
-            PivotReportLayout.Outline,
-            "N/A",
-            true,
-            false,
-            false,
-            false,
-            1_048_576,
-            ShowExpandCollapseButtons: false,
-            AutofitColumnsOnUpdate: false,
-            PreserveFormattingOnUpdate: false,
-            ShowFieldHeaders: false,
-            ShowContextualTooltips: false,
-            ShowPropertiesInTooltips: false,
-            ShowClassicLayout: true,
-            MergeAndCenterLabels: true,
-            PageOverThenDown: true,
-            PageWrap: 4,
-            CompactRowLabelIndent: 3));
+        result.Should().BeEquivalentTo(new
+        {
+            ShowRowGrandTotals = true,
+            ShowColumnGrandTotals = false,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            RepeatItemLabels = false,
+            BlankLineAfterItems = true,
+            StyleName = "PivotStyleMedium9",
+            ShowRowHeaders = false,
+            ShowColumnHeaders = true,
+            ShowRowStripes = true,
+            ShowColumnStripes = false,
+            ReportLayout = PivotReportLayout.Outline,
+            EmptyValueText = "N/A",
+            ErrorValueText = (string?)null,
+            RefreshOnOpen = true,
+            SaveSourceData = false,
+            EnableRefresh = false,
+            PreserveSourceSortFilter = false,
+            MissingItemsLimit = 1_048_576,
+            ShowExpandCollapseButtons = false,
+            AutofitColumnsOnUpdate = false,
+            PreserveFormattingOnUpdate = false,
+            ShowFieldHeaders = false,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
+            PageOverThenDown = true,
+            PageWrap = 4,
+            CompactRowLabelIndent = 3
+        });
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_CapturesEmptyAndErrorValueText()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Tabular,
+            emptyValueText: "  N/A  ",
+            errorValueText: "  #VALUE!  ");
+
+        result.EmptyValueText.Should().Be("N/A");
+        result.ErrorValueText.Should().Be("#VALUE!");
+
+        var blankResult = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Tabular,
+            emptyValueText: " ",
+            errorValueText: " \t ");
+
+        blankResult.EmptyValueText.Should().BeNull();
+        blankResult.ErrorValueText.Should().BeNull();
     }
 
     [Fact]
@@ -722,6 +767,7 @@ public sealed class PivotWorkflowDialogTests
             ShowRowStripes = true,
             ShowColumnStripes = true,
             EmptyValueText = "-",
+            ErrorCaption = "(error)",
             ShowExpandCollapseButtons = false,
             PrintExpandCollapseButtons = true,
             AutofitColumnsOnUpdate = false,
@@ -738,32 +784,35 @@ public sealed class PivotWorkflowDialogTests
 
         PivotTableOptionsDialog.FromPivotTable(pivotTable)
             .Should()
-            .Be(new PivotTableOptionsDialogResult(
-                false,
-                true,
-                true,
-                PivotSubtotalPlacement.Top,
-                false,
-                true,
-                "PivotStyleDark4",
-                true,
-                false,
-                true,
-                true,
-                PivotReportLayout.Compact,
-                "-",
-                PrintExpandCollapseButtons: true,
-                ShowExpandCollapseButtons: false,
-                AutofitColumnsOnUpdate: false,
-                PreserveFormattingOnUpdate: false,
-                ShowFieldHeaders: false,
-                ShowContextualTooltips: false,
-                ShowPropertiesInTooltips: false,
-                ShowClassicLayout: true,
-                MergeAndCenterLabels: true,
-                PageOverThenDown: true,
-                PageWrap: 2,
-                CompactRowLabelIndent: 5));
+            .BeEquivalentTo(new
+            {
+                ShowRowGrandTotals = false,
+                ShowColumnGrandTotals = true,
+                ShowSubtotals = true,
+                SubtotalPlacement = PivotSubtotalPlacement.Top,
+                RepeatItemLabels = false,
+                BlankLineAfterItems = true,
+                StyleName = "PivotStyleDark4",
+                ShowRowHeaders = true,
+                ShowColumnHeaders = false,
+                ShowRowStripes = true,
+                ShowColumnStripes = true,
+                ReportLayout = PivotReportLayout.Compact,
+                EmptyValueText = "-",
+                ErrorValueText = "(error)",
+                PrintExpandCollapseButtons = true,
+                ShowExpandCollapseButtons = false,
+                AutofitColumnsOnUpdate = false,
+                PreserveFormattingOnUpdate = false,
+                ShowFieldHeaders = false,
+                ShowContextualTooltips = false,
+                ShowPropertiesInTooltips = false,
+                ShowClassicLayout = true,
+                MergeAndCenterLabels = true,
+                PageOverThenDown = true,
+                PageWrap = 2,
+                CompactRowLabelIndent = 5
+            });
     }
 
     [Fact]
@@ -892,6 +941,7 @@ public sealed class PivotWorkflowDialogTests
             "AddLabeledControl(layoutPanel, \"_Report layout\", _reportLayoutBox",
             "AddLabeledControl(layoutPanel, \"When in compact form _indent row labels\", _compactIndentBox",
             "AddLabeledControl(formatPanel, \"For _empty cells show:\", _emptyCellsBox",
+            "AddLabeledControl(formatPanel, \"For error _values show:\", _errorValuesBox",
             "AddLabeledControl(dataPanel, \"Retain items _deleted from the data source\", _missingItemsLimitBox",
             "AddLabeledControl(filtersPanel, \"Subtotal _placement\", _subtotalPlacementBox",
             "AddLabeledControl(stylePanel, \"PivotTable _style\", _styleBox",

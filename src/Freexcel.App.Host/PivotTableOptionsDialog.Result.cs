@@ -40,7 +40,8 @@ public sealed partial class PivotTableOptionsDialog
             showItemsWithNoDataOnRows: pivotTable.ShowItemsWithNoDataOnRows,
             showItemsWithNoDataOnColumns: pivotTable.ShowItemsWithNoDataOnColumns,
             pageOverThenDown: pivotTable.PageOverThenDown,
-            pageWrap: pivotTable.PageWrap);
+            pageWrap: pivotTable.PageWrap,
+            errorValueText: pivotTable.ErrorCaption);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -77,7 +78,8 @@ public sealed partial class PivotTableOptionsDialog
         bool showItemsWithNoDataOnRows = false,
         bool showItemsWithNoDataOnColumns = false,
         bool pageOverThenDown = false,
-        int pageWrap = 0) =>
+        int pageWrap = 0,
+        string? errorValueText = null) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -113,9 +115,12 @@ public sealed partial class PivotTableOptionsDialog
             showItemsWithNoDataOnRows,
             showItemsWithNoDataOnColumns,
             pageOverThenDown,
-            NormalizePageWrap(pageWrap));
+            NormalizePageWrap(pageWrap),
+            NormalizeErrorValueText(errorValueText));
 
     private static string? NormalizeEmptyValueText(string? text) => NormalizeOptionalText(text);
+
+    private static string? NormalizeErrorValueText(string? text) => NormalizeOptionalText(text);
 
     private static int ParseCompactRowLabelIndent(string? text) =>
         int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value)
