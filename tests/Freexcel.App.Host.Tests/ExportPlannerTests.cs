@@ -1066,6 +1066,51 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedHeaderFooter()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("HeaderFooterExport.xlsx");
+            var sheet = workbook.AddSheet("Summary");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Worksheet cell"));
+            sheet.PageHeader = new WorksheetHeaderFooter(
+                "Header left &[Page]",
+                "Header center &[Pages]",
+                "Header right &[File] &[Picture]");
+            sheet.PageFooter = new WorksheetHeaderFooter(
+                "Footer left &[Tab]",
+                "Footer center",
+                $"{new string('x', 300)} hidden-tail-token");
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Header left 1");
+                pdfText.Should().Contain("Header center 1");
+                pdfText.Should().Contain("Header right HeaderFooterExport.xlsx");
+                pdfText.Should().Contain("Footer left Summary");
+                pdfText.Should().Contain("Footer center");
+                pdfText.Should().Contain(new string('x', 10));
+                pdfText.Should().NotContain("hidden-tail-token");
+                pdfText.Should().NotContain("&[Picture]");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_DoesNotWriteHiddenClippedWorksheetCellText()
     {
         StaTestRunner.Run(() =>

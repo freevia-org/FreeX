@@ -101,6 +101,19 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_DoesNotListCompletedLocalPrivateManifestRowsAsOpenGap()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Count(row => row.SourceType == "local-private")
+            .Should().BeGreaterThan(0, "optional local-private workbook rows are already represented in the manifest");
+        report.Should().NotContain(
+            "Add local-private workbook rows",
+            "the report gap list should not ask for manifest rows after they exist");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
@@ -115,6 +128,24 @@ public class XlsxCorpusScaffoldTests
             $"Current manifest has {manifestRows.Count} rows: {generatedCount} generated rows, {publicCount} public Tealeg rows, {localPrivateCount} optional local-private rows, and {regressionCount} regression formula-cache workbooks.");
         nextPhasesPlan.Should().Contain($"current {manifestRows.Count}-row manifest baseline");
         nextPhasesPlan.Should().NotContain("prior 90-row manifest baseline");
+    }
+
+    [Fact]
+    public void RegressionFormulaCachedWorkbooks_AreAllRepresentedInCorpusManifest()
+    {
+        var manifestRows = ReadManifestRows();
+        var regressionWorkbookPaths = Directory
+            .EnumerateFiles(FindWorkspaceDirectory("test-corpus", "regressions", "formula-cached"), "*.xlsx", SearchOption.TopDirectoryOnly)
+            .Select(path => Path.GetRelativePath(FindWorkspaceDirectory("test-corpus"), path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var manifestRegressionPaths = manifestRows
+            .Where(row => row.SourceType == "regression")
+            .Select(row => row.Path)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        manifestRegressionPaths.Should().Equal(regressionWorkbookPaths);
     }
 
     [Fact]
@@ -146,7 +177,7 @@ public class XlsxCorpusScaffoldTests
     {
         var columns = line.Split(',');
         columns.Should().HaveCount(ExpectedManifestHeader.Length);
-        return new ManifestRow(columns[2], columns[8]);
+        return new ManifestRow(columns[1], columns[2], columns[8]);
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
@@ -164,5 +195,20 @@ public class XlsxCorpusScaffoldTests
         throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 
-    private sealed record ManifestRow(string SourceType, string ExpectedStatus);
+    private static string FindWorkspaceDirectory(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
+            if (Directory.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException($"Could not locate workspace directory: {Path.Combine(relativeParts)}");
+    }
+
+    private sealed record ManifestRow(string Path, string SourceType, string ExpectedStatus);
 }
