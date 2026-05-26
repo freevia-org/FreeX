@@ -6,13 +6,17 @@ namespace Freexcel.Core.IO;
 internal static class XlsxChartLevelReader
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace ChartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
     public static string? ReadTitle(XDocument chartXml)
     {
         var title = chartXml.Root?
             .Element(ChartNs + "chart")?
-            .Element(ChartNs + "title");
+            .Element(ChartNs + "title")
+            ?? chartXml.Root?
+                .Element(ChartExNs + "chart")?
+                .Element(ChartExNs + "title");
 
         return title?
             .Descendants(DrawingNs + "t")
