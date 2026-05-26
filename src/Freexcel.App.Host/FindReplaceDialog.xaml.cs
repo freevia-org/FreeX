@@ -249,7 +249,7 @@ public sealed partial class FindReplaceDialog : Window
 
     private FindOptions CreateFindOptions() =>
         new(
-            Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Sheet : FindWithin.Workbook,
+            Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet,
             CurrentSheetId: _getCurrentSheetId(),
             SearchOrder: SearchCombo.SelectedIndex == 1 ? FindSearchOrder.ByColumns : FindSearchOrder.ByRows,
             LookIn: LookInCombo.SelectedIndex switch
