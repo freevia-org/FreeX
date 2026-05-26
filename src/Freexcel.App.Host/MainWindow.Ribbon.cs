@@ -75,12 +75,19 @@ public partial class MainWindow
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
-        PrepareSelectedRibbonTabForImmediateCompaction();
+        NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true);
+    }
+
+    private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab = false)
+    {
+        if (prepareSelectedTab)
+            PrepareSelectedRibbonTabForImmediateCompaction();
         NormalizeRibbonSurface(forceCompact: true);
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
-                PrepareSelectedRibbonTabForImmediateCompaction();
+                if (prepareSelectedTab)
+                    PrepareSelectedRibbonTabForImmediateCompaction();
                 NormalizeRibbonSurface(forceCompact: true);
             }),
             DispatcherPriority.Send);

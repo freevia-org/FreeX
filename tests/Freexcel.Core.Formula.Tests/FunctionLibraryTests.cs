@@ -4934,6 +4934,15 @@ public class FunctionLibraryTests
             .Should().BeApproximately(1.0, 1e-10);
     }
 
+    [Fact] public void Correl_IgnoresNonnumericPairs()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(2)),(2,1,new TextValue("x")),(3,1,new NumberValue(6)),
+            (1,2,new NumberValue(1)),(2,2,new NumberValue(2)),(3,2,new NumberValue(3)));
+        ((NumberValue)_eval.Evaluate("=CORREL(A1:A3,B1:B3)", sheet)).Value
+            .Should().BeApproximately(1.0, 1e-10);
+    }
+
     [Fact] public void Correl_RangeError_PropagatesError()
     {
         var sheet = MakeSheet(
@@ -4972,6 +4981,15 @@ public class FunctionLibraryTests
         // FORECAST(8, known_y=A1:A3=[1,2,3], known_x=B1:B3=[2,4,6]) → predict y at x=8 → 4
         ((NumberValue)_eval.Evaluate("=FORECAST(8,A1:A3,B1:B3)", sheet)).Value
             .Should().BeApproximately(4.0, 1e-10);
+    }
+
+    [Fact] public void Forecast_IgnoresNonnumericPairs()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(2)),(2,1,new TextValue("x")),(3,1,new NumberValue(6)),
+            (1,2,new NumberValue(1)),(2,2,new NumberValue(2)),(3,2,new NumberValue(3)));
+        ((NumberValue)_eval.Evaluate("=FORECAST.LINEAR(4,A1:A3,B1:B3)", sheet)).Value
+            .Should().BeApproximately(8.0, 1e-10);
     }
 
     [Fact] public void Forecast_KnownYRangeError_PropagatesError()
