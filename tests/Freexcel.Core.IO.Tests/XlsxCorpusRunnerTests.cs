@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(28, "the generated metadata-pass manifest currently declares twenty-eight deterministic package-retention rows");
+        rows.Should().HaveCount(29, "the generated metadata-pass manifest currently declares twenty-nine deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -661,6 +661,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetSheetViewsRow_RetainsSheetViewsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sheet-views-001");
+        AssertWorksheetSheetViews(source, "generated-worksheet-sheet-views-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-sheet-views-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-sheet-views-001");
+        AssertWorksheetSheetViews(saved, "generated-worksheet-sheet-views-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -991,6 +1009,26 @@ public class XlsxCorpusRunnerTests
         singleXmlCell.Attribute("r")!.Value.Should().Be("A1", because);
         singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1", because);
         singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept", because);
+    }
+
+    private static void AssertWorksheetSheetViews(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+        sheetViews.Should().NotBeNull(because);
+        sheetViews!.Attribute("nativeSheetViewsAttr")!.Value.Should().Be("kept", because);
+        var sheetView = sheetViews.Elements(worksheetNs + "sheetView")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        sheetView.Attribute("workbookViewId")!.Value.Should().Be("0", because);
+        sheetView.Attribute("showZeros")!.Value.Should().Be("0", because);
+        sheetView.Attribute("rightToLeft")!.Value.Should().Be("1", because);
+        sheetView.Element(worksheetNs + "pivotSelection")!
+            .Attribute("pane")!.Value.Should().Be("topRight", because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)
