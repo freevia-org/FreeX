@@ -399,7 +399,7 @@
                                    FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="18,0,0,12"/>
                         <TextBlock Text="Local tester diagnostics"
                                    FontWeight="SemiBold" FontSize="12" Margin="0,8,0,5"/>
-                        <TextBlock Text="Freexcel writes local usage events and crash files to %LOCALAPPDATA%\Freexcel\Diagnostics. These files stay on this computer unless you attach them to an issue. Start Freexcel with FREEXCEL_DIAGNOSTICS=0 to disable local diagnostics for that run."
+                        <TextBlock Text="Freexcel writes local usage events and crash files to %LOCALAPPDATA%\Freexcel\Diagnostics. These files stay on this computer unless you attach them to an issue. Crash exception messages and stack traces can occasionally contain sensitive values, so review files before sharing them. Start Freexcel with FREEXCEL_DIAGNOSTICS=0 to disable local diagnostics for that run."
                                    FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,12"/>
                         <Button x:Name="TrustCenterSettingsButton" Content="Trust Center _Settings..." Width="170" Height="26"
                                 HorizontalAlignment="Left" Click="TrustCenterSettingsButton_Click"/>

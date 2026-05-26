@@ -141,7 +141,7 @@ public partial class App : Application
             return;
 
         var result = MessageBox.Show(
-            "Freexcel can send crash reports to help stabilize tester builds. Reports include app version, runtime, operating system, session ID, and exception details. Workbook contents, formulas, filenames, and paths are not collected by default.\n\nSend crash reports for this tester build?",
+            "Freexcel can send crash reports to help stabilize tester builds. Reports include app version, runtime, operating system, session ID, exception message, and stack trace. Workbook contents, formulas, filenames, and paths are not collected intentionally, but exception details can occasionally include sensitive values.\n\nSend crash reports for this tester build?",
             "Crash Reports",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);

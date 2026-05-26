@@ -22,6 +22,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("dotnet build Freexcel.slnx --configuration Release --no-restore");
         workflow.Should().Contain("dotnet test Freexcel.slnx --configuration Release --no-build");
         workflow.Should().Contain("tools/Publish-UserTestBuild.ps1");
+        workflow.Should().Contain("-RuntimeIdentifier win-x64");
         workflow.Should().Contain("-PublishMode SingleFile");
         workflow.Should().Contain("Freexcel-latest-win-x64.exe");
         workflow.Should().Contain("actions/upload-artifact@v7");
@@ -33,6 +34,17 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$releaseName = \"Freexcel tester $releaseId ($shortSha)\"");
         workflow.Should().Contain("\"release_id=$releaseId\" >> $env:GITHUB_OUTPUT");
         workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile");
+    }
+
+    [Fact]
+    public void UserTestPublishScript_PublishesFrameworkDependentRuntimeSpecificBuild()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        script.Should().Contain("[string]$RuntimeIdentifier = \"win-x64\"");
+        script.Should().Contain("\"-r\", $RuntimeIdentifier");
+        script.Should().Contain("\"--self-contained\", \"false\"");
     }
 
     [Fact]
