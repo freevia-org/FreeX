@@ -1665,6 +1665,9 @@ public interface IEvalContext
     /// <summary>Returns true if the row is hidden (filter, manual, or group collapse).</summary>
     bool IsRowHidden(uint row);
 
+    /// <summary>Returns true if the row is hidden by an active filter.</summary>
+    bool IsRowFilterHidden(uint row);
+
     /// <summary>Returns the current evaluation sheet (the formula's host sheet), or null when no sheet context.</summary>
     Model.Sheet? CurrentSheet { get; }
 
