@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
@@ -147,8 +148,21 @@ public partial class MainWindow
     private void FontSizeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        var text = FontSizeBox.Text;
-        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))
+        CommitFontSizeBoxText();
+    }
+
+    private void FontSizeBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (_suppressToolbarSync) return;
+
+        CommitFontSizeBoxText();
+        e.Handled = true;
+    }
+
+    private void CommitFontSizeBoxText()
+    {
+        if (WorksheetSizeInputParser.TryParsePositiveSize(FontSizeBox.Text, out var size))
             ApplyStyleDiff(new StyleDiff(FontSize: size));
     }
 

@@ -51,6 +51,27 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void EditableFontSizeBox_CommitsTypedKeyboardInputWithEnter()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var fontSizeBox = document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FontSizeBox");
+
+        fontSizeBox.Attribute("IsEditable")?.Value.Should().Be("True");
+        fontSizeBox.Attribute("KeyDown")?.Value.Should().Be("FontSizeBox_KeyDown");
+        source.Should().Contain("private void FontSizeBox_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("if (e.Key != Key.Enter) return;");
+        source.Should().Contain("private void CommitFontSizeBoxText()");
+        source.Should().Contain("WorksheetSizeInputParser.TryParsePositiveSize(FontSizeBox.Text, out var size)");
+        source.Should().Contain("ApplyStyleDiff(new StyleDiff(FontSize: size));");
+    }
+
+    [Fact]
     public void RibbonKeyboardFocus_IsNotHijackedByWorksheetNavigation()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));

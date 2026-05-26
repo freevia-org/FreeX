@@ -344,6 +344,7 @@
                                               local:RibbonTooltip.Description="Change the font of the selected cells."/>
                                     <ComboBox x:Name="FontSizeBox" Width="40" Height="22" Margin="1" IsEditable="True" Background="White"
                                               SelectionChanged="FontSizeBox_SelectionChanged"
+                                              KeyDown="FontSizeBox_KeyDown"
                                               AutomationProperties.Name="Font Size"
                                               local:RibbonTooltip.Title="Font Size"
                                               local:RibbonTooltip.KeyTip="FS"
