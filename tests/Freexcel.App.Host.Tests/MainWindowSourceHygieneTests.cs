@@ -54,6 +54,39 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void LiveUiE2eAppProcessLaunch_IsCentralizedInSharedHarness()
+    {
+        var testsDirectory = new DirectoryInfo(WorkspaceFileLocator.Find("tests", "Freexcel.App.Host.Tests", "FormulaEditingUiE2eTests.cs")).Parent!;
+        var testSources = testsDirectory
+            .EnumerateFiles("*.cs", SearchOption.AllDirectories)
+            .Where(file => !string.Equals(file.Name, "MainWindowSourceHygieneTests.cs", StringComparison.Ordinal))
+            .Select(file => new
+            {
+                RelativePath = Path.GetRelativePath(testsDirectory.FullName, file.FullName).Replace('\\', '/'),
+                Source = File.ReadAllText(file.FullName)
+            })
+            .ToList();
+
+        testSources
+            .Where(file => file.Source.Contains("Freexcel.App.Host.exe", StringComparison.Ordinal))
+            .Select(file => file.RelativePath)
+            .Should()
+            .Equal(["FormulaEditingUiE2eTests.cs"]);
+        testSources
+            .Where(file => file.Source.Contains("FreexcelUiRun.Start()", StringComparison.Ordinal))
+            .Select(file => file.RelativePath)
+            .Should()
+            .Equal(["FormulaEditingUiE2eTests.cs"]);
+        testSources
+            .Single(file => file.RelativePath == "FormulaEditingUiE2eTests.cs")
+            .Source
+            .Should()
+            .Contain("SharedAppInstance_CoversLiveUiScenarios")
+            .And.Contain("CellOverflowEditingUiE2eHarness.Run(run)")
+            .And.Contain("FormulaEditingUiE2eHarness.Run(run)");
+    }
+
+    [Fact]
     public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
     {
         var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));

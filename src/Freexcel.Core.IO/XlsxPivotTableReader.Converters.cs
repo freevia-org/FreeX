@@ -4,6 +4,11 @@ namespace Freexcel.Core.IO;
 
 internal static partial class XlsxPivotTableReader
 {
+    private static IReadOnlyList<string>? ReadCsvAttribute(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
     private static PivotFieldGrouping ReadPivotFieldGrouping(string? value, PivotFieldGrouping defaultValue = PivotFieldGrouping.None) =>
         value?.Trim().ToLowerInvariant() switch
         {
