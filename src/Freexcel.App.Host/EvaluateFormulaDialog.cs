@@ -77,7 +77,7 @@ public sealed class EvaluateFormulaDialog : Window
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
-        var help = new Button { Content = "_Help on this formula", Width = 142, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var help = new Button { Content = "Help on this _Function", Width = 142, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         help.Click += (_, _) => ShowFormulaHelp();
         buttons.Children.Add(help);
 
