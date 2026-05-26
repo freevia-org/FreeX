@@ -907,16 +907,61 @@ public sealed class FormulaEvaluator
     private ScalarValue EvaluateIfError(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 2) return ErrorValue.Value;
-        var value = EvaluateNode(node.Arguments[0], context);
-        return value is ErrorValue ? EvaluateNode(node.Arguments[1], context) : value;
+        var value = EvaluateArrayOperand(node.Arguments[0], context);
+        if (value is RangeValue range)
+        {
+            if (!RangeHasMatchingError(range, _ => true)) return value;
+            var fallback = EvaluateArrayOperand(node.Arguments[1], context);
+            return ReplaceRangeErrors(range, fallback, _ => true);
+        }
+
+        return value is ErrorValue ? EvaluateArrayOperand(node.Arguments[1], context) : value;
     }
 
     private ScalarValue EvaluateIfNa(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 2) return ErrorValue.Value;
-        var value = EvaluateNode(node.Arguments[0], context);
-        return value == ErrorValue.NA ? EvaluateNode(node.Arguments[1], context) : value;
+        var value = EvaluateArrayOperand(node.Arguments[0], context);
+        if (value is RangeValue range)
+        {
+            if (!RangeHasMatchingError(range, IsNAError)) return value;
+            var fallback = EvaluateArrayOperand(node.Arguments[1], context);
+            return ReplaceRangeErrors(range, fallback, IsNAError);
+        }
+
+        return value is ErrorValue e && IsNAError(e) ? EvaluateArrayOperand(node.Arguments[1], context) : value;
     }
+
+    private static bool RangeHasMatchingError(RangeValue range, Func<ErrorValue, bool> catches)
+    {
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                if (range.Cells[r, c] is ErrorValue error && catches(error))
+                    return true;
+
+        return false;
+    }
+
+    private static ScalarValue ReplaceRangeErrors(RangeValue range, ScalarValue fallback, Func<ErrorValue, bool> catches)
+    {
+        RangeValue? fallbackRange = fallback as RangeValue;
+        if (fallbackRange is not null && (fallbackRange.RowCount != range.RowCount || fallbackRange.ColCount != range.ColCount))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue error && catches(error)
+                    ? fallbackRange?.Cells[r, c] ?? fallback
+                    : value;
+            }
+
+        return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
+    }
+
+    private static bool IsNAError(ErrorValue error) => error.Code == ErrorValue.NA.Code;
 
     private ScalarValue EvaluateChoose(FunctionCallNode node, IEvalContext context)
     {
