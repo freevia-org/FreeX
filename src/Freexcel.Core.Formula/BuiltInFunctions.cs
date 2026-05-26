@@ -1125,7 +1125,7 @@ public static partial class BuiltInFunctions
             ? new NumberValue(cell.Row)
             : ErrorValue.Value;
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return new NumberValue(rv.StartRow);
+        if (args[0] is RangeValue rv) return RowNumbers(rv);
         return ErrorValue.Value;
     }
 
@@ -1135,8 +1135,28 @@ public static partial class BuiltInFunctions
             ? new NumberValue(cell.Col)
             : ErrorValue.Value;
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return new NumberValue(rv.StartCol);
+        if (args[0] is RangeValue rv) return ColumnNumbers(rv);
         return ErrorValue.Value;
+    }
+
+    private static ScalarValue RowNumbers(RangeValue range)
+    {
+        if (range.RowCount == 1) return new NumberValue(range.StartRow);
+
+        var cells = new ScalarValue[range.RowCount, 1];
+        for (int r = 0; r < range.RowCount; r++)
+            cells[r, 0] = new NumberValue(range.StartRow + r);
+        return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
+    }
+
+    private static ScalarValue ColumnNumbers(RangeValue range)
+    {
+        if (range.ColCount == 1) return new NumberValue(range.StartCol);
+
+        var cells = new ScalarValue[1, range.ColCount];
+        for (int c = 0; c < range.ColCount; c++)
+            cells[0, c] = new NumberValue(range.StartCol + c);
+        return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
     }
 
     private static ScalarValue Rows(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

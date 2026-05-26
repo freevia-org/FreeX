@@ -491,6 +491,7 @@ public sealed partial class Sheet
                 : new Dictionary<string, string>(column.NativeCustomFiltersAttributes, StringComparer.Ordinal),
             CloneAutoFilterTop10(column.Top10),
             CloneAutoFilterDynamicFilter(column.DynamicFilter),
+            CloneAutoFilterColorFilter(column.ColorFilter),
             column.NativeFilterXmls.ToArray(),
             column.NativeAttributes is null
                 ? null
@@ -522,6 +523,16 @@ public sealed partial class Sheet
                 NativeAttributes = dynamicFilter.NativeAttributes is null
                     ? null
                     : new Dictionary<string, string>(dynamicFilter.NativeAttributes, StringComparer.Ordinal)
+            };
+
+    private static WorksheetAutoFilterColorFilterModel? CloneAutoFilterColorFilter(WorksheetAutoFilterColorFilterModel? colorFilter) =>
+        colorFilter is null
+            ? null
+            : colorFilter with
+            {
+                NativeAttributes = colorFilter.NativeAttributes is null
+                    ? null
+                    : new Dictionary<string, string>(colorFilter.NativeAttributes, StringComparer.Ordinal)
             };
 
     private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)

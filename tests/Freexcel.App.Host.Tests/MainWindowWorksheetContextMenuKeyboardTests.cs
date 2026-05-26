@@ -92,19 +92,56 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         });
     }
 
+    [Fact]
+    public void KeyboardWorksheetContextMenu_WithPictureAtActiveCellShowsPictureScopedCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.AddPictureAt(2, 2);
+            harness.SelectCell(2, 2);
+
+            harness.ContextMenuTargetKind(2, 2).Should().Be("Picture");
+            harness.OpenKeyboardContextMenu();
+
+            harness.FocusedMenuHeader.Should().Be("_Format Picture...");
+            harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
+            harness.OpenMenuHeaders.Should().ContainInOrder([
+                "_Format Picture...",
+                "_Crop...",
+                "_Reset Crop",
+                "Edit _Alt Text...",
+                "_Selection Pane..."
+            ]);
+            harness.OpenMenuHeaders.Should().NotContain("_Format Cells...");
+            harness.OpenMenuHeaders.Should().NotContain("Cu_t");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly Workbook _workbook;
         private readonly MethodInfo _openKeyboardContextMenu;
+        private readonly MethodInfo _getWorksheetContextMenuTargetKind;
+        private readonly FieldInfo _workbookField;
+        private readonly FieldInfo _currentSheetIdField;
 
-        private MainWindowHarness(MainWindow window, Workbook workbook)
+        private MainWindowHarness(MainWindow window)
         {
             _window = window;
-            _workbook = workbook;
             _openKeyboardContextMenu = typeof(MainWindow)
                 .GetMethod("OpenKeyboardContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "OpenKeyboardContextMenu");
+            _getWorksheetContextMenuTargetKind = typeof(MainWindow)
+                .GetMethod("GetWorksheetContextMenuTargetKind", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "GetWorksheetContextMenuTargetKind");
+            _workbookField = typeof(MainWindow)
+                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
+            _currentSheetIdField = typeof(MainWindow)
+                .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
         }
 
         public string? FocusedMenuHeader =>
@@ -118,9 +155,28 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 .Select(item => item.Header?.ToString() ?? "")
                 .ToList() ?? [];
 
+        public void AddPictureAt(uint row, uint col)
+        {
+            var sheet = CurrentSheet;
+            sheet.Pictures.Add(new PictureModel
+            {
+                Anchor = new CellAddress(sheet.Id, row, col),
+                Name = "Logo"
+            });
+            PumpDispatcher();
+        }
+
+        public void SelectCell(uint row, uint col)
+        {
+            var sheet = CurrentSheet;
+            var address = new CellAddress(sheet.Id, row, col);
+            SheetGrid.SelectedRange = new GridRange(address, address);
+            PumpDispatcher();
+        }
+
         public void SelectWholeRows(uint startRow, uint endRow)
         {
-            var sheet = _workbook.Sheets[0];
+            var sheet = CurrentSheet;
             var range = new GridRange(
                 new CellAddress(sheet.Id, startRow, 1),
                 new CellAddress(sheet.Id, endRow, CellAddress.MaxCol));
@@ -130,7 +186,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
 
         public void SelectWholeColumns(uint startCol, uint endCol)
         {
-            var sheet = _workbook.Sheets[0];
+            var sheet = CurrentSheet;
             var range = new GridRange(
                 new CellAddress(sheet.Id, 1, startCol),
                 new CellAddress(sheet.Id, CellAddress.MaxRow, endCol));
@@ -142,6 +198,15 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         {
             _openKeyboardContextMenu.Invoke(_window, null);
             PumpDispatcher();
+            PumpDispatcher();
+        }
+
+        public string ContextMenuTargetKind(uint row, uint col)
+        {
+            var sheet = CurrentSheet;
+            return _getWorksheetContextMenuTargetKind
+                .Invoke(_window, [new CellAddress(sheet.Id, row, col)])
+                ?.ToString() ?? "";
         }
 
         public static MainWindowHarness Create()
@@ -168,11 +233,23 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             window.Show();
             window.UpdateLayout();
             PumpDispatcher();
-            return new MainWindowHarness(window, workbook);
+            return new MainWindowHarness(window);
         }
 
         private Freexcel.App.UI.GridView SheetGrid =>
             (Freexcel.App.UI.GridView)_window.FindName("SheetGrid");
+
+        private Sheet CurrentSheet
+        {
+            get
+            {
+                var sheetId = (SheetId)_currentSheetIdField.GetValue(_window)!;
+                return CurrentWorkbook.GetSheet(sheetId) ?? throw new InvalidOperationException("Current sheet was not found.");
+            }
+        }
+
+        private Workbook CurrentWorkbook =>
+            (Workbook)_workbookField.GetValue(_window)!;
 
         private ContextMenu? ActiveContextMenu
         {
