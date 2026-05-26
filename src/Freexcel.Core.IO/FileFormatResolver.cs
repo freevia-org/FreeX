@@ -25,6 +25,9 @@ public static class FileFormatResolver
     public static string NormalizeExtension(string extension)
     {
         extension = extension.Trim();
+        if (extension.Length == 0)
+            return "";
+
         return extension.StartsWith(".", StringComparison.Ordinal)
             ? extension
             : $".{extension}";
