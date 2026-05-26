@@ -143,7 +143,6 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Theory]
-    [InlineData("Page Layout", "Themes")]
     [InlineData("Formulas", "Function Library")]
     [InlineData("Data", "Get & Transform Data")]
     [InlineData("Review", "Proofing")]
@@ -163,7 +162,7 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Theory]
-    [InlineData("Data", "Queries & Connections")]
+    [InlineData("Data", "Sort & Filter")]
     [InlineData("View", "Show")]
     public void RibbonTabs_KeepSecondaryExcelGroupsExpandedAtMediumWidths(string tab, string secondaryGroup)
     {
@@ -372,6 +371,29 @@ public sealed class MainWindowAdaptiveRibbonTests
                 harness.RibbonHorizontalScrollBarModes.Should().OnlyContain(
                     mode => mode == ScrollBarVisibility.Hidden,
                     $"{tab} should keep the ribbon face clean while preserving hidden horizontal fallback scrolling");
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData(900)]
+    [InlineData(1120)]
+    [InlineData(1280)]
+    [InlineData(1366)]
+    [InlineData(1465)]
+    public void RibbonTabs_DoNotClipActiveCommandRowAtCommonExcelWidths(double width)
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, width);
+
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"{tab} at {width}px should collapse groups before the hidden ribbon scroll surface clips visible commands; {harness.DebugActiveRibbonChildren}");
             }
         });
     }
@@ -612,6 +634,22 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Select(scrollViewer => scrollViewer.HorizontalScrollBarVisibility)
                     .ToList()
                 : [];
+
+        public double ActiveRibbonPanelOverflow
+        {
+            get
+            {
+                if (ActiveRibbonPanel is not { } panel)
+                    return 0;
+
+                panel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                var viewport = FindVisualAncestor<ScrollViewer>(panel)?.ActualWidth;
+                if (viewport is null or <= 0)
+                    viewport = (_window.FindName("RibbonTabs") as TabControl)?.ActualWidth;
+
+                return panel.DesiredSize.Width - Math.Max(0, (viewport ?? 0) - 4);
+            }
+        }
 
         private TabItem? SelectedRibbonTab =>
             (_window.FindName("RibbonTabs") as TabControl)?.SelectedItem as TabItem;

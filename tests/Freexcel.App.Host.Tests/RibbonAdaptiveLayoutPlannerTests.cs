@@ -133,7 +133,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             RibbonAdaptiveGroupState.SmallWithLabels,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
-            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
@@ -142,10 +142,48 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             RibbonAdaptiveGroupState.Collapsed);
     }
 
+    [Fact]
+    public void ApplyBreakpointOverrides_KeepsInsertChartsBeforeUtilityGroups()
+    {
+        var groupNames = new[] { "Tables", "Illustrations", "Add-ins", "Charts", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments" };
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1320,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
+
+        states[Array.IndexOf(groupNames, "Charts")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Add-ins")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Tours")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_KeepsPageSetupBeforeThemesAtMediumWidths()
+    {
+        var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange" };
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1120,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
+
+        states[Array.IndexOf(groupNames, "Page Setup")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Themes")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_KeepsDataSortAndFilterBeforeConnectionsAtMediumWidths()
+    {
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1120,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
+
+        states[Array.IndexOf(groupNames, "Sort & Filter")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Queries & Connections")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
     [Theory]
-    [InlineData(1120, new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline" }, 2)]
     [InlineData(1120, new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" }, 2)]
-    [InlineData(1120, new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange" }, 1)]
     [InlineData(1120, new[] { "Proofing", "Accessibility", "Comments", "Protect" }, 2)]
     [InlineData(1120, new[] { "Draw", "Arrange", "Format" }, 1)]
     public void ApplyBreakpointOverrides_AppliesExcelLikeTabSpecificCollapseOrder(
