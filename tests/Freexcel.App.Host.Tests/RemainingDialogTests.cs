@@ -1128,7 +1128,9 @@ public sealed class RemainingDialogTests
     private static string ReadObjectDialogSources() =>
         string.Join(
             Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextEntryDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ThreadedCommentDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
     private static T GetField<T>(object instance, string name)
         where T : class
