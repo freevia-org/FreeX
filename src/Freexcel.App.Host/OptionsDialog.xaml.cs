@@ -157,6 +157,7 @@ public partial class OptionsDialog : Window
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
             CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
             CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
+            PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
         };
         opts.Save();
         Result = opts;

@@ -46,6 +46,9 @@ public sealed class FreexcelOptions
     public bool CrashAnalyticsEnabled { get; set; }
     public bool CrashAnalyticsPrompted { get; set; }
 
+    // Export
+    public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;
+
     private static readonly string StorePath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "Freexcel", "options.json");

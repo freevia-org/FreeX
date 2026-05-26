@@ -27,7 +27,7 @@ public static partial class BuiltInFunctions
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
-                    if (skipHidden && ctx.IsRowHidden(absRow)) continue;
+                    if (skipHidden ? ctx.IsRowHidden(absRow) : ctx.IsRowFilterHidden(absRow)) continue;
                     for (int c = 0; c < rv.ColCount; c++)
                     {
                         var cell = rv.Cells[r, c];
