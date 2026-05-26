@@ -290,6 +290,67 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ViewArrangeAllMenuKeyTips_UpdateWorkbookArrangementAndExitKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Tiled);
+
+            harness.OpenRibbonMenu(Key.W, Key.A);
+            harness.ActiveMenuItemGestureText("Tiled").Should().Be("T");
+            harness.ActiveMenuItemIsChecked("Tiled").Should().BeTrue();
+            harness.HandleKeyTip(Key.V);
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Vertical);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.W, Key.A);
+            harness.ActiveMenuItemGestureText("Cascade").Should().Be("C");
+            harness.ActiveMenuItemIsChecked("Vertical").Should().BeTrue();
+            harness.HandleKeyTip(Key.C);
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Cascade);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void ViewSplitKeyTip_TogglesSheetSplitAndExitsKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(2, 2, 2, 2);
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.S);
+
+            harness.KeyTipScope.Should().Be("Commands", "S is a visible prefix for Split and Synchronous Scrolling on the View tab");
+            harness.ActiveSheetSplitPanes.Should().Be((null, null));
+
+            harness.HandleKeyTip(Key.P);
+
+            harness.ActiveSheetSplitPanes.Should().Be((2u, 2u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.S);
+            harness.HandleKeyTip(Key.P);
+
+            harness.ActiveSheetSplitPanes.Should().Be((null, null));
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
     public void FocusedRibbonTabAndEscape_StayInRibbonThenReturnToWorksheet()
     {
         RunSta(() =>
@@ -692,6 +753,15 @@ public sealed class MainWindowRibbonKeyTipTests
             }
         }
 
+        public (uint? SplitRow, uint? SplitColumn) ActiveSheetSplitPanes
+        {
+            get
+            {
+                var sheet = _workbook.Sheets[0];
+                return (sheet.SplitRow, sheet.SplitColumn);
+            }
+        }
+
         public bool ActiveCellBold
         {
             get
@@ -750,8 +820,14 @@ public sealed class MainWindowRibbonKeyTipTests
         public string? ActiveMenuItemGestureText(string header) =>
             FindActiveMenuItem(header)?.InputGestureText;
 
+        public bool? ActiveMenuItemIsChecked(string header) =>
+            FindActiveMenuItem(header)?.IsChecked;
+
         public bool ActiveMenuItemSubmenuIsOpen(string header) =>
             FindActiveMenuItem(header)?.IsSubmenuOpen == true;
+
+        public WorkbookWindowArrangement WorkbookArrangement =>
+            _workbook.WindowArrangement;
 
         public IReadOnlyList<string> VisibleCommandKeyTips(string keyTip)
         {
