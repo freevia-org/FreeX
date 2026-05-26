@@ -15448,6 +15448,68 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetDiagnosticsNativeAttributeNames()
+    {
+        var workbook = new Workbook("WorksheetDiagnosticsInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+        workbook.WatchedCells.Add(new CellAddress(sheet.Id, 1, 1));
+        sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["validIgnoredErrorsAttr"] = "kept",
+                ["invalid ignoredErrors attr"] = "skip"
+            },
+            ErrorNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["validIgnoredErrorAttr"] = "kept",
+                    ["invalid ignoredError attr"] = "skip"
+                }
+            }
+        };
+        sheet.CellWatchesMetadata = new WorksheetCellWatchesMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["validCellWatchesAttr"] = "kept",
+                ["invalid cellWatches attr"] = "skip"
+            },
+            WatchNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["validCellWatchAttr"] = "kept",
+                    ["invalid cellWatch attr"] = "skip"
+                }
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors");
+        var ignoredError = ignoredErrors!.Element(worksheetNs + "ignoredError")!;
+        var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
+        var cellWatch = cellWatches!.Element(worksheetNs + "cellWatch")!;
+
+        ignoredErrors.Attribute("validIgnoredErrorsAttr")!.Value.Should().Be("kept");
+        ignoredError.Attribute("validIgnoredErrorAttr")!.Value.Should().Be("kept");
+        cellWatches.Attribute("validCellWatchesAttr")!.Value.Should().Be("kept");
+        cellWatch.Attribute("validCellWatchAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_DoesNotRestoreClearedIgnoredErrors()
     {
         var workbook = new Workbook("IgnoredErrorsRemovalTest");
