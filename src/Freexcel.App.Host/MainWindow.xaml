@@ -163,7 +163,7 @@
                         local:RibbonTooltip.KeyTip="1"
                         local:RibbonTooltip.Description="Save the workbook.">
                     <local:RibbonIcon Kind="Save" IconSize="16"
-                                      Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                      Foreground="{StaticResource FreexcelWhiteBrush}"/>
                 </Button>
                 <Button x:Name="UndoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
                         Style="{StaticResource TitleBarQatButton}" FontSize="14"
@@ -173,7 +173,7 @@
                         local:RibbonTooltip.KeyTip="2"
                         local:RibbonTooltip.Description="Undo the last action.">
                     <local:RibbonIcon Kind="Undo" IconSize="16"
-                                      Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                      Foreground="{StaticResource FreexcelWhiteBrush}"/>
                 </Button>
                 <Button x:Name="RedoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,8,0"
                         Style="{StaticResource TitleBarQatButton}" FontSize="14"
@@ -183,7 +183,7 @@
                         local:RibbonTooltip.KeyTip="3"
                         local:RibbonTooltip.Description="Redo the last undone action.">
                     <local:RibbonIcon Kind="Redo" IconSize="16"
-                                      Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                      Foreground="{StaticResource FreexcelWhiteBrush}"/>
                 </Button>
                 <!-- System buttons — must be docked Right before the fill element -->
                 <!-- Order in XAML (Right-docked) is right-to-left, so Close first -->
@@ -191,19 +191,19 @@
                         Style="{StaticResource CloseSysBtnStyle}" Click="CloseSysBtn_Click"
                         AutomationProperties.Name="Close">
                     <local:RibbonIcon Kind="WindowClose" IconSize="18"
-                                      Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                      Foreground="{StaticResource FreexcelWhiteBrush}"/>
                 </Button>
                 <Button x:Name="MaxRestoreBtn"  DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MaxRestoreBtn_Click"
                         AutomationProperties.Name="Maximize or Restore">
                     <local:RibbonIcon x:Name="MaxRestoreIcon" Kind="WindowMaximize" IconSize="18"
-                                      Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                      Foreground="{StaticResource FreexcelWhiteBrush}"/>
                 </Button>
                 <Button                         DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MinimizeBtn_Click"
                         AutomationProperties.Name="Minimize">
                     <local:RibbonIcon Kind="WindowMinimize" IconSize="18"
-                                      Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                      Foreground="{StaticResource FreexcelWhiteBrush}"/>
                 </Button>
                 <!-- Workbook name centred -->
                 <TextBlock x:Name="WorkbookNameText"
