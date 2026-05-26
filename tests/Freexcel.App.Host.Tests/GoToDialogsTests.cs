@@ -199,13 +199,13 @@ public sealed class GoToDialogsTests
             "new(GoToSpecialKind.Comments, \"Co_mments\")",
             "new(GoToSpecialKind.CurrentRegion, \"Current _region\")",
             "new(GoToSpecialKind.RowDifferences, \"Row _differences\")",
-            "new(GoToSpecialKind.ColumnDifferences, \"Column dif_ferences\")",
+            "new(GoToSpecialKind.ColumnDifferences, \"Column diff_erences\")",
             "new(GoToSpecialKind.LastCell, \"_Last cell\")",
-            "new(GoToSpecialKind.ConditionalFormats, \"Conditional _formats\")",
+            "new(GoToSpecialKind.ConditionalFormats, \"Conditional forma_ts\")",
             "new(GoToSpecialKind.Objects, \"_Objects\")",
             "new(GoToSpecialKind.Precedents, \"_Precedents\")",
-            "new(GoToSpecialKind.Dependents, \"_Dependents\")",
-            "new(GoToSpecialKind.DataValidation, \"_Data validation\")",
+            "new(GoToSpecialKind.Dependents, \"Depe_ndents\")",
+            "new(GoToSpecialKind.DataValidation, \"Data valid_ation\")",
             "new(GoToSpecialKind.VisibleCellsOnly, \"_Visible cells only\")"
         })
             source.Should().Contain(expected);
@@ -216,6 +216,19 @@ public sealed class GoToDialogsTests
         source.Should().NotContain("shown for parity");
         source.Should().NotContain("The selectable options match");
         source.Should().Contain("DialogButtonRowFactory.Create");
+    }
+
+    [Fact]
+    public void GoToSpecialDialog_UsesUniqueChoiceAccessKeys()
+    {
+        var duplicateAccessKeys = GoToSpecialDialog.GetChoices()
+            .Select(choice => new { choice.Label, AccessKey = GetAccessKey(choice.Label) })
+            .Where(choice => choice.AccessKey is not null)
+            .GroupBy(choice => choice.AccessKey)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key}: {string.Join(", ", group.Select(choice => choice.Label))}");
+
+        duplicateAccessKeys.Should().BeEmpty();
     }
 
     [Fact]
@@ -274,6 +287,15 @@ public sealed class GoToDialogsTests
         GoToSpecialDialog.TryParseChoice("dependents", out kind).Should().BeTrue();
 
         kind.Should().Be(GoToSpecialKind.Dependents);
+    }
+
+    private static char? GetAccessKey(string label)
+    {
+        var index = label.IndexOf('_', StringComparison.Ordinal);
+        if (index < 0 || index + 1 >= label.Length)
+            return null;
+
+        return char.ToUpperInvariant(label[index + 1]);
     }
 
     private static T GetPrivateControl<T>(GoToDialog dialog, string fieldName)
