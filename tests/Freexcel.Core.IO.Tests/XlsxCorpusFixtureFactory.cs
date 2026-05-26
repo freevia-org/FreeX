@@ -55,6 +55,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-calc-chain-001" => true,
         "generated-document-properties-001" => true,
         "generated-header-footer-legacy-drawing-001" => true,
+        "generated-worksheet-legacy-drawing-001" => true,
         "generated-workbook-extension-list-001" => true,
         "generated-workbook-properties-001" => true,
         "generated-workbook-file-version-001" => true,
@@ -209,6 +210,39 @@ internal static class XlsxCorpusFixtureFactory
                 </Relationships>
                 """),
             ("xl/media/headerFooterImage1.png", "Freexcel generated header footer image placeholder")),
+        "generated-worksheet-legacy-drawing-001" => CreatePackage(
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <legacyDrawing r:id="rIdFreexcelLegacyDrawing"/>
+                </worksheet>
+                """),
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdFreexcelLegacyDrawing"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing"
+                                Target="../drawings/vmlDrawing1.vml"/>
+                </Relationships>
+                """),
+            ("xl/drawings/vmlDrawing1.vml", """
+                <xml xmlns:v="urn:schemas-microsoft-com:vml"
+                     xmlns:o="urn:schemas-microsoft-com:office:office"
+                     xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                     xmlns:x="urn:schemas-microsoft-com:office:excel">
+                  <v:shape id="FreexcelLegacyDrawingShape" type="#_x0000_t201">
+                    <v:imagedata r:id="rIdFreexcelVmlImage"/>
+                    <x:ClientData ObjectType="Note"/>
+                  </v:shape>
+                </xml>
+                """),
+            ("xl/drawings/_rels/vmlDrawing1.vml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdFreexcelVmlImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/vmlImage1.png"/>
+                </Relationships>
+                """),
+            ("xl/media/vmlImage1.png", "Freexcel generated VML image placeholder")),
         "generated-workbook-extension-list-001" => CreatePackage(("xl/workbook.xml", """
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <extLst>
@@ -499,6 +533,9 @@ internal static class XlsxCorpusFixtureFactory
           string.Equals(packagePart, "xl/_rels/workbook.xml.rels", StringComparison.OrdinalIgnoreCase))) ||
         (string.Equals(id, "generated-workbook-extension-list-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-legacy-drawing-001", StringComparison.OrdinalIgnoreCase) &&
+         (string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase) ||
+          string.Equals(packagePart, "xl/worksheets/_rels/sheet1.xml.rels", StringComparison.OrdinalIgnoreCase))) ||
         (string.Equals(id, "generated-workbook-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-version-001", StringComparison.OrdinalIgnoreCase) &&
@@ -578,6 +615,7 @@ internal static class XlsxCorpusFixtureFactory
             "docProps/custom.xml" => "application/vnd.openxmlformats-officedocument.custom-properties+xml",
             "xl/drawings/vmlDrawing1.vml" => "application/vnd.openxmlformats-officedocument.vmlDrawing",
             "xl/media/headerFooterImage1.png" => "image/png",
+            "xl/media/vmlImage1.png" => "image/png",
             "xl/diagrams/data1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
             "xl/diagrams/layout1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
             "xl/diagrams/quickStyle1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
@@ -665,6 +703,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-extension-list-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookExtensionListFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetLegacyDrawingFixup(archive);
             return;
         }
 
@@ -1138,6 +1182,36 @@ internal static class XlsxCorpusFixtureFactory
                     new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
                     new XAttribute("name", "FreexcelUnknownWorkbookExtension")))));
         ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorksheetLegacyDrawingFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            worksheetXml.Root?.Elements(worksheetNs + "legacyDrawing").Remove();
+            worksheetXml.Root?.Add(new XElement(
+                worksheetNs + "legacyDrawing",
+                new XAttribute(officeRelNs + "id", "rIdFreexcelLegacyDrawing")));
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdFreexcelLegacyDrawing",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
+            "../drawings/vmlDrawing1.vml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
     }
 
     private static void ApplyWorkbookFileVersionFixup(ZipArchive archive)
