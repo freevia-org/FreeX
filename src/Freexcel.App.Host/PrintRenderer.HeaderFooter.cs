@@ -50,7 +50,8 @@ public static partial class PrintRenderer
         double printableH,
         int pageNumber,
         int totalPages,
-        bool draftQuality)
+        bool draftQuality,
+        bool blackAndWhite)
     {
         var visual = new DrawingVisual();
         var textOverlays = new List<PdfTextOverlay>();
@@ -117,7 +118,8 @@ public static partial class PrintRenderer
                 colWidth,
                 rowHeight,
                 pageW,
-                pageH);
+                pageH,
+                blackAndWhite);
         }
 
         return (visual, textOverlays);

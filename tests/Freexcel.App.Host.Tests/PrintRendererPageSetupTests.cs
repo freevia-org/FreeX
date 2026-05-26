@@ -122,8 +122,33 @@ public sealed class PrintRendererPageSetupTests
             var draftDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
             var draftPage = draftDocument.Pages[0].GetPageRoot(forceReload: false)!;
 
-            CountCommentChromePixels(normalPage).Should().BeGreaterThan(0);
-            CountCommentChromePixels(draftPage).Should().Be(0);
+            CountColorCommentChromePixels(normalPage).Should().BeGreaterThan(0);
+            CountColorCommentChromePixels(draftPage).Should().Be(0);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_BlackAndWhiteUsesNeutralDisplayedCommentChrome()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Black and white comments");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Printed"));
+            sheet.Comments[a1] = "Visible note";
+            sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+
+            sheet.PrintBlackAndWhite = false;
+            var colorDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var colorPage = colorDocument.Pages[0].GetPageRoot(forceReload: false)!;
+
+            sheet.PrintBlackAndWhite = true;
+            var bwDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var bwPage = bwDocument.Pages[0].GetPageRoot(forceReload: false)!;
+
+            CountColorCommentChromePixels(colorPage).Should().BeGreaterThan(0);
+            CountColorCommentChromePixels(bwPage).Should().Be(0);
         });
     }
 
@@ -167,7 +192,7 @@ public sealed class PrintRendererPageSetupTests
         });
     }
 
-    private static int CountCommentChromePixels(FrameworkElement page)
+    private static int CountColorCommentChromePixels(FrameworkElement page)
     {
         var width = Math.Max(1, (int)Math.Ceiling(page.Width));
         var height = Math.Max(1, (int)Math.Ceiling(page.Height));
