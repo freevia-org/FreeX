@@ -55,6 +55,29 @@ public partial class FileAdapterSmokeTests
         ls2.GetCell(1, 1)!.FormulaText.Should().Be("A1+1");
     }
 
+    [Fact]
+    public void NativeJsonAdapter_SaveThenResolveOpenAdapterAndReload()
+    {
+        var workbook = new Workbook("ResolvableNative");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Saved"));
+
+        using var stream = new MemoryStream();
+        var saveAdapter = new NativeJsonAdapter();
+        saveAdapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var openAdapter = FileDialogFilterBuilder.FindOpenAdapter(
+            [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new NativeJsonAdapter()],
+            ".fxl",
+            out var format);
+
+        openAdapter.Should().BeOfType<NativeJsonAdapter>();
+        format!.Extension.Should().Be(".fxl");
+        var loaded = openAdapter!.Load(stream);
+        loaded.GetSheetAt(0).GetCell(1, 1).Should().NotBeNull();
+    }
+
     // ── XLSX ──────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -13127,6 +13150,56 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectClearedHeaderFooterLegacyDrawing()
+    {
+        var workbook = new Workbook("HeaderFooterDrawingRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("header image"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddHeaderFooterLegacyDrawingPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageHeaderPictures.Left.Should().NotBeNull();
+        loadedSheet.PageHeaderPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.PageFooterPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.FirstPageHeaderPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.FirstPageFooterPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.EvenPageHeaderPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.EvenPageFooterPictures = WorksheetHeaderFooterPictureSet.Empty;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().BeNull();
+        archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels").Should().BeNull();
+        archive.GetEntry("xl/media/headerFooterImage1.png").Should().BeNull();
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.Root!.Element(worksheetNs + "legacyDrawingHF").Should().BeNull();
+
+        if (archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels") is { } worksheetRelsEntry)
+        {
+            var worksheetRelsText = LoadPackageXml(worksheetRelsEntry).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            worksheetRelsText.Should().NotContain("rIdHeaderFooterDrawing1");
+            worksheetRelsText.Should().NotContain("../drawings/vmlDrawing1.vml");
+        }
+
+        var contentTypesText = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!)
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        contentTypesText.Should().NotContain("/xl/drawings/vmlDrawing1.vml");
+        contentTypesText.Should().NotContain("/xl/media/headerFooterImage1.png");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_RegeneratesHeaderFooterDrawingWhenPictureChanges()
     {
         var workbook = new Workbook("HeaderFooterDrawingChangeTest");
@@ -13763,10 +13836,13 @@ public partial class FileAdapterSmokeTests
         loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("thickTop", "1");
         loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("outlineLevelRow", "3");
         loadedSheet.SheetFormatMetadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativeSheetFormatChild", StringComparison.Ordinal));
+        loadedSheet.SheetFormatMetadata.NativeAttributes["invalid sheetFormat attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -13778,6 +13854,7 @@ public partial class FileAdapterSmokeTests
         sheetFormat.Attribute("zeroHeight")!.Value.Should().Be("1");
         sheetFormat.Attribute("thickTop")!.Value.Should().Be("1");
         sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         sheetFormat.Element(worksheetNs + "nativeSheetFormatChild").Should().NotBeNull();
         sheetFormat.Element(worksheetNs + "nativeSheetFormatChild")!
             .Attribute("value")!
