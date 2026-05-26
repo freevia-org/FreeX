@@ -1727,6 +1727,42 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void MainWindow_WiresCreateTableRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("new CreateTableDialog(");
+        source.Should().Contain("request => ApplyCreateTableRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyCreateTableRangeSelection(");
+        source.Should().Contain("CreateTableRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End));");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
+    public void CreateTableApplyRangeSelection_UpdatesRangeBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new CreateTableDialog(SheetId.New(), "A1:C12", "TableStyleMedium2");
+            dialog.Show();
+            try
+            {
+                dialog.ApplyRangeSelection("B2:D8");
+
+                FindVisualChildren<TextBox>(dialog).Single().Text.Should().Be("B2:D8");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void CreateTableDialogRangePicker_RefocusesRangeBoxAfterRequest()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
