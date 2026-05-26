@@ -7349,6 +7349,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_WrapCountError_PropagatesBeforeArrayShapeValidation()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new NumberValue(2)),
+            (2,1,new NumberValue(3)), (2,2,new NumberValue(4)));
+
+        _eval.Evaluate("=WRAPROWS(A1:B2,NA())", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=WRAPCOLS(A1:B2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void WraprowsAndWrapcols_HugeFiniteWrapCount_ReturnsNumError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
