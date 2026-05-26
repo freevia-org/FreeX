@@ -67,8 +67,26 @@ public sealed class PageSetupDialogXamlTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("PageSetupInitialFocusTarget.PageOrientation");
         source.Should().Contain("OrientationBox.Focus();");
         source.Should().Contain("Keyboard.Focus(OrientationBox);");
+    }
+
+    [Fact]
+    public void PrintTitlesCommand_OpensPageSetupSheetTabWithRowsRepeatFocus()
+    {
+        var source = ReadPageSetupDialogSource();
+        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("PageSetupInitialFocusTarget.RepeatRows");
+        source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
+        source.Should().Contain("RowsRepeatBox.Focus();");
+        source.Should().Contain("RowsRepeatBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(RowsRepeatBox);");
+        handlerSource.Should().Contain("PrintTitlesBtn_Click");
+        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.RepeatRows);");
+        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);");
+        handlerSource.Should().Contain("initialFocusTarget) { Owner = this }");
     }
 
     [Fact]

@@ -173,7 +173,7 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
-    public void CalculateQuickAnalysisCellPreviewRects_ReturnsVisibleCellRects_ForOverlayVisuals()
+    public void CalculateQuickAnalysisCellPreviewRects_ReturnsInsetCellsForColorScalePreview()
     {
         var sheetId = SheetId.New();
         var range = new GridRange(
@@ -181,8 +181,8 @@ public sealed class GridViewSelectionLayoutTests
             new CellAddress(sheetId, 2, 2));
         var viewport = new ViewportModel(
             [],
-            [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20), new RowMetric(4, 20, 40)],
-            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64), new ColMetric(4, 64, 128)]);
+            [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)]);
 
         var rects = GridView.CalculateQuickAnalysisCellPreviewRects(
             viewport,

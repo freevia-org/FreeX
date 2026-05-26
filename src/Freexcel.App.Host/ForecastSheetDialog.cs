@@ -23,7 +23,7 @@ public sealed class ForecastSheetDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _periodsBox.Text = periods.ToString(CultureInfo.InvariantCulture);
-        Content = ObjectSizeDialog.CreateSingleInputContent("Forecast _periods:", _periodsBox, Accept);
+        Content = ObjectSizeDialog.CreateSingleInputContent("Forecast _periods:", _periodsBox, Accept, acceptContent: "_Create");
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 

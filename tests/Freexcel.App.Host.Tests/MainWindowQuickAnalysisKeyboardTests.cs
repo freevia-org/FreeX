@@ -30,6 +30,18 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.OpenMenuHeaders.Should().ContainInOrder(["Formatting", "Data Bars", "Color Scale", "Icon Set"]);
             harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.DataBars);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Color Scale");
+
+            harness.FocusedMenuHeader.Should().Be("Color Scale");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ColorScale);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Icon Set");
+
+            harness.FocusedMenuHeader.Should().Be("Icon Set");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.IconSet);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
         });
     }
 
@@ -115,6 +127,16 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         public void OpenQuickAnalysisMenu()
         {
             _showQuickAnalysisMenu.Invoke(_window, null);
+            PumpDispatcher();
+        }
+
+        public void FocusMenuItem(string header)
+        {
+            var item = ActiveContextMenu?.Items.OfType<MenuItem>()
+                .FirstOrDefault(item => item.Header?.ToString() == header)
+                ?? throw new InvalidOperationException($"Menu item '{header}' was not found.");
+            item.Focus();
+            Keyboard.Focus(item);
             PumpDispatcher();
         }
 

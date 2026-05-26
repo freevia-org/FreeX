@@ -380,6 +380,8 @@ public static partial class BuiltInFunctions
         }
         if (useA1 && TryParseA1RangeRef(refText, out var startRow, out var startCol, out var endRow, out var endCol))
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
+        if (useA1 && TryParseA1FullRowRangeRef(refText, out startRow, out endRow))
+            return BuildIndirectRange(ctx, sheetName, startRow, 1, endRow, CellAddress.MaxCol);
         if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
 
@@ -447,6 +449,26 @@ public static partial class BuiltInFunctions
 
         return TryParseA1Ref(refText[..colon], out startRow, out startCol)
             && TryParseA1Ref(refText[(colon + 1)..], out endRow, out endCol);
+    }
+
+    private static bool TryParseA1FullRowRangeRef(string refText, out uint startRow, out uint endRow)
+    {
+        startRow = endRow = 0;
+        int colon = refText.IndexOf(':');
+        if (colon < 0 || colon != refText.LastIndexOf(':')) return false;
+
+        return TryParseA1RowNumber(refText[..colon], out startRow)
+            && TryParseA1RowNumber(refText[(colon + 1)..], out endRow);
+    }
+
+    private static bool TryParseA1RowNumber(string text, out uint row)
+    {
+        row = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        text = text.Trim();
+        if (text.StartsWith('$')) text = text[1..];
+        if (text.Length == 0 || text.Any(ch => !char.IsDigit(ch))) return false;
+        return uint.TryParse(text, out row) && row is >= 1 and <= CellAddress.MaxRow;
     }
 
     private static bool TryParseR1C1RangeRef(
@@ -524,7 +546,7 @@ public static partial class BuiltInFunctions
         int matchIdx = -1;
         for (int i = 0; i < lookupFlat.Count; i++)
         {
-            if (lookupFlat[i] is ErrorValue lErr) return lErr;
+            if (lookupFlat[i] is ErrorValue) continue;
             if (CompareScalar(lookupFlat[i], lookupVal) <= 0)
                 matchIdx = i;
         }
@@ -541,7 +563,7 @@ public static partial class BuiltInFunctions
         int matchIdx = -1;
         for (int i = 0; i < lookupVector.Count; i++)
         {
-            if (lookupVector[i] is ErrorValue lErr) return lErr;
+            if (lookupVector[i] is ErrorValue) continue;
             if (CompareScalar(lookupVector[i], lookupVal) <= 0)
                 matchIdx = i;
         }

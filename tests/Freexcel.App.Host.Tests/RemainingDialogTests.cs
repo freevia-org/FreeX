@@ -365,6 +365,8 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("IsCancel = true");
     }
 
     [Fact]
@@ -517,6 +519,17 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_periodsBox.Focus();");
         source.Should().Contain("_periodsBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_periodsBox);");
+    }
+
+    [Fact]
+    public void ForecastSheetDialog_UsesExcelLikeCreateDefaultAction()
+    {
+        var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
+        var helperSource = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed class ObjectRotationDialog");
+
+        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(\"Forecast _periods:\", _periodsBox, Accept, acceptContent: \"_Create\")");
+        helperSource.Should().Contain("string acceptContent = \"_OK\"");
+        helperSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72, acceptContent: acceptContent)");
     }
 
     [Fact]

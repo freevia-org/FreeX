@@ -334,6 +334,8 @@ public partial class MainWindow
         kind switch
         {
             QuickAnalysisPreviewVisualKind.DataBars => GridQuickAnalysisPreviewVisualKind.DataBars,
+            QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale,
+            QuickAnalysisPreviewVisualKind.IconSet => GridQuickAnalysisPreviewVisualKind.IconSet,
             QuickAnalysisPreviewVisualKind.Highlight => GridQuickAnalysisPreviewVisualKind.Highlight,
             QuickAnalysisPreviewVisualKind.ClearFormat => GridQuickAnalysisPreviewVisualKind.ClearFormat,
             QuickAnalysisPreviewVisualKind.TotalFormula => GridQuickAnalysisPreviewVisualKind.TotalFormula,

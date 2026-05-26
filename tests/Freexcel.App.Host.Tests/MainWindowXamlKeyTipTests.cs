@@ -1339,11 +1339,12 @@ public sealed class MainWindowXamlKeyTipTests
         statsPanel.Attribute("ClipToBounds")?.Value.Should().Be("True");
 
         var zoomControls = statusBarGrid
-            .Descendants(presentation + "StackPanel")
+            .Descendants(presentation + "Grid")
             .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusZoomControls");
 
         zoomControls.Attribute("Grid.Column")?.Value.Should().Be("2");
         zoomControls.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
+        zoomControls.Attribute("Height")?.Value.Should().Be("24");
         zoomControls.Attribute("Background")?.Value.Should().Be("{StaticResource FreexcelStatusSurfaceBrush}");
         zoomControls.Attribute("Panel.ZIndex")?.Value.Should().Be("1");
     }
