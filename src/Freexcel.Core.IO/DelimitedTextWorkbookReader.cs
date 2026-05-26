@@ -278,6 +278,7 @@ internal static partial class DelimitedTextWorkbookReader
             "#NULL!" => ErrorValue.Null,
             "#N/A" => ErrorValue.NA,
             "#NUM!" => ErrorValue.Num,
+            "#CIRCULAR!" => ErrorValue.Circular,
             "#SPILL!" => ErrorValue.Spill,
             "#CALC!" => ErrorValue.Calc,
             _ => null!
