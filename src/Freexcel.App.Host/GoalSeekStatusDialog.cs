@@ -64,7 +64,8 @@ public sealed class GoalSeekStatusDialog : Window
                 Content = "_OK",
                 Width = 76,
                 Margin = new Thickness(4, 0, 0, 0),
-                IsDefault = true
+                IsDefault = true,
+                IsCancel = true
             };
             okButton.Click += (_, _) => DialogResult = false;
             buttons.Children.Add(okButton);

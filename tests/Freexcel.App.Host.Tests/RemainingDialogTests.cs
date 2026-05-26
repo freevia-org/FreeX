@@ -365,6 +365,8 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("IsCancel = true");
     }
 
     [Fact]
