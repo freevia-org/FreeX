@@ -430,7 +430,7 @@ public class ExportPlannerTests
             "Content = \"_Include document properties\"",
             "Content = \"_Open after publishing\"",
             "Content = \"_Ignore print areas\"",
-            "Content = \"Create _PDF bookmarks using sheet names\"",
+            "Content = \"Create _PDF bookmarks\"",
             "Content = \"_Bitmap text when fonts may not be embedded\"",
             "Content = \"PDF/_A compliant (not supported)\"",
             "Content = \"Document structure _tags (not supported)\"",
@@ -449,6 +449,7 @@ public class ExportPlannerTests
         })
             source.Should().Contain(expected);
 
+        source.Should().NotContain("Create _PDF bookmarks using sheet names");
         source.Should().NotContain("CSV _delimiter:");
     }
 
