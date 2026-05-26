@@ -285,7 +285,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(45, "the generated metadata-pass manifest currently declares forty-five deterministic package-retention rows");
+        rows.Should().HaveCount(46, "the generated metadata-pass manifest currently declares forty-six deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -716,6 +716,29 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-stylesheet-native-metadata-001");
         AssertStylesheetNativeMetadata(saved, "generated-stylesheet-native-metadata-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookThemeNativeSchemesRow_RetainsThemeSchemeDetailsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-theme-native-schemes-001");
+        AssertWorkbookThemeNativeSchemes(source, "generated-workbook-theme-native-schemes-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.Theme.Name.Should().Be("Freexcel Native Scheme Theme");
+        workbook.Theme.MajorFontName.Should().Be("Major Native");
+        workbook.Theme.MinorFontName.Should().Be("Minor Native");
+        workbook.Theme.NativeColorSchemeXml.Should().Contain("lumMod");
+        workbook.Theme.NativeFontSchemeXml.Should().Contain("typeface=\"Major East Asia\"");
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-theme-scheme-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-theme-native-schemes-001");
+        AssertWorkbookThemeNativeSchemes(saved, "generated-workbook-theme-native-schemes-001 saved");
     }
 
     [Fact]
@@ -1977,6 +2000,34 @@ public class XlsxCorpusRunnerTests
             .Should()
             .Contain("{FFEEDDCC-7788-6655-4433-22110099AABB}", because)
             .And.Contain("FreexcelNativeStylesExtension", because);
+    }
+
+    private static void AssertWorkbookThemeNativeSchemes(Stream package, string because)
+    {
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var themeXml = LoadPackageXml(archive.GetEntry("xl/theme/theme1.xml")!);
+        var themeElements = themeXml.Root!.Element(drawingNs + "themeElements")!;
+        var colorScheme = themeElements.Element(drawingNs + "clrScheme")!;
+        colorScheme.Element(drawingNs + "accent1")!
+            .Element(drawingNs + "srgbClr")!
+            .Element(drawingNs + "lumMod")!
+            .Attribute("val")!
+            .Value
+            .Should()
+            .Be("75000", because);
+        var majorFont = themeElements.Element(drawingNs + "fontScheme")!.Element(drawingNs + "majorFont")!;
+        majorFont.Element(drawingNs + "ea")!
+            .Attribute("typeface")!
+            .Value
+            .Should()
+            .Be("Major East Asia", because);
+        majorFont.Element(drawingNs + "font")!
+            .Attribute("script")!
+            .Value
+            .Should()
+            .Be("Jpan", because);
     }
 
     private static void AssertHeaderFooterLegacyDrawingPackageGraph(Stream package, string because)
@@ -4041,6 +4092,7 @@ public class XlsxCorpusRunnerTests
     private static bool IsFidelityCriticalPart(string path) =>
         path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/theme/theme1.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/styles.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
