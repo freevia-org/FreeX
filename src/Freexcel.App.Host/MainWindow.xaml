@@ -3549,10 +3549,11 @@
              ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="4" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="{StaticResource FreexcelBorderBrush}"
                 BorderThickness="0" Padding="0">
-            <Grid>
+            <Grid x:Name="SheetTabsRowGrid"
+                  SizeChanged="SheetTabsRowGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
@@ -3671,21 +3672,49 @@
                         </ItemsControl>
                 </ScrollViewer>
 
-                <Button x:Name="SheetNavRightBtn" Grid.Column="2" Content="&gt;" Width="20" Height="20" Padding="0"
+                <Button x:Name="AddSheetButton" Grid.Column="2" Content="+" Width="28" Height="22"
+                        FontSize="14" Margin="2,0,0,0" Padding="0"
+                        Background="#F7FBF8" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1,1,1,0"
+                        Foreground="{StaticResource FreexcelGreenDarkBrush}"
+                        VerticalAlignment="Center" Cursor="Hand"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        AutomationProperties.Name="Insert Sheet"
+                        AutomationProperties.HelpText="Add a new sheet to the workbook."
+                        Click="AddSheetButton_Click"
+                        local:RibbonTooltip.Title="Insert Sheet"
+                        local:RibbonTooltip.KeyTip="IS"
+                        local:RibbonTooltip.Description="Add a new sheet to the workbook.">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="GhostTabChrome"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="3,3,0,0"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="GhostTabChrome" Property="Background" Value="{StaticResource FreexcelGreenSoftBrush}"/>
+                                    <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreexcelGreenBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="GhostTabChrome" Property="Background" Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
+                                    <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreexcelGreenDarkBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
                         Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="2,0,0,0"
                         local:RibbonTooltip.Title="Scroll Tabs Right"
                         local:RibbonTooltip.KeyTip="SR"
                         local:RibbonTooltip.Description="Scroll the sheet tab list to the right."/>
-
-                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" Width="26" Height="22"
-                        FontSize="14" Margin="4,0" Padding="0"
-                        Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
-                        VerticalAlignment="Center" Cursor="Hand"
-                        Click="AddSheetButton_Click"
-                        local:RibbonTooltip.Title="Insert Sheet"
-                        local:RibbonTooltip.KeyTip="IS"
-                        local:RibbonTooltip.Description="Add a new sheet to the workbook."/>
 
                 <!-- Horizontal scrollbar (Excel-style, right of sheet tabs) -->
                 <ScrollBar x:Name="HorizontalScroll" Grid.Column="4"

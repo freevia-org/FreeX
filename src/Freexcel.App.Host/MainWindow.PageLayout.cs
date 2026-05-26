@@ -242,7 +242,7 @@ public partial class MainWindow
 
     private void ScaleToFitBtn_Click(object sender, RoutedEventArgs e)
     {
-        PageSetupDialogBtn_Click(sender, e);
+        ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit);
     }
 
     private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
