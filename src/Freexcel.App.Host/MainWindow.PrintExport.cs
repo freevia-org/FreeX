@@ -43,9 +43,12 @@ public partial class MainWindow
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
-        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null) { Owner = this };
+        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage) { Owner = this };
         if (optionsDialog.ShowDialog() != true)
             return;
+
+        _options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;
+        _options.Save();
 
         var saveDlg = new Microsoft.Win32.SaveFileDialog
         {

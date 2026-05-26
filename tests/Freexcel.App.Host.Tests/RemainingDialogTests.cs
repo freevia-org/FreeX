@@ -5,6 +5,8 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -782,6 +784,33 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void UnhideSheetDialogSheetList_DoubleClickAcceptsSelectedSheet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new UnhideSheetDialog(["Hidden 1", "Hidden 2"]);
+            var sheetBox = GetField<ListBox>(dialog, "_sheetBox");
+            dialog.Dispatcher.BeginInvoke(() =>
+            {
+                sheetBox.SelectedItem = "Hidden 2";
+                sheetBox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                {
+                    RoutedEvent = Control.MouseDoubleClickEvent
+                });
+
+                dialog.Dispatcher.BeginInvoke(() =>
+                {
+                    if (dialog.DialogResult is null)
+                        dialog.Close();
+                }, DispatcherPriority.ContextIdle);
+            }, DispatcherPriority.ApplicationIdle);
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.Result.Should().Be(new UnhideSheetDialogResult("Hidden 2"));
+        });
+    }
+
+    [Fact]
     public void SpellCheckDialog_CreateReplaceResult_CapturesReplacement()
     {
         SpellCheckDialog.CreateReplaceResult("mispelled", "misspelled")
@@ -903,7 +932,8 @@ public sealed class RemainingDialogTests
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewToolbarPlanner.cs")));
 
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)
     {
