@@ -182,41 +182,8 @@ public sealed partial class Sheet
         foreach (var pt in PivotTables)
             copy.PivotTables.Add(ClonePivotTable(pt, newId));
 
-        // Structured tables
         foreach (var table in StructuredTables)
-        {
-            var clonedTable = new StructuredTableModel
-            {
-                Id = table.Id,
-                Name = table.Name,
-                DisplayName = table.DisplayName,
-                Range = RemapRange(table.Range, newId),
-                HasAutoFilter = table.HasAutoFilter,
-                TotalsRowShown = table.TotalsRowShown,
-                HeaderRowCount = table.HeaderRowCount,
-                TotalsRowCount = table.TotalsRowCount,
-                InsertRow = table.InsertRow,
-                InsertRowShift = table.InsertRowShift,
-                Published = table.Published,
-                Comment = table.Comment,
-                StyleName = table.StyleName,
-                ShowFirstColumn = table.ShowFirstColumn,
-                ShowLastColumn = table.ShowLastColumn,
-                ShowRowStripes = table.ShowRowStripes,
-                ShowColumnStripes = table.ShowColumnStripes,
-                PackagePart = table.PackagePart,
-                NativeSortStateXml = table.NativeSortStateXml,
-                NativeAttributes = table.NativeAttributes,
-                NativeChildXmls = table.NativeChildXmls,
-                NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
-                NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
-                NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
-                NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
-            };
-            clonedTable.Columns.AddRange(table.Columns);
-            clonedTable.FilterColumns.AddRange(table.FilterColumns);
-            copy.StructuredTables.Add(clonedTable);
-        }
+            copy.StructuredTables.Add(CloneStructuredTable(table, newId));
 
         // Conditional formats
         foreach (var cf in ConditionalFormats)
@@ -391,6 +358,41 @@ public sealed partial class Sheet
         clonedPt.ValueFilters.AddRange(pt.ValueFilters);
         clonedPt.Sorts.AddRange(pt.Sorts);
         return clonedPt;
+    }
+
+    private static StructuredTableModel CloneStructuredTable(StructuredTableModel table, SheetId newId)
+    {
+        var clonedTable = new StructuredTableModel
+        {
+            Id = table.Id,
+            Name = table.Name,
+            DisplayName = table.DisplayName,
+            Range = RemapRange(table.Range, newId),
+            HasAutoFilter = table.HasAutoFilter,
+            TotalsRowShown = table.TotalsRowShown,
+            HeaderRowCount = table.HeaderRowCount,
+            TotalsRowCount = table.TotalsRowCount,
+            InsertRow = table.InsertRow,
+            InsertRowShift = table.InsertRowShift,
+            Published = table.Published,
+            Comment = table.Comment,
+            StyleName = table.StyleName,
+            ShowFirstColumn = table.ShowFirstColumn,
+            ShowLastColumn = table.ShowLastColumn,
+            ShowRowStripes = table.ShowRowStripes,
+            ShowColumnStripes = table.ShowColumnStripes,
+            PackagePart = table.PackagePart,
+            NativeSortStateXml = table.NativeSortStateXml,
+            NativeAttributes = table.NativeAttributes,
+            NativeChildXmls = table.NativeChildXmls,
+            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
+            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
+            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
+            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
+        };
+        clonedTable.Columns.AddRange(table.Columns);
+        clonedTable.FilterColumns.AddRange(table.FilterColumns);
+        return clonedTable;
     }
 
     private void CopyLayoutCollectionsTo(Sheet copy)
