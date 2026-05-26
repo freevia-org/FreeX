@@ -141,12 +141,17 @@ public static class RibbonAdaptiveLayoutPlanner
             ApplyPriorityState(
                 states,
                 groupNames,
-                availableWidth <= 1120
-                    ? ["Workbook Views", "Show"]
-                    : availableWidth <= 1320
-                        ? ["Workbook Views", "Show", "Zoom"]
-                        : ["Workbook Views", "Show", "Zoom", "Window"],
+                availableWidth > 1800
+                    ? ["Workbook Views", "Show", "Zoom", "Window"]
+                    : ["Workbook Views", "Zoom", "Window"],
                 RibbonAdaptiveGroupState.Full);
+            ApplyPriorityCollapse(
+                states,
+                groupNames,
+                availableWidth > 1800
+                    ? ["Macros"]
+                    : ["Show", "Macros"]);
+            return true;
         }
 
         var firstCollapsedIndex = GetFirstCollapsedIndexForKnownTab(availableWidth, groupNames);

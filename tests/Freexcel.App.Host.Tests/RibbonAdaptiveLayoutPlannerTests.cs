@@ -207,14 +207,13 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
 
         states[Array.IndexOf(groupNames, "Workbook Views")].Should().Be(RibbonAdaptiveGroupState.Full);
-        states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
         states[Array.IndexOf(groupNames, "Zoom")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Window")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Macros")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Theory]
-    [InlineData(1120, new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" }, 2)]
     [InlineData(1120, new[] { "Tools", "Pens", "Convert", "Arrange", "Format" }, 3)]
     public void ApplyBreakpointOverrides_AppliesExcelLikeTabSpecificCollapseOrder(
         double availableWidth,
@@ -228,6 +227,22 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
 
         states.Take(firstCollapsedIndex).Should().OnlyContain(state => state == RibbonAdaptiveGroupState.Full);
         states.Skip(firstCollapsedIndex).Should().OnlyContain(state => state == RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_PrioritizesViewZoomAndWindowBeforeShowAtMediumWidths()
+    {
+        var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" };
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1120,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
+
+        states[Array.IndexOf(groupNames, "Workbook Views")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Zoom")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Window")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Macros")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Theory]
