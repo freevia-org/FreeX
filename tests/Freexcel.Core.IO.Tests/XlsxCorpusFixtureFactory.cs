@@ -84,6 +84,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
+        "generated-worksheet-auto-filter-metadata-001" => true,
         "generated-worksheet-custom-properties-001" => true,
         "generated-worksheet-smart-tags-001" => true,
         "generated-worksheet-scenarios-001" => true,
@@ -519,6 +520,22 @@ internal static class XlsxCorpusFixtureFactory
               </dataConsolidate>
             </worksheet>
             """)),
+        "generated-worksheet-auto-filter-metadata-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1"><c r="A1" t="str"><v>Category</v></c><c r="B1" t="str"><v>Amount</v></c></row>
+                <row r="2"><c r="A2" t="str"><v>A</v></c><c r="B2"><v>10</v></c></row>
+                <row r="3"><c r="A3" t="str"><v>B</v></c><c r="B3"><v>20</v></c></row>
+              </sheetData>
+              <autoFilter ref="A1:B3">
+                <filterColumn colId="0">
+                  <filters blank="1">
+                    <filter val="A"/>
+                  </filters>
+                </filterColumn>
+              </autoFilter>
+            </worksheet>
+            """)),
         "generated-worksheet-custom-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <customProperties>
@@ -756,6 +773,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-sort-state-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-data-consolidation-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-auto-filter-metadata-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-custom-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
@@ -1066,6 +1085,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-data-consolidation-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetDataConsolidationFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-auto-filter-metadata-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetAutoFilterMetadataFixup(archive);
             return;
         }
 
@@ -2237,6 +2262,49 @@ internal static class XlsxCorpusFixtureFactory
                     new XAttribute("ref", "A1:B2"),
                     new XAttribute("sheet", "Data"),
                     new XAttribute("customDataRefFlag", "keep")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetAutoFilterMetadataFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetData").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "autoFilter").Remove();
+        worksheetXml.Root?.Add(
+            new XElement(
+                worksheetNs + "sheetData",
+                new XElement(
+                    worksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "A1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Category")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "B1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Amount"))),
+                new XElement(
+                    worksheetNs + "row",
+                    new XAttribute("r", "2"),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "A2"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "A")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "B2"), new XElement(worksheetNs + "v", "10"))),
+                new XElement(
+                    worksheetNs + "row",
+                    new XAttribute("r", "3"),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "A3"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "B")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "B3"), new XElement(worksheetNs + "v", "20")))),
+            new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:B3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "filters",
+                        new XAttribute("blank", "1"),
+                        new XElement(worksheetNs + "filter", new XAttribute("val", "A"))))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
