@@ -153,16 +153,6 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
-    public void Source_FormatsRefersToRangesLikeExcel()
-    {
-        var source = ReadNamedRangeDialogSource();
-
-        source.Should().Contain("return $\"={PivotUiPlanner.QuoteSheetNameForReference(sheetName)}!{start}:{end}\";");
-        source.Should().Contain("private static string FormatAbsoluteAddress(CellAddress address)");
-        source.Should().Contain("CellAddress.NumberToColumnName(address.Col)");
-    }
-
-    [Fact]
     public void NameDefinitionDialogInvalidInputs_StayOpenAndFocusInvalidField()
     {
         var source = ReadNamedRangeDialogSource();

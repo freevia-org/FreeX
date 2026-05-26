@@ -470,6 +470,25 @@ public sealed class ManageConditionalFormatsDialogTests
         clone.NativePayloadChildXmls.Should().BeEquivalentTo(source.NativePayloadChildXmls);
     }
 
+    [Fact]
+    public void RulesListView_DoubleClickOnRowOpensEditRule()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("MouseDoubleClick += EditRule_Click");
+    }
+
+    [Fact]
+    public void RulesListView_EnterKeyOpensEditRuleAndDeleteKeyDeletesSelectedRule()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("_listView.KeyDown += ListView_KeyDown");
+        source.Should().Contain("private void ListView_KeyDown");
+        source.Should().Contain("Key.Enter");
+        source.Should().Contain("Key.Delete");
+    }
+
     private static ConditionalFormat CloneWithPriority(ConditionalFormat source, int priority, Guid? id = null)
     {
         var method = typeof(ManageConditionalFormatsDialog)

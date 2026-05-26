@@ -32,6 +32,50 @@ public sealed class ShortcutParityMatrixTests
         summary.NotImplemented.Should().Be(0, "the visible shortcut matrix should not regress to undocumented missing shortcuts");
     }
 
+    [Fact]
+    public void ShortcutParityMatrix_NextWorkBacklogKeepsCurrentPriorityOrder()
+    {
+        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
+        var nextWork = ReadNextWorkItems(matrix);
+
+        nextWork.Should().HaveCount(9);
+        nextWork.Should().SatisfyRespectively(
+            item => item.Should().Contain("`Ctrl+P`"),
+            item => item.Should().ContainAll("`Ctrl+V`", "`Ctrl+Alt+V`"),
+            item => item.Should().ContainAll("`Ctrl+1`", "`Ctrl+Shift+F/P`"),
+            item => item.Should().Contain("`Ctrl+Shift+F2`"),
+            item => item.Should().Contain("`Alt+Down`"),
+            item => item.Should().Contain("`Ctrl+Q`"),
+            item => item.Should().ContainAll("ribbon keytips", "Conditional Formatting"),
+            item => item.Should().Contain("`Shift+F10` / Menu key"),
+            item => item.Should().Contain("F4"));
+    }
+
+    [Fact]
+    public void UiTestCatalog_ShortcutInventoryCountsMatchShortcutMatrix()
+    {
+        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var summary = ReadCoverageSummary(matrix);
+
+        catalog.Should().Contain(
+            $"| Documented shortcut rows | {summary.TotalInScope} | From `SHORTCUT_PARITY_MATRIX.md`: {summary.Parity} parity, {summary.Partial} partial. |");
+        catalog.Should().Contain($"{summary.TotalInScope} documented shortcut rows;");
+    }
+
+    private static IReadOnlyList<string> ReadNextWorkItems(IReadOnlyList<string> lines)
+    {
+        var sectionStart = Array.FindIndex(lines.ToArray(), line => line == "## Next Shortcut Work");
+        sectionStart.Should().BeGreaterThanOrEqualTo(0);
+
+        return lines
+            .Skip(sectionStart + 1)
+            .SkipWhile(string.IsNullOrWhiteSpace)
+            .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal))
+            .Where(line => char.IsDigit(line.FirstOrDefault()))
+            .ToArray();
+    }
+
     private static CoverageSummary ReadCoverageSummary(IReadOnlyList<string> lines)
     {
         var parity = ReadSummaryCount(lines, "Parity");

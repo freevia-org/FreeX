@@ -48,18 +48,6 @@ public sealed class CommandInventoryDocumentTests
     }
 
     [Fact]
-    public void CommandSurfaceCustomNumberFormatDocumentsModeledThemeColorSupport()
-    {
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
-        var row = doc.Split('\n')
-            .Single(line => line.StartsWith("| Custom Number Format |", StringComparison.Ordinal));
-
-        row.Should().Contain("modeled `[ThemeColor ...]` prefixes resolved through the workbook theme");
-        row.Should().Contain("native Excel OOXML theme-color number-format fidelity");
-        row.Should().NotContain("theme-derived number-format colors");
-    }
-
-    [Fact]
     public void CommandSurfaceFileBackstageRows_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();

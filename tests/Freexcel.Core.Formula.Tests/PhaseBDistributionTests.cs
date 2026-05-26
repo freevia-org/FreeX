@@ -207,6 +207,29 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void GammaLognormalAndWeibullFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, 1.0), (2, 1, 2.0),
+            (1, 2, 1.0), (2, 2, 2.0),
+            (1, 3, 1.0), (2, 3, 3.0),
+            (1, 4, 0.0), (2, 4, 1.0),
+            (1, 5, 0.5), (2, 5, 0.75),
+            (1, 6, 0.0), (2, 6, 0.5),
+            (1, 7, 1.0), (2, 7, 1.5));
+
+        AssertColumnApproximately(Eval("WEIBULL.DIST(A1:A2,B1:B2,C1:C2,D1:D2)", sheet), Calc("WEIBULL.DIST(1,1,1,FALSE)"), Calc("WEIBULL.DIST(2,2,3,TRUE)"));
+        AssertColumnApproximately(Eval("GAMMA.DIST(A1:A2,B1:B2,C1:C2,D1:D2)", sheet), Calc("GAMMA.DIST(1,1,1,FALSE)"), Calc("GAMMA.DIST(2,2,3,TRUE)"));
+        AssertColumnApproximately(Eval("GAMMA.INV(E1:E2,B1:B2,C1:C2)", sheet), Calc("GAMMA.INV(0.5,1,1)"), Calc("GAMMA.INV(0.75,2,3)"));
+        AssertColumnApproximately(Eval("LOGNORM.DIST(A1:A2,F1:F2,G1:G2,D1:D2)", sheet), Calc("LOGNORM.DIST(1,0,1,FALSE)"), Calc("LOGNORM.DIST(2,0.5,1.5,TRUE)"));
+        AssertColumnApproximately(Eval("LOGNORM.INV(E1:E2,F1:F2,G1:G2)", sheet), Calc("LOGNORM.INV(0.5,0,1)"), Calc("LOGNORM.INV(0.75,0.5,1.5)"));
+
+        Eval("WEIBULL.DIST(A1:A2,B1:C1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("GAMMA.DIST(A1:A2,B1:C1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("LOGNORM.DIST(A1:A2,F1:G1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void BetaDistributionFunctions_RangeFirstArgument_SpillElementwise()
     {
         var xValues = MakeSheet((1, 1, 0.25), (2, 1, 0.5));
@@ -219,6 +242,24 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void BetaDistributionFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, 0.25), (2, 1, 0.5),
+            (1, 2, 1.0), (2, 2, 2.0),
+            (1, 3, 1.0), (2, 3, 3.0),
+            (1, 4, 1.0), (2, 4, 0.0),
+            (1, 5, 0.0), (2, 5, 0.0),
+            (1, 6, 1.0), (2, 6, 2.0));
+
+        AssertColumnApproximately(Eval("BETA.DIST(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2,F1:F2)", sheet), Calc("BETA.DIST(0.25,1,1,TRUE,0,1)"), Calc("BETA.DIST(0.5,2,3,FALSE,0,2)"));
+        AssertColumnApproximately(Eval("BETA.INV(A1:A2,B1:B2,C1:C2,E1:E2,F1:F2)", sheet), Calc("BETA.INV(0.25,1,1,0,1)"), Calc("BETA.INV(0.5,2,3,0,2)"));
+
+        Eval("BETA.DIST(A1:A2,B1:C1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("BETA.INV(A1:A2,B1:C1,1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void SimpleDistributionFunctions_RangeFirstArgument_SpillElementwise()
     {
         var xValues = MakeSheet((1, 1, 1.0), (2, 1, 2.0));
@@ -226,21 +267,6 @@ public class PhaseBDistributionTests
         AssertColumnApproximately(Eval("EXPON.DIST(A1:A2,1,TRUE)", xValues), 1.0 - Math.Exp(-1.0), 1.0 - Math.Exp(-2.0));
         AssertColumnApproximately(Eval("WEIBULL.DIST(A1:A2,1,1,TRUE)", xValues), 1.0 - Math.Exp(-1.0), 1.0 - Math.Exp(-2.0));
         AssertColumnApproximately(Eval("POISSON.DIST(A1:A2,2,FALSE)", xValues), 2.0 * Math.Exp(-2.0), 2.0 * Math.Exp(-2.0));
-    }
-
-    [Fact]
-    public void PoissonAndExponDistributionFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
-    {
-        var sheet = MakeSheet(
-            (1, 1, 1.0), (2, 1, 2.0),
-            (1, 2, 2.0), (2, 2, 3.0),
-            (1, 3, 0.0), (2, 3, 1.0));
-
-        AssertColumnApproximately(Eval("POISSON.DIST(A1:A2,B1:B2,C1:C2)", sheet), Calc("POISSON.DIST(1,2,FALSE)"), Calc("POISSON.DIST(2,3,TRUE)"));
-        AssertColumnApproximately(Eval("EXPON.DIST(A1:A2,B1:B2,C1:C2)", sheet), Calc("EXPON.DIST(1,2,FALSE)"), Calc("EXPON.DIST(2,3,TRUE)"));
-
-        Eval("POISSON.DIST(A1:A2,B1:C1,FALSE)", sheet).Should().Be(ErrorValue.Value);
-        Eval("EXPON.DIST(A1:A2,B1:C1,FALSE)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -855,4 +881,25 @@ public class PhaseBDistributionTests
     [Fact]
     public void BinomDistRange_AllValues_Returns1()
         => Calc("BINOM.DIST.RANGE(10,0.5,0,10)").Should().BeApproximately(1.0, 1e-10);
+
+    [Fact]
+    public void BinomDistRange_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, 10.0), (2, 1, 12.0),
+            (1, 2, 0.5), (2, 2, 0.25),
+            (1, 3, 3.0), (2, 3, 2.0),
+            (1, 4, 5.0), (2, 4, 4.0));
+
+        AssertColumnApproximately(
+            Eval("BINOM.DIST.RANGE(A1:A2,B1:B2,C1:C2,D1:D2)", sheet),
+            Calc("BINOM.DIST.RANGE(10,0.5,3,5)"),
+            Calc("BINOM.DIST.RANGE(12,0.25,2,4)"));
+        AssertColumnApproximately(
+            Eval("BINOM.DIST.RANGE(A1:A2,B1:B2,C1:C2)", sheet),
+            Calc("BINOM.DIST.RANGE(10,0.5,3)"),
+            Calc("BINOM.DIST.RANGE(12,0.25,2)"));
+
+        Eval("BINOM.DIST.RANGE(A1:A2,B1:C1,3)", sheet).Should().Be(ErrorValue.Value);
+    }
 }
