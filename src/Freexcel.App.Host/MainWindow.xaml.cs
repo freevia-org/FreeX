@@ -74,6 +74,7 @@ public partial class MainWindow : Window
     private bool _normalizingRibbonSurface;
     private CellColor _borderPickerColor = CellColor.Black;
     private BorderStyle _borderPickerStyle = BorderStyle.Thin;
+    private BorderDrawMode _borderDrawMode;
     private readonly IReadOnlyList<System.Windows.Media.Brush> _formulaReferenceBrushes =
     [
         new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(32, 112, 214)),
