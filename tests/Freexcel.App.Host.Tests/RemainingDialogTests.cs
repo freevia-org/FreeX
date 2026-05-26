@@ -946,6 +946,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = \"Page _Setup...\"");
         source.Should().Contain("Content = \"_Print...\"");
         source.Should().Contain("Content = \"_Close Preview\"");
+        source.Should().Contain("IsCancel = true");
         source.Should().Contain("closeButton.Click += (_, _) => Close();");
     }
 
