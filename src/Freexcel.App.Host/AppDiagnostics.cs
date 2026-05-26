@@ -79,16 +79,26 @@ public sealed class AppDiagnostics : IAppDiagnostics
 
     public string RecordCrash(Exception exception, string source)
     {
+        var reportPath = string.Empty;
         try
         {
-            _crashAnalytics.CaptureCrash(exception, source);
-            return _fileStore.RecordCrash(exception, source, _metadata);
+            reportPath = _fileStore.RecordCrash(exception, source, _metadata);
         }
         catch
         {
-            // Crash reporting is best-effort; preserve the original failure path.
-            return string.Empty;
+            // Local crash reporting is best-effort; preserve the original failure path.
         }
+
+        try
+        {
+            _crashAnalytics.CaptureCrash(exception, source);
+        }
+        catch
+        {
+            // Remote crash reporting must never suppress local diagnostics.
+        }
+
+        return reportPath;
     }
 }
 

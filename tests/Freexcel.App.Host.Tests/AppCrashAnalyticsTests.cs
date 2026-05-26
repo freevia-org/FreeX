@@ -29,6 +29,26 @@ public sealed class AppCrashAnalyticsTests
     }
 
     [Fact]
+    public void Options_CreateDefault_MarksEnvironmentKillSwitch()
+    {
+        Environment.SetEnvironmentVariable("FREEXCEL_CRASH_ANALYTICS", "0");
+        try
+        {
+            var options = AppCrashAnalyticsOptions.CreateDefault(
+                sentryDsnProvider: () => "https://public@example.ingest.sentry.io/1",
+                crashAnalyticsEnabled: false);
+
+            options.IsEnabled.Should().BeFalse();
+            options.IsDisabledByEnvironment.Should().BeTrue();
+            options.Dsn.Should().Be("https://public@example.ingest.sentry.io/1");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FREEXCEL_CRASH_ANALYTICS", null);
+        }
+    }
+
+    [Fact]
     public void FreexcelOptions_DefaultsCrashAnalyticsToOptOutUntilUserEnablesIt()
     {
         var options = new FreexcelOptions();
@@ -68,6 +88,27 @@ public sealed class AppCrashAnalyticsTests
         crashAnalytics.Crashes[0].Source.Should().Be("dispatcher");
     }
 
+    [Fact]
+    public void AppDiagnostics_WritesLocalCrashReportWhenRemoteCrashAnalyticsFails()
+    {
+        using var temp = new TemporaryDirectory();
+        var diagnostics = new AppDiagnostics(
+            new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true)),
+            new AppDiagnosticsMetadata(
+                AppVersion: "Version Test",
+                SessionId: "session-1",
+                RuntimeDescription: ".NET Test",
+                OperatingSystemDescription: "Windows Test",
+                ProcessArchitecture: "X64"),
+            new ThrowingCrashAnalytics());
+
+        var reportPath = diagnostics.RecordCrash(new InvalidOperationException("boom"), "dispatcher");
+
+        reportPath.Should().NotBeEmpty();
+        File.Exists(reportPath).Should().BeTrue();
+        File.ReadAllText(reportPath).Should().Contain("\"eventName\": \"crash\"");
+    }
+
     private sealed class FakeCrashAnalytics : ICrashAnalytics
     {
         public List<(string EventName, IReadOnlyDictionary<string, string?> Properties)> Breadcrumbs { get; } = [];
@@ -86,6 +127,24 @@ public sealed class AppCrashAnalyticsTests
         {
             Crashes.Add((exception, source));
         }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class ThrowingCrashAnalytics : ICrashAnalytics
+    {
+        public void Initialize(AppCrashAnalyticsOptions options, AppDiagnosticsMetadata metadata)
+        {
+        }
+
+        public void RecordBreadcrumb(string eventName, IReadOnlyDictionary<string, string?>? properties = null)
+        {
+        }
+
+        public void CaptureCrash(Exception exception, string source) =>
+            throw new InvalidOperationException("remote unavailable");
 
         public void Dispose()
         {

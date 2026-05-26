@@ -5,7 +5,8 @@ namespace Freexcel.App.Host;
 public sealed record AppCrashAnalyticsOptions(
     string? Dsn,
     bool IsEnabled,
-    string Environment = "tester")
+    string Environment = "tester",
+    bool IsDisabledByEnvironment = false)
 {
     public static AppCrashAnalyticsOptions CreateDefault(bool crashAnalyticsEnabled) =>
         CreateDefault(
@@ -27,7 +28,8 @@ public sealed record AppCrashAnalyticsOptions(
 
         return new AppCrashAnalyticsOptions(
             string.IsNullOrWhiteSpace(dsn) ? null : dsn,
-            enabled);
+            enabled,
+            IsDisabledByEnvironment: disabledByEnvironment);
     }
 }
 

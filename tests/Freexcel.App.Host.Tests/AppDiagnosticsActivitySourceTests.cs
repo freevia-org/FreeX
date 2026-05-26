@@ -10,6 +10,7 @@ public sealed class AppDiagnosticsActivitySourceTests
     {
         var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
         var exportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         mainWindowSource.Should().Contain("IAppDiagnostics? diagnostics = null");
@@ -20,6 +21,9 @@ public sealed class AppDiagnosticsActivitySourceTests
         backstageSource.Should().Contain("RecordDiagnosticEvent(\"workbook_saved\"");
         backstageSource.Should().Contain("RecordDiagnosticEvent(\"workbook_save_failed\"");
         backstageSource.Should().Contain("[\"fileType\"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext)");
+        dataSource.Should().Contain("RecordDiagnosticEvent(\"import_completed\"");
+        dataSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");
+        dataSource.Should().Contain("BuildImportDiagnosticProperties(ext");
         exportSource.Should().Contain("RecordDiagnosticEvent(\"export_completed\"");
         exportSource.Should().Contain("RecordDiagnosticEvent(\"export_failed\"");
         exportSource.Should().Contain("[\"fileType\"] = \"pdf\"");

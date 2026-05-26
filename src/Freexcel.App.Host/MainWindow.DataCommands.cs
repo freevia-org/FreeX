@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -19,6 +20,10 @@ public partial class MainWindow
             .ToList();
         if (adapters.Count == 0)
         {
+            RecordDiagnosticEvent("import_failed", new Dictionary<string, string?>
+            {
+                ["reason"] = "no_adapter"
+            });
             MessageBox.Show("No import adapters are available.", "Get Data", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -28,29 +33,62 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true) return;
 
         var ext = System.IO.Path.GetExtension(dialog.FileName).ToLowerInvariant();
-        var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out _);
-        if (adapter is null) return;
+        var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format);
+        if (adapter is null)
+        {
+            RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, null, "unsupported_extension"));
+            return;
+        }
 
         try
         {
             using var stream = System.IO.File.OpenRead(dialog.FileName);
             var imported = adapter.Load(stream);
-            if (imported.Sheets.Count == 0) return;
+            if (imported.Sheets.Count == 0)
+            {
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "empty_workbook", imported.Sheets.Count));
+                return;
+            }
 
             var destination = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
             if (!TryExecuteCommand(new ImportSheetCommand(_currentSheetId, destination, imported.Sheets[0]), "Get Data", out var outcome))
+            {
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "command_failed", imported.Sheets.Count));
                 return;
+            }
 
             RecalculateIfAutomatic(outcome.AffectedCells ?? []);
             SetActiveCell(destination);
             EnsureCellVisible(destination);
             UpdateViewport();
             RefreshStatusBar();
+            RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, null, imported.Sheets.Count));
         }
         catch (Exception ex)
         {
+            RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, ex.GetType().Name));
             MessageBox.Show($"Failed to import data:\n{ex.Message}", "Get Data", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private static Dictionary<string, string?> BuildImportDiagnosticProperties(
+        string extension,
+        string? format,
+        string? reason = null,
+        int? worksheetCount = null)
+    {
+        var properties = new Dictionary<string, string?>
+        {
+            ["extension"] = extension,
+            ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(extension)
+        };
+        if (!string.IsNullOrWhiteSpace(format))
+            properties["format"] = format;
+        if (worksheetCount is not null)
+            properties["worksheetCount"] = worksheetCount.Value.ToString(CultureInfo.InvariantCulture);
+        if (!string.IsNullOrWhiteSpace(reason))
+            properties["reason"] = reason;
+        return properties;
     }
     private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click(sender, e);
 

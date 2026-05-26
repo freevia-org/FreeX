@@ -3,7 +3,9 @@ namespace Freexcel.App.Host;
 public static class CrashAnalyticsConsentPlanner
 {
     public static bool ShouldPrompt(FreexcelOptions options, AppCrashAnalyticsOptions crashAnalyticsOptions) =>
-        !options.CrashAnalyticsPrompted && !string.IsNullOrWhiteSpace(crashAnalyticsOptions.Dsn);
+        !options.CrashAnalyticsPrompted &&
+        !crashAnalyticsOptions.IsDisabledByEnvironment &&
+        !string.IsNullOrWhiteSpace(crashAnalyticsOptions.Dsn);
 
     public static void ApplyConsent(FreexcelOptions options, bool enabled)
     {
