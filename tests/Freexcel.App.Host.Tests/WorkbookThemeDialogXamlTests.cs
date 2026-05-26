@@ -83,10 +83,10 @@ public sealed class WorkbookThemeDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml.cs"));
 
-        source.Should().Contain("foreach (var field in ThemeColorFields())");
-        source.Should().Contain("TryReadThemeColor(field.TextBox, out var color)");
-        source.Should().Contain("private bool TryReadThemeColor(TextBox colorBox, out CellColor color)");
-        source.Should().Contain("FocusInvalidColorInput(colorBox);");
+        source.Should().Contain("WorkbookThemeDialogPlanner.TryCreateTheme");
+        source.Should().Contain("private void ShowInvalidThemeColor(WorkbookThemeDialogValidationError error)");
+        source.Should().Contain("ThemeColorFields().FirstOrDefault(field => field.Slot == error.Slot)");
+        source.Should().Contain("FocusInvalidColorInput(field.TextBox);");
         source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
         source.Should().Contain("colorBox.Focus();");
         source.Should().Contain("colorBox.SelectAll();");
