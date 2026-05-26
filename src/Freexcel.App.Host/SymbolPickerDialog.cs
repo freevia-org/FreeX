@@ -206,8 +206,8 @@ public sealed partial class SymbolPickerDialog : Window
         var specialPanel = new StackPanel();
         specialPanel.Children.Add(specialList);
 
-        tabControl.Items.Add(new TabItem { Header = "Symbols", Content = symbolsPanel });
-        tabControl.Items.Add(new TabItem { Header = "Special Characters", Content = specialPanel });
+        tabControl.Items.Add(new TabItem { Header = "_Symbols", Content = symbolsPanel });
+        tabControl.Items.Add(new TabItem { Header = "Special _Characters", Content = specialPanel });
 
         var leftPanel = new StackPanel();
         leftPanel.Children.Add(tabControl);
@@ -219,6 +219,16 @@ public sealed partial class SymbolPickerDialog : Window
         outer.Children.Add(leftPanel);
 
         Content = outer;
+        Loaded += (_, _) => FocusInitialKeyboardTarget(grid);
+    }
+
+    private static void FocusInitialKeyboardTarget(UniformGrid grid)
+    {
+        if (grid.Children.OfType<Button>().FirstOrDefault() is not { } firstSymbol)
+            return;
+
+        firstSymbol.Focus();
+        Keyboard.Focus(firstSymbol);
     }
 
     private void ShowInvalidCharacterCodeWarning(TextBox selectedCode)
