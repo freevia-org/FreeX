@@ -136,6 +136,7 @@ public class DependencyGraphTests
 
         throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(parts));
     }
+
 }
 
 public class VolatileFunctionTests

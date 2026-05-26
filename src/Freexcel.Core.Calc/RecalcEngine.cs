@@ -27,8 +27,8 @@ public sealed class RecalcEngine
     public RecalcReport Recalculate(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
     {
         // Include volatile cells in the dependency traversal so their dependents appear in the plan
-        var allChanged = changedCells.Concat(_volatileCells).ToList();
-        var plan = _graph.GetRecalcOrder(allChanged);
+        var changedForTraversal = BuildChangedSetForTraversal(changedCells);
+        var plan = _graph.GetRecalcOrder(changedForTraversal);
         var recalculated = new List<CellAddress>();
         var errors = new List<(CellAddress Cell, string Error)>();
 
@@ -49,18 +49,23 @@ public sealed class RecalcEngine
         // Directly-changed formula cells must evaluate first (they are NOT included in
         // plan.OrderedCells, which only contains downstream dependents). Then volatile cells,
         // then the topological dependent order.
-        var directFormulaChanges = changedCells
-            .Where(addr => {
-                var s = workbook.GetSheet(addr.Sheet);
-                var c = s?.GetCell(addr);
-                return c?.HasFormula == true;
-            });
+        var toEvaluate = new List<CellAddress>(
+            changedCells.Count + _volatileCells.Count + plan.OrderedCells.Count);
+        var seen = new HashSet<CellAddress>();
 
-        var toEvaluate = directFormulaChanges
-            .Concat(_volatileCells)
-            .Concat(plan.OrderedCells)
-            .Distinct()
-            .ToList();
+        foreach (var addr in changedCells)
+        {
+            var sheet = workbook.GetSheet(addr.Sheet);
+            var cell = sheet?.GetCell(addr);
+            if (cell?.HasFormula == true)
+                AddIfNew(addr, toEvaluate, seen);
+        }
+
+        foreach (var addr in _volatileCells)
+            AddIfNew(addr, toEvaluate, seen);
+
+        foreach (var addr in plan.OrderedCells)
+            AddIfNew(addr, toEvaluate, seen);
 
         foreach (var addr in toEvaluate)
         {
@@ -123,6 +128,28 @@ public sealed class RecalcEngine
         }
 
         return new RecalcReport(recalculated, errors, plan.CyclicCells);
+    }
+
+    private IEnumerable<CellAddress> BuildChangedSetForTraversal(IReadOnlyList<CellAddress> changedCells)
+    {
+        if (_volatileCells.Count == 0)
+            return changedCells;
+
+        var allChanged = new List<CellAddress>(changedCells.Count + _volatileCells.Count);
+        foreach (var addr in changedCells)
+            allChanged.Add(addr);
+        foreach (var addr in _volatileCells)
+            allChanged.Add(addr);
+        return allChanged;
+    }
+
+    private static void AddIfNew(
+        CellAddress addr,
+        List<CellAddress> orderedCells,
+        HashSet<CellAddress> seen)
+    {
+        if (seen.Add(addr))
+            orderedCells.Add(addr);
     }
 
     /// <summary>
