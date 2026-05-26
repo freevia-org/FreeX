@@ -253,6 +253,8 @@ public partial class MainWindow
 
         if (match is ComboBox comboBox)
         {
+            comboBox.Focus();
+            Keyboard.Focus(comboBox);
             comboBox.IsDropDownOpen = true;
             return true;
         }
