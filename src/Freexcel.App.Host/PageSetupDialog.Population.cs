@@ -78,6 +78,15 @@ public partial class PageSetupDialog
 
     private void FocusInitialKeyboardTarget()
     {
+        if (_initialFocusTarget == PageSetupInitialFocusTarget.RepeatRows)
+        {
+            PageSetupTabs.SelectedItem = SheetTab;
+            RowsRepeatBox.Focus();
+            RowsRepeatBox.SelectAll();
+            Keyboard.Focus(RowsRepeatBox);
+            return;
+        }
+
         OrientationBox.Focus();
         Keyboard.Focus(OrientationBox);
     }

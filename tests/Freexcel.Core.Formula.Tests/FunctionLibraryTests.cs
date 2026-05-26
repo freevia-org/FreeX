@@ -6048,6 +6048,16 @@ public class FunctionLibraryTests
             .Should().Be(new NumberValue(6));
     }
 
+    [Fact] public void Indirect_A1FullRowString_ReturnsRangeValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"1:1\"))", sheet)
+            .Should().Be(new NumberValue(3));
+    }
+
     [Fact] public void Indirect_InvalidR1C1String_ReturnsRefError()
     {
         _eval.Evaluate("=INDIRECT(\"R0C1\",FALSE)", MakeSheet()).Should().Be(ErrorValue.Ref);
