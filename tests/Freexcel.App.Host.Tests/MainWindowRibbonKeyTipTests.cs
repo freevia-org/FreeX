@@ -669,6 +669,27 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ReviewAllowEditRangesKeyTip_IsDisabledWhenSheetIsProtected()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create(workbook =>
+            {
+                workbook.Sheets[0].IsProtected = true;
+            });
+
+            harness.RefreshSheetProtectionUi();
+
+            harness.NamedButtonIsEnabled("AllowEditRangesButton").Should().BeFalse();
+            harness.HandleDirectTopLevelKeyTip(Key.R).Should().BeTrue();
+            harness.HandleKeyTip(Key.A);
+
+            harness.KeyTipScope.Should().Be("None", "disabled Review commands should not stay routable through keytips");
+            harness.StartScreenIsVisible.Should().BeFalse("Alt,R,A,R must not open the Allow Edit Ranges workflow on a protected sheet");
+        });
+    }
+
+    [Fact]
     public void InsertShapesKeyTip_OpensShapeMenuAndInsertsRectangle()
     {
         RunSta(() =>
@@ -954,6 +975,7 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _getVisibleKeyTipElements;
         private readonly MethodInfo _updateRibbonCompactMode;
         private readonly MethodInfo _updateSsRecentList;
+        private readonly MethodInfo _refreshSheetProtectionUi;
         private readonly MethodInfo _hideStartScreen;
         private readonly Type _scopeType;
         private readonly FieldInfo _scopeField;
@@ -980,6 +1002,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
             _updateSsRecentList = typeof(MainWindow).GetMethod("UpdateSsRecentList", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateSsRecentList");
+            _refreshSheetProtectionUi = typeof(MainWindow).GetMethod("RefreshSheetProtectionUi", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetProtectionUi");
             _hideStartScreen = typeof(MainWindow).GetMethod("HideStartScreen", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "HideStartScreen");
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
@@ -1034,6 +1058,9 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public bool RedoQatIsEnabled =>
             (_window.FindName("RedoQatBtn") as Button)?.IsEnabled == true;
+
+        public bool? NamedButtonIsEnabled(string name) =>
+            (_window.FindName(name) as Button)?.IsEnabled;
 
         public string? StatusZoomText =>
             (_window.FindName("StatusZoomText") as TextBlock)?.Text;
@@ -1345,6 +1372,12 @@ public sealed class MainWindowRibbonKeyTipTests
                 IsPinned = true
             }));
             _updateSsRecentList.Invoke(_window, [""]);
+            PumpDispatcher();
+        }
+
+        public void RefreshSheetProtectionUi()
+        {
+            _refreshSheetProtectionUi.Invoke(_window, null);
             PumpDispatcher();
         }
 
