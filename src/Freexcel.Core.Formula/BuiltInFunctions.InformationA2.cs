@@ -153,6 +153,7 @@ public static partial class BuiltInFunctions
 
         bool ignoreErrors = options == 2 || options == 3 || options == 6 || options == 7;
         bool ignoreHiddenRows = options == 1 || options == 3 || options == 5 || options == 7;
+        bool ignoreNestedAggregates = options <= 3;
 
         bool needsK = funcNum is >= 14 and <= 19;
         if (needsK && args.Count < 4) return ErrorValue.Value;
@@ -171,7 +172,7 @@ public static partial class BuiltInFunctions
             }
             if (arg is RangeValue rv)
             {
-                foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows))
+                foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows, ignoreNestedAggregates))
                 {
                     if (cell is ErrorValue ce)
                     {
@@ -212,7 +213,7 @@ public static partial class BuiltInFunctions
                     }
                     if (arg is RangeValue rv)
                     {
-                        foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows))
+                        foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows, ignoreNestedAggregates))
                         {
                             if (cell is ErrorValue ce)
                             {
@@ -316,14 +317,22 @@ public static partial class BuiltInFunctions
         }
     }
 
-    private static IEnumerable<ScalarValue> AggregateVisibleCells(RangeValue range, IEvalContext ctx, bool ignoreHiddenRows)
+    private static IEnumerable<ScalarValue> AggregateVisibleCells(
+        RangeValue range,
+        IEvalContext ctx,
+        bool ignoreHiddenRows,
+        bool ignoreNestedAggregates)
     {
         for (int r = 0; r < range.RowCount; r++)
         {
             uint absRow = range.StartRow + (uint)r;
             if (ignoreHiddenRows && ctx.IsRowHidden(absRow)) continue;
             for (int c = 0; c < range.ColCount; c++)
+            {
+                uint absCol = range.StartCol + (uint)c;
+                if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, range, absRow, absCol)) continue;
                 yield return range.Cells[r, c];
+            }
         }
     }
 

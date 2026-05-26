@@ -1204,6 +1204,26 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void TitleBarIcons_UseExplicitWhiteForeground()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var titleBarStart = xaml.IndexOf("<!-- Title / quick-access bar", StringComparison.Ordinal);
+        var titleBarEnd = xaml.IndexOf("<!-- Workbook name centred -->", StringComparison.Ordinal);
+
+        titleBarStart.Should().BeGreaterThanOrEqualTo(0);
+        titleBarEnd.Should().BeGreaterThan(titleBarStart);
+
+        var titleBarCommands = xaml[titleBarStart..titleBarEnd];
+        foreach (var kind in new[] { "Save", "Undo", "Redo", "WindowClose", "WindowMaximize", "WindowMinimize" })
+        {
+            titleBarCommands.Should().Contain($"Kind=\"{kind}\"");
+        }
+
+        titleBarCommands.Should().NotContain("Foreground=\"{Binding Foreground");
+        titleBarCommands.Split("Foreground=\"{StaticResource FreexcelWhiteBrush}\"").Length.Should().BeGreaterThanOrEqualTo(7);
+    }
+
+    [Fact]
     public void ToolbarIcons_DoNotUseFontGlyphAssets()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");

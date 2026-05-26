@@ -153,6 +153,21 @@ public sealed class ScenarioManagerDialogTests
     }
 
     [Fact]
+    public void TryValidateResultCells_AcceptsCommaSeparatedTypedReferences()
+    {
+        var sheetId = SheetId.New();
+        var resultsSheetId = SheetId.New();
+
+        ScenarioManagerDialog.TryValidateResultCells(
+                "B2,Results!D5:E5",
+                sheetId,
+                name => name == "Results" ? resultsSheetId : null,
+                out var error)
+            .Should()
+            .BeTrue(error);
+    }
+
+    [Fact]
     public void DialogSource_UsesExcelLikeScenarioListAndSideButtons()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
@@ -260,6 +275,7 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario details.\", _newNameBox);");
         source.Should().Contain("!TryValidateChangingCells(_changingCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error)");
         source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario details.\", _changingCellsBox);");
+        source.Should().Contain("WorkbookRangeTextCodec.TryParseMany(currentSheetId.Value, resultCellsText, resolveSheetIdByName, out _)");
         source.Should().Contain("!TryValidateResultCells(_resultCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error)");
         source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario result cells.\", _resultCellsBox);");
         source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
@@ -270,6 +286,8 @@ public sealed class ScenarioManagerDialogTests
         handlerSource.Should().Contain("dialog.ResultCellsText");
         handlerSource.Should().Contain("new ScenarioSummaryReportCommand(");
         handlerSource.Should().Contain("ParseScenarioResultCells(resultCellsText)");
+        handlerSource.Should().Contain("WorkbookRangeTextCodec.TryParseMany(_currentSheetId, resultCellsText, ResolveSheetIdByName, out var ranges)");
+        handlerSource.Should().Contain("ranges.SelectMany(range => range.AllCells()).Distinct().ToList()");
         handlerSource.Should().Contain("if (workbook.CalculationMode == WorkbookCalculationMode.Automatic)");
         handlerSource.Should().Contain("_recalcEngine.Recalculate(workbook, changedCells)");
         handlerSource.Should().Contain("new SaveScenarioCommand(name, changes, comment, hidden, locked)");
@@ -285,6 +303,18 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_scenarioList.Items.Count > 0 ? _scenarioList : _newNameBox");
         source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void DialogSource_MakesShowTheDefaultSelectedScenarioAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+
+        source.Should().Contain("_scenarioList.MouseDoubleClick += (_, _) => AcceptSelectedScenario();");
+        source.Should().Contain("_showButton = AddActionButton(sideButtons, \"_Show\", ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);");
+        source.Should().Contain("private void AcceptSelectedScenario()");
+        source.Should().Contain("Accept(ScenarioManagerAction.Show);");
+        source.Should().Contain("_showButton.IsDefault = hasSelection;");
     }
 
     private static T GetField<T>(ScenarioManagerDialog dialog, string fieldName)

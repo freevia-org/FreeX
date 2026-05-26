@@ -15,6 +15,7 @@
 
         <GroupBox Grid.Row="0" Header="_Views">
             <ListView x:Name="ViewsList" SelectionChanged="ViewsList_SelectionChanged"
+                      MouseDoubleClick="ViewsList_MouseDoubleClick"
                       AutomationProperties.Name="Custom views"
                       AutomationProperties.HelpText="Shows saved workbook views that can be shown or deleted.">
                 <ListView.View>
