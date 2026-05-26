@@ -353,6 +353,12 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue Indirect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+        => IndirectCore(args, ctx, unwrapSingleCell: true);
+
+    internal static ScalarValue IndirectReference(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+        => IndirectCore(args, ctx, unwrapSingleCell: false);
+
+    private static ScalarValue IndirectCore(IReadOnlyList<ScalarValue> args, IEvalContext ctx, bool unwrapSingleCell)
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
@@ -392,9 +398,12 @@ public static partial class BuiltInFunctions
                 ? !TryParseA1Ref(refText, out uint row, out uint col)
                 : !TryParseR1C1Ref(refText, ctx.CurrentCellAddress, out row, out col))
             return ErrorValue.Ref;
-        return sheetName is not null
-            ? ctx.GetCellValue(sheetName, row, col)
-            : ctx.GetCellValue(row, col);
+
+        return unwrapSingleCell
+            ? sheetName is not null
+                ? ctx.GetCellValue(sheetName, row, col)
+                : ctx.GetCellValue(row, col)
+            : BuildIndirectRange(ctx, sheetName, row, col, row, col);
     }
 
     private static ScalarValue BuildIndirectRange(
@@ -472,8 +481,19 @@ public static partial class BuiltInFunctions
             ? $"{(colAbs ? "$" : "")}{colLetter}{(rowAbs ? "$" : "")}{rowNum}"
             : $"{(rowAbs ? $"R{rowNum}" : $"R[{rowNum}]")}{(colAbs ? $"C{colNum}" : $"C[{colNum}]")}";
         if (!string.IsNullOrEmpty(sheetText))
-            addr = $"'{sheetText.Replace("'", "''")}'!{addr}";
+            addr = $"{FormatAddressSheetText(sheetText)}!{addr}";
         return new TextValue(addr);
+    }
+
+    private static string FormatAddressSheetText(string sheetText)
+    {
+        static bool IsSimpleSheetNameChar(char ch) =>
+            char.IsLetterOrDigit(ch) || ch is '_' or '.';
+
+        bool needsQuotes = sheetText.Length == 0 || !sheetText.All(IsSimpleSheetNameChar);
+        return needsQuotes
+            ? $"'{sheetText.Replace("'", "''")}'"
+            : sheetText;
     }
 
     private static ScalarValue Lookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

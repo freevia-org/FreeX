@@ -145,7 +145,7 @@ public sealed partial class SortDialog : Window
         var add = new Button { Content = "_Add Level", Width = 98, Margin = new Thickness(0, 0, 8, 0) };
         add.Click += (_, _) =>
         {
-            _levels.Add(new SortDialogLevel(0, true));
+            ReplaceLevels(AddLevel(_levels));
             _levelsGrid.SelectedIndex = _levels.Count - 1;
             UpdateToolbarButtonStates();
         };
@@ -153,10 +153,7 @@ public sealed partial class SortDialog : Window
         _deleteLevelButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
-            var updated = RemoveLevel(_levels, selectedIndex);
-            _levels.Clear();
-            foreach (var level in updated)
-                _levels.Add(level);
+            ReplaceLevels(RemoveLevel(_levels, selectedIndex));
             _levelsGrid.SelectedIndex = Math.Min(selectedIndex, _levels.Count - 1);
             UpdateToolbarButtonStates();
         };
@@ -164,10 +161,7 @@ public sealed partial class SortDialog : Window
         _copyLevelButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
-            var updated = CopyLevel(_levels, selectedIndex);
-            _levels.Clear();
-            foreach (var level in updated)
-                _levels.Add(level);
+            ReplaceLevels(CopyLevel(_levels, selectedIndex));
             _levelsGrid.SelectedIndex = Math.Min(selectedIndex + 1, _levels.Count - 1);
             UpdateToolbarButtonStates();
         };
@@ -175,10 +169,7 @@ public sealed partial class SortDialog : Window
         _moveUpButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? 0 : _levelsGrid.SelectedIndex;
-            var updated = MoveLevel(_levels, selectedIndex, -1);
-            _levels.Clear();
-            foreach (var level in updated)
-                _levels.Add(level);
+            ReplaceLevels(MoveLevel(_levels, selectedIndex, -1));
             _levelsGrid.SelectedIndex = Math.Max(0, selectedIndex - 1);
             UpdateToolbarButtonStates();
         };
@@ -186,10 +177,7 @@ public sealed partial class SortDialog : Window
         _moveDownButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
-            var updated = MoveLevel(_levels, selectedIndex, 1);
-            _levels.Clear();
-            foreach (var level in updated)
-                _levels.Add(level);
+            ReplaceLevels(MoveLevel(_levels, selectedIndex, 1));
             _levelsGrid.SelectedIndex = Math.Min(_levels.Count - 1, selectedIndex + 1);
             UpdateToolbarButtonStates();
         };
@@ -274,11 +262,12 @@ public sealed partial class SortDialog : Window
     {
         _sortByColumn.Header = _options.LeftToRight ? "Sort by row" : "Sort by";
         _headerCheck.IsEnabled = !_options.LeftToRight;
-        _sortByColumn.ItemsSource = _options.LeftToRight
-            ? _rowChoices
-            : _headerCheck.IsChecked == true
-            ? _columnChoices
-            : _genericColumnChoices;
+        _sortByColumn.ItemsSource = SortDialogPlanner.BuildActiveColumnChoices(
+            _options,
+            _headerCheck.IsChecked == true,
+            _columnChoices,
+            _genericColumnChoices,
+            _rowChoices);
     }
 
     private void AttachLevel(SortDialogLevel level)
@@ -293,12 +282,14 @@ public sealed partial class SortDialog : Window
 
     private void ApplyColorChoices(SortDialogLevel level)
     {
-        level.SetColorChoices(SortOnFromLabel(level.SortOn) switch
-        {
-            Freexcel.Core.Commands.SortOn.CellColor => _cellColorChoices,
-            Freexcel.Core.Commands.SortOn.FontColor => _fontColorChoices,
-            _ => [new SortColorChoice("")]
-        });
+        level.SetColorChoices(SortDialogPlanner.BuildColorChoicesForSortOn(level.SortOn, _cellColorChoices, _fontColorChoices));
+    }
+
+    private void ReplaceLevels(IEnumerable<SortDialogLevel> levels)
+    {
+        _levels.Clear();
+        foreach (var level in levels)
+            _levels.Add(level);
     }
 
     private static DataGridTemplateColumn CreateOrderColumn()

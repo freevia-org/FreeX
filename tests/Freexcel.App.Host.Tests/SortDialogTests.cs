@@ -29,6 +29,84 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void PlannerBuildSortKeys_MapsLabelsAndIgnoresColorForValueSorts()
+    {
+        var levels = new[]
+        {
+            new SortDialogLevel(0, true) { SortOn = "Cell Values", TargetColor = "#FF0000" },
+            new SortDialogLevel(1, false) { SortOn = "Cell Color", TargetColor = "#00FF00" },
+            new SortDialogLevel(2, true) { SortOn = "Font Color", TargetColor = "#0000FF" },
+            new SortDialogLevel(3, true) { SortOn = "Unknown", TargetColor = "#FFFFFF" }
+        };
+
+        SortDialogPlanner.BuildSortKeys(levels).Should().Equal(
+            new SortKey(0, true, SortOn.CellValues, null),
+            new SortKey(1, false, SortOn.CellColor, new CellColor(0, 255, 0)),
+            new SortKey(2, true, SortOn.FontColor, new CellColor(0, 0, 255)),
+            new SortKey(3, true, SortOn.CellValues, null));
+    }
+
+    [Fact]
+    public void PlannerBuildActiveColumnChoices_UsesRowsForLeftToRightAndHeaderAwareColumnsOtherwise()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sales");
+        sheet.SetCell(new CellAddress(sheetId, 4, 2), new TextValue("Region"));
+        var range = new GridRange(
+            new CellAddress(sheetId, 4, 2),
+            new CellAddress(sheetId, 6, 4));
+        var headerChoices = SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders: true);
+        var genericChoices = SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders: false);
+        var rowChoices = SortDialogPlanner.BuildRowChoices(range);
+
+        SortDialogPlanner.BuildActiveColumnChoices(
+                new SortDialogOptions(LeftToRight: false),
+                hasHeaders: true,
+                headerChoices,
+                genericChoices,
+                rowChoices)
+            .Should()
+            .Equal(headerChoices);
+        SortDialogPlanner.BuildActiveColumnChoices(
+                new SortDialogOptions(LeftToRight: false),
+                hasHeaders: false,
+                headerChoices,
+                genericChoices,
+                rowChoices)
+            .Should()
+            .Equal(genericChoices);
+        SortDialogPlanner.BuildActiveColumnChoices(
+                new SortDialogOptions(LeftToRight: true),
+                hasHeaders: true,
+                headerChoices,
+                genericChoices,
+                rowChoices)
+            .Should()
+            .Equal(rowChoices);
+    }
+
+    [Fact]
+    public void SortDialogPlanningFacade_ForwardsPureWorkToPlanner()
+    {
+        var planningSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.Planning.cs"));
+
+        planningSource.Should().Contain("internal static class SortDialogPlanner");
+        planningSource.Should().Contain("SortDialogPlanner.BuildSortKeys(levels)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildOrderChoices(sortOn)");
+        planningSource.Should().Contain("SortDialogPlanner.AddLevel(levels, columnOffset, ascending)");
+        planningSource.Should().Contain("SortDialogPlanner.RemoveLevel(levels, index)");
+        planningSource.Should().Contain("SortDialogPlanner.CopyLevel(levels, index)");
+        planningSource.Should().Contain("SortDialogPlanner.MoveLevel(levels, index, direction)");
+        planningSource.Should().Contain("SortDialogPlanner.UpdateLevel(levels, index, columnOffset, ascending)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(range)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildRowChoices(range)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColorChoices(workbook, sheet, range)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColorChoices(workbook, sheet, range, sortOn)");
+        planningSource.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");
+    }
+
+    [Fact]
     public void AddLevel_AppendsAscendingFirstColumnLevelByDefault()
     {
         var levels = new[] { new SortDialogLevel(1, false) };
