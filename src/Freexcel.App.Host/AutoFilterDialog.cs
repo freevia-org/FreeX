@@ -177,18 +177,7 @@ public sealed partial class AutoFilterDialog : Window
         foreach (var filterButton in new[] { _textFiltersButton, _numberFiltersButton, _dateFiltersButton })
         {
             filterButton.Margin = new Thickness(0, 8, 0, 0);
-            filterButton.Click += (_, _) =>
-            {
-                if (filterButton.ContextMenu is { } submenu)
-                {
-                    submenu.PlacementTarget = filterButton;
-                    submenu.IsOpen = true;
-                    return;
-                }
-
-                _criteriaOperatorBox.Focus();
-                UpdateCriteriaTextFromTypedControls();
-            };
+            filterButton.Click += (_, _) => TryOpenFilterFamilySubmenu(filterButton);
             stack.Children.Add(filterButton);
         }
 
@@ -300,6 +289,7 @@ public sealed partial class AutoFilterDialog : Window
         stack.Children.Add(buttons);
 
         Content = root;
+        PreviewKeyDown += AutoFilterDialog_PreviewKeyDown;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 }

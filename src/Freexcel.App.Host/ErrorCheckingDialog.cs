@@ -109,7 +109,7 @@ public sealed class ErrorCheckingDialog : Window
         options.Click += (_, _) => _openOptions?.Invoke();
         buttons.Children.Add(options);
 
-        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
