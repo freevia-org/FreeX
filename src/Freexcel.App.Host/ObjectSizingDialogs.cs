@@ -202,7 +202,7 @@ public sealed class RotationDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _rotationBox.Text = degrees.ToString(CultureInfo.InvariantCulture);
-        Content = ObjectSizeDialog.CreateSingleInputContent("Degrees:", _rotationBox, Accept);
+        Content = ObjectSizeDialog.CreateSingleInputContent("_Degrees:", _rotationBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
