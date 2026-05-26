@@ -56,6 +56,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-document-properties-001" => true,
         "generated-header-footer-legacy-drawing-001" => true,
         "generated-workbook-extension-list-001" => true,
+        "generated-workbook-properties-001" => true,
         "generated-workbook-file-version-001" => true,
         "generated-workbook-file-recovery-001" => true,
         "generated-workbook-file-sharing-001" => true,
@@ -216,6 +217,14 @@ internal static class XlsxCorpusFixtureFactory
                                       name="FreexcelUnknownWorkbookExtension"/>
                 </ext>
               </extLst>
+            </workbook>
+            """)),
+        "generated-workbook-properties-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:fx="urn:freexcel:test">
+              <workbookPr date1904="1" defaultThemeVersion="166925">
+                <fx:workbookPrNativeChild id="first"/>
+                <fx:workbookPrNativeChild id="second"/>
+              </workbookPr>
             </workbook>
             """)),
         "generated-workbook-file-version-001" => CreatePackage(("xl/workbook.xml", """
@@ -490,6 +499,8 @@ internal static class XlsxCorpusFixtureFactory
           string.Equals(packagePart, "xl/_rels/workbook.xml.rels", StringComparison.OrdinalIgnoreCase))) ||
         (string.Equals(id, "generated-workbook-extension-list-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-properties-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-version-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase) &&
@@ -654,6 +665,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-extension-list-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookExtensionListFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookPropertiesFixup(archive);
             return;
         }
 
@@ -1141,6 +1158,27 @@ internal static class XlsxCorpusFixtureFactory
             new XAttribute("lowestEdited", "7"),
             new XAttribute("rupBuild", "28129"),
             new XAttribute("customVersionFlag", "keep")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookPropertiesFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "workbookPr").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "workbookPr",
+            new XAttribute("date1904", "1"),
+            new XAttribute("defaultThemeVersion", "166925"),
+            new XElement(freexcelNs + "workbookPrNativeChild", new XAttribute("id", "first")),
+            new XElement(freexcelNs + "workbookPrNativeChild", new XAttribute("id", "second"))));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
