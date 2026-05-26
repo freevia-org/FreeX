@@ -337,7 +337,8 @@ public sealed partial class XlsxFileAdapter
             .Elements(worksheetNs + "cfvo")
             .Select(element => new CfThresholdModel(
                 FromCfvoType(element.Attribute("type")?.Value),
-                element.Attribute("val")?.Value))
+                element.Attribute("val")?.Value,
+                XlsxXmlAttributeReader.ReadNullableBoolAttribute(element, "gte")))
             .ToList();
 
     private static IEnumerable<CfIconOverride> ReadCfIconOverrides(XElement iconSet, XNamespace worksheetNs)
