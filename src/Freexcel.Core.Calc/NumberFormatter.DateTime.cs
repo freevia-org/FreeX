@@ -15,13 +15,16 @@ public static partial class NumberFormatter
     private static FormatResult FormatDateTimeWithColor(
         double oaDate,
         string[] sections,
+        int? targetWidthCharacters,
         WorkbookIndexedColorPalette? indexedColors)
     {
         var parsed = SelectDateTimeSection(oaDate, sections, indexedColors);
         if (parsed.Format == "")
             return new FormatResult("", parsed.ColorHex);
 
-        return new FormatResult(FormatDateTime(oaDate, parsed.Format), parsed.ColorHex);
+        var text = FormatDateTime(oaDate, parsed.Format);
+        text = ApplyAccountingTargetWidth(text, parsed.Format, targetWidthCharacters);
+        return new FormatResult(text, parsed.ColorHex);
     }
 
     private static ParsedSection SelectDateTimeSection(

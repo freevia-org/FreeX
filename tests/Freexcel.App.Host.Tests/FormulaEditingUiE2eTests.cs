@@ -161,6 +161,10 @@ internal sealed class FreexcelUiRun : IDisposable
 
     public DirectoryInfo Artifacts { get; }
 
+    public int ProcessId => _process.Id;
+
+    public IntPtr WindowHandle => _window;
+
     public static FreexcelUiRun Start()
     {
         var appExe = ResolveAppExecutable();
