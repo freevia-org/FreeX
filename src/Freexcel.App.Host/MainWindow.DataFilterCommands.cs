@@ -409,7 +409,12 @@ public partial class MainWindow
     private void NamedRangesButton_Click(object sender, RoutedEventArgs e)
     {
         var initialRange = SheetGrid.SelectedRange;
-        var dlg = new NamedRangeDialog(_workbook, _commandBus, initialRange)
+        NamedRangeDialog? dlg = null;
+        dlg = new NamedRangeDialog(
+            _workbook,
+            _commandBus,
+            initialRange,
+            request => ApplyNamedRangeSelection(dlg, request))
         {
             Owner = this
         };

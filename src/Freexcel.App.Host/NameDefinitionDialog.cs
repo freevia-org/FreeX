@@ -159,6 +159,12 @@ internal sealed class NameDefinitionDialog : Window
         Keyboard.Focus(_refersToBox);
     }
 
+    public void ApplyRangeSelection(string rangeText)
+    {
+        _refersToBox.Text = rangeText;
+        FocusRefersToInput();
+    }
+
     private void FocusInitialKeyboardTarget()
     {
         FocusNameInput();
