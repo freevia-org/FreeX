@@ -59,6 +59,21 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void DefinedNamesList_DoubleClickOpensEditNameDialog()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var source = ReadNamedRangeDialogSource();
+
+        document.Descendants(presentation + "ListView")
+            .Single(element => element.Attribute(x + "Name")?.Value == "NamesList")
+            .Attribute("MouseDoubleClick")?.Value.Should().Be("NamesList_MouseDoubleClick");
+        source.Should().Contain("private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+        source.Should().Contain("EditButton_Click(sender, e);");
+    }
+
+    [Fact]
     public void Dialog_ProvidesFilterAndRefersToRangePickerAffordance()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
