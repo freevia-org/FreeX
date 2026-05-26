@@ -393,7 +393,7 @@
                         <TextBlock Text="Security and privacy settings for Freexcel."
                                    FontSize="12" Foreground="#555" Margin="0,0,0,12"/>
                         <CheckBox x:Name="OptCrashAnalytics"
-                                  Content="Send opt-in crash reports"
+                                  Content="Send opt-in _crash reports"
                                   FontSize="12"
                                   Margin="0,0,0,6"
                                   AutomationProperties.HelpText="Crash reports include app version, runtime, operating system, session ID, exception type, message, and stack trace. Workbook contents, formulas, filenames, and paths are not collected intentionally, but exception details can occasionally include sensitive values."/>
