@@ -594,12 +594,6 @@ public static partial class BuiltInFunctions
 
         foreach (var arg in args)
         {
-            if (arg is ErrorValue e)
-            {
-                error = e;
-                return false;
-            }
-
             arrays.Add(arg is RangeValue arr
                 ? arr
                 : new RangeValue(new[,] { { arg } }));

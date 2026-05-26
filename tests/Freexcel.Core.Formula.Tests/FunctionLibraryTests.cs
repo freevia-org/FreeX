@@ -7172,19 +7172,31 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Vstack_ErrorArgument_PropagatesError()
+    public void Vstack_ScalarErrorArgument_SpillsErrorAsCell()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=VSTACK(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+        var result = _eval.Evaluate("=VSTACK(A1:A1,NA())", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[1, 0].Should().Be(ErrorValue.NA);
     }
 
     [Fact]
-    public void Hstack_ErrorArgument_PropagatesError()
+    public void Hstack_ScalarErrorArgument_SpillsErrorAsCell()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=HSTACK(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+        var result = _eval.Evaluate("=HSTACK(A1:A1,NA())", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(2);
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[0, 1].Should().Be(ErrorValue.NA);
     }
 
     [Fact]
