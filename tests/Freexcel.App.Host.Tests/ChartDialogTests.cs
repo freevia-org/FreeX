@@ -416,6 +416,35 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialog_SelectsFirstPreviewRowsAndDisablesSelectionActionsWhenEmpty()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SelectDataSourceDialog("A1:D12");
+            var buttons = FindLogicalDescendants<Button>(dialog)
+                .Where(button => button.Content is string)
+                .ToDictionary(button => (string)button.Content);
+            var lists = FindLogicalDescendants<ListBox>(dialog).ToList();
+
+            lists[0].SelectedIndex.Should().Be(0);
+            lists[1].SelectedIndex.Should().Be(0);
+            buttons["_Edit series"].IsEnabled.Should().BeTrue();
+            buttons["_Remove series"].IsEnabled.Should().BeTrue();
+            buttons["_Edit Axis Labels"].IsEnabled.Should().BeTrue();
+
+            dialog.ApplyRangeSelection("");
+
+            lists[0].Items.Count.Should().Be(0);
+            lists[1].Items.Count.Should().Be(0);
+            lists[0].SelectedIndex.Should().Be(-1);
+            lists[1].SelectedIndex.Should().Be(-1);
+            buttons["_Edit series"].IsEnabled.Should().BeFalse();
+            buttons["_Remove series"].IsEnabled.Should().BeFalse();
+            buttons["_Edit Axis Labels"].IsEnabled.Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_HiddenEmptyCellsMessageBoxUsesDialogOwner()
     {
         var source = ReadChartDialogSource();
