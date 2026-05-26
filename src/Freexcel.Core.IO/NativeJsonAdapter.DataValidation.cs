@@ -13,7 +13,7 @@ public sealed partial class NativeJsonAdapter
 
         try
         {
-            return new DataValidation
+            var validation = new DataValidation
             {
                 AppliesTo = GridRange.Parse(validationDto.AppliesTo, sheetId),
                 Type = validationDto.Type,
@@ -34,6 +34,13 @@ public sealed partial class NativeJsonAdapter
                 NativeContainerAttributes = validationDto.NativeContainerAttributes,
                 NativeContainerChildXmls = validationDto.NativeContainerChildXmls
             };
+            foreach (var range in validationDto.AdditionalRanges ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(range))
+                    validation.AdditionalRanges.Add(GridRange.Parse(range, sheetId));
+            }
+
+            return validation;
         }
         catch (FormatException)
         {
@@ -44,6 +51,9 @@ public sealed partial class NativeJsonAdapter
     private static DataValidationDto ToDataValidationDto(DataValidation validation) => new()
     {
         AppliesTo = validation.AppliesTo.ToString(),
+        AdditionalRanges = validation.AdditionalRanges.Count == 0
+            ? null
+            : validation.AdditionalRanges.Select(range => range.ToString()).ToList(),
         Type = validation.Type,
         Operator = validation.Operator,
         Formula1 = validation.Formula1,

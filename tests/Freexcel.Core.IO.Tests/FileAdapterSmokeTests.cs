@@ -5329,6 +5329,64 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_MultiAreaDataValidationSqref_Survives()
+    {
+        var workbook = new Workbook("DvMultiAreaTest");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 5; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue("Apple"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue("Banana"));
+        }
+
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            Type = DvType.List,
+            Formula1 = "Apple,Banana,Cherry"
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var validation = worksheetXml.Root!
+                .Element(worksheetNs + "dataValidations")!
+                .Element(worksheetNs + "dataValidation")!;
+            validation.SetAttributeValue("sqref", "A1:A5 C1:C5");
+            validation.SetAttributeValue("imeMode", "noControl");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+        var loadedRule = loaded.GetSheetAt(0).DataValidations.Should().ContainSingle().Subject;
+        loadedRule.AppliesTo.ToString().Should().Be("A1:A5");
+        loadedRule.AdditionalRanges.Select(range => range.ToString()).Should().Equal("C1:C5");
+        loadedRule.NativeAttributes.Should().Contain("imeMode", "noControl");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedWorksheetXml = LoadPackageXml(savedArchive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace savedWorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var savedValidation = savedWorksheetXml.Root!
+            .Element(savedWorksheetNs + "dataValidations")!
+            .Element(savedWorksheetNs + "dataValidation")!;
+        savedValidation.Attribute("sqref")!.Value.Should().Be("A1:A5 C1:C5");
+        savedValidation.Attribute("imeMode")!.Value.Should().Be("noControl");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_SkipsInvalidDataValidationRules()
     {
         var workbook = new Workbook("DvInvalidSaveTest");

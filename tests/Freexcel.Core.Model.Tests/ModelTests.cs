@@ -510,7 +510,7 @@ public class SheetCloneTests
         var src = wb.AddSheet("S");
         var nativeAttributes = new Dictionary<string, string> { ["uid"] = "{validation}" };
         var nativeChildXmls = new[] { """<ext custom="kept" />""" };
-        src.DataValidations.Add(new DataValidation
+        var validation = new DataValidation
         {
             AppliesTo = new GridRange(
                 new CellAddress(src.Id, 3, 2),
@@ -521,7 +521,11 @@ public class SheetCloneTests
             ErrorTitle = "Invalid",
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls
-        });
+        };
+        validation.AdditionalRanges.Add(new GridRange(
+            new CellAddress(src.Id, 8, 4),
+            new CellAddress(src.Id, 9, 4)));
+        src.DataValidations.Add(validation);
         var newId = SheetId.New();
 
         var copy = src.Clone(newId, "Copy");
@@ -531,6 +535,9 @@ public class SheetCloneTests
         clonedValidation.AppliesTo.Should().Be(new GridRange(
             new CellAddress(newId, 3, 2),
             new CellAddress(newId, 6, 2)));
+        clonedValidation.AdditionalRanges.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(newId, 8, 4),
+            new CellAddress(newId, 9, 4)));
         clonedValidation.Type.Should().Be(DvType.List);
         clonedValidation.AllowBlank.Should().BeFalse();
         clonedValidation.ErrorTitle.Should().Be("Invalid");

@@ -11,7 +11,8 @@ internal static class XlsxDataValidationClosedXmlMapper
         {
             try
             {
-                var rangeAddr = xlDv.Ranges.FirstOrDefault()?.RangeAddress;
+                var ranges = xlDv.Ranges.Select(range => range.RangeAddress).ToArray();
+                var rangeAddr = ranges.FirstOrDefault();
                 if (rangeAddr == null) continue;
 
                 var sheetId = sheet.Id;
@@ -80,6 +81,9 @@ internal static class XlsxDataValidationClosedXmlMapper
                     dv.Formula2 = xlDv.MaxValue;
                 }
 
+                foreach (var additionalRange in ranges.Skip(1))
+                    dv.AdditionalRanges.Add(ToGridRange(additionalRange, sheetId));
+
                 sheet.DataValidations.Add(dv);
             }
             catch
@@ -98,13 +102,12 @@ internal static class XlsxDataValidationClosedXmlMapper
 
             try
             {
-                var rangeStr = $"{CellAddress.NumberToColumnName(dv.AppliesTo.Start.Col)}{dv.AppliesTo.Start.Row}" +
-                               $":{CellAddress.NumberToColumnName(dv.AppliesTo.End.Col)}{dv.AppliesTo.End.Row}";
-
-                var xlRange = xlSheet.Range(rangeStr);
+                var xlRange = xlSheet.Range(ToA1Range(dv.AppliesTo));
 #pragma warning disable CS0618 // SetDataValidation is obsolete in newer ClosedXML but CreateDataValidation may not exist in 0.105
                 var xlDv = xlRange.CreateDataValidation();
 #pragma warning restore CS0618
+                foreach (var additionalRange in dv.AdditionalRanges)
+                    xlDv.AddRange(xlSheet.Range(ToA1Range(additionalRange)));
 
                 xlDv.IgnoreBlanks = dv.AllowBlank;
                 xlDv.InCellDropdown = dv.ShowDropdown;
@@ -171,4 +174,19 @@ internal static class XlsxDataValidationClosedXmlMapper
             case DvOperator.LessThanOrEqual: rule.EqualOrLessThan(f1); break;
         }
     }
+
+    private static GridRange ToGridRange(IXLRangeAddress rangeAddress, SheetId sheetId) =>
+        new(
+            new CellAddress(
+                sheetId,
+                (uint)rangeAddress.FirstAddress.RowNumber,
+                (uint)rangeAddress.FirstAddress.ColumnNumber),
+            new CellAddress(
+                sheetId,
+                (uint)rangeAddress.LastAddress.RowNumber,
+                (uint)rangeAddress.LastAddress.ColumnNumber));
+
+    private static string ToA1Range(GridRange range) =>
+        $"{CellAddress.NumberToColumnName(range.Start.Col)}{range.Start.Row}" +
+        $":{CellAddress.NumberToColumnName(range.End.Col)}{range.End.Row}";
 }
