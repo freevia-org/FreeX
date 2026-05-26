@@ -19,7 +19,7 @@ internal static partial class DelimitedTextWorkbookReader
             if (row > CellAddress.MaxRow)
                 break;
 
-            if (canReadSeparatorDirective && TryReadSeparatorDirective(fields, out var directiveDelimiter))
+            if (canReadSeparatorDirective && TryReadSeparatorDirective(fields, delimiter, out var directiveDelimiter))
             {
                 delimiter = directiveDelimiter;
                 canReadSeparatorDirective = false;
@@ -51,7 +51,10 @@ internal static partial class DelimitedTextWorkbookReader
         return workbook;
     }
 
-    private static bool TryReadSeparatorDirective(IReadOnlyList<DelimitedTextField> fields, out char delimiter)
+    private static bool TryReadSeparatorDirective(
+        IReadOnlyList<DelimitedTextField> fields,
+        char currentDelimiter,
+        out char delimiter)
     {
         delimiter = default;
 
@@ -59,7 +62,7 @@ internal static partial class DelimitedTextWorkbookReader
             string.Equals(fields[0].Value, "sep=", StringComparison.OrdinalIgnoreCase) &&
             fields[1].Value.Length == 0)
         {
-            delimiter = ',';
+            delimiter = currentDelimiter;
             return true;
         }
 
