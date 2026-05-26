@@ -12,7 +12,7 @@ internal sealed class ExportOptionsDialog : Window
     private readonly CheckBox _documentPropertiesBox = new() { Content = "_Include document properties" };
     private readonly CheckBox _openAfterPublishBox = new() { Content = "_Open after publishing" };
     private readonly CheckBox _ignorePrintAreasBox = new() { Content = "_Ignore print areas" };
-    private readonly CheckBox _bookmarksBox = new() { Content = "Create _PDF bookmarks using sheet names" };
+    private readonly CheckBox _bookmarksBox = new() { Content = "Create _PDF bookmarks" };
     private readonly CheckBox _bitmapTextBox = new() { Content = "_Bitmap text when fonts may not be embedded" };
     private readonly CheckBox _pdfABox = new() { Content = "PDF/_A compliant (not supported)", IsEnabled = false };
     private readonly CheckBox _structureTagsBox = new() { Content = "Document structure _tags (not supported)", IsEnabled = false };
