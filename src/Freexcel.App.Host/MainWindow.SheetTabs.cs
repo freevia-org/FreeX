@@ -291,25 +291,21 @@ public partial class MainWindow
     private bool FocusAdjacentVisibleSheetTab(int direction)
     {
         var visibleTabs = _sheetTabs.ToList();
-        if (visibleTabs.Count == 0)
+        var nextSheetId = SheetTabFocusPlanner.AdjacentTab(visibleTabs, _currentSheetId, direction);
+        if (nextSheetId is null)
             return false;
 
-        var index = visibleTabs.FindIndex(tab => tab.Id == _currentSheetId);
-        if (index < 0)
-            index = direction < 0 ? visibleTabs.Count : -1;
-
-        var nextIndex = Math.Clamp(index + direction, 0, visibleTabs.Count - 1);
-        FocusSheetTab(visibleTabs[nextIndex].Id);
+        FocusSheetTab(nextSheetId.Value);
         return true;
     }
 
     private bool FocusEdgeVisibleSheetTab(bool first)
     {
-        var tab = first ? _sheetTabs.FirstOrDefault() : _sheetTabs.LastOrDefault();
-        if (tab is null)
+        var sheetId = SheetTabFocusPlanner.EdgeTab(_sheetTabs.ToList(), first);
+        if (sheetId is null)
             return false;
 
-        FocusSheetTab(tab.Id);
+        FocusSheetTab(sheetId.Value);
         return true;
     }
 
