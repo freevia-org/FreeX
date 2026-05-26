@@ -438,9 +438,7 @@ public sealed partial class ViewportService : IViewportService
             style.NumberFormat,
             targetWidthCharacters,
             workbook.IndexedColors);
-        if (result.ThemeColor is { } themeColor)
-            style.FontColor = themeColor.Resolve(workbook.Theme);
-        else if (TryParseHexColor(result.ColorHex, out var color))
+        if (TryParseHexColor(result.ColorHex, out var color))
             style.FontColor = color;
 
         return result.Text;

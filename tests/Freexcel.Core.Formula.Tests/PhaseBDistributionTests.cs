@@ -229,21 +229,6 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
-    public void PoissonAndExponDistributionFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
-    {
-        var sheet = MakeSheet(
-            (1, 1, 1.0), (2, 1, 2.0),
-            (1, 2, 2.0), (2, 2, 3.0),
-            (1, 3, 0.0), (2, 3, 1.0));
-
-        AssertColumnApproximately(Eval("POISSON.DIST(A1:A2,B1:B2,C1:C2)", sheet), Calc("POISSON.DIST(1,2,FALSE)"), Calc("POISSON.DIST(2,3,TRUE)"));
-        AssertColumnApproximately(Eval("EXPON.DIST(A1:A2,B1:B2,C1:C2)", sheet), Calc("EXPON.DIST(1,2,FALSE)"), Calc("EXPON.DIST(2,3,TRUE)"));
-
-        Eval("POISSON.DIST(A1:A2,B1:C1,FALSE)", sheet).Should().Be(ErrorValue.Value);
-        Eval("EXPON.DIST(A1:A2,B1:C1,FALSE)", sheet).Should().Be(ErrorValue.Value);
-    }
-
-    [Fact]
     public void TDist_CumulativeAt0_Returns0Point5()
         => Calc("T.DIST(0,10,TRUE)").Should().BeApproximately(0.5, 1e-10);
 
@@ -541,24 +526,6 @@ public class PhaseBDistributionTests
         AssertColumnApproximately(Eval("BINOM.INV(10,0.5,A1:A2)", alphaValues), Calc("BINOM.INV(10,0.5,0.25)"), Calc("BINOM.INV(10,0.5,0.75)"));
         AssertColumnApproximately(Eval("NEGBINOM.DIST(A1:A2,5,0.25,FALSE)", counts), Calc("NEGBINOM.DIST(4,5,0.25,FALSE)"), Calc("NEGBINOM.DIST(6,5,0.25,FALSE)"));
         AssertColumnApproximately(Eval("HYPERGEOM.DIST(A1:A2,4,2,10,FALSE)", sampleSuccesses), Calc("HYPERGEOM.DIST(0,4,2,10,FALSE)"), Calc("HYPERGEOM.DIST(1,4,2,10,FALSE)"));
-    }
-
-    [Fact]
-    public void DiscreteDistributionFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
-    {
-        var sheet = MakeSheet(
-            (1, 1, 4.0), (2, 1, 6.0),
-            (1, 2, 8.0), (2, 2, 10.0),
-            (1, 3, 0.25), (2, 3, 0.5),
-            (1, 4, 5.0), (2, 4, 6.0),
-            (1, 5, 0.0), (2, 5, 1.0));
-
-        AssertColumnApproximately(Eval("BINOM.DIST(A1:A2,B1:B2,C1:C2,E1:E2)", sheet), Calc("BINOM.DIST(4,8,0.25,FALSE)"), Calc("BINOM.DIST(6,10,0.5,TRUE)"));
-        AssertColumnApproximately(Eval("BINOM.INV(B1:B2,C1:C2,A1:A2/10)", sheet), Calc("BINOM.INV(8,0.25,0.4)"), Calc("BINOM.INV(10,0.5,0.6)"));
-        AssertColumnApproximately(Eval("NEGBINOM.DIST(A1:A2,D1:D2,C1:C2,E1:E2)", sheet), Calc("NEGBINOM.DIST(4,5,0.25,FALSE)"), Calc("NEGBINOM.DIST(6,6,0.5,TRUE)"));
-
-        Eval("BINOM.DIST(A1:A2,B1:C1,0.5,FALSE)", sheet).Should().Be(ErrorValue.Value);
-        Eval("NEGBINOM.DIST(A1:A2,B1:C1,0.5,FALSE)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

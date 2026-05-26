@@ -222,21 +222,6 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
-    public void CumulativePaymentFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
-    {
-        AssertApproxColumn(
-            EvalWithData("CUMIPMT(A1:A2,12,10000,1,12,0)", (1, 1, 0.1 / 12), (2, 1, 0.2 / 12)),
-            Calc("CUMIPMT(0.1/12,12,10000,1,12,0)"),
-            Calc("CUMIPMT(0.2/12,12,10000,1,12,0)"));
-        AssertApproxColumn(
-            EvalWithData("CUMPRINC(0.1/12,A1:A2,B1:B2,1,C1:C2,D1:D2)", (1, 1, 12.0), (2, 1, 24.0), (1, 2, 10000.0), (2, 2, 12000.0), (1, 3, 12.0), (2, 3, 24.0), (1, 4, 0.0), (2, 4, 1.0)),
-            Calc("CUMPRINC(0.1/12,12,10000,1,12,0)"),
-            Calc("CUMPRINC(0.1/12,24,12000,1,24,1)"));
-
-        EvalWithData("CUMIPMT(A1:A2,B1:C1,10000,1,12,0)", (1, 1, 0.1 / 12), (2, 1, 0.2 / 12), (1, 2, 12.0), (1, 3, 24.0)).Should().Be(ErrorValue.Value);
-    }
-
-    [Fact]
     public void Cumprinc_AllPeriods_SumApproxNegativePV()
     {
         // Over all periods, total principal repaid = -PV

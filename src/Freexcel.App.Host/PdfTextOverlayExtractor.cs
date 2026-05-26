@@ -260,26 +260,7 @@ internal static class PdfTextOverlayExtractor
                 foreach (var child in span.Inlines)
                     AppendInlineText(child, parts);
                 break;
-            case InlineUIContainer { Child: UIElement child }:
-                if (ExtractInlineUiText(child) is { Length: > 0 } childText)
-                    parts.Add(childText);
-                break;
         }
-    }
-
-    private static string ExtractInlineUiText(UIElement element)
-    {
-        if (element.Visibility != Visibility.Visible)
-            return "";
-
-        return element switch
-        {
-            TextBlock textBlock => ExtractText(textBlock),
-            AccessText accessText => NormalizeAccessText(accessText.Text),
-            TextBox textBox => textBox.Text,
-            ContentControl contentControl => ExtractContentText(contentControl.Content),
-            _ => ""
-        };
     }
 
     private static string NormalizeAccessText(string text)
