@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(32, "the generated metadata-pass manifest currently declares thirty-two deterministic package-retention rows");
+        rows.Should().HaveCount(33, "the generated metadata-pass manifest currently declares thirty-three deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -733,6 +733,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetPageSetupNativeRow_RetainsPageSetupAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-page-setup-native-001");
+        AssertWorksheetPageSetupNative(source, "generated-worksheet-page-setup-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-page-setup-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-page-setup-native-001");
+        AssertWorksheetPageSetupNative(saved, "generated-worksheet-page-setup-native-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -1152,6 +1170,21 @@ public class XlsxCorpusRunnerTests
         printOptions.Attribute("horizontalCentered")?.Value.Should().NotBe("1", because);
         printOptions.Attribute("verticalCentered")?.Value.Should().NotBe("1", because);
         printOptions.Element(freexcelNs + "nativePrintOptionsChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetPageSetupNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+        pageSetup.Should().NotBeNull(because);
+        pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1", because);
+        pageSetup.Attribute("copies")!.Value.Should().Be("3", because);
+        pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native", because);
+        pageSetup.Element(worksheetNs + "nativePageSetupChild")!
             .Attribute("value")!.Value.Should().Be("kept", because);
     }
 
