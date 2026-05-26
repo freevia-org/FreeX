@@ -221,6 +221,22 @@ public sealed class PivotTableDialog : Window
         FocusRangeSelectionInput(request.Target);
     }
 
+    public void ApplyRangeSelection(PivotTableRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target == PivotTableRangeSelectionTarget.DestinationRange
+            ? _destinationRangeBox
+            : _sourceRangeBox;
+        textBox.Text = rangeText;
+
+        if (target == PivotTableRangeSelectionTarget.DestinationRange)
+        {
+            _existingWorksheetButton.IsChecked = true;
+            UpdateDestinationState();
+        }
+
+        FocusRangeSelectionInput(textBox);
+    }
+
     private bool ValidateInputs()
     {
         if (!WorkbookRangeTextCodec.TryParse(_sourceSheetId, _sourceRangeBox.Text, ResolveSheetIdByName, out _))

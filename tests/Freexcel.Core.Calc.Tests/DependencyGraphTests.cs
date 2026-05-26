@@ -123,6 +123,132 @@ public class DependencyGraphTests
         plan.CyclicCells.Should().NotBeEmpty();
     }
 
+    [Fact]
+    public void LargeRangeDependency_RecalculatesOnlyWhenChangedCellIsInsideRange()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var formula = new CellAddress(sheet.Id, 1, 2);
+        var inside = new CellAddress(sheet.Id, 50000, 1);
+        var outside = new CellAddress(sheet.Id, 1, 3);
+
+        sheet.SetCell(inside, new NumberValue(4));
+        sheet.SetFormula(formula, "SUM(A1:A100000)");
+        engine.RecalculateAllFormulas(workbook);
+        sheet.GetValue(formula).Should().Be(new NumberValue(4));
+
+        sheet.SetCell(inside, new NumberValue(9));
+        var insideReport = engine.Recalculate(workbook, [inside]);
+
+        insideReport.RecalculatedCells.Should().Contain(formula);
+        sheet.GetValue(formula).Should().Be(new NumberValue(9));
+
+        sheet.SetCell(outside, new NumberValue(25));
+        var outsideReport = engine.Recalculate(workbook, [outside]);
+
+        outsideReport.RecalculatedCells.Should().NotContain(formula);
+        sheet.GetValue(formula).Should().Be(new NumberValue(9));
+    }
+
+    [Fact]
+    public void ReplacingFormula_RemovesLargeRangeDependency()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var formula = new CellAddress(sheet.Id, 1, 2);
+        var oldInside = new CellAddress(sheet.Id, 50000, 1);
+        var newPrecedent = new CellAddress(sheet.Id, 1, 3);
+
+        sheet.SetCell(oldInside, new NumberValue(4));
+        sheet.SetCell(newPrecedent, new NumberValue(8));
+        sheet.SetFormula(formula, "SUM(A1:A100000)");
+        engine.RecalculateAllFormulas(workbook);
+
+        sheet.SetFormula(formula, "C1");
+        engine.RebuildFormulaDependencies(workbook);
+        sheet.SetCell(oldInside, new NumberValue(99));
+        var oldRangeReport = engine.Recalculate(workbook, [oldInside]);
+
+        oldRangeReport.RecalculatedCells.Should().NotContain(formula);
+
+        sheet.SetCell(newPrecedent, new NumberValue(12));
+        var newPrecedentReport = engine.Recalculate(workbook, [newPrecedent]);
+
+        newPrecedentReport.RecalculatedCells.Should().Contain(formula);
+        sheet.GetValue(formula).Should().Be(new NumberValue(12));
+    }
+
+    [Fact]
+    public void CrossSheetLargeRangeDependency_RecalculatesFromSourceSheetChange()
+    {
+        var workbook = new Workbook("Test");
+        var formulaSheet = workbook.AddSheet("Formula");
+        var dataSheet = workbook.AddSheet("Data");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var formula = new CellAddress(formulaSheet.Id, 1, 1);
+        var inside = new CellAddress(dataSheet.Id, 50000, 1);
+        var outside = new CellAddress(formulaSheet.Id, 1, 2);
+
+        dataSheet.SetCell(inside, new NumberValue(6));
+        formulaSheet.SetFormula(formula, "SUM(Data!A1:A100000)");
+        engine.RecalculateAllFormulas(workbook);
+        formulaSheet.GetValue(formula).Should().Be(new NumberValue(6));
+
+        dataSheet.SetCell(inside, new NumberValue(10));
+        var insideReport = engine.Recalculate(workbook, [inside]);
+
+        insideReport.RecalculatedCells.Should().Contain(formula);
+        formulaSheet.GetValue(formula).Should().Be(new NumberValue(10));
+
+        formulaSheet.SetCell(outside, new NumberValue(1));
+        var outsideReport = engine.Recalculate(workbook, [outside]);
+
+        outsideReport.RecalculatedCells.Should().NotContain(formula);
+    }
+
+    [Fact]
+    public void NamedLargeRangeDependency_RecalculatesWhenChangedCellIsInsideRange()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var formula = new CellAddress(sheet.Id, 1, 2);
+        var inside = new CellAddress(sheet.Id, 50000, 1);
+
+        workbook.DefineNamedRange(
+            "BigInputs",
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 100000, 1)));
+        sheet.SetCell(inside, new NumberValue(2));
+        sheet.SetFormula(formula, "SUM(BigInputs)");
+        engine.RecalculateAllFormulas(workbook);
+
+        sheet.SetCell(inside, new NumberValue(7));
+        var report = engine.Recalculate(workbook, [inside]);
+
+        report.RecalculatedCells.Should().Contain(formula);
+        sheet.GetValue(formula).Should().Be(new NumberValue(7));
+    }
+
+    [Fact]
+    public void RecalcOrder_DetectsCycleThroughLargeRangeDependency()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var formula = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.SetFormula(formula, "SUM(A1:A100000)");
+        engine.RecalculateAllFormulas(workbook);
+        var report = engine.Recalculate(workbook, [formula]);
+
+        report.CyclicCells.Should().Contain(formula);
+        sheet.GetValue(formula).Should().Be(ErrorValue.Circular);
+    }
+
     private static string FindWorkspaceFile(params string[] parts)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
