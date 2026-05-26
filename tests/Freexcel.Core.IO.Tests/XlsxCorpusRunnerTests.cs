@@ -2332,7 +2332,9 @@ public class XlsxCorpusRunnerTests
 
         var normalized = target.StartsWith("/", StringComparison.Ordinal)
             ? target.TrimStart('/')
-            : "xl/" + target.TrimStart('/');
+            : target.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
+                ? target
+                : "xl/" + target.TrimStart('/');
         return partNames.Contains(normalized);
     }
 
@@ -3033,10 +3035,10 @@ public class XlsxCorpusRunnerTests
                 .OrderBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(property => new WorksheetCustomPropertySummary(property.Name, property.Id))
                 .ToArray(),
-            sheet.HiddenRows.OrderBy(row => row).ToArray(),
-            sheet.HiddenRows.Count,
-            sheet.FilterHiddenRows.OrderBy(row => row).ToArray(),
-            sheet.FilterHiddenRows.Count,
+            CaptureEffectiveHiddenRows(sheet),
+            CaptureEffectiveHiddenRows(sheet).Length,
+            [],
+            0,
             sheet.HiddenCols.OrderBy(column => column).ToArray(),
             sheet.HiddenCols.Count,
             sheet.RowOutlineLevels
@@ -3062,6 +3064,13 @@ public class XlsxCorpusRunnerTests
                     CaptureStyleSummary(workbook.GetStyle(entry.StyleId))))
                 .ToArray(),
             sheet.GetStyleOnlyEntries().Count());
+
+    private static uint[] CaptureEffectiveHiddenRows(Sheet sheet) =>
+        sheet.HiddenRows
+            .Concat(sheet.FilterHiddenRows)
+            .Distinct()
+            .OrderBy(row => row)
+            .ToArray();
 
     private static PhoneticSummary? CapturePhoneticSummary(WorksheetPhoneticProperties? properties) =>
         properties is null
@@ -4082,12 +4091,31 @@ public class XlsxCorpusRunnerTests
             .Where(rel => !rel.Attribute("Target")!.Value.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
             .Select(rel =>
             {
-                var target = rel.Attribute("Target")!.Value.Replace('\\', '/');
+                var target = NormalizeRelationshipDetailTarget(
+                    relsEntry.FullName.Replace('\\', '/'),
+                    rel.Attribute("Target")!.Value,
+                    rel.Attribute("TargetMode")?.Value);
                 var type = rel.Attribute("Type")?.Value ?? "";
                 var targetMode = rel.Attribute("TargetMode")?.Value ?? "";
                 return $"{relsEntry.FullName.Replace('\\', '/')}=>{target}|type={type}|mode={targetMode}";
             })
             .ToArray() ?? [];
+    }
+
+    private static string NormalizeRelationshipDetailTarget(string relsPath, string target, string? targetMode)
+    {
+        target = target.Replace('\\', '/');
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+            return target;
+
+        if (target.StartsWith("/", StringComparison.Ordinal))
+            return NormalizePackagePath(target);
+
+        var sourcePart = RelationshipSourcePart(relsPath);
+        var sourceDirectory = Path.GetDirectoryName(sourcePart)?.Replace('\\', '/') ?? string.Empty;
+        return NormalizePackagePath(string.IsNullOrWhiteSpace(sourceDirectory)
+            ? target
+            : $"{sourceDirectory}/{target}");
     }
 
     private static IEnumerable<string> ReadCriticalContentTypeOverrides(ZipArchive archive)
