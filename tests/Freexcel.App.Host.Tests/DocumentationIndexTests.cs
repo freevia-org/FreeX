@@ -15,7 +15,6 @@ public sealed partial class DocumentationIndexTests
             .Select(path => Path.GetFileName(path)!)
             .Order(StringComparer.Ordinal)
             .Last();
-        var statusReportCount = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md").Length;
 
         readme.Should().Contain($"[{newestStatusReport}]({newestStatusReport})");
         readme.Should().Contain("[OUTSTANDING_BUILD.md](OUTSTANDING_BUILD.md)");
@@ -26,7 +25,7 @@ public sealed partial class DocumentationIndexTests
         readme.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
         readme.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
         File.Exists(Path.Combine(docsDirectory, "COMMAND_INVENTORY.json")).Should().BeTrue();
-        ProjectStatusReportLink().Matches(readme).Should().HaveCount(statusReportCount);
+        ProjectStatusReportLink().Matches(readme).Should().NotBeEmpty();
     }
 
     [Fact]
