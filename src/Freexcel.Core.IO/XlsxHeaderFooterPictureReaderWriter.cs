@@ -233,6 +233,136 @@ internal static class XlsxHeaderFooterPictureReaderWriter
         }
     }
 
+    public static void RemoveClearedPictures(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relsEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relTargets = XlsxRelationshipReader.ReadTargets(
+            relsXml,
+            packageRelNs,
+            XlsxPackagePath.NormalizeWorkbookTarget);
+        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        {
+            var name = sheetElement.Attribute("name")?.Value;
+            var relId = sheetElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(relId))
+                continue;
+            if (!sheetsByName.TryGetValue(name, out var sheet) || HasPictures(sheet))
+                continue;
+            if (!relTargets.TryGetValue(relId, out var worksheetPath))
+                continue;
+
+            RemoveSheetHeaderFooterDrawing(archive, worksheetPath, workbookNs, relNs, packageRelNs);
+        }
+    }
+
+    private static void RemoveSheetHeaderFooterDrawing(
+        ZipArchive archive,
+        string worksheetPath,
+        XNamespace worksheetNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+        var root = worksheetXml.Root;
+        var relId = root?
+            .Element(worksheetNs + "legacyDrawingHF")?
+            .Attribute(relNs + "id")?
+            .Value;
+        if (root is null)
+            return;
+
+        var worksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
+        var worksheetRelsEntry = archive.GetEntry(worksheetRelsPath);
+        if (worksheetRelsEntry is null)
+        {
+            root.Elements(worksheetNs + "legacyDrawingHF").Remove();
+            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            return;
+        }
+
+        var worksheetRelsXml = XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry);
+        var relationships = worksheetRelsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(element =>
+                !string.IsNullOrWhiteSpace(relId)
+                    ? string.Equals(element.Attribute("Id")?.Value, relId, StringComparison.Ordinal)
+                    : root.Element(worksheetNs + "legacyDrawing") is null &&
+                      string.Equals(
+                          element.Attribute("Type")?.Value,
+                          VmlDrawingRelationshipType,
+                          StringComparison.OrdinalIgnoreCase))
+            .ToList()
+            ?? [];
+        foreach (var relationship in relationships)
+        {
+            var vmlTarget = relationship.Attribute("Target")?.Value;
+            if (!string.IsNullOrWhiteSpace(vmlTarget))
+                DeletePackagePartGraph(archive, XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, vmlTarget), packageRelNs);
+
+            relationship.Remove();
+        }
+        XlsxPackageXmlEditor.ReplaceXml(archive, worksheetRelsPath, worksheetRelsXml);
+        root.Elements(worksheetNs + "legacyDrawingHF").Remove();
+        XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void DeletePackagePartGraph(ZipArchive archive, string partPath, XNamespace packageRelNs)
+    {
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(partPath);
+        if (archive.GetEntry(relsPath) is { } relsEntry)
+        {
+            var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+            foreach (var target in relsXml.Root?
+                         .Elements(packageRelNs + "Relationship")
+                         .Where(relationship => !string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                         .Select(relationship => relationship.Attribute("Target")?.Value)
+                         .Where(target => !string.IsNullOrWhiteSpace(target))
+                     ?? [])
+            {
+                DeletePackagePartGraph(archive, XlsxPackagePath.ResolveRelationshipTarget(partPath, target!), packageRelNs);
+            }
+
+            relsEntry.Delete();
+        }
+
+        archive.GetEntry(partPath)?.Delete();
+        RemoveSpecificContentType(archive, partPath);
+    }
+
+    private static void RemoveSpecificContentType(ZipArchive archive, string partPath)
+    {
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return;
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        contentTypesXml.Root?
+            .Elements(contentTypeNs + "Override")
+            .Where(element => string.Equals(
+                element.Attribute("PartName")?.Value,
+                $"/{partPath.TrimStart('/')}",
+                StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        XlsxPackageXmlEditor.ReplaceXml(archive, "[Content_Types].xml", contentTypesXml);
+    }
+
     private static void WriteSheetPictures(ZipArchive archive, string worksheetPath, Sheet sheet, int sheetIndex)
     {
         var worksheetEntry = archive.GetEntry(worksheetPath);
