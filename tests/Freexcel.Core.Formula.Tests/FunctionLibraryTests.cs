@@ -5466,6 +5466,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Row_NoArgument_ReturnsCurrentCellRow()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=ROW()", sheet, currentCell: new CellAddress(sheet.Id, 7, 4))
+            .Should().Be(new NumberValue(7));
+    }
+
+    [Fact]
     public void Column_Range_ReturnsFirstColumn()
     {
         var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));
@@ -5479,6 +5488,15 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((5, 2, new NumberValue(1)));
 
         _eval.Evaluate("=COLUMN(B5)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Column_NoArgument_ReturnsCurrentCellColumn()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=COLUMN()", sheet, currentCell: new CellAddress(sheet.Id, 7, 4))
+            .Should().Be(new NumberValue(4));
     }
 
     [Fact] public void Replace_Middle_ReplacesCorrectly() =>
@@ -5950,6 +5968,20 @@ public class FunctionLibraryTests
         data.SetCell(new CellAddress(data.Id, 3, 1), new NumberValue(3));
 
         _eval.Evaluate("=SUM(INDIRECT(\"Data!A1:A3\"))", sheet, wb).Should().Be(new NumberValue(6));
+    }
+
+    [Fact] public void Indirect_NamedRangeString_ReturnsRangeValue()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
+        wb.DefineNamedRange("MyData", new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1)));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"MyData\"))", sheet, wb).Should().Be(new NumberValue(6));
     }
 
     [Fact] public void Indirect_R1C1String_ReturnsValue()

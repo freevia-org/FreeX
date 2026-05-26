@@ -528,13 +528,13 @@ public sealed class ChartDialogTests
         helperSource.Should().Contain("new ColorPickerDialog(initialColor, allowNoColor: true)");
         foreach (var colorLabel in new[]
         {
-            "Chart area fill color",
-            "Plot area fill color",
-            "Legend text color",
-            "Fill color",
-            "Line color",
-            "Major gridline color",
-            "Axis line color"
+            "_Chart area fill color",
+            "_Plot area fill color",
+            "Legend _text color",
+            "_Fill color",
+            "_Line color",
+            "_Major gridline color",
+            "Axis _line color"
         })
         {
             source.Should().Contain($"AddColorText(stack, \"{colorLabel}\"");
@@ -587,6 +587,32 @@ public sealed class ChartDialogTests
         })
         {
             source.Should().Contain(content);
+        }
+
+        foreach (var helperCall in new[]
+        {
+            "AddColorText(stack, \"_Chart area fill color\"",
+            "AddColorText(stack, \"_Plot area fill color\"",
+            "AddNumericText(stack, \"Plot area border _width\"",
+            "AddCombo(stack, \"Legend _position\"",
+            "AddColorText(stack, \"Legend _text color\"",
+            "AddNumericText(stack, \"Legend _font size\"",
+            "AddCombo(stack, \"_Position\"",
+            "AddCombo(stack, \"_Separator\"",
+            "AddCombo(stack, \"Number _format\"",
+            "AddNumericText(stack, \"_Border thickness\"",
+            "AddNumericText(stack, \"_Minimum (blank for Auto)\"",
+            "AddNumericText(stack, \"Ma_ximum (blank for Auto)\"",
+            "AddCombo(stack, \"_Major tick marks\"",
+            "AddCombo(stack, \"M_inor tick marks\"",
+            "AddCombo(stack, \"_Series\"",
+            "AddCombo(stack, \"_Dash style\"",
+            "AddCombo(stack, \"_Marker\"",
+            "AddCombo(stack, \"_Type\"",
+            "AddCombo(stack, \"_Direction\""
+        })
+        {
+            source.Should().Contain(helperCall);
         }
     }
 

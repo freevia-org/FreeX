@@ -158,33 +158,33 @@ public sealed class ChartAxisFormatDialog : Window
         {
             var stack = new StackPanel();
             stack.Children.Add(CreateInlineHelp("Leave bounds blank for Auto."));
-            ChartDialogHelpers.AddNumericText(stack, "Minimum (blank for Auto)", _minimumBox, "Blank or Auto keeps the automatic minimum.");
-            ChartDialogHelpers.AddNumericText(stack, "Maximum (blank for Auto)", _maximumBox, "Blank or Auto keeps the automatic maximum.");
-            ChartDialogHelpers.AddNumericText(stack, "Major unit", _majorUnitBox, "Blank keeps the automatic major unit.");
-            ChartDialogHelpers.AddNumericText(stack, "Minor unit", _minorUnitBox, "Blank keeps the automatic minor unit.");
+            ChartDialogHelpers.AddNumericText(stack, "_Minimum (blank for Auto)", _minimumBox, "Blank or Auto keeps the automatic minimum.");
+            ChartDialogHelpers.AddNumericText(stack, "Ma_ximum (blank for Auto)", _maximumBox, "Blank or Auto keeps the automatic maximum.");
+            ChartDialogHelpers.AddNumericText(stack, "Major _unit", _majorUnitBox, "Blank keeps the automatic major unit.");
+            ChartDialogHelpers.AddNumericText(stack, "Minor u_nit", _minorUnitBox, "Blank keeps the automatic minor unit.");
             ChartDialogHelpers.AddCheck(stack, _logBox);
-            ChartDialogHelpers.AddCombo(stack, "Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            ChartDialogHelpers.AddCombo(stack, "Number _format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
             root.Children.Add(CreateGroupBox("Axis Options", stack));
         }
         {
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _majorGridBox);
             ChartDialogHelpers.AddCheck(stack, _minorGridBox);
-            ChartDialogHelpers.AddColorText(stack, "Major gridline color", _majorGridColorBox);
-            ChartDialogHelpers.AddColorText(stack, "Minor gridline color", _minorGridColorBox);
-            ChartDialogHelpers.AddNumericText(stack, "Gridline width", _gridlineThicknessBox, "Enter a gridline width in points.");
+            ChartDialogHelpers.AddColorText(stack, "_Major gridline color", _majorGridColorBox);
+            ChartDialogHelpers.AddColorText(stack, "M_inor gridline color", _minorGridColorBox);
+            ChartDialogHelpers.AddNumericText(stack, "Gridline _width", _gridlineThicknessBox, "Enter a gridline width in points.");
             root.Children.Add(CreateGroupBox("Gridlines", stack));
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddCombo(stack, "Major tick marks", _majorTickBox, Enum.GetValues<ChartAxisTickStyle>());
-            ChartDialogHelpers.AddCombo(stack, "Minor tick marks", _minorTickBox, Enum.GetValues<ChartAxisTickStyle>());
+            ChartDialogHelpers.AddCombo(stack, "_Major tick marks", _majorTickBox, Enum.GetValues<ChartAxisTickStyle>());
+            ChartDialogHelpers.AddCombo(stack, "M_inor tick marks", _minorTickBox, Enum.GetValues<ChartAxisTickStyle>());
             ChartDialogHelpers.AddCheck(stack, _labelsBox);
-            ChartDialogHelpers.AddColorText(stack, "Label color", _labelColorBox);
-            ChartDialogHelpers.AddNumericText(stack, "Label font size", _labelFontSizeBox, "Enter a font size in points.");
-            ChartDialogHelpers.AddNumericText(stack, "Label angle", _labelAngleBox, "Enter label rotation in degrees.");
-            ChartDialogHelpers.AddColorText(stack, "Axis line color", _lineColorBox);
-            ChartDialogHelpers.AddNumericText(stack, "Axis line width", _lineThicknessBox, "Enter an axis line width in points.");
+            ChartDialogHelpers.AddColorText(stack, "Label _color", _labelColorBox);
+            ChartDialogHelpers.AddNumericText(stack, "Label _font size", _labelFontSizeBox, "Enter a font size in points.");
+            ChartDialogHelpers.AddNumericText(stack, "Label _angle", _labelAngleBox, "Enter label rotation in degrees.");
+            ChartDialogHelpers.AddColorText(stack, "Axis _line color", _lineColorBox);
+            ChartDialogHelpers.AddNumericText(stack, "Axis line _width", _lineThicknessBox, "Enter an axis line width in points.");
             root.Children.Add(CreateGroupBox("Tick Marks", stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
