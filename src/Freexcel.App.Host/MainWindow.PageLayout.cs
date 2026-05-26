@@ -415,7 +415,10 @@ public partial class MainWindow
         if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
             return;
 
-        var rangeText = FormatPageSetupRangeSelection(request.Target, selectedRange);
+        var rangeText = PageSetupRangeSelectionFormatter.Format(
+            request.Target,
+            selectedRange,
+            _options.UseR1C1ReferenceStyle);
         if (request.CollapseDialog)
             dialog.Hide();
 
@@ -432,14 +435,6 @@ public partial class MainWindow
             }
         }
     }
-
-    private string FormatPageSetupRangeSelection(PageSetupRangeSelectionTarget target, GridRange selectedRange) =>
-        target switch
-        {
-            PageSetupRangeSelectionTarget.RepeatRows => $"{selectedRange.Start.Row}:{selectedRange.End.Row}",
-            PageSetupRangeSelectionTarget.RepeatColumns => $"{FormatColumnReference(selectedRange.Start.Col)}:{FormatColumnReference(selectedRange.End.Col)}",
-            _ => FormatRangeReference(selectedRange.Start, selectedRange.End)
-        };
 
     private void ShowPageSetupPrinterOptions()
     {
