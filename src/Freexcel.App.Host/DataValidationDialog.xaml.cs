@@ -286,6 +286,17 @@ public partial class DataValidationDialog : Window
             Formula2Box.Text = SelectionSource;
     }
 
+    public void ApplyRangeSelection(DataValidationRangeSelectionTarget target, string formulaText)
+    {
+        SelectionSource = formulaText;
+        var textBox = target == DataValidationRangeSelectionTarget.Formula2
+            ? Formula2Box
+            : Formula1Box;
+        textBox.Text = formulaText;
+        UpdateVisibility();
+        FocusRangeSelectionInput(textBox);
+    }
+
     private void RequestRangeSelection(DataValidationRangeSelectionTarget target, TextBox textBox)
     {
         FocusRangeSelectionInput(textBox);
