@@ -17,7 +17,14 @@ public enum GridQuickAnalysisPreviewVisualKind
     None,
     DataBars,
     ColorScale,
-    IconSet
+    IconSet,
+    Highlight,
+    ClearFormat,
+    TotalFormula,
+    Table,
+    LineSparkline,
+    ColumnSparkline,
+    WinLossSparkline
 }
 
 /// <summary>
@@ -82,6 +89,17 @@ public partial class GridView : FrameworkElement
         MakeBrush(255, 192, 0),
         MakeBrush(248, 105, 107)
     ];
+    private static readonly Brush QuickAnalysisHighlightPreviewBrush = MakeBrushAlpha(96, 255, 235, 156);
+    private static readonly Pen QuickAnalysisHighlightPreviewPen = new(MakeBrush(191, 143, 0), 1);
+    private static readonly Brush QuickAnalysisClearFormatPreviewBrush = MakeBrushAlpha(50, 217, 217, 217);
+    private static readonly Pen QuickAnalysisClearFormatPreviewPen = new(MakeBrush(128, 128, 128), 1);
+    private static readonly Brush QuickAnalysisTotalPreviewBrush = MakeBrushAlpha(70, 198, 239, 206);
+    private static readonly Pen QuickAnalysisTotalPreviewPen = new(MakeBrush(84, 130, 53), 1);
+    private static readonly Brush QuickAnalysisTablePreviewBrush = MakeBrushAlpha(58, 189, 215, 238);
+    private static readonly Pen QuickAnalysisTablePreviewPen = new(MakeBrush(91, 155, 213), 1);
+    private static readonly Pen QuickAnalysisSparklinePreviewPen = new(MakeBrush(68, 114, 196), 1.5);
+    private static readonly Brush QuickAnalysisWinLossPositiveBrush = MakeBrushAlpha(180, 84, 130, 53);
+    private static readonly Brush QuickAnalysisWinLossNegativeBrush = MakeBrushAlpha(180, 192, 80, 77);
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
     private static readonly Pen FreezePen = MakeFreezePen();
     private static readonly Brush PageBreakPreviewBrush = MakeBrushAlpha(28, 0, 103, 192);

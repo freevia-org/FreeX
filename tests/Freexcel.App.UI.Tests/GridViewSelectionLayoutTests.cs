@@ -197,6 +197,50 @@ public sealed class GridViewSelectionLayoutTests
             new Rect(97, 41, 58, 14));
     }
 
+    [Fact]
+    public void CalculateQuickAnalysisSparklinePreviewRects_ReturnsCompactRectPerVisibleTargetRow()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 3),
+            new CellAddress(sheetId, 3, 3));
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 24, 20), new RowMetric(4, 20, 44)],
+            [new ColMetric(1, 64, 0), new ColMetric(3, 72, 64)]);
+
+        var rects = GridView.CalculateQuickAnalysisSparklinePreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rects.Should().Equal(
+            new Rect(100, 25, 60, 6),
+            new Rect(100, 46, 60, 8));
+    }
+
+    [Fact]
+    public void CalculateQuickAnalysisSparklinePreviewRects_SkipsTinyTargetsThatCannotContainPreviewBars()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 3),
+            new CellAddress(sheetId, 1, 3));
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0)],
+            [new ColMetric(3, 10, 64)]);
+
+        var rects = GridView.CalculateQuickAnalysisSparklinePreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rects.Should().BeEmpty();
+    }
+
     private static ViewportModel Viewport() =>
         new(
             [],
