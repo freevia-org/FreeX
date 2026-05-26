@@ -201,7 +201,7 @@ public sealed class ScenarioManagerDialog : Window
 
         if (currentSheetId is not null &&
             resolveSheetIdByName is not null &&
-            WorkbookRangeTextCodec.TryParse(currentSheetId.Value, resultCellsText, resolveSheetIdByName, out _))
+            WorkbookRangeTextCodec.TryParseMany(currentSheetId.Value, resultCellsText, resolveSheetIdByName, out _))
         {
             error = null;
             return true;
