@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -43,6 +44,7 @@ public sealed partial class SymbolPickerDialog
         topGrid.Children.Add(subsetBox);
 
         var grid = new UniformGrid { Columns = 10, Width = 360 };
+        AutomationProperties.SetName(grid, "Symbols");
         var recent = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
 
         void SelectSymbol(char value)
@@ -159,6 +161,7 @@ public sealed partial class SymbolPickerDialog
     private ListBox CreateSpecialCharacterList(Action<string> selectSymbolText, Action acceptSelectedSymbol)
     {
         var specialList = new ListBox { Height = 292, MinWidth = 360 };
+        AutomationProperties.SetName(specialList, "Special characters");
         foreach (var special in GetSpecialCharacters())
         {
             var item = new ListBoxItem
