@@ -65,7 +65,7 @@ public sealed class StatusBarLayoutTests
             }
             finally
             {
-                window.Close();
+                MainWindowTestCleanup.CloseWithoutSavePrompt(window);
                 PumpDispatcher();
             }
         });
@@ -221,7 +221,7 @@ public sealed class StatusBarLayoutTests
 
         public void Dispose()
         {
-            _window.Close();
+            MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
             PumpDispatcher();
         }
     }

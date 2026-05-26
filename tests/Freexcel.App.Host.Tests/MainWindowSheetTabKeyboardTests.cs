@@ -132,7 +132,7 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         public void Dispose()
         {
-            _window.Close();
+            MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
             PumpDispatcher();
         }
 

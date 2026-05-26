@@ -13,7 +13,7 @@ public sealed record ScenarioManagerItem(
     bool Hidden,
     bool Locked);
 
-public sealed class ScenarioManagerDialog : Window
+public sealed partial class ScenarioManagerDialog : Window
 {
     private readonly ListBox _scenarioList = new();
     private readonly TextBox _newNameBox = new();
@@ -129,105 +129,6 @@ public sealed class ScenarioManagerDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static IReadOnlyList<ScenarioManagerItem> BuildScenarioItems(Workbook workbook) =>
-        workbook.Scenarios.Select(scenario => new ScenarioManagerItem(
-            scenario.Name,
-            scenario.ChangingCells,
-            scenario.Comment,
-            FormatScenarioChangingCells(workbook, scenario),
-            scenario.Hidden,
-            scenario.Locked)).ToList();
-
-    public static bool TryParseAction(string text, out ScenarioManagerAction action)
-    {
-        if (ScenarioManagerPlanner.TryParseAction(text, out var plannedAction) && plannedAction is { } parsed)
-        {
-            action = parsed;
-            return true;
-        }
-
-        action = default;
-        return false;
-    }
-
-    public static bool RequiresScenarioName(ScenarioManagerAction action) =>
-        action is ScenarioManagerAction.Add or ScenarioManagerAction.Edit or ScenarioManagerAction.Save;
-
-    public static bool TryValidateScenarioName(string? name, out string? error)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            error = "Enter a scenario name.";
-            return false;
-        }
-
-        error = null;
-        return true;
-    }
-
-    public static bool TryValidateChangingCells(
-        string? changingCellsText,
-        SheetId? currentSheetId,
-        Func<string, SheetId?>? resolveSheetIdByName,
-        out string? error)
-    {
-        if (string.IsNullOrWhiteSpace(changingCellsText) ||
-            currentSheetId is null ||
-            resolveSheetIdByName is null)
-        {
-            error = null;
-            return true;
-        }
-
-        if (WorkbookRangeTextCodec.TryParse(currentSheetId.Value, changingCellsText, resolveSheetIdByName, out _))
-        {
-            error = null;
-            return true;
-        }
-
-        error = "Enter a valid changing cells reference.";
-        return false;
-    }
-
-    public static bool TryValidateResultCells(
-        string? resultCellsText,
-        SheetId? currentSheetId,
-        Func<string, SheetId?>? resolveSheetIdByName,
-        out string? error)
-    {
-        if (string.IsNullOrWhiteSpace(resultCellsText))
-        {
-            error = null;
-            return true;
-        }
-
-        if (currentSheetId is not null &&
-            resolveSheetIdByName is not null &&
-            WorkbookRangeTextCodec.TryParseMany(currentSheetId.Value, resultCellsText, resolveSheetIdByName, out _))
-        {
-            error = null;
-            return true;
-        }
-
-        error = "Enter a valid result cells reference.";
-        return false;
-    }
-
-    public static string FormatScenarioChangingCells(Workbook workbook, WorkbookScenario scenario)
-    {
-        if (scenario.ChangingCells.Count == 0)
-            return "";
-
-        var sheetId = scenario.ChangingCells[0].Address.Sheet;
-        if (scenario.ChangingCells.Any(cell => cell.Address.Sheet != sheetId))
-            return "";
-
-        var range = new GridRange(
-            scenario.ChangingCells.Min(cell => cell.Address),
-            scenario.ChangingCells.Max(cell => cell.Address));
-        return WorkbookRangeTextCodec.Format(range, sheetId, id => workbook.GetSheet(id)?.Name);
-    }
-
     private static void AddField(Grid grid, int row, string label, Control field)
     {
         var text = new Label
@@ -273,23 +174,9 @@ public sealed class ScenarioManagerDialog : Window
     private void UpdateSelectionState()
     {
         var selected = _scenarioList.SelectedItem as ScenarioManagerItem;
-        if (selected is not null)
+        if (ProjectSelectionFields(selected, _newNameBox.Text, _defaultScenarioName) is { } fields)
         {
-            _newNameBox.Text = selected.Name;
-            _changingCellsBox.Text = selected.ChangingCellsText;
-            _resultCellsBox.Text = "";
-            _commentBox.Text = selected.Comment ?? "";
-            _lockedBox.IsChecked = selected.Locked;
-            _hiddenBox.IsChecked = selected.Hidden;
-        }
-        else if (string.IsNullOrWhiteSpace(_newNameBox.Text))
-        {
-            _newNameBox.Text = _defaultScenarioName;
-            _changingCellsBox.Text = "";
-            _resultCellsBox.Text = "";
-            _commentBox.Text = "";
-            _lockedBox.IsChecked = false;
-            _hiddenBox.IsChecked = false;
+            ApplySelectionFields(fields);
         }
 
         var hasSelection = selected is not null;
@@ -316,36 +203,60 @@ public sealed class ScenarioManagerDialog : Window
 
     private void Accept(ScenarioManagerAction action)
     {
-        if (RequiresScenarioName(action) && !TryValidateScenarioName(_newNameBox.Text, out var error))
+        if (ValidateAcceptRequest(
+                action,
+                _newNameBox.Text,
+                _changingCellsBox.Text,
+                _resultCellsBox.Text,
+                _currentSheetId,
+                _resolveSheetIdByName) is { } failure)
         {
-            ShowInvalidInputWarning(error ?? "Enter scenario details.", _newNameBox);
+            ShowInvalidInputWarning(failure.Message, GetValidationTarget(failure.Field));
             return;
         }
 
-        if (RequiresScenarioName(action) &&
-            !TryValidateChangingCells(_changingCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error))
-        {
-            ShowInvalidInputWarning(error ?? "Enter scenario details.", _changingCellsBox);
-            return;
-        }
-
-        if (action is ScenarioManagerAction.Report &&
-            !TryValidateResultCells(_resultCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error))
-        {
-            ShowInvalidInputWarning(error ?? "Enter scenario result cells.", _resultCellsBox);
-            return;
-        }
-
-        SelectedAction = action;
-        SelectedScenarioName = (_scenarioList.SelectedItem as ScenarioManagerItem)?.Name;
-        NewScenarioName = _newNameBox.Text;
-        ChangingCellsText = _changingCellsBox.Text;
-        ResultCellsText = _resultCellsBox.Text;
-        CommentText = _commentBox.Text;
-        ScenarioLocked = _lockedBox.IsChecked == true;
-        ScenarioHidden = _hiddenBox.IsChecked == true;
+        ApplyAcceptResult(ProjectAcceptResult(
+            action,
+            _scenarioList.SelectedItem as ScenarioManagerItem,
+            _newNameBox.Text,
+            _changingCellsBox.Text,
+            _resultCellsBox.Text,
+            _commentBox.Text,
+            _lockedBox.IsChecked == true,
+            _hiddenBox.IsChecked == true));
         DialogResult = true;
     }
+
+    private void ApplySelectionFields(ScenarioManagerSelectionFields fields)
+    {
+        _newNameBox.Text = fields.ScenarioName;
+        _changingCellsBox.Text = fields.ChangingCellsText;
+        _resultCellsBox.Text = fields.ResultCellsText;
+        _commentBox.Text = fields.CommentText;
+        _lockedBox.IsChecked = fields.Locked;
+        _hiddenBox.IsChecked = fields.Hidden;
+    }
+
+    private void ApplyAcceptResult(ScenarioManagerAcceptResult result)
+    {
+        SelectedAction = result.Action;
+        SelectedScenarioName = result.SelectedScenarioName;
+        NewScenarioName = result.NewScenarioName;
+        ChangingCellsText = result.ChangingCellsText;
+        ResultCellsText = result.ResultCellsText;
+        CommentText = result.CommentText;
+        ScenarioLocked = result.Locked;
+        ScenarioHidden = result.Hidden;
+    }
+
+    private TextBox GetValidationTarget(ScenarioManagerValidationField field) =>
+        field switch
+        {
+            ScenarioManagerValidationField.ScenarioName => _newNameBox,
+            ScenarioManagerValidationField.ChangingCells => _changingCellsBox,
+            ScenarioManagerValidationField.ResultCells => _resultCellsBox,
+            _ => _newNameBox
+        };
 
     private void ShowInvalidInputWarning(string message, TextBox target)
     {
