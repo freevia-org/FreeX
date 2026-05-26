@@ -58,6 +58,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-legacy-drawing-001" => true,
         "generated-workbook-extension-list-001" => true,
         "generated-workbook-properties-001" => true,
+        "generated-workbook-calculation-001" => true,
         "generated-workbook-file-version-001" => true,
         "generated-workbook-file-recovery-001" => true,
         "generated-workbook-file-sharing-001" => true,
@@ -259,6 +260,11 @@ internal static class XlsxCorpusFixtureFactory
                 <fx:workbookPrNativeChild id="first"/>
                 <fx:workbookPrNativeChild id="second"/>
               </workbookPr>
+            </workbook>
+            """)),
+        "generated-workbook-calculation-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <calcPr calcMode="manual" iterate="1" iterateCount="50" calcId="191029" refMode="A1" fullPrecision="0" concurrentCalc="1"/>
             </workbook>
             """)),
         "generated-workbook-file-version-001" => CreatePackage(("xl/workbook.xml", """
@@ -538,6 +544,8 @@ internal static class XlsxCorpusFixtureFactory
           string.Equals(packagePart, "xl/worksheets/_rels/sheet1.xml.rels", StringComparison.OrdinalIgnoreCase))) ||
         (string.Equals(id, "generated-workbook-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-calculation-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-version-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase) &&
@@ -715,6 +723,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-properties-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookPropertiesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-calculation-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookCalculationFixup(archive);
             return;
         }
 
@@ -1253,6 +1267,29 @@ internal static class XlsxCorpusFixtureFactory
             new XAttribute("defaultThemeVersion", "166925"),
             new XElement(freexcelNs + "workbookPrNativeChild", new XAttribute("id", "first")),
             new XElement(freexcelNs + "workbookPrNativeChild", new XAttribute("id", "second"))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookCalculationFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "calcPr").Remove();
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "calcPr",
+            new XAttribute("calcMode", "manual"),
+            new XAttribute("iterate", "1"),
+            new XAttribute("iterateCount", "50"),
+            new XAttribute("calcId", "191029"),
+            new XAttribute("refMode", "A1"),
+            new XAttribute("fullPrecision", "0"),
+            new XAttribute("concurrentCalc", "1")));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
