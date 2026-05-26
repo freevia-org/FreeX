@@ -225,11 +225,13 @@ public sealed class RibbonTabParityTests
             "100%",
             "Zoom to Selection");
         ExtractTooltipTitles(zoomGroup).Should().NotContain(["Zoom Out", "Zoom In"]);
-        windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Freeze Panes\"");
-        windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Split\"");
         ExtractTooltipTitles(windowGroup).Should().ContainInOrder(
             "New Window",
             "Arrange All",
+            "Freeze Panes",
+            "Split",
+            "Hide",
+            "Unhide",
             "View Side by Side",
             "Synchronous Scrolling",
             "Reset Window Position",

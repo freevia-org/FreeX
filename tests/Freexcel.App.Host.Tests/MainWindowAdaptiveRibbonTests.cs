@@ -358,6 +358,27 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void ViewRibbon_RulerCheckBoxIsEnabledOnlyInPageLayoutView()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("View", 1465);
+
+            harness.ViewRulerCheckBoxIsEnabled.Should().BeFalse("Excel disables Ruler outside Page Layout view");
+
+            harness.ClickActiveRibbonButton("Page Layout");
+
+            harness.ViewRulerCheckBoxIsEnabled.Should().BeTrue("Excel enables Ruler in Page Layout view");
+
+            harness.ClickActiveRibbonButton("Normal");
+
+            harness.ViewRulerCheckBoxIsEnabled.Should().BeFalse("returning to Normal view should disable Ruler again");
+        });
+    }
+
+    [Fact]
     public void RibbonScrollViewers_HideHorizontalScrollBarsWithoutDisablingFallbackScroll()
     {
         StaTestRunner.Run(() =>
@@ -628,6 +649,9 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Select(checkBox => checkBox.HorizontalContentAlignment)
                 .ToList();
 
+        public bool? ViewRulerCheckBoxIsEnabled =>
+            (_window.FindName("ViewRulerChk") as CheckBox)?.IsEnabled;
+
         public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
             _window.FindName("RibbonTabs") is TabControl tabs
                 ? EnumerateSelfAndVisualDescendants(tabs)
@@ -706,6 +730,20 @@ public sealed class MainWindowAdaptiveRibbonTests
             PumpDispatcher();
             PumpDispatcher();
             _updateRibbonCompactMode.Invoke(_window, [true]);
+            PumpDispatcher();
+        }
+
+        public void ClickActiveRibbonButton(string title)
+        {
+            var button = EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .Concat(EnumerateLogicalDescendants(SelectedRibbonContentRoot))
+                .OfType<Button>()
+                .Distinct()
+                .FirstOrDefault(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal));
+
+            button.Should().NotBeNull(DebugActiveRibbonChildren);
+            button!.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            _window.UpdateLayout();
             PumpDispatcher();
         }
 
