@@ -287,7 +287,7 @@ internal static class XlsxWorkbookMetadataPreserver
         if (sourceWorkbookProperties is null)
             return false;
 
-        XName[] modeledAttributes = [workbookNs + "date1904"];
+        XName[] modeledAttributes = ["date1904"];
         var targetWorkbookProperties = targetRoot.Element(workbookNs + "workbookPr");
         if (targetWorkbookProperties is null)
         {
