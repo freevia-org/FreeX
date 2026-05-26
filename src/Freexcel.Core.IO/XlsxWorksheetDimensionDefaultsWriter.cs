@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -84,7 +85,7 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
             if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetFormatAttribute(attribute.Key))
                 continue;
 
-            changed |= SetAttributeIfDifferent(sheetFormat, XName.Get(attribute.Key), attribute.Value);
+            changed |= TrySetNativeAttributeIfDifferent(sheetFormat, attribute.Key, attribute.Value);
         }
 
         if (metadata.NativeChildXmls.Count > 0)
@@ -129,5 +130,21 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
 
         element.SetAttributeValue(name, value);
         return true;
+    }
+
+    private static bool TrySetNativeAttributeIfDifferent(XElement element, string name, string value)
+    {
+        try
+        {
+            return SetAttributeIfDifferent(element, XName.Get(name), value);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 }
