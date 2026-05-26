@@ -6728,6 +6728,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sortby_SortOrderError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(2)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(1)));
+
+        _eval.Evaluate("=SORTBY(A1:A2,B1:B2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Sortby_MismatchedKeyShape_ReturnsValueError()
     {
         var sheet = MakeSheet(
