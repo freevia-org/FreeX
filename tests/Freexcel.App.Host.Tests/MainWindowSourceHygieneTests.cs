@@ -2140,6 +2140,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ConditionalFormattingRulesManager_ApplyUsesSameWorkbookCommandAsOk()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("new ManageConditionalFormatsDialog(");
+        source.Should().Contain("applyRules: ApplyManagedConditionalFormatRules)");
+        source.Should().Contain("private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)");
+        source.Should().Contain("new ReplaceAllConditionalFormatsCommand(sheetId, remapped)");
+        source.Should().Contain("GroupedSheetRangePlanner.CloneConditionalFormatForSheet(r, sheetId)");
+        CountOccurrences(source, "new ReplaceAllConditionalFormatsCommand(sheetId, remapped)").Should().Be(1);
+    }
+
+    [Fact]
     public void PivotTableDesignCommands_OpenOptionsDialogInsteadOfCyclingLayoutState()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
