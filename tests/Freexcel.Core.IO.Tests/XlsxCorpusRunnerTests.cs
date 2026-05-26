@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(43, "the generated metadata-pass manifest currently declares forty-three deterministic package-retention rows");
+        rows.Should().HaveCount(44, "the generated metadata-pass manifest currently declares forty-four deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -631,6 +631,24 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-workbook-views-001");
         AssertWorkbookViews(saved, "generated-workbook-views-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookDefinedNamesNativeRow_RetainsDefinedNamesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-defined-names-native-001");
+        AssertWorkbookDefinedNamesNative(source, "generated-workbook-defined-names-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-defined-name-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-defined-names-native-001");
+        AssertWorkbookDefinedNamesNative(saved, "generated-workbook-defined-names-native-001 saved");
     }
 
     [Fact]
@@ -1824,6 +1842,23 @@ public class XlsxCorpusRunnerTests
         customView.Attribute("guid")!.Value.Should().Be("{22222222-2222-2222-2222-222222222222}", because);
         customView.Attribute("includePrintSettings")!.Value.Should().Be("1", because);
         customView.Attribute("includeHiddenRowCol")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorkbookDefinedNamesNative(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var definedName = workbookXml.Root!
+            .Element(workbookNs + "definedNames")!
+            .Elements(workbookNs + "definedName")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        definedName.Attribute("name")!.Value.Should().Be("DynamicSalesRange", because);
+        definedName.Attribute("hidden")!.Value.Should().Be("1", because);
+        definedName.Value.Should().Be("1+1", because);
     }
 
     private static void AssertHeaderFooterLegacyDrawingPackageGraph(Stream package, string because)
