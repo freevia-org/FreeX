@@ -501,6 +501,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void AccessibilityCheckerDialog_CleanStateUsesSingleExcelLikeOkButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
+
+        source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
+        source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
+    }
+
+    [Fact]
     public void AccessibilityCheckerDialog_GetNavigationTarget_UsesFirstCellInIssueLocation()
     {
         var sheetId = SheetId.New();
