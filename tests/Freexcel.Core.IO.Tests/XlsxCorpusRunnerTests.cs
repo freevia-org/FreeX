@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(40, "the generated metadata-pass manifest currently declares forty deterministic package-retention rows");
+        rows.Should().HaveCount(41, "the generated metadata-pass manifest currently declares forty-one deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -685,6 +685,25 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-single-xml-cells-001");
         AssertWorksheetSingleXmlCells(saved, "generated-worksheet-single-xml-cells-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetCalculationPropertiesRow_RetainsCalculationPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-calculation-properties-001");
+        AssertWorksheetCalculationProperties(source, "generated-worksheet-calculation-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).FullCalculationOnLoad.Should().BeTrue();
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-worksheet-calculation-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-calculation-properties-001");
+        AssertWorksheetCalculationProperties(saved, "generated-worksheet-calculation-properties-001 saved");
     }
 
     [Fact]
@@ -1219,6 +1238,18 @@ public class XlsxCorpusRunnerTests
         singleXmlCell.Attribute("r")!.Value.Should().Be("A1", because);
         singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1", because);
         singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept", because);
+    }
+
+    private static void AssertWorksheetCalculationProperties(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
+        sheetCalcPr.Should().NotBeNull(because);
+        sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1", because);
+        sheetCalcPr.Attribute("calcId")!.Value.Should().Be("999", because);
     }
 
     private static void AssertWorksheetSheetViews(Stream package, string because)
