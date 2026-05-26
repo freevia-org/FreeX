@@ -65,13 +65,22 @@ public static partial class PivotTableRefreshService
             pivotTable.ShowSubtotals &&
             rowFields.Count > 1 &&
             pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom;
+        var writeCompactTopSubtotals = pivotTable.ReportLayout == PivotReportLayout.Compact &&
+            pivotTable.ShowSubtotals &&
+            rowFields.Count > 1 &&
+            pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Top;
+        var topSubtotalRows = writeCompactTopSubtotals
+            ? rowGroups
+                .GroupBy(group => new PivotKey(group.Key.Values.Take(rowFields.Count - 1).ToArray()))
+                .ToDictionary(group => group.Key, group => group.SelectMany(item => item).ToList())
+            : [];
         foreach (var rowGroup in rowGroups)
         {
             var rowGroupRows = rowGroup.ToList();
-            if (writeCompactBottomSubtotals)
+            if (writeCompactBottomSubtotals || writeCompactTopSubtotals)
             {
                 var subtotalKey = new PivotKey(rowGroup.Key.Values.Take(rowFields.Count - 1).ToArray());
-                if (currentSubtotalKey is not null && !currentSubtotalKey.Equals(subtotalKey))
+                if (writeCompactBottomSubtotals && currentSubtotalKey is not null && !currentSubtotalKey.Equals(subtotalKey))
                 {
                     WriteMatrixSubtotalRow(
                         workbook,
@@ -92,8 +101,32 @@ public static partial class PivotTableRefreshService
                     subtotalRows.Clear();
                 }
 
-                currentSubtotalKey = subtotalKey;
-                subtotalRows.AddRange(rowGroupRows);
+                if (writeCompactBottomSubtotals)
+                {
+                    currentSubtotalKey = subtotalKey;
+                    subtotalRows.AddRange(rowGroupRows);
+                }
+                else if (currentSubtotalKey is null || !currentSubtotalKey.Equals(subtotalKey))
+                {
+                    currentSubtotalKey = subtotalKey;
+                    if (topSubtotalRows.TryGetValue(subtotalKey, out var rowsForSubtotal))
+                    {
+                        WriteMatrixSubtotalRow(
+                            workbook,
+                            sheet,
+                            pivotTable,
+                            headers,
+                            start,
+                            valueStartCol,
+                            columnKeys,
+                            columnFields,
+                            visibleRows,
+                            subtotalKey,
+                            rowsForSubtotal,
+                            outputRow);
+                        outputRow++;
+                    }
+                }
             }
 
             if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
