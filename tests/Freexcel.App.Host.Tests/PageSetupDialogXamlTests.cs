@@ -90,6 +90,24 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void ScaleToFitCommand_OpensPageSetupPageTabWithActiveScalingInputFocus()
+    {
+        var source = ReadPageSetupDialogSource();
+        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("PageSetupInitialFocusTarget.ScaleToFit");
+        source.Should().Contain("PageSetupTabs.SelectedItem = PageTab;");
+        source.Should().Contain("AdjustToRadioButton.IsChecked == true");
+        source.Should().Contain("? ScalePercentBox");
+        source.Should().Contain(": FitPagesWideBox");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+        handlerSource.Should().Contain("ScaleToFitBtn_Click");
+        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit);");
+    }
+
+    [Fact]
     public void PageTab_UsesExcelLikeScalingChoices()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
