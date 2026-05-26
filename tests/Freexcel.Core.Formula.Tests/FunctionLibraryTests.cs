@@ -2553,6 +2553,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void BinaryMath_OneCellRangeArgument_BroadcastsAcrossOtherRange()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)), (2, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(2)));
+
+        AssertColumn(_eval.Evaluate("=MOD(A1:A2,B1:B1)", sheet), new NumberValue(0), new NumberValue(1));
+    }
+
+    [Fact]
     public void BinaryMath_MismatchedRangeArgumentShapes_ReturnValueError()
     {
         var sheet = MakeSheet(
