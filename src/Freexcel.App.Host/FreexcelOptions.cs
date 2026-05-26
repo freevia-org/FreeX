@@ -42,6 +42,9 @@ public sealed class FreexcelOptions
     // Save
     public string DefaultFormat { get; set; } = ".xlsx";
 
+    // Export
+    public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;
+
     private static readonly string StorePath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "Freexcel", "options.json");
