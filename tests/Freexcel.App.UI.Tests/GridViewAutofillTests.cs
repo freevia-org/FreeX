@@ -35,4 +35,32 @@ public sealed class GridViewAutofillTests
 
         target.Should().Be(new CellAddress(sheet, 3, 9));
     }
+
+    [Fact]
+    public void CalculateAutofillEdgeScrollIntent_RequestsHorizontalScrollNearRightEdge()
+    {
+        GridView.CalculateAutofillEdgeScrollIntent(
+                pointerX: 795,
+                pointerY: 120,
+                width: 800,
+                height: 600,
+                rowHeaderWidth: 48,
+                columnHeaderHeight: 24)
+            .Should()
+            .Be(new GridAutoScrollRequest(1, 0));
+    }
+
+    [Fact]
+    public void CalculateAutofillEdgeScrollIntent_IgnoresPointerAwayFromEdges()
+    {
+        GridView.CalculateAutofillEdgeScrollIntent(
+                pointerX: 400,
+                pointerY: 300,
+                width: 800,
+                height: 600,
+                rowHeaderWidth: 48,
+                columnHeaderHeight: 24)
+            .Should()
+            .Be(new GridAutoScrollRequest(0, 0));
+    }
 }

@@ -101,6 +101,76 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void InputMessageToggle_DisablesPromptEditors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog();
+            dialog.Show();
+            try
+            {
+                var showInputMessage = GetControl<CheckBox>(dialog, "ShowInputMessageBox");
+                var promptTitle = GetControl<TextBox>(dialog, "PromptTitleBox");
+                var promptMessage = GetControl<TextBox>(dialog, "PromptMessageBox");
+
+                promptTitle.IsEnabled.Should().BeTrue();
+                promptMessage.IsEnabled.Should().BeTrue();
+
+                showInputMessage.IsChecked = false;
+
+                promptTitle.IsEnabled.Should().BeFalse();
+                promptMessage.IsEnabled.Should().BeFalse();
+
+                showInputMessage.IsChecked = true;
+
+                promptTitle.IsEnabled.Should().BeTrue();
+                promptMessage.IsEnabled.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void ErrorAlertToggle_DisablesAlertEditors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog();
+            dialog.Show();
+            try
+            {
+                var showErrorMessage = GetControl<CheckBox>(dialog, "ShowErrorMessageBox");
+                var alertStyle = GetControl<ComboBox>(dialog, "AlertStyleCombo");
+                var errorTitle = GetControl<TextBox>(dialog, "ErrorTitleBox");
+                var errorMessage = GetControl<TextBox>(dialog, "ErrorMessageBox");
+
+                alertStyle.IsEnabled.Should().BeTrue();
+                errorTitle.IsEnabled.Should().BeTrue();
+                errorMessage.IsEnabled.Should().BeTrue();
+
+                showErrorMessage.IsChecked = false;
+
+                alertStyle.IsEnabled.Should().BeFalse();
+                errorTitle.IsEnabled.Should().BeFalse();
+                errorMessage.IsEnabled.Should().BeFalse();
+
+                showErrorMessage.IsChecked = true;
+
+                alertStyle.IsEnabled.Should().BeTrue();
+                errorTitle.IsEnabled.Should().BeTrue();
+                errorMessage.IsEnabled.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void DataValidationDialog_OrdersAllowTypesLikeExcel()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));

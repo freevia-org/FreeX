@@ -184,6 +184,25 @@ public static class ViewportScrollCalculator
         return (maximum, value);
     }
 
+    public static (double Maximum, double Value) CalculateDragAutoScroll(
+        double currentValue,
+        double currentMaximum,
+        int direction,
+        double step,
+        double visibleSpan,
+        uint absoluteLimit)
+    {
+        if (direction == 0)
+            return (currentMaximum, currentValue);
+
+        var effectiveStep = Math.Max(1, step);
+        var desired = currentValue + Math.Sign(direction) * effectiveStep;
+        var maxOrigin = CalculateMaximumViewportOrigin(absoluteLimit, ToVisibleSpan(visibleSpan));
+        var maximum = Math.Min(maxOrigin, Math.Max(currentMaximum, desired));
+        var value = Math.Clamp(desired, 1, maximum);
+        return (maximum, value);
+    }
+
     public static uint CalculateMaximumViewportOrigin(uint absoluteLimit, uint visibleSpan)
     {
         visibleSpan = Math.Max(1, visibleSpan);

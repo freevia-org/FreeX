@@ -112,6 +112,13 @@ public partial class MainWindow
         _formulaReferenceLength = edit.ReferenceLength;
         RefreshFormulaReferenceHighlights();
         editor.Focus();
+        editor.Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                editor.Focus();
+                System.Windows.Input.Keyboard.Focus(editor);
+            }),
+            System.Windows.Threading.DispatcherPriority.Input);
         return true;
     }
 
