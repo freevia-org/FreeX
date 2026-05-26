@@ -449,13 +449,7 @@ public partial class MainWindow
             "Label Separator",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelSeparator: chart.DataLabelSeparator switch
-                {
-                    ChartDataLabelSeparator.Comma => ChartDataLabelSeparator.Semicolon,
-                    ChartDataLabelSeparator.Semicolon => ChartDataLabelSeparator.NewLine,
-                    ChartDataLabelSeparator.NewLine => ChartDataLabelSeparator.Space,
-                    _ => ChartDataLabelSeparator.Comma
-                }));
+                DataLabelSeparator: ChartOptionCycler.NextDataLabelSeparator(chart.DataLabelSeparator)));
     }
 
     private void ChartDataLabelNumberFormatBtn_Click(object sender, RoutedEventArgs e)
