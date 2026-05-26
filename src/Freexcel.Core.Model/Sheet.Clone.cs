@@ -381,6 +381,7 @@ public sealed partial class Sheet
                 NativeContainerChildXmls = cf.NativeContainerChildXmls
             };
             clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
+            clonedFormat.IconOverrides.AddRange(cf.IconOverrides);
             copy.ConditionalFormats.Add(clonedFormat);
         }
 

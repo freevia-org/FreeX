@@ -275,6 +275,41 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void IconSet_WithPerThresholdOverrides_AppliesCustomIconForEachBucket()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(50)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromValue(new NumberValue(90)));
+
+        var cf = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3TrafficLights1"
+        };
+        cf.IconSetThresholds.AddRange([
+            new CfThresholdModel(CfThresholdType.Percent, "40"),
+            new CfThresholdModel(CfThresholdType.Percent, "70")
+        ]);
+        cf.IconOverrides.AddRange([
+            new CfIconOverride("3Arrows", 0),
+            new CfIconOverride("3Arrows", 1),
+            new CfIconOverride("3Arrows", 2)
+        ]);
+        sheet.ConditionalFormats.Add(cf);
+
+        var vp = GetViewport(wb, sheet);
+
+        // Values 10, 50, 90 with thresholds at 40% (42) and 70% (66) of range [10,90]
+        // → buckets 0, 1, 2 respectively
+        GetCell(vp, 1, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3Arrows", 0, 3, true));
+        GetCell(vp, 2, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3Arrows", 1, 3, true));
+        GetCell(vp, 3, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3Arrows", 2, 3, true));
+    }
+
+    [Fact]
     public void Top10_HighlightsTopRankedValues()
     {
         var (wb, sheet) = MakeWorkbook();

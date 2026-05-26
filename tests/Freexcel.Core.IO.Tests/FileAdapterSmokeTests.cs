@@ -4923,6 +4923,44 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_RoundTrip_ConditionalFormat_IconSet_WithIconOverrides_Survives()
+    {
+        var adapter = new XlsxFileAdapter();
+        var workbook = new Workbook("CfIconOverrides");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 3; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+        var cf = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            RuleType = CfRuleType.IconSet,
+            Priority = 1,
+            IconSetStyle = "3TrafficLights1"
+        };
+        cf.IconSetThresholds.AddRange([
+            new CfThresholdModel(CfThresholdType.Percent, "33"),
+            new CfThresholdModel(CfThresholdType.Percent, "66")
+        ]);
+        cf.IconOverrides.AddRange([
+            new CfIconOverride("3Arrows", 2),
+            new CfIconOverride("NoIcons", 0),
+            new CfIconOverride("3TrafficLights1", 0)
+        ]);
+        sheet.ConditionalFormats.Add(cf);
+
+        using var ms = new MemoryStream();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        var iconSet = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        iconSet.IconOverrides.Should().HaveCount(3);
+        iconSet.IconOverrides[0].Should().Be(new CfIconOverride("3Arrows", 2));
+        iconSet.IconOverrides[1].Should().Be(new CfIconOverride("NoIcons", 0));
+        iconSet.IconOverrides[2].Should().Be(new CfIconOverride("3TrafficLights1", 0));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsAdvancedConditionalFormatNativeMetadata()
     {
         var workbook = new Workbook("CfNativeMetadata");
@@ -13150,6 +13188,56 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectClearedHeaderFooterLegacyDrawing()
+    {
+        var workbook = new Workbook("HeaderFooterDrawingRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("header image"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddHeaderFooterLegacyDrawingPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageHeaderPictures.Left.Should().NotBeNull();
+        loadedSheet.PageHeaderPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.PageFooterPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.FirstPageHeaderPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.FirstPageFooterPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.EvenPageHeaderPictures = WorksheetHeaderFooterPictureSet.Empty;
+        loadedSheet.EvenPageFooterPictures = WorksheetHeaderFooterPictureSet.Empty;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().BeNull();
+        archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels").Should().BeNull();
+        archive.GetEntry("xl/media/headerFooterImage1.png").Should().BeNull();
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.Root!.Element(worksheetNs + "legacyDrawingHF").Should().BeNull();
+
+        if (archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels") is { } worksheetRelsEntry)
+        {
+            var worksheetRelsText = LoadPackageXml(worksheetRelsEntry).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            worksheetRelsText.Should().NotContain("rIdHeaderFooterDrawing1");
+            worksheetRelsText.Should().NotContain("../drawings/vmlDrawing1.vml");
+        }
+
+        var contentTypesText = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!)
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        contentTypesText.Should().NotContain("/xl/drawings/vmlDrawing1.vml");
+        contentTypesText.Should().NotContain("/xl/media/headerFooterImage1.png");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_RegeneratesHeaderFooterDrawingWhenPictureChanges()
     {
         var workbook = new Workbook("HeaderFooterDrawingChangeTest");
@@ -16618,19 +16706,33 @@ public partial class FileAdapterSmokeTests
                 new WorksheetCellSmartTagsModel
                 {
                     Reference = "A1",
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["validCellSmartTagsAttr"] = "cell-kept",
+                        ["invalid cellSmartTags attr"] = "skip"
+                    },
                     Tags =
                     [
                         new WorksheetCellSmartTagModel
                         {
                             Type = "0",
                             Deleted = false,
+                            NativeAttributes = new Dictionary<string, string>
+                            {
+                                ["validCellSmartTagAttr"] = "tag-kept",
+                                ["invalid cellSmartTag attr"] = "skip"
+                            },
                             Properties =
                             [
                                 new WorksheetCellSmartTagPropertyModel
                                 {
                                     Key = "place",
                                     Value = "Seattle",
-                                    NativeAttributes = new Dictionary<string, string> { ["customSmartTagPropertyFlag"] = "keep" }
+                                    NativeAttributes = new Dictionary<string, string>
+                                    {
+                                        ["customSmartTagPropertyFlag"] = "keep",
+                                        ["invalid cellSmartTagPr attr"] = "skip"
+                                    }
                                 }
                             ]
                         }
@@ -16641,7 +16743,9 @@ public partial class FileAdapterSmokeTests
 
         var saved = new MemoryStream();
         var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, saved);
+        var save = () => adapter.Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16653,7 +16757,10 @@ public partial class FileAdapterSmokeTests
             .Which.Attribute("r")!.Value.Should().Be("A1");
         smartTags.Descendants(worksheetNs + "cellSmartTag").Should().ContainSingle()
             .Which.Attribute("deleted")!.Value.Should().Be("0");
+        smartTags.ToString().Should().Contain("validCellSmartTagsAttr=\"cell-kept\"");
+        smartTags.ToString().Should().Contain("validCellSmartTagAttr=\"tag-kept\"");
         smartTags.ToString().Should().Contain("customSmartTagPropertyFlag=\"keep\"");
+        smartTags.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         smartTags.ToString().Should().NotContain("wrongNamespace");
     }
 

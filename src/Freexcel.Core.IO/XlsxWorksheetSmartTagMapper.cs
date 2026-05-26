@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -192,7 +193,24 @@ internal static class XlsxWorksheetSmartTagMapper
                 continue;
             }
 
-            element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
+        }
+    }
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
         }
     }
 

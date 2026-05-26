@@ -96,6 +96,7 @@ public sealed partial class ManageConditionalFormatsDialog
             NativeContainerChildXmls = src.NativeContainerChildXmls
         };
         cf.IconSetThresholds.AddRange(src.IconSetThresholds);
+        cf.IconOverrides.AddRange(src.IconOverrides);
         return cf;
     }
 

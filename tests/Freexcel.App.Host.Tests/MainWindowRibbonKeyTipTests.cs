@@ -228,6 +228,40 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void HomeNumberFormatKeyTip_OpensDropdownAndFocusesComboBox()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+            harness.HandleKeyTip(Key.N);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Home");
+            harness.NumberFormatDropDownIsOpen.Should().BeTrue();
+            harness.NumberFormatBoxHasKeyboardFocus.Should().BeTrue();
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
+    public void CommandKeyTipComboBoxInvocation_ExplicitlyFocusesComboBoxBeforeOpening()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyTips.cs"));
+
+        var comboBranch = source[
+            source.IndexOf("if (match is ComboBox comboBox)", StringComparison.Ordinal)..
+            source.IndexOf("return false;", source.IndexOf("if (match is ComboBox comboBox)", StringComparison.Ordinal), StringComparison.Ordinal)];
+
+        comboBranch.Should().Contain("comboBox.Focus();");
+        comboBranch.Should().Contain("Keyboard.Focus(comboBox);");
+        comboBranch.IndexOf("comboBox.Focus();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(comboBranch.IndexOf("comboBox.IsDropDownOpen = true;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void NestedMenuKeyTips_OpenSubmenuScopeBeforeRoutingChildKeyTips()
     {
         RunSta(() =>
@@ -397,6 +431,13 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public bool StartScreenIsVisible =>
             (_window.FindName("StartScreenOverlay") as FrameworkElement)?.Visibility == Visibility.Visible;
+
+        public bool NumberFormatDropDownIsOpen =>
+            (_window.FindName("NumberFormatBox") as ComboBox)?.IsDropDownOpen == true;
+
+        public bool NumberFormatBoxHasKeyboardFocus =>
+            (_window.FindName("NumberFormatBox") as ComboBox)?.IsKeyboardFocusWithin == true ||
+            ReferenceEquals(Keyboard.FocusedElement, _window.FindName("NumberFormatBox"));
 
         public string? ActiveMenuItemGestureText(string header) =>
             FindActiveMenuItem(header)?.InputGestureText;
