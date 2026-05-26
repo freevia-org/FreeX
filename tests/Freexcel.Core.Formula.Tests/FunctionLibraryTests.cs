@@ -7572,6 +7572,23 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Subtotal_FuncNum9_IgnoresNestedSubtotalFormulaCell()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (3, 1, new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell
+        {
+            FormulaText = "SUBTOTAL(9,A1:A1)",
+            Value = new NumberValue(10)
+        });
+
+        var result = _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet);
+
+        result.Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
     public void Subtotal_FuncNum3_CountaIncludesTextCells()
     {
         // COUNTA should count text cells too, not just numbers

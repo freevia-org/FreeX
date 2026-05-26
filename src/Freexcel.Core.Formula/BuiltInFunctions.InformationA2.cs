@@ -152,7 +152,7 @@ public static partial class BuiltInFunctions
         if (options < 0 || options > 7) return ErrorValue.Value;
 
         bool ignoreErrors = options == 2 || options == 3 || options == 6 || options == 7;
-        // Hidden-row ignore (options 1, 3, 5, 7) is not honored here — see header note.
+        bool ignoreHiddenRows = options == 1 || options == 3 || options == 5 || options == 7;
 
         bool needsK = funcNum is >= 14 and <= 19;
         if (needsK && args.Count < 4) return ErrorValue.Value;
@@ -171,7 +171,7 @@ public static partial class BuiltInFunctions
             }
             if (arg is RangeValue rv)
             {
-                foreach (var cell in rv.Flatten())
+                foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows))
                 {
                     if (cell is ErrorValue ce)
                     {
@@ -212,7 +212,7 @@ public static partial class BuiltInFunctions
                     }
                     if (arg is RangeValue rv)
                     {
-                        foreach (var cell in rv.Flatten())
+                        foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows))
                         {
                             if (cell is ErrorValue ce)
                             {
@@ -313,6 +313,17 @@ public static partial class BuiltInFunctions
             }
             default:
                 return ErrorValue.Value;
+        }
+    }
+
+    private static IEnumerable<ScalarValue> AggregateVisibleCells(RangeValue range, IEvalContext ctx, bool ignoreHiddenRows)
+    {
+        for (int r = 0; r < range.RowCount; r++)
+        {
+            uint absRow = range.StartRow + (uint)r;
+            if (ignoreHiddenRows && ctx.IsRowHidden(absRow)) continue;
+            for (int c = 0; c < range.ColCount; c++)
+                yield return range.Cells[r, c];
         }
     }
 

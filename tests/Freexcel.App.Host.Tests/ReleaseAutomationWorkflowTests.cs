@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using FluentAssertions;
 
@@ -22,6 +23,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("dotnet build Freexcel.slnx --configuration Release --no-restore");
         workflow.Should().Contain("dotnet test Freexcel.slnx --configuration Release --no-build");
         workflow.Should().Contain("tools/Publish-UserTestBuild.ps1");
+        workflow.Should().Contain("-RuntimeIdentifier win-x64");
         workflow.Should().Contain("-PublishMode SingleFile");
         workflow.Should().Contain("Freexcel-latest-win-x64.exe");
         workflow.Should().Contain("actions/upload-artifact@v7");
@@ -41,6 +43,32 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$releaseName = \"Freexcel (Test Release) $displayVersion ($releaseStamp) Run $runNumber Attempt $runAttempt ($shortSha)\"");
         workflow.Should().Contain("\"release_id=$releaseId\" >> $env:GITHUB_OUTPUT");
         workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile");
+    }
+
+    [Fact]
+    public void UserTestPublishScript_PublishesFrameworkDependentRuntimeSpecificBuild()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        script.Should().Contain("[string]$RuntimeIdentifier = \"win-x64\"");
+        script.Should().Contain("\"-r\", $RuntimeIdentifier");
+        script.Should().Contain("\"--self-contained\", \"false\"");
+    }
+
+    [Fact]
+    public void TesterReleaseWorkflow_DefaultsToStableReleaseWhenAdvertisingLatestDownload()
+    {
+        var workflowPath = WorkspaceFileLocator.Find(".github", "workflows", "tester-release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        workflow.Should().Contain("Download the stable latest asset: Freexcel-latest-win-x64.exe");
+
+        var prereleaseInput = Regex.Match(workflow, @"(?ms)^\s+prerelease:\s*$.*?^\s+type:\s+boolean\s*$");
+        prereleaseInput.Success.Should().BeTrue("the workflow should expose a prerelease dispatch input");
+        prereleaseInput.Value.Should().Contain(
+            "default: false",
+            "GitHub releases/latest excludes prereleases, so the advertised stable latest asset must be backed by stable releases by default");
     }
 
     [Fact]

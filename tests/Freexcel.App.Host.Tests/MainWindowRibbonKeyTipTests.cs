@@ -433,6 +433,32 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void CollapsedInsertChartsKeyTip_RoutesThroughVisibleOverflowGroup()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRibbonTab("Insert", 800);
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.N);
+            harness.HandleKeyTip(Key.C);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Insert");
+            harness.VisibleCommandKeyTips("CH").Should().ContainSingle("Charts");
+            harness.KeyTipScope.Should().Be("Commands", "C should be treated as the first character of the collapsed Charts group keytip CH");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.HandleKeyTip(Key.H);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuIsOpen.Should().BeTrue();
+            harness.ActiveMenuItemGestureText("Recommended Charts").Should().Be("RC");
+            harness.ActiveMenuItemGestureText("Column Chart").Should().Be("CC");
+        });
+    }
+
+    [Fact]
     public void FormulasFunctionLibraryDynamicMenu_IsKeyTipRoutable()
     {
         RunSta(() =>
@@ -478,6 +504,8 @@ public sealed class MainWindowRibbonKeyTipTests
 
     private sealed class MainWindowHarness : IDisposable
     {
+        private static SharedMainWindowSession? SharedSession;
+
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
         private readonly MethodInfo _enterKeyTipMode;
@@ -486,6 +514,7 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _getVisibleKeyTipElements;
         private readonly MethodInfo _updateRibbonCompactMode;
         private readonly MethodInfo _updateSsRecentList;
+        private readonly MethodInfo _hideStartScreen;
         private readonly Type _scopeType;
         private readonly FieldInfo _scopeField;
         private readonly FieldInfo _activeMenuField;
@@ -507,6 +536,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
             _updateSsRecentList = typeof(MainWindow).GetMethod("UpdateSsRecentList", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateSsRecentList");
+            _hideStartScreen = typeof(MainWindow).GetMethod("HideStartScreen", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "HideStartScreen");
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
             _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -645,6 +676,31 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public static MainWindowHarness Create(Action<Workbook>? configureWorkbook = null)
         {
+            var session = SharedSession ??= CreateSharedSession();
+            var window = session.Window;
+            if (!window.IsVisible)
+                window.Show();
+
+            window.WindowState = WindowState.Normal;
+            window.Width = 2400;
+            window.Height = 720;
+            if (window.FindName("RibbonTabs") is TabControl ribbonTabs)
+                ribbonTabs.Width = 2400;
+            window.UpdateLayout();
+            PumpDispatcher();
+
+            var createNewWorkbook = typeof(MainWindow).GetMethod("CreateNewWorkbook", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateNewWorkbook");
+            createNewWorkbook.Invoke(window, null);
+            configureWorkbook?.Invoke(session.WorkbookRef.Current);
+
+            var harness = new MainWindowHarness(window, session.WorkbookRef.Current);
+            harness.ResetUiState();
+            return harness;
+        }
+
+        private static SharedMainWindowSession CreateSharedSession()
+        {
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
             var workbookRef = new WorkbookRef { Current = workbook };
@@ -667,8 +723,7 @@ public sealed class MainWindowRibbonKeyTipTests
                 ribbonTabs.Width = 2400;
             window.UpdateLayout();
             PumpDispatcher();
-            configureWorkbook?.Invoke(workbookRef.Current);
-            return new MainWindowHarness(window, workbookRef.Current);
+            return new SharedMainWindowSession(window, workbookRef);
         }
 
         public void SetRibbonWidth(double width)
@@ -682,6 +737,25 @@ public sealed class MainWindowRibbonKeyTipTests
             _window.WindowState = WindowState.Normal;
             _window.Width = width;
             _window.UpdateLayout();
+            _updateRibbonCompactMode.Invoke(_window, [true]);
+            PumpDispatcher();
+        }
+
+        public void SelectRibbonTab(string header, double width)
+        {
+            if (_window.FindName("RibbonTabs") is TabControl ribbonTabs)
+            {
+                ribbonTabs.Width = width;
+                ribbonTabs.SelectedItem = ribbonTabs.Items
+                    .OfType<TabItem>()
+                    .First(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+            }
+
+            _window.WindowState = WindowState.Normal;
+            _window.Width = width;
+            _window.UpdateLayout();
+            PumpDispatcher();
+            PumpDispatcher();
             _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
@@ -736,11 +810,41 @@ public sealed class MainWindowRibbonKeyTipTests
             ActiveMenuIsOpen.Should().BeTrue();
         }
 
-        public void Dispose()
+        private void ResetUiState()
         {
-            _window.Close();
+            _hideStartScreen.Invoke(_window, null);
+            if (ActiveMenu is { } activeMenu)
+                activeMenu.IsOpen = false;
+            _scopeField.SetValue(_window, Enum.Parse(_scopeType, "None"));
+            _activeMenuField.SetValue(_window, null);
+            if (_window.FindName("KeyTipOverlay") is Canvas overlay)
+            {
+                overlay.Children.Clear();
+                overlay.Visibility = Visibility.Collapsed;
+            }
+            if (_window.FindName("RibbonTabs") is TabControl ribbonTabs)
+            {
+                ribbonTabs.Width = 2400;
+                ribbonTabs.SelectedIndex = 1;
+            }
+            if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)
+                numberFormatBox.IsDropDownOpen = false;
+            SelectActiveCell();
+            _window.UpdateLayout();
             PumpDispatcher();
         }
+
+        public void Dispose()
+        {
+            if (ActiveMenu is { } activeMenu)
+                activeMenu.IsOpen = false;
+            if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)
+                numberFormatBox.IsDropDownOpen = false;
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
+        private sealed record SharedMainWindowSession(MainWindow Window, WorkbookRef WorkbookRef);
 
         private static IEnumerable<MenuItem> EnumerateMenuItems(ItemsControl control)
         {

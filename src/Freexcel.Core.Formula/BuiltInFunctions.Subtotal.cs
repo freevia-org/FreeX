@@ -30,6 +30,8 @@ public static partial class BuiltInFunctions
                     if (skipHidden ? ctx.IsRowHidden(absRow) : ctx.IsRowFilterHidden(absRow)) continue;
                     for (int c = 0; c < rv.ColCount; c++)
                     {
+                        uint absCol = rv.StartCol + (uint)c;
+                        if (IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
                         var cell = rv.Cells[r, c];
                         if (cell is ErrorValue err) return err;
                         if (TryCellNumber(cell, out double value)) nums.Add(value);
@@ -63,6 +65,23 @@ public static partial class BuiltInFunctions
             11 => nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(SubtotalVarP(nums)),
             _  => ErrorValue.Value
         };
+    }
+
+    private static bool IsNestedSubtotalOrAggregateCell(IEvalContext ctx, RangeValue range, uint row, uint col)
+    {
+        var cell = range.SheetName is null
+            ? ctx.TryGetCell(row, col)
+            : ctx.TryGetCell(range.SheetName, row, col);
+        return IsSubtotalOrAggregateFormula(cell?.FormulaText);
+    }
+
+    private static bool IsSubtotalOrAggregateFormula(string? formulaText)
+    {
+        if (string.IsNullOrWhiteSpace(formulaText)) return false;
+        var text = formulaText.TrimStart();
+        if (text.StartsWith("=", StringComparison.Ordinal)) text = text[1..].TrimStart();
+        return text.StartsWith("SUBTOTAL(", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("AGGREGATE(", StringComparison.OrdinalIgnoreCase);
     }
 
     private static double SubtotalVarS(List<double> nums)

@@ -19,6 +19,11 @@ public partial class MainWindow
     private bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)
     {
         outcome = _commandBus.Execute(_workbook.Id, command);
+        RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
+        {
+            ["command"] = title,
+            ["status"] = outcome.Success ? "succeeded" : "failed"
+        });
         if (outcome.Success)
         {
             InvalidateNavigationCaches();
