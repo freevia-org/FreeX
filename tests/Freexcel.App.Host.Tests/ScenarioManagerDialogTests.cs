@@ -33,13 +33,17 @@ public sealed class ScenarioManagerDialogTests
                 new ScenarioCellValue(first, new NumberValue(10)),
                 new ScenarioCellValue(second, new NumberValue(20))
             ],
-            "Revenue lift"));
+            "Revenue lift",
+            Hidden: true,
+            Locked: true));
 
         var item = ScenarioManagerDialog.BuildScenarioItems(workbook).Single();
 
         item.Name.Should().Be("Best Case");
         item.ChangingCellsText.Should().Be("B2:C4");
         item.Comment.Should().Be("Revenue lift");
+        item.Hidden.Should().BeTrue();
+        item.Locked.Should().BeTrue();
     }
 
     [Theory]
@@ -146,6 +150,8 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("\"Scenario _name:\"");
         source.Should().Contain("\"Changing _cells:\"");
         source.Should().Contain("\"_Comment:\"");
+        source.Should().Contain("\"_Prevent changes\"");
+        source.Should().Contain("\"_Hide\"");
         source.Should().Contain("\"_Add...\"");
         source.Should().Contain("\"_Edit...\"");
         source.Should().Contain("\"_Delete\"");
@@ -167,6 +173,8 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("_newNameBox.Text = selected.Name");
         source.Should().Contain("_changingCellsBox.Text = selected.ChangingCellsText");
         source.Should().Contain("_commentBox.Text = selected.Comment ?? \"\"");
+        source.Should().Contain("_lockedBox.IsChecked = selected.Locked");
+        source.Should().Contain("_hiddenBox.IsChecked = selected.Hidden");
     }
 
     [Fact]
@@ -190,6 +198,8 @@ public sealed class ScenarioManagerDialogTests
                 GetField<TextBox>(dialog, "_newNameBox").Text.Should().Be("Best Case");
                 GetField<TextBox>(dialog, "_changingCellsBox").Text.Should().Be("B2:D3");
                 GetField<TextBox>(dialog, "_commentBox").Text.Should().Be("Use growth plan");
+                GetField<CheckBox>(dialog, "_lockedBox").IsChecked.Should().BeFalse();
+                GetField<CheckBox>(dialog, "_hiddenBox").IsChecked.Should().BeFalse();
             }
             finally
             {
@@ -206,8 +216,12 @@ public sealed class ScenarioManagerDialogTests
 
         source.Should().Contain("public string? ChangingCellsText");
         source.Should().Contain("public string? CommentText");
+        source.Should().Contain("public bool ScenarioHidden");
+        source.Should().Contain("public bool ScenarioLocked");
         source.Should().Contain("ChangingCellsText = _changingCellsBox.Text");
         source.Should().Contain("CommentText = _commentBox.Text");
+        source.Should().Contain("ScenarioLocked = _lockedBox.IsChecked == true");
+        source.Should().Contain("ScenarioHidden = _hiddenBox.IsChecked == true");
         source.Should().Contain("if (RequiresScenarioName(action) && !TryValidateScenarioName(_newNameBox.Text, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario details.\", _newNameBox);");
         source.Should().Contain("!TryValidateChangingCells(_changingCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error)");
@@ -215,7 +229,9 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         source.Should().Contain("target.SelectAll();");
         handlerSource.Should().Contain("new ScenarioManagerDialog(_workbook, _currentSheetId, ResolveSheetIdByName)");
-        handlerSource.Should().Contain("SaveScenarioFromDialog(dialog.NewScenarioName, dialog.ChangingCellsText, dialog.CommentText)");
+        handlerSource.Should().Contain("dialog.ScenarioHidden");
+        handlerSource.Should().Contain("dialog.ScenarioLocked");
+        handlerSource.Should().Contain("new SaveScenarioCommand(name, changes, comment, hidden, locked)");
         handlerSource.Should().Contain("TryParseScenarioChangingCells");
     }
 
