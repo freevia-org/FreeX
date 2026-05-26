@@ -124,7 +124,7 @@ public sealed class DelimitedTextFileAdapterTests
     public void Load_UsesExcelLikeTextCoercionForErrorLiterals()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#N/A\t#DIV/0!\t#REF!\r\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#N/A\t#DIV/0!\t#REF!\t#CIRCULAR!\r\n"));
 
         var workbook = adapter.Load(stream);
         var sheet = workbook.Sheets.Single();
@@ -132,6 +132,7 @@ public sealed class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(ErrorValue.NA);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(ErrorValue.DivByZero);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(ErrorValue.Ref);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 4)).Should().Be(ErrorValue.Circular);
     }
 
     [Fact]
