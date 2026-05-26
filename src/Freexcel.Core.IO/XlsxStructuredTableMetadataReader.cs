@@ -250,7 +250,12 @@ internal static class XlsxStructuredTableMetadataReader
             .Select(column =>
             {
                 var filters = column.Element(workbookNs + "filters");
+                var customFilters = column.Element(workbookNs + "customFilters");
                 var nativeFilters = XlsxStructuredTableNativeMetadataReader.ReadFilterXmls(column, workbookNs);
+                var nativeCustomFiltersAttributes = customFilters?
+                    .Attributes()
+                    .Where(attribute => !IsModeledAttribute(attribute, "and"))
+                    .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
                 return new StructuredTableFilterColumnModel(
                     XlsxXmlAttributeReader.ReadIntAttribute(column, "colId") ?? -1,
                     filters?
@@ -260,12 +265,42 @@ internal static class XlsxStructuredTableMetadataReader
                         .Select(value => value!)
                         .ToList() ?? [],
                     XlsxXmlAttributeReader.ReadBoolAttribute(filters, "blank"),
+                    customFilters?
+                        .Elements(workbookNs + "customFilter")
+                        .Select(filter => new StructuredTableCustomFilterModel(
+                            filter.Attribute("operator")?.Value,
+                            filter.Attribute("val")?.Value,
+                            ReadCustomFilterNativeAttributes(filter)))
+                        .ToList() ?? [],
+                    XlsxXmlAttributeReader.ReadBoolAttribute(customFilters, "and"),
+                    customFilters?.Attribute("and")?.Value,
+                    nativeCustomFiltersAttributes?.Count > 0 ? nativeCustomFiltersAttributes : null,
                     nativeFilters,
                     XlsxStructuredTableNativeMetadataReader.ReadFilterColumnAttributes(column));
             })
-            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank || column.NativeFilterXmls.Count > 0 || column.NativeAttributes?.Count > 0))
+            .Where(column => column.ColumnId >= 0 &&
+                (column.Values.Count > 0 ||
+                 column.IncludeBlank ||
+                 column.CustomFilters.Count > 0 ||
+                 column.CustomFiltersAndRaw is not null ||
+                 column.NativeCustomFiltersAttributes?.Count > 0 ||
+                 column.NativeFilterXmls.Count > 0 ||
+                 column.NativeAttributes?.Count > 0))
             .ToList();
     }
+
+    private static IReadOnlyDictionary<string, string>? ReadCustomFilterNativeAttributes(XElement filter)
+    {
+        var attributes = filter.Attributes()
+            .Where(attribute =>
+                !IsModeledAttribute(attribute, "operator") &&
+                !IsModeledAttribute(attribute, "val"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return attributes.Count == 0 ? null : attributes;
+    }
+
+    private static bool IsModeledAttribute(XAttribute attribute, string localName) =>
+        attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == localName;
 
 }
 
