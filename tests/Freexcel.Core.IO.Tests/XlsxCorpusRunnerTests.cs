@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(10, "the generated metadata-pass manifest currently declares ten deterministic package-retention rows");
+        rows.Should().HaveCount(11, "the generated metadata-pass manifest currently declares eleven deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -460,6 +460,42 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-ignored-errors-001");
         AssertWorksheetIgnoredErrors(saved, "generated-worksheet-ignored-errors-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetCellWatchesRow_RetainsCellWatchesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-cell-watches-001");
+        AssertWorksheetCellWatches(source, "generated-worksheet-cell-watches-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-cell-watches-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-cell-watches-001");
+        AssertWorksheetCellWatches(saved, "generated-worksheet-cell-watches-001 saved");
+    }
+
+    private static void AssertWorksheetCellWatches(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
+        cellWatches.Should().NotBeNull(because);
+        cellWatches!.Attribute("nativeContainer")!.Value.Should().Be("kept", because);
+
+        var cellWatch = cellWatches.Elements(worksheetNs + "cellWatch")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        cellWatch.Attribute("r")!.Value.Should().Be("A1", because);
+        cellWatch.Attribute("nativeWatch")!.Value.Should().Be("kept", because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)
