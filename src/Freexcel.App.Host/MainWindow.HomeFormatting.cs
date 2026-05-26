@@ -553,12 +553,38 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
-        var dlg = new ManageConditionalFormatsDialog(
+        ManageConditionalFormatsDialog? dlg = null;
+        dlg = new ManageConditionalFormatsDialog(
             sheet,
             SheetGrid.SelectedRange,
+            requestAppliesToRangeSelection: request => ApplyConditionalFormatAppliesToRangeSelection(dlg, request),
             applyRules: ApplyManagedConditionalFormatRules) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultRules is null) return;
         ApplyManagedConditionalFormatRules(dlg.ResultRules);
+    }
+
+    private void ApplyConditionalFormatAppliesToRangeSelection(
+        ManageConditionalFormatsDialog? dialog,
+        ConditionalFormatAppliesToRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyAppliesToRangeSelection(request.RuleId, selectedRange);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)

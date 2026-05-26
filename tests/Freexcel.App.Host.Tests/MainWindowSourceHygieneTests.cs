@@ -2153,6 +2153,21 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ConditionalFormattingRulesManager_WiresAppliesToRangePickerCallback()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("requestAppliesToRangeSelection: request => ApplyConditionalFormatAppliesToRangeSelection(dlg, request)");
+        source.Should().Contain("private void ApplyConditionalFormatAppliesToRangeSelection(");
+        source.Should().Contain("ConditionalFormatAppliesToRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyAppliesToRangeSelection(request.RuleId, selectedRange);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
     public void PivotTableDesignCommands_OpenOptionsDialogInsteadOfCyclingLayoutState()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
