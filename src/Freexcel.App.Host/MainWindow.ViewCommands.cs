@@ -51,6 +51,11 @@ public partial class MainWindow
         if (_suppressViewOptionSync || SheetGrid is null) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || sender is not System.Windows.Controls.CheckBox chk) return;
+        if (sheet.ViewMode != WorksheetViewMode.PageLayout)
+        {
+            chk.IsChecked = sheet.ShowRulers;
+            return;
+        }
 
         if (!TryExecuteGroupedSheetCommand(
                 "Ruler",
