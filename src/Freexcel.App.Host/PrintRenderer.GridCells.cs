@@ -51,7 +51,7 @@ public static partial class PrintRenderer
                     displayText,
                     CultureInfo.CurrentCulture,
                     FlowDirection.LeftToRight,
-                    new Typeface("Segoe UI"),
+                    PrintedCellTypeface,
                     PrintFontSize,
                     Brushes.Black,
                     1.0)
@@ -63,12 +63,13 @@ public static partial class PrintRenderer
 
                 var textPoint = new Point(x + 2, y + (rowHeight - ft.Height) / 2);
                 dc.DrawText(ft, textPoint);
+                var overlayText = BoundPrintedCellOverlayText(displayText, ft.MaxTextWidth);
                 textOverlays.Add(new PdfTextOverlay(
-                    displayText,
+                    overlayText,
                     textPoint.X,
                     textPoint.Y,
                     PrintFontSize,
-                    "Segoe UI",
+                    PrintedCellTypeface.FontFamily.Source,
                     Bold: false,
                     Italic: false,
                     Colors.Black));
