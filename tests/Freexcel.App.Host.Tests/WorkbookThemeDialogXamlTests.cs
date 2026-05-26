@@ -83,7 +83,8 @@ public sealed class WorkbookThemeDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml.cs"));
 
-        source.Should().Contain("TryReadThemeColor(Dark1ColorBox, out var dark1)");
+        source.Should().Contain("foreach (var field in ThemeColorFields())");
+        source.Should().Contain("TryReadThemeColor(field.TextBox, out var color)");
         source.Should().Contain("private bool TryReadThemeColor(TextBox colorBox, out CellColor color)");
         source.Should().Contain("FocusInvalidColorInput(colorBox);");
         source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
@@ -201,8 +202,8 @@ public sealed class WorkbookThemeDialogXamlTests
 
         source.Should().Contain("UpdateColorPickerSwatches();");
         source.Should().Contain("private void UpdateColorPickerSwatches()");
-        source.Should().Contain("ThemeColorPickerPairs()");
-        source.Should().Contain("button.Background = new SolidColorBrush(ToMediaColor(ParsePreviewColor(textBox.Text)));");
+        source.Should().Contain("ThemeColorFields()");
+        source.Should().Contain("field.Button.Background = new SolidColorBrush(ToMediaColor(ParsePreviewColor(field.TextBox.Text)));");
     }
 
     [Fact]
@@ -225,6 +226,26 @@ public sealed class WorkbookThemeDialogXamlTests
         source.Should().Contain("ThemeColorTextBoxes");
         source.Should().Contain("PreviewHeadingText.FontFamily");
         source.Should().Contain("PreviewAccentStrip");
+    }
+
+    [Fact]
+    public void DialogThemeFieldMap_CoversEveryThemeColorSlot()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.ThemeFields.cs"));
+
+        source.Should().Contain("WorkbookThemeColorSlot.Dark1");
+        source.Should().Contain("WorkbookThemeColorSlot.Light1");
+        source.Should().Contain("WorkbookThemeColorSlot.Dark2");
+        source.Should().Contain("WorkbookThemeColorSlot.Light2");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent1");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent2");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent3");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent4");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent5");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent6");
+        source.Should().Contain("WorkbookThemeColorSlot.Hyperlink");
+        source.Should().Contain("WorkbookThemeColorSlot.FollowedHyperlink");
+        source.Should().Contain("IsAccent: true");
     }
 
 }
