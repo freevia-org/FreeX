@@ -357,6 +357,12 @@ internal static class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-printer-settings-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyPrinterSettingsReferenceFixup(archive);
+            return;
+        }
+
         if (!string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -523,6 +529,50 @@ internal static class XlsxCorpusFixtureFactory
         var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
         EnsureRelationship(drawingRelsXml, "rIdFreexcelNativeControl1", nativeRelationshipType, nativePartTarget);
         ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", drawingRelsXml);
+    }
+
+    private static void ApplyPrinterSettingsReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        if (contentTypesEntry is null || worksheetEntry is null)
+            return;
+
+        var contentTypes = LoadPackageXml(contentTypesEntry);
+        EnsureContentTypeOverride(
+            contentTypes,
+            "/xl/printerSettings/printerSettings1.bin",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings");
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
+        if (pageSetup is null)
+        {
+            pageSetup = new XElement(worksheetNs + "pageSetup",
+                new XAttribute("paperSize", "1"),
+                new XAttribute("orientation", "portrait"));
+            worksheetXml.Root?.Add(pageSetup);
+        }
+
+        pageSetup.SetAttributeValue(officeRelNs + "id", "rIdPrinterSettings1");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdPrinterSettings1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings",
+            "../printerSettings/printerSettings1.bin");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
     }
 
     private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target)

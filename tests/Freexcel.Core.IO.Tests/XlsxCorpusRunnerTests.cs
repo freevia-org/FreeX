@@ -319,6 +319,51 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedPrinterSettingsRow_RetainsWorksheetPageSetupRelationshipAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-printer-settings-001");
+        AssertPrinterSettingsReference(source, "generated-printer-settings-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-printer-settings-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-printer-settings-001");
+        AssertPrinterSettingsReference(saved, "generated-printer-settings-001 saved");
+    }
+
+    private static void AssertPrinterSettingsReference(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/printerSettings/printerSettings1.bin").Should().NotBeNull(because);
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var relId = worksheetXml.Root?
+            .Element(worksheetNs + "pageSetup")?
+            .Attribute(officeRelNs + "id")?
+            .Value;
+        relId.Should().Be("rIdPrinterSettings1", because);
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var printerRelationships = worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, "rIdPrinterSettings1", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../printerSettings/printerSettings1.bin", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        printerRelationships.Should().ContainSingle(because);
+    }
+
+    [Fact]
     public void PackageSummary_TreatsDocumentPropertiesAsFidelityCriticalParts()
     {
         var workbook = new Workbook("DocumentPropertiesCriticalParts");
