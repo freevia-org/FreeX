@@ -34,7 +34,12 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new PivotTableDialog(_workbook, _currentSheetId, sourceRange) { Owner = this };
+        PivotTableDialog? dialog = null;
+        dialog = new PivotTableDialog(
+            _workbook,
+            _currentSheetId,
+            sourceRange,
+            request => ApplyPivotTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -100,6 +105,31 @@ public partial class MainWindow
         UpdateViewport();
         if (dialog.Result.OpenFieldList)
             RefreshPivotFieldListPane();
+    }
+
+    private void ApplyPivotTableRangeSelection(
+        PivotTableDialog? dialog,
+        PivotTableRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void RefreshPivotTableBtn_Click(object sender, RoutedEventArgs e)
