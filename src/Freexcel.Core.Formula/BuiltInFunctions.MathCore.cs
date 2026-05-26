@@ -61,13 +61,15 @@ public static partial class BuiltInFunctions
     {
         if (left is RangeValue leftRange && right is RangeValue rightRange)
         {
-            if (leftRange.RowCount != rightRange.RowCount || leftRange.ColCount != rightRange.ColCount)
+            var shape = leftRange.RowCount == 1 && leftRange.ColCount == 1 ? rightRange : leftRange;
+            if (!CanBroadcastToShape(leftRange, shape.RowCount, shape.ColCount) ||
+                !CanBroadcastToShape(rightRange, shape.RowCount, shape.ColCount))
                 return ErrorValue.Value;
 
-            var cells = new ScalarValue[leftRange.RowCount, leftRange.ColCount];
-            for (int r = 0; r < leftRange.RowCount; r++)
-                for (int c = 0; c < leftRange.ColCount; c++)
-                    cells[r, c] = map(leftRange.Cells[r, c], rightRange.Cells[r, c]);
+            var cells = new ScalarValue[shape.RowCount, shape.ColCount];
+            for (int r = 0; r < shape.RowCount; r++)
+                for (int c = 0; c < shape.ColCount; c++)
+                    cells[r, c] = map(ValueAtBroadcastCell(leftRange, r, c), ValueAtBroadcastCell(rightRange, r, c));
             return new RangeValue(cells);
         }
 
