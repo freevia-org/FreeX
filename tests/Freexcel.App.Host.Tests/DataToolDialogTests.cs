@@ -927,6 +927,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Content = \"_Filter the list, in-place\"");
         source.Should().Contain("Content = \"_Copy to another location\"");
         source.Should().Contain("Content = \"_Unique records only\"");
+        source.Should().Contain("new GroupBox { Header = \"Action\"");
+        source.Should().NotContain("Text = \"Action\"");
         source.Should().Contain("AddReferenceRow(rangesGrid, 0, \"_List range:\", _listRangeBox");
         source.Should().Contain("AddReferenceRow(rangesGrid, 1, \"_Criteria range:\", _criteriaRangeBox");
         source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
