@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(15, "the generated metadata-pass manifest currently declares fifteen deterministic package-retention rows");
+        rows.Should().HaveCount(16, "the generated metadata-pass manifest currently declares sixteen deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -550,6 +550,54 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-custom-properties-001");
         AssertWorksheetCustomProperties(saved, "generated-worksheet-custom-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSmartTagsRow_RetainsSmartTagsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-smart-tags-001");
+        AssertWorksheetSmartTags(source, "generated-worksheet-smart-tags-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-worksheet-smart-tags-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-smart-tags-001");
+        AssertWorksheetSmartTags(saved, "generated-worksheet-smart-tags-001 saved");
+    }
+
+    private static void AssertWorksheetSmartTags(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var cellSmartTags = worksheetXml.Root!
+            .Element(worksheetNs + "smartTags")!
+            .Elements(worksheetNs + "cellSmartTags")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        cellSmartTags.Attribute("r")!.Value.Should().Be("A1", because);
+
+        var smartTag = cellSmartTags.Elements(worksheetNs + "cellSmartTag")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        smartTag.Attribute("type")!.Value.Should().Be("0", because);
+        smartTag.Attribute("deleted")!.Value.Should().Be("0", because);
+
+        var property = smartTag.Elements(worksheetNs + "cellSmartTagPr")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        property.Attribute("key")!.Value.Should().Be("place", because);
+        property.Attribute("val")!.Value.Should().Be("Seattle", because);
+        property.Attribute("customSmartTagPropertyFlag")!.Value.Should().Be("keep", because);
     }
 
     private static void AssertWorksheetCustomProperties(Stream package, string because)

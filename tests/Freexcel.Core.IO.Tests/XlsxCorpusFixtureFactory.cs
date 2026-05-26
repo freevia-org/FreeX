@@ -62,6 +62,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
         "generated-worksheet-custom-properties-001" => true,
+        "generated-worksheet-smart-tags-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -257,6 +258,17 @@ internal static class XlsxCorpusFixtureFactory
               </customProperties>
             </worksheet>
             """)),
+        "generated-worksheet-smart-tags-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <smartTags>
+                <cellSmartTags r="A1">
+                  <cellSmartTag type="0" deleted="0">
+                    <cellSmartTagPr key="place" val="Seattle" customSmartTagPropertyFlag="keep"/>
+                  </cellSmartTag>
+                </cellSmartTags>
+              </smartTags>
+            </worksheet>
+            """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -413,6 +425,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-data-consolidation-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-custom-properties-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-smart-tags-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase));
 
     private static void EnsureKnownGapContentTypeOverrides(ZipArchive archive, IReadOnlyCollection<string> partNames)
@@ -582,6 +596,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-custom-properties-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetCustomPropertiesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-smart-tags-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSmartTagsFixup(archive);
             return;
         }
 
@@ -1101,6 +1121,34 @@ internal static class XlsxCorpusFixtureFactory
                 new XAttribute("name", "FreexcelNativeProperty"),
                 new XAttribute("id", "1"),
                 new XAttribute("unsupportedAttr", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSmartTagsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "smartTags").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "smartTags",
+            new XElement(
+                worksheetNs + "cellSmartTags",
+                new XAttribute("r", "A1"),
+                new XElement(
+                    worksheetNs + "cellSmartTag",
+                    new XAttribute("type", "0"),
+                    new XAttribute("deleted", "0"),
+                    new XElement(
+                        worksheetNs + "cellSmartTagPr",
+                        new XAttribute("key", "place"),
+                        new XAttribute("val", "Seattle"),
+                        new XAttribute("customSmartTagPropertyFlag", "keep"))))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
