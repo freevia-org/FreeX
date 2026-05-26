@@ -227,6 +227,23 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void DataWhatIfKeyTip_OpensAnalysisMenuWithExcelChoices()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.A, Key.W);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Data");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Goal Seek...").Should().Be("G");
+            harness.ActiveMenuItemGestureText("Scenario Manager...").Should().Be("S");
+            harness.ActiveMenuItemGestureText("Data Table...").Should().Be("D");
+        });
+    }
+
+    [Fact]
     public void HomePasteKeyTip_OpensExcelStylePasteMenu()
     {
         RunSta(() =>

@@ -532,18 +532,20 @@ public class ExportPlannerTests
     }
 
     [Theory]
-    [InlineData(null, 3, true, null)]
-    [InlineData(1, 3, true, null)]
-    [InlineData(3, 3, true, null)]
-    [InlineData(4, 3, false, "Page range starts after the last exportable page (3).")]
-    [InlineData(1, 0, false, "There are no exportable pages.")]
+    [InlineData(null, null, 3, true, null)]
+    [InlineData(1, 2, 3, true, null)]
+    [InlineData(3, 3, 3, true, null)]
+    [InlineData(4, 4, 3, false, "Page range starts after the last exportable page (3).")]
+    [InlineData(1, 4, 3, false, "Page range ends after the last exportable page (3).")]
+    [InlineData(1, 1, 0, false, "There are no exportable pages.")]
     public void TryValidatePageRange_ChecksRenderedPageCount(
         int? fromPage,
+        int? toPage,
         int pageCount,
         bool expectedSuccess,
         string? expectedError)
     {
-        var pageRange = fromPage is null ? null : new ExportPageRange(fromPage.Value, fromPage.Value);
+        var pageRange = fromPage is null || toPage is null ? null : new ExportPageRange(fromPage.Value, toPage.Value);
 
         var success = ExportPlanner.TryValidatePageRange(pageRange, pageCount, out var error);
 
@@ -1552,6 +1554,29 @@ public class ExportPlannerTests
 
                 action.Should().Throw<InvalidOperationException>()
                     .WithMessage("Page range starts after the last exportable page (2).");
+                File.Exists(path).Should().BeFalse();
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_RejectsPageRangeEndingAfterDocumentWithoutCreatingFile()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateDocument(pageCount: 2);
+
+            try
+            {
+                var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 3));
+
+                action.Should().Throw<InvalidOperationException>()
+                    .WithMessage("Page range ends after the last exportable page (2).");
                 File.Exists(path).Should().BeFalse();
             }
             finally

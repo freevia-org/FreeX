@@ -41,6 +41,7 @@ public sealed partial class DocumentationIndexTests
         report.Should().Contain("[OUTSTANDING_BUILD.md](OUTSTANDING_BUILD.md)");
         report.Should().Contain("[NEXT_PHASES_PLAN.md](NEXT_PHASES_PLAN.md)");
         report.Should().Contain("[COMMAND_SURFACE_PARITY.md](COMMAND_SURFACE_PARITY.md)");
+        report.Should().Contain("[MENU_TOOLBAR_PARITY.md](MENU_TOOLBAR_PARITY.md)");
         report.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
         report.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
         report.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
