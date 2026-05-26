@@ -1558,6 +1558,31 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_BorderPreviewButtonsToggleExistingSidesOff()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var current = new CellStyle
+            {
+                BorderTop = new CellBorder(BorderStyle.Thin, CellColor.Black)
+            };
+            var dialog = ShowDialogForTest(current);
+            try
+            {
+                InvokeDialogHandler(dialog, "DlgBorderPreviewTopButton_Click");
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.BorderTop.Should().Be(new CellBorder(BorderStyle.None, CellColor.Black));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsClearFillIntoStyleDiff()
     {
         StaTestRunner.Run(() =>
