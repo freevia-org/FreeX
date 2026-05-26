@@ -12,6 +12,7 @@ public static partial class PrintRenderer
 
     private static void DrawDisplayedComments(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         IReadOnlyDictionary<CellAddress, string> comments,
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
         IReadOnlyList<uint> pageRows,
@@ -59,6 +60,15 @@ public static partial class PrintRenderer
             var boxTop = Math.Min(pageH - boxHeight - 8, cellTop + 4);
             var rect = new Rect(Math.Max(8, boxLeft), Math.Max(8, boxTop), boxWidth, boxHeight);
             dc.DrawRectangle(fill, border, rect);
+            AddCommentTextOverlays(
+                textOverlays,
+                overlay.Text,
+                rect.Left + 4,
+                rect.Top + 4,
+                typeface,
+                PrintFontSize,
+                FontWeights.Normal,
+                rect.Width - 8);
             DrawCommentText(
                 dc,
                 overlay.Text,
@@ -84,14 +94,14 @@ public static partial class PrintRenderer
         var typeface = new Typeface("Segoe UI");
         var maxWidth = pageW - marginLeft * 2;
         var textOverlays = new List<PdfTextOverlay>();
-        AddCommentSummaryTextOverlays(textOverlays, "Comments", marginLeft, marginTop, typeface, 14, FontWeights.SemiBold, maxWidth);
+        AddCommentTextOverlays(textOverlays, "Comments", marginLeft, marginTop, typeface, 14, FontWeights.SemiBold, maxWidth);
         DrawCommentText(dc, "Comments", new Point(marginLeft, marginTop), typeface, 14, FontWeights.SemiBold, maxWidth);
 
         var y = marginTop + CommentSummaryHeaderHeight;
         foreach (var (address, comment) in commentsForPage)
         {
             var line = $"{address.ToA1()}: {comment}";
-            AddCommentSummaryTextOverlays(textOverlays, line, marginLeft, y, typeface, PrintFontSize, FontWeights.Normal, maxWidth);
+            AddCommentTextOverlays(textOverlays, line, marginLeft, y, typeface, PrintFontSize, FontWeights.Normal, maxWidth);
             var height = DrawCommentText(dc, line, new Point(marginLeft, y), typeface, PrintFontSize, FontWeights.Normal, maxWidth);
             y += Math.Max(18, height + 6);
         }
@@ -99,7 +109,7 @@ public static partial class PrintRenderer
         return (visual, textOverlays);
     }
 
-    private static void AddCommentSummaryTextOverlays(
+    private static void AddCommentTextOverlays(
         ICollection<PdfTextOverlay> textOverlays,
         string text,
         double x,
