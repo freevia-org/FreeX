@@ -12,16 +12,11 @@ public partial class GridView
 
         if (_objectDragKind != ObjectDragKind.None)
         {
-            var dx = pos.X - _objectDragStartPos.X;
-            var dy = pos.Y - _objectDragStartPos.Y;
-            _objectDragCurrentRect = _objectDragKind switch
-            {
-                ObjectDragKind.Move     => new Rect(_objectDragStartRect.X + dx, _objectDragStartRect.Y + dy, _objectDragStartRect.Width, _objectDragStartRect.Height),
-                ObjectDragKind.ResizeSE => new Rect(_objectDragStartRect.X, _objectDragStartRect.Y, Math.Max(8, _objectDragStartRect.Width + dx), Math.Max(8, _objectDragStartRect.Height + dy)),
-                ObjectDragKind.ResizeE  => new Rect(_objectDragStartRect.X, _objectDragStartRect.Y, Math.Max(8, _objectDragStartRect.Width + dx), _objectDragStartRect.Height),
-                ObjectDragKind.ResizeS  => new Rect(_objectDragStartRect.X, _objectDragStartRect.Y, _objectDragStartRect.Width, Math.Max(8, _objectDragStartRect.Height + dy)),
-                _ => _objectDragStartRect
-            };
+            _objectDragCurrentRect = GridObjectDragPlanner.CalculateDragRect(
+                _objectDragKind,
+                _objectDragStartRect,
+                _objectDragStartPos,
+                pos);
             Cursor = ObjectDragCursor(_objectDragKind);
             InvalidateVisual();
             e.Handled = true;
