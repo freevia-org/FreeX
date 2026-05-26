@@ -285,6 +285,57 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ViewShowToggleKeyTips_UpdateSheetAndFormulaBarState()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.ActiveSheetViewOptions.Should().Be((true, true, true));
+            var initialFormulaBarVisibility = harness.FormulaBarIsVisible;
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.G);
+
+            harness.ActiveSheetViewOptions.Should().Be((false, true, true));
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.H);
+
+            harness.ActiveSheetViewOptions.Should().Be((false, false, true));
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.R);
+
+            harness.KeyTipScope.Should().Be("Commands", "R is the prefix for the Ruler keytip RU");
+            harness.ActiveSheetViewOptions.Should().Be((false, false, true));
+
+            harness.HandleKeyTip(Key.U);
+
+            harness.ActiveSheetViewOptions.Should().Be((false, false, false));
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.F);
+
+            harness.KeyTipScope.Should().Be("Commands", "F is shared by Formula Bar FB and Freeze Panes FP");
+            harness.FormulaBarIsVisible.Should().Be(initialFormulaBarVisibility);
+
+            harness.HandleKeyTip(Key.B);
+
+            harness.FormulaBarIsVisible.Should().Be(!initialFormulaBarVisibility);
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
     public void ViewFreezePanesMenuKeyTips_ApplyPresetsAndExitKeyTipMode()
     {
         RunSta(() =>
@@ -795,6 +846,18 @@ public sealed class MainWindowRibbonKeyTipTests
                     range.RowCount);
             }
         }
+
+        public (bool ShowGridlines, bool ShowHeadings, bool ShowRulers) ActiveSheetViewOptions
+        {
+            get
+            {
+                var sheet = _workbook.Sheets[0];
+                return (sheet.ShowGridlines, sheet.ShowHeadings, sheet.ShowRulers);
+            }
+        }
+
+        public bool FormulaBarIsVisible =>
+            (_window.FindName("FormulaBarBorder") as FrameworkElement)?.Visibility == Visibility.Visible;
 
         public (uint FrozenRows, uint FrozenCols) ActiveSheetFrozenPanes
         {
