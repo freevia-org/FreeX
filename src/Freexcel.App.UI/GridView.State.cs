@@ -36,8 +36,14 @@ public partial class GridView
 
     private void RebuildMergeLookup()
     {
+        if (MergedRegions is not { Count: > 0 } || Viewport == null)
+        {
+            if (_mergeLookup.Count > 0)
+                _mergeLookup.Clear();
+            return;
+        }
+
         _mergeLookup.Clear();
-        if (MergedRegions == null || Viewport == null) return;
 
         var visRows = new HashSet<uint>(Viewport.RowMetrics.Select(r => r.Row));
         var visCols = new HashSet<uint>(Viewport.ColMetrics.Select(c => c.Col));
