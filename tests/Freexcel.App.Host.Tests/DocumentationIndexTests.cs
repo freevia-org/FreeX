@@ -86,7 +86,9 @@ public sealed partial class DocumentationIndexTests
             "UI_TEST_CATALOG.md",
             "SHORTCUT_PARITY_MATRIX.md",
             "COMMAND_SURFACE_PARITY.md",
-            "MENU_TOOLBAR_PARITY.md"
+            "MENU_TOOLBAR_PARITY.md",
+            "FIDELITY_CONTRACT.md",
+            "XLSX_CORPUS_REPORT.md"
         };
 
         foreach (var doc in currentDocs)
