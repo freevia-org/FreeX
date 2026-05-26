@@ -130,6 +130,9 @@ public partial class GridView
             case GridQuickAnalysisPreviewVisualKind.BarChart:
                 DrawQuickAnalysisBarChartPreview(dc, rect.Value);
                 break;
+            case GridQuickAnalysisPreviewVisualKind.StackedColumnChart:
+                DrawQuickAnalysisStackedColumnChartPreview(dc, rect.Value);
+                break;
         }
     }
 
@@ -211,6 +214,35 @@ public partial class GridView
             var height = chartRect.Height * heights[i];
             var left = chartRect.Left + i * (barWidth + gap);
             dc.DrawRectangle(QuickAnalysisColumnChartPreviewBrush, null, new Rect(left, baseline - height, barWidth, height));
+        }
+    }
+
+    private static void DrawQuickAnalysisStackedColumnChartPreview(DrawingContext dc, Rect previewRect)
+    {
+        var chartRect = new Rect(
+            previewRect.Left + Math.Min(12, previewRect.Width * 0.12),
+            previewRect.Top + Math.Min(10, previewRect.Height * 0.18),
+            Math.Max(0, previewRect.Width * 0.72),
+            Math.Max(0, previewRect.Height * 0.58));
+        if (chartRect.Width <= 0 || chartRect.Height <= 0)
+            return;
+
+        var baseline = chartRect.Bottom;
+        dc.DrawLine(QuickAnalysisColumnChartAxisPen, new Point(chartRect.Left, baseline), new Point(chartRect.Right, baseline));
+
+        var gap = Math.Min(5.0, chartRect.Width / 14);
+        var barWidth = Math.Max(2, (chartRect.Width - (3 * gap)) / 4);
+        var heights = new[] { 0.68, 0.84, 0.58, 0.92 };
+        var topSegments = new[] { 0.36, 0.48, 0.42, 0.31 };
+        var topBrush = QuickAnalysisHighlightPreviewBrush;
+        for (var i = 0; i < heights.Length; i++)
+        {
+            var totalHeight = chartRect.Height * heights[i];
+            var topHeight = totalHeight * topSegments[i];
+            var bottomHeight = totalHeight - topHeight;
+            var left = chartRect.Left + i * (barWidth + gap);
+            dc.DrawRectangle(QuickAnalysisColumnChartPreviewBrush, null, new Rect(left, baseline - bottomHeight, barWidth, bottomHeight));
+            dc.DrawRectangle(topBrush, null, new Rect(left, baseline - totalHeight, barWidth, topHeight));
         }
     }
 
