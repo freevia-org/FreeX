@@ -51,23 +51,12 @@ public partial class MainWindow
 
     private static void ExtendScrollRangeFromScrollbarArrow(ScrollBar scrollBar, uint absoluteLimit)
     {
-        TryExtendScrollRangeFromScrollbarArrow(scrollBar, absoluteLimit);
+        ViewportScrollbarUpdater.TryExtendFromArrowSmallIncrement(scrollBar, absoluteLimit);
     }
 
     private static bool TryExtendScrollRangeFromScrollbarArrow(ScrollBar scrollBar, uint absoluteLimit)
     {
-        var (maximum, value) = CalculateScrollbarArrowSmallIncrement(
-            scrollBar.Value,
-            scrollBar.Maximum,
-            scrollBar.SmallChange,
-            scrollBar.ViewportSize,
-            absoluteLimit);
-        if (maximum <= scrollBar.Maximum && value <= scrollBar.Value)
-            return false;
-
-        scrollBar.Maximum = maximum;
-        scrollBar.Value = value;
-        return true;
+        return ViewportScrollbarUpdater.TryExtendFromArrowSmallIncrement(scrollBar, absoluteLimit);
     }
 
     private void SheetGrid_MouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
