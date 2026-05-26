@@ -1,4 +1,5 @@
 using Freexcel.Core.Model;
+using System.Windows;
 
 namespace Freexcel.App.UI;
 
@@ -56,6 +57,55 @@ public static class PageMarginGuideLayoutPlanner
         viewport.ColMetrics.FirstOrDefault(metric => metric.Col == column) is { } metric
             ? metric.LeftOffset + metric.Width + rowHeaderWidth
             : null;
+
+    public static WorksheetPageMarginEdge? HitTestGuide(
+        PageMarginGuideLayout guide,
+        Point pointer,
+        PageMarginRulerHandles handles,
+        bool showRulers,
+        double guideHitZone)
+    {
+        if (GridView.HitTestPageMarginRulerHandles(handles, pointer, showRulers) is { } handleEdge)
+            return handleEdge;
+
+        if (pointer.Y >= guide.Top && pointer.Y <= guide.Bottom)
+        {
+            if (Math.Abs(pointer.X - guide.MarginLeft) <= guideHitZone)
+                return WorksheetPageMarginEdge.Left;
+            if (Math.Abs(pointer.X - guide.MarginRight) <= guideHitZone)
+                return WorksheetPageMarginEdge.Right;
+        }
+
+        if (pointer.X >= guide.Left && pointer.X <= guide.Right)
+        {
+            if (Math.Abs(pointer.Y - guide.MarginTop) <= guideHitZone)
+                return WorksheetPageMarginEdge.Top;
+            if (Math.Abs(pointer.Y - guide.MarginBottom) <= guideHitZone)
+                return WorksheetPageMarginEdge.Bottom;
+        }
+
+        return null;
+    }
+
+    public static WorksheetPageMargins CalculateDraggedMargins(
+        WorksheetPaperSize paperSize,
+        WorksheetPageOrientation orientation,
+        WorksheetPageMargins currentMargins,
+        WorksheetPageMarginEdge edge,
+        PageMarginGuideLayout guide,
+        Point pointer)
+    {
+        var fraction = edge is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right
+            ? (pointer.X - guide.Left) / Math.Max(1.0, guide.Right - guide.Left)
+            : (pointer.Y - guide.Top) / Math.Max(1.0, guide.Bottom - guide.Top);
+
+        return WorksheetPageLayout.GetMarginsFromGuideFraction(
+            paperSize,
+            orientation,
+            currentMargins,
+            edge,
+            fraction);
+    }
 }
 
 public readonly record struct PageMarginGuideLayout(
