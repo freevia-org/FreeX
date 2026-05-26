@@ -5931,6 +5931,27 @@ public class FunctionLibraryTests
         _eval.Evaluate("=INDIRECT(\"A1\")", sheet).Should().Be(new NumberValue(42));
     }
 
+    [Fact] public void Indirect_A1RangeString_ReturnsRangeValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+        _eval.Evaluate("=SUM(INDIRECT(\"A1:A3\"))", sheet).Should().Be(new NumberValue(6));
+    }
+
+    [Fact] public void Indirect_SheetQualifiedA1RangeString_ReturnsRangeValue()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var data = wb.AddSheet("Data");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new NumberValue(1));
+        data.SetCell(new CellAddress(data.Id, 2, 1), new NumberValue(2));
+        data.SetCell(new CellAddress(data.Id, 3, 1), new NumberValue(3));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"Data!A1:A3\"))", sheet, wb).Should().Be(new NumberValue(6));
+    }
+
     [Fact] public void Indirect_R1C1String_ReturnsValue()
     {
         var sheet = MakeSheet((2, 3, new NumberValue(99)));
