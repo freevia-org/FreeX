@@ -182,6 +182,8 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("public enum AllowEditRangeDialogAction");
         source.Should().Contain("public sealed record AllowEditRangeDialogResult");
         source.Should().Contain("private readonly ListBox _existingRangesBox");
+        source.Should().Contain("new Label { Content = \"_Ranges unlocked by password:\", Target = _existingRangesBox");
+        source.Should().NotContain("Header = \"Ranges unlocked by password\"");
         source.Should().Contain("Content = \"_Delete\"");
         source.Should().Contain("Content = \"Clear _All\"");
         source.Should().Contain("private void DeleteSelectedRange_Click");
