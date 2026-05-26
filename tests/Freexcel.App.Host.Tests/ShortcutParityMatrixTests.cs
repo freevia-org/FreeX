@@ -51,6 +51,18 @@ public sealed class ShortcutParityMatrixTests
             item => item.Should().Contain("F4"));
     }
 
+    [Fact]
+    public void UiTestCatalog_ShortcutInventoryCountsMatchShortcutMatrix()
+    {
+        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var summary = ReadCoverageSummary(matrix);
+
+        catalog.Should().Contain(
+            $"| Documented shortcut rows | {summary.TotalInScope} | From `SHORTCUT_PARITY_MATRIX.md`: {summary.Parity} parity, {summary.Partial} partial. |");
+        catalog.Should().Contain($"{summary.TotalInScope} documented shortcut rows;");
+    }
+
     private static IReadOnlyList<string> ReadNextWorkItems(IReadOnlyList<string> lines)
     {
         var sectionStart = Array.FindIndex(lines.ToArray(), line => line == "## Next Shortcut Work");
