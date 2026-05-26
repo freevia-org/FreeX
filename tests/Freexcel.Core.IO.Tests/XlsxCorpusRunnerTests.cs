@@ -336,6 +336,52 @@ public class XlsxCorpusRunnerTests
         AssertPrinterSettingsReference(saved, "generated-printer-settings-001 saved");
     }
 
+    [Fact]
+    public void GeneratedCustomXmlRow_RetainsPackageRelationshipsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-custom-xml-001");
+        AssertCustomXmlPackageGraph(source, "generated-custom-xml-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-custom-xml-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-custom-xml-001");
+        AssertCustomXmlPackageGraph(saved, "generated-custom-xml-001 saved");
+    }
+
+    private static void AssertCustomXmlPackageGraph(Stream package, string because)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("customXml/item1.xml").Should().NotBeNull(because);
+        archive.GetEntry("customXml/itemProps1.xml").Should().NotBeNull(because);
+        archive.GetEntry("customXml/_rels/item1.xml.rels").Should().NotBeNull(because);
+
+        var packageRelsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "customXml/item1.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+
+        var itemRelsXml = LoadPackageXml(archive.GetEntry("customXml/_rels/item1.xml.rels")!);
+        itemRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "itemProps1.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+    }
+
     private static void AssertPrinterSettingsReference(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
