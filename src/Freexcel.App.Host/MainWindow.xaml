@@ -336,8 +336,9 @@
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <ComboBox x:Name="FontNameBox" Width="110" Height="22" Margin="1" Background="White"
+                                    <ComboBox x:Name="FontNameBox" Width="110" Height="22" Margin="1" IsEditable="True" IsTextSearchEnabled="True" Background="White"
                                               SelectionChanged="FontNameBox_SelectionChanged"
+                                              KeyDown="FontNameBox_KeyDown"
                                               AutomationProperties.Name="Font"
                                               local:RibbonTooltip.Title="Font"
                                               local:RibbonTooltip.KeyTip="FF"

@@ -72,6 +72,28 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void EditableFontNameBox_CommitsTypedKeyboardInputWithEnter()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var fontNameBox = document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FontNameBox");
+
+        fontNameBox.Attribute("IsEditable")?.Value.Should().Be("True");
+        fontNameBox.Attribute("IsTextSearchEnabled")?.Value.Should().Be("True");
+        fontNameBox.Attribute("KeyDown")?.Value.Should().Be("FontNameBox_KeyDown");
+        source.Should().Contain("private void FontNameBox_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("if (e.Key != Key.Enter) return;");
+        source.Should().Contain("private void CommitFontNameBoxText()");
+        source.Should().Contain("var name = FontNameBox.Text?.Trim();");
+        source.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name));");
+    }
+
+    [Fact]
     public void RibbonKeyboardFocus_IsNotHijackedByWorksheetNavigation()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));

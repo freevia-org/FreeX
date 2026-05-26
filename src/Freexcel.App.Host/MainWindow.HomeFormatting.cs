@@ -145,6 +145,22 @@ public partial class MainWindow
             ApplyStyleDiff(new StyleDiff(FontName: name));
     }
 
+    private void FontNameBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (_suppressToolbarSync) return;
+
+        CommitFontNameBoxText();
+        e.Handled = true;
+    }
+
+    private void CommitFontNameBoxText()
+    {
+        var name = FontNameBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(name))
+            ApplyStyleDiff(new StyleDiff(FontName: name));
+    }
+
     private void FontSizeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
