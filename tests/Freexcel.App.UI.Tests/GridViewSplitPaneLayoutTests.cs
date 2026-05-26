@@ -354,6 +354,35 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneScrollbarLayoutPlanner_MapsThumbHitAndDragMath()
+    {
+        var scrollbar = new SplitPaneScrollbar(
+            SplitPaneScrollbarOrientation.Horizontal,
+            SplitPaneRegion.TopRight,
+            new Rect(100, 20, 200, 10),
+            SplitPaneScrollbarLayoutPlanner.CalculateThumb(
+                SplitPaneScrollbarOrientation.Horizontal,
+                new Rect(100, 20, 200, 10),
+                firstVisibleIndex: 50,
+                visibleCount: 10,
+                maxIndex: 200),
+            VisibleSpan: 10,
+            MaxStartIndex: 191);
+
+        SplitPaneScrollbarLayoutPlanner.HitTestScrollbar(scrollbar, scrollbar.Thumb.TopLeft + new Vector(2, 2))
+            .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Thumb, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
+        SplitPaneScrollbarLayoutPlanner.CalculateScrollTarget(scrollbar, new Point(scrollbar.Track.Right - 1, scrollbar.Track.Top + 2))
+            .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 191));
+        SplitPaneScrollbarLayoutPlanner.CalculatePageTarget(scrollbar, currentIndex: 50, new Point(scrollbar.Thumb.Left - 4, scrollbar.Track.Top + 2))
+            .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 40));
+        SplitPaneScrollbarLayoutPlanner.CalculateThumbDragTarget(
+                scrollbar,
+                new Point(scrollbar.Track.Left + 1 + 99 + scrollbar.Thumb.Width / 2, scrollbar.Track.Top + 2),
+                scrollbar.Thumb.Width / 2)
+            .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 109));
+    }
+
+    [Fact]
     public void CalculateSplitPaneScrollbarChrome_SizesThumbsFromVisibleSpan()
     {
         var viewport = SplitViewport();
