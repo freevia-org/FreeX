@@ -169,9 +169,18 @@ internal static partial class DelimitedTextWorkbookReader
 
     private static TextReader CreateTextReader(Stream stream)
     {
-        using var memory = new MemoryStream();
-        stream.CopyTo(memory);
-        if (!memory.TryGetBuffer(out var bytes))
+        if (stream is MemoryStream sourceMemoryStream &&
+            sourceMemoryStream.TryGetBuffer(out var sourceBytes))
+        {
+            var position = Math.Min(sourceMemoryStream.Position, sourceMemoryStream.Length);
+            var remainingLength = checked((int)(sourceMemoryStream.Length - position));
+            sourceMemoryStream.Position = sourceMemoryStream.Length;
+            return new StringReader(DecodeText(sourceBytes.AsSpan(checked((int)position), remainingLength)));
+        }
+
+        using var buffered = new MemoryStream();
+        stream.CopyTo(buffered);
+        if (!buffered.TryGetBuffer(out var bytes))
             throw new InvalidOperationException("Buffered delimited text stream is not accessible.");
 
         return new StringReader(DecodeText(bytes.AsSpan()));
