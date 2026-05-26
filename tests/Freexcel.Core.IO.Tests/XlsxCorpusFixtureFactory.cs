@@ -54,6 +54,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-printer-settings-001" => true,
         "generated-calc-chain-001" => true,
         "generated-document-properties-001" => true,
+        "generated-header-footer-legacy-drawing-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -172,6 +173,24 @@ internal static class XlsxCorpusFixtureFactory
                   <Manager>Workbook Fidelity</Manager>
                 </Properties>
                 """)),
+        "generated-header-footer-legacy-drawing-001" => CreatePackage(
+            ("xl/drawings/vmlDrawing1.vml", """
+                <xml xmlns:v="urn:schemas-microsoft-com:vml"
+                     xmlns:o="urn:schemas-microsoft-com:office:office"
+                     xmlns:x="urn:schemas-microsoft-com:office:excel">
+                  <v:shape id="LH" type="#_x0000_t75">
+                    <v:imagedata o:relid="rIdImage1" o:title="Header"/>
+                  </v:shape>
+                </xml>
+                """),
+            ("xl/drawings/_rels/vmlDrawing1.vml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/headerFooterImage1.png"/>
+                </Relationships>
+                """),
+            ("xl/media/headerFooterImage1.png", "Freexcel generated header footer image placeholder")),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -358,6 +377,8 @@ internal static class XlsxCorpusFixtureFactory
             "docProps/core.xml" => "application/vnd.openxmlformats-package.core-properties+xml",
             "docProps/app.xml" => "application/vnd.openxmlformats-officedocument.extended-properties+xml",
             "docProps/custom.xml" => "application/vnd.openxmlformats-officedocument.custom-properties+xml",
+            "xl/drawings/vmlDrawing1.vml" => "application/vnd.openxmlformats-officedocument.vmlDrawing",
+            "xl/media/headerFooterImage1.png" => "image/png",
             "xl/diagrams/data1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
             "xl/diagrams/layout1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
             "xl/diagrams/quickStyle1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
@@ -433,6 +454,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-custom-docprops-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyCustomDocumentPropertiesReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-header-footer-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyHeaderFooterLegacyDrawingReferenceFixup(archive);
             return;
         }
 
@@ -737,6 +764,49 @@ internal static class XlsxCorpusFixtureFactory
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
             "docProps/custom.xml");
         ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+    }
+
+    private static void ApplyHeaderFooterLegacyDrawingReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/drawings/vmlDrawing1.vml",
+                "application/vnd.openxmlformats-officedocument.vmlDrawing");
+            EnsureContentTypeOverride(contentTypes, "/xl/media/headerFooterImage1.png", "image/png");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            worksheetXml.Root?.Elements(worksheetNs + "legacyDrawingHF").Remove();
+            worksheetXml.Root?.Add(new XElement(
+                worksheetNs + "legacyDrawingHF",
+                new XAttribute(officeRelNs + "id", "rIdHeaderFooterDrawing1")));
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdHeaderFooterDrawing1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
+            "../drawings/vmlDrawing1.vml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
     }
 
     private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target, string? targetMode = null)
