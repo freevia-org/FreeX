@@ -10,14 +10,14 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Sequence(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e) return e;
-        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        double rawRows = args[0] is not BlankValue ? ToNumber(args[0]) : 1;
-        double rawCols = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
-        double start = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
-        double step  = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
+        if (!TryGetScalarControlArgument(args[0], out var rowsArg, out var rowsError)) return rowsError;
+        if (!TryGetScalarControlArgument(args.Count > 1 ? args[1] : BlankValue.Instance, out var colsArg, out var colsError)) return colsError;
+        if (!TryGetScalarControlArgument(args.Count > 2 ? args[2] : BlankValue.Instance, out var startArg, out var startError)) return startError;
+        if (!TryGetScalarControlArgument(args.Count > 3 ? args[3] : BlankValue.Instance, out var stepArg, out var stepError)) return stepError;
+        double rawRows = rowsArg is not BlankValue ? ToNumber(rowsArg) : 1;
+        double rawCols = colsArg is not BlankValue ? ToNumber(colsArg) : 1;
+        double start = startArg is not BlankValue ? ToNumber(startArg) : 1;
+        double step  = stepArg is not BlankValue ? ToNumber(stepArg) : 1;
         if (!double.IsFinite(rawRows) || !double.IsFinite(rawCols)) return ErrorValue.Value;
         if (!double.IsFinite(start) || !double.IsFinite(step)) return ErrorValue.Num;
         int rows = (int)rawRows;
