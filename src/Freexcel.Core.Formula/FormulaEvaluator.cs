@@ -993,7 +993,7 @@ public sealed class FormulaEvaluator
                 _               => null
             };
             if (taken is null) return ErrorValue.Value;
-            if (taken.Value) return EvaluateNode(node.Arguments[i + 1], context);
+            if (taken.Value) return EvaluateArrayOperand(node.Arguments[i + 1], context);
         }
         return ErrorValue.NA;
     }
@@ -1235,9 +1235,9 @@ public sealed class FormulaEvaluator
             var val = EvaluateNode(node.Arguments[1 + i * 2], context);
             if (val is ErrorValue ve) return ve;
             if (BuiltInFunctions.ScalarEquals(expr, val))
-                return EvaluateNode(node.Arguments[1 + i * 2 + 1], context);
+                return EvaluateArrayOperand(node.Arguments[1 + i * 2 + 1], context);
         }
-        return hasDefault ? EvaluateNode(node.Arguments[^1], context) : ErrorValue.NA;
+        return hasDefault ? EvaluateArrayOperand(node.Arguments[^1], context) : ErrorValue.NA;
     }
 
     private static bool IsAggregateFunction(string name) =>
