@@ -75,6 +75,13 @@ public sealed partial class SymbolPickerDialog : Window
             selectedCode.Text = ToCodeText(value);
         }
 
+        void AcceptSelectedSymbol()
+        {
+            recentSymbols = PromoteRecentSymbol(recentSymbols, SelectedSymbol, 8).ToList();
+            PopulateRecent();
+            DialogResult = true;
+        }
+
         Button CreateSymbolButton(string value, double width = 34, double height = 34, double fontSize = 16)
         {
             var button = new Button
@@ -92,6 +99,7 @@ public sealed partial class SymbolPickerDialog : Window
                 if (s is Button { Tag: string symbol })
                     SelectSymbolText(symbol);
             };
+            button.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();
             return button;
         }
 
@@ -152,6 +160,7 @@ public sealed partial class SymbolPickerDialog : Window
             if (specialList.SelectedItem is ListBoxItem { Tag: string symbol })
                 SelectSymbolText(symbol);
         };
+        specialList.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();
         specialList.SelectedIndex = 0;
 
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
@@ -184,12 +193,7 @@ public sealed partial class SymbolPickerDialog : Window
             Margin = new Thickness(0, 8, 0, 0)
         };
         var insert = new Button { Content = "_Insert", Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-        insert.Click += (_, _) =>
-        {
-            recentSymbols = PromoteRecentSymbol(recentSymbols, SelectedSymbol, 8).ToList();
-            PopulateRecent();
-            DialogResult = true;
-        };
+        insert.Click += (_, _) => AcceptSelectedSymbol();
         var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         btnRow.Children.Add(insert);
         btnRow.Children.Add(cancel);
