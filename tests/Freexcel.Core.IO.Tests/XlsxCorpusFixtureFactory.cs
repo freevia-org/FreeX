@@ -75,6 +75,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-page-setup-native-001" => true,
         "generated-worksheet-header-footer-native-001" => true,
         "generated-worksheet-dimension-native-001" => true,
+        "generated-worksheet-sheet-properties-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -391,6 +392,16 @@ internal static class XlsxCorpusFixtureFactory
               <dimension ref="A1" nativeDimensionAttr="kept"/>
             </worksheet>
             """)),
+        "generated-worksheet-sheet-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <sheetPr filterMode="1">
+                <pageSetUpPr fitToPage="1" autoPageBreaks="0"/>
+                <fx:sheetPrNativeChild id="first"/>
+                <fx:sheetPrNativeChild id="second"/>
+              </sheetPr>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -638,6 +649,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-dimension-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-sheet-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
@@ -900,6 +913,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-dimension-native-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetDimensionNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-sheet-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSheetPropertiesFixup(archive);
             return;
         }
 
@@ -1782,6 +1801,30 @@ internal static class XlsxCorpusFixtureFactory
             worksheetNs + "dimension",
             new XAttribute("ref", "A1"),
             new XAttribute("nativeDimensionAttr", "kept")));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSheetPropertiesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetPr").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "sheetPr",
+            new XAttribute("filterMode", "1"),
+            new XElement(
+                worksheetNs + "pageSetUpPr",
+                new XAttribute("fitToPage", "1"),
+                new XAttribute("autoPageBreaks", "0")),
+            new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "first")),
+            new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "second"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
