@@ -524,7 +524,7 @@ public static partial class BuiltInFunctions
         int matchIdx = -1;
         for (int i = 0; i < lookupFlat.Count; i++)
         {
-            if (lookupFlat[i] is ErrorValue lErr) return lErr;
+            if (lookupFlat[i] is ErrorValue) continue;
             if (CompareScalar(lookupFlat[i], lookupVal) <= 0)
                 matchIdx = i;
         }
@@ -541,7 +541,7 @@ public static partial class BuiltInFunctions
         int matchIdx = -1;
         for (int i = 0; i < lookupVector.Count; i++)
         {
-            if (lookupVector[i] is ErrorValue lErr) return lErr;
+            if (lookupVector[i] is ErrorValue) continue;
             if (CompareScalar(lookupVector[i], lookupVal) <= 0)
                 matchIdx = i;
         }
