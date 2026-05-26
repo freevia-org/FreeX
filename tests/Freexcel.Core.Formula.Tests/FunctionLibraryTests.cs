@@ -5464,11 +5464,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Row_Range_ReturnsFirstRow()
+    public void Row_Range_SpillsRowNumbers()
     {
         var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));
 
-        _eval.Evaluate("=ROW(B2:C4)", sheet).Should().Be(new NumberValue(2));
+        var result = _eval.Evaluate("=ROW(B2:C4)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(2));
+        result.Cells[1, 0].Should().Be(new NumberValue(3));
+        result.Cells[2, 0].Should().Be(new NumberValue(4));
     }
 
     [Fact]
@@ -5489,11 +5494,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Column_Range_ReturnsFirstColumn()
+    public void Column_Range_SpillsColumnNumbers()
     {
         var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));
 
-        _eval.Evaluate("=COLUMN(B2:C4)", sheet).Should().Be(new NumberValue(2));
+        var result = _eval.Evaluate("=COLUMN(B2:C4)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(2);
+        result.Cells[0, 0].Should().Be(new NumberValue(2));
+        result.Cells[0, 1].Should().Be(new NumberValue(3));
     }
 
     [Fact]
