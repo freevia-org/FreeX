@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(24, "the generated metadata-pass manifest currently declares twenty-four deterministic package-retention rows");
+        rows.Should().HaveCount(25, "the generated metadata-pass manifest currently declares twenty-five deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -589,6 +589,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetSingleXmlCellsRow_RetainsSingleXmlCellsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-single-xml-cells-001");
+        AssertWorksheetSingleXmlCells(source, "generated-worksheet-single-xml-cells-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-single-xml-cells-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-single-xml-cells-001");
+        AssertWorksheetSingleXmlCells(saved, "generated-worksheet-single-xml-cells-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -899,6 +917,26 @@ public class XlsxCorpusRunnerTests
             .Subject;
         cellWatch.Attribute("r")!.Value.Should().Be("A1", because);
         cellWatch.Attribute("nativeWatch")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetSingleXmlCells(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var singleXmlCells = worksheetXml.Root!.Element(worksheetNs + "singleXmlCells");
+        singleXmlCells.Should().NotBeNull(because);
+        singleXmlCells!.Attribute("nativeSingleXmlCellsAttr")!.Value.Should().Be("kept", because);
+
+        var singleXmlCell = singleXmlCells.Elements(worksheetNs + "singleXmlCell")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        singleXmlCell.Attribute("id")!.Value.Should().Be("1", because);
+        singleXmlCell.Attribute("r")!.Value.Should().Be("A1", because);
+        singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1", because);
+        singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept", because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)

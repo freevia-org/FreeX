@@ -14000,10 +14000,16 @@ public partial class FileAdapterSmokeTests
         loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("max", "1048575");
         loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("man", "1");
         loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("pt", "1");
+        loadedSheet.RowPageBreaksMetadata.NativeAttributes["invalid rowBreaks attr"] = "skip";
+        loadedSheet.RowPageBreaksMetadata.BreakNativeAttributes[20]["invalid rowBreak attr"] = "skip";
+        loadedSheet.ColumnPageBreaksMetadata.NativeAttributes["invalid colBreaks attr"] = "skip";
+        loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5]["invalid colBreak attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14016,6 +14022,7 @@ public partial class FileAdapterSmokeTests
         rowBreak.Attribute("man")!.Value.Should().Be("1");
         rowBreak.Attribute("pt")!.Value.Should().Be("1");
         rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native");
+        rowBreak.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
 
         var columnBreak = worksheetXml.Root!.Element(worksheetNs + "colBreaks")!
             .Elements(worksheetNs + "brk")
@@ -14024,6 +14031,15 @@ public partial class FileAdapterSmokeTests
         columnBreak.Attribute("man")!.Value.Should().Be("1");
         columnBreak.Attribute("pt")!.Value.Should().Be("1");
         columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native");
+        columnBreak.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
+        worksheetXml.Root.Element(worksheetNs + "rowBreaks")!
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
+            .Should()
+            .NotContain("invalid ");
+        worksheetXml.Root.Element(worksheetNs + "colBreaks")!
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
+            .Should()
+            .NotContain("invalid ");
     }
 
     [Fact]

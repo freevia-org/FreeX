@@ -27,6 +27,15 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Save_GroupsCellsByRowInsteadOfIndexingEveryCoordinate()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "CsvFileAdapter.cs"));
+
+        source.Should().NotContain("Dictionary<(uint Row, uint Col), Cell>");
+        source.Should().NotContain("TryGetValue((r, c)");
+    }
+
+    [Fact]
     public void Save_StreamsRowsWithoutPerRowStringArrayJoin()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "CsvFileAdapter.cs"));
@@ -61,6 +70,37 @@ public sealed class CsvFileAdapterTests
 
         output.WriteLine(
             $"CSV dense save benchmark: rows={rowCount}, cols={colCount}, bytes={stream.Length}, elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}, allocatedBytes={allocatedBytes}");
+        stream.Length.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Save_SparseWideSyntheticSheet_ReportsThroughputAndAllocatedBytes()
+    {
+        const int rowCount = 5_000;
+        const int colCount = 2_000;
+        const int cellsPerRow = 3;
+        var workbook = CreateSparseWideWorkbook(rowCount, colCount, cellsPerRow);
+        var adapter = new CsvFileAdapter();
+        var expectedCapacity = rowCount * (colCount + 32);
+
+        using (var warmup = new MemoryStream(expectedCapacity))
+        {
+            adapter.Save(workbook, warmup);
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        using var stream = new MemoryStream(expectedCapacity);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        adapter.Save(workbook, stream);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        output.WriteLine(
+            $"CSV sparse wide save benchmark: rows={rowCount}, cols={colCount}, cellsPerRow={cellsPerRow}, bytes={stream.Length}, elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}, allocatedBytes={allocatedBytes}");
         stream.Length.Should().BeGreaterThan(0);
     }
 
@@ -457,6 +497,22 @@ public sealed class CsvFileAdapterTests
             for (var col = 1; col <= colCount; col++)
             {
                 sheet.SetCell(new CellAddress(sheet.Id, (uint)row, (uint)col), new NumberValue(row * col));
+            }
+        }
+
+        return workbook;
+    }
+
+    private static Workbook CreateSparseWideWorkbook(int rowCount, int colCount, int cellsPerRow)
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        for (var row = 1; row <= rowCount; row++)
+        {
+            for (var index = 0; index < cellsPerRow; index++)
+            {
+                var col = 1 + (index * (colCount - 1) / Math.Max(1, cellsPerRow - 1));
+                sheet.SetCell(new CellAddress(sheet.Id, (uint)row, (uint)col), new NumberValue(row + col));
             }
         }
 

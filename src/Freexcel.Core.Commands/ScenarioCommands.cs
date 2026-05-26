@@ -198,9 +198,19 @@ internal static class ScenarioProtectionGuards
 
 public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
 {
+    private readonly IReadOnlyList<CellAddress> _resultCells;
+    private readonly Action<Workbook, IReadOnlyList<CellAddress>>? _recalculate;
     private SheetId? _reportSheetId;
 
     public string Label => "Scenario Summary";
+
+    public ScenarioSummaryReportCommand(
+        IReadOnlyList<CellAddress>? resultCells = null,
+        Action<Workbook, IReadOnlyList<CellAddress>>? recalculate = null)
+    {
+        _resultCells = resultCells?.Distinct().ToList() ?? [];
+        _recalculate = recalculate;
+    }
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
@@ -208,6 +218,20 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
             return protectedOutcome;
         if (ctx.Workbook.Scenarios.Count == 0)
             return new CommandOutcome(false, "No scenarios are saved in this workbook.");
+        if (_resultCells.Count > 0)
+        {
+            foreach (var scenario in ctx.Workbook.Scenarios)
+            {
+                if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, scenario.ChangingCells) is { } scenarioProtectedOutcome)
+                    return scenarioProtectedOutcome;
+            }
+        }
+
+        foreach (var address in _resultCells)
+        {
+            if (ctx.Workbook.GetSheet(address.Sheet) is null)
+                return new CommandOutcome(false, "Scenario result cells must belong to this workbook.");
+        }
 
         var report = ctx.Workbook.AddSheet(GetUniqueReportSheetName(ctx.Workbook));
         _reportSheetId = report.Id;
@@ -251,6 +275,9 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
             }
         }
 
+        if (_resultCells.Count > 0)
+            AddResultCellsSection(ctx.Workbook, report, (uint)changingCells.Count + 6);
+
         return new CommandOutcome(true);
     }
 
@@ -282,5 +309,94 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
         var sheet = workbook.GetSheet(address.Sheet);
         var sheetName = sheet?.Name ?? "Sheet";
         return $"{sheetName}!{address.ToA1()}";
+    }
+
+    private void AddResultCellsSection(Workbook workbook, Sheet report, uint headerRow)
+    {
+        report.SetCell(new CellAddress(report.Id, headerRow, 1), new TextValue("Result Cells"));
+        for (var index = 0; index < workbook.Scenarios.Count; index++)
+        {
+            report.SetCell(
+                new CellAddress(report.Id, headerRow, (uint)index + 2),
+                new TextValue(workbook.Scenarios[index].Name));
+        }
+
+        for (var rowIndex = 0; rowIndex < _resultCells.Count; rowIndex++)
+        {
+            var address = _resultCells[rowIndex];
+            var reportRow = headerRow + (uint)rowIndex + 1;
+            report.SetCell(new CellAddress(report.Id, reportRow, 1), new TextValue(FormatAddress(workbook, address)));
+        }
+
+        for (var scenarioIndex = 0; scenarioIndex < workbook.Scenarios.Count; scenarioIndex++)
+        {
+            var scenario = workbook.Scenarios[scenarioIndex];
+            var snapshot = CaptureScenarioCellSnapshot(workbook, scenario);
+            var changedCells = scenario.ChangingCells.Select(cell => cell.Address).Distinct().ToList();
+            try
+            {
+                ApplyScenarioValues(workbook, scenario);
+                _recalculate?.Invoke(workbook, changedCells);
+                for (var rowIndex = 0; rowIndex < _resultCells.Count; rowIndex++)
+                {
+                    var address = _resultCells[rowIndex];
+                    var sheet = workbook.GetSheet(address.Sheet);
+                    if (sheet is null)
+                        continue;
+
+                    report.SetCell(
+                        new CellAddress(report.Id, headerRow + (uint)rowIndex + 1, (uint)scenarioIndex + 2),
+                        Cell.FromValue(sheet.GetValue(address)));
+                }
+            }
+            finally
+            {
+                RestoreScenarioCellSnapshot(workbook, snapshot);
+                _recalculate?.Invoke(workbook, changedCells);
+            }
+        }
+    }
+
+    private static List<(CellAddress Address, Cell? PreviousCell)> CaptureScenarioCellSnapshot(
+        Workbook workbook,
+        WorkbookScenario scenario)
+    {
+        var snapshot = new List<(CellAddress Address, Cell? PreviousCell)>();
+        foreach (var address in scenario.ChangingCells.Select(cell => cell.Address).Distinct())
+        {
+            var sheet = workbook.GetSheet(address.Sheet);
+            if (sheet is null)
+                continue;
+
+            snapshot.Add((address, sheet.GetCell(address)?.Clone()));
+        }
+
+        return snapshot;
+    }
+
+    private static void ApplyScenarioValues(Workbook workbook, WorkbookScenario scenario)
+    {
+        foreach (var change in scenario.ChangingCells)
+        {
+            var sheet = workbook.GetSheet(change.Address.Sheet);
+            sheet?.SetCell(change.Address, Cell.FromValue(change.Value));
+        }
+    }
+
+    private static void RestoreScenarioCellSnapshot(
+        Workbook workbook,
+        IReadOnlyList<(CellAddress Address, Cell? PreviousCell)> snapshot)
+    {
+        foreach (var (address, previousCell) in snapshot)
+        {
+            var sheet = workbook.GetSheet(address.Sheet);
+            if (sheet is null)
+                continue;
+
+            if (previousCell is null)
+                sheet.ClearCell(address);
+            else
+                sheet.SetCell(address, previousCell.Clone());
+        }
     }
 }
