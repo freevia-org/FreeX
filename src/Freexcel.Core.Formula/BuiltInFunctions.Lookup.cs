@@ -370,6 +370,9 @@ public static partial class BuiltInFunctions
                 sheetName = sheetPart;
             refText = refText[(bangIdx + 1)..];
         }
+        if (useA1 && TryParseA1RangeRef(refText, out var startRow, out var startCol, out var endRow, out var endCol))
+            return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
+
         if (useA1
                 ? !TryParseA1Ref(refText, out uint row, out uint col)
                 : !TryParseR1C1Ref(refText, out row, out col))
@@ -377,6 +380,40 @@ public static partial class BuiltInFunctions
         return sheetName is not null
             ? ctx.GetCellValue(sheetName, row, col)
             : ctx.GetCellValue(row, col);
+    }
+
+    private static ScalarValue BuildIndirectRange(
+        IEvalContext ctx,
+        string? sheetName,
+        uint startRow,
+        uint startCol,
+        uint endRow,
+        uint endCol)
+    {
+        if (sheetName is not null && !ctx.SheetExists(sheetName)) return ErrorValue.Ref;
+
+        uint r0 = Math.Min(startRow, endRow);
+        uint r1 = Math.Max(startRow, endRow);
+        uint c0 = Math.Min(startCol, endCol);
+        uint c1 = Math.Max(startCol, endCol);
+        var cells = new ScalarValue[r1 - r0 + 1, c1 - c0 + 1];
+        for (uint r = r0; r <= r1; r++)
+            for (uint c = c0; c <= c1; c++)
+                cells[r - r0, c - c0] = sheetName is not null
+                    ? ctx.GetCellValue(sheetName, r, c)
+                    : ctx.GetCellValue(r, c);
+
+        return new RangeValue(cells, r0, c0) { SheetName = sheetName };
+    }
+
+    private static bool TryParseA1RangeRef(string refText, out uint startRow, out uint startCol, out uint endRow, out uint endCol)
+    {
+        startRow = startCol = endRow = endCol = 0;
+        int colon = refText.IndexOf(':');
+        if (colon < 0 || colon != refText.LastIndexOf(':')) return false;
+
+        return TryParseA1Ref(refText[..colon], out startRow, out startCol)
+            && TryParseA1Ref(refText[(colon + 1)..], out endRow, out endCol);
     }
 
     private static ScalarValue Address(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
