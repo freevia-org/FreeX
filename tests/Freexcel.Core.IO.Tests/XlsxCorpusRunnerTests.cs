@@ -3631,6 +3631,25 @@ public class XlsxCorpusRunnerTests
                     filter.ColumnId,
                     filter.Values.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     filter.IncludeBlank,
+                    filter.CustomFilters
+                        .Select(customFilter => new StructuredTableCustomFilterSummary(
+                            customFilter.Operator ?? "",
+                            customFilter.Value ?? "",
+                            customFilter.NativeAttributes is null
+                                ? []
+                                : customFilter.NativeAttributes
+                                    .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                                    .Select(pair => new NativeAttributeSummary(pair.Key, pair.Value))
+                                    .ToArray()))
+                        .ToArray(),
+                    filter.CustomFiltersAnd,
+                    filter.CustomFiltersAndRaw ?? "",
+                    filter.NativeCustomFiltersAttributes is null
+                        ? []
+                        : filter.NativeCustomFiltersAttributes
+                            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                            .Select(pair => new NativeAttributeSummary(pair.Key, pair.Value))
+                            .ToArray(),
                     filter.NativeFilterXmls.Select(NormalizeXml).ToArray(),
                     filter.NativeAttributes is null
                         ? []
@@ -4802,7 +4821,16 @@ public class XlsxCorpusRunnerTests
         int ColumnId,
         IReadOnlyList<string> Values,
         bool IncludeBlank,
+        IReadOnlyList<StructuredTableCustomFilterSummary> CustomFilters,
+        bool CustomFiltersAnd,
+        string CustomFiltersAndRaw,
+        IReadOnlyList<NativeAttributeSummary> NativeCustomFiltersAttributes,
         IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyList<NativeAttributeSummary> NativeAttributes);
+
+    private sealed record StructuredTableCustomFilterSummary(
+        string Operator,
+        string Value,
         IReadOnlyList<NativeAttributeSummary> NativeAttributes);
 
     private sealed record NativeAttributeSummary(string Name, string Value);

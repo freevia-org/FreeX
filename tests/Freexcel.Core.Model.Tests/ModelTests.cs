@@ -468,9 +468,10 @@ public class SheetCloneTests
         clonedTable.StyleName.Should().Be("TableStyleMedium2");
         clonedTable.TotalsRowShown.Should().BeTrue();
         clonedTable.Columns.Should().Equal(table.Columns);
-        clonedTable.FilterColumns.Should().Equal(table.FilterColumns);
+        clonedTable.FilterColumns.Should().BeEquivalentTo(table.FilterColumns);
         clonedTable.Columns.Should().NotBeSameAs(table.Columns);
-        clonedTable.NativeAttributes.Should().BeSameAs(nativeAttributes);
+        clonedTable.NativeAttributes.Should().BeEquivalentTo(nativeAttributes);
+        clonedTable.NativeAttributes.Should().NotBeSameAs(nativeAttributes);
     }
 
     [Fact]
