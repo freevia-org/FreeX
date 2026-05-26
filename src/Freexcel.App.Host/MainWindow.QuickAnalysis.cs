@@ -346,6 +346,7 @@ public partial class MainWindow
             QuickAnalysisPreviewVisualKind.ColumnChart => GridQuickAnalysisPreviewVisualKind.ColumnChart,
             QuickAnalysisPreviewVisualKind.LineChart => GridQuickAnalysisPreviewVisualKind.LineChart,
             QuickAnalysisPreviewVisualKind.BarChart => GridQuickAnalysisPreviewVisualKind.BarChart,
+            QuickAnalysisPreviewVisualKind.StackedColumnChart => GridQuickAnalysisPreviewVisualKind.StackedColumnChart,
             _ => GridQuickAnalysisPreviewVisualKind.None
         };
 }
