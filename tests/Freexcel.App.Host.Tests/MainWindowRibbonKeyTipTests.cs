@@ -504,6 +504,8 @@ public sealed class MainWindowRibbonKeyTipTests
 
     private sealed class MainWindowHarness : IDisposable
     {
+        private static SharedMainWindowSession? SharedSession;
+
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
         private readonly MethodInfo _enterKeyTipMode;
@@ -512,6 +514,7 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _getVisibleKeyTipElements;
         private readonly MethodInfo _updateRibbonCompactMode;
         private readonly MethodInfo _updateSsRecentList;
+        private readonly MethodInfo _hideStartScreen;
         private readonly Type _scopeType;
         private readonly FieldInfo _scopeField;
         private readonly FieldInfo _activeMenuField;
@@ -533,6 +536,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
             _updateSsRecentList = typeof(MainWindow).GetMethod("UpdateSsRecentList", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateSsRecentList");
+            _hideStartScreen = typeof(MainWindow).GetMethod("HideStartScreen", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "HideStartScreen");
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
             _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -671,6 +676,31 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public static MainWindowHarness Create(Action<Workbook>? configureWorkbook = null)
         {
+            var session = SharedSession ??= CreateSharedSession();
+            var window = session.Window;
+            if (!window.IsVisible)
+                window.Show();
+
+            window.WindowState = WindowState.Normal;
+            window.Width = 2400;
+            window.Height = 720;
+            if (window.FindName("RibbonTabs") is TabControl ribbonTabs)
+                ribbonTabs.Width = 2400;
+            window.UpdateLayout();
+            PumpDispatcher();
+
+            var createNewWorkbook = typeof(MainWindow).GetMethod("CreateNewWorkbook", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateNewWorkbook");
+            createNewWorkbook.Invoke(window, null);
+            configureWorkbook?.Invoke(session.WorkbookRef.Current);
+
+            var harness = new MainWindowHarness(window, session.WorkbookRef.Current);
+            harness.ResetUiState();
+            return harness;
+        }
+
+        private static SharedMainWindowSession CreateSharedSession()
+        {
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
             var workbookRef = new WorkbookRef { Current = workbook };
@@ -693,8 +723,7 @@ public sealed class MainWindowRibbonKeyTipTests
                 ribbonTabs.Width = 2400;
             window.UpdateLayout();
             PumpDispatcher();
-            configureWorkbook?.Invoke(workbookRef.Current);
-            return new MainWindowHarness(window, workbookRef.Current);
+            return new SharedMainWindowSession(window, workbookRef);
         }
 
         public void SetRibbonWidth(double width)
@@ -781,11 +810,41 @@ public sealed class MainWindowRibbonKeyTipTests
             ActiveMenuIsOpen.Should().BeTrue();
         }
 
-        public void Dispose()
+        private void ResetUiState()
         {
-            _window.Close();
+            _hideStartScreen.Invoke(_window, null);
+            if (ActiveMenu is { } activeMenu)
+                activeMenu.IsOpen = false;
+            _scopeField.SetValue(_window, Enum.Parse(_scopeType, "None"));
+            _activeMenuField.SetValue(_window, null);
+            if (_window.FindName("KeyTipOverlay") is Canvas overlay)
+            {
+                overlay.Children.Clear();
+                overlay.Visibility = Visibility.Collapsed;
+            }
+            if (_window.FindName("RibbonTabs") is TabControl ribbonTabs)
+            {
+                ribbonTabs.Width = 2400;
+                ribbonTabs.SelectedIndex = 1;
+            }
+            if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)
+                numberFormatBox.IsDropDownOpen = false;
+            SelectActiveCell();
+            _window.UpdateLayout();
             PumpDispatcher();
         }
+
+        public void Dispose()
+        {
+            if (ActiveMenu is { } activeMenu)
+                activeMenu.IsOpen = false;
+            if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)
+                numberFormatBox.IsDropDownOpen = false;
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
+        private sealed record SharedMainWindowSession(MainWindow Window, WorkbookRef WorkbookRef);
 
         private static IEnumerable<MenuItem> EnumerateMenuItems(ItemsControl control)
         {
