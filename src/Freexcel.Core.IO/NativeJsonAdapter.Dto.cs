@@ -191,6 +191,7 @@ public sealed partial class NativeJsonAdapter
         public string? CustomFiltersAndRaw { get; set; }
         public Dictionary<string, string>? NativeCustomFiltersAttributes { get; set; }
         public WorksheetAutoFilterTop10Dto? Top10 { get; set; }
+        public WorksheetAutoFilterDynamicFilterDto? DynamicFilter { get; set; }
         public List<string> NativeFilterXmls { get; set; } = [];
         public Dictionary<string, string>? NativeAttributes { get; set; }
     }
@@ -212,6 +213,16 @@ public sealed partial class NativeJsonAdapter
         public string? PercentRaw { get; set; }
         public string? ValueRaw { get; set; }
         public string? FilterValueRaw { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+    }
+
+    private class WorksheetAutoFilterDynamicFilterDto
+    {
+        public string? Type { get; set; }
+        public double? Value { get; set; }
+        public double? MaxValue { get; set; }
+        public string? ValueRaw { get; set; }
+        public string? MaxValueRaw { get; set; }
         public Dictionary<string, string>? NativeAttributes { get; set; }
     }
 

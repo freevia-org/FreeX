@@ -50,6 +50,15 @@ public sealed partial class NativeJsonAdapter
                             column.Top10.ValueRaw,
                             column.Top10.FilterValueRaw,
                             CleanNativeAttributes(column.Top10.NativeAttributes)),
+                    column.DynamicFilter is null
+                        ? null
+                        : new WorksheetAutoFilterDynamicFilterModel(
+                            column.DynamicFilter.Type,
+                            column.DynamicFilter.Value,
+                            column.DynamicFilter.MaxValue,
+                            column.DynamicFilter.ValueRaw,
+                            column.DynamicFilter.MaxValueRaw,
+                            CleanNativeAttributes(column.DynamicFilter.NativeAttributes)),
                     column.NativeFilterXmls?.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToArray() ?? [],
                     CleanNativeAttributes(column.NativeAttributes)));
             }
@@ -96,6 +105,17 @@ public sealed partial class NativeJsonAdapter
                             ValueRaw = column.Top10.ValueRaw,
                             FilterValueRaw = column.Top10.FilterValueRaw,
                             NativeAttributes = CleanNativeAttributesForSave(column.Top10.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
+                        },
+                    DynamicFilter = column.DynamicFilter is null
+                        ? null
+                        : new WorksheetAutoFilterDynamicFilterDto
+                        {
+                            Type = column.DynamicFilter.Type,
+                            Value = column.DynamicFilter.Value,
+                            MaxValue = column.DynamicFilter.MaxValue,
+                            ValueRaw = column.DynamicFilter.ValueRaw,
+                            MaxValueRaw = column.DynamicFilter.MaxValueRaw,
+                            NativeAttributes = CleanNativeAttributesForSave(column.DynamicFilter.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
                         },
                     NativeFilterXmls = column.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToList(),
                     NativeAttributes = CleanNativeAttributesForSave(column.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))

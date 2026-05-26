@@ -17266,6 +17266,7 @@ public partial class FileAdapterSmokeTests
             CustomFiltersAndRaw: null,
             NativeCustomFiltersAttributes: null,
             Top10: new WorksheetAutoFilterTop10Model(),
+            DynamicFilter: null,
             NativeFilterXmls: []));
 
         var saved = new MemoryStream();
@@ -17283,6 +17284,88 @@ public partial class FileAdapterSmokeTests
             .Value
             .Should()
             .Be("10");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MaterializesAndPreservesWorksheetAutoFilterDynamicAverage()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterDynamicAverageRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterDynamicAverageMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.DynamicFilter.Should().NotBeNull();
+        loadedFilterColumn.DynamicFilter!.Type.Should().Be("aboveAverage");
+        loadedFilterColumn.DynamicFilter.NativeAttributes.Should().Contain("{urn:freexcel:test}dynamicFilterFlag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().Equal(2u, 4u);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dynamicFilter = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "dynamicFilter");
+        dynamicFilter.Should().NotBeNull();
+        dynamicFilter!.Attribute("type")!.Value.Should().Be("aboveAverage");
+        dynamicFilter.Attribute(XName.Get("dynamicFilterFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterDynamicDateWithoutMaterializing()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterDynamicDateRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Date"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(45000));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterDynamicDateMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.DynamicFilter.Should().NotBeNull();
+        loadedFilterColumn.DynamicFilter!.Type.Should().Be("thisMonth");
+        loadedFilterColumn.DynamicFilter.Value.Should().Be(45000);
+        loadedFilterColumn.DynamicFilter.ValueRaw.Should().Be("45000");
+        loadedSheet.FilterHiddenRows.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dynamicFilter = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "dynamicFilter");
+        dynamicFilter.Should().NotBeNull();
+        dynamicFilter!.Attribute("type")!.Value.Should().Be("thisMonth");
+        dynamicFilter.Attribute("val")!.Value.Should().Be("45000");
     }
 
     [Fact]
@@ -17450,7 +17533,7 @@ public partial class FileAdapterSmokeTests
     {
         var workbook = new Workbook("WorksheetAutoFilterNativeJsonTest");
         var sheet = workbook.AddSheet("Data");
-        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:C3", null)
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:D3", null)
         {
             NativeAttributes = new Dictionary<string, string> { ["customAutoFilterFlag"] = "keep" },
             NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"/>"]
@@ -17487,8 +17570,23 @@ public partial class FileAdapterSmokeTests
                 ValueRaw: "25",
                 FilterValueRaw: "10",
                 NativeAttributes: new Dictionary<string, string> { ["customTop10Flag"] = "keep" }),
+            DynamicFilter: null,
             NativeFilterXmls: [],
             NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag3"] = "keep" }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            3,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: new WorksheetAutoFilterDynamicFilterModel(
+                Type: "belowAverage",
+                NativeAttributes: new Dictionary<string, string> { ["customDynamicFilterFlag"] = "keep" }),
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag4"] = "keep" }));
 
         var stream = new MemoryStream();
         new NativeJsonAdapter().Save(workbook, stream);
@@ -17498,10 +17596,10 @@ public partial class FileAdapterSmokeTests
 
         var autoFilter = loaded.GetSheetAt(0).AutoFilter;
         autoFilter.Should().NotBeNull();
-        autoFilter!.Reference.Should().Be("A1:C3");
+        autoFilter!.Reference.Should().Be("A1:D3");
         autoFilter.NativeAttributes.Should().Contain("customAutoFilterFlag", "keep");
         autoFilter.NativeChildXmls.Should().ContainSingle().Which.Should().Contain("extLst");
-        autoFilter.FilterColumns.Should().HaveCount(3);
+        autoFilter.FilterColumns.Should().HaveCount(4);
         var filterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 0);
         filterColumn.ColumnId.Should().Be(0);
         filterColumn.Values.Should().Equal("A");
@@ -17529,6 +17627,11 @@ public partial class FileAdapterSmokeTests
         top10Column.Top10.FilterValue.Should().Be(10);
         top10Column.Top10.NativeAttributes.Should().Contain("customTop10Flag", "keep");
         top10Column.NativeAttributes.Should().Contain("customFilterColumnFlag3", "keep");
+        var dynamicFilterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 3);
+        dynamicFilterColumn.DynamicFilter.Should().NotBeNull();
+        dynamicFilterColumn.DynamicFilter!.Type.Should().Be("belowAverage");
+        dynamicFilterColumn.DynamicFilter.NativeAttributes.Should().Contain("customDynamicFilterFlag", "keep");
+        dynamicFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag4", "keep");
     }
 
     [Fact]
@@ -21759,6 +21862,53 @@ public partial class FileAdapterSmokeTests
                         new XAttribute("val", "2"),
                         new XAttribute("filterVal", "20"),
                         new XAttribute(freexcelNs + "top10Flag", "keep")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterDynamicAverageMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A4"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "dynamicFilter",
+                        new XAttribute("type", "aboveAverage"),
+                        new XAttribute(freexcelNs + "dynamicFilterFlag", "keep")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterDynamicDateMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A2"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "dynamicFilter",
+                        new XAttribute("type", "thisMonth"),
+                        new XAttribute("val", "45000")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

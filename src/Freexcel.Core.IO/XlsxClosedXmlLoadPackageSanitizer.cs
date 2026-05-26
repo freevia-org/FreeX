@@ -36,6 +36,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 RemoveChartExDrawingRelationships(archive);
             if (requirements.HasUnsupportedConditionalFormattingBlocks)
                 RemoveUnsupportedConditionalFormattingBlocks(archive);
+            if (requirements.HasWorksheetDynamicFilters)
+                RemoveWorksheetDynamicFilters(archive);
         }
 
         sanitized.Position = 0;
@@ -52,11 +54,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return new SanitizationRequirements(
                 HasPivotPackageMetadata(archive),
                 HasChartExChartParts(archive),
-                scanUnsupportedConditionalFormatting && HasUnsupportedConditionalFormattingBlocks(archive));
+                scanUnsupportedConditionalFormatting && HasUnsupportedConditionalFormattingBlocks(archive),
+                HasWorksheetDynamicFilters(archive));
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true);
+            return new SanitizationRequirements(true, true, true, true);
         }
         finally
         {
@@ -68,9 +71,10 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     private readonly record struct SanitizationRequirements(
         bool HasPivotPackageMetadata,
         bool HasChartExChartParts,
-        bool HasUnsupportedConditionalFormattingBlocks)
+        bool HasUnsupportedConditionalFormattingBlocks,
+        bool HasWorksheetDynamicFilters)
     {
-        public bool RequiresAny => HasPivotPackageMetadata || HasChartExChartParts || HasUnsupportedConditionalFormattingBlocks;
+        public bool RequiresAny => HasPivotPackageMetadata || HasChartExChartParts || HasUnsupportedConditionalFormattingBlocks || HasWorksheetDynamicFilters;
     }
 
     private static bool HasPivotPackageMetadata(ZipArchive archive) =>
@@ -167,6 +171,60 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
 
         return false;
+    }
+
+    private static bool HasWorksheetDynamicFilters(ZipArchive archive) =>
+        archive.Entries
+            .Where(entry =>
+                entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Any(entry =>
+            {
+                using var stream = entry.Open();
+                using var reader = XmlReader.Create(stream, new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    IgnoreComments = true,
+                    IgnoreProcessingInstructions = true,
+                    IgnoreWhitespace = true,
+                });
+
+                while (reader.Read())
+                {
+                    if (reader.NodeType == XmlNodeType.Element &&
+                        string.Equals(reader.LocalName, "dynamicFilter", StringComparison.Ordinal) &&
+                        string.Equals(reader.NamespaceURI, "http://schemas.openxmlformats.org/spreadsheetml/2006/main", StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+
+    private static void RemoveWorksheetDynamicFilters(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(entry =>
+                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            var dynamicFilters = root
+                .Descendants(worksheetNs + "dynamicFilter")
+                .ToList();
+            if (dynamicFilters.Count == 0)
+                continue;
+
+            dynamicFilters.Remove();
+            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+        }
     }
 
     private static void RemoveUnsupportedConditionalFormattingBlocks(ZipArchive archive)

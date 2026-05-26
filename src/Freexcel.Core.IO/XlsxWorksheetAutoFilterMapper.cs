@@ -145,7 +145,8 @@ internal static class XlsxWorksheetAutoFilterMapper
 
         var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
         var hasTop10 = filterColumn.Top10 is not null;
-        if (!hasCustomFilters && !hasTop10 && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
+        var hasDynamicFilter = filterColumn.DynamicFilter is not null;
+        if (!hasCustomFilters && !hasTop10 && !hasDynamicFilter && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
         {
             element.Add(new XElement(
                 worksheetNs + "filters",
@@ -173,11 +174,34 @@ internal static class XlsxWorksheetAutoFilterMapper
 
         if (!hasCustomFilters && filterColumn.Top10 is { } top10)
             element.Add(ToTop10Xml(top10, worksheetNs));
+        else if (!hasCustomFilters && filterColumn.DynamicFilter is { } dynamicFilter)
+            element.Add(ToDynamicFilterXml(dynamicFilter, worksheetNs));
 
         foreach (var nativeFilterXml in filterColumn.NativeFilterXmls)
         {
-            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters", "customFilters", "top10") is { } nativeFilter)
+            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters", "customFilters", "top10", "dynamicFilter") is { } nativeFilter)
                 element.Add(nativeFilter);
+        }
+
+        return element;
+    }
+
+    private static XElement ToDynamicFilterXml(WorksheetAutoFilterDynamicFilterModel dynamicFilter, XNamespace worksheetNs)
+    {
+        var element = new XElement(worksheetNs + "dynamicFilter");
+        element.SetAttributeValue("type", string.IsNullOrWhiteSpace(dynamicFilter.Type) ? "aboveAverage" : dynamicFilter.Type);
+        if (dynamicFilter.ValueRaw is not null)
+            element.SetAttributeValue("val", dynamicFilter.ValueRaw);
+        else if (dynamicFilter.Value is not null)
+            element.SetAttributeValue("val", dynamicFilter.Value.Value.ToString(CultureInfo.InvariantCulture));
+        if (dynamicFilter.MaxValueRaw is not null)
+            element.SetAttributeValue("maxVal", dynamicFilter.MaxValueRaw);
+        else if (dynamicFilter.MaxValue is not null)
+            element.SetAttributeValue("maxVal", dynamicFilter.MaxValue.Value.ToString(CultureInfo.InvariantCulture));
+
+        foreach (var (name, value) in dynamicFilter.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         return element;
@@ -284,8 +308,9 @@ internal static class XlsxWorksheetAutoFilterMapper
             var filters = column.Element(worksheetNs + "filters");
             var customFilters = column.Element(worksheetNs + "customFilters");
             var top10 = column.Element(worksheetNs + "top10");
+            var dynamicFilter = column.Element(worksheetNs + "dynamicFilter");
             var nativeFilters = column.Elements()
-                .Where(element => element.Name != worksheetNs + "filters" && element.Name != worksheetNs + "customFilters" && element.Name != worksheetNs + "top10")
+                .Where(element => element.Name != worksheetNs + "filters" && element.Name != worksheetNs + "customFilters" && element.Name != worksheetNs + "top10" && element.Name != worksheetNs + "dynamicFilter")
                 .Select(element => element.ToString(SaveOptions.DisableFormatting))
                 .ToArray();
             var nativeAttributes = column.Attributes()
@@ -316,6 +341,7 @@ internal static class XlsxWorksheetAutoFilterMapper
                 customFilters?.Attribute("and")?.Value,
                 nativeCustomFiltersAttributes?.Count > 0 ? nativeCustomFiltersAttributes : null,
                 ReadTop10(top10),
+                ReadDynamicFilter(dynamicFilter),
                 nativeFilters,
                 nativeAttributes.Count == 0 ? null : nativeAttributes);
             if (filterColumn.ColumnId >= 0 &&
@@ -325,12 +351,33 @@ internal static class XlsxWorksheetAutoFilterMapper
                  filterColumn.CustomFiltersAndRaw is not null ||
                  filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
                  filterColumn.Top10 is not null ||
+                 filterColumn.DynamicFilter is not null ||
                  filterColumn.NativeFilterXmls.Count > 0 ||
                  filterColumn.NativeAttributes?.Count > 0))
             {
                 yield return filterColumn;
             }
         }
+    }
+
+    private static WorksheetAutoFilterDynamicFilterModel? ReadDynamicFilter(XElement? dynamicFilter)
+    {
+        if (dynamicFilter is null)
+            return null;
+
+        var nativeAttributes = dynamicFilter.Attributes()
+            .Where(attribute =>
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "type") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "val") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "maxVal"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return new WorksheetAutoFilterDynamicFilterModel(
+            Type: dynamicFilter.Attribute("type")?.Value,
+            Value: XlsxXmlAttributeReader.ReadDoubleAttribute(dynamicFilter, "val"),
+            MaxValue: XlsxXmlAttributeReader.ReadDoubleAttribute(dynamicFilter, "maxVal"),
+            ValueRaw: dynamicFilter.Attribute("val")?.Value,
+            MaxValueRaw: dynamicFilter.Attribute("maxVal")?.Value,
+            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
     }
 
     private static WorksheetAutoFilterTop10Model? ReadTop10(XElement? top10)
@@ -395,12 +442,58 @@ internal static class XlsxWorksheetAutoFilterMapper
                 continue;
             }
 
+            if (filterColumn.DynamicFilter is { } dynamicFilter)
+            {
+                if (!IsAverageDynamicFilter(dynamicFilter, out var above))
+                    continue;
+
+                yield return new WorksheetAutoFilterState(
+                    column,
+                    null,
+                    false,
+                    BuildAverageKeptRows(sheet, range, column, above));
+                continue;
+            }
+
             yield return new WorksheetAutoFilterState(
                 column,
                 new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
                 filterColumn.IncludeBlank,
                 null);
         }
+    }
+
+    private static bool IsAverageDynamicFilter(WorksheetAutoFilterDynamicFilterModel dynamicFilter, out bool above)
+    {
+        above = true;
+        if (string.Equals(dynamicFilter.Type, "aboveAverage", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.Equals(dynamicFilter.Type, "belowAverage", StringComparison.OrdinalIgnoreCase))
+        {
+            above = false;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static HashSet<uint> BuildAverageKeptRows(Sheet sheet, GridRange range, uint column, bool above)
+    {
+        var numericRows = new List<(uint Row, double Value)>();
+        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
+        {
+            if (sheet.GetValue(row, column) is NumberValue number)
+                numericRows.Add((row, number.Value));
+        }
+
+        if (numericRows.Count == 0)
+            return [];
+
+        var average = numericRows.Average(item => item.Value);
+        return numericRows
+            .Where(item => above ? item.Value > average : item.Value < average)
+            .Select(item => item.Row)
+            .ToHashSet();
     }
 
     private static HashSet<uint> BuildTop10KeptRows(Sheet sheet, GridRange range, uint column, WorksheetAutoFilterTop10Model top10)
