@@ -12248,6 +12248,37 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedAdditionalWorkbookViews()
+    {
+        var workbook = new Workbook("WorkbookViewsRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdditionalWorkbookView(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.AdditionalViews.Should().NotBeNull();
+        loaded.AdditionalViews = null;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var views = workbookXml.Root!.Element(workbookNs + "bookViews")!.Elements(workbookNs + "workbookView").ToList();
+        views.Should().ContainSingle();
+        views.Single().Attribute("visibility")?.Value.Should().NotBe("hidden");
+        workbookXml.ToString().Should().NotContain("customWorkbookViewFlag");
+    }
+
+    [Fact]
     public void XlsxAdapter_FreshSave_FallsBackWhenAdditionalWorkbookViewNativeXmlIsNotWorkbookView()
     {
         var workbook = new Workbook("AdditionalWorkbookViewFallbackTest")
@@ -13727,6 +13758,7 @@ public partial class FileAdapterSmokeTests
             {
                 ["rightToLeft"] = "1",
                 ["showZeros"] = "0",
+                ["invalid primaryView attr"] = "skip",
                 ["zoomScale"] = "42"
             },
             NativeChildXmls =
@@ -13736,7 +13768,9 @@ public partial class FileAdapterSmokeTests
         };
 
         var saved = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, saved);
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -13750,6 +13784,7 @@ public partial class FileAdapterSmokeTests
         sheetView.Attribute("showZeros")!.Value.Should().Be("0");
         sheetView.Attribute("zoomScale").Should().BeNull("zoomScale is modeled separately");
         sheetView.Element(worksheetNs + "pivotSelection")!.Attribute("pane")!.Value.Should().Be("topRight");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
