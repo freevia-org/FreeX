@@ -153,6 +153,15 @@ public sealed class SparklineDialog : Window
         FocusRangeSelectionInput(textBox);
     }
 
+    public void ApplyRangeSelection(SparklineRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target == SparklineRangeSelectionTarget.Location
+            ? _locationBox
+            : _dataRangeBox;
+        textBox.Text = rangeText;
+        FocusRangeSelectionInput(textBox);
+    }
+
     private static void FocusRangeSelectionInput(TextBox textBox)
     {
         textBox.Focus();
