@@ -244,6 +244,33 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void DataOutlineKeyTips_GroupAndUngroupSelectedRows()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRange(2, 1, 4, 1);
+
+            harness.HandleDirectTopLevelKeyTip(Key.A).Should().BeTrue();
+            harness.HandleKeyTip(Key.G);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Data");
+            harness.KeyTipScope.Should().Be("None");
+            harness.RowOutlineLevel(2).Should().Be(1);
+            harness.RowOutlineLevel(3).Should().Be(1);
+            harness.RowOutlineLevel(4).Should().Be(1);
+
+            harness.HandleDirectTopLevelKeyTip(Key.A).Should().BeTrue();
+            harness.HandleKeyTip(Key.U);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.RowOutlineLevel(2).Should().Be(0);
+            harness.RowOutlineLevel(3).Should().Be(0);
+            harness.RowOutlineLevel(4).Should().Be(0);
+        });
+    }
+
+    [Fact]
     public void HomePasteKeyTip_OpensExcelStylePasteMenu()
     {
         RunSta(() =>
@@ -521,6 +548,26 @@ public sealed class MainWindowRibbonKeyTipTests
             if (_window.FindName("SheetGrid") is SheetGridView sheetGrid)
                 sheetGrid.SelectedRange = new GridRange(address, address);
             PumpDispatcher();
+        }
+
+        public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
+        {
+            var sheet = _workbook.Sheets[0];
+            if (_window.FindName("SheetGrid") is SheetGridView sheetGrid)
+            {
+                sheetGrid.SelectedRanges = null;
+                sheetGrid.SelectedRange = new GridRange(
+                    new CellAddress(sheet.Id, startRow, startCol),
+                    new CellAddress(sheet.Id, endRow, endCol));
+            }
+
+            PumpDispatcher();
+        }
+
+        public int RowOutlineLevel(uint row)
+        {
+            var sheet = _workbook.Sheets[0];
+            return sheet.RowOutlineLevels.TryGetValue(row, out var level) ? level : 0;
         }
 
         public string? ActiveMenuItemGestureText(string header) =>

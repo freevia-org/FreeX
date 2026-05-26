@@ -1,4 +1,8 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -108,6 +112,31 @@ public sealed class GoToDialogsTests
         source.Should().Contain("_addressBox.Focus();");
         source.Should().Contain("_addressBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_addressBox);");
+    }
+
+    [Fact]
+    public void GoToDialogReferenceList_DoubleClickAcceptsSelectedReference()
+    {
+        var sheetId = SheetId.New();
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new GoToDialog(sheetId, defaultAddress: "A1", recentReferences: ["D10"]);
+            var historyList = GetPrivateControl<ListBox>(dialog, "_historyList");
+            dialog.Dispatcher.BeginInvoke(() =>
+            {
+                historyList.SelectedItem = "D10";
+
+                historyList.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                {
+                    RoutedEvent = Control.MouseDoubleClickEvent
+                });
+            }, DispatcherPriority.ApplicationIdle);
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(sheetId, 10, 4),
+                new CellAddress(sheetId, 10, 4)));
+        });
     }
 
     [Fact]
@@ -245,5 +274,13 @@ public sealed class GoToDialogsTests
         GoToSpecialDialog.TryParseChoice("dependents", out kind).Should().BeTrue();
 
         kind.Should().Be(GoToSpecialKind.Dependents);
+    }
+
+    private static T GetPrivateControl<T>(GoToDialog dialog, string fieldName)
+        where T : class
+    {
+        var field = typeof(GoToDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
 }

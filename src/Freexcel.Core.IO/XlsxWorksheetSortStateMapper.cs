@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -26,7 +25,7 @@ internal static class XlsxWorksheetSortStateMapper
                 .ToList()
         };
 
-        ReadNativeAttributes(sortState, model.NativeAttributes, ["ref", "columnSort", "caseSensitive", "sortMethod"]);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(sortState, model.NativeAttributes, ["ref", "columnSort", "caseSensitive", "sortMethod"]);
         return model;
     }
 
@@ -70,7 +69,7 @@ internal static class XlsxWorksheetSortStateMapper
             IconSet = element.Attribute("iconSet")?.Value,
             IconId = element.Attribute("iconId")?.Value
         };
-        ReadNativeAttributes(
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(
             element,
             model.NativeAttributes,
             ["ref", "descending", "sortBy", "customList", "dxfId", "iconSet", "iconId"]);
@@ -94,11 +93,11 @@ internal static class XlsxWorksheetSortStateMapper
         }
 
         var element = new XElement(WorksheetNs + "sortState");
-        ApplyNativeAttributes(element, model.NativeAttributes, ["ref", "columnSort", "caseSensitive", "sortMethod"]);
-        element.SetAttributeValue("ref", NullIfWhiteSpace(model.Reference));
-        element.SetAttributeValue("columnSort", ToBoolAttribute(model.ColumnSort));
-        element.SetAttributeValue("caseSensitive", ToBoolAttribute(model.CaseSensitive));
-        element.SetAttributeValue("sortMethod", NullIfWhiteSpace(model.SortMethod));
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, model.NativeAttributes, ["ref", "columnSort", "caseSensitive", "sortMethod"]);
+        element.SetAttributeValue("ref", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Reference));
+        element.SetAttributeValue("columnSort", XlsxWorksheetNativeMetadataHelpers.ToBoolAttribute(model.ColumnSort));
+        element.SetAttributeValue("caseSensitive", XlsxWorksheetNativeMetadataHelpers.ToBoolAttribute(model.CaseSensitive));
+        element.SetAttributeValue("sortMethod", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.SortMethod));
         foreach (var condition in model.Conditions.Select(ToXml))
             element.Add(condition);
 
@@ -108,17 +107,17 @@ internal static class XlsxWorksheetSortStateMapper
     private static XElement ToXml(WorksheetSortConditionModel model)
     {
         var element = new XElement(WorksheetNs + "sortCondition");
-        ApplyNativeAttributes(
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
             element,
             model.NativeAttributes,
             ["ref", "descending", "sortBy", "customList", "dxfId", "iconSet", "iconId"]);
-        element.SetAttributeValue("ref", NullIfWhiteSpace(model.Reference));
-        element.SetAttributeValue("descending", ToBoolAttribute(model.Descending));
-        element.SetAttributeValue("sortBy", NullIfWhiteSpace(model.SortBy));
-        element.SetAttributeValue("customList", NullIfWhiteSpace(model.CustomList));
-        element.SetAttributeValue("dxfId", NullIfWhiteSpace(model.DxfId));
-        element.SetAttributeValue("iconSet", NullIfWhiteSpace(model.IconSet));
-        element.SetAttributeValue("iconId", NullIfWhiteSpace(model.IconId));
+        element.SetAttributeValue("ref", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Reference));
+        element.SetAttributeValue("descending", XlsxWorksheetNativeMetadataHelpers.ToBoolAttribute(model.Descending));
+        element.SetAttributeValue("sortBy", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.SortBy));
+        element.SetAttributeValue("customList", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.CustomList));
+        element.SetAttributeValue("dxfId", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.DxfId));
+        element.SetAttributeValue("iconSet", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.IconSet));
+        element.SetAttributeValue("iconId", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.IconId));
         return element;
     }
 
@@ -162,54 +161,4 @@ internal static class XlsxWorksheetSortStateMapper
             insertionPoint.AddBeforeSelf(sortState);
     }
 
-    private static void ReadNativeAttributes(
-        XElement element,
-        Dictionary<string, string> target,
-        IReadOnlyCollection<string> modeledNames)
-    {
-        foreach (var attribute in element.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || modeledNames.Contains(attribute.Name.LocalName, StringComparer.Ordinal))
-                continue;
-
-            target[attribute.Name.ToString()] = attribute.Value;
-        }
-    }
-
-    private static void ApplyNativeAttributes(
-        XElement element,
-        Dictionary<string, string> attributes,
-        IReadOnlyCollection<string> modeledNames)
-    {
-        foreach (var attribute in attributes)
-        {
-            if (string.IsNullOrWhiteSpace(attribute.Key) || modeledNames.Contains(attribute.Key, StringComparer.Ordinal))
-                continue;
-
-            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
-        }
-    }
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
-    }
-
-    private static string? ToBoolAttribute(bool? value) =>
-        value is { } boolValue ? boolValue ? "1" : "0" : null;
-
-    private static string? NullIfWhiteSpace(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value;
 }

@@ -888,8 +888,9 @@ public sealed class FormulaEvaluator
     private ScalarValue EvaluateIf(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count is < 2 or > 3) return ErrorValue.Value;
-        var cond = EvaluateNode(node.Arguments[0], context);
+        var cond = EvaluateArrayOperand(node.Arguments[0], context);
         if (cond is ErrorValue e) return e;
+        if (cond is RangeValue conditionRange) return EvaluateIfConditionRange(node, context, conditionRange);
         bool? taken = cond switch
         {
             BoolValue b     => b.Value,
@@ -902,6 +903,50 @@ public sealed class FormulaEvaluator
         if (taken.Value)  return EvaluateArrayOperand(node.Arguments[1], context);
         if (node.Arguments.Count == 3) return EvaluateArrayOperand(node.Arguments[2], context);
         return new BoolValue(false);
+    }
+
+    private ScalarValue EvaluateIfConditionRange(FunctionCallNode node, IEvalContext context, RangeValue conditionRange)
+    {
+        ScalarValue? trueBranch = null;
+        ScalarValue? falseBranch = null;
+        var cells = new ScalarValue[conditionRange.RowCount, conditionRange.ColCount];
+
+        for (int r = 0; r < conditionRange.RowCount; r++)
+            for (int c = 0; c < conditionRange.ColCount; c++)
+            {
+                var condition = conditionRange.Cells[r, c];
+                if (condition is ErrorValue error)
+                {
+                    cells[r, c] = error;
+                    continue;
+                }
+
+                bool? taken = condition switch
+                {
+                    BoolValue b     => b.Value,
+                    NumberValue n   => n.Value != 0,
+                    DateTimeValue d => d.Value != 0,
+                    BlankValue      => false,
+                    _               => null
+                };
+                if (taken is null)
+                {
+                    cells[r, c] = ErrorValue.Value;
+                    continue;
+                }
+
+                var selected = taken.Value
+                    ? trueBranch ??= EvaluateArrayOperand(node.Arguments[1], context)
+                    : falseBranch ??= node.Arguments.Count == 3
+                        ? EvaluateArrayOperand(node.Arguments[2], context)
+                        : new BoolValue(false);
+
+                cells[r, c] = selected is RangeValue selectedRange
+                    ? PickRangeElementForArrayResult(selectedRange, r, c, conditionRange.RowCount, conditionRange.ColCount)
+                    : selected;
+            }
+
+        return new RangeValue(cells, conditionRange.StartRow, conditionRange.StartCol) { SheetName = conditionRange.SheetName };
     }
 
     private ScalarValue EvaluateIfError(FunctionCallNode node, IEvalContext context)
@@ -966,8 +1011,9 @@ public sealed class FormulaEvaluator
     private ScalarValue EvaluateChoose(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count < 2) return ErrorValue.Value;
-        var indexVal = EvaluateNode(node.Arguments[0], context);
+        var indexVal = EvaluateArrayOperand(node.Arguments[0], context);
         if (indexVal is ErrorValue e) return e;
+        if (indexVal is RangeValue indexRange) return EvaluateChooseIndexRange(node, context, indexRange);
         var coerced = CoerceToNumber(indexVal);
         if (coerced is ErrorValue ec) return ec;
         double rawIdx = ((NumberValue)coerced).Value;
@@ -975,6 +1021,57 @@ public sealed class FormulaEvaluator
         int idx = (int)rawIdx;
         if (idx < 1 || idx >= node.Arguments.Count) return ErrorValue.Value;
         return EvaluateArrayOperand(node.Arguments[idx], context);
+    }
+
+    private ScalarValue EvaluateChooseIndexRange(FunctionCallNode node, IEvalContext context, RangeValue indexRange)
+    {
+        var branchCache = new Dictionary<int, ScalarValue>();
+        var cells = new ScalarValue[indexRange.RowCount, indexRange.ColCount];
+
+        for (int r = 0; r < indexRange.RowCount; r++)
+            for (int c = 0; c < indexRange.ColCount; c++)
+            {
+                var index = CoerceChooseIndex(indexRange.Cells[r, c], node.Arguments.Count);
+                if (index is null)
+                {
+                    cells[r, c] = ErrorValue.Value;
+                    continue;
+                }
+
+                if (!branchCache.TryGetValue(index.Value, out var selected))
+                {
+                    selected = EvaluateArrayOperand(node.Arguments[index.Value], context);
+                    branchCache[index.Value] = selected;
+                }
+
+                cells[r, c] = selected is RangeValue selectedRange
+                    ? PickRangeElementForArrayResult(selectedRange, r, c, indexRange.RowCount, indexRange.ColCount)
+                    : selected;
+            }
+
+        return new RangeValue(cells, indexRange.StartRow, indexRange.StartCol) { SheetName = indexRange.SheetName };
+    }
+
+    private static ScalarValue PickRangeElementForArrayResult(RangeValue range, int row, int col, int targetRows, int targetCols)
+    {
+        if (range.RowCount == targetRows && range.ColCount == targetCols)
+            return range.Cells[row, col];
+
+        if (range.RowCount == 1 && range.ColCount == 1)
+            return range.Cells[0, 0];
+
+        return ErrorValue.Value;
+    }
+
+    private int? CoerceChooseIndex(ScalarValue value, int argumentCount)
+    {
+        if (value is ErrorValue) return null;
+        var coerced = CoerceToNumber(value);
+        if (coerced is not NumberValue number) return null;
+        double rawIdx = number.Value;
+        if (!double.IsFinite(rawIdx)) return null;
+        int idx = (int)rawIdx;
+        return idx >= 1 && idx < argumentCount ? idx : null;
     }
 
     private ScalarValue EvaluateIfs(FunctionCallNode node, IEvalContext context)

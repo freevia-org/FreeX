@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -29,16 +28,10 @@ internal static class XlsxWorksheetSingleXmlCellMapper
             var cell = new WorksheetSingleXmlCellModel
             {
                 Id = ReadOptionalInt(cellElement.Attribute("id")?.Value),
-                Reference = NullIfWhiteSpace(cellElement.Attribute("r")?.Value),
+                Reference = XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(cellElement.Attribute("r")?.Value),
                 XmlCellPropertyId = ReadOptionalInt(cellElement.Attribute("xmlCellPrId")?.Value)
             };
-            foreach (var attribute in cellElement.Attributes())
-            {
-                if (attribute.IsNamespaceDeclaration || IsModeledSingleXmlCellAttribute(attribute.Name.LocalName))
-                    continue;
-
-                cell.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-            }
+            XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(cellElement, cell.NativeAttributes, ["id", "r", "xmlCellPrId"]);
 
             if (cell.Id is not null ||
                 cell.Reference is not null ||
@@ -95,7 +88,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
             if (string.IsNullOrWhiteSpace(attribute.Key))
                 continue;
 
-            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
+            XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(element, attribute.Key, attribute.Value);
         }
 
         foreach (var cell in model.Cells)
@@ -110,7 +103,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSingleXmlCellAttribute(attribute.Key))
                     continue;
 
-                TrySetNativeAttribute(cellElement, attribute.Key, attribute.Value);
+                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(cellElement, attribute.Key, attribute.Value);
             }
 
             if (cellElement.HasAttributes)
@@ -140,29 +133,9 @@ internal static class XlsxWorksheetSingleXmlCellMapper
             ? result
             : null;
 
-    private static string? NullIfWhiteSpace(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value;
-
     private static void SetOptionalIntAttribute(XElement element, string name, int? value)
     {
         if (value is not null)
             element.SetAttributeValue(name, value.Value.ToString(CultureInfo.InvariantCulture));
-    }
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
     }
 }
