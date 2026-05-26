@@ -124,6 +124,9 @@ public partial class GridView
             case GridQuickAnalysisPreviewVisualKind.ColumnChart:
                 DrawQuickAnalysisColumnChartPreview(dc, rect.Value);
                 break;
+            case GridQuickAnalysisPreviewVisualKind.LineChart:
+                DrawQuickAnalysisLineChartPreview(dc, rect.Value);
+                break;
         }
     }
 
@@ -206,6 +209,34 @@ public partial class GridView
             var left = chartRect.Left + i * (barWidth + gap);
             dc.DrawRectangle(QuickAnalysisColumnChartPreviewBrush, null, new Rect(left, baseline - height, barWidth, height));
         }
+    }
+
+    private static void DrawQuickAnalysisLineChartPreview(DrawingContext dc, Rect previewRect)
+    {
+        var chartRect = new Rect(
+            previewRect.Left + Math.Min(12, previewRect.Width * 0.12),
+            previewRect.Top + Math.Min(10, previewRect.Height * 0.18),
+            Math.Max(0, previewRect.Width * 0.72),
+            Math.Max(0, previewRect.Height * 0.58));
+        if (chartRect.Width <= 0 || chartRect.Height <= 0)
+            return;
+
+        var baseline = chartRect.Bottom;
+        dc.DrawLine(QuickAnalysisColumnChartAxisPen, new Point(chartRect.Left, baseline), new Point(chartRect.Right, baseline));
+
+        var points = new[]
+        {
+            new Point(chartRect.Left, chartRect.Top + chartRect.Height * 0.74),
+            new Point(chartRect.Left + chartRect.Width * 0.32, chartRect.Top + chartRect.Height * 0.32),
+            new Point(chartRect.Left + chartRect.Width * 0.66, chartRect.Top + chartRect.Height * 0.56),
+            new Point(chartRect.Right, chartRect.Top + chartRect.Height * 0.18)
+        };
+
+        for (var i = 1; i < points.Length; i++)
+            dc.DrawLine(QuickAnalysisPreviewPen, points[i - 1], points[i]);
+
+        foreach (var point in points)
+            dc.DrawEllipse(QuickAnalysisColumnChartPreviewBrush, null, point, 2.5, 2.5);
     }
 
     private void RenderSelection(DrawingContext dc)

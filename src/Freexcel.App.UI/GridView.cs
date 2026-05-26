@@ -25,7 +25,8 @@ public enum GridQuickAnalysisPreviewVisualKind
     LineSparkline,
     ColumnSparkline,
     WinLossSparkline,
-    ColumnChart
+    ColumnChart,
+    LineChart
 }
 
 /// <summary>
