@@ -5466,6 +5466,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Row_NoArgument_ReturnsCurrentCellRow()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=ROW()", sheet, currentCell: new CellAddress(sheet.Id, 7, 4))
+            .Should().Be(new NumberValue(7));
+    }
+
+    [Fact]
     public void Column_Range_ReturnsFirstColumn()
     {
         var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));
@@ -5479,6 +5488,15 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((5, 2, new NumberValue(1)));
 
         _eval.Evaluate("=COLUMN(B5)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Column_NoArgument_ReturnsCurrentCellColumn()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=COLUMN()", sheet, currentCell: new CellAddress(sheet.Id, 7, 4))
+            .Should().Be(new NumberValue(4));
     }
 
     [Fact] public void Replace_Middle_ReplacesCorrectly() =>
@@ -5952,10 +5970,32 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SUM(INDIRECT(\"Data!A1:A3\"))", sheet, wb).Should().Be(new NumberValue(6));
     }
 
+    [Fact] public void Indirect_NamedRangeString_ReturnsRangeValue()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
+        wb.DefineNamedRange("MyData", new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1)));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"MyData\"))", sheet, wb).Should().Be(new NumberValue(6));
+    }
+
     [Fact] public void Indirect_R1C1String_ReturnsValue()
     {
         var sheet = MakeSheet((2, 3, new NumberValue(99)));
         _eval.Evaluate("=INDIRECT(\"R2C3\",FALSE)", sheet).Should().Be(new NumberValue(99));
+    }
+
+    [Fact] public void Indirect_RelativeR1C1String_ReturnsValueRelativeToCurrentCell()
+    {
+        var sheet = MakeSheet((4, 6, new NumberValue(123)));
+
+        _eval.Evaluate("=INDIRECT(\"R[-1]C[1]\",FALSE)", sheet, currentCell: new CellAddress(sheet.Id, 5, 5))
+            .Should().Be(new NumberValue(123));
     }
 
     [Fact] public void Indirect_InvalidR1C1String_ReturnsRefError()

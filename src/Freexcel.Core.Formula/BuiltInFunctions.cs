@@ -1117,7 +1117,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Row(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args.Count == 0) return ErrorValue.Value; // no cell reference available without context
+        if (args.Count == 0) return ctx.CurrentCellAddress is { } cell
+            ? new NumberValue(cell.Row)
+            : ErrorValue.Value;
         if (args[0] is ErrorValue e) return e;
         if (args[0] is RangeValue rv) return new NumberValue(rv.StartRow);
         return ErrorValue.Value;
@@ -1125,7 +1127,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Column(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args.Count == 0) return ErrorValue.Value;
+        if (args.Count == 0) return ctx.CurrentCellAddress is { } cell
+            ? new NumberValue(cell.Col)
+            : ErrorValue.Value;
         if (args[0] is ErrorValue e) return e;
         if (args[0] is RangeValue rv) return new NumberValue(rv.StartCol);
         return ErrorValue.Value;
@@ -1546,14 +1550,36 @@ public static partial class BuiltInFunctions
         return row > 0 && row <= CellAddress.MaxRow && col > 0 && col <= CellAddress.MaxCol;
     }
 
-    private static bool TryParseR1C1Ref(string cellRef, out uint row, out uint col)
+    private static bool TryParseR1C1Ref(string cellRef, CellAddress? currentCell, out uint row, out uint col)
     {
         row = 0; col = 0;
-        var match = Regex.Match(cellRef, @"^R(\d+)C(\d+)$", RegexOptions.IgnoreCase);
+        var match = Regex.Match(cellRef, @"^R(?:(\d+)|\[(-?\d+)\])?C(?:(\d+)|\[(-?\d+)\])?$", RegexOptions.IgnoreCase);
         if (!match.Success) return false;
-        if (!uint.TryParse(match.Groups[1].Value, out row)) return false;
-        if (!uint.TryParse(match.Groups[2].Value, out col)) return false;
-        return row > 0 && row <= CellAddress.MaxRow && col > 0 && col <= CellAddress.MaxCol;
+        if (!ResolveR1C1Part(match.Groups[1].Value, match.Groups[2].Value, currentCell?.Row, CellAddress.MaxRow, out row))
+            return false;
+        if (!ResolveR1C1Part(match.Groups[3].Value, match.Groups[4].Value, currentCell?.Col, CellAddress.MaxCol, out col))
+            return false;
+        return true;
+    }
+
+    private static bool ResolveR1C1Part(string absoluteText, string relativeText, uint? current, uint max, out uint value)
+    {
+        value = 0;
+        if (absoluteText.Length > 0)
+            return uint.TryParse(absoluteText, out value) && value > 0 && value <= max;
+
+        if (current is null) return false;
+
+        long resolved = current.Value;
+        if (relativeText.Length > 0)
+        {
+            if (!long.TryParse(relativeText, out var offset)) return false;
+            resolved += offset;
+        }
+
+        if (resolved <= 0 || resolved > max) return false;
+        value = (uint)resolved;
+        return true;
     }
 
 

@@ -132,7 +132,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         var stack = CreateTabPanel();
         var layoutPanel = PivotDialogLayout.CreateGroupPanel();
         AddLabeledControl(layoutPanel, "_Report layout", _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
-        AddLabeledControl(layoutPanel, "When in compact form indent row labels", _compactIndentBox);
+        AddLabeledControl(layoutPanel, "When in compact form _indent row labels", _compactIndentBox);
         AddLabeledControl(layoutPanel, "Display fields in report _filter area", _pageFieldLayoutBox, PageFieldLayoutLabels);
         AddLabeledControl(layoutPanel, "Report filter fields per _column", _pageWrapBox);
         AddCheckBox(layoutPanel, _repeatItemLabelsBox);

@@ -114,23 +114,23 @@ public sealed class ChartDataLabelsDialog : Window
         {
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _showBox);
-            ChartDialogHelpers.AddCombo(stack, "Position", _positionBox, Enum.GetValues<ChartDataLabelPosition>());
+            ChartDialogHelpers.AddCombo(stack, "_Position", _positionBox, Enum.GetValues<ChartDataLabelPosition>());
             ChartDialogHelpers.AddCheck(stack, _categoryBox);
             ChartDialogHelpers.AddCheck(stack, _seriesBox);
             ChartDialogHelpers.AddCheck(stack, _percentageBox);
-            ChartDialogHelpers.AddCombo(stack, "Separator", _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
-            ChartDialogHelpers.AddCombo(stack, "Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            ChartDialogHelpers.AddCombo(stack, "_Separator", _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
+            ChartDialogHelpers.AddCombo(stack, "Number _format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
             ChartDialogHelpers.AddCheck(stack, _calloutsBox);
             root.Children.Add(CreateGroupBox("Label Options", stack));
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, "Fill color", _fillBox);
-            ChartDialogHelpers.AddColorText(stack, "Border color", _borderBox);
-            ChartDialogHelpers.AddColorText(stack, "Text color", _textBox);
-            ChartDialogHelpers.AddNumericText(stack, "Border thickness", _borderThicknessBox, "Enter a border width in points.");
-            ChartDialogHelpers.AddNumericText(stack, "Font size", _fontSizeBox, "Enter a font size in points.");
-            ChartDialogHelpers.AddNumericText(stack, "Text angle", _angleBox, "Enter degrees from -90 to 90.");
+            ChartDialogHelpers.AddColorText(stack, "_Fill color", _fillBox);
+            ChartDialogHelpers.AddColorText(stack, "_Border color", _borderBox);
+            ChartDialogHelpers.AddColorText(stack, "_Text color", _textBox);
+            ChartDialogHelpers.AddNumericText(stack, "_Border thickness", _borderThicknessBox, "Enter a border width in points.");
+            ChartDialogHelpers.AddNumericText(stack, "_Font size", _fontSizeBox, "Enter a font size in points.");
+            ChartDialogHelpers.AddNumericText(stack, "Text _angle", _angleBox, "Enter degrees from -90 to 90.");
             root.Children.Add(CreateGroupBox("Fill & Line", stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));

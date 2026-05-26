@@ -890,7 +890,7 @@ public sealed class PivotWorkflowDialogTests
         foreach (var content in new[]
         {
             "AddLabeledControl(layoutPanel, \"_Report layout\", _reportLayoutBox",
-            "AddLabeledControl(layoutPanel, \"When in compact form indent row labels\", _compactIndentBox",
+            "AddLabeledControl(layoutPanel, \"When in compact form _indent row labels\", _compactIndentBox",
             "AddLabeledControl(formatPanel, \"For _empty cells show:\", _emptyCellsBox",
             "AddLabeledControl(dataPanel, \"Retain items _deleted from the data source\", _missingItemsLimitBox",
             "AddLabeledControl(filtersPanel, \"Subtotal _placement\", _subtotalPlacementBox",
