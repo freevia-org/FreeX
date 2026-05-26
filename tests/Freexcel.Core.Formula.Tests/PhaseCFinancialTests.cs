@@ -558,6 +558,21 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void DollarFractionHelpers_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        AssertApproxColumn(
+            EvalWithData("DOLLARDE(A1:A2,B1:B2)", (1, 1, 1.02), (2, 1, 2.16), (1, 2, 32.0), (2, 2, 16.0)),
+            Calc("DOLLARDE(1.02,32)"),
+            Calc("DOLLARDE(2.16,16)"));
+        AssertApproxColumn(
+            EvalWithData("DOLLARFR(A1:A2,B1:B2)", (1, 1, 1.0625), (2, 1, 2.5), (1, 2, 32.0), (2, 2, 16.0)),
+            Calc("DOLLARFR(1.0625,32)"),
+            Calc("DOLLARFR(2.5,16)"));
+
+        EvalWithData("DOLLARDE(A1:A2,B1:C1)", (1, 1, 1.02), (2, 1, 2.16), (1, 2, 32.0), (1, 3, 16.0)).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Dollarfr_InverseOfDollarde()
     {
         // DOLLARFR(1.0625, 32) = 1 + 0.0625*32/100 = 1.02
@@ -609,6 +624,27 @@ public class PhaseCFinancialTests
             EvalWithData("RECEIVED(43831,44197,100,A1:A2,0)", (1, 1, 0.05), (2, 1, 0.04)),
             Calc("RECEIVED(43831,44197,100,0.05,0)"),
             Calc("RECEIVED(43831,44197,100,0.04,0)"));
+    }
+
+    [Fact]
+    public void DiscountSettlementFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 44197.0), (2, 2, 44228.0),
+            (1, 3, 97.0), (2, 3, 98.0),
+            (1, 4, 100.0), (2, 4, 110.0),
+            (1, 5, 0.0), (2, 5, 1.0),
+            (1, 6, 90.0), (2, 6, 95.0),
+            (1, 7, 0.05), (2, 7, 0.04)
+        };
+
+        AssertApproxColumn(EvalWithData("DISC(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2)", cells), Calc("DISC(43831,44197,97,100,0)"), Calc("DISC(43862,44228,98,110,1)"));
+        AssertApproxColumn(EvalWithData("INTRATE(A1:A2,B1:B2,F1:F2,D1:D2,E1:E2)", cells), Calc("INTRATE(43831,44197,90,100,0)"), Calc("INTRATE(43862,44228,95,110,1)"));
+        AssertApproxColumn(EvalWithData("RECEIVED(A1:A2,B1:B2,D1:D2,G1:G2,E1:E2)", cells), Calc("RECEIVED(43831,44197,100,0.05,0)"), Calc("RECEIVED(43862,44228,110,0.04,1)"));
+
+        EvalWithData("DISC(A1:A2,B1:C1,97,100,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -702,6 +738,24 @@ public class PhaseCFinancialTests
             EvalWithData("TBILLYIELD(43831,43921,A1:A2)", (1, 1, 98.75), (2, 1, 99.0)),
             Calc("TBILLYIELD(43831,43921,98.75)"),
             Calc("TBILLYIELD(43831,43921,99)"));
+    }
+
+    [Fact]
+    public void TreasuryBillFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 43921.0), (2, 2, 43952.0),
+            (1, 3, 0.05), (2, 3, 0.04),
+            (1, 4, 98.75), (2, 4, 99.0)
+        };
+
+        AssertApproxColumn(EvalWithData("TBILLEQ(A1:A2,B1:B2,C1:C2)", cells), Calc("TBILLEQ(43831,43921,0.05)"), Calc("TBILLEQ(43862,43952,0.04)"));
+        AssertApproxColumn(EvalWithData("TBILLPRICE(A1:A2,B1:B2,C1:C2)", cells), Calc("TBILLPRICE(43831,43921,0.05)"), Calc("TBILLPRICE(43862,43952,0.04)"));
+        AssertApproxColumn(EvalWithData("TBILLYIELD(A1:A2,B1:B2,D1:D2)", cells), Calc("TBILLYIELD(43831,43921,98.75)"), Calc("TBILLYIELD(43862,43952,99)"));
+
+        EvalWithData("TBILLEQ(A1:A2,B1:C1,0.05)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -1015,6 +1069,28 @@ public class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("ODDFYIELD(43900,44562,43831,44197,0.05,A1:A2,100,2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("ODDFYIELD(43900,44562,43831,44197,0.05,99,100,2)"), Calc("ODDFYIELD(43900,44562,43831,44197,0.05,101,100,2)"));
         AssertApproxColumn(EvalWithData("ODDLPRICE(43900,44197,43831,0.05,A1:A2,100,2)", rates), Calc("ODDLPRICE(43900,44197,43831,0.05,0.05,100,2)"), Calc("ODDLPRICE(43900,44197,43831,0.05,0.06,100,2)"));
         AssertApproxColumn(EvalWithData("ODDLYIELD(43900,44197,43831,0.05,A1:A2,100,2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("ODDLYIELD(43900,44197,43831,0.05,99,100,2)"), Calc("ODDLYIELD(43900,44197,43831,0.05,101,100,2)"));
+    }
+
+    [Fact]
+    public void Accrint_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 43831.0), (2, 2, 43862.0),
+            (1, 3, 44197.0), (2, 3, 44228.0),
+            (1, 4, 0.05), (2, 4, 0.06),
+            (1, 5, 1000.0), (2, 5, 1200.0),
+            (1, 6, 2.0), (2, 6, 4.0),
+            (1, 7, 0.0), (2, 7, 1.0)
+        };
+
+        AssertApproxColumn(
+            EvalWithData("ACCRINT(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2,F1:F2,G1:G2)", cells),
+            Calc("ACCRINT(43831,43831,44197,0.05,1000,2,0)"),
+            Calc("ACCRINT(43862,43862,44228,0.06,1200,4,1)"));
+
+        EvalWithData("ACCRINT(A1:A2,B1:C1,44197,0.05,1000,2,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

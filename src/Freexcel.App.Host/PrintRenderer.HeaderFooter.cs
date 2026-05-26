@@ -49,7 +49,9 @@ public static partial class PrintRenderer
         double printableW,
         double printableH,
         int pageNumber,
-        int totalPages)
+        int totalPages,
+        bool draftQuality,
+        bool blackAndWhite)
     {
         var visual = new DrawingVisual();
         var textOverlays = new List<PdfTextOverlay>();
@@ -71,7 +73,8 @@ public static partial class PrintRenderer
             sheetName,
             alignHeaderFooterWithMargins,
             pageNumber,
-            totalPages);
+            totalPages,
+            draftQuality);
 
         var rowHeight = measurement.RowHeight;
         var colWidth = measurement.ColumnWidth;
@@ -102,7 +105,7 @@ public static partial class PrintRenderer
             gridLeft,
             gridTop);
 
-        if (printComments == WorksheetPrintComments.AsDisplayed)
+        if (!draftQuality && printComments == WorksheetPrintComments.AsDisplayed)
         {
             DrawDisplayedComments(
                 dc,
@@ -115,7 +118,8 @@ public static partial class PrintRenderer
                 colWidth,
                 rowHeight,
                 pageW,
-                pageH);
+                pageH,
+                blackAndWhite);
         }
 
         return (visual, textOverlays);

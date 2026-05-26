@@ -23,17 +23,18 @@ public static partial class PrintRenderer
         string sheetName,
         bool alignWithMargins,
         int pageNumber,
-        int totalPages)
+        int totalPages,
+        bool draftQuality)
     {
         var typeface = new Typeface("Segoe UI");
-        var headerHeight = CalculateHeaderFooterLineHeight(header, headerPictures);
-        var footerHeight = CalculateHeaderFooterLineHeight(footer, footerPictures);
+        var headerHeight = CalculateHeaderFooterLineHeight(header, headerPictures, draftQuality);
+        var footerHeight = CalculateHeaderFooterLineHeight(footer, footerPictures, draftQuality);
         var headerY = Math.Max(4, headerMargin - headerHeight);
         var footerY = Math.Max(4, pageH - footerMargin - footerHeight);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, typeface, pageNumber, totalPages, workbookName, sheetName);
-        DrawHeaderFooterLine(dc, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, typeface, pageNumber, totalPages, workbookName, sheetName);
+        DrawHeaderFooterLine(dc, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, typeface, pageNumber, totalPages, workbookName, sheetName, draftQuality);
+        DrawHeaderFooterLine(dc, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, typeface, pageNumber, totalPages, workbookName, sheetName, draftQuality);
     }
 
     private static void DrawHeaderFooterLine(
@@ -49,7 +50,8 @@ public static partial class PrintRenderer
         int pageNumber,
         int totalPages,
         string workbookName,
-        string sheetName)
+        string sheetName,
+        bool draftQuality)
     {
         var left = ExpandHeaderFooterText(value.Left, pageNumber, totalPages, workbookName, sheetName, DateTime.Now);
         var center = ExpandHeaderFooterText(value.Center, pageNumber, totalPages, workbookName, sheetName, DateTime.Now);
@@ -61,9 +63,9 @@ public static partial class PrintRenderer
         var centerRect = new Rect((pageW - sectionWidth) / 2, y, sectionWidth, lineHeight);
         var rightRect = new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight);
 
-        var leftPicture = HasHeaderFooterPictureToken(value.Left) ? pictures.Left : null;
-        var centerPicture = HasHeaderFooterPictureToken(value.Center) ? pictures.Center : null;
-        var rightPicture = HasHeaderFooterPictureToken(value.Right) ? pictures.Right : null;
+        var leftPicture = !draftQuality && HasHeaderFooterPictureToken(value.Left) ? pictures.Left : null;
+        var centerPicture = !draftQuality && HasHeaderFooterPictureToken(value.Center) ? pictures.Center : null;
+        var rightPicture = !draftQuality && HasHeaderFooterPictureToken(value.Right) ? pictures.Right : null;
 
         DrawHeaderFooterPicture(dc, leftPicture, leftRect, TextAlignment.Left);
         DrawHeaderFooterPicture(dc, centerPicture, centerRect, TextAlignment.Center);
