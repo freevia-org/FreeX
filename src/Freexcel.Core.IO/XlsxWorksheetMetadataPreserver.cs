@@ -642,6 +642,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
         if (sourceBlockName == workbookNs + "dataConsolidate")
             return sheet.DataConsolidation is null;
 
+        if (sourceBlockName == workbookNs + "singleXmlCells")
+            return sheet.SingleXmlCells is null;
+
         return false;
     }
 }
