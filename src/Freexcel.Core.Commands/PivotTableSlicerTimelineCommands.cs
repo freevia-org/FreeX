@@ -217,7 +217,8 @@ public sealed class AddTimelineCommand : IWorkbookCommand
             SourcePivotTableName = target.Value.PivotTable.Name,
             SourceFieldName = headers[sourceFieldIndex],
             StartDate = dateBounds.Start,
-            EndDate = dateBounds.End
+            EndDate = dateBounds.End,
+            DrawingAnchor = PivotTableFloatingControlAnchor.CreateDefault(target.Value.PivotTable)
         };
         ctx.Workbook.Timelines.Add(timeline);
         _addedTimeline = timeline;

@@ -2731,6 +2731,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Randarray_AcceptsSpilledScalarControlArguments()
+    {
+        var result = _eval.Evaluate("=RANDARRAY(SEQUENCE(1,,2),SEQUENCE(1,,2),SEQUENCE(1,,5),SEQUENCE(1,,7),SEQUENCE(1,,TRUE))", MakeSheet());
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        foreach (var value in rv.Cells)
+        {
+            var number = value.Should().BeOfType<NumberValue>().Subject.Value;
+            number.Should().Be(Math.Truncate(number));
+            number.Should().BeInRange(5, 7);
+        }
+    }
+
+    [Fact]
     public void Randarray_WholeNumberIntegerRangeOverflow_ReturnsValueError()
     {
         _eval.Evaluate("=RANDARRAY(1,1,-9223372036854775808,9223372036854775807,TRUE)", MakeSheet()).Should().Be(ErrorValue.Value);
@@ -6043,6 +6059,22 @@ public class FunctionLibraryTests
     }
 
     // ── FILTER ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Sequence_AcceptsSpilledScalarControlArguments()
+    {
+        var result = _eval.Evaluate("=SEQUENCE(SEQUENCE(1,,2),SEQUENCE(1,,3),SEQUENCE(1,,5),SEQUENCE(1,,2))", MakeSheet());
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(3);
+        rv.Cells[0, 0].Should().Be(new NumberValue(5));
+        rv.Cells[0, 1].Should().Be(new NumberValue(7));
+        rv.Cells[0, 2].Should().Be(new NumberValue(9));
+        rv.Cells[1, 0].Should().Be(new NumberValue(11));
+        rv.Cells[1, 1].Should().Be(new NumberValue(13));
+        rv.Cells[1, 2].Should().Be(new NumberValue(15));
+    }
 
     [Fact]
     public void Sequence_NonFiniteRows_ReturnsValueError()

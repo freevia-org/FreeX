@@ -148,7 +148,8 @@ public sealed class AddSlicerCommand : IWorkbookCommand
             Name = _slicerName.Trim(),
             CacheName = $"Slicer_{PivotTableSlicerTimelineCommandHelpers.SanitizeCacheName(_slicerName, "Slicer")}",
             SourcePivotTableName = target.Value.PivotTable.Name,
-            SourceFieldName = headers.First(header => string.Equals(header, _sourceFieldName, StringComparison.CurrentCultureIgnoreCase))
+            SourceFieldName = headers.First(header => string.Equals(header, _sourceFieldName, StringComparison.CurrentCultureIgnoreCase)),
+            DrawingAnchor = PivotTableFloatingControlAnchor.CreateDefault(target.Value.PivotTable)
         };
         ctx.Workbook.Slicers.Add(slicer);
         _addedSlicer = slicer;
@@ -160,5 +161,21 @@ public sealed class AddSlicerCommand : IWorkbookCommand
         if (_addedSlicer is not null)
             ctx.Workbook.Slicers.Remove(_addedSlicer);
         _addedSlicer = null;
+    }
+}
+
+internal static class PivotTableFloatingControlAnchor
+{
+    private const uint DefaultWidthColumns = 3;
+    private const uint DefaultHeightRows = 8;
+
+    public static DrawingAnchorRange CreateDefault(PivotTableModel pivotTable)
+    {
+        var fromColumn = pivotTable.TargetRange.End.Col;
+        var fromRow = pivotTable.TargetRange.Start.Row > 0 ? pivotTable.TargetRange.Start.Row - 1 : 0;
+
+        return new DrawingAnchorRange(
+            new DrawingAnchorPoint(fromColumn, 0, fromRow, 0),
+            new DrawingAnchorPoint(fromColumn + DefaultWidthColumns, 0, fromRow + DefaultHeightRows, 0));
     }
 }
