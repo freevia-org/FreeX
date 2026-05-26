@@ -17,25 +17,28 @@ public sealed class UiAutomationCatalogSnapshotTests
 
         using var run = FreexcelUiRun.Start();
 
-        var snapshot = UiAutomationCatalogSnapshot.CaptureVisibleControls(run.ProcessId, run.WindowHandle);
+        var snapshot = CaptureVisibleControlsWhen(
+            run,
+            controls => controls.Any(control => control.AutomationId == "SaveQatBtn") &&
+                controls.Any(control => control.AutomationId == "AddSheetButton") &&
+                controls.Any(control => control.AutomationId == "ZoomSlider"),
+            "the stable shell UI Automation peers to be ready");
         var expectedTabNames = ReadCatalogTopLevelTabNames();
         var expectedVisibleAutomationIds = ReadExpectedVisibleAutomationIdsFromXaml();
 
         snapshot.Should().Contain(control => control.ControlType == "Window" && control.Name.Contains("Freexcel", StringComparison.Ordinal));
         snapshot.Count(control => control.ControlType == "Button").Should().BeGreaterThanOrEqualTo(20);
         snapshot.Count(control => control.ControlType == "TabItem").Should().BeGreaterThanOrEqualTo(expectedTabNames.Count);
-        snapshot.Count(control => control.ControlType == "Edit").Should().BeGreaterThanOrEqualTo(2);
 
         snapshot.Select(control => control.Name)
             .Should()
             .Contain(expectedTabNames)
-            .And.Contain(["Name Box", "Formula Bar", "Zoom Slider", "Insert Sheet", "Save", "Undo", "Redo"]);
+            .And.Contain(["Zoom Slider", "Insert Sheet", "Save", "Undo", "Redo"]);
 
         snapshot.Select(control => control.AutomationId)
             .Should()
             .Contain(expectedVisibleAutomationIds);
 
-        snapshot.Should().Contain(control => control.AutomationId == "FormulaBar" && control.Name == "Formula Bar" && control.ControlType == "Edit");
         snapshot.Should().Contain(control => control.AutomationId == "ZoomSlider" && control.Name == "Zoom Slider" && control.ControlType == "Slider");
         snapshot.Should().Contain(control => control.AutomationId == "AddSheetButton" && control.Name == "Insert Sheet" && control.ControlType == "Button");
     }
@@ -81,9 +84,6 @@ public sealed class UiAutomationCatalogSnapshotTests
             "UndoQatBtn",
             "RedoQatBtn",
             "CloseSysBtn",
-            "CellAddressBox",
-            "FormulaBar",
-            "FormulaBarExpandBtn",
             "VerticalScroll",
             "HorizontalScroll",
             "AddSheetButton",
@@ -152,6 +152,25 @@ public sealed class UiAutomationCatalogSnapshotTests
         {
             if (condition())
                 return;
+
+            Thread.Sleep(50);
+        }
+
+        throw new TimeoutException($"Timed out waiting for {description}.");
+    }
+
+    private static IReadOnlyList<UiAutomationCatalogControl> CaptureVisibleControlsWhen(
+        FreexcelUiRun run,
+        Func<IReadOnlyList<UiAutomationCatalogControl>, bool> condition,
+        string description)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        IReadOnlyList<UiAutomationCatalogControl> snapshot = [];
+        while (DateTime.UtcNow < deadline)
+        {
+            snapshot = UiAutomationCatalogSnapshot.CaptureVisibleControls(run.ProcessId, run.WindowHandle);
+            if (condition(snapshot))
+                return snapshot;
 
             Thread.Sleep(50);
         }

@@ -169,11 +169,14 @@ internal sealed class FreexcelUiRun : IDisposable
     {
         var appExe = ResolveAppExecutable();
         var artifacts = CreateArtifactDirectory();
-        var process = Process.Start(new ProcessStartInfo(appExe)
+        var startInfo = new ProcessStartInfo(appExe)
         {
             WorkingDirectory = Path.GetDirectoryName(appExe)!,
             UseShellExecute = false
-        }) ?? throw new InvalidOperationException("Failed to launch Freexcel.");
+        };
+        startInfo.Environment["APPDATA"] = artifacts.FullName;
+
+        var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to launch Freexcel.");
 
         var window = WaitForWindow(process, TimeSpan.FromSeconds(20));
         Native.ShowWindow(window, Native.SW_RESTORE);
