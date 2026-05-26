@@ -124,7 +124,7 @@ public partial class MainWindow
     private void FormatRowHeightMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new RowHeightDialog { Owner = this };
+        var dialog = new RowHeightDialog(GetSelectedRowHeightDialogValue(range)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -138,6 +138,17 @@ public partial class MainWindow
             return;
         UpdateViewport();
     }
+
+    private double GetSelectedRowHeightDialogValue(GridRange range)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return 20;
+
+        var (startRow, _) = SelectionRangeService.GetRowSpan(range);
+        return sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight;
+    }
+
     private void FormatAutoRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -148,7 +159,7 @@ public partial class MainWindow
     private void FormatColWidthMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new ColumnWidthDialog { Owner = this };
+        var dialog = new ColumnWidthDialog(GetSelectedColumnWidthDialogValue(range)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -162,6 +173,17 @@ public partial class MainWindow
             return;
         UpdateViewport();
     }
+
+    private double GetSelectedColumnWidthDialogValue(GridRange range)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return 8.43;
+
+        var (startCol, _) = SelectionRangeService.GetColumnSpan(range);
+        return sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth;
+    }
+
     private void FormatAutoColMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;

@@ -246,6 +246,24 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void HomeFormatKeyTip_OpensRowAndColumnSizingMenu()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.H, Key.O);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Home");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Row Height...").Should().Be("R");
+            harness.ActiveMenuItemGestureText("AutoFit Row Height").Should().Be("A");
+            harness.ActiveMenuItemGestureText("Column Width...").Should().Be("C");
+            harness.ActiveMenuItemGestureText("AutoFit Column Width").Should().Be("W");
+        });
+    }
+
+    [Fact]
     public void CommandKeyTipComboBoxInvocation_ExplicitlyFocusesComboBoxBeforeOpening()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyTips.cs"));
