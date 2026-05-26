@@ -58,6 +58,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-extension-list-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
+        "generated-worksheet-phonetic-properties-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -218,6 +219,11 @@ internal static class XlsxCorpusFixtureFactory
               </cellWatches>
             </worksheet>
             """)),
+        "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
+            </worksheet>
+            """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -366,6 +372,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase));
 
     private static void EnsureKnownGapContentTypeOverrides(ZipArchive archive, IReadOnlyCollection<string> partNames)
@@ -511,6 +519,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetCellWatchesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetPhoneticPropertiesFixup(archive);
             return;
         }
 
@@ -923,6 +937,26 @@ internal static class XlsxCorpusFixtureFactory
                 worksheetNs + "cellWatch",
                 new XAttribute("r", "A1"),
                 new XAttribute("nativeWatch", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetPhoneticPropertiesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "phoneticPr").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "phoneticPr",
+            new XAttribute("fontId", "1"),
+            new XAttribute("type", "fullwidthKatakana"),
+            new XAttribute("alignment", "center"),
+            new XAttribute("nativeOnly", "kept")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
