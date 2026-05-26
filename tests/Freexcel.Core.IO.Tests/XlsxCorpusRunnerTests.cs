@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(14, "the generated metadata-pass manifest currently declares fourteen deterministic package-retention rows");
+        rows.Should().HaveCount(15, "the generated metadata-pass manifest currently declares fifteen deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -532,6 +532,42 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-data-consolidation-001");
         AssertWorksheetDataConsolidation(saved, "generated-worksheet-data-consolidation-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetCustomPropertiesRow_RetainsCustomPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-custom-properties-001");
+        AssertWorksheetCustomProperties(source, "generated-worksheet-custom-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-worksheet-custom-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-custom-properties-001");
+        AssertWorksheetCustomProperties(saved, "generated-worksheet-custom-properties-001 saved");
+    }
+
+    private static void AssertWorksheetCustomProperties(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var customProperty = worksheetXml.Root!
+            .Element(worksheetNs + "customProperties")!
+            .Elements(worksheetNs + "customPr")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+
+        customProperty.Attribute("name")!.Value.Should().Be("FreexcelNativeProperty", because);
+        customProperty.Attribute("id")!.Value.Should().Be("1", because);
+        customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept", because);
     }
 
     private static void AssertWorksheetDataConsolidation(Stream package, string because)
