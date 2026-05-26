@@ -443,7 +443,11 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new DataTableDialog(_currentSheetId, range) { Owner = this };
+        DataTableDialog? dialog = null;
+        dialog = new DataTableDialog(
+            _currentSheetId,
+            range,
+            request => ApplyDataTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null)
             return;
         var formulaCell = dialog.Result.FormulaCell;
@@ -468,5 +472,29 @@ public partial class MainWindow
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
+    }
+
+    private void ApplyDataTableRangeSelection(
+        DataTableDialog? dialog,
+        DataTableRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, selectedRange.Start);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 }
