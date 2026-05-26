@@ -248,17 +248,17 @@ internal static partial class DelimitedTextWorkbookReader
             return new BoolValue(true);
         if (string.Equals(trimmed, "FALSE", StringComparison.OrdinalIgnoreCase))
             return new BoolValue(false);
-        if (TryReadError(field, out var error))
+        if (TryReadError(trimmed, out var error))
             return error;
-        if (TryParsePercentage(field, out var percentage))
+        if (TryParsePercentage(trimmed, out var percentage))
             return new NumberValue(percentage);
-        if (TryParseIsoDateTime(field, out var dateTime))
+        if (TryParseIsoDateTime(trimmed, out var dateTime))
             return DateTimeValue.FromDateTime(dateTime);
-        if (TryParseTime(field, out var time))
+        if (TryParseTime(trimmed, out var time))
             return new DateTimeValue(time.TotalDays);
-        if (TryParseCurrency(field, out var currency))
+        if (TryParseCurrency(trimmed, out var currency))
             return new NumberValue(currency);
-        if (double.TryParse(field, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
+        if (double.TryParse(trimmed, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
             return new NumberValue(number);
 
         return new TextValue(field);
@@ -266,28 +266,68 @@ internal static partial class DelimitedTextWorkbookReader
 
     private static bool TryReadError(string field, out ErrorValue error)
     {
-        error = field.Trim().ToUpperInvariant() switch
+        if (string.Equals(field, "#DIV/0!", StringComparison.OrdinalIgnoreCase))
         {
-            "#DIV/0!" => ErrorValue.DivByZero,
-            "#VALUE!" => ErrorValue.Value,
-            "#REF!" => ErrorValue.Ref,
-            "#NAME?" => ErrorValue.Name,
-            "#NULL!" => ErrorValue.Null,
-            "#N/A" => ErrorValue.NA,
-            "#NUM!" => ErrorValue.Num,
-            "#SPILL!" => ErrorValue.Spill,
-            "#CALC!" => ErrorValue.Calc,
-            _ => null!
-        };
+            error = ErrorValue.DivByZero;
+            return true;
+        }
 
-        return error is not null;
+        if (string.Equals(field, "#VALUE!", StringComparison.OrdinalIgnoreCase))
+        {
+            error = ErrorValue.Value;
+            return true;
+        }
+
+        if (string.Equals(field, "#REF!", StringComparison.OrdinalIgnoreCase))
+        {
+            error = ErrorValue.Ref;
+            return true;
+        }
+
+        if (string.Equals(field, "#NAME?", StringComparison.OrdinalIgnoreCase))
+        {
+            error = ErrorValue.Name;
+            return true;
+        }
+
+        if (string.Equals(field, "#NULL!", StringComparison.OrdinalIgnoreCase))
+        {
+            error = ErrorValue.Null;
+            return true;
+        }
+
+        if (string.Equals(field, "#N/A", StringComparison.OrdinalIgnoreCase))
+        {
+            error = ErrorValue.NA;
+            return true;
+        }
+
+        if (string.Equals(field, "#NUM!", StringComparison.OrdinalIgnoreCase))
+        {
+            error = ErrorValue.Num;
+            return true;
+        }
+
+        if (string.Equals(field, "#SPILL!", StringComparison.OrdinalIgnoreCase))
+        {
+            error = ErrorValue.Spill;
+            return true;
+        }
+
+        if (string.Equals(field, "#CALC!", StringComparison.OrdinalIgnoreCase))
+        {
+            error = ErrorValue.Calc;
+            return true;
+        }
+
+        error = null!;
+        return false;
     }
 
     private static bool TryParseIsoDateTime(string field, out DateTime dateTime)
     {
-        var trimmed = field.Trim();
         return DateTime.TryParseExact(
-            trimmed,
+            field,
             DateTimeFormats,
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
@@ -296,9 +336,8 @@ internal static partial class DelimitedTextWorkbookReader
 
     private static bool TryParseTime(string field, out TimeSpan time)
     {
-        var trimmed = field.Trim();
         if (TimeSpan.TryParseExact(
-            trimmed,
+            field,
             TimeSpanFormats,
             CultureInfo.InvariantCulture,
             out time))
@@ -307,7 +346,7 @@ internal static partial class DelimitedTextWorkbookReader
         }
 
         if (DateTime.TryParseExact(
-            trimmed,
+            field,
             TimeOfDayFormats,
             CultureInfo.InvariantCulture,
             DateTimeStyles.NoCurrentDateDefault,
@@ -333,11 +372,10 @@ internal static partial class DelimitedTextWorkbookReader
     private static bool TryParsePercentage(string field, out double value)
     {
         value = default;
-        var trimmed = field.Trim();
-        if (trimmed.Length < 2 || trimmed[^1] != '%')
+        if (field.Length < 2 || field[^1] != '%')
             return false;
 
-        if (!double.TryParse(trimmed[..^1], NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
+        if (!double.TryParse(field[..^1], NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
             return false;
 
         value = number / 100d;
@@ -347,12 +385,11 @@ internal static partial class DelimitedTextWorkbookReader
     private static bool TryParseCurrency(string field, out double value)
     {
         value = default;
-        var trimmed = field.Trim();
-        if (!trimmed.Contains('$', StringComparison.Ordinal))
+        if (!field.Contains('$', StringComparison.Ordinal))
             return false;
 
         return double.TryParse(
-            trimmed,
+            field,
             NumberStyles.Currency,
             CultureInfo.GetCultureInfo("en-US"),
             out value);

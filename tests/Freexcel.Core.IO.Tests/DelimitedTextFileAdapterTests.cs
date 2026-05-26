@@ -18,6 +18,21 @@ public sealed class DelimitedTextFileAdapterTests
             "text load should decode the buffered stream segment without duplicating the full byte array");
     }
 
+    [Fact]
+    public void Load_CoercesValuesWithoutRepeatedTrimOrUppercaseAllocations()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.IO", "DelimitedTextWorkbookReader.cs"));
+        var coercion = source[
+            source.IndexOf("private static ScalarValue CoerceValue", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryReadFormula", StringComparison.Ordinal)];
+
+        coercion.Should().Contain("var trimmed = field.Trim();");
+        coercion.Should().NotContain("ToUpperInvariant()");
+        coercion.Replace("var trimmed = field.Trim();", "", StringComparison.Ordinal)
+            .Should().NotContain("field.Trim()");
+    }
+
     [Theory]
     [InlineData(".txt")]
     [InlineData(".tsv")]
@@ -117,6 +132,22 @@ public sealed class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(ErrorValue.NA);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(ErrorValue.DivByZero);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void Load_TrimsOnceForPaddedCoercionValues()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(" #N/A \t 12.5% \t 2026-05-17 \t 09:30 \t $1,234.50 \r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(ErrorValue.NA);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(0.125));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 4)).Should().Be(new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 5)).Should().Be(new NumberValue(1234.50));
     }
 
     [Fact]
