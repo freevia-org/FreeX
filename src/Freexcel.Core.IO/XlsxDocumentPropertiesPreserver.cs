@@ -31,6 +31,18 @@ internal static class XlsxDocumentPropertiesPreserver
                 XName.Get("PresentationFormat", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
                 XName.Get("Template", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties")
             ]);
+
+        PreserveDocumentPropertyPart(sourceArchive, targetArchive, "docProps/custom.xml");
+    }
+
+    private static void PreserveDocumentPropertyPart(ZipArchive sourceArchive, ZipArchive targetArchive, string partName)
+    {
+        var sourceEntry = sourceArchive.GetEntry(partName);
+        if (sourceEntry is null)
+            return;
+
+        targetArchive.GetEntry(partName)?.Delete();
+        XlsxPackageMetadataMerger.CopyEntry(sourceEntry, targetArchive);
     }
 
     private static void PreserveDocumentPropertyElements(
