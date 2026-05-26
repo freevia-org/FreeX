@@ -18,7 +18,7 @@ public sealed partial class XlsxFileAdapter
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
         var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, generatedArchive);
-        var removedWorksheetPackageParts = GetRemovedWorksheetPackagePartPaths(sourceArchive, context);
+        var removedWorksheetPackageParts = GetExcludedWorksheetPackagePartPaths(sourceArchive, context, workbook);
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(
             sourceArchive,
             generatedArchive,
@@ -60,9 +60,10 @@ public sealed partial class XlsxFileAdapter
     private static bool HasSourcePackagePart(ZipArchive archive, string prefix) =>
         archive.Entries.Any(entry => entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
-    private static IReadOnlySet<string> GetRemovedWorksheetPackagePartPaths(
+    private static IReadOnlySet<string> GetExcludedWorksheetPackagePartPaths(
         ZipArchive sourceArchive,
-        XlsxSourcePackagePreservationContext? context)
+        XlsxSourcePackagePreservationContext? context,
+        Workbook workbook)
     {
         var excludedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (context is null)
@@ -113,7 +114,82 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
+        foreach (var sourceSheet in sourceWorksheetPaths)
+        {
+            if (!context.TargetSheets.ContainsKey(sourceSheet.Key))
+                continue;
+
+            var sheet = workbook.GetSheet(sourceSheet.Key);
+            if (sheet is null || XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet))
+                continue;
+
+            var retainedTargetsOutsideSheet = sourceWorksheetPaths
+                .Where(candidate =>
+                    context.TargetSheets.ContainsKey(candidate.Key) &&
+                    !string.Equals(candidate.SourcePath, sourceSheet.SourcePath, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(path => GetRelationshipDependencyPaths(sourceArchive, path.SourcePath, context.PackageRelNs))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var targetPath in GetLegacyDrawingHfDependencyPaths(
+                         sourceArchive,
+                         sourceSheet.SourcePath,
+                         context.WorkbookNs,
+                         context.RelNs,
+                         context.PackageRelNs))
+            {
+                if (!retainedTargetsOutsideSheet.Contains(targetPath))
+                    excludedPaths.Add(targetPath);
+            }
+        }
+
         return excludedPaths;
+    }
+
+    private static IEnumerable<string> GetLegacyDrawingHfDependencyPaths(
+        ZipArchive archive,
+        string worksheetPath,
+        XNamespace workbookNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            yield break;
+
+        var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+        var legacyDrawingRelIds = worksheetXml.Root?
+            .Element(workbookNs + "legacyDrawingHF")?
+            .Attribute(relNs + "id")?
+            .Value is { Length: > 0 } relId
+            ? new HashSet<string>([relId], StringComparer.Ordinal)
+            : [];
+
+        var relationshipPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
+        var relationshipEntry = archive.GetEntry(relationshipPath);
+        if (relationshipEntry is null)
+            yield break;
+
+        var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
+        var targets = relationshipsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                legacyDrawingRelIds.Contains(relationship.Attribute("Id")?.Value ?? "") ||
+                string.Equals(
+                    relationship.Attribute("Type")?.Value,
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
+                    StringComparison.OrdinalIgnoreCase))
+            .Select(relationship => relationship.Attribute("Target")?.Value)
+            .Where(target => !string.IsNullOrWhiteSpace(target))
+            .ToList()
+            ?? [];
+        foreach (var target in targets)
+        {
+            var vmlPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target!);
+            yield return vmlPath;
+            yield return XlsxPackagePath.GetRelationshipPartPath(vmlPath);
+            foreach (var dependencyPath in GetRelationshipDependencyPaths(archive, vmlPath, packageRelNs))
+                yield return dependencyPath;
+        }
     }
 
     private static IEnumerable<string> GetRelationshipDependencyPaths(
@@ -189,13 +265,18 @@ public sealed partial class XlsxFileAdapter
 
             var generatedEntry = generatedArchive.GetEntry(chartExPartPath);
             if (generatedEntry is not null &&
-                !GeneratedChartMatchesSourceModel(sourceEntry, generatedEntry))
+                !GeneratedChartMatchesSourceModel(sourceEntry, generatedEntry, includeTitle: false))
             {
                 continue;
             }
 
-            generatedArchive.GetEntry(chartExPartPath)?.Delete();
-            XlsxPackageMetadataMerger.CopyEntry(sourceEntry, generatedArchive);
+            if (generatedEntry is not null)
+                CopyChartExWithModeledTitle(sourceEntry, generatedEntry, generatedArchive);
+            else
+            {
+                generatedArchive.GetEntry(chartExPartPath)?.Delete();
+                XlsxPackageMetadataMerger.CopyEntry(sourceEntry, generatedArchive);
+            }
         }
     }
 
@@ -206,10 +287,13 @@ public sealed partial class XlsxFileAdapter
         return XlsxChartPartReader.TryReadSupportedChart(sourceXml, sheetId, out var sourceChart) &&
                workbook.Sheets
                    .SelectMany(sheet => sheet.Charts)
-                   .Any(chart => ChartModelsMatch(sourceChart, chart));
+                   .Any(chart => ChartModelsMatch(sourceChart, chart, includeTitle: false));
     }
 
-    private static bool GeneratedChartMatchesSourceModel(ZipArchiveEntry sourceEntry, ZipArchiveEntry generatedEntry)
+    private static bool GeneratedChartMatchesSourceModel(
+        ZipArchiveEntry sourceEntry,
+        ZipArchiveEntry generatedEntry,
+        bool includeTitle)
     {
         var sheetId = SheetId.New();
         var sourceXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
@@ -220,15 +304,39 @@ public sealed partial class XlsxFileAdapter
             return false;
         }
 
-        return ChartModelsMatch(sourceChart, generatedChart);
+        return ChartModelsMatch(sourceChart, generatedChart, includeTitle);
     }
 
     private static bool ChartModelsMatch(ChartModel sourceChart, ChartModel candidate) =>
+        ChartModelsMatch(sourceChart, candidate, includeTitle: true);
+
+    private static bool ChartModelsMatch(ChartModel sourceChart, ChartModel candidate, bool includeTitle) =>
         sourceChart.Type == candidate.Type &&
         RangesMatchIgnoringSheet(sourceChart.DataRange, candidate.DataRange) &&
         sourceChart.FirstRowIsHeader == candidate.FirstRowIsHeader &&
         sourceChart.FirstColIsCategories == candidate.FirstColIsCategories &&
-        string.Equals(sourceChart.Title ?? "", candidate.Title ?? "", StringComparison.Ordinal);
+        (!includeTitle || string.Equals(sourceChart.Title ?? "", candidate.Title ?? "", StringComparison.Ordinal));
+
+    private static void CopyChartExWithModeledTitle(
+        ZipArchiveEntry sourceEntry,
+        ZipArchiveEntry generatedEntry,
+        ZipArchive generatedArchive)
+    {
+        XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var sourceXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        var generatedXml = XlsxPackageXmlEditor.LoadXml(generatedEntry);
+        var sourceChart = sourceXml.Root?.Element(chartExNs + "chart");
+        var generatedTitle = generatedXml.Root?.Element(chartExNs + "chart")?.Element(chartExNs + "title");
+        if (sourceChart is not null)
+        {
+            sourceChart.Element(chartExNs + "title")?.Remove();
+            if (generatedTitle is not null)
+                sourceChart.AddFirst(new XElement(generatedTitle));
+        }
+
+        generatedArchive.GetEntry(sourceEntry.FullName)?.Delete();
+        XlsxPackageXmlEditor.ReplaceXml(generatedArchive, sourceEntry.FullName, sourceXml);
+    }
 
     private static bool RangesMatchIgnoringSheet(GridRange left, GridRange right) =>
         left.Start.Row == right.Start.Row &&

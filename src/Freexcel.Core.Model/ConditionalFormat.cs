@@ -49,6 +49,11 @@ public enum CfThresholdType
 
 public sealed record CfThresholdModel(CfThresholdType Type, string? Value = null);
 
+/// <summary>
+/// Per-threshold icon override. <see cref="IconSet"/> = "NoIcons" suppresses the icon for that bucket.
+/// </summary>
+public sealed record CfIconOverride(string IconSet, int IconId);
+
 /// <summary>Comparison operator used in CellValue rules.</summary>
 public enum CfOperator
 {
@@ -137,6 +142,13 @@ public sealed class ConditionalFormat
     public bool IconSetShowValue { get; set; } = true;
     public bool IconSetReverse { get; set; }
     public List<CfThresholdModel> IconSetThresholds { get; } = [];
+
+    /// <summary>
+    /// Per-bucket icon overrides, one entry per icon position (lowest to highest).
+    /// When non-empty and the count matches the icon set size, each override specifies
+    /// the exact icon set and index to display for that bucket.
+    /// </summary>
+    public List<CfIconOverride> IconOverrides { get; } = [];
 
     public int TopBottomRank { get; set; } = 10;
     public bool TopBottomPercent { get; set; }
