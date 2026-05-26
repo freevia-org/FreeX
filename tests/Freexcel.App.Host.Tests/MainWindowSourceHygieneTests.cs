@@ -1298,6 +1298,11 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("ScrollChanged=\"SheetTabsScroller_ScrollChanged\"");
         xaml.Should().Contain("SizeChanged=\"SheetTabsScroller_SizeChanged\"");
         xaml.Should().Contain("x:Name=\"AddSheetButton\" Grid.Column=\"2\"");
+        xaml.Should().Contain("Padding=\"10,3,10,1\"");
+        xaml.Should().Contain("MinWidth=\"36\"");
+        xaml.Should().Contain("MinHeight=\"22\"");
+        xaml.Should().Contain("Opacity=\"0.82\"");
+        xaml.Should().NotContain("x:Name=\"AddSheetButton\" Grid.Column=\"2\" Content=\"+\" Width=\"28\" Height=\"22\"");
         xaml.Should().Contain("CornerRadius=\"3,3,0,0\"");
         xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"4\"");
         xaml.Should().Contain("HorizontalAlignment=\"Right\"");
