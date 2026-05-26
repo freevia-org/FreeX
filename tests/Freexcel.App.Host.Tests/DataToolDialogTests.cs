@@ -692,6 +692,10 @@ public sealed class DataToolDialogTests
             "_Remove All"
         })
             source.Should().Contain($"Content = \"{content}\"");
+
+        source.Should().Contain("new Label { Content = \"_Add subtotal to:\", Target = _subtotalColumnPanel");
+        source.Should().Contain("_subtotalColumnPanel.Focusable = true");
+        source.Should().Contain("_subtotalColumnPanel.GotKeyboardFocus");
     }
 
     [Fact]
@@ -703,7 +707,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("SubtotalFunctionChoices");
         source.Should().Contain("ItemsSource = SubtotalFunctionChoices");
         source.Should().Contain("SelectedItem = \"Sum\"");
-        source.Should().Contain("new GroupBox { Header = \"Add subtotal to:\"");
+        source.Should().NotContain("Header = \"Add subtotal to:\"");
         source.Should().Contain("_subtotalColumnPanel");
     }
 
@@ -744,8 +748,8 @@ public sealed class DataToolDialogTests
         source.IndexOf("Content = \"_At each change in:\"", StringComparison.Ordinal).Should()
             .BeLessThan(source.IndexOf("Content = \"_Use function:\"", StringComparison.Ordinal));
         source.IndexOf("Content = \"_Use function:\"", StringComparison.Ordinal).Should()
-            .BeLessThan(source.IndexOf("Header = \"Add subtotal to:\"", StringComparison.Ordinal));
-        source.IndexOf("Header = \"Add subtotal to:\"", StringComparison.Ordinal).Should()
+            .BeLessThan(source.IndexOf("Content = \"_Add subtotal to:\"", StringComparison.Ordinal));
+        source.IndexOf("Content = \"_Add subtotal to:\"", StringComparison.Ordinal).Should()
             .BeLessThan(source.IndexOf("Content = \"_Replace current subtotals\"", StringComparison.Ordinal));
         source.Should().Contain("CreateSubtotalButtonRow");
     }
