@@ -59,6 +59,17 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void UiTestCatalog_EvidenceScreenshotCountMatchesArtifacts()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+        var screenshotCount = Directory.GetFiles(Path.Combine(docsDirectory, "ui-test-artifacts"), "*.png").Length;
+        var declaredCount = int.Parse(UiEvidenceScreenshotCount().Match(catalog).Groups["count"].Value);
+
+        declaredCount.Should().Be(screenshotCount);
+    }
+
+    [Fact]
     public void CurrentDocs_LocalMarkdownLinksResolve()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
@@ -99,4 +110,7 @@ public sealed partial class DocumentationIndexTests
 
     [GeneratedRegex(@"(?<!!)\[[^\]]+\]\((?<target>[^)]+)\)")]
     private static partial Regex MarkdownLink();
+
+    [GeneratedRegex(@"\| Existing UI evidence screenshots \| (?<count>\d+) \|")]
+    private static partial Regex UiEvidenceScreenshotCount();
 }
