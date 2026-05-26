@@ -143,7 +143,8 @@ internal static class XlsxWorksheetAutoFilterMapper
             TrySetNativeAttributeIfMissing(element, name, value);
         }
 
-        if (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank)
+        var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
+        if (!hasCustomFilters && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
         {
             element.Add(new XElement(
                 worksheetNs + "filters",
@@ -151,16 +152,50 @@ internal static class XlsxWorksheetAutoFilterMapper
                 filterColumn.Values.Select(value => new XElement(worksheetNs + "filter", new XAttribute("val", value)))));
         }
 
+        if (hasCustomFilters)
+        {
+            var customFilters = new XElement(
+                worksheetNs + "customFilters",
+                filterColumn.CustomFilters.Select(customFilter => ToCustomFilterXml(customFilter, worksheetNs)));
+            if (filterColumn.CustomFiltersAndRaw is not null)
+                customFilters.SetAttributeValue("and", filterColumn.CustomFiltersAndRaw);
+            else if (filterColumn.CustomFiltersAnd)
+                customFilters.SetAttributeValue("and", "1");
+
+            foreach (var (name, value) in filterColumn.NativeCustomFiltersAttributes ?? new Dictionary<string, string>())
+            {
+                TrySetNativeAttributeIfMissing(customFilters, name, value);
+            }
+
+            element.Add(customFilters);
+        }
+
         foreach (var nativeFilterXml in filterColumn.NativeFilterXmls)
         {
-            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters") is { } nativeFilter)
+            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters", "customFilters") is { } nativeFilter)
                 element.Add(nativeFilter);
         }
 
         return element;
     }
 
-    private static XElement? TryParseNativeWorksheetChild(string? nativeXml, XNamespace worksheetNs, string modeledLocalName)
+    private static XElement ToCustomFilterXml(WorksheetAutoFilterCustomFilterModel customFilter, XNamespace worksheetNs)
+    {
+        var element = new XElement(worksheetNs + "customFilter");
+        if (customFilter.Operator is not null)
+            element.SetAttributeValue("operator", customFilter.Operator);
+        if (customFilter.Value is not null)
+            element.SetAttributeValue("val", customFilter.Value);
+
+        foreach (var (name, value) in customFilter.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            TrySetNativeAttributeIfMissing(element, name, value);
+        }
+
+        return element;
+    }
+
+    private static XElement? TryParseNativeWorksheetChild(string? nativeXml, XNamespace worksheetNs, params string[] modeledLocalNames)
     {
         if (string.IsNullOrWhiteSpace(nativeXml))
             return null;
@@ -168,7 +203,7 @@ internal static class XlsxWorksheetAutoFilterMapper
         try
         {
             var nativeChild = XElement.Parse(nativeXml);
-            return nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != modeledLocalName
+            return nativeChild.Name.Namespace == worksheetNs && !modeledLocalNames.Contains(nativeChild.Name.LocalName, StringComparer.Ordinal)
                 ? nativeChild
                 : null;
         }
@@ -210,13 +245,19 @@ internal static class XlsxWorksheetAutoFilterMapper
         foreach (var column in autoFilter.Elements(worksheetNs + "filterColumn"))
         {
             var filters = column.Element(worksheetNs + "filters");
+            var customFilters = column.Element(worksheetNs + "customFilters");
             var nativeFilters = column.Elements()
-                .Where(element => element.Name != worksheetNs + "filters")
+                .Where(element => element.Name != worksheetNs + "filters" && element.Name != worksheetNs + "customFilters")
                 .Select(element => element.ToString(SaveOptions.DisableFormatting))
                 .ToArray();
             var nativeAttributes = column.Attributes()
                 .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "colId")
                 .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+            var customFiltersAnd = XlsxXmlAttributeReader.ReadBoolAttribute(customFilters, "and");
+            var nativeCustomFiltersAttributes = customFilters?
+                .Attributes()
+                .Where(attribute => !IsWorksheetAutoFilterModeledAttribute(attribute, "and"))
+                .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
             var filterColumn = new WorksheetAutoFilterColumnModel(
                 XlsxXmlAttributeReader.ReadIntAttribute(column, "colId") ?? -1,
                 filters?
@@ -226,11 +267,24 @@ internal static class XlsxWorksheetAutoFilterMapper
                     .Select(value => value!)
                     .ToArray() ?? [],
                 XlsxXmlAttributeReader.ReadBoolAttribute(filters, "blank"),
+                customFilters?
+                    .Elements(worksheetNs + "customFilter")
+                    .Select(filter => new WorksheetAutoFilterCustomFilterModel(
+                        filter.Attribute("operator")?.Value,
+                        filter.Attribute("val")?.Value,
+                        ReadCustomFilterNativeAttributes(filter)))
+                    .ToArray() ?? [],
+                customFiltersAnd,
+                customFilters?.Attribute("and")?.Value,
+                nativeCustomFiltersAttributes?.Count > 0 ? nativeCustomFiltersAttributes : null,
                 nativeFilters,
                 nativeAttributes.Count == 0 ? null : nativeAttributes);
             if (filterColumn.ColumnId >= 0 &&
                 (filterColumn.Values.Count > 0 ||
                  filterColumn.IncludeBlank ||
+                 filterColumn.CustomFilters.Count > 0 ||
+                 filterColumn.CustomFiltersAndRaw is not null ||
+                 filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
                  filterColumn.NativeFilterXmls.Count > 0 ||
                  filterColumn.NativeAttributes?.Count > 0))
             {
@@ -239,12 +293,32 @@ internal static class XlsxWorksheetAutoFilterMapper
         }
     }
 
+    private static IReadOnlyDictionary<string, string>? ReadCustomFilterNativeAttributes(XElement filter)
+    {
+        var attributes = filter.Attributes()
+            .Where(attribute =>
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "operator") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "val"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return attributes.Count == 0 ? null : attributes;
+    }
+
+    private static bool IsWorksheetAutoFilterModeledAttribute(XAttribute attribute, string localName) =>
+        attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == localName;
+
     private static IEnumerable<WorksheetAutoFilterState> BuildFilters(WorksheetAutoFilterModel autoFilter, GridRange range)
     {
         foreach (var filterColumn in autoFilter.FilterColumns)
         {
             if (filterColumn.ColumnId < 0)
                 continue;
+            if (filterColumn.CustomFilters.Count > 0 ||
+                filterColumn.CustomFiltersAndRaw is not null ||
+                filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
+                filterColumn.NativeFilterXmls.Count > 0)
+            {
+                continue;
+            }
 
             yield return new WorksheetAutoFilterState(
                 range.Start.Col + (uint)filterColumn.ColumnId,

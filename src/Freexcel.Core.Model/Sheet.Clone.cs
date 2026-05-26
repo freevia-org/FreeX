@@ -304,17 +304,47 @@ public sealed partial class Sheet
             ShowColumnStripes = table.ShowColumnStripes,
             PackagePart = table.PackagePart,
             NativeSortStateXml = table.NativeSortStateXml,
-            NativeAttributes = table.NativeAttributes,
-            NativeChildXmls = table.NativeChildXmls,
-            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
-            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
-            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
-            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
+            NativeAttributes = table.NativeAttributes is null
+                ? null
+                : new Dictionary<string, string>(table.NativeAttributes, StringComparer.Ordinal),
+            NativeChildXmls = table.NativeChildXmls?.ToArray(),
+            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes is null
+                ? null
+                : new Dictionary<string, string>(table.NativeAutoFilterAttributes, StringComparer.Ordinal),
+            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls?.ToArray(),
+            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes is null
+                ? null
+                : new Dictionary<string, string>(table.NativeStyleInfoAttributes, StringComparer.Ordinal),
+            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray()
         };
         clonedTable.Columns.AddRange(table.Columns);
-        clonedTable.FilterColumns.AddRange(table.FilterColumns);
+        clonedTable.FilterColumns.AddRange(table.FilterColumns.Select(CloneStructuredTableFilterColumn));
         return clonedTable;
     }
+
+    private static StructuredTableFilterColumnModel CloneStructuredTableFilterColumn(StructuredTableFilterColumnModel column) =>
+        new(
+            column.ColumnId,
+            column.Values.ToArray(),
+            column.IncludeBlank,
+            column.CustomFilters.Select(CloneStructuredTableCustomFilter).ToArray(),
+            column.CustomFiltersAnd,
+            column.CustomFiltersAndRaw,
+            column.NativeCustomFiltersAttributes is null
+                ? null
+                : new Dictionary<string, string>(column.NativeCustomFiltersAttributes, StringComparer.Ordinal),
+            column.NativeFilterXmls.ToArray(),
+            column.NativeAttributes is null
+                ? null
+                : new Dictionary<string, string>(column.NativeAttributes, StringComparer.Ordinal));
+
+    private static StructuredTableCustomFilterModel CloneStructuredTableCustomFilter(StructuredTableCustomFilterModel filter) =>
+        new(
+            filter.Operator,
+            filter.Value,
+            filter.NativeAttributes is null
+                ? null
+                : new Dictionary<string, string>(filter.NativeAttributes, StringComparer.Ordinal));
 
     private static ConditionalFormat CloneConditionalFormat(ConditionalFormat cf, SheetId newId)
     {
@@ -444,9 +474,33 @@ public sealed partial class Sheet
                 : new Dictionary<string, string>(autoFilter.NativeAttributes, StringComparer.Ordinal),
             NativeChildXmls = autoFilter.NativeChildXmls?.ToArray()
         };
-        clone.FilterColumns.AddRange(autoFilter.FilterColumns);
+        clone.FilterColumns.AddRange(autoFilter.FilterColumns.Select(CloneAutoFilterColumn));
         return clone;
     }
+
+    private static WorksheetAutoFilterColumnModel CloneAutoFilterColumn(WorksheetAutoFilterColumnModel column) =>
+        new(
+            column.ColumnId,
+            column.Values.ToArray(),
+            column.IncludeBlank,
+            column.CustomFilters.Select(CloneAutoFilterCustomFilter).ToArray(),
+            column.CustomFiltersAnd,
+            column.CustomFiltersAndRaw,
+            column.NativeCustomFiltersAttributes is null
+                ? null
+                : new Dictionary<string, string>(column.NativeCustomFiltersAttributes, StringComparer.Ordinal),
+            column.NativeFilterXmls.ToArray(),
+            column.NativeAttributes is null
+                ? null
+                : new Dictionary<string, string>(column.NativeAttributes, StringComparer.Ordinal));
+
+    private static WorksheetAutoFilterCustomFilterModel CloneAutoFilterCustomFilter(WorksheetAutoFilterCustomFilterModel filter) =>
+        new(
+            filter.Operator,
+            filter.Value,
+            filter.NativeAttributes is null
+                ? null
+                : new Dictionary<string, string>(filter.NativeAttributes, StringComparer.Ordinal));
 
     private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)
     {

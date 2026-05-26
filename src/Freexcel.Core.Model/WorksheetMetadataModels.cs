@@ -12,6 +12,10 @@ public sealed record WorksheetAutoFilterColumnModel
     public int ColumnId { get; init; }
     public IReadOnlyList<string> Values { get; init; }
     public bool IncludeBlank { get; init; }
+    public IReadOnlyList<WorksheetAutoFilterCustomFilterModel> CustomFilters { get; init; }
+    public bool CustomFiltersAnd { get; init; }
+    public string? CustomFiltersAndRaw { get; init; }
+    public IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes { get; init; }
     public IReadOnlyList<string> NativeFilterXmls { get; init; }
     public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
 
@@ -24,6 +28,10 @@ public sealed record WorksheetAutoFilterColumnModel
             ColumnId,
             Values,
             IncludeBlank,
+            [],
+            false,
+            null,
+            null,
             string.IsNullOrWhiteSpace(NativeFilterXml) ? [] : [NativeFilterXml],
             null)
     {
@@ -35,14 +43,68 @@ public sealed record WorksheetAutoFilterColumnModel
         bool IncludeBlank,
         IReadOnlyList<string> NativeFilterXmls,
         IReadOnlyDictionary<string, string>? NativeAttributes = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            [],
+            false,
+            null,
+            null,
+            NativeFilterXmls,
+            NativeAttributes)
+    {
+    }
+
+    public WorksheetAutoFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<WorksheetAutoFilterCustomFilterModel> CustomFilters,
+        bool CustomFiltersAnd,
+        IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyDictionary<string, string>? NativeAttributes = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            CustomFilters,
+            CustomFiltersAnd,
+            null,
+            NativeCustomFiltersAttributes,
+            NativeFilterXmls,
+            NativeAttributes)
+    {
+    }
+
+    public WorksheetAutoFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<WorksheetAutoFilterCustomFilterModel> CustomFilters,
+        bool CustomFiltersAnd,
+        string? CustomFiltersAndRaw,
+        IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyDictionary<string, string>? NativeAttributes = null)
     {
         this.ColumnId = ColumnId;
         this.Values = Values;
         this.IncludeBlank = IncludeBlank;
+        this.CustomFilters = CustomFilters;
+        this.CustomFiltersAnd = CustomFiltersAnd;
+        this.CustomFiltersAndRaw = CustomFiltersAndRaw;
+        this.NativeCustomFiltersAttributes = NativeCustomFiltersAttributes;
         this.NativeFilterXmls = NativeFilterXmls;
         this.NativeAttributes = NativeAttributes;
     }
 }
+
+public sealed record WorksheetAutoFilterCustomFilterModel(
+    string? Operator,
+    string? Value,
+    IReadOnlyDictionary<string, string>? NativeAttributes = null);
 
 public sealed class WorksheetProtectionMetadataModel
 {

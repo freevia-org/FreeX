@@ -14,28 +14,18 @@ public partial class GridView
 {
     // Grid rendering for freeze dividers, selection, headers, cells, borders, and text decorations.
 
-    private (double Top, double Left, double Bottom, double Right,
-        double MarginLeft, double MarginRight, double MarginTop, double MarginBottom)?
-        GetPageMarginGuidePixels(GridRange printArea)
+    private PageMarginGuideLayout? GetPageMarginGuidePixels(GridRange printArea)
     {
         if (Viewport == null) return null;
-        var (top, left, bottom, right) = GetRangePixels(Viewport, printArea);
-        if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return null;
 
-        var guide = WorksheetPageLayout.GetMarginGuideFractions(PaperSize, PageOrientation, PageMargins);
-        var width = right.Value - left.Value;
-        var height = bottom.Value - top.Value;
-        if (width <= 0 || height <= 0) return null;
-
-        return (
-            top.Value,
-            left.Value,
-            bottom.Value,
-            right.Value,
-            left.Value + width * guide.Left,
-            left.Value + width * guide.Right,
-            top.Value + height * guide.Top,
-            top.Value + height * guide.Bottom);
+        return PageMarginGuideLayoutPlanner.CalculateGuide(
+            Viewport,
+            printArea,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            PaperSize,
+            PageOrientation,
+            PageMargins);
     }
 
     private void RenderGridLines(DrawingContext dc)

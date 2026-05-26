@@ -3671,9 +3671,14 @@ internal static class XlsxCorpusFixtureFactory
             0,
             [],
             IncludeBlank: false,
+            CustomFilters:
+            [
+                new StructuredTableCustomFilterModel("greaterThan", "15")
+            ],
+            CustomFiltersAnd: false,
+            NativeCustomFiltersAttributes: null,
             NativeFilterXmls:
             [
-                """<customFilters xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><customFilter operator="greaterThan" val="15" /></customFilters>"""
             ]));
         sheet.FilterHiddenRows.Add(2);
         sheet.FilterHiddenRows.Add(3);
