@@ -16,6 +16,8 @@ public sealed class EvaluateFormulaDialog : Window
     private readonly TextBlock _positionText;
     private readonly Button _stepOutButton;
     private readonly Button _nextButton;
+    private readonly Button _stepInButton;
+    private readonly Button _closeButton;
 
     public EvaluateFormulaDialog(FormulaEvaluationSummary summary)
     {
@@ -48,13 +50,13 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_nextButton);
 
-        var stepIn = new Button { Content = "Step _In", Width = 68, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        stepIn.Click += (_, _) =>
+        _stepInButton = new Button { Content = "Step _In", Width = 68, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _stepInButton.Click += (_, _) =>
         {
             _session.MoveNext();
             Refresh();
         };
-        buttons.Children.Add(stepIn);
+        buttons.Children.Add(_stepInButton);
 
         _stepOutButton = new Button { Content = "Step _Out", Width = 76, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         _stepOutButton.Click += (_, _) =>
@@ -73,9 +75,9 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(restart);
 
-        var close = new Button { Content = "_Close", Width = 80, Height = 26, IsCancel = true, Margin = new Thickness(4, 0, 0, 0) };
-        close.Click += (_, _) => Close();
-        buttons.Children.Add(close);
+        _closeButton = new Button { Content = "_Close", Width = 80, Height = 26, IsCancel = true, Margin = new Thickness(4, 0, 0, 0) };
+        _closeButton.Click += (_, _) => Close();
+        buttons.Children.Add(_closeButton);
 
         var help = new Button { Content = "Help on this _Function", Width = 142, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         help.Click += (_, _) => ShowFormulaHelp();
@@ -151,6 +153,7 @@ public sealed class EvaluateFormulaDialog : Window
 
         _stepOutButton.IsEnabled = _session.CurrentStep is not null;
         _nextButton.IsEnabled = _session.CanMoveNext;
+        _stepInButton.IsEnabled = _session.CanMoveNext;
     }
 
     private void ShowFormulaHelp()
@@ -165,8 +168,14 @@ public sealed class EvaluateFormulaDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _nextButton.Focus();
-        Keyboard.Focus(_nextButton);
+        FocusFirstEnabledCommand();
+    }
+
+    private void FocusFirstEnabledCommand()
+    {
+        var target = _nextButton.IsEnabled ? _nextButton : _closeButton;
+        target.Focus();
+        Keyboard.Focus(target);
     }
 
     private void RefreshFormulaHighlight()
