@@ -64,6 +64,24 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void CurrentPlanningDocs_ConditionalFormattingRemainingScopeStaysAligned()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var outstandingBuild = File.ReadAllText(Path.Combine(docsDirectory, "OUTSTANDING_BUILD.md"));
+        var nextPhasesPlan = File.ReadAllText(Path.Combine(docsDirectory, "NEXT_PHASES_PLAN.md"));
+        var report = File.ReadAllText(newestStatusReport);
+
+        outstandingBuild.Should().Contain("Remaining: any deeper color-scale XLSX edge semantics.");
+        nextPhasesPlan.Should().Contain("Remaining polish is any deeper color-scale XLSX edge semantics as new gaps are found.");
+        report.Should().Contain("Phase 7D: Deeper color-scale XLSX edge semantics as new gaps are found");
+        nextPhasesPlan.Should().NotContain("rule-manager dialog matching Excel's full priority/manage-rules UX");
+        report.Should().NotContain("Remaining CF hardening beyond data bar/color scale advanced options");
+    }
+
+    [Fact]
     public void DocsReadme_LinksReleaseFacingUserDocs()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
