@@ -93,11 +93,7 @@ public sealed class FormulaEvaluator
         // Bare named range reference outside a function: return top-left cell value.
         // For 2D named ranges this is intentionally lossy — full implicit-intersection
         // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
-        var r = range.Value;
-        var sheetName = context.TryGetSheetName(r.Start.Sheet);
-        return sheetName is not null
-            ? context.GetCellValue(sheetName, r.Start.Row, r.Start.Col)
-            : context.GetCellValue(r.Start.Row, r.Start.Col);
+        return BuildRangeValue(range.Value, context);
     }
 
     private static ScalarValue EvaluateRange(RangeRefNode range, IEvalContext context)

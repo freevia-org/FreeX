@@ -892,6 +892,29 @@ public class CrossSheetReferenceTests
     }
 
     [Fact]
+    public void NamedRangeReference_BareReferenceSpillsFullRange()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetCell(a2, new NumberValue(2));
+        sheet.SetCell(a3, new NumberValue(3));
+        workbook.DefineNamedRange("MyData", new GridRange(a1, a3));
+
+        var result = _evaluator.Evaluate("=MyData", sheet, workbook)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[1, 0].Should().Be(new NumberValue(2));
+        result.Cells[2, 0].Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void CrossSheetRef_UnknownSheet_ReturnsRefError()
     {
         var workbook = new Workbook("Test");
