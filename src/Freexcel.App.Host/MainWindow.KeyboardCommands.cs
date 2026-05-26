@@ -8,7 +8,7 @@ public partial class MainWindow
 {
     private void RegisterKeyboardCommandShortcuts()
     {
-        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewWorkbook, (_, _) => CreateNewWorkbook());
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewWorkbook, async (_, _) => await RequestNewWorkbookAsync());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenWorkbook, OpenButton_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveWorkbook, SaveButton_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.Copy, (_, _) => ExecuteCopy());

@@ -88,6 +88,8 @@ public partial class MainWindow
             _inlineEditor.TextChanged += (_, _) =>
             {
                 FormulaBar.Text = _inlineEditor.Text;
+                if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(_inlineEditor.Text))
+                    _formulaRangeEntryMode = true;
                 RefreshInlineEditorTextSurface();
                 RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();

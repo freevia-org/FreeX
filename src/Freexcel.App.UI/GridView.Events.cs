@@ -17,6 +17,9 @@ public partial class GridView
     /// <summary>Fired when the user drags the autofill handle and releases.</summary>
     public event Action<GridRange, GridRange>? AutofillRequested;
 
+    /// <summary>Fired while the user drags the autofill handle near a viewport edge.</summary>
+    public event Action<GridAutoScrollRequest>? AutofillEdgeScrollRequested;
+
     /// <summary>Fired on right mouse button down with the clicked cell address.</summary>
     public event Action<CellAddress, System.Windows.Point>? ContextMenuRequested;
 
