@@ -68,6 +68,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
         "generated-worksheet-single-xml-cells-001" => true,
+        "generated-worksheet-sheet-views-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -330,6 +331,15 @@ internal static class XlsxCorpusFixtureFactory
               </singleXmlCells>
             </worksheet>
             """)),
+        "generated-worksheet-sheet-views-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetViews nativeSheetViewsAttr="kept">
+                <sheetView workbookViewId="0" showZeros="0" rightToLeft="1">
+                  <pivotSelection pane="topRight"/>
+                </sheetView>
+              </sheetViews>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -564,6 +574,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-single-xml-cells-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-sheet-views-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-sort-state-001", StringComparison.OrdinalIgnoreCase) &&
@@ -783,6 +795,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-single-xml-cells-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetSingleXmlCellsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-sheet-views-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSheetViewsFixup(archive);
             return;
         }
 
@@ -1496,6 +1514,31 @@ internal static class XlsxCorpusFixtureFactory
                 new XAttribute("r", "A1"),
                 new XAttribute("xmlCellPrId", "1"),
                 new XAttribute("nativeSingleXmlCellAttr", "cell-kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSheetViewsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetViews").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "sheetViews",
+            new XAttribute("nativeSheetViewsAttr", "kept"),
+            new XElement(
+                worksheetNs + "sheetView",
+                new XAttribute("workbookViewId", "0"),
+                new XAttribute("showZeros", "0"),
+                new XAttribute("rightToLeft", "1"),
+                new XElement(
+                    worksheetNs + "pivotSelection",
+                    new XAttribute("pane", "topRight")))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 

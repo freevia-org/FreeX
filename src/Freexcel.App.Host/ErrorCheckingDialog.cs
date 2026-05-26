@@ -115,6 +115,7 @@ public sealed class ErrorCheckingDialog : Window
 
         _listView = new ListView { ItemsSource = _issues };
         _listView.MouseDoubleClick += ListView_MouseDoubleClick;
+        _listView.KeyDown += ListView_KeyDown;
         _listView.View = new System.Windows.Controls.GridView
         {
             Columns =
@@ -203,6 +204,15 @@ public sealed class ErrorCheckingDialog : Window
     }
 
     private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e) => NavigateSelected();
+
+    private void ListView_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            NavigateSelected();
+            e.Handled = true;
+        }
+    }
 
     private void ShowSelectedIssueHelp()
     {

@@ -19,6 +19,18 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
     }
 
     [Fact]
+    public void ErrorCheckingIssueList_EnterKeyNavigatesSelectedIssue()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
+
+        source.Should().Contain("_listView.KeyDown += ListView_KeyDown;");
+        source.Should().Contain("private void ListView_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("if (e.Key == Key.Enter)");
+        source.Should().Contain("NavigateSelected();");
+        source.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
     public void EvaluateFormulaDialog_ExposesExcelLikeStepRestartAndHelpControls()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));

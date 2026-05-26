@@ -72,6 +72,7 @@ public sealed partial class SelectionPaneDialog : Window
         _list.MouseMove += List_MouseMove;
         _list.DragOver += List_DragOver;
         _list.Drop += List_Drop;
+        _list.KeyDown += List_KeyDown;
         _items = items.Select(item => new SelectionPaneDialogItem(item)).ToList();
         _list.ItemsSource = _items;
         _list.SelectionChanged += (_, _) =>
