@@ -17,7 +17,7 @@ public sealed class AppInfoTests
     [Fact]
     public void AboutText_UsesCurrentVersionAndDoesNotNameTooling()
     {
-        AppInfo.VersionText.Should().Be("Version 0.5 (Phase 5)");
+        AppInfo.VersionText.Should().Be("Version 0.5 (Tester Release)");
         AppInfo.AboutText.Should().Contain(AppInfo.VersionText);
         AppInfo.AboutText.Should().Contain("Built with .NET 10, WPF, ClosedXML, OxyPlot.");
         AppInfo.AboutText.Should().NotContain("Claude Code");

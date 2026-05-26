@@ -66,6 +66,7 @@ public partial class OptionsDialog : Window
             FreexcelEnterDirection.Left => 3,
             _ => 0
         };
+        UpdateAfterEnterDirectionState();
         OptShowGridlines.IsChecked = _opts.ShowGridlines;
         OptShowHeadings.IsChecked = _opts.ShowHeadings;
         OptObjectsDisplay.ItemsSource = new[] { "All", "Placeholders", "Nothing (hide objects)" };
@@ -112,6 +113,17 @@ public partial class OptionsDialog : Window
     {
         TabList.Focus();
         Keyboard.Focus(TabList);
+    }
+
+    private void MoveAfterEnter_Changed(object sender, RoutedEventArgs e) =>
+        UpdateAfterEnterDirectionState();
+
+    private void UpdateAfterEnterDirectionState()
+    {
+        if (OptAfterEnterDirection is null)
+            return;
+
+        OptAfterEnterDirection.IsEnabled = OptMoveAfterEnter.IsChecked == true;
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)

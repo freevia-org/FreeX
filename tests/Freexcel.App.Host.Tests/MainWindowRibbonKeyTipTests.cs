@@ -227,6 +227,150 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ViewZoomMenuKeyTip_AppliesPresetAndExitsKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.StatusZoomText.Should().Be("100%");
+
+            harness.OpenRibbonMenu(Key.W, Key.Q);
+            harness.ActiveMenuItemGestureText("200%").Should().Be("2");
+
+            harness.HandleKeyTip(Key.D2);
+
+            harness.StatusZoomText.Should().Be("200%");
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+            harness.OverlayBadgeTexts.Should().BeEmpty("invoking a zoom preset should close menu keytip mode like Excel");
+        });
+    }
+
+    [Fact]
+    public void ViewFreezePanesMenuKeyTips_ApplyPresetsAndExitKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
+            harness.ActiveMenuItemGestureText("Freeze Top Row").Should().Be("R");
+            harness.HandleKeyTip(Key.R);
+
+            harness.ActiveSheetFrozenPanes.Should().Be((1u, 0u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
+            harness.ActiveMenuItemGestureText("Freeze First Column").Should().Be("C");
+            harness.HandleKeyTip(Key.C);
+
+            harness.ActiveSheetFrozenPanes.Should().Be((0u, 1u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.SelectRange(2, 2, 2, 2);
+            harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
+            harness.ActiveMenuItemGestureText("Freeze Panes").Should().Be("F");
+            harness.HandleKeyTip(Key.F);
+
+            harness.ActiveSheetFrozenPanes.Should().Be((1u, 1u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
+            harness.ActiveMenuItemGestureText("Unfreeze All").Should().Be("U");
+            harness.HandleKeyTip(Key.U);
+
+            harness.ActiveSheetFrozenPanes.Should().Be((0u, 0u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void ViewArrangeAllMenuKeyTips_UpdateWorkbookArrangementAndExitKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Tiled);
+
+            harness.OpenRibbonMenu(Key.W, Key.A);
+            harness.ActiveMenuItemGestureText("Tiled").Should().Be("T");
+            harness.ActiveMenuItemIsChecked("Tiled").Should().BeTrue();
+            harness.HandleKeyTip(Key.V);
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Vertical);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.W, Key.A);
+            harness.ActiveMenuItemGestureText("Cascade").Should().Be("C");
+            harness.ActiveMenuItemIsChecked("Vertical").Should().BeTrue();
+            harness.HandleKeyTip(Key.C);
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Cascade);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void ViewSplitKeyTip_TogglesSheetSplitAndExitsKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(2, 2, 2, 2);
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.S);
+
+            harness.KeyTipScope.Should().Be("Commands", "S is a visible prefix for Split and Synchronous Scrolling on the View tab");
+            harness.ActiveSheetSplitPanes.Should().Be((null, null));
+
+            harness.HandleKeyTip(Key.P);
+
+            harness.ActiveSheetSplitPanes.Should().Be((2u, 2u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.S);
+            harness.HandleKeyTip(Key.P);
+
+            harness.ActiveSheetSplitPanes.Should().Be((null, null));
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
+    public void FocusedRibbonTabAndEscape_StayInRibbonThenReturnToWorksheet()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.FocusSelectedRibbonTab().Should().BeTrue();
+            harness.FocusedElementIsInsideRibbon.Should().BeTrue();
+
+            harness.HandleFocusedRibbonKey(Key.Tab).Should().BeTrue();
+
+            harness.FocusedElementIsInsideRibbon.Should().BeTrue("focused-ribbon Tab should request WPF ribbon traversal instead of worksheet movement");
+
+            harness.HandleFocusedRibbonKey(Key.Escape).Should().BeTrue();
+
+            harness.FocusedElementIsWorksheet.Should().BeTrue("Escape should leave focused ribbon navigation and return to the worksheet");
+        });
+    }
+
+    [Fact]
     public void DataWhatIfKeyTip_OpensAnalysisMenuWithExcelChoices()
     {
         RunSta(() =>
@@ -511,6 +655,8 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _enterKeyTipMode;
         private readonly MethodInfo _handleActiveRibbonKeyTip;
         private readonly MethodInfo _tryHandleDirectRibbonKeyTip;
+        private readonly MethodInfo _tryHandleFocusedRibbonKeyboardNavigation;
+        private readonly MethodInfo _isInsideRibbonSurface;
         private readonly MethodInfo _getVisibleKeyTipElements;
         private readonly MethodInfo _updateRibbonCompactMode;
         private readonly MethodInfo _updateSsRecentList;
@@ -530,6 +676,10 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "HandleActiveRibbonKeyTip");
             _tryHandleDirectRibbonKeyTip = typeof(MainWindow).GetMethod("TryHandleDirectRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleDirectRibbonKeyTip");
+            _tryHandleFocusedRibbonKeyboardNavigation = typeof(MainWindow).GetMethod("TryHandleFocusedRibbonKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedRibbonKeyboardNavigation");
+            _isInsideRibbonSurface = typeof(MainWindow).GetMethod("IsInsideRibbonSurface", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "IsInsideRibbonSurface");
             _getVisibleKeyTipElements = typeof(MainWindow).GetMethod("GetVisibleKeyTipElements", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetVisibleKeyTipElements");
             _updateRibbonCompactMode = typeof(MainWindow).GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -568,6 +718,13 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public bool ActiveMenuIsOpen => ActiveMenu?.IsOpen == true;
 
+        public bool FocusedElementIsInsideRibbon =>
+            Keyboard.FocusedElement is DependencyObject focusedElement &&
+            (bool)_isInsideRibbonSurface.Invoke(_window, [focusedElement])!;
+
+        public bool FocusedElementIsWorksheet =>
+            ReferenceEquals(Keyboard.FocusedElement, _window.FindName("SheetGrid"));
+
         public bool StartScreenIsVisible =>
             (_window.FindName("StartScreenOverlay") as FrameworkElement)?.Visibility == Visibility.Visible;
 
@@ -583,6 +740,27 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public bool RedoQatIsEnabled =>
             (_window.FindName("RedoQatBtn") as Button)?.IsEnabled == true;
+
+        public string? StatusZoomText =>
+            (_window.FindName("StatusZoomText") as TextBlock)?.Text;
+
+        public (uint FrozenRows, uint FrozenCols) ActiveSheetFrozenPanes
+        {
+            get
+            {
+                var sheet = _workbook.Sheets[0];
+                return (sheet.FrozenRows, sheet.FrozenCols);
+            }
+        }
+
+        public (uint? SplitRow, uint? SplitColumn) ActiveSheetSplitPanes
+        {
+            get
+            {
+                var sheet = _workbook.Sheets[0];
+                return (sheet.SplitRow, sheet.SplitColumn);
+            }
+        }
 
         public bool ActiveCellBold
         {
@@ -642,8 +820,14 @@ public sealed class MainWindowRibbonKeyTipTests
         public string? ActiveMenuItemGestureText(string header) =>
             FindActiveMenuItem(header)?.InputGestureText;
 
+        public bool? ActiveMenuItemIsChecked(string header) =>
+            FindActiveMenuItem(header)?.IsChecked;
+
         public bool ActiveMenuItemSubmenuIsOpen(string header) =>
             FindActiveMenuItem(header)?.IsSubmenuOpen == true;
+
+        public WorkbookWindowArrangement WorkbookArrangement =>
+            _workbook.WindowArrangement;
 
         public IReadOnlyList<string> VisibleCommandKeyTips(string keyTip)
         {
@@ -796,6 +980,30 @@ public sealed class MainWindowRibbonKeyTipTests
         public bool HandleDirectTopLevelKeyTip(Key key)
         {
             var handled = (bool)_tryHandleDirectRibbonKeyTip.Invoke(_window, [key])!;
+            PumpDispatcher();
+            return handled;
+        }
+
+        public bool FocusSelectedRibbonTab()
+        {
+            if (_window.FindName("RibbonTabs") is not TabControl { SelectedItem: TabItem tab })
+                return false;
+
+            var focused = tab.Focus();
+            Keyboard.Focus(tab);
+            PumpDispatcher();
+            return focused || ReferenceEquals(Keyboard.FocusedElement, tab);
+        }
+
+        public bool HandleFocusedRibbonKey(Key key)
+        {
+            var source = PresentationSource.FromVisual(_window);
+            source.Should().NotBeNull("the shared test window must be visible before routing focused-ribbon keyboard input");
+            var args = new KeyEventArgs(Keyboard.PrimaryDevice, source!, Environment.TickCount, key)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent
+            };
+            var handled = (bool)_tryHandleFocusedRibbonKeyboardNavigation.Invoke(_window, [args])!;
             PumpDispatcher();
             return handled;
         }

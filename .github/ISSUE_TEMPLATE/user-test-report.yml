@@ -9,7 +9,7 @@ body:
     id: build
     attributes:
       label: App version/build
-      description: Paste the full file name or build label, for example freexcel-0-5-phase-5-20260524-123456-abcdef12-win-x64-singlefile.
+      description: Paste the full file name or build label, for example freexcel-0-5-tester-release-20260524-123456-abcdef12-win-x64-singlefile.
     validations:
       required: true
   - type: dropdown

@@ -14215,10 +14215,12 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintOptionsMetadata.Should().NotBeNull();
         loadedSheet.PrintOptionsMetadata!.NativeAttributes.Should().Contain("gridLinesSet", "1");
         loadedSheet.PrintOptionsMetadata.NativeAttributes.Should().Contain("customAttr", "print-native");
+        loadedSheet.PrintOptionsMetadata.NativeAttributes["invalid printOptions attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14228,6 +14230,7 @@ public partial class FileAdapterSmokeTests
         printOptions.Should().NotBeNull();
         printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1");
         printOptions.Attribute("customAttr")!.Value.Should().Be("print-native");
+        printOptions.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid printOptions attr");
     }
 
     [Fact]
@@ -14400,10 +14403,12 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.PageMarginsMetadata.Should().NotBeNull();
         loadedSheet.PageMarginsMetadata!.NativeAttributes.Should().Contain("customAttr", "page-margins-native");
+        loadedSheet.PageMarginsMetadata.NativeAttributes["invalid pageMargins attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14417,6 +14422,7 @@ public partial class FileAdapterSmokeTests
         pageMargins.Attribute("footer")!.Value.Should().Be("0.45");
         pageMargins.Attribute("customAttr").Should().NotBeNull();
         pageMargins.Attribute("customAttr")!.Value.Should().Be("page-margins-native");
+        pageMargins.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid pageMargins attr");
     }
 
     [Fact]
@@ -19347,6 +19353,75 @@ public partial class FileAdapterSmokeTests
         tableXml.Should().Contain("headerRowDxfId=\"2\"");
         tableXml.Should().Contain("extLst");
         tableXml.Should().Contain("{FREEXCEL-TABLE-ROOT-EXT}");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_SkipsInvalidStructuredTableNativeAttributeNames()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableInvalidNativeAttributesTest");
+        var sheet = workbook.GetSheetAt(0);
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HasAutoFilter = true,
+            TotalsRowShown = false,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["headerRowDxfId"] = "2",
+                ["invalid table attr"] = "skip"
+            },
+            NativeAutoFilterAttributes = new Dictionary<string, string>
+            {
+                ["customAutoFilterFlag"] = "keep",
+                ["invalid autoFilter attr"] = "skip"
+            },
+            NativeStyleInfoAttributes = new Dictionary<string, string>
+            {
+                ["pivot"] = "0",
+                ["invalid styleInfo attr"] = "skip"
+            }
+        };
+        table.Columns.Add(new StructuredTableColumnModel(
+            1,
+            "Category",
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["uniqueName"] = "CategoryNative",
+                ["invalid column attr"] = "skip"
+            }));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: false,
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["hiddenButton"] = "1",
+                ["invalid filterColumn attr"] = "skip"
+            }));
+        sheet.StructuredTables.Add(table);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        var save = () => adapter.Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("headerRowDxfId=\"2\"");
+        tableXml.Should().Contain("customAutoFilterFlag=\"keep\"");
+        tableXml.Should().Contain("pivot=\"0\"");
+        tableXml.Should().Contain("uniqueName=\"CategoryNative\"");
+        tableXml.Should().Contain("hiddenButton=\"1\"");
+        tableXml.Should().NotContain("invalid ");
     }
 
     [Fact]

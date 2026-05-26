@@ -69,6 +69,16 @@ public partial class GridView
 
         if (_autofillDragging && Viewport != null && _autofillSourceRange.HasValue)
         {
+            var scrollRequest = CalculateAutofillEdgeScrollIntent(
+                pos.X,
+                pos.Y,
+                ActualWidth,
+                ActualHeight,
+                ActualRowHeaderWidth,
+                EffectiveColHeaderHeight);
+            if (scrollRequest.HasAnyDirection)
+                AutofillEdgeScrollRequested?.Invoke(scrollRequest);
+
             var src = _autofillSourceRange.Value;
 
             var srcTopRow    = Viewport.RowMetrics.FirstOrDefault(r => r.Row == src.Start.Row);
@@ -146,6 +156,32 @@ public partial class GridView
                    : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
                    : null;
         }
+    }
+
+    public static GridAutoScrollRequest CalculateAutofillEdgeScrollIntent(
+        double pointerX,
+        double pointerY,
+        double width,
+        double height,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double edgeThreshold = 24)
+    {
+        if (width <= 0 || height <= 0)
+            return new GridAutoScrollRequest(0, 0);
+
+        var horizontal = pointerX >= width - edgeThreshold
+            ? 1
+            : pointerX <= rowHeaderWidth + edgeThreshold
+                ? -1
+                : 0;
+        var vertical = pointerY >= height - edgeThreshold
+            ? 1
+            : pointerY <= columnHeaderHeight + edgeThreshold
+                ? -1
+                : 0;
+
+        return new GridAutoScrollRequest(horizontal, vertical);
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)

@@ -125,8 +125,7 @@ internal static class XlsxStructuredTableWriter
             root.SetAttributeValue("comment", table.Comment);
         foreach (var (name, value) in table.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && root.Attribute(name) is null)
-                root.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(root, name, value);
         }
 
         if (table.HasAutoFilter)
@@ -184,8 +183,7 @@ internal static class XlsxStructuredTableWriter
 
         foreach (var (name, value) in column.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         foreach (var nativeChildXml in (column.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -220,8 +218,7 @@ internal static class XlsxStructuredTableWriter
 
         foreach (var (name, value) in table.NativeStyleInfoAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         foreach (var nativeChildXml in (table.NativeStyleInfoChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -256,8 +253,7 @@ internal static class XlsxStructuredTableWriter
     {
         foreach (var (name, value) in table.NativeAutoFilterAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         foreach (var nativeChildXml in (table.NativeAutoFilterChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -284,8 +280,7 @@ internal static class XlsxStructuredTableWriter
             new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
         foreach (var (name, value) in filterColumn.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         if (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank)
@@ -319,5 +314,22 @@ internal static class XlsxStructuredTableWriter
         return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0
             ? value
             : 1;
+    }
+
+    private static void TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        try
+        {
+            var attributeName = XName.Get(name);
+            if (element.Attribute(attributeName) is null)
+                element.SetAttributeValue(attributeName, value);
+        }
+        catch
+        {
+            // Ignore malformed native table attribute names from authored metadata.
+        }
     }
 }

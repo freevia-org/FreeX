@@ -86,6 +86,12 @@ public class PhaseDLambdaTests
     }
 
     [Fact]
+    public void Lambda_BareFunctionValue_ReturnsCalcError()
+    {
+        Assert.Equal(ErrorValue.Calc, Eval("=LAMBDA(x, x+1)"));
+    }
+
+    [Fact]
     public void Lambda_RangeArgumentCanBeUsedInArrayExpression()
     {
         Set(1, 1, new NumberValue(1));

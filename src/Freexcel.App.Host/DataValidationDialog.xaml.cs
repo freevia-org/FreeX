@@ -35,6 +35,10 @@ public partial class DataValidationDialog : Window
     {
         _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
+        ShowInputMessageBox.Checked += (_, _) => UpdateMessageEditorStates();
+        ShowInputMessageBox.Unchecked += (_, _) => UpdateMessageEditorStates();
+        ShowErrorMessageBox.Checked += (_, _) => UpdateMessageEditorStates();
+        ShowErrorMessageBox.Unchecked += (_, _) => UpdateMessageEditorStates();
         ResetToDefaults(markClearRequested: false);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -60,6 +64,7 @@ public partial class DataValidationDialog : Window
         PromptMessageBox.Text = existing.PromptMessage ?? "";
         ErrorMessageBox.Text = existing.ErrorMessage ?? "";
         UpdateVisibility();
+        UpdateMessageEditorStates();
     }
 
     private void ResetToDefaults(bool markClearRequested)
@@ -82,12 +87,25 @@ public partial class DataValidationDialog : Window
         Result = null;
         ApplyToSameSettings = false;
         UpdateVisibility();
+        UpdateMessageEditorStates();
     }
 
     private void FocusInitialKeyboardTarget()
     {
         TypeCombo.Focus();
         Keyboard.Focus(TypeCombo);
+    }
+
+    private void UpdateMessageEditorStates()
+    {
+        var inputEnabled = ShowInputMessageBox.IsChecked == true;
+        PromptTitleBox.IsEnabled = inputEnabled;
+        PromptMessageBox.IsEnabled = inputEnabled;
+
+        var errorEnabled = ShowErrorMessageBox.IsChecked == true;
+        AlertStyleCombo.IsEnabled = errorEnabled;
+        ErrorTitleBox.IsEnabled = errorEnabled;
+        ErrorMessageBox.IsEnabled = errorEnabled;
     }
 
     private void TypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

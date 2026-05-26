@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(29, "the generated metadata-pass manifest currently declares twenty-nine deterministic package-retention rows");
+        rows.Should().HaveCount(36, "the generated metadata-pass manifest currently declares thirty-six deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -679,6 +679,132 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetSheetFormatRow_RetainsSheetFormatAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sheet-format-001");
+        AssertWorksheetSheetFormat(source, "generated-worksheet-sheet-format-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-sheet-format-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-sheet-format-001");
+        AssertWorksheetSheetFormat(saved, "generated-worksheet-sheet-format-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetPageBreaksRow_RetainsPageBreaksAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-page-breaks-001");
+        AssertWorksheetPageBreaks(source, "generated-worksheet-page-breaks-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-page-breaks-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-page-breaks-001");
+        AssertWorksheetPageBreaks(saved, "generated-worksheet-page-breaks-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetPrintOptionsRow_RetainsPrintOptionsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-print-options-001");
+        AssertWorksheetPrintOptions(source, "generated-worksheet-print-options-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-print-options-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-print-options-001");
+        AssertWorksheetPrintOptions(saved, "generated-worksheet-print-options-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetPageSetupNativeRow_RetainsPageSetupAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-page-setup-native-001");
+        AssertWorksheetPageSetupNative(source, "generated-worksheet-page-setup-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-page-setup-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-page-setup-native-001");
+        AssertWorksheetPageSetupNative(saved, "generated-worksheet-page-setup-native-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetHeaderFooterNativeRow_RetainsHeaderFooterAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-header-footer-native-001");
+        AssertWorksheetHeaderFooterNative(source, "generated-worksheet-header-footer-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-header-footer-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-header-footer-native-001");
+        AssertWorksheetHeaderFooterNative(saved, "generated-worksheet-header-footer-native-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetDimensionNativeRow_RetainsDimensionAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-dimension-native-001");
+        AssertWorksheetDimensionNative(source, "generated-worksheet-dimension-native-001 source", "A1");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-dimension-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-dimension-native-001");
+        AssertWorksheetDimensionNative(saved, "generated-worksheet-dimension-native-001 saved", "A1:B12");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSheetPropertiesRow_RetainsSheetPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sheet-properties-001");
+        AssertWorksheetSheetProperties(source, "generated-worksheet-sheet-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-sheet-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-sheet-properties-001");
+        AssertWorksheetSheetProperties(saved, "generated-worksheet-sheet-properties-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -1029,6 +1155,137 @@ public class XlsxCorpusRunnerTests
         sheetView.Attribute("rightToLeft")!.Value.Should().Be("1", because);
         sheetView.Element(worksheetNs + "pivotSelection")!
             .Attribute("pane")!.Value.Should().Be("topRight", because);
+    }
+
+    private static void AssertWorksheetSheetFormat(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetFormat = worksheetXml.Root!.Element(worksheetNs + "sheetFormatPr");
+        sheetFormat.Should().NotBeNull(because);
+        sheetFormat!.Attribute("baseColWidth")!.Value.Should().Be("12", because);
+        sheetFormat.Attribute("zeroHeight")!.Value.Should().Be("1", because);
+        sheetFormat.Attribute("thickTop")!.Value.Should().Be("1", because);
+        sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3", because);
+        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetPageBreaks(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var rowBreaks = worksheetXml.Root!.Element(worksheetNs + "rowBreaks");
+        rowBreaks.Should().NotBeNull(because);
+        rowBreaks!.Attribute("count")!.Value.Should().Be("1", because);
+        rowBreaks.Attribute("manualBreakCount")!.Value.Should().Be("1", because);
+        var rowBreak = rowBreaks.Elements(worksheetNs + "brk")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        rowBreak.Attribute("id")!.Value.Should().Be("20", because);
+        rowBreak.Attribute("max")!.Value.Should().Be("16383", because);
+        rowBreak.Attribute("man")!.Value.Should().Be("1", because);
+        rowBreak.Attribute("pt")!.Value.Should().Be("1", because);
+        rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native", because);
+
+        var columnBreaks = worksheetXml.Root.Element(worksheetNs + "colBreaks");
+        columnBreaks.Should().NotBeNull(because);
+        columnBreaks!.Attribute("count")!.Value.Should().Be("1", because);
+        columnBreaks.Attribute("manualBreakCount")!.Value.Should().Be("1", because);
+        var columnBreak = columnBreaks.Elements(worksheetNs + "brk")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        columnBreak.Attribute("id")!.Value.Should().Be("5", because);
+        columnBreak.Attribute("max")!.Value.Should().Be("1048575", because);
+        columnBreak.Attribute("man")!.Value.Should().Be("1", because);
+        columnBreak.Attribute("pt")!.Value.Should().Be("1", because);
+        columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native", because);
+    }
+
+    private static void AssertWorksheetPrintOptions(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
+        printOptions.Should().NotBeNull(because);
+        printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1", because);
+        printOptions.Attribute("customAttr")!.Value.Should().Be("print-native", because);
+        printOptions.Attribute("gridLines")?.Value.Should().NotBe("1", because);
+        printOptions.Attribute("headings")?.Value.Should().NotBe("1", because);
+        printOptions.Attribute("horizontalCentered")?.Value.Should().NotBe("1", because);
+        printOptions.Attribute("verticalCentered")?.Value.Should().NotBe("1", because);
+        printOptions.Element(freexcelNs + "nativePrintOptionsChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetPageSetupNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+        pageSetup.Should().NotBeNull(because);
+        pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1", because);
+        pageSetup.Attribute("copies")!.Value.Should().Be("3", because);
+        pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native", because);
+        pageSetup.Element(worksheetNs + "nativePageSetupChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetHeaderFooterNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
+        headerFooter.Should().NotBeNull(because);
+        headerFooter!.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept", because);
+        headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center", because);
+        headerFooter.Element(worksheetNs + "nativeHeaderFooterChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetDimensionNative(Stream package, string because, string expectedRef)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension");
+        dimension.Should().NotBeNull(because);
+        dimension!.Attribute("ref")!.Value.Should().Be(expectedRef, because);
+        dimension.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetSheetProperties(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
+        sheetPr.Should().NotBeNull(because);
+        sheetPr!.Attribute("filterMode")!.Value.Should().Be("1", because);
+        var pageSetUpPr = sheetPr.Element(worksheetNs + "pageSetUpPr");
+        pageSetUpPr.Should().NotBeNull(because);
+        pageSetUpPr!.Attribute("fitToPage")!.Value.Should().Be("1", because);
+        pageSetUpPr.Attribute("autoPageBreaks")!.Value.Should().Be("0", because);
+        sheetPr.Elements(freexcelNs + "sheetPrNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)

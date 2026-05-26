@@ -88,6 +88,35 @@ public sealed class StatusBarLayoutTests
         });
     }
 
+    [Fact]
+    public void F6ShellFocusCycle_TraversesVisibleExcelRegionsInHost()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Worksheet);
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Ribbon);
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.FormulaBar);
+            harness.FocusedElementName.Should().Be("FormulaBar");
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.SheetTabs);
+            harness.FocusedSheetTabName.Should().Be("Sheet1");
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.StatusBar);
+            harness.FocusedElementName.Should().Be("StatusZoomOutButton");
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Worksheet);
+        });
+    }
+
     private static Rect BoundsRelativeToWindow(FrameworkElement element, Window window) =>
         element.TransformToAncestor(window).TransformBounds(new Rect(new Size(element.ActualWidth, element.ActualHeight)));
 
@@ -112,6 +141,7 @@ public sealed class StatusBarLayoutTests
     {
         private readonly MainWindow _window;
         private readonly MethodInfo _cycleShellFocus;
+        private readonly MethodInfo _getCurrentShellFocusTarget;
         private readonly MethodInfo _tryHandleFocusedStatusBarKeyboardNavigation;
 
         private MainWindowHarness(MainWindow window)
@@ -120,13 +150,25 @@ public sealed class StatusBarLayoutTests
             _cycleShellFocus = typeof(MainWindow)
                 .GetMethod("CycleShellFocus", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "CycleShellFocus");
+            _getCurrentShellFocusTarget = typeof(MainWindow)
+                .GetMethod("GetCurrentShellFocusTarget", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "GetCurrentShellFocusTarget");
             _tryHandleFocusedStatusBarKeyboardNavigation = typeof(MainWindow)
                 .GetMethod("TryHandleFocusedStatusBarKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedStatusBarKeyboardNavigation");
         }
 
+        public ShellFocusTarget CurrentShellFocusTarget =>
+            (ShellFocusTarget)_getCurrentShellFocusTarget.Invoke(_window, [])!;
+
         public string? FocusedElementName =>
             Keyboard.FocusedElement is FrameworkElement element ? element.Name : null;
+
+        public string? FocusedSheetTabName =>
+            Keyboard.FocusedElement is FrameworkElement element &&
+            element.DataContext is SheetTabViewModel sheetTab
+                ? sheetTab.Name
+                : null;
 
         public void CycleShellFocus(bool reverse)
         {
