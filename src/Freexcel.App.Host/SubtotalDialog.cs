@@ -56,7 +56,9 @@ public sealed class SubtotalDialog : Window
         root.Children.Add(_groupColumnBox);
         root.Children.Add(new Label { Content = "_Use function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         root.Children.Add(_functionBox);
-        root.Children.Add(new Label { Content = "_Add subtotal to:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
+        root.Children.Add(new Label { Content = "_Add subtotal to:", Target = _subtotalColumnPanel, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
+        _subtotalColumnPanel.Focusable = true;
+        _subtotalColumnPanel.GotKeyboardFocus += (_, _) => FocusSubtotalColumnChoices();
         foreach (var column in columnChoices)
         {
             var box = new CheckBox
@@ -69,7 +71,7 @@ public sealed class SubtotalDialog : Window
             _subtotalColumnBoxes.Add(box);
             _subtotalColumnPanel.Children.Add(box);
         }
-        root.Children.Add(new GroupBox { Header = "Add subtotal to:", Content = _subtotalColumnPanel });
+        root.Children.Add(new GroupBox { Content = _subtotalColumnPanel });
         _replaceBox.Content = "_Replace current subtotals";
         _pageBreakBox.Content = "_Page break between groups";
         _summaryBelowBox.Content = "_Summary below data";
