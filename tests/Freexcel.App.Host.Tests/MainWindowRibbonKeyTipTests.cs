@@ -346,6 +346,42 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void PageLayoutSheetOptionKeyTips_TogglePrintGridlinesAndHeadings()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.ActiveSheetPrintOptions.Should().Be((false, false));
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.P);
+            harness.HandleKeyTip(Key.P);
+            harness.KeyTipScope.Should().Be("Commands", "P is the shared Page Layout print-option prefix for PG and PH");
+            harness.HandleKeyTip(Key.G);
+
+            harness.ActiveSheetPrintOptions.Should().Be((true, false));
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.P);
+            harness.HandleKeyTip(Key.P);
+            harness.HandleKeyTip(Key.H);
+
+            harness.ActiveSheetPrintOptions.Should().Be((true, true));
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.P);
+            harness.HandleKeyTip(Key.P);
+            harness.HandleKeyTip(Key.G);
+
+            harness.ActiveSheetPrintOptions.Should().Be((false, true));
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
     public void ViewZoomCommandKeyTips_ResetAndFitSelection()
     {
         RunSta(() =>
@@ -775,9 +811,10 @@ public sealed class MainWindowRibbonKeyTipTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyTips.cs"));
 
-        var comboBranch = source[
-            source.IndexOf("if (match is ComboBox comboBox)", StringComparison.Ordinal)..
-            source.IndexOf("return false;", source.IndexOf("if (match is ComboBox comboBox)", StringComparison.Ordinal), StringComparison.Ordinal)];
+        var comboStart = source.IndexOf("if (match is ComboBox comboBox)", StringComparison.Ordinal);
+        var openDropDown = "comboBox.IsDropDownOpen = true;";
+        var comboEnd = source.IndexOf(openDropDown, comboStart, StringComparison.Ordinal) + openDropDown.Length;
+        var comboBranch = source[comboStart..comboEnd];
 
         comboBranch.Should().Contain("comboBox.Focus();");
         comboBranch.Should().Contain("Keyboard.Focus(comboBox);");
@@ -1072,11 +1109,11 @@ public sealed class MainWindowRibbonKeyTipTests
                 if (_window.FindName("SheetGrid") is not SheetGridView { SelectedRange: { } range } sheetGrid)
                     return 100;
 
-                return (int)ZoomSelectionPlanner.CalculateFitPercent(
+                return (int)Math.Round(ZoomSelectionPlanner.CalculateFitPercent(
                     sheetGrid.ActualWidth,
                     sheetGrid.ActualHeight,
                     range.ColCount,
-                    range.RowCount);
+                    range.RowCount));
             }
         }
 
@@ -1103,6 +1140,15 @@ public sealed class MainWindowRibbonKeyTipTests
         public WorksheetPageOrientation ActiveSheetPageOrientation => _workbook.Sheets[0].PageOrientation;
 
         public WorksheetPaperSize ActiveSheetPaperSize => _workbook.Sheets[0].PaperSize;
+
+        public (bool PrintGridlines, bool PrintHeadings) ActiveSheetPrintOptions
+        {
+            get
+            {
+                var sheet = _workbook.Sheets[0];
+                return (sheet.PrintGridlines, sheet.PrintHeadings);
+            }
+        }
 
         public (uint StartRow, uint StartCol, uint EndRow, uint EndCol)? ActiveSheetPrintArea
         {
