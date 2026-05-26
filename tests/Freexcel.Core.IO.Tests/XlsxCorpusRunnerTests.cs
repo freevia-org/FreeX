@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(31, "the generated metadata-pass manifest currently declares thirty-one deterministic package-retention rows");
+        rows.Should().HaveCount(32, "the generated metadata-pass manifest currently declares thirty-two deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -715,6 +715,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetPrintOptionsRow_RetainsPrintOptionsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-print-options-001");
+        AssertWorksheetPrintOptions(source, "generated-worksheet-print-options-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-print-options-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-print-options-001");
+        AssertWorksheetPrintOptions(saved, "generated-worksheet-print-options-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -1116,6 +1134,25 @@ public class XlsxCorpusRunnerTests
         columnBreak.Attribute("man")!.Value.Should().Be("1", because);
         columnBreak.Attribute("pt")!.Value.Should().Be("1", because);
         columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native", because);
+    }
+
+    private static void AssertWorksheetPrintOptions(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
+        printOptions.Should().NotBeNull(because);
+        printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1", because);
+        printOptions.Attribute("customAttr")!.Value.Should().Be("print-native", because);
+        printOptions.Attribute("gridLines")?.Value.Should().NotBe("1", because);
+        printOptions.Attribute("headings")?.Value.Should().NotBe("1", because);
+        printOptions.Attribute("horizontalCentered")?.Value.Should().NotBe("1", because);
+        printOptions.Attribute("verticalCentered")?.Value.Should().NotBe("1", because);
+        printOptions.Element(freexcelNs + "nativePrintOptionsChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)
