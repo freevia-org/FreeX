@@ -13,11 +13,14 @@ public partial class ConditionalFormatDialog : Window
     private string _ruleType;
     private readonly GridRange _range;
     private readonly Guid _existingId;
-    private TextBox _value1Box;
-    private TextBox _value2Box;
-    private Label _value2Label;
+    private TextBox _value1Box = new();
+    private TextBox _value2Box = new();
+    private Label _value2Label = new();
     private ComboBox _colorBox;
     private TextBox? _formulaBox;
+    private ComboBox _conditionKindBox = new();
+    private ComboBox _cellValueOperatorBox = new();
+    private ComboBox _specificTextOperatorBox = new();
     private ComboBox _iconSetStyleBox;
     private CheckBox _iconSetShowValueBox;
     private CheckBox _iconSetReverseBox;
@@ -96,6 +99,37 @@ public partial class ConditionalFormatDialog : Window
         "Use a formula to determine which cells to format"
     ];
 
+    private static readonly string[] ConditionKindLabels =
+    [
+        "Cell Value",
+        "Specific Text",
+        "Dates Occurring",
+        "Blanks",
+        "No Blanks",
+        "Errors",
+        "No Errors"
+    ];
+
+    private static readonly (string Label, string RuleType)[] CellValueOperatorLabels =
+    [
+        ("greater than", "Greater Than"),
+        ("less than", "Less Than"),
+        ("equal to", "Equal To"),
+        ("between", "Between"),
+        ("not equal to", "Not Equal To"),
+        ("greater than or equal to", "Greater Than Or Equal To"),
+        ("less than or equal to", "Less Than Or Equal To"),
+        ("not between", "Not Between")
+    ];
+
+    private static readonly (string Label, string RuleType)[] SpecificTextOperatorLabels =
+    [
+        ("containing", "Text Contains"),
+        ("not containing", "Text Does Not Contain"),
+        ("beginning with", "Text Begins With"),
+        ("ending with", "Text Ends With")
+    ];
+
     private static readonly IReadOnlyList<string> IconSetStyles = ConditionalFormatIconSetPlanner.Styles;
 
     private static readonly (string Label, string Value)[] DateOccurringPeriods =
@@ -132,9 +166,6 @@ public partial class ConditionalFormatDialog : Window
         bool isDateOccurring = ruleType is "Date Occurring";
         bool isDuplicateValues = ruleType is "Duplicate Values";
         bool isBetween = ruleType is "Between";
-        bool needsValue = ruleType is "Greater Than" or "Less Than" or "Equal To"
-                                   or "Between" or "Text Contains";
-
         var inner = new StackPanel { Margin = new Thickness(16) };
         _iconSetStyleBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
         foreach (var style in IconSetStyles) _iconSetStyleBox.Items.Add(style);
@@ -270,7 +301,7 @@ public partial class ConditionalFormatDialog : Window
             _value2Box  = new TextBox();
             _value2Label = new Label();
         }
-        else if (isDateOccurring)
+        else if (isDateOccurring && !IsContainsShellRuleType(ruleType))
         {
             Height = 220;
             inner.Children.Add(CreateAccessLabel("_Date period:", _dateOccurringPeriodBox));
@@ -292,20 +323,9 @@ public partial class ConditionalFormatDialog : Window
         }
         else
         {
-            Height = needsValue ? (isBetween ? 260 : 220) : 180;
-
-            _value1Box  = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            var lbl1 = new Label { Content = isBetween ? "_Minimum:" : "_Value:", Target = _value1Box, Padding = new Thickness(0) };
-            _value2Box  = new TextBox { Margin = new Thickness(0, 4, 0, 8),
-                Visibility = isBetween ? Visibility.Visible : Visibility.Collapsed };
-            _value2Label = new Label { Content = "Ma_ximum:", Target = _value2Box, Padding = new Thickness(0),
-                Visibility = isBetween ? Visibility.Visible : Visibility.Collapsed };
-
-            if (needsValue)
+            if (IsContainsShellRuleType(ruleType))
             {
-                inner.Children.Add(lbl1);
-                inner.Children.Add(_value1Box);
-                if (isBetween) { inner.Children.Add(_value2Label); inner.Children.Add(_value2Box); }
+                AddContainsShellEditor(inner, ruleType);
             }
             else if (ruleType is "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%")
             {
@@ -313,6 +333,13 @@ public partial class ConditionalFormatDialog : Window
                 _topBottomRankBox.Text = ruleType is "Top 10%" or "Bottom 10%" ? "10" : "10";
                 inner.Children.Add(CreateAccessLabel(ruleType is "Top 10%" or "Bottom 10%" ? "_Percent:" : "_Rank:", _topBottomRankBox));
                 inner.Children.Add(_topBottomRankBox);
+            }
+            else
+            {
+                Height = 180;
+                _value1Box = new TextBox();
+                _value2Box = new TextBox();
+                _value2Label = new Label();
             }
         }
 
@@ -456,6 +483,7 @@ public partial class ConditionalFormatDialog : Window
     {
         Control target =
             _formulaBox is { IsVisible: true } formulaBox ? formulaBox :
+            _conditionKindBox.IsVisible ? _conditionKindBox :
             _value1Box.IsVisible ? _value1Box :
             _topBottomRankBox.IsVisible ? _topBottomRankBox :
             _dataBarMinTypeBox.IsVisible ? _dataBarMinTypeBox :
@@ -501,8 +529,6 @@ public partial class ConditionalFormatDialog : Window
         _customFormatStyle = null;
 
         var inner = new StackPanel { Margin = new Thickness(16) };
-        var needsValue = ruleType is "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains";
-        var isBetween = ruleType is "Between";
         var isFormula = ruleType is "Formula" or "Use a Formula";
         var isIconSet = ruleType is "Icon Set";
         var isDataBar = ruleType is "Data Bar";
@@ -661,7 +687,7 @@ public partial class ConditionalFormatDialog : Window
             _value2Box = new TextBox();
             _value2Label = new Label();
         }
-        else if (isDateOccurring)
+        else if (isDateOccurring && !IsContainsShellRuleType(ruleType))
         {
             Height = 220;
             _dateOccurringPeriodBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
@@ -675,31 +701,9 @@ public partial class ConditionalFormatDialog : Window
         }
         else
         {
-            Height = needsValue ? (isBetween ? 260 : 220) : 180;
-            _value1Box = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            var lbl1 = new Label { Content = isBetween ? "_Minimum:" : "_Value:", Target = _value1Box, Padding = new Thickness(0) };
-            _value2Box = new TextBox
+            if (IsContainsShellRuleType(ruleType))
             {
-                Margin = new Thickness(0, 4, 0, 8),
-                Visibility = isBetween ? Visibility.Visible : Visibility.Collapsed
-            };
-            _value2Label = new Label
-            {
-                Content = "Ma_ximum:",
-                Target = _value2Box,
-                Padding = new Thickness(0),
-                Visibility = isBetween ? Visibility.Visible : Visibility.Collapsed
-            };
-
-            if (needsValue)
-            {
-                inner.Children.Add(lbl1);
-                inner.Children.Add(_value1Box);
-                if (isBetween)
-                {
-                    inner.Children.Add(_value2Label);
-                    inner.Children.Add(_value2Box);
-                }
+                AddContainsShellEditor(inner, ruleType);
             }
             else if (ruleType is "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%")
             {
@@ -707,6 +711,13 @@ public partial class ConditionalFormatDialog : Window
                 _topBottomRankBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "10" };
                 inner.Children.Add(CreateAccessLabel(ruleType is "Top 10%" or "Bottom 10%" ? "_Percent:" : "_Rank:", _topBottomRankBox));
                 inner.Children.Add(_topBottomRankBox);
+            }
+            else
+            {
+                Height = 180;
+                _value1Box = new TextBox();
+                _value2Box = new TextBox();
+                _value2Label = new Label();
             }
         }
 
@@ -751,5 +762,115 @@ public partial class ConditionalFormatDialog : Window
         _descriptionHost.Children.RemoveRange(1, _descriptionHost.Children.Count - 1);
         _descriptionHost.Children.Add(inner);
     }
+
+    private void AddContainsShellEditor(StackPanel inner, string ruleType)
+    {
+        Height = ruleType is "Between" or "Not Between" ? 320 : 280;
+        _conditionKindBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = ConditionKindLabels };
+        _conditionKindBox.SelectedItem = ConditionKindLabelForRuleType(ruleType);
+        _conditionKindBox.SelectionChanged += ConditionKindBox_SelectionChanged;
+        inner.Children.Add(CreateAccessLabel("Format only cells _with:", _conditionKindBox));
+        inner.Children.Add(_conditionKindBox);
+
+        _value1Box = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _value2Box = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _value2Label = new Label { Content = "Ma_ximum:", Target = _value2Box, Padding = new Thickness(0) };
+        _cellValueOperatorBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = CellValueOperatorLabels.Select(item => item.Label).ToArray() };
+        _specificTextOperatorBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = SpecificTextOperatorLabels.Select(item => item.Label).ToArray() };
+
+        var kind = _conditionKindBox.SelectedItem as string;
+        if (kind == "Cell Value")
+        {
+            _cellValueOperatorBox.SelectedItem = CellValueOperatorLabelForRuleType(ruleType);
+            _cellValueOperatorBox.SelectionChanged += CellValueOperatorBox_SelectionChanged;
+            inner.Children.Add(CreateAccessLabel("_Operator:", _cellValueOperatorBox));
+            inner.Children.Add(_cellValueOperatorBox);
+            AddValueBoxes(inner, ruleType is "Between" or "Not Between");
+        }
+        else if (kind == "Specific Text")
+        {
+            _specificTextOperatorBox.SelectedItem = SpecificTextOperatorLabelForRuleType(ruleType);
+            _specificTextOperatorBox.SelectionChanged += SpecificTextOperatorBox_SelectionChanged;
+            inner.Children.Add(CreateAccessLabel("_Text operator:", _specificTextOperatorBox));
+            inner.Children.Add(_specificTextOperatorBox);
+            inner.Children.Add(CreateAccessLabel("_Text:", _value1Box));
+            inner.Children.Add(_value1Box);
+        }
+        else if (kind == "Dates Occurring")
+        {
+            _dateOccurringPeriodBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
+            foreach (var (label, _) in DateOccurringPeriods) _dateOccurringPeriodBox.Items.Add(label);
+            _dateOccurringPeriodBox.SelectedItem = "Today";
+            inner.Children.Add(CreateAccessLabel("_Date period:", _dateOccurringPeriodBox));
+            inner.Children.Add(_dateOccurringPeriodBox);
+        }
+    }
+
+    private void AddValueBoxes(StackPanel inner, bool isBetween)
+    {
+        inner.Children.Add(new Label { Content = isBetween ? "_Minimum:" : "_Value:", Target = _value1Box, Padding = new Thickness(0) });
+        inner.Children.Add(_value1Box);
+        if (isBetween)
+        {
+            inner.Children.Add(_value2Label);
+            inner.Children.Add(_value2Box);
+        }
+    }
+
+    private void ConditionKindBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { SelectedItem: string label })
+            RefreshRuleDescription(DefaultRuleTypeForConditionKind(label));
+    }
+
+    private void CellValueOperatorBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { SelectedItem: string label } &&
+            CellValueOperatorLabels.FirstOrDefault(item => item.Label == label) is var match &&
+            match.RuleType is not null)
+            RefreshRuleDescription(match.RuleType);
+    }
+
+    private void SpecificTextOperatorBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { SelectedItem: string label } &&
+            SpecificTextOperatorLabels.FirstOrDefault(item => item.Label == label) is var match &&
+            match.RuleType is not null)
+            RefreshRuleDescription(match.RuleType);
+    }
+
+    private static bool IsContainsShellRuleType(string ruleType) =>
+        ruleType is "Greater Than" or "Less Than" or "Equal To" or "Between" or "Not Equal To"
+            or "Greater Than Or Equal To" or "Less Than Or Equal To" or "Not Between"
+            or "Text Contains" or "Text Does Not Contain" or "Text Begins With" or "Text Ends With"
+            or "Date Occurring" or "Blanks" or "No Blanks" or "Errors" or "No Errors";
+
+    private static string ConditionKindLabelForRuleType(string ruleType) => ruleType switch
+    {
+        "Text Contains" or "Text Does Not Contain" or "Text Begins With" or "Text Ends With" => "Specific Text",
+        "Date Occurring" => "Dates Occurring",
+        "Blanks" => "Blanks",
+        "No Blanks" => "No Blanks",
+        "Errors" => "Errors",
+        "No Errors" => "No Errors",
+        _ => "Cell Value"
+    };
+
+    private static string DefaultRuleTypeForConditionKind(string label) => label switch
+    {
+        "Specific Text" => "Text Contains",
+        "Dates Occurring" => "Date Occurring",
+        "Blanks" => "Blanks",
+        "No Blanks" => "No Blanks",
+        "Errors" => "Errors",
+        "No Errors" => "No Errors",
+        _ => "Greater Than"
+    };
+
+    private static string CellValueOperatorLabelForRuleType(string ruleType) =>
+        CellValueOperatorLabels.FirstOrDefault(item => item.RuleType == ruleType).Label ?? "greater than";
+
+    private static string SpecificTextOperatorLabelForRuleType(string ruleType) =>
+        SpecificTextOperatorLabels.FirstOrDefault(item => item.RuleType == ruleType).Label ?? "containing";
 
 }
