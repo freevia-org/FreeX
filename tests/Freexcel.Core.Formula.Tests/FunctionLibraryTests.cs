@@ -8455,6 +8455,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Numbervalue_OneCellSeparatorRanges_BroadcastAcrossTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("1,2")),
+            (2, 1, new TextValue("3,4")),
+            (1, 2, new TextValue(",")),
+            (1, 3, new TextValue(".")));
+
+        AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B1,C1:C1)", sheet), new NumberValue(1.2), new NumberValue(3.4));
+    }
+
+    [Fact]
     public void Numbervalue_MismatchedSeparatorArgument_ReturnsValueError()
     {
         var sheet = MakeSheet(
