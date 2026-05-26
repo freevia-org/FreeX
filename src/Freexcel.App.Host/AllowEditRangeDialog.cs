@@ -68,6 +68,7 @@ public sealed class AllowEditRangeDialog : Window
         _existingRangesBox.MinHeight = 80;
         _existingRangesBox.SelectionMode = SelectionMode.Single;
         _existingRangesBox.SelectionChanged += (_, _) => UpdateRangeButtons();
+        _existingRangesBox.MouseDoubleClick += DeleteSelectedRange_Click;
         existingPanel.Children.Add(_existingRangesBox);
         var rangeButtons = new StackPanel
         {
