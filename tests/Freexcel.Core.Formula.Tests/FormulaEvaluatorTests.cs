@@ -1275,6 +1275,30 @@ public class ShortCircuitEvaluationTests
     }
 
     [Fact]
+    public void IFS_RangeConditionSelectsBranchElements()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new BoolValue(false));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new BoolValue(true));
+
+        var result = _evaluator.Evaluate("=IFS(C1:C3,A1:A3,TRUE,B1:B3)", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[1, 0].Should().Be(new NumberValue(20));
+        result.Cells[2, 0].Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void IFS_ErrorCondition_Propagates()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
@@ -1320,6 +1344,35 @@ public class ShortCircuitEvaluationTests
         defaulted.RowCount.Should().Be(2);
         defaulted.Cells[0, 0].Should().Be(new NumberValue(10));
         defaulted.Cells[1, 0].Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
+    public void SWITCH_RangeExpressionSelectsResultElements()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
+
+        var result = _evaluator.Evaluate("=SWITCH(A1:A3,1,\"one\",2,\"two\",\"other\")", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new TextValue("one"));
+        result.Cells[1, 0].Should().Be(new TextValue("two"));
+        result.Cells[2, 0].Should().Be(new TextValue("other"));
+    }
+
+    [Fact]
+    public void SWITCH_ScalarExpressionKeepsImplicitIntersectionForRangeCaseValues()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+
+        _evaluator.Evaluate("=SWITCH(1,A1:A2,\"hit\",\"miss\")", sheet, wb)
+            .Should().Be(new TextValue("hit"));
     }
 
     [Fact]
