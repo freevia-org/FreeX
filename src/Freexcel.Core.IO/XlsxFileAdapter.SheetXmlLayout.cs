@@ -484,20 +484,7 @@ public sealed partial class XlsxFileAdapter
     }
 
     private static uint? ParsePaneSplit(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        if (uint.TryParse(value, out var integer))
-            return integer;
-
-        if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var floating) &&
-            floating > 0 &&
-            floating <= uint.MaxValue)
-            return (uint)Math.Round(floating);
-
-        return null;
-    }
+        => XlsxWorksheetXmlValueParser.ParsePaneSplit(value);
 
     private static CellAddress? ParseOptionalCellReference(string? reference)
     {
@@ -510,10 +497,10 @@ public sealed partial class XlsxFileAdapter
     }
 
     private static bool IsTruthy(string? value) =>
-        value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+        XlsxWorksheetXmlValueParser.IsTruthy(value);
 
     private static bool IsFalse(string? value) =>
-        value is "0" || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+        XlsxWorksheetXmlValueParser.IsFalse(value);
 
     private static bool? ParseOptionalBool(string? value)
     {
@@ -540,12 +527,7 @@ public sealed partial class XlsxFileAdapter
             : null;
 
     private static WorksheetViewMode ParseWorksheetViewMode(string? value) =>
-        value switch
-        {
-            "pageBreakPreview" => WorksheetViewMode.PageBreakPreview,
-            "pageLayout" => WorksheetViewMode.PageLayout,
-            _ => WorksheetViewMode.Normal
-        };
+        XlsxWorksheetXmlValueParser.ParseWorksheetViewMode(value);
 
     private static bool IsValidWorksheetRow(uint row) =>
         row is >= 1 and <= CellAddress.MaxRow;
@@ -560,10 +542,10 @@ public sealed partial class XlsxFileAdapter
         rotation == 255 || rotation is >= -90 and <= 90;
 
     private static uint ValidFrozenRowsOrZero(uint row) =>
-        row <= CellAddress.MaxRow ? row : 0;
+        XlsxWorksheetXmlValueParser.ValidFrozenRowsOrZero(row);
 
     private static uint ValidFrozenColumnsOrZero(uint column) =>
-        column <= CellAddress.MaxCol ? column : 0;
+        XlsxWorksheetXmlValueParser.ValidFrozenColumnsOrZero(column);
 
     private static bool IsSupportedFontSize(double fontSize) =>
         double.IsFinite(fontSize) && fontSize is >= 1 and <= 409;
