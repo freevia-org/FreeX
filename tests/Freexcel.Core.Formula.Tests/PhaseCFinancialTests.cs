@@ -741,6 +741,24 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void TreasuryBillFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 43921.0), (2, 2, 43952.0),
+            (1, 3, 0.05), (2, 3, 0.04),
+            (1, 4, 98.75), (2, 4, 99.0)
+        };
+
+        AssertApproxColumn(EvalWithData("TBILLEQ(A1:A2,B1:B2,C1:C2)", cells), Calc("TBILLEQ(43831,43921,0.05)"), Calc("TBILLEQ(43862,43952,0.04)"));
+        AssertApproxColumn(EvalWithData("TBILLPRICE(A1:A2,B1:B2,C1:C2)", cells), Calc("TBILLPRICE(43831,43921,0.05)"), Calc("TBILLPRICE(43862,43952,0.04)"));
+        AssertApproxColumn(EvalWithData("TBILLYIELD(A1:A2,B1:B2,D1:D2)", cells), Calc("TBILLYIELD(43831,43921,98.75)"), Calc("TBILLYIELD(43862,43952,99)"));
+
+        EvalWithData("TBILLEQ(A1:A2,B1:C1,0.05)", cells).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Coupnum_SemiAnnual_FiveYearBond()
     {
         // Settlement ~2020-01-15 (43845), Maturity ~2025-01-15 (45672), freq=2

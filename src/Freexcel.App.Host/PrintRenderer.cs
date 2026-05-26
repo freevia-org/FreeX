@@ -162,7 +162,8 @@ public static partial class PrintRenderer
                     printableW,
                     printableH,
                     pageNumber,
-                    totalPages);
+                    totalPages,
+                    sheet.PrintDraftQuality);
             pageNumber++;
 
             var container = new VisualHost { Visual = visual, TextOverlays = textOverlays };

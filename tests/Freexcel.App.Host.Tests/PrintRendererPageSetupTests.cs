@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FluentAssertions;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
@@ -67,6 +69,84 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void HeaderFooterPictureLayout_IgnoresPicturesForDraftQuality()
+    {
+        var picture = new WorksheetHeaderFooterPicture([1], "image/png", "logo.png", 96, 42);
+
+        PrintRenderer.CalculateHeaderFooterLineHeight(
+                new WorksheetHeaderFooter("Logo &[Picture]", "", ""),
+                new WorksheetHeaderFooterPictureSet(picture, null, null),
+                draftQuality: true)
+            .Should()
+            .Be(18);
+    }
+
+    [Fact]
+    public void RenderWorksheet_DraftQualitySkipsHeaderFooterPictures()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Draft print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Printed"));
+            sheet.PageHeader = new WorksheetHeaderFooter("Logo &[Picture]", "", "");
+            sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+                new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "logo.png", 96, 42),
+                null,
+                null);
+            sheet.PrintDraftQuality = true;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            document.Pages.Should().HaveCount(1);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_DraftQualitySkipsDisplayedCommentGraphics()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Draft comments");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Printed"));
+            sheet.Comments[a1] = "Visible note";
+            sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+
+            sheet.PrintDraftQuality = false;
+            var normalDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var normalPage = normalDocument.Pages[0].GetPageRoot(forceReload: false)!;
+
+            sheet.PrintDraftQuality = true;
+            var draftDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var draftPage = draftDocument.Pages[0].GetPageRoot(forceReload: false)!;
+
+            CountCommentChromePixels(normalPage).Should().BeGreaterThan(0);
+            CountCommentChromePixels(draftPage).Should().Be(0);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_DraftQualityKeepsCommentsAtEnd()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Draft comment summary");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Printed"));
+            sheet.Comments[a1] = "Visible note";
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+            sheet.PrintDraftQuality = true;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            document.Pages.Should().HaveCount(2);
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_UsesLandscapeLetterPageSetupForExport()
     {
         StaTestRunner.Run(() =>
@@ -85,6 +165,36 @@ public sealed class PrintRendererPageSetupTests
             document.DocumentPaginator.PageSize.Height.Should().BeApproximately(8.5 * 96.0, 0.01);
             document.Pages.Should().HaveCount(1);
         });
+    }
+
+    private static int CountCommentChromePixels(FrameworkElement page)
+    {
+        var width = Math.Max(1, (int)Math.Ceiling(page.Width));
+        var height = Math.Max(1, (int)Math.Ceiling(page.Height));
+        var size = new Size(width, height);
+        page.Measure(size);
+        page.Arrange(new Rect(size));
+        page.UpdateLayout();
+
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(page);
+        var pixels = new byte[width * height * 4];
+        bitmap.CopyPixels(pixels, width * 4, 0);
+
+        var count = 0;
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            var blue = pixels[i];
+            var green = pixels[i + 1];
+            var red = pixels[i + 2];
+
+            var isCommentIndicator = red > 150 && green < 40 && blue < 40;
+            var isCommentFill = red > 240 && green > 240 && blue is >= 190 and < 240;
+            if (isCommentIndicator || isCommentFill)
+                count++;
+        }
+
+        return count;
     }
 
     [Fact]
