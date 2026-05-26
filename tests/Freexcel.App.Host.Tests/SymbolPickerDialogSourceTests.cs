@@ -59,8 +59,8 @@ public sealed class SymbolPickerDialogSourceTests
 
         source.Should().Contain("void AcceptSelectedSymbol()");
         source.Should().Contain("button.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();");
-        source.Should().Contain("specialList.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();");
-        source.Should().Contain("insert.Click += (_, _) => AcceptSelectedSymbol();");
+        source.Should().Contain("specialList.MouseDoubleClick += (_, _) => acceptSelectedSymbol();");
+        source.Should().Contain("insert.Click += (_, _) => acceptSelectedSymbol();");
     }
 
     [Fact]
@@ -161,5 +161,6 @@ public sealed class SymbolPickerDialogSourceTests
 
     private static string ReadSymbolPickerDialogSources() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs")) +
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Layout.cs")) +
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Catalog.cs"));
 }
