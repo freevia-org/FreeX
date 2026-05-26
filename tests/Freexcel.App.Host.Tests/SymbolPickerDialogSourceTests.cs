@@ -53,6 +53,17 @@ public sealed class SymbolPickerDialogSourceTests
     }
 
     [Fact]
+    public void Dialog_DoubleClickInsertsSelectedSymbolOrSpecialCharacter()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("void AcceptSelectedSymbol()");
+        source.Should().Contain("button.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();");
+        source.Should().Contain("specialList.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();");
+        source.Should().Contain("insert.Click += (_, _) => AcceptSelectedSymbol();");
+    }
+
+    [Fact]
     public void Dialog_RebuildsSymbolsForSelectedSubset()
     {
         SymbolPickerDialog.GetSymbolsForSubset("Currency Symbols").Should().Contain('\u20ac');
