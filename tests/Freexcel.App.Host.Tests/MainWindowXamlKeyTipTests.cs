@@ -702,6 +702,8 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "AllowEditRangesBtn_Click");
 
+        allowEditRangesButton.Attribute("Name")?.Value.Should().Be("AllowEditRangesButton");
+        allowEditRangesButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("AR");
         allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Add");
         allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("delete");
         allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("clear");
