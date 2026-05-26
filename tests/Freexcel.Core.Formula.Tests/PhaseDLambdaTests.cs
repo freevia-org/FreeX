@@ -375,6 +375,18 @@ public class PhaseDLambdaTests
     }
 
     [Fact]
+    public void MakeArray_AcceptsSpilledScalarDimensions()
+    {
+        var result = Rv(Eval("=MAKEARRAY(SEQUENCE(1,,2), SEQUENCE(1,,3), LAMBDA(r, c, r+c))"));
+
+        Assert.Equal(2, result.RowCount);
+        Assert.Equal(3, result.ColCount);
+        Assert.Equal(2.0, Num(result.At(1, 1)));
+        Assert.Equal(4.0, Num(result.At(1, 3)));
+        Assert.Equal(5.0, Num(result.At(2, 3)));
+    }
+
+    [Fact]
     public void MakeArray_ZeroRows_ReturnsValueError()
     {
         Assert.Equal(ErrorValue.Value, Eval("=MAKEARRAY(0, 3, LAMBDA(r, c, 1))"));

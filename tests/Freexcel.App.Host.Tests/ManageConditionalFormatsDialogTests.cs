@@ -479,6 +479,33 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void ApplyAppliesToRangeSelection_UpdatesOnlyRequestingRule()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var first = CreateRule(sheet.Id, 1, 1, 1);
+            var second = CreateRule(sheet.Id, 2, 2, 2);
+            sheet.ConditionalFormats.Add(first);
+            sheet.ConditionalFormats.Add(second);
+            var dialog = new ManageConditionalFormatsDialog(sheet, selection: null);
+
+            var newRange = new GridRange(new CellAddress(sheet.Id, 5, 3), new CellAddress(sheet.Id, 8, 4));
+            dialog.ApplyAppliesToRangeSelection(second.Id, newRange);
+
+            var listView = GetControl<ListView>(dialog, "_listView");
+            var rules = listView.Items.Cast<ConditionalFormat>().ToList();
+            rules[0].AppliesTo.Should().Be(first.AppliesTo);
+            rules[1].Id.Should().Be(second.Id);
+            rules[1].AppliesTo.Should().Be(newRange);
+            rules[1].Priority.Should().Be(2);
+            listView.SelectedItem.Should().BeSameAs(rules[1]);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
     public void NewRuleCommand_OpensExcelStyleRuleTypeShellOnFirstCategory()
     {
         var source = ReadManageConditionalFormatsDialogSource();
