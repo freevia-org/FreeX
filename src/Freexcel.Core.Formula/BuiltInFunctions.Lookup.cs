@@ -274,12 +274,11 @@ public static partial class BuiltInFunctions
         if (searchMode is 1 or -1)
             return XmatchScalarLinear(lookupValue, lookupFlat, matchMode, searchMode);
 
-        var indices = Enumerable.Range(0, lookupFlat.Count).ToList();
-        if (searchMode is -1 or -2) indices.Reverse();
+        GetLookupSearchBounds(lookupFlat.Count, searchMode, out int start, out int end, out int step);
 
         if (matchMode == 0)
         {
-            foreach (int i in indices)
+            for (int i = start; i != end; i += step)
             {
                 if (lookupFlat[i] is ErrorValue err) return err;
                 if (ScalarEquals(lookupFlat[i], lookupValue))
@@ -291,7 +290,7 @@ public static partial class BuiltInFunctions
         if (matchMode == 2)
         {
             string pattern = ToText(lookupValue);
-            foreach (int i in indices)
+            for (int i = start; i != end; i += step)
             {
                 if (lookupFlat[i] is ErrorValue err) return err;
                 if (lookupFlat[i] is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
@@ -302,12 +301,12 @@ public static partial class BuiltInFunctions
 
         if (matchMode == -1)
         {
-            var error = TryFindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: true, out int best);
+            var error = TryFindApproximateMatchIndex(lookupFlat, lookupValue, start, end, step, nextSmaller: true, out int best);
             if (error is not null) return error;
             return best >= 0 ? new NumberValue(best + 1) : ErrorValue.NA;
         }
 
-        var nextLargerError = TryFindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: false, out int nextLarger);
+        var nextLargerError = TryFindApproximateMatchIndex(lookupFlat, lookupValue, start, end, step, nextSmaller: false, out int nextLarger);
         if (nextLargerError is not null) return nextLargerError;
         return nextLarger >= 0 ? new NumberValue(nextLarger + 1) : ErrorValue.NA;
     }
@@ -632,13 +631,12 @@ public static partial class BuiltInFunctions
         if (searchMode is 1 or -1)
             return XlookupScalarLinear(lookupValue, lookupFlat, returnArr, lookupIsVertical, ifNotFound, matchMode, searchMode);
 
-        var indices = Enumerable.Range(0, lookupFlat.Count).ToList();
-        if (searchMode is -1 or -2) indices.Reverse();
+        GetLookupSearchBounds(lookupFlat.Count, searchMode, out int start, out int end, out int step);
 
         if (matchMode == 0)
         {
             // Exact match
-            foreach (int i in indices)
+            for (int i = start; i != end; i += step)
             {
                 if (lookupFlat[i] is ErrorValue err) return err;
                 if (ScalarEquals(lookupFlat[i], lookupValue))
@@ -649,7 +647,7 @@ public static partial class BuiltInFunctions
         else if (matchMode == 2)
         {
             string pattern = ToText(lookupValue);
-            foreach (int i in indices)
+            for (int i = start; i != end; i += step)
             {
                 if (lookupFlat[i] is ErrorValue err) return err;
                 if (lookupFlat[i] is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
@@ -659,13 +657,13 @@ public static partial class BuiltInFunctions
         }
         else if (matchMode == -1)
         {
-            var error = TryFindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: true, out int best);
+            var error = TryFindApproximateMatchIndex(lookupFlat, lookupValue, start, end, step, nextSmaller: true, out int best);
             if (error is not null) return error;
             return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
         }
         else
         {
-            var error = TryFindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: false, out int best);
+            var error = TryFindApproximateMatchIndex(lookupFlat, lookupValue, start, end, step, nextSmaller: false, out int best);
             if (error is not null) return error;
             return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
         }
@@ -722,12 +720,14 @@ public static partial class BuiltInFunctions
     private static ErrorValue? TryFindApproximateMatchIndex(
         IReadOnlyList<ScalarValue> lookupFlat,
         ScalarValue lookupValue,
-        IReadOnlyList<int> searchIndices,
+        int start,
+        int end,
+        int step,
         bool nextSmaller,
         out int matchIndex)
     {
         matchIndex = -1;
-        foreach (int i in searchIndices)
+        for (int i = start; i != end; i += step)
         {
             if (lookupFlat[i] is ErrorValue err) return err;
             if (ScalarEquals(lookupFlat[i], lookupValue))
@@ -738,7 +738,7 @@ public static partial class BuiltInFunctions
         }
 
         int best = -1;
-        foreach (int i in searchIndices)
+        for (int i = start; i != end; i += step)
         {
             if (lookupFlat[i] is ErrorValue err) return err;
             int candidateVsLookup = CompareScalar(lookupFlat[i], lookupValue);
@@ -758,6 +758,21 @@ public static partial class BuiltInFunctions
 
         matchIndex = best;
         return null;
+    }
+
+    private static void GetLookupSearchBounds(int count, int searchMode, out int start, out int end, out int step)
+    {
+        if (searchMode is 1 or 2)
+        {
+            start = 0;
+            end = count;
+            step = 1;
+            return;
+        }
+
+        start = count - 1;
+        end = -1;
+        step = -1;
     }
 
     private static ErrorValue? TryFindApproximateMatchIndexLinear(
