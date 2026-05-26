@@ -58,6 +58,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-extension-list-001" => true,
         "generated-workbook-file-version-001" => true,
         "generated-workbook-file-recovery-001" => true,
+        "generated-workbook-file-sharing-001" => true,
         "generated-workbook-smart-tags-001" => true,
         "generated-workbook-function-groups-001" => true,
         "generated-workbook-views-001" => true,
@@ -225,6 +226,11 @@ internal static class XlsxCorpusFixtureFactory
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <fileRecoveryPr autoRecover="1" crashSave="1" customRecoveryFlag="keep" repairLoad="0"/>
               <fileRecoveryPr dataExtractLoad="1" repairLoad="1"/>
+            </workbook>
+            """)),
+        "generated-workbook-file-sharing-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <fileSharing readOnlyRecommended="1" userName="FreexcelTest" revisionsPassword="1234"/>
             </workbook>
             """)),
         "generated-workbook-smart-tags-001" => CreatePackage(("xl/workbook.xml", """
@@ -480,6 +486,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-file-sharing-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-function-groups-001", StringComparison.OrdinalIgnoreCase) &&
@@ -648,6 +656,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookFileRecoveryFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-file-sharing-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookFileSharingFixup(archive);
             return;
         }
 
@@ -1136,6 +1150,25 @@ internal static class XlsxCorpusFixtureFactory
                 workbookNs + "fileRecoveryPr",
                 new XAttribute("dataExtractLoad", "1"),
                 new XAttribute("repairLoad", "1")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookFileSharingFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "fileSharing").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "fileSharing",
+            new XAttribute("readOnlyRecommended", "1"),
+            new XAttribute("userName", "FreexcelTest"),
+            new XAttribute("revisionsPassword", "1234")));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
