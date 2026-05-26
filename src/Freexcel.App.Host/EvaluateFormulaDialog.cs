@@ -40,7 +40,7 @@ public sealed class EvaluateFormulaDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        _nextButton = new Button { Content = "_Evaluate", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _nextButton = new Button { Content = "_Evaluate", Width = 80, Height = 26, IsDefault = true, Margin = new Thickness(4, 0, 0, 0) };
         _nextButton.Click += (_, _) =>
         {
             _session.MoveNext();
@@ -73,7 +73,7 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(restart);
 
-        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var close = new Button { Content = "_Close", Width = 80, Height = 26, IsCancel = true, Margin = new Thickness(4, 0, 0, 0) };
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 

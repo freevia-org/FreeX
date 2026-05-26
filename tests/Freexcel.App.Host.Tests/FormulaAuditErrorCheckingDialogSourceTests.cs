@@ -44,4 +44,13 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
         source.Should().Contain("ShowFormulaHelp");
         source.Should().NotContain("SystemSounds.Asterisk.Play");
     }
+
+    [Fact]
+    public void EvaluateFormulaDialog_UsesEvaluateAsDefaultAndCloseAsCancel()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));
+
+        source.Should().Contain("Content = \"_Evaluate\", Width = 80, Height = 26, IsDefault = true");
+        source.Should().Contain("Content = \"_Close\", Width = 80, Height = 26, IsCancel = true");
+    }
 }
