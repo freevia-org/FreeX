@@ -12,7 +12,8 @@ public sealed class DelimitedTextFileAdapter(string extension, string formatName
         new FileFormatDescriptor(extension, formatName, CanOpen: true, CanSave: false)
     ];
 
-    public Workbook Load(Stream stream) => DelimitedTextWorkbookReader.Load(stream, delimiter);
+    public Workbook Load(Stream stream) =>
+        DelimitedTextWorkbookReader.Load(stream, delimiter, allowSeparatorDirective: true);
 
     public void Save(Workbook workbook, Stream stream) =>
         throw new NotSupportedException($"{FormatName} is currently open-only. Use Save As Excel Workbook instead.");
