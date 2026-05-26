@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(23, "the generated metadata-pass manifest currently declares twenty-three deterministic package-retention rows");
+        rows.Should().HaveCount(24, "the generated metadata-pass manifest currently declares twenty-four deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -478,6 +478,24 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-workbook-file-recovery-001");
         AssertWorkbookFileRecovery(saved, "generated-workbook-file-recovery-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookFileSharingRow_RetainsFileSharingAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-file-sharing-001");
+        AssertWorkbookFileSharing(source, "generated-workbook-file-sharing-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 15, 1), new TextValue("freexcel-workbook-file-sharing-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-file-sharing-001");
+        AssertWorkbookFileSharing(saved, "generated-workbook-file-sharing-001 saved");
     }
 
     [Fact]
@@ -940,6 +958,19 @@ public class XlsxCorpusRunnerTests
         recoveryBlocks[0].Attribute("repairLoad")!.Value.Should().Be("0", because);
         recoveryBlocks[1].Attribute("dataExtractLoad")!.Value.Should().Be("1", because);
         recoveryBlocks[1].Attribute("repairLoad")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorkbookFileSharing(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing");
+        fileSharing.Should().NotBeNull(because);
+        fileSharing!.Attribute("readOnlyRecommended")!.Value.Should().Be("1", because);
+        fileSharing.Attribute("userName")!.Value.Should().Be("FreexcelTest", because);
+        fileSharing.Attribute("revisionsPassword")!.Value.Should().Be("1234", because);
     }
 
     private static void AssertWorkbookSmartTags(Stream package, string because)
