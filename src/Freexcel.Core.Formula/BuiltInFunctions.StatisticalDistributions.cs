@@ -1100,12 +1100,16 @@ public static partial class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
         if (args[4] is ErrorValue e4) return e4;
-        int n = (int)Math.Truncate(ToNumber(args[1]));   // sample size
-        int M = (int)Math.Truncate(ToNumber(args[2]));   // population successes
-        int N = (int)Math.Truncate(ToNumber(args[3]));   // population size
-        bool cum = ToBool(args[4]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => HypergeomDistScalar(value, n, M, N, cum));
-        return HypergeomDistScalar(args[0], n, M, N, cum);
+        return MapScalarArgs(args, values => HypergeomDistScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue HypergeomDistScalar(ScalarValue sampleSuccessesValue, ScalarValue sampleSizeValue, ScalarValue populationSuccessesValue, ScalarValue populationSizeValue, ScalarValue cumulativeValue)
+    {
+        int n = (int)Math.Truncate(ToNumber(sampleSizeValue));
+        int M = (int)Math.Truncate(ToNumber(populationSuccessesValue));
+        int N = (int)Math.Truncate(ToNumber(populationSizeValue));
+        bool cum = ToBool(cumulativeValue);
+        return HypergeomDistScalar(sampleSuccessesValue, n, M, N, cum);
     }
 
     private static ScalarValue HypergeomDistScalar(ScalarValue sampleSuccessesValue, int n, int M, int N, bool cum)
