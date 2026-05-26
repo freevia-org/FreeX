@@ -25,7 +25,10 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("tools/Publish-UserTestBuild.ps1");
         workflow.Should().Contain("-RuntimeIdentifier win-x64");
         workflow.Should().Contain("-PublishMode SingleFile");
+        workflow.Should().Contain("Publish unsigned local MSIX");
+        workflow.Should().Contain("-PublishMode Msix");
         workflow.Should().Contain("Freexcel-latest-win-x64.exe");
+        workflow.Should().Contain("Freexcel-latest-win-x64.msix");
         workflow.Should().Contain("actions/upload-artifact@v7");
         workflow.Should().Contain("gh release create");
         workflow.Should().Contain("gh release upload");
@@ -43,6 +46,9 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$releaseName = \"Freexcel (Test Release) $displayVersion ($releaseStamp) Run $runNumber Attempt $runAttempt ($shortSha)\"");
         workflow.Should().Contain("\"release_id=$releaseId\" >> $env:GITHUB_OUTPUT");
         workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile");
+        workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-msix");
+        workflow.Should().Contain("path: artifacts/upload/freexcel-*-win-x64-msix.msix");
+        workflow.Should().Contain("gh release upload $tag artifacts/upload/*.exe artifacts/upload/*.msix --clobber");
     }
 
     [Fact]
@@ -57,12 +63,30 @@ public sealed class ReleaseAutomationWorkflowTests
     }
 
     [Fact]
+    public void UserTestPublishScript_CanPackageUnsignedLocalMsix()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\")]");
+        script.Should().Contain("$artifactMsixPath = Join-Path $artifactRoot \"$artifactName.msix\"");
+        script.Should().Contain("<Identity Name=\"Freexcel.Tester\" Publisher=\"CN=FreexcelLocal\" Version=\"$msixVersion\" />");
+        script.Should().Contain("EntryPoint=\"Windows.FullTrustApplication\"");
+        script.Should().Contain("<rescap:Capability Name=\"runFullTrust\" />");
+        script.Should().Contain("Get-Command makeappx.exe");
+        script.Should().Contain("makeappx.exe was not found. Install the Windows SDK");
+        script.Should().Contain("pack /d $publishDir /p $artifactMsixPath /o");
+        script.Should().Contain("Set-Content -LiteralPath \"$artifactMsixPath.sha256\"");
+    }
+
+    [Fact]
     public void TesterReleaseWorkflow_DefaultsToStableReleaseWhenAdvertisingLatestDownload()
     {
         var workflowPath = WorkspaceFileLocator.Find(".github", "workflows", "tester-release.yml");
         var workflow = File.ReadAllText(workflowPath);
 
         workflow.Should().Contain("Download the stable latest asset: Freexcel-latest-win-x64.exe");
+        workflow.Should().Contain("Unsigned local MSIX package: Freexcel-latest-win-x64.msix");
 
         var prereleaseInput = Regex.Match(workflow, @"(?ms)^\s+prerelease:\s*$.*?^\s+type:\s+boolean\s*$");
         prereleaseInput.Success.Should().BeTrue("the workflow should expose a prerelease dispatch input");

@@ -48,7 +48,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrimaryViewAttribute(attribute.Key))
                     continue;
 
-                sheetView.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetView, attribute.Key, attribute.Value);
             }
 
             if (sheet.PrimaryViewMetadata.NativeChildXmls.Count > 0)
