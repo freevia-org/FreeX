@@ -6,6 +6,9 @@ namespace Freexcel.Core.Calc;
 
 public static partial class NumberFormatter
 {
+    private static readonly Regex SectionConditionRegex = new(
+        @"^\s*(>=|<=|<>|>|<|=)\s*([+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?)\s*$");
+
     private sealed record ParsedSection(string Format, string? ColorHex, FormatCondition? Condition);
 
     private sealed record FormatCondition(string Operator, double Value)
@@ -137,7 +140,7 @@ public static partial class NumberFormatter
 
     private static bool TryParseCondition(string token, out FormatCondition? condition)
     {
-        var match = Regex.Match(token, @"^\s*(>=|<=|<>|>|<|=)\s*([+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?)\s*$");
+        var match = SectionConditionRegex.Match(token);
         if (match.Success &&
             double.TryParse(match.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
         {

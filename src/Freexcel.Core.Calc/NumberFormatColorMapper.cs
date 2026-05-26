@@ -6,9 +6,16 @@ namespace Freexcel.Core.Calc;
 
 internal static class NumberFormatColorMapper
 {
+    private static readonly Regex LeadingColorDirectiveRegex = new(
+        @"^\[([A-Za-z]+|Color\s*\d+)\]",
+        RegexOptions.IgnoreCase);
+    private static readonly Regex IndexedColorTokenRegex = new(
+        @"^Color\s*(\d+)$",
+        RegexOptions.IgnoreCase);
+
     public static (string? Color, string Format) ExtractColor(string section)
     {
-        var match = Regex.Match(section, @"^\[([A-Za-z]+|Color\s*\d+)\]", RegexOptions.IgnoreCase);
+        var match = LeadingColorDirectiveRegex.Match(section);
         if (!match.Success)
             return (null, section);
 
@@ -48,7 +55,7 @@ internal static class NumberFormatColorMapper
         out string? color)
     {
         color = null;
-        var match = Regex.Match(token, @"^Color\s*(\d+)$", RegexOptions.IgnoreCase);
+        var match = IndexedColorTokenRegex.Match(token);
         if (!match.Success ||
             !int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ||
             !((indexedColors is not null && indexedColors.TryResolveColor(index, out var resolvedColor)) ||
