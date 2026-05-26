@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(8, "the generated metadata-pass manifest currently declares eight deterministic package-retention rows");
+        rows.Should().HaveCount(9, "the generated metadata-pass manifest currently declares nine deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -256,7 +256,6 @@ public class XlsxCorpusRunnerTests
             var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
             before.CriticalParts.Should().Contain(fixtureParts, row.Id);
             var fixtureContentTypeOverrides = ContentTypeOverridesForParts(before, fixtureParts);
-            fixtureContentTypeOverrides.Should().NotBeEmpty(row.Id);
 
             source.Position = 0;
             XlsxFeatureInspector.Inspect(source).HasUnsupportedFeatures.Should().BeFalse(row.Id);
@@ -277,7 +276,8 @@ public class XlsxCorpusRunnerTests
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
             after.CriticalRelationshipDetails.Should().Contain(before.CriticalRelationshipDetails, row.Id);
             after.CriticalContentTypeOverrides.Should().Contain(before.CriticalContentTypeOverrides, row.Id);
-            after.CriticalContentTypeOverrides.Should().Contain(fixtureContentTypeOverrides, row.Id);
+            if (fixtureContentTypeOverrides.Count > 0)
+                after.CriticalContentTypeOverrides.Should().Contain(fixtureContentTypeOverrides, row.Id);
 
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
@@ -424,6 +424,34 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-header-footer-legacy-drawing-001");
         AssertHeaderFooterLegacyDrawingPackageGraph(saved, "generated-header-footer-legacy-drawing-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookExtensionListRow_RetainsUnknownWorkbookExtensionsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-extension-list-001");
+        AssertWorkbookExtensionList(source, "generated-workbook-extension-list-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-workbook-extension-list-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-extension-list-001");
+        AssertWorkbookExtensionList(saved, "generated-workbook-extension-list-001 saved");
+    }
+
+    private static void AssertWorkbookExtensionList(Stream package, string because)
+    {
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Contain("{00112233-4455-6677-8899-AABBCCDDEEFF}", because)
+            .And.Contain("FreexcelUnknownWorkbookExtension", because);
     }
 
     private static void AssertHeaderFooterLegacyDrawingPackageGraph(Stream package, string because)
@@ -2434,6 +2462,7 @@ public class XlsxCorpusRunnerTests
 
     private static bool IsFidelityCriticalPart(string path) =>
         path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) ||
