@@ -1,6 +1,7 @@
 using Freexcel.Core.Calc;
 using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
+using FluentAssertions;
 using System.Diagnostics;
 
 namespace Freexcel.Core.Calc.Tests;
@@ -117,6 +118,49 @@ public class PerformanceBenchmarkTests
         // Assert: Target <1s
         Assert.True(recalcSw.ElapsedMilliseconds < 2000, 
             $"100k recalc took {recalcSw.ElapsedMilliseconds}ms (expected <2000ms)");
+    }
+
+    [Fact]
+    public void Benchmark_RepeatedSmallChangeRecalc_ReportsAllocationDiagnostics()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        const uint formulaCount = 5_000;
+        const int iterations = 250;
+
+        for (uint row = 1; row <= formulaCount; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 2));
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 3), $"A{row}+B{row}");
+        }
+
+        engine.RebuildFormulaDependencies(workbook);
+
+        var changed = new[]
+        {
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2)
+        };
+
+        engine.Recalculate(workbook, changed);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+            engine.Recalculate(workbook, changed);
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Repeated small-change recalc: {iterations} iterations, {formulaCount:N0} formulas, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes allocated, " +
+            $"{allocated / iterations:N0} bytes/iteration");
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(3));
+        allocated.Should().BeGreaterThan(0);
     }
 
     /// <summary>
