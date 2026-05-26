@@ -136,6 +136,19 @@ public static class RibbonAdaptiveLayoutPlanner
             return true;
         }
 
+        if (IsViewRibbonGroupSet(groupNames))
+        {
+            ApplyPriorityState(
+                states,
+                groupNames,
+                availableWidth <= 1120
+                    ? ["Workbook Views", "Show"]
+                    : availableWidth <= 1320
+                        ? ["Workbook Views", "Show", "Zoom"]
+                        : ["Workbook Views", "Show", "Zoom", "Window"],
+                RibbonAdaptiveGroupState.Full);
+        }
+
         var firstCollapsedIndex = GetFirstCollapsedIndexForKnownTab(availableWidth, groupNames);
         if (firstCollapsedIndex is null)
             return false;
@@ -153,7 +166,7 @@ public static class RibbonAdaptiveLayoutPlanner
             return availableWidth <= 1120 ? 2 : availableWidth <= 1320 ? 3 : null;
 
         if (IsDrawRibbonGroupSet(groupNames))
-            return availableWidth <= 1120 ? 1 : availableWidth <= 1320 ? 2 : null;
+            return availableWidth <= 1120 ? 3 : availableWidth <= 1320 ? 4 : null;
 
         return null;
     }
@@ -250,9 +263,9 @@ public static class RibbonAdaptiveLayoutPlanner
 
     private static bool IsDrawRibbonGroupSet(IReadOnlyList<string> groupNames) =>
         groupNames.Count >= 3 &&
-        TryFindGroupIndex(groupNames, "Draw", out _) &&
-        TryFindGroupIndex(groupNames, "Arrange", out _) &&
-        TryFindGroupIndex(groupNames, "Format", out _);
+        TryFindGroupIndex(groupNames, "Tools", out _) &&
+        TryFindGroupIndex(groupNames, "Pens", out _) &&
+        TryFindGroupIndex(groupNames, "Convert", out _);
 
     private static bool IsTinyRibbonGroupSet(IReadOnlyList<string> groupNames) =>
         groupNames.Count <= 2 &&
