@@ -45,18 +45,19 @@ public partial class GridView
 
         _mergeLookup.Clear();
 
-        var visRows = new HashSet<uint>(Viewport.RowMetrics.Select(r => r.Row));
-        var visCols = new HashSet<uint>(Viewport.ColMetrics.Select(c => c.Col));
-
-        foreach (var merge in MergedRegions)
+        foreach (var rowMetric in Viewport.RowMetrics)
         {
-            for (uint r = merge.Start.Row; r <= merge.End.Row; r++)
+            var row = rowMetric.Row;
+            foreach (var colMetric in Viewport.ColMetrics)
             {
-                if (!visRows.Contains(r)) continue;
-                for (uint c = merge.Start.Col; c <= merge.End.Col; c++)
+                var col = colMetric.Col;
+                foreach (var merge in MergedRegions)
                 {
-                    if (visCols.Contains(c))
-                        _mergeLookup[(r, c)] = merge;
+                    if (row >= merge.Start.Row &&
+                        row <= merge.End.Row &&
+                        col >= merge.Start.Col &&
+                        col <= merge.End.Col)
+                        _mergeLookup[(row, col)] = merge;
                 }
             }
         }

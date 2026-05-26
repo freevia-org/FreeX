@@ -14,8 +14,22 @@ public sealed class GridViewMergeLookupPerformanceTests
             source.IndexOf("private void RebuildMergeLookup()", StringComparison.Ordinal)..
             source.IndexOf("private DispatcherTimer?", StringComparison.Ordinal)];
 
-        method.IndexOf("MergedRegions is not { Count: > 0 }", StringComparison.Ordinal)
-            .Should().BeLessThan(method.IndexOf("new HashSet<uint>", StringComparison.Ordinal));
+        method.Should().Contain("MergedRegions is not { Count: > 0 }");
+        method.Should().NotContain("new HashSet<uint>");
+    }
+
+    [Fact]
+    public void RebuildMergeLookup_BoundsLargeMergeWorkToVisibleMetrics()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.State.cs"));
+        var method = source[
+            source.IndexOf("private void RebuildMergeLookup()", StringComparison.Ordinal)..
+            source.IndexOf("private DispatcherTimer?", StringComparison.Ordinal)];
+
+        method.Should().Contain("foreach (var rowMetric in Viewport.RowMetrics)");
+        method.Should().Contain("foreach (var colMetric in Viewport.ColMetrics)");
+        method.Should().NotContain("r <= merge.End.Row");
+        method.Should().NotContain("c <= merge.End.Col");
     }
 
     [Fact]
