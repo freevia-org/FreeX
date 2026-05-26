@@ -72,13 +72,6 @@ public sealed partial class AdvancedFilterDialog : Window
         var content = new StackPanel();
         root.Children.Add(content);
 
-        content.Children.Add(new TextBlock
-        {
-            Text = "Action",
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 4)
-        });
-
         var actionGroup = new GroupBox { Header = "Action", Margin = new Thickness(0, 0, 0, 10) };
         var actionPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
         _filterInPlaceButton.Margin = new Thickness(0, 0, 0, 4);
