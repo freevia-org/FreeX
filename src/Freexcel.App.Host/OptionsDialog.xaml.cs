@@ -154,6 +154,7 @@ public partial class OptionsDialog : Window
                 _ => FreexcelObjectDisplay.All
             },
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
+            PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
         };
         opts.Save();
         Result = opts;
