@@ -935,6 +935,15 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotStyleGalleryDialog_LabelsStyleGalleryWithAccessKeyAndAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotStyleGalleryDialog.cs"));
+
+        source.Should().Contain("new Label { Content = \"_PivotTable style:\", Target = _styleGallery");
+        source.Should().Contain("AutomationProperties.SetName(_styleGallery, \"PivotTable style gallery\");");
+    }
+
+    [Fact]
     public void PivotStyleGalleryDialog_CreateResult_NormalizesBlankStyleToDefault()
     {
         PivotStyleGalleryDialog.CreateResult("  PivotStyleDark28  ")

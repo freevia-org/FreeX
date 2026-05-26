@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -35,6 +36,8 @@ public sealed class PivotStyleGalleryDialog : Window
 
         _styleGallery.SelectionMode = SelectionMode.Single;
         _styleGallery.Margin = new Thickness(0, 0, 0, 12);
+        AutomationProperties.SetName(_styleGallery, "PivotTable style gallery");
+        root.Children.Add(new Label { Content = "_PivotTable style:", Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         DockPanel.SetDock(_styleGallery, Dock.Top);
         root.Children.Add(_styleGallery);
         root.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
