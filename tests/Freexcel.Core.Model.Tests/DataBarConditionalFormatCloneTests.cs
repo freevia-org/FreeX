@@ -54,6 +54,34 @@ public sealed class DataBarConditionalFormatCloneTests
     }
 
     [Fact]
+    public void PasteConditionalFormatsCommand_PreservesIconSetGteThresholds()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3TrafficLights1"
+        };
+        source.IconSetThresholds.AddRange(
+        [
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true)
+        ]);
+        sheet.ConditionalFormats.Add(source);
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1));
+
+        new PasteConditionalFormatsCommand(sheet.Id, sourceRange, new CellAddress(sheet.Id, 10, 3), transpose: false)
+            .Apply(new SimpleContext(workbook));
+
+        var pasted = sheet.ConditionalFormats.Should().HaveCount(2).And.Subject.Last();
+        pasted.IconSetThresholds.Should().Equal(
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true));
+    }
+
+    [Fact]
     public void PasteConditionalFormatsCommand_DropsExistingX14IdNativeChild()
     {
         var workbook = new Workbook("Book1");
