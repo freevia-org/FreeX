@@ -279,7 +279,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotTableDataSourceDialogOpenedFromKeyboard_FocusesSourceRange()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
 
@@ -294,7 +294,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotTableDataSourceRangePicker_RefocusesSourceInputAfterRequest()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
 
@@ -309,7 +309,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotTableDataSourceDialogInvalidRange_ShowsOwnedWarningAndRefocusesSource()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
         var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
@@ -579,9 +579,9 @@ public sealed class PivotWorkflowDialogTests
     public void PivotChartTypeDialogOpenedFromKeyboard_FocusesRecommendedGallery()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotChartTypeDialog.cs",
             "public sealed class PivotChartTypeDialog",
-            "public sealed class PivotChartOptionsDialogResult");
+            "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -802,12 +802,12 @@ public sealed class PivotWorkflowDialogTests
 
         foreach (var content in new[]
         {
-            "Layout & Format",
-            "Totals & Filters",
-            "Display",
-            "Data",
-            "Printing",
-            "Alt Text",
+            "_Layout & Format",
+            "_Totals & Filters",
+            "_Display",
+            "_Data",
+            "_Printing",
+            "_Alt Text",
             "_emptyCellsBox",
             "_compactIndentBox",
             "_autofitColumnsBox",
@@ -1413,6 +1413,9 @@ public sealed class PivotWorkflowDialogTests
             new[]
             {
                 "PivotWorkflowDialogs.cs",
+                "PivotTableDataSourceDialog.cs",
+                "PivotChartTypeDialog.cs",
+                "PivotDialogLayout.cs",
                 "PivotChartOptionsDialog.cs",
                 "PivotSlicerTimelineDialogs.cs",
                 "PivotCalculatedDialogs.cs",

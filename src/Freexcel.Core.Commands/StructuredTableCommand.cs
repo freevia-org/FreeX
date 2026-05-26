@@ -131,6 +131,108 @@ public sealed record StructuredTableStyleBanding(
     CellColor EvenRowFill,
     CellColor HeaderFontColor);
 
+public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly int _tableId;
+    private readonly bool _showFirstColumn;
+    private readonly bool _showLastColumn;
+    private readonly bool _showRowStripes;
+    private readonly bool _showColumnStripes;
+    private StructuredTableModel? _previousTable;
+
+    public string Label => "Configure Table Style Options";
+
+    public ConfigureStructuredTableStyleOptionsCommand(
+        SheetId sheetId,
+        int tableId,
+        bool showFirstColumn,
+        bool showLastColumn,
+        bool showRowStripes,
+        bool showColumnStripes)
+    {
+        _sheetId = sheetId;
+        _tableId = tableId;
+        _showFirstColumn = showFirstColumn;
+        _showLastColumn = showLastColumn;
+        _showRowStripes = showRowStripes;
+        _showColumnStripes = showColumnStripes;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
+        if (tableIndex < 0)
+            return new CommandOutcome(false, "Table was not found.");
+
+        _previousTable = sheet.StructuredTables[tableIndex];
+        sheet.StructuredTables[tableIndex] = CopyWithStyleOptions(
+            _previousTable,
+            _showFirstColumn,
+            _showLastColumn,
+            _showRowStripes,
+            _showColumnStripes);
+
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousTable is null)
+            return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
+        if (tableIndex >= 0)
+            sheet.StructuredTables[tableIndex] = _previousTable;
+    }
+
+    private static StructuredTableModel CopyWithStyleOptions(
+        StructuredTableModel table,
+        bool showFirstColumn,
+        bool showLastColumn,
+        bool showRowStripes,
+        bool showColumnStripes)
+    {
+        var copy = new StructuredTableModel
+        {
+            Id = table.Id,
+            Name = table.Name,
+            DisplayName = table.DisplayName,
+            Range = table.Range,
+            HasAutoFilter = table.HasAutoFilter,
+            TotalsRowShown = table.TotalsRowShown,
+            HeaderRowCount = table.HeaderRowCount,
+            TotalsRowCount = table.TotalsRowCount,
+            InsertRow = table.InsertRow,
+            InsertRowShift = table.InsertRowShift,
+            Published = table.Published,
+            Comment = table.Comment,
+            StyleName = table.StyleName,
+            ShowFirstColumn = showFirstColumn,
+            ShowLastColumn = showLastColumn,
+            ShowRowStripes = showRowStripes,
+            ShowColumnStripes = showColumnStripes,
+            PackagePart = table.PackagePart,
+            NativeSortStateXml = table.NativeSortStateXml,
+            NativeAttributes = table.NativeAttributes,
+            NativeChildXmls = table.NativeChildXmls,
+            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
+            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
+            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
+            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
+        };
+
+        copy.Columns.AddRange(table.Columns);
+        copy.FilterColumns.AddRange(table.FilterColumns);
+        return copy;
+    }
+}
+
 public sealed class CreateStyledStructuredTableCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;

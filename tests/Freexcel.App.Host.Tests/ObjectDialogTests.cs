@@ -317,6 +317,7 @@ public sealed class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
 
+        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(\"_Degrees:\", _rotationBox, Accept)");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_rotationBox.Focus();");

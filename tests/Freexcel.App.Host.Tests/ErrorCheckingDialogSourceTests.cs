@@ -55,6 +55,8 @@ public sealed class ErrorCheckingDialogSourceTests
             "_Close"
         })
             source.Should().Contain($"Content = \"{content}\"");
+
+        source.Should().Contain("Content = \"_Close\", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
     }
 
     [Fact]

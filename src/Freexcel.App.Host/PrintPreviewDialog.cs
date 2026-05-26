@@ -144,6 +144,7 @@ public sealed partial class PrintPreviewDialog : Window
         {
             Content = "_Close Preview",
             Padding = new Thickness(12, 4, 12, 4),
+            IsCancel = true,
             ToolTip = "Return to the workbook."
         };
         AutomationProperties.SetName(printButton, "Print");
