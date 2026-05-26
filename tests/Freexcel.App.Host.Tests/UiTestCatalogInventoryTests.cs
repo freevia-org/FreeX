@@ -16,7 +16,11 @@ public sealed partial class UiTestCatalogInventoryTests
         var inventory = ReadCommandInventory();
         var shortcutSummary = ReadShortcutSummary();
         var topLevelTabs = ReadVisibleTopLevelRibbonTabs();
+        var contextualTabs = ReadContextualRibbonTabs();
+        var dialogTypeNames = ReadDialogTypeNames();
         var xamlClickWiredControls = ReadMainWindowXamlClickHandlerCount();
+        var screenshotToolScripts = ReadDocumentedScreenshotToolScripts();
+        var uiEvidenceScreenshotCount = ReadUiEvidenceScreenshotCount();
         var worksheetContextMenuCommandCount = WorksheetContextMenuPlanner.BuildCommands()
             .Count(command => !command.IsSeparator);
 
@@ -37,6 +41,16 @@ public sealed partial class UiTestCatalogInventoryTests
             $"{string.Join(", ", topLevelTabs)}.");
         AssertSnapshotRow(
             snapshot,
+            "Contextual ribbon tab declarations",
+            contextualTabs.Count,
+            $"{string.Join(", ", contextualTabs)} from collapsed `MainWindow.xaml` tab declarations.");
+        AssertSnapshotRow(
+            snapshot,
+            "Dialog source classes",
+            dialogTypeNames.Count,
+            "Unique `*Dialog` class/x:Class names in `src/Freexcel.App.Host`.");
+        AssertSnapshotRow(
+            snapshot,
             "XAML click-wired controls",
             xamlClickWiredControls,
             "`Click=\"...\"` occurrences in `MainWindow.xaml` on latest synced `origin/main`.");
@@ -50,6 +64,16 @@ public sealed partial class UiTestCatalogInventoryTests
             "Worksheet context menu commands",
             worksheetContextMenuCommandCount,
             "From `WorksheetContextMenuPlanner.BuildCommands()`.");
+        AssertSnapshotRow(
+            snapshot,
+            "Screenshot tool scripts",
+            screenshotToolScripts.Count,
+            $"{string.Join(", ", screenshotToolScripts.Select(script => $"`tools/{script}`"))} documented and present.");
+        AssertSnapshotRow(
+            snapshot,
+            "Existing UI evidence screenshots",
+            uiEvidenceScreenshotCount,
+            "Current `docs/ui-test-artifacts` images from prior passes; append new evidence paths to the relevant row.");
     }
 
     [Fact]
@@ -90,7 +114,7 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().NotContain(
             "Generate a machine-readable row list from `COMMAND_SURFACE_PARITY.md`",
             "the source-based inventory guard now exists and future work should expand it");
-        catalog.Should().Contain("Expand the source-based machine-readable inventory guard");
+        catalog.Should().Contain("Continue expanding the source-based machine-readable inventory guard");
     }
 
     private static IReadOnlyDictionary<string, InventorySnapshotRow> ReadInventorySnapshot()
@@ -180,10 +204,79 @@ public sealed partial class UiTestCatalogInventoryTests
             .ToArray();
     }
 
+    private static IReadOnlyList<string> ReadContextualRibbonTabs()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        return document
+            .Descendants(presentation + "TabItem")
+            .Where(tab => tab.Attribute("Visibility")?.Value == "Collapsed")
+            .Select(tab => tab.Attribute("Header")?.Value)
+            .Where(header => !string.IsNullOrWhiteSpace(header))
+            .Cast<string>()
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> ReadDialogTypeNames()
+    {
+        var hostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))
+            ?? throw new DirectoryNotFoundException("Could not locate Freexcel.App.Host.");
+        var dialogNames = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (var sourceFile in Directory.EnumerateFiles(hostDirectory, "*.cs", SearchOption.TopDirectoryOnly))
+        {
+            var source = File.ReadAllText(sourceFile);
+            foreach (Match match in DialogClassDeclaration().Matches(source))
+            {
+                dialogNames.Add(match.Groups["name"].Value);
+            }
+        }
+
+        foreach (var xamlFile in Directory.EnumerateFiles(hostDirectory, "*.xaml", SearchOption.TopDirectoryOnly))
+        {
+            var xaml = File.ReadAllText(xamlFile);
+            foreach (Match match in DialogXamlClassDeclaration().Matches(xaml))
+            {
+                dialogNames.Add(match.Groups["name"].Value.Split('.').Last());
+            }
+        }
+
+        return dialogNames.ToArray();
+    }
+
     private static int ReadMainWindowXamlClickHandlerCount()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         return XamlClickHandler().Matches(xaml).Count;
+    }
+
+    private static IReadOnlyList<string> ReadDocumentedScreenshotToolScripts()
+    {
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var scripts = ScreenshotToolPath()
+            .Matches(catalog)
+            .Select(match => match.Groups["script"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var script in scripts)
+        {
+            File.Exists(WorkspaceFileLocator.Find("tools", script)).Should().BeTrue();
+        }
+
+        return scripts;
+    }
+
+    private static int ReadUiEvidenceScreenshotCount()
+    {
+        var artifactDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "ui-test-artifacts", "launch-shell.png"))
+            ?? throw new DirectoryNotFoundException("Could not locate docs/ui-test-artifacts.");
+
+        return Directory
+            .EnumerateFiles(artifactDirectory, "*.png", SearchOption.TopDirectoryOnly)
+            .Count();
     }
 
     private static int ReadShortcutSummaryCount(IReadOnlyList<string> lines, string label)
@@ -218,6 +311,15 @@ public sealed partial class UiTestCatalogInventoryTests
 
     [GeneratedRegex(@"Click=""[^""]+""")]
     private static partial Regex XamlClickHandler();
+
+    [GeneratedRegex(@"\bclass\s+(?<name>[A-Za-z0-9_]*Dialog)\b")]
+    private static partial Regex DialogClassDeclaration();
+
+    [GeneratedRegex(@"x:Class=""(?<name>[A-Za-z0-9_.]*Dialog)""")]
+    private static partial Regex DialogXamlClassDeclaration();
+
+    [GeneratedRegex(@"`tools/(?<script>screenshot_(?:excel|ribbon)\.ps1)`")]
+    private static partial Regex ScreenshotToolPath();
 
     private sealed record InventorySnapshotRow(int Count, string Notes);
 
