@@ -1322,6 +1322,89 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_NumberTab_UsesWidthAwareAccountingPreview()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var preview = GetControl<TextBlock>(dialog, "NumberPreview");
+                var usRegion = new RegionInfo("en-US");
+                var usCulture = CultureInfo.GetCultureInfo("en-US");
+                var usCultureLabel = $"{usRegion.CurrencySymbol} {usCulture.EnglishName}";
+
+                categories.SelectedItem = "Accounting";
+                decimals.Text = "2";
+                symbols.SelectedItem = "GBP";
+                preview.Text.Should().Be("GBP   1,234.56");
+
+                symbols.SelectedItem = usCultureLabel;
+                preview.Text.Should().Be("$     1,234.56");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_TextFormatWithLayoutDirectivePreviewsSampleText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var preview = GetControl<TextBlock>(dialog, "NumberPreview");
+                var type = GetControl<ComboBox>(dialog, "NumberFormatCombo");
+
+                categories.SelectedItem = "Custom";
+                type.Text = "@_* ";
+                preview.Text.Should().Be("Sample");
+
+                type.Text = ";;;@_* ";
+                preview.Text.Should().Be("Sample");
+
+                PreviewForFormat("@ 0_* ").Should().Be("Sample 0 ");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_EscapedOrQuotedLayoutCharactersDoNotForceAccountingPreview()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var preview = GetControl<TextBlock>(dialog, "NumberPreview");
+                var type = GetControl<ComboBox>(dialog, "NumberFormatCombo");
+
+                categories.SelectedItem = "Custom";
+                type.Text = @"@\*";
+                preview.Text.Should().Be("Sample*");
+                PreviewForFormat("\"*_\"@").Should().Be("*_Sample");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_NumberTab_EnablesOnlyControlsThatAffectSelectedCategory()
     {
         StaTestRunner.Run(() =>
@@ -1529,6 +1612,13 @@ public sealed class FormatCellsDialogXamlTests
         var field = typeof(FormatCellsDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static string PreviewForFormat(string format)
+    {
+        var method = typeof(FormatCellsDialog).GetMethod("PreviewForFormat", BindingFlags.Static | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        return method!.Invoke(null, [format]).Should().BeOfType<string>().Subject;
     }
 
     private static void ClickOkForTest(FormatCellsDialog dialog)
