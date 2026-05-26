@@ -288,6 +288,69 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void ScopeSelector_IncludesTableScopeWhenSelectionIntersectsStructuredTable()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var tableRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 6, 4));
+            sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "Sales", DisplayName = "Sales", Range = tableRange });
+            var selection = new GridRange(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 3, 3));
+            var dialog = new ManageConditionalFormatsDialog(sheet, selection);
+
+            var scope = GetControl<ComboBox>(dialog, "_scopeBox");
+
+            scope.Items.Cast<string>().Should().Equal("This Worksheet", "This Table", "Current Selection");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ScopeSelector_TableScopeFiltersRulesByTableRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var tableRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 6, 4));
+            sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "Sales", DisplayName = "Sales", Range = tableRange });
+            sheet.ConditionalFormats.Add(CreateRule(sheet.Id, 3, 3, 1));
+            sheet.ConditionalFormats.Add(CreateRule(sheet.Id, 10, 10, 2));
+            var selection = new GridRange(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 3, 3));
+            var dialog = new ManageConditionalFormatsDialog(sheet, selection);
+
+            GetControl<ComboBox>(dialog, "_scopeBox").SelectedItem = "This Table";
+            var listView = GetControl<ListView>(dialog, "_listView");
+
+            listView.Items.Cast<ConditionalFormat>().Should().ContainSingle(rule => rule.AppliesTo.Start.Row == 3);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void BuildResultRules_ForTableScopePreservesRulesOutsideTable()
+    {
+        var sheetId = SheetId.New();
+        var tableRange = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 6, 4));
+        var tableRule = CreateRule(sheetId, 3, 3, 1);
+        var outsideRule = CreateRule(sheetId, 10, 10, 2);
+        var editedTableRule = CreateRule(sheetId, 4, 4, 99, stopIfTrue: true);
+
+        var result = ManageConditionalFormatsDialog.BuildResultRules(
+            [tableRule, outsideRule],
+            tableRange,
+            filterToSelection: true,
+            [editedTableRule]);
+
+        result.Should().HaveCount(2);
+        result[0].StopIfTrue.Should().BeTrue();
+        result[0].Priority.Should().Be(1);
+        result[1].AppliesTo.Should().Be(outsideRule.AppliesTo);
+        result[1].Priority.Should().Be(2);
+    }
+
+    [Fact]
     public void ToolbarButtons_EnableOnlyValidSelectedRuleActions()
     {
         StaTestRunner.Run(() =>
