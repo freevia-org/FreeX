@@ -24,6 +24,8 @@ internal static class XlsxStylesheetMetadataPreserver
         var changed = false;
         if (MergeStylesheetColors(sourceStylesXml.Root?.Element(workbookNs + "colors"), targetRoot, workbookNs))
             changed = true;
+        if (MergeStylesheetDifferentialStyles(sourceStylesXml.Root?.Element(workbookNs + "dxfs"), targetRoot, workbookNs))
+            changed = true;
         if (MergeStylesheetTableStyles(sourceStylesXml.Root?.Element(workbookNs + "tableStyles"), targetRoot, workbookNs))
             changed = true;
         if (XlsxNativeXmlMerger.MergeExtensionList(sourceStylesXml.Root?.Element(workbookNs + "extLst"), targetRoot, workbookNs))
@@ -46,6 +48,40 @@ internal static class XlsxStylesheetMetadataPreserver
         }
 
         return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceColors, targetColors);
+    }
+
+    private static bool MergeStylesheetDifferentialStyles(XElement? sourceDifferentialStyles, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceDifferentialStyles is null)
+            return false;
+
+        var targetDifferentialStyles = targetRoot.Element(workbookNs + "dxfs");
+        if (targetDifferentialStyles is null)
+        {
+            targetRoot.Add(new XElement(sourceDifferentialStyles));
+            return true;
+        }
+
+        var changed = XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceDifferentialStyles, targetDifferentialStyles);
+        var targetStyles = targetDifferentialStyles.Elements(workbookNs + "dxf").ToList();
+        foreach (var (sourceStyle, index) in sourceDifferentialStyles.Elements(workbookNs + "dxf").Select((style, index) => (style, index)))
+        {
+            if (index >= targetStyles.Count)
+            {
+                targetDifferentialStyles.Add(new XElement(sourceStyle));
+                targetStyles.Add(targetDifferentialStyles.Elements(workbookNs + "dxf").Last());
+                changed = true;
+                continue;
+            }
+
+            if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceStyle, targetStyles[index]))
+                changed = true;
+        }
+
+        targetDifferentialStyles.SetAttributeValue(
+            "count",
+            targetDifferentialStyles.Elements(workbookNs + "dxf").Count().ToString(CultureInfo.InvariantCulture));
+        return changed;
     }
 
     private static bool MergeStylesheetTableStyles(XElement? sourceTableStyles, XElement targetRoot, XNamespace workbookNs)
