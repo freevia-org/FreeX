@@ -7,19 +7,7 @@ namespace Freexcel.Core.Calc;
 public static partial class NumberFormatter
 {
     // Returned alongside display text so the grid can apply conditional colors.
-    public sealed record FormatResult(string Text, string? ColorHex = null)
-    {
-        public FormatResult(
-            string text,
-            string? colorHex,
-            WorkbookThemeColorReference? themeColor)
-            : this(text, colorHex)
-        {
-            ThemeColor = themeColor;
-        }
-
-        public WorkbookThemeColorReference? ThemeColor { get; init; }
-    }
+    public sealed record FormatResult(string Text, string? ColorHex = null);
 
     public static string Format(ScalarValue value, string formatString)
         => FormatWithColor(value, formatString).Text;
@@ -97,11 +85,10 @@ public static partial class NumberFormatter
 
         ParsedSection section;
         double displayValue = value;
-        var selectedIndex = 0;
 
         if (hasConditions)
         {
-            selectedIndex = Array.FindIndex(parsedSections, section =>
+            int selectedIndex = Array.FindIndex(parsedSections, section =>
                 section.Condition is not null && section.Condition.Matches(value));
             if (selectedIndex < 0)
             {
@@ -114,17 +101,14 @@ public static partial class NumberFormatter
         }
         else
         {
-            (section, displayValue, selectedIndex) = SelectPositionalSection(value, parsedSections);
+            (section, displayValue) = SelectPositionalSection(value, parsedSections);
         }
 
-        var preserveAccountingZeroDashAlignment = !hasConditions &&
-            selectedIndex == 2 &&
-            HasAccountingZeroDashPlaceholder(section.Format);
         string text = section.Format == ""
             ? ""
-            : ApplyNumericFormat(displayValue, section.Format, preserveAccountingZeroDashAlignment);
+            : ApplyNumericFormat(displayValue, section.Format);
         text = ApplyAccountingTargetWidth(text, section.Format, targetWidthCharacters);
-        return new FormatResult(text, section.ColorHex, section.ThemeColor);
+        return new FormatResult(text, section.ColorHex);
     }
 
     private static string ApplyAccountingTargetWidth(string text, string format, int? targetWidthCharacters)
@@ -278,10 +262,7 @@ public static partial class NumberFormatter
         return existingGap >= 0 ? existingGap + 1 : firstValueChar;
     }
 
-    private static string ApplyNumericFormat(
-        double value,
-        string format,
-        bool preserveAccountingZeroDashAlignment = false)
+    private static string ApplyNumericFormat(double value, string format)
     {
         if (string.IsNullOrEmpty(format) || IsGeneralFormat(format))
             return FormatNumberGeneral(value);
@@ -355,18 +336,8 @@ public static partial class NumberFormatter
             (prefix, format, suffix) = ExtractNumericAffixes(format);
 
             if (format.All(c => c is '?' || char.IsWhiteSpace(c)) &&
-                preserveAccountingZeroDashAlignment &&
-                IsAccountingDashPlaceholder(prefix, suffix))
-            {
-                return prefix + RenderQuestionOnlyAlignment(format) + suffix;
-            }
-
-            if (format.All(c => c is '?' || char.IsWhiteSpace(c)) &&
-                value == 0 &&
-                HasVisibleAffix(prefix, suffix))
-            {
+                !ShouldRenderQuestionOnlyFormat(prefix, suffix))
                 return prefix + suffix;
-            }
 
             if (string.IsNullOrEmpty(format))
                 return prefix + suffix;
@@ -640,25 +611,6 @@ public static partial class NumberFormatter
 
     private static bool IsNumericPlaceholder(char c)
         => c is '0' or '#' or '?';
-
-    private static bool IsAccountingDashPlaceholder(string prefix, string suffix) =>
-        suffix.Length == 0 && prefix.TrimEnd().EndsWith("-", StringComparison.Ordinal);
-
-    private static bool HasVisibleAffix(string prefix, string suffix) =>
-        !string.IsNullOrWhiteSpace(prefix) || !string.IsNullOrWhiteSpace(suffix);
-
-    private static bool HasAccountingZeroDashPlaceholder(string format) =>
-        HasAccountingLayoutDirective(format) &&
-        HasActiveQuestionPlaceholder(format) &&
-        format.Contains("\"-\"", StringComparison.Ordinal);
-
-    private static string RenderQuestionOnlyAlignment(string format)
-    {
-        var result = new System.Text.StringBuilder(format.Length);
-        foreach (var c in format)
-            result.Append(c == '?' ? ' ' : c);
-        return result.ToString();
-    }
 
     private static bool IsGeneralFormat(string format) =>
         string.Equals(format, "General", StringComparison.OrdinalIgnoreCase);
