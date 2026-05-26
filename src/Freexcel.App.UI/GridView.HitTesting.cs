@@ -43,26 +43,12 @@ public partial class GridView
             Math.Max(0, guide.Value.Right - guide.Value.Left),
             Math.Max(0, guide.Value.Bottom - guide.Value.Top));
         var handles = CalculatePageMarginRulerHandles(pageBounds, PaperSize, PageOrientation, PageMargins);
-        if (HitTestPageMarginRulerHandles(handles, pos, ShowRulers) is { } handleEdge)
-            return handleEdge;
-
-        if (pos.Y >= guide.Value.Top && pos.Y <= guide.Value.Bottom)
-        {
-            if (Math.Abs(pos.X - guide.Value.MarginLeft) <= PageMarginGuideHitZone)
-                return WorksheetPageMarginEdge.Left;
-            if (Math.Abs(pos.X - guide.Value.MarginRight) <= PageMarginGuideHitZone)
-                return WorksheetPageMarginEdge.Right;
-        }
-
-        if (pos.X >= guide.Value.Left && pos.X <= guide.Value.Right)
-        {
-            if (Math.Abs(pos.Y - guide.Value.MarginTop) <= PageMarginGuideHitZone)
-                return WorksheetPageMarginEdge.Top;
-            if (Math.Abs(pos.Y - guide.Value.MarginBottom) <= PageMarginGuideHitZone)
-                return WorksheetPageMarginEdge.Bottom;
-        }
-
-        return null;
+        return PageMarginGuideLayoutPlanner.HitTestGuide(
+            guide.Value,
+            pos,
+            handles,
+            ShowRulers,
+            PageMarginGuideHitZone);
     }
 
     private WorksheetPageMargins? GetPageMarginsForDraggedGuide(Point pos)
@@ -73,16 +59,13 @@ public partial class GridView
         var guide = GetPageMarginGuidePixels(printArea);
         if (guide is null) return null;
 
-        var fraction = edge is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right
-            ? (pos.X - guide.Value.Left) / Math.Max(1.0, guide.Value.Right - guide.Value.Left)
-            : (pos.Y - guide.Value.Top) / Math.Max(1.0, guide.Value.Bottom - guide.Value.Top);
-
-        return WorksheetPageLayout.GetMarginsFromGuideFraction(
+        return PageMarginGuideLayoutPlanner.CalculateDraggedMargins(
             PaperSize,
             PageOrientation,
             PageMargins,
             edge,
-            fraction);
+            guide.Value,
+            pos);
     }
 
     public static (ChartModel Chart, string FieldButton)? HitTestPivotChartFieldButton(
