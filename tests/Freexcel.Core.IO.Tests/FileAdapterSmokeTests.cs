@@ -13704,6 +13704,7 @@ public partial class FileAdapterSmokeTests
             {
                 ["rightToLeft"] = "1",
                 ["showZeros"] = "0",
+                ["invalid primaryView attr"] = "skip",
                 ["zoomScale"] = "42"
             },
             NativeChildXmls =
@@ -13713,7 +13714,9 @@ public partial class FileAdapterSmokeTests
         };
 
         var saved = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, saved);
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -13727,6 +13730,7 @@ public partial class FileAdapterSmokeTests
         sheetView.Attribute("showZeros")!.Value.Should().Be("0");
         sheetView.Attribute("zoomScale").Should().BeNull("zoomScale is modeled separately");
         sheetView.Element(worksheetNs + "pivotSelection")!.Attribute("pane")!.Value.Should().Be("topRight");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
