@@ -11694,6 +11694,34 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetSingleXmlCells()
+    {
+        var workbook = new Workbook("SingleXmlCellsRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSingleXmlCells(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SingleXmlCells = null;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        worksheetXml.Root!.Element(worksheetNs + "singleXmlCells").Should().BeNull();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorksheetSingleXmlCells()
     {
         var workbook = new Workbook("SingleXmlCellsNativeJson");
@@ -16992,6 +17020,34 @@ public partial class FileAdapterSmokeTests
             .Which.Attribute("deleted")!.Value.Should().Be("0");
         smartTags.ToString().Should().Contain("customSmartTagPropertyFlag=\"keep\"");
         smartTags.ToString().Should().NotContain("wrongNamespace");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetSmartTags()
+    {
+        var workbook = new Workbook("WorksheetSmartTagsRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Seattle"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSmartTags(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SmartTags = null;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        worksheetXml.Root!.Element(worksheetNs + "smartTags").Should().BeNull();
     }
 
     [Fact]
