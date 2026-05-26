@@ -808,7 +808,7 @@ public sealed class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
-        source.Should().Contain("new Label { Content = \"_Sheet:\", Target = _sheetBox");
+        source.Should().Contain("new Label { Content = \"_Unhide sheet:\", Target = _sheetBox");
     }
 
     [Fact]
