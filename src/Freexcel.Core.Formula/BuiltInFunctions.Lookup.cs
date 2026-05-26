@@ -372,7 +372,10 @@ public static partial class BuiltInFunctions
             if (sheetPart.StartsWith('\'') && sheetPart.EndsWith('\'') && sheetPart.Length >= 2)
                 sheetName = sheetPart[1..^1].Replace("''", "'");   // strip outer quotes and unescape ''→'
             else
+            {
+                if (!IsSimpleSheetQualifier(sheetPart)) return ErrorValue.Ref;
                 sheetName = sheetPart;
+            }
             refText = refText[(bangIdx + 1)..];
         }
         if (useA1 && TryParseA1RangeRef(refText, out var startRow, out var startCol, out var endRow, out var endCol))
@@ -429,6 +432,12 @@ public static partial class BuiltInFunctions
 
         return new RangeValue(cells, r0, c0) { SheetName = sheetName };
     }
+
+    private static bool IsSimpleSheetQualifier(string sheetName) =>
+        sheetName.Length > 0 && sheetName.All(IsSimpleSheetNameChar);
+
+    private static bool IsSimpleSheetNameChar(char ch) =>
+        char.IsLetterOrDigit(ch) || ch is '_' or '.';
 
     private static bool TryParseA1RangeRef(string refText, out uint startRow, out uint startCol, out uint endRow, out uint endCol)
     {
@@ -487,10 +496,7 @@ public static partial class BuiltInFunctions
 
     private static string FormatAddressSheetText(string sheetText)
     {
-        static bool IsSimpleSheetNameChar(char ch) =>
-            char.IsLetterOrDigit(ch) || ch is '_' or '.';
-
-        bool needsQuotes = sheetText.Length == 0 || !sheetText.All(IsSimpleSheetNameChar);
+        bool needsQuotes = !IsSimpleSheetQualifier(sheetText);
         return needsQuotes
             ? $"'{sheetText.Replace("'", "''")}'"
             : sheetText;

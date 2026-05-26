@@ -176,6 +176,9 @@ public sealed class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ClearHyperlinks).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.PickFromDropDown).IsEnabled.Should().BeFalse();
     }
 
     [Fact]
@@ -195,6 +198,26 @@ public sealed class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Header == "Clear Hyperlinks").IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildCommands_EnablesFilterContextEntriesOnlyForFilterOrDropdownTargets()
+    {
+        var filterHeaderCommands = WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(
+                HasAutoFilterHeaderTarget: true,
+                HasDropdownTarget: true));
+
+        filterHeaderCommands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeTrue();
+        filterHeaderCommands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeTrue();
+        filterHeaderCommands.Single(command => command.Action == WorksheetContextMenuAction.PickFromDropDown).IsEnabled.Should().BeTrue();
+
+        var validationDropdownCommands = WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasDropdownTarget: true));
+
+        validationDropdownCommands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeFalse();
+        validationDropdownCommands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeFalse();
+        validationDropdownCommands.Single(command => command.Action == WorksheetContextMenuAction.PickFromDropDown).IsEnabled.Should().BeTrue();
     }
 
     [Fact]

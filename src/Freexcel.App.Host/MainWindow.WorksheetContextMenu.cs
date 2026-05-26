@@ -323,10 +323,18 @@ public partial class MainWindow
             return WorksheetContextMenuState.Default;
 
         sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
+        var hasAutoFilterHeaderTarget =
+            SelectionRangeService.GetCurrentRegion(sheet, address) is { } currentRegion &&
+            AutoFilterDropdownPlanner.TryPlan(currentRegion, address, out _);
+        var hasValidationDropdown =
+            DataValidationService.GetApplicable(sheet, address)
+                .Any(rule => rule.Type == DvType.List && rule.ShowDropdown);
         return new WorksheetContextMenuState(
             HasThreadedComment: threadedComment is not null,
             IsThreadedCommentResolved: threadedComment?.IsResolved == true,
             HasNote: sheet.Comments.ContainsKey(address),
-            HasHyperlink: sheet.Hyperlinks.ContainsKey(address));
+            HasHyperlink: sheet.Hyperlinks.ContainsKey(address),
+            HasAutoFilterHeaderTarget: hasAutoFilterHeaderTarget,
+            HasDropdownTarget: hasAutoFilterHeaderTarget || hasValidationDropdown);
     }
 }
