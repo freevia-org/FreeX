@@ -96,8 +96,8 @@
 
                 <Label Content="_Within:" Target="{Binding ElementName=WithinCombo}" VerticalAlignment="Center"/>
                 <ComboBox x:Name="WithinCombo" Grid.Column="1" SelectedIndex="0" Margin="0,0,12,6">
-                    <ComboBoxItem Content="Workbook"/>
                     <ComboBoxItem Content="Sheet"/>
+                    <ComboBoxItem Content="Workbook"/>
                 </ComboBox>
 
                 <Label Content="_Search:" Target="{Binding ElementName=SearchCombo}" Grid.Column="2" VerticalAlignment="Center"/>

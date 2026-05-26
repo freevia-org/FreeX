@@ -113,7 +113,7 @@ public sealed class FindReplaceDialogXamlTests
             .Single(element => element.Attribute(xaml + "Name")?.Value == "OptionsExpander")
             .Attribute("IsExpanded")?.Value.Should().Be("False");
 
-        AssertComboBoxContainsExactly(document, presentation, xaml, "WithinCombo", ["Workbook", "Sheet"]);
+        AssertComboBoxContainsExactly(document, presentation, xaml, "WithinCombo", ["Sheet", "Workbook"]);
         AssertComboBoxContainsExactly(document, presentation, xaml, "SearchCombo", ["By Rows", "By Columns"]);
         AssertComboBoxContainsExactly(document, presentation, xaml, "LookInCombo", ["Formulas", "Values", "Notes", "Comments"]);
         document.Descendants(presentation + "ComboBoxItem")
@@ -147,6 +147,14 @@ public sealed class FindReplaceDialogXamlTests
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceWithClearFormatButton", "Visibility", "Collapsed");
 
         AssertNamedElement(document, presentation, xaml, "DataGrid", "FindResultsGrid");
+    }
+
+    [Fact]
+    public void Dialog_DefaultsWithinScopeToSheet()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
+
+        source.Should().Contain("Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet");
     }
 
     [Fact]

@@ -346,26 +346,20 @@ public partial class MainWindow
 
     private void ShowOpenProgress(string title, string detail, double? percent = null)
     {
-        if (OpenProgressOverlay is null)
-            return;
-
-        OpenProgressTitle.Text = title;
-        OpenProgressDetail.Text = detail;
-        if (OpenProgressBar is not null)
-        {
-            OpenProgressBar.IsIndeterminate = !percent.HasValue;
-            if (percent.HasValue)
-                OpenProgressBar.Value = Math.Clamp(percent.Value, OpenProgressBar.Minimum, OpenProgressBar.Maximum);
-        }
-        OpenProgressOverlay.Visibility = Visibility.Visible;
-        OpenProgressOverlay.UpdateLayout();
+        BackstageProgressOverlayBinder.ShowOverlay(
+            OpenProgressOverlay,
+            OpenProgressTitle,
+            OpenProgressDetail,
+            OpenProgressBar,
+            title,
+            detail,
+            percent);
         Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
     }
 
     private void HideOpenProgress()
     {
-        if (OpenProgressOverlay is not null)
-            OpenProgressOverlay.Visibility = Visibility.Collapsed;
+        BackstageProgressOverlayBinder.Hide(OpenProgressOverlay);
     }
 
     // Start screen button handlers
@@ -634,23 +628,18 @@ public partial class MainWindow
 
     private void ShowSaveProgress(string title, string detail, double? percent = null)
     {
-        if (StatusSaveProgressPanel is null)
-            return;
-
-        StatusSaveProgressText.Text = $"{title}: {detail}";
-        if (StatusSaveProgressBar is not null)
-        {
-            StatusSaveProgressBar.IsIndeterminate = !percent.HasValue;
-            if (percent.HasValue)
-                StatusSaveProgressBar.Value = Math.Clamp(percent.Value, StatusSaveProgressBar.Minimum, StatusSaveProgressBar.Maximum);
-        }
-        StatusSaveProgressPanel.Visibility = Visibility.Visible;
+        BackstageProgressOverlayBinder.ShowStatusPanel(
+            StatusSaveProgressPanel,
+            StatusSaveProgressText,
+            StatusSaveProgressBar,
+            title,
+            detail,
+            percent);
     }
 
     private void HideSaveProgress()
     {
-        if (StatusSaveProgressPanel is not null)
-            StatusSaveProgressPanel.Visibility = Visibility.Collapsed;
+        BackstageProgressOverlayBinder.Hide(StatusSaveProgressPanel);
     }
 
     private bool ConfirmUnsupportedXlsxFeatureSave()
