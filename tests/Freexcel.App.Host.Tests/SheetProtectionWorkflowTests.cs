@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -79,6 +80,14 @@ public sealed class SheetProtectionWorkflowTests
         uiText.ButtonContent.Should().Be("Unprotect Sheet");
         uiText.TooltipTitle.Should().Be("Unprotect Sheet");
         uiText.TooltipDescription.Should().Contain("Remove");
+    }
+
+    [Fact]
+    public void ProtectSheetDialogPrompt_UsesPasswordAccessKey()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("new PasswordProtectionDialog(\"Protect Sheet\", \"_Password (optional):\")");
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
