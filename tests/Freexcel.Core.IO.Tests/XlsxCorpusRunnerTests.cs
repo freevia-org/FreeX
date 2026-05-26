@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(20, "the generated metadata-pass manifest currently declares twenty deterministic package-retention rows");
+        rows.Should().HaveCount(21, "the generated metadata-pass manifest currently declares twenty-one deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -478,6 +478,24 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-workbook-file-recovery-001");
         AssertWorkbookFileRecovery(saved, "generated-workbook-file-recovery-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookSmartTagsRow_RetainsSmartTagsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-smart-tags-001");
+        AssertWorkbookSmartTags(source, "generated-workbook-smart-tags-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-workbook-smart-tags-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-smart-tags-001");
+        AssertWorkbookSmartTags(saved, "generated-workbook-smart-tags-001 saved");
     }
 
     [Fact]
@@ -886,6 +904,30 @@ public class XlsxCorpusRunnerTests
         recoveryBlocks[0].Attribute("repairLoad")!.Value.Should().Be("0", because);
         recoveryBlocks[1].Attribute("dataExtractLoad")!.Value.Should().Be("1", because);
         recoveryBlocks[1].Attribute("repairLoad")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorkbookSmartTags(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var smartTagProperties = workbookXml.Root!.Element(workbookNs + "smartTagPr");
+        smartTagProperties.Should().NotBeNull(because);
+        smartTagProperties!.Attribute("embed")!.Value.Should().Be("1", because);
+        smartTagProperties.Attribute("show")!.Value.Should().Be("all", because);
+        smartTagProperties.Attribute("customSmartTagFlag")!.Value.Should().Be("keep", because);
+
+        var smartTagTypes = workbookXml.Root.Element(workbookNs + "smartTagTypes");
+        smartTagTypes.Should().NotBeNull(because);
+        smartTagTypes!.Attribute("customSmartTagTypesFlag")!.Value.Should().Be("keep", because);
+        var smartTagType = smartTagTypes.Elements(workbookNs + "smartTagType")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        smartTagType.Attribute("namespaceUri")!.Value.Should().Be("urn:schemas-microsoft-com:office:smarttags", because);
+        smartTagType.Attribute("name")!.Value.Should().Be("place", because);
+        smartTagType.Attribute("customSmartTagTypeFlag")!.Value.Should().Be("keep", because);
     }
 
     private static void AssertHeaderFooterLegacyDrawingPackageGraph(Stream package, string because)
