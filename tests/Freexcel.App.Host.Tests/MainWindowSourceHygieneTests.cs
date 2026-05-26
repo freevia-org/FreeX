@@ -75,8 +75,9 @@ public sealed class MainWindowSourceHygieneTests
         testSources
             .Where(file => file.Source.Contains("FreexcelUiRun.Start()", StringComparison.Ordinal))
             .Select(file => file.RelativePath)
+            .OrderBy(path => path, StringComparer.Ordinal)
             .Should()
-            .Equal(["FormulaEditingUiE2eTests.cs"]);
+            .Equal(["FormulaEditingUiE2eTests.cs", "UiAutomationCatalogSnapshotTests.cs"]);
         testSources
             .Single(file => file.RelativePath == "FormulaEditingUiE2eTests.cs")
             .Source
