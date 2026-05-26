@@ -49,7 +49,7 @@ public sealed class PivotCalculatedFieldDialog : Window
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
         var formulaPanel = PivotDialogLayout.CreateGroupPanel();
-        AddTextBox(formulaPanel, "_Name", _nameBox);
+        AddTextBox(formulaPanel, "_Name:", _nameBox);
         AddTextBox(formulaPanel, "_Formula:", _formulaBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Name and formula", formulaPanel));
 
@@ -209,9 +209,9 @@ public sealed class PivotCalculatedItemDialog : Window
         _fieldBox.ItemsSource = _fields;
         _fieldBox.DisplayMemberPath = nameof(PivotCalculatedItemSourceFieldOption.Name);
         _fieldBox.SelectionChanged += (_, _) => RefreshItemList();
-        PivotDialogLayout.AddLabeledControl(itemPanel, "Source _field", _fieldBox);
-        AddTextBox(itemPanel, "_Name", _nameBox);
-        AddTextBox(itemPanel, "Item _formula", _formulaBox);
+        PivotDialogLayout.AddLabeledControl(itemPanel, "Source _field:", _fieldBox);
+        AddTextBox(itemPanel, "_Name:", _nameBox);
+        AddTextBox(itemPanel, "Item _formula:", _formulaBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Field and item", itemPanel));
 
         var insertPanel = PivotDialogLayout.CreateGroupPanel();

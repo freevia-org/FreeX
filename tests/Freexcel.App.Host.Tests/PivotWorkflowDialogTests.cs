@@ -409,10 +409,11 @@ public sealed class PivotWorkflowDialogTests
             "AddTextBox(rangePanel, \"_Starting at\", _startBox",
             "AddTextBox(rangePanel, \"_Ending at\", _endBox",
             "AddTextBox(rangePanel, \"_By\", _intervalBox",
-            "AddTextBox(formulaPanel, \"_Name\", _nameBox",
+            "AddTextBox(formulaPanel, \"_Name:\", _nameBox",
             "AddTextBox(formulaPanel, \"_Formula:\", _formulaBox",
-            "PivotDialogLayout.AddLabeledControl(itemPanel, \"Source _field\", _fieldBox",
-            "AddTextBox(itemPanel, \"Item _formula\", _formulaBox",
+            "PivotDialogLayout.AddLabeledControl(itemPanel, \"Source _field:\", _fieldBox",
+            "AddTextBox(itemPanel, \"_Name:\", _nameBox",
+            "AddTextBox(itemPanel, \"Item _formula:\", _formulaBox",
             "public static void AddLabeledControl(Panel stack, string label, UIElement control",
             "Target = target"
         })
@@ -1359,6 +1360,7 @@ public sealed class PivotWorkflowDialogTests
         var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Name and formula");
+        source.Should().Contain("AddTextBox(formulaPanel, \"_Name:\", _nameBox");
         source.Should().Contain("Formula:");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -1431,8 +1433,9 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("_nameBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_nameBox);");
         source.Should().NotContain("Calculated items are evaluated within the selected field");
-        source.Should().Contain("Source _field");
-        source.Should().Contain("Item _formula");
+        source.Should().Contain("PivotDialogLayout.AddLabeledControl(itemPanel, \"Source _field:\", _fieldBox");
+        source.Should().Contain("AddTextBox(itemPanel, \"_Name:\", _nameBox");
+        source.Should().Contain("AddTextBox(itemPanel, \"Item _formula:\", _formulaBox");
     }
 
     [Fact]
