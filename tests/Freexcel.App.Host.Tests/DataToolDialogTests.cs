@@ -1605,8 +1605,7 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_rowInputBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(_rowInputBox);");
+        source.Should().Contain("FocusRangeSelectionInput(_rowInputBox);");
     }
 
     [Fact]
