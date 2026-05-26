@@ -53,15 +53,25 @@ public partial class MainWindow
         ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
         SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
 
+        var protectedOverflowGroups = GetOverflowProtectedRibbonGroupNames(availableWidth.Value, adaptiveGroups.Select(group => group.Name).ToList());
+
         while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
-               CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: availableWidth.Value > 760))
+               CollapseOneMoreRibbonGroup(
+                   plannedStates,
+                   adaptiveGroups.Select(group => group.Name).ToList(),
+                   protectedOverflowGroups,
+                   preserveFirstGroup: availableWidth.Value > 760))
         {
             ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
         }
 
         while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
-               CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: false))
+               CollapseOneMoreRibbonGroup(
+                   plannedStates,
+                   adaptiveGroups.Select(group => group.Name).ToList(),
+                   protectedOverflowGroups,
+                   preserveFirstGroup: false))
         {
             ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
@@ -106,12 +116,18 @@ public partial class MainWindow
         return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
     }
 
-    private static bool CollapseOneMoreRibbonGroup(RibbonAdaptiveGroupState[] states, bool preserveFirstGroup)
+    private static bool CollapseOneMoreRibbonGroup(
+        RibbonAdaptiveGroupState[] states,
+        IReadOnlyList<string> groupNames,
+        IReadOnlySet<string> protectedGroupNames,
+        bool preserveFirstGroup)
     {
         var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
         for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
         {
             if (states[i] == RibbonAdaptiveGroupState.Collapsed)
+                continue;
+            if (i < groupNames.Count && protectedGroupNames.Contains(groupNames[i]))
                 continue;
 
             states[i] = RibbonAdaptiveGroupState.Collapsed;
@@ -119,6 +135,36 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    private static IReadOnlySet<string> GetOverflowProtectedRibbonGroupNames(
+        double availableWidth,
+        IReadOnlyList<string> groupNames)
+    {
+        if (availableWidth is <= 900 or > 1120)
+            return new HashSet<string>(StringComparer.Ordinal);
+
+        if (groupNames.Contains("Get & Transform Data", StringComparer.Ordinal) &&
+            groupNames.Contains("Sort & Filter", StringComparer.Ordinal))
+        {
+            return new HashSet<string>(StringComparer.Ordinal)
+            {
+                "Get & Transform Data",
+                "Sort & Filter"
+            };
+        }
+
+        if (groupNames.Contains("Workbook Views", StringComparer.Ordinal) &&
+            groupNames.Contains("Show", StringComparer.Ordinal))
+        {
+            return new HashSet<string>(StringComparer.Ordinal)
+            {
+                "Workbook Views",
+                "Show"
+            };
+        }
+
+        return new HashSet<string>(StringComparer.Ordinal);
     }
 
     private static void SetCollapsedRibbonButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)

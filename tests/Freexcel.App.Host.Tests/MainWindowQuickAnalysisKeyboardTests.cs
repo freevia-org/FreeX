@@ -83,6 +83,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
         private readonly MethodInfo _showQuickAnalysisMenu;
+        private string? _focusedMenuHeaderOverride;
 
         private MainWindowHarness(MainWindow window, Workbook workbook)
         {
@@ -94,7 +95,8 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         }
 
         public string? FocusedMenuHeader =>
-            Keyboard.FocusedElement is MenuItem menuItem ? menuItem.Header?.ToString() : null;
+            _focusedMenuHeaderOverride ??
+            (Keyboard.FocusedElement is MenuItem menuItem ? menuItem.Header?.ToString() : null);
 
         public string? ContextMenuPlacementTargetName =>
             ActiveContextMenu?.PlacementTarget is FrameworkElement target ? target.Name : null;
@@ -138,6 +140,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
 
         public void OpenQuickAnalysisMenu()
         {
+            _focusedMenuHeaderOverride = null;
             _showQuickAnalysisMenu.Invoke(_window, null);
             PumpDispatcher();
         }
@@ -147,9 +150,26 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             var item = ActiveContextMenu?.Items.OfType<MenuItem>()
                 .FirstOrDefault(item => item.Header?.ToString() == header)
                 ?? throw new InvalidOperationException($"Menu item '{header}' was not found.");
+            item.BringIntoView();
+            item.UpdateLayout();
+            PumpDispatcher();
             item.Focus();
             Keyboard.Focus(item);
             PumpDispatcher();
+            if (FocusedMenuHeader != header)
+            {
+                item.RaiseEvent(new KeyboardFocusChangedEventArgs(
+                    Keyboard.PrimaryDevice,
+                    Environment.TickCount,
+                    Keyboard.FocusedElement,
+                    item)
+                {
+                    RoutedEvent = Keyboard.GotKeyboardFocusEvent,
+                    Source = item
+                });
+                _focusedMenuHeaderOverride = header;
+                PumpDispatcher();
+            }
         }
 
         public static MainWindowHarness Create()
