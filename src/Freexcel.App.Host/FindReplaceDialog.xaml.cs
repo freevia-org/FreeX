@@ -306,7 +306,7 @@ public sealed partial class FindReplaceDialog : Window
 
     private static void SetFormatState(bool isSet, string toolTip, Button formatButton, Button clearButton)
     {
-        formatButton.Content = isSet ? "Format Set..." : "For_mat...";
+        formatButton.Content = isSet ? "For_mat Set..." : "For_mat...";
         formatButton.ToolTip = isSet ? toolTip : null;
         clearButton.Visibility = isSet ? Visibility.Visible : Visibility.Collapsed;
     }

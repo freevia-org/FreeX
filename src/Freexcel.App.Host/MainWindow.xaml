@@ -3168,6 +3168,7 @@
                          VerticalContentAlignment="Center"
                          BorderBrush="#C0C0C0" Padding="5,3"
                          AutomationProperties.Name="Name Box"
+                         AutomationProperties.AutomationId="CellAddressBox"
                          AutomationProperties.HelpText="Go to a cell or named range"/>
 
                 <!-- fx button opens Insert Function dialog -->
@@ -3201,6 +3202,7 @@
                              CaretBrush="Black"
                              VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="6,3"
                              AutomationProperties.Name="Formula Bar"
+                             AutomationProperties.AutomationId="FormulaBar"
                              AutomationProperties.HelpText="Edit the active cell value or formula"
                              PreviewKeyDown="FormulaBar_KeyDown"/>
                 </Grid>

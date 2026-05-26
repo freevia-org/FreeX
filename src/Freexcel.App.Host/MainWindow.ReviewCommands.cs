@@ -294,7 +294,7 @@ public partial class MainWindow
         var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password: null);
         if (!sheet.IsProtected)
         {
-            var dialog = new PasswordProtectionDialog("Protect Sheet", "Password (optional):") { Owner = this };
+            var dialog = new PasswordProtectionDialog("Protect Sheet", "_Password (optional):") { Owner = this };
             if (dialog.ShowDialog() != true) return;
             result = ProtectionDialogPlanner.CreateSheetResult(
                 sheet,
@@ -319,7 +319,7 @@ public partial class MainWindow
         string? pwd = null;
         if (!_workbook.IsStructureProtected)
         {
-            var dialog = new PasswordProtectionDialog("Protect Workbook", "Password (optional):") { Owner = this };
+            var dialog = new PasswordProtectionDialog("Protect Workbook", "_Password (optional):") { Owner = this };
             if (dialog.ShowDialog() != true) return;
             pwd = dialog.Password;
         }
