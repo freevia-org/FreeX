@@ -7,29 +7,19 @@ public partial class GridView
 {
     private (ResizeTarget Target, uint Index, double CurrentSize) HitTestResize(Point pos)
     {
-        if (Viewport == null) return (ResizeTarget.None, 0, 0);
-
-        if (pos.Y < EffectiveColHeaderHeight)
+        var hit = GridResizeHitPlanner.HitTest(
+            Viewport,
+            pos,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            ResizeHitZone);
+        var target = hit.Target switch
         {
-            foreach (var col in Viewport.ColMetrics)
-            {
-                double rightEdge = col.LeftOffset + col.Width + ActualRowHeaderWidth;
-                if (Math.Abs(pos.X - rightEdge) <= ResizeHitZone)
-                    return (ResizeTarget.Column, col.Col, col.Width);
-            }
-        }
-
-        if (pos.X < ActualRowHeaderWidth)
-        {
-            foreach (var row in Viewport.RowMetrics)
-            {
-                double bottomEdge = row.TopOffset + row.Height + EffectiveColHeaderHeight;
-                if (Math.Abs(pos.Y - bottomEdge) <= ResizeHitZone)
-                    return (ResizeTarget.Row, row.Row, row.Height);
-            }
-        }
-
-        return (ResizeTarget.None, 0, 0);
+            GridResizeHitTarget.Column => ResizeTarget.Column,
+            GridResizeHitTarget.Row => ResizeTarget.Row,
+            _ => ResizeTarget.None
+        };
+        return (target, hit.Index, hit.CurrentSize);
     }
 
     private bool IsOnAutofillHandle(Point pos)
