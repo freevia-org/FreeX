@@ -69,6 +69,7 @@ public sealed class ScenarioManagerDialog : Window
         _scenarioList.ItemsSource = BuildScenarioItems(workbook);
         _scenarioList.DisplayMemberPath = nameof(ScenarioManagerItem.Name);
         _scenarioList.SelectionChanged += (_, _) => UpdateSelectionState();
+        _scenarioList.MouseDoubleClick += (_, _) => AcceptSelectedScenario();
         _scenarioList.SelectedIndex = _scenarioList.Items.Count > 0 ? 0 : -1;
         _scenarioList.Height = 118;
         left.Children.Add(_scenarioList);
@@ -105,7 +106,7 @@ public sealed class ScenarioManagerDialog : Window
         _editButton = AddActionButton(sideButtons, "_Edit...", ScenarioManagerAction.Edit, isEnabled: false);
         _deleteButton = AddActionButton(sideButtons, "_Delete", ScenarioManagerAction.Delete, isEnabled: false);
         AddActionButton(sideButtons, "_List...", ScenarioManagerAction.List);
-        _showButton = AddActionButton(sideButtons, "_Show", ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null);
+        _showButton = AddActionButton(sideButtons, "_Show", ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);
         AddActionButton(sideButtons, "S_ummary...", ScenarioManagerAction.Report);
         UpdateSelectionState();
 
@@ -225,9 +226,9 @@ public sealed class ScenarioManagerDialog : Window
         grid.Children.Add(checkBox);
     }
 
-    private Button AddActionButton(Panel panel, string label, ScenarioManagerAction action, bool isEnabled = true)
+    private Button AddActionButton(Panel panel, string label, ScenarioManagerAction action, bool isEnabled = true, bool isDefault = false)
     {
-        var button = new Button { Content = label, Width = 82, Margin = new Thickness(0, 0, 0, 6), IsEnabled = isEnabled };
+        var button = new Button { Content = label, Width = 82, Margin = new Thickness(0, 0, 0, 6), IsEnabled = isEnabled, IsDefault = isDefault };
         button.Click += (_, _) => Accept(action);
         panel.Children.Add(button);
         return button;
@@ -263,7 +264,22 @@ public sealed class ScenarioManagerDialog : Window
         var hasSelection = selected is not null;
         if (_editButton is not null) _editButton.IsEnabled = hasSelection;
         if (_deleteButton is not null) _deleteButton.IsEnabled = hasSelection;
-        if (_showButton is not null) _showButton.IsEnabled = hasSelection;
+        if (_showButton is not null)
+        {
+            _showButton.IsEnabled = hasSelection;
+            _showButton.IsDefault = hasSelection;
+        }
+    }
+
+    private void AcceptSelectedScenario()
+    {
+        if (_scenarioList.SelectedItem is null)
+        {
+            FocusInitialKeyboardTarget();
+            return;
+        }
+
+        Accept(ScenarioManagerAction.Show);
     }
 
     private void Accept(ScenarioManagerAction action)
