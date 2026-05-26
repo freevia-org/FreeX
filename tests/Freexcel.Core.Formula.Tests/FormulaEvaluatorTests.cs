@@ -1186,6 +1186,21 @@ public class ShortCircuitEvaluationTests
     }
 
     [Fact]
+    public void IFS_ReturnsSelectedRangeBranch()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+
+        var result = _evaluator.Evaluate("=IFS(FALSE,\"skip\",TRUE,A1:A2)", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(2);
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[1, 0].Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
     public void IFS_ErrorCondition_Propagates()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
@@ -1209,6 +1224,28 @@ public class ShortCircuitEvaluationTests
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
         _evaluator.Evaluate("=SWITCH(99,1,\"one\",2,\"two\",\"default\")", sheet, wb)
             .Should().Be(new TextValue("default"));
+    }
+
+    [Fact]
+    public void SWITCH_ReturnsSelectedRangeBranch()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+
+        var matched = _evaluator.Evaluate("=SWITCH(2,1,A1:A2,2,B1:B2)", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+        matched.RowCount.Should().Be(2);
+        matched.Cells[0, 0].Should().Be(new NumberValue(10));
+        matched.Cells[1, 0].Should().Be(new NumberValue(20));
+
+        var defaulted = _evaluator.Evaluate("=SWITCH(99,1,A1:A2,B1:B2)", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+        defaulted.RowCount.Should().Be(2);
+        defaulted.Cells[0, 0].Should().Be(new NumberValue(10));
+        defaulted.Cells[1, 0].Should().Be(new NumberValue(20));
     }
 
     [Fact]
