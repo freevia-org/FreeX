@@ -609,7 +609,14 @@ public class NumberFormatterTests
             var value = new DateTimeValue(new DateTime(2024, 1, 1, 13, 14, 15).ToOADate());
 
             Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(value, "[$-F800]"));
+            Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(value, "[$-F800]dddd, mmmm dd, yyyy"));
             Assert.Equal("13:14:15", NumberFormatter.Format(value, "[$-F400]"));
+            Assert.Equal("13:14:15", NumberFormatter.Format(value, "[$-F400]h:mm:ss AM/PM"));
+
+            var numericSerial = new NumberValue(value.Value);
+            Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(numericSerial, "[$-F800]dddd, mmmm dd, yyyy"));
+            Assert.Equal("13:14:15", NumberFormatter.Format(numericSerial, "[$-F400]h:mm:ss AM/PM"));
+            Assert.Equal("45292.55", NumberFormatter.Format(numericSerial, "[$-F400]0.00"));
         }
         finally
         {
