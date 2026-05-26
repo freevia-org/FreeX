@@ -417,24 +417,17 @@ public partial class GridView
         double height,
         double minimumWidth,
         double minimumHeight,
-        out Rect rect)
-    {
-        rect = default;
-        if (Viewport == null)
-            return false;
-
-        var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == anchor.Row);
-        var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == anchor.Col);
-        if (row is null || col is null)
-            return false;
-
-        rect = new Rect(
-            col.LeftOffset + ActualRowHeaderWidth,
-            row.TopOffset + EffectiveColHeaderHeight,
-            Math.Max(minimumWidth, width),
-            Math.Max(minimumHeight, height));
-        return true;
-    }
+        out Rect rect) =>
+        GridDrawingObjectPlanner.TryCreateAnchoredObjectRect(
+            Viewport,
+            anchor,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            width,
+            height,
+            minimumWidth,
+            minimumHeight,
+            out rect);
 
     private void DrawObjectPlaceholder(DrawingContext dc, Rect rect, string label)
     {

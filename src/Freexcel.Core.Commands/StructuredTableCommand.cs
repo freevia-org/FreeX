@@ -198,8 +198,9 @@ public sealed class CreateStyledStructuredTableCommand : IWorkbookCommand
                 Bold: true);
         }
 
+        var dataRowOffset = row - _range.Start.Row;
         return new StyleDiff(
-            FillColor: row % 2 == 0 ? _banding.EvenRowFill : _banding.OddRowFill,
+            FillColor: dataRowOffset % 2 == 1 ? _banding.EvenRowFill : _banding.OddRowFill,
             FontColor: CellColor.Black,
             Bold: false);
     }
