@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
@@ -31,35 +30,8 @@ internal static class XlsxHeaderFooterPictureReaderWriter
     private const string VmlDrawingContentType =
         "application/vnd.openxmlformats-officedocument.vmlDrawing";
 
-    private static readonly HeaderFooterPictureSlot[] Slots =
-    [
-        new("LH", HeaderFooterPictureSetKind.PageHeader, HeaderFooterPicturePosition.Left),
-        new("CH", HeaderFooterPictureSetKind.PageHeader, HeaderFooterPicturePosition.Center),
-        new("RH", HeaderFooterPictureSetKind.PageHeader, HeaderFooterPicturePosition.Right),
-        new("LF", HeaderFooterPictureSetKind.PageFooter, HeaderFooterPicturePosition.Left),
-        new("CF", HeaderFooterPictureSetKind.PageFooter, HeaderFooterPicturePosition.Center),
-        new("RF", HeaderFooterPictureSetKind.PageFooter, HeaderFooterPicturePosition.Right),
-        new("LFH", HeaderFooterPictureSetKind.FirstPageHeader, HeaderFooterPicturePosition.Left),
-        new("CFH", HeaderFooterPictureSetKind.FirstPageHeader, HeaderFooterPicturePosition.Center),
-        new("RFH", HeaderFooterPictureSetKind.FirstPageHeader, HeaderFooterPicturePosition.Right),
-        new("LFF", HeaderFooterPictureSetKind.FirstPageFooter, HeaderFooterPicturePosition.Left),
-        new("CFF", HeaderFooterPictureSetKind.FirstPageFooter, HeaderFooterPicturePosition.Center),
-        new("RFF", HeaderFooterPictureSetKind.FirstPageFooter, HeaderFooterPicturePosition.Right),
-        new("LEH", HeaderFooterPictureSetKind.EvenPageHeader, HeaderFooterPicturePosition.Left),
-        new("CEH", HeaderFooterPictureSetKind.EvenPageHeader, HeaderFooterPicturePosition.Center),
-        new("REH", HeaderFooterPictureSetKind.EvenPageHeader, HeaderFooterPicturePosition.Right),
-        new("LEF", HeaderFooterPictureSetKind.EvenPageFooter, HeaderFooterPicturePosition.Left),
-        new("CEF", HeaderFooterPictureSetKind.EvenPageFooter, HeaderFooterPicturePosition.Center),
-        new("REF", HeaderFooterPictureSetKind.EvenPageFooter, HeaderFooterPicturePosition.Right)
-    ];
-
     public static bool HasPictures(Sheet sheet) =>
-        HasPictures(sheet.PageHeaderPictures) ||
-        HasPictures(sheet.PageFooterPictures) ||
-        HasPictures(sheet.FirstPageHeaderPictures) ||
-        HasPictures(sheet.FirstPageFooterPictures) ||
-        HasPictures(sheet.EvenPageHeaderPictures) ||
-        HasPictures(sheet.EvenPageFooterPictures);
+        XlsxHeaderFooterPicturePackagePlanner.HasPictures(sheet);
 
     public static XlsxHeaderFooterPictureSets Read(
         ZipArchive archive,
@@ -102,12 +74,12 @@ internal static class XlsxHeaderFooterPictureReaderWriter
             return XlsxHeaderFooterPictureSets.Empty;
 
         var vmlRelsXml = XlsxPackageXmlEditor.LoadXml(vmlRelsEntry);
-        var pictures = new Dictionary<(HeaderFooterPictureSetKind Kind, HeaderFooterPicturePosition Position), WorksheetHeaderFooterPicture>();
+        var pictures = new Dictionary<(XlsxHeaderFooterPictureSetKind Kind, XlsxHeaderFooterPicturePosition Position), WorksheetHeaderFooterPicture>();
 
         foreach (var shape in vmlXml.Descendants(vmlNs + "shape"))
         {
             var id = shape.Attribute("id")?.Value;
-            var slot = Slots.FirstOrDefault(candidate => string.Equals(candidate.ShapeId, id, StringComparison.OrdinalIgnoreCase));
+            var slot = XlsxHeaderFooterPicturePackagePlanner.Slots.FirstOrDefault(candidate => string.Equals(candidate.ShapeId, id, StringComparison.OrdinalIgnoreCase));
             if (slot is null)
                 continue;
 
@@ -135,17 +107,17 @@ internal static class XlsxHeaderFooterPictureReaderWriter
                 memory.ToArray(),
                 XlsxPackagePath.GetImageContentType(imagePath),
                 Path.GetFileName(imagePath),
-                ParseStyleDimension(shape.Attribute("style")?.Value, "width") ?? 96,
-                ParseStyleDimension(shape.Attribute("style")?.Value, "height") ?? 48);
+                XlsxHeaderFooterPicturePackagePlanner.ParseStyleDimension(shape.Attribute("style")?.Value, "width") ?? 96,
+                XlsxHeaderFooterPicturePackagePlanner.ParseStyleDimension(shape.Attribute("style")?.Value, "height") ?? 48);
         }
 
         return new XlsxHeaderFooterPictureSets(
-            ToSet(pictures, HeaderFooterPictureSetKind.PageHeader),
-            ToSet(pictures, HeaderFooterPictureSetKind.PageFooter),
-            ToSet(pictures, HeaderFooterPictureSetKind.FirstPageHeader),
-            ToSet(pictures, HeaderFooterPictureSetKind.FirstPageFooter),
-            ToSet(pictures, HeaderFooterPictureSetKind.EvenPageHeader),
-            ToSet(pictures, HeaderFooterPictureSetKind.EvenPageFooter));
+            XlsxHeaderFooterPicturePackagePlanner.ToSet(pictures, XlsxHeaderFooterPictureSetKind.PageHeader),
+            XlsxHeaderFooterPicturePackagePlanner.ToSet(pictures, XlsxHeaderFooterPictureSetKind.PageFooter),
+            XlsxHeaderFooterPicturePackagePlanner.ToSet(pictures, XlsxHeaderFooterPictureSetKind.FirstPageHeader),
+            XlsxHeaderFooterPicturePackagePlanner.ToSet(pictures, XlsxHeaderFooterPictureSetKind.FirstPageFooter),
+            XlsxHeaderFooterPicturePackagePlanner.ToSet(pictures, XlsxHeaderFooterPictureSetKind.EvenPageHeader),
+            XlsxHeaderFooterPicturePackagePlanner.ToSet(pictures, XlsxHeaderFooterPictureSetKind.EvenPageFooter));
     }
 
     public static IReadOnlySet<string> FindSheetsWithUnchangedSourcePictures(Stream xlsxStream, Workbook workbook)
@@ -187,7 +159,7 @@ internal static class XlsxHeaderFooterPictureReaderWriter
 
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
             var sourcePictures = Read(archive, worksheetPath, worksheetXml);
-            if (PictureSetsEqual(sourcePictures, sheet))
+            if (XlsxHeaderFooterPicturePackagePlanner.PictureSetsEqual(sourcePictures, sheet))
                 unchanged.Add(name);
         }
 
@@ -384,14 +356,14 @@ internal static class XlsxHeaderFooterPictureReaderWriter
         var shapes = new List<XElement>();
         var pictureIndex = 1;
 
-        foreach (var slot in Slots)
+        foreach (var slot in XlsxHeaderFooterPicturePackagePlanner.Slots)
         {
-            var picture = GetPicture(sheet, slot.Kind, slot.Position);
+            var picture = XlsxHeaderFooterPicturePackagePlanner.GetPicture(sheet, slot.Kind, slot.Position);
             if (picture is null)
                 continue;
 
             var extension = XlsxPackagePath.GetImageExtension(picture.ContentType);
-            var imagePath = $"xl/media/{GetMediaFileName(picture.FileName, sheetIndex, pictureIndex, extension)}";
+            var imagePath = $"xl/media/{XlsxHeaderFooterPicturePackagePlanner.GetMediaFileName(picture.FileName, sheetIndex, pictureIndex, extension)}";
             archive.GetEntry(imagePath)?.Delete();
             var imageEntry = archive.CreateEntry(imagePath, CompressionLevel.Optimal);
             using (var imageStream = imageEntry.Open())
@@ -454,130 +426,4 @@ internal static class XlsxHeaderFooterPictureReaderWriter
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
     }
 
-    private static WorksheetHeaderFooterPictureSet ToSet(
-        IReadOnlyDictionary<(HeaderFooterPictureSetKind Kind, HeaderFooterPicturePosition Position), WorksheetHeaderFooterPicture> pictures,
-        HeaderFooterPictureSetKind kind) =>
-        new(
-            pictures.TryGetValue((kind, HeaderFooterPicturePosition.Left), out var left) ? left : null,
-            pictures.TryGetValue((kind, HeaderFooterPicturePosition.Center), out var center) ? center : null,
-            pictures.TryGetValue((kind, HeaderFooterPicturePosition.Right), out var right) ? right : null);
-
-    private static WorksheetHeaderFooterPicture? GetPicture(
-        Sheet sheet,
-        HeaderFooterPictureSetKind kind,
-        HeaderFooterPicturePosition position)
-    {
-        var set = kind switch
-        {
-            HeaderFooterPictureSetKind.PageHeader => sheet.PageHeaderPictures,
-            HeaderFooterPictureSetKind.PageFooter => sheet.PageFooterPictures,
-            HeaderFooterPictureSetKind.FirstPageHeader => sheet.FirstPageHeaderPictures,
-            HeaderFooterPictureSetKind.FirstPageFooter => sheet.FirstPageFooterPictures,
-            HeaderFooterPictureSetKind.EvenPageHeader => sheet.EvenPageHeaderPictures,
-            HeaderFooterPictureSetKind.EvenPageFooter => sheet.EvenPageFooterPictures,
-            _ => WorksheetHeaderFooterPictureSet.Empty
-        };
-
-        return position switch
-        {
-            HeaderFooterPicturePosition.Left => set.Left,
-            HeaderFooterPicturePosition.Center => set.Center,
-            HeaderFooterPicturePosition.Right => set.Right,
-            _ => null
-        };
-    }
-
-    private static bool HasPictures(WorksheetHeaderFooterPictureSet set) =>
-        set.Left is not null || set.Center is not null || set.Right is not null;
-
-    private static bool PictureSetsEqual(XlsxHeaderFooterPictureSets sourcePictures, Sheet sheet) =>
-        PictureSetEqual(sourcePictures.PageHeader, sheet.PageHeaderPictures) &&
-        PictureSetEqual(sourcePictures.PageFooter, sheet.PageFooterPictures) &&
-        PictureSetEqual(sourcePictures.FirstPageHeader, sheet.FirstPageHeaderPictures) &&
-        PictureSetEqual(sourcePictures.FirstPageFooter, sheet.FirstPageFooterPictures) &&
-        PictureSetEqual(sourcePictures.EvenPageHeader, sheet.EvenPageHeaderPictures) &&
-        PictureSetEqual(sourcePictures.EvenPageFooter, sheet.EvenPageFooterPictures);
-
-    private static bool PictureSetEqual(WorksheetHeaderFooterPictureSet left, WorksheetHeaderFooterPictureSet right) =>
-        PictureEqual(left.Left, right.Left) &&
-        PictureEqual(left.Center, right.Center) &&
-        PictureEqual(left.Right, right.Right);
-
-    private static bool PictureEqual(WorksheetHeaderFooterPicture? left, WorksheetHeaderFooterPicture? right)
-    {
-        if (left is null || right is null)
-            return left is null && right is null;
-
-        return string.Equals(left.ContentType, right.ContentType, StringComparison.OrdinalIgnoreCase) &&
-               string.Equals(left.FileName, right.FileName, StringComparison.OrdinalIgnoreCase) &&
-               left.Width.Equals(right.Width) &&
-               left.Height.Equals(right.Height) &&
-               left.ImageBytes.AsSpan().SequenceEqual(right.ImageBytes);
-    }
-
-    private static string GetMediaFileName(string? fileName, int sheetIndex, int pictureIndex, string extension)
-    {
-        var candidate = Path.GetFileName(fileName ?? "");
-        if (string.IsNullOrWhiteSpace(candidate) ||
-            candidate.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-        {
-            return $"freexcelHeaderFooter{sheetIndex}_{pictureIndex}{extension}";
-        }
-
-        return Path.HasExtension(candidate)
-            ? candidate
-            : $"{candidate}{extension}";
-    }
-
-    private static double? ParseStyleDimension(string? style, string name)
-    {
-        if (string.IsNullOrWhiteSpace(style))
-            return null;
-
-        foreach (var part in style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var pieces = part.Split(':', 2, StringSplitOptions.TrimEntries);
-            if (pieces.Length != 2 || !string.Equals(pieces[0], name, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var raw = pieces[1].Trim();
-            if (raw.EndsWith("px", StringComparison.OrdinalIgnoreCase))
-                raw = raw[..^2];
-            else if (raw.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
-            {
-                raw = raw[..^2];
-                return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var points)
-                    ? points * (96.0 / 72.0)
-                    : null;
-            }
-
-            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var pixels)
-                ? pixels
-                : null;
-        }
-
-        return null;
-    }
-
-    private sealed record HeaderFooterPictureSlot(
-        string ShapeId,
-        HeaderFooterPictureSetKind Kind,
-        HeaderFooterPicturePosition Position);
-
-    private enum HeaderFooterPictureSetKind
-    {
-        PageHeader,
-        PageFooter,
-        FirstPageHeader,
-        FirstPageFooter,
-        EvenPageHeader,
-        EvenPageFooter
-    }
-
-    private enum HeaderFooterPicturePosition
-    {
-        Left,
-        Center,
-        Right
-    }
 }
