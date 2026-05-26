@@ -234,13 +234,17 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
-    public void ZoomDialogOpenedFromKeyboard_FocusesCustomZoomEntry()
+    public void ZoomDialogOpenedFromKeyboard_FocusesPresetOrCustomZoomChoice()
     {
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_customZoomButton.Focus();");
+        source.Should().Contain("var checkedPreset = _presetButtons.FirstOrDefault(button => button.IsChecked == true);");
+        source.Should().Contain("if (checkedPreset is not null)");
+        source.Should().Contain("checkedPreset.Focus();");
+        source.Should().Contain("Keyboard.Focus(checkedPreset);");
+        source.Should().Contain("else");
         source.Should().Contain("_zoomBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_zoomBox);");
     }

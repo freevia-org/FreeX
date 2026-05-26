@@ -932,6 +932,44 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterCopyToReferencePicker_DisabledUntilCopyToAnotherLocationSelected()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AdvancedFilterDialog(SheetId.New(), "A1:C12");
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                var copyToBox = textBoxes[2];
+                var copyToPicker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == "Select copy-to cell");
+                var inPlace = FindVisualChildren<RadioButton>(dialog)
+                    .Single(button => Equals(button.Content, "_Filter the list, in-place"));
+                var copyToAnotherLocation = FindVisualChildren<RadioButton>(dialog)
+                    .Single(button => Equals(button.Content, "_Copy to another location"));
+
+                copyToBox.IsEnabled.Should().BeFalse();
+                copyToPicker.IsEnabled.Should().BeFalse();
+
+                copyToAnotherLocation.IsChecked = true;
+
+                copyToBox.IsEnabled.Should().BeTrue();
+                copyToPicker.IsEnabled.Should().BeTrue();
+
+                inPlace.IsChecked = true;
+
+                copyToBox.IsEnabled.Should().BeFalse();
+                copyToPicker.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void MainWindow_WiresAdvancedFilterReferencePickersToCurrentSelection()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));

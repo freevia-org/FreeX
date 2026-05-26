@@ -33,9 +33,18 @@ public sealed class ZoomDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _customZoomButton.Focus();
-        _zoomBox.SelectAll();
-        Keyboard.Focus(_zoomBox);
+        var checkedPreset = _presetButtons.FirstOrDefault(button => button.IsChecked == true);
+        if (checkedPreset is not null)
+        {
+            checkedPreset.Focus();
+            Keyboard.Focus(checkedPreset);
+        }
+        else
+        {
+            _customZoomButton.Focus();
+            _zoomBox.SelectAll();
+            Keyboard.Focus(_zoomBox);
+        }
     }
 
     public static bool TryCreateResult(string? input, out ZoomDialogResult result, out string? error)
