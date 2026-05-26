@@ -8,6 +8,65 @@ namespace Freexcel.App.UI.Tests;
 public sealed class GridViewPageLayoutTests
 {
     [Fact]
+    public void PageMarginGuideLayoutPlanner_MapsPrintAreaToMarginGuidePixels()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(2, 20, 10), new RowMetric(3, 30, 30)],
+            [new ColMetric(4, 80, 15), new ColMetric(5, 120, 95)],
+            null,
+            []);
+        var printArea = new GridRange(
+            new CellAddress(sheetId, 2, 4),
+            new CellAddress(sheetId, 3, 5));
+
+        var guide = PageMarginGuideLayoutPlanner.CalculateGuide(
+            viewport,
+            printArea,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            WorksheetPaperSize.Letter,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Normal);
+
+        guide.Should().Be(new PageMarginGuideLayout(
+            Top: 28,
+            Left: 45,
+            Bottom: 78,
+            Right: 245,
+            MarginLeft: 68.529411764705884,
+            MarginRight: 221.47058823529412,
+            MarginTop: 32.545454545454547,
+            MarginBottom: 73.454545454545453));
+    }
+
+    [Fact]
+    public void PageMarginGuideLayoutPlanner_ReturnsNullWhenPrintAreaEdgeIsNotVisible()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(2, 20, 10)],
+            [new ColMetric(4, 80, 15)],
+            null,
+            []);
+        var printArea = new GridRange(
+            new CellAddress(sheetId, 2, 4),
+            new CellAddress(sheetId, 3, 4));
+
+        PageMarginGuideLayoutPlanner.CalculateGuide(
+                viewport,
+                printArea,
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                WorksheetPaperSize.Letter,
+                WorksheetPageOrientation.Portrait,
+                WorksheetPageMargins.Normal)
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void CalculatePageMarginRulerHandles_MapsMarginsToHorizontalAndVerticalRulerHandles()
     {
         var pageBounds = new Rect(30, 18, 850, 1100);

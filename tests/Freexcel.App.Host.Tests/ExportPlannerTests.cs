@@ -945,6 +945,40 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfTextOverlayExtractor_IncludesRenderTranslationTransformsButNotLayoutTranslation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var page = new FixedPage { Width = 180, Height = 120 };
+            var container = new Canvas
+            {
+                LayoutTransform = new TranslateTransform(100, 200),
+                RenderTransform = new TranslateTransform(3, 4)
+            };
+            Canvas.SetLeft(container, 10);
+            Canvas.SetTop(container, 20);
+
+            var textTransform = new TransformGroup();
+            textTransform.Children.Add(new TranslateTransform(7, 8));
+            textTransform.Children.Add(new MatrixTransform(new Matrix(1, 0, 0, 1, 11, 13)));
+            var text = new TextBlock
+            {
+                Text = "Translated PDF Text",
+                Margin = new System.Windows.Thickness(5, 6, 0, 0),
+                RenderTransform = textTransform
+            };
+
+            container.Children.Add(text);
+            page.Children.Add(container);
+
+            var overlay = PdfTextOverlayExtractor.Extract(page).Should().ContainSingle().Subject;
+            overlay.Text.Should().Be("Translated PDF Text");
+            overlay.X.Should().Be(36);
+            overlay.Y.Should().Be(51);
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorksheetCells()
     {
         StaTestRunner.Run(() =>
