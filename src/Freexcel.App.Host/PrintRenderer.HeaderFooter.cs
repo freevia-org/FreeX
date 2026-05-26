@@ -39,6 +39,8 @@ public static partial class PrintRenderer
         WorksheetHeaderFooterPictureSet pageFooterPictures,
         string workbookName,
         string sheetName,
+        WorkbookTheme workbookTheme,
+        IReadOnlyList<TextBoxModel> textBoxes,
         bool alignHeaderFooterWithMargins,
         bool centerHorizontally,
         bool centerVertically,
@@ -104,6 +106,18 @@ public static partial class PrintRenderer
             printErrorValue,
             gridLeft,
             gridTop);
+
+        DrawPrintedTextBoxes(
+            dc,
+            textOverlays,
+            textBoxes,
+            workbookTheme,
+            pageRows,
+            pageColumns,
+            gridLeft,
+            gridTop,
+            colWidth,
+            rowHeight);
 
         if (!draftQuality && printComments == WorksheetPrintComments.AsDisplayed)
         {

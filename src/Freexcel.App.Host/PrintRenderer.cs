@@ -152,19 +152,21 @@ public static partial class PrintRenderer
                 pageFooterPictures,
                 workbook.Name,
                 sheet.Name,
+                workbook.Theme,
+                sheet.TextBoxes,
                 sheet.HeaderFooterAlignWithMargins,
                 sheet.CenterHorizontallyOnPage,
-                    sheet.CenterVerticallyOnPage,
-                    sheet.PrintErrorValue,
-                    sheet.PrintComments,
-                    sheet.Comments,
-                    sheet.ThreadedComments,
-                    printableW,
-                    printableH,
-                    pageNumber,
-                    totalPages,
-                    sheet.PrintDraftQuality,
-                    sheet.PrintBlackAndWhite);
+                sheet.CenterVerticallyOnPage,
+                sheet.PrintErrorValue,
+                sheet.PrintComments,
+                sheet.Comments,
+                sheet.ThreadedComments,
+                printableW,
+                printableH,
+                pageNumber,
+                totalPages,
+                sheet.PrintDraftQuality,
+                sheet.PrintBlackAndWhite);
             pageNumber++;
 
             var container = new VisualHost { Visual = visual, TextOverlays = textOverlays };

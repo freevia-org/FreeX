@@ -2703,15 +2703,15 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Normal" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NormalViewBtn_Click"
                                         local:RibbonTooltip.Title="Normal"
-                                        local:RibbonTooltip.KeyTip="NM"
+                                        local:RibbonTooltip.KeyTip="L"
                                         local:RibbonTooltip.Description="Show the worksheet in the standard editing view."/>
                                 <Button Content="Page Break Preview" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreakPreviewBtn_Click"
                                         local:RibbonTooltip.Title="Page Break Preview"
-                                        local:RibbonTooltip.KeyTip="P"
+                                        local:RibbonTooltip.KeyTip="I"
                                         local:RibbonTooltip.Description="Show manual page breaks and print area boundaries while editing."/>
                                 <Button Content="Page Layout" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutViewBtn_Click"
                                         local:RibbonTooltip.Title="Page Layout"
-                                        local:RibbonTooltip.KeyTip="L"
+                                        local:RibbonTooltip.KeyTip="P"
                                         local:RibbonTooltip.Description="Show the sheet with print layout boundaries."/>
                                 <Button Content="Custom Views" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CustomViewsBtn_Click"
                                         local:RibbonTooltip.Title="Custom Views"
