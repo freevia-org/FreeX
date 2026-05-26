@@ -1556,6 +1556,52 @@ public sealed class DataToolDialogTests
                 CollapseDialog: true));
     }
 
+    [Fact]
+    public void MainWindow_WiresDataTableReferencePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new DataTableDialog(");
+        source.Should().Contain("request => ApplyDataTableRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyDataTableRangeSelection(");
+        source.Should().Contain("DataTableRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, selectedRange.Start);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
+    public void DataTableApplyRangeSelection_UpdatesRequestedInputBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var range = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 8, 5));
+            var dialog = new DataTableDialog(sheetId, range);
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                dialog.ApplyRangeSelection(
+                    DataTableRangeSelectionTarget.RowInputCell,
+                    new CellAddress(sheetId, 3, 1));
+                dialog.ApplyRangeSelection(
+                    DataTableRangeSelectionTarget.ColumnInputCell,
+                    new CellAddress(sheetId, 1, 6));
+
+                textBoxes[0].Text.Should().Be("A3");
+                textBoxes[1].Text.Should().Be("F1");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     [Theory]
     [InlineData("Select row input cell", DataTableRangeSelectionTarget.RowInputCell, "A1")]
     [InlineData("Select column input cell", DataTableRangeSelectionTarget.ColumnInputCell, "C1")]
