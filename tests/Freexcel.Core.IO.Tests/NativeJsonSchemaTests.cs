@@ -19,6 +19,21 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void MetadataMapping_StaysInDedicatedPartial()
+    {
+        var loadSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "NativeJsonAdapter.cs"));
+        var saveSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "NativeJsonAdapter.Save.cs"));
+        var mapperSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "NativeJsonAdapter.MetadataMapping.cs"));
+
+        loadSource.Should().NotContain("private static WorkbookFileSharingModel? ToWorkbookFileSharing");
+        saveSource.Should().NotContain("private static WorkbookFileSharingDto? FromWorkbookFileSharing");
+        mapperSource.Should().Contain("private static WorkbookFileSharingModel? ToWorkbookFileSharing");
+        mapperSource.Should().Contain("private static WorkbookFileSharingDto? FromWorkbookFileSharing");
+        mapperSource.Should().Contain("private static WorksheetPageSetupMetadataModel? ToWorksheetPageSetupMetadata");
+        mapperSource.Should().Contain("private static WorksheetPageSetupMetadataDto? FromWorksheetPageSetupMetadata");
+    }
+
+    [Fact]
     public void Save_WritesCurrentNativeJsonSchemaHeader()
     {
         var workbook = new Workbook("Schema");
