@@ -45,6 +45,18 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReusesAccessibleMemoryStreamBufferBeforeCopying()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.IO", "DelimitedTextWorkbookReader.cs"));
+
+        source.Should().Contain("TryGetBuffer(out var sourceBytes)");
+        source.Should().NotContain(
+            "stream.CopyTo(memory);",
+            "accessible MemoryStream inputs should decode their remaining buffer slice without copying first");
+    }
+
+    [Fact]
     public void Save_DenseSyntheticSheet_ReportsThroughputAndAllocatedBytes()
     {
         const int rowCount = 300;
@@ -105,6 +117,38 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_LargeAccessibleMemoryStream_ReportsThroughputAndAllocatedBytes()
+    {
+        const int rowCount = 20_000;
+        const int colCount = 10;
+        var bytes = CreateCsvBytes(rowCount, colCount);
+        var adapter = new CsvFileAdapter();
+
+        using (var warmup = new MemoryStream(bytes, index: 0, count: bytes.Length, writable: false, publiclyVisible: true))
+        {
+            adapter.Load(warmup);
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        using var stream = new MemoryStream(bytes, index: 0, count: bytes.Length, writable: false, publiclyVisible: true);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var workbook = adapter.Load(stream);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        output.WriteLine(
+            $"CSV accessible MemoryStream load benchmark: rows={rowCount}, cols={colCount}, bytes={bytes.Length}, elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}, allocatedBytes={allocatedBytes}");
+        var sheet = workbook.Sheets.Single();
+        sheet.GetValue(new CellAddress(sheet.Id, (uint)rowCount, (uint)colCount))
+            .Should().Be(new NumberValue(rowCount * colCount));
+        stream.Position.Should().Be(stream.Length);
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForBooleans()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("TRUE,false\r\n"));
@@ -113,6 +157,61 @@ public sealed class CsvFileAdapterTests
 
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new BoolValue(true));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new BoolValue(false));
+    }
+
+    [Fact]
+    public void Load_AccessibleMemoryStreamWithNonzeroPositionReadsRemainingSliceAndConsumesStream()
+    {
+        var padding = Encoding.UTF8.GetBytes("outside segment\r\n");
+        var prefix = Encoding.UTF8.GetBytes("ignored,prefix\r\n");
+        var csv = Encoding.UTF8.GetBytes("Name,Amount\r\nAlice,3.5\r\n");
+        var buffer = padding.Concat(prefix).Concat(csv).ToArray();
+        using var stream = new MemoryStream(
+            buffer,
+            index: padding.Length,
+            count: prefix.Length + csv.Length,
+            writable: false,
+            publiclyVisible: true);
+        stream.Position = prefix.Length;
+
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("Amount"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Alice"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(3.5));
+        sheet.GetCell(new CellAddress(sheet.Id, 3, 1)).Should().BeNull();
+        stream.Position.Should().Be(stream.Length);
+    }
+
+    [Fact]
+    public void Load_InaccessibleMemoryStreamWithNonzeroPositionUsesCopyPathAndConsumesStream()
+    {
+        var prefix = Encoding.UTF8.GetBytes("ignored,prefix\r\n");
+        var csv = Encoding.UTF8.GetBytes("Name,Amount\r\nAlice,3.5\r\n");
+        using var stream = new MemoryStream(prefix.Concat(csv).ToArray(), writable: false);
+        stream.Position = prefix.Length;
+
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(3.5));
+        stream.Position.Should().Be(stream.Length);
+    }
+
+    [Fact]
+    public void Load_AccessibleMemoryStreamPastLengthReadsEmptySliceAndConsumesStream()
+    {
+        using var stream = new MemoryStream();
+        stream.Write(Encoding.UTF8.GetBytes("Name,Amount\r\nAlice,3.5\r\n"));
+        stream.Position = stream.Length + 10;
+
+        var workbook = new CsvFileAdapter().Load(stream);
+
+        workbook.Sheets.Single().CellCount.Should().Be(0);
+        stream.Position.Should().Be(stream.Length);
     }
 
     [Fact]
@@ -517,5 +616,24 @@ public sealed class CsvFileAdapterTests
         }
 
         return workbook;
+    }
+
+    private static byte[] CreateCsvBytes(int rowCount, int colCount)
+    {
+        var builder = new StringBuilder(rowCount * colCount * 8);
+        for (var row = 1; row <= rowCount; row++)
+        {
+            for (var col = 1; col <= colCount; col++)
+            {
+                if (col > 1)
+                    builder.Append(',');
+
+                builder.Append(row * col);
+            }
+
+            builder.Append("\r\n");
+        }
+
+        return Encoding.UTF8.GetBytes(builder.ToString());
     }
 }

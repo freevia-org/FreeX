@@ -432,6 +432,48 @@ public class SheetCloneTests
     }
 
     [Fact]
+    public void Sheet_Clone_RemapStructuredTableRangeAndCopiesColumns()
+    {
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("S");
+        var nativeAttributes = new Dictionary<string, string> { ["custom"] = "kept" };
+        var table = new StructuredTableModel
+        {
+            Id = 2,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(
+                new CellAddress(src.Id, 1, 1),
+                new CellAddress(src.Id, 5, 3)),
+            HasAutoFilter = true,
+            TotalsRowShown = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            PackagePart = "xl/tables/table1.xml",
+            NativeAttributes = nativeAttributes
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount", TotalsRowFunction: "sum"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["West"], IncludeBlank: true));
+        src.StructuredTables.Add(table);
+        var newId = SheetId.New();
+
+        var copy = src.Clone(newId, "Copy");
+
+        var clonedTable = copy.StructuredTables.Should().ContainSingle().Subject;
+        clonedTable.Should().NotBeSameAs(table);
+        clonedTable.Range.Should().Be(new GridRange(
+            new CellAddress(newId, 1, 1),
+            new CellAddress(newId, 5, 3)));
+        clonedTable.StyleName.Should().Be("TableStyleMedium2");
+        clonedTable.TotalsRowShown.Should().BeTrue();
+        clonedTable.Columns.Should().Equal(table.Columns);
+        clonedTable.FilterColumns.Should().Equal(table.FilterColumns);
+        clonedTable.Columns.Should().NotBeSameAs(table.Columns);
+        clonedTable.NativeAttributes.Should().BeSameAs(nativeAttributes);
+    }
+
+    [Fact]
     public void Sheet_Clone_DropsExistingConditionalFormatX14IdNativeChild()
     {
         var wb = new Workbook("T");
