@@ -46,13 +46,6 @@ public sealed record PivotTableOptionsDialogResult(
 
 public sealed partial class PivotTableOptionsDialog : Window
 {
-    private static readonly string[] StyleNames =
-    [
-        ..Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"),
-        ..Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"),
-        ..Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}")
-    ];
-
     private readonly CheckBox _rowGrandTotalsBox = new() { Content = "Show _row grand totals" };
     private readonly CheckBox _columnGrandTotalsBox = new() { Content = "Show _column grand totals" };
     private readonly CheckBox _subtotalsBox = new() { Content = "Show _subtotals" };
@@ -172,7 +165,7 @@ public sealed partial class PivotTableOptionsDialog : Window
     {
         var stack = CreateTabPanel();
         var stylePanel = PivotDialogLayout.CreateGroupPanel();
-        AddLabeledControl(stylePanel, "PivotTable _style", _styleBox, StyleNames);
+        AddLabeledControl(stylePanel, "PivotTable _style", _styleBox, PivotStyleCatalog.BuiltInStyleNames);
         AddCheckBox(stylePanel, _rowHeadersBox);
         AddCheckBox(stylePanel, _columnHeadersBox);
         AddCheckBox(stylePanel, _fieldHeadersBox);
@@ -270,12 +263,10 @@ public sealed partial class PivotTableOptionsDialog : Window
         _pageFieldLayoutBox.SelectedItem = result.PageOverThenDown ? PageFieldLayoutOverThenDown : PageFieldLayoutDownThenOver;
         _pageWrapBox.Text = result.PageWrap.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _mergeLabelsBox.IsChecked = result.MergeAndCenterLabels;
-        var styleNames = StyleNames.Contains(result.StyleName, StringComparer.OrdinalIgnoreCase)
-            ? StyleNames
-            : [..StyleNames, result.StyleName];
+        var styleNames = PivotStyleCatalog.GetStyleNames(result.StyleName);
         _styleBox.ItemsSource = styleNames;
         _styleBox.SelectedItem = styleNames.FirstOrDefault(styleName =>
-            string.Equals(styleName, result.StyleName, StringComparison.OrdinalIgnoreCase)) ?? StyleNames[0];
+            string.Equals(styleName, result.StyleName, StringComparison.OrdinalIgnoreCase)) ?? styleNames[0];
         _rowHeadersBox.IsChecked = result.ShowRowHeaders;
         _columnHeadersBox.IsChecked = result.ShowColumnHeaders;
         _fieldHeadersBox.IsChecked = result.ShowFieldHeaders;
@@ -317,7 +308,7 @@ public sealed partial class PivotTableOptionsDialog : Window
                 : PivotSubtotalPlacement.Bottom,
             _repeatItemLabelsBox.IsChecked == true,
             _blankLineBox.IsChecked == true,
-            _styleBox.SelectedItem?.ToString() ?? "PivotStyleLight16",
+            PivotStyleCatalog.NormalizeStyleName(_styleBox.SelectedItem?.ToString()),
             _rowHeadersBox.IsChecked == true,
             _columnHeadersBox.IsChecked == true,
             _rowStripesBox.IsChecked == true,

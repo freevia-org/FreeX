@@ -894,6 +894,74 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotStyleCatalog_ListsBuiltInLightMediumAndDarkStylesAndPreservesCustomCurrentStyle()
+    {
+        var styleNames = PivotStyleCatalog.GetStyleNames("  MyWorkbookPivotStyle  ");
+
+        styleNames.Should().HaveCount(85);
+        styleNames.Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"));
+        styleNames.Skip(28).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"));
+        styleNames.Skip(56).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}"));
+        styleNames[^1].Should().Be("MyWorkbookPivotStyle");
+    }
+
+    [Fact]
+    public void PivotStyleCatalog_DoesNotDuplicateBuiltInCurrentStyle()
+    {
+        PivotStyleCatalog.GetStyleNames("pivotstylemedium10")
+            .Should()
+            .HaveCount(84)
+            .And
+            .ContainSingle(styleName => string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_UsesCurrentStyleAsInitialSelectionAndPreservesCustomStyle()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotStyleGalleryDialog("CustomPivotStyle");
+            var styleGallery = (ListBox)typeof(PivotStyleGalleryDialog)
+                .GetField("_styleGallery", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleNames = styleGallery.Items.Cast<object>().Select(item => item.ToString()).ToList();
+
+            styleNames.Should().HaveCount(85);
+            styleNames.Should().Contain("CustomPivotStyle");
+            styleGallery.SelectedItem.Should().Be("CustomPivotStyle");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_CreateResult_NormalizesBlankStyleToDefault()
+    {
+        PivotStyleGalleryDialog.CreateResult("  PivotStyleDark28  ")
+            .Should()
+            .Be(new PivotStyleGalleryDialogResult("PivotStyleDark28"));
+
+        PivotStyleGalleryDialog.CreateResult("  ")
+            .Should()
+            .Be(new PivotStyleGalleryDialogResult("PivotStyleLight16"));
+    }
+
+    [Fact]
+    public void MainWindow_PivotStyleGalleryButton_OpensLightweightGalleryInsteadOfOptionsDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotDesignCommands.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void PivotStyleGalleryBtn_Click", StringComparison.Ordinal)..
+            source.IndexOf("private void PivotRowHeadersBtn_Click", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("ShowPivotStyleGalleryDialog();");
+        handlerSource.Should().NotContain("ShowPivotTableOptionsDialog();");
+        source.Should().Contain("private void ShowPivotStyleGalleryDialog()");
+        source.Should().Contain("new PivotStyleGalleryDialog(pivotTable.StyleName)");
+        source.Should().Contain("styleName: dialog.Result.StyleName");
+    }
+
+    [Fact]
     public void PivotTableOptionsDialog_UsesExcelStyleTabbedOptionShell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableOptionsDialog.cs"));
@@ -1540,6 +1608,8 @@ public sealed class PivotWorkflowDialogTests
                 "PivotChartOptionsDialog.cs",
                 "PivotSlicerTimelineDialogs.cs",
                 "PivotCalculatedDialogs.cs",
+                "PivotStyleCatalog.cs",
+                "PivotStyleGalleryDialog.cs",
                 "PivotTableOptionsDialog.cs",
                 "PivotTableOptionsDialog.Result.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
