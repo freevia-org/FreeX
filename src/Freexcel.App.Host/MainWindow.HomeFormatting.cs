@@ -154,6 +154,12 @@ public partial class MainWindow
         e.Handled = true;
     }
 
+    private void FontNameBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        CommitFontNameBoxText();
+    }
+
     private void CommitFontNameBoxText()
     {
         var name = FontNameBox.Text?.Trim();
@@ -174,6 +180,12 @@ public partial class MainWindow
 
         CommitFontSizeBoxText();
         e.Handled = true;
+    }
+
+    private void FontSizeBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        CommitFontSizeBoxText();
     }
 
     private void CommitFontSizeBoxText()

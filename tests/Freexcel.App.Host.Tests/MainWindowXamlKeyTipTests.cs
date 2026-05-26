@@ -94,6 +94,29 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void EditableFontBoxes_CommitTypedKeyboardInputWhenFocusLeaves()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var fontNameBox = document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FontNameBox");
+        var fontSizeBox = document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FontSizeBox");
+
+        fontNameBox.Attribute("LostKeyboardFocus")?.Value.Should().Be("FontNameBox_LostKeyboardFocus");
+        fontSizeBox.Attribute("LostKeyboardFocus")?.Value.Should().Be("FontSizeBox_LostKeyboardFocus");
+        source.Should().Contain("private void FontNameBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)");
+        source.Should().Contain("private void FontSizeBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)");
+        source.Should().Contain("CommitFontNameBoxText();");
+        source.Should().Contain("CommitFontSizeBoxText();");
+    }
+
+    [Fact]
     public void RibbonKeyboardFocus_IsNotHijackedByWorksheetNavigation()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
