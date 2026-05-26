@@ -197,9 +197,25 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         states[Array.IndexOf(groupNames, "Accessibility")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
+    [Fact]
+    public void ApplyBreakpointOverrides_RestoresViewPriorityGroupsAfterPlannerCollapse()
+    {
+        var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" };
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1366,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
+
+        states[Array.IndexOf(groupNames, "Workbook Views")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Zoom")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Window")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Macros")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
     [Theory]
     [InlineData(1120, new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" }, 2)]
-    [InlineData(1120, new[] { "Draw", "Arrange", "Format" }, 1)]
+    [InlineData(1120, new[] { "Tools", "Pens", "Convert", "Arrange", "Format" }, 3)]
     public void ApplyBreakpointOverrides_AppliesExcelLikeTabSpecificCollapseOrder(
         double availableWidth,
         string[] groupNames,
