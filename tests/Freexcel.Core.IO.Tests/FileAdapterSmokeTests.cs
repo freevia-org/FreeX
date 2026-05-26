@@ -12904,6 +12904,7 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
         var colors = stylesXml.Root!.Element(workbookNs + "colors");
         colors.Should().NotBeNull();
         colors!.ToString().Should().Contain("rgb=\"FF010203\"");
@@ -12929,8 +12930,15 @@ public partial class FileAdapterSmokeTests
                 element.DifferentialFormatId == 0));
         tableStyles.Elements(workbookNs + "tableStyle")
             .Any(element => element.Attribute("name")?.Value == "FreexcelNativePivotStyle" &&
-                            element.Attribute("pivot")?.Value == "1")
+                            element.Attribute("pivot")?.Value == "1" &&
+                            element.Element(workbookNs + "tableStyleElement")?.Attribute("dxfId")?.Value == "0")
             .Should().BeTrue();
+        var differentialStyles = stylesXml.Root!.Element(workbookNs + "dxfs");
+        differentialStyles.Should().NotBeNull();
+        differentialStyles!.Elements(workbookNs + "dxf").Should().ContainSingle()
+            .Which.Should().Match<XElement>(element =>
+                element.Attribute("nativePivotDxf")!.Value == "kept" &&
+                element.Element(freexcelNs + "pivotStyleDxfNativeChild")!.Attribute("value")!.Value == "kept");
 
         var extensionList = stylesXml.Root!.Element(workbookNs + "extLst");
         extensionList.Should().NotBeNull();
@@ -19623,6 +19631,20 @@ public partial class FileAdapterSmokeTests
                 new XElement(
                     workbookNs + "indexedColors",
                     new XElement(workbookNs + "rgbColor", new XAttribute("rgb", "FF010203")))));
+            stylesXml.Root.Elements(workbookNs + "dxfs").Remove();
+            stylesXml.Root.Add(new XElement(
+                workbookNs + "dxfs",
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "dxf",
+                    new XAttribute("nativePivotDxf", "kept"),
+                    new XElement(
+                        workbookNs + "fill",
+                        new XElement(
+                            workbookNs + "patternFill",
+                            new XAttribute("patternType", "solid"),
+                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FFABCDEF")))),
+                    new XElement(freexcelNs + "pivotStyleDxfNativeChild", new XAttribute("value", "kept")))));
 
             var tableStyles = stylesXml.Root.Element(workbookNs + "tableStyles");
             if (tableStyles is null)
