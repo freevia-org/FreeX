@@ -1072,6 +1072,28 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void Accrint_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 43831.0), (2, 2, 43862.0),
+            (1, 3, 44197.0), (2, 3, 44228.0),
+            (1, 4, 0.05), (2, 4, 0.06),
+            (1, 5, 1000.0), (2, 5, 1200.0),
+            (1, 6, 2.0), (2, 6, 4.0),
+            (1, 7, 0.0), (2, 7, 1.0)
+        };
+
+        AssertApproxColumn(
+            EvalWithData("ACCRINT(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2,F1:F2,G1:G2)", cells),
+            Calc("ACCRINT(43831,43831,44197,0.05,1000,2,0)"),
+            Calc("ACCRINT(43862,43862,44228,0.06,1200,4,1)"));
+
+        EvalWithData("ACCRINT(A1:A2,B1:C1,44197,0.05,1000,2,0)", cells).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Coupncd_AndCouppcd_BracketSettlementDate()
     {
         double settlement = 43831;
