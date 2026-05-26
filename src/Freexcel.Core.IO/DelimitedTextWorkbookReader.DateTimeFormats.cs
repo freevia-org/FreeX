@@ -211,6 +211,8 @@ internal static partial class DelimitedTextWorkbookReader
 
     private static readonly string[] TimeOfDayFormats =
     [
+        "h tt",
+        "hh tt",
         "h:mm tt",
         "hh:mm tt",
         "h:mm:ss tt",
