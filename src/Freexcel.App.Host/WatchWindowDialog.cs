@@ -78,7 +78,7 @@ public sealed class WatchWindowDialog : Window
         _deleteButton.Click += (_, _) => DeleteSelectedWatch();
         buttons.Children.Add(_deleteButton);
 
-        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 

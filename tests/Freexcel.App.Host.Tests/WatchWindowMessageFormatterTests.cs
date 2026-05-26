@@ -34,6 +34,7 @@ public sealed class WatchWindowMessageFormatterTests
         source.Should().Contain("Content = \"_Refresh\"");
         source.Should().Contain("Content = \"_Delete Watch\"");
         source.Should().Contain("Content = \"_Close\"");
+        source.Should().Contain("Content = \"_Close\", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
     }
 
     [Fact]
