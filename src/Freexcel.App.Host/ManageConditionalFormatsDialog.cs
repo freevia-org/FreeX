@@ -42,6 +42,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private const string ScopeSheet     = "This Worksheet";
     private const string ScopeSelection = "Current Selection";
+    private const string ScopeTable     = "This Table";
     private const string DefaultNewRuleType = "Data Bar";
 
     public ConditionalFormatAppliesToRangeSelectionRequest? AppliesToRangeSelectionRequest { get; private set; }
@@ -82,6 +83,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         });
 
         _scopeBox.Items.Add(ScopeSheet);
+        if (FindSelectionTableRange() is not null)
+            _scopeBox.Items.Add(ScopeTable);
         if (selection.HasValue) _scopeBox.Items.Add(ScopeSelection);
         _scopeBox.SelectedItem = selection.HasValue ? ScopeSelection : ScopeSheet;
         _scopeBox.SelectionChanged += ScopeBox_SelectionChanged;
@@ -182,12 +185,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private void PopulateRules()
     {
         _rules.Clear();
-        bool filterToSelection = _selection.HasValue
-            && _scopeBox.SelectedItem is string s
-            && s == ScopeSelection;
+        var scopeRange = CurrentScopeRange();
 
-        var source = filterToSelection
-            ? _sheet.ConditionalFormats.Where(r => RangesOverlap(r.AppliesTo, _selection!.Value))
+        var source = scopeRange is { } range
+            ? _sheet.ConditionalFormats.Where(r => RangesOverlap(r.AppliesTo, range))
             : (IEnumerable<ConditionalFormat>)_sheet.ConditionalFormats;
 
         var priority = 1;
@@ -327,8 +328,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         ReassignPriorities();
         ResultRules = BuildResultRules(
             _sheet.ConditionalFormats,
-            _selection,
-            IsFilteringToSelection(),
+            CurrentScopeRange(),
+            IsFilteringToRange(),
             _rules);
     }
 
@@ -345,10 +346,27 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         }
     }
 
-    private bool IsFilteringToSelection() =>
-        _selection.HasValue
-        && _scopeBox.SelectedItem is string selectedScope
-        && selectedScope == ScopeSelection;
+    private bool IsFilteringToRange() => CurrentScopeRange() is not null;
+
+    private GridRange? CurrentScopeRange() =>
+        _scopeBox.SelectedItem is string selectedScope
+            ? selectedScope switch
+            {
+                ScopeSelection => _selection,
+                ScopeTable => FindSelectionTableRange(),
+                _ => null
+            }
+            : null;
+
+    private GridRange? FindSelectionTableRange()
+    {
+        if (_selection is not { } selection)
+            return null;
+
+        return _sheet.StructuredTables
+            .FirstOrDefault(table => RangesOverlap(table.Range, selection))
+            ?.Range;
+    }
 
     private void RangePickerButton_Click(object sender, RoutedEventArgs e)
     {
