@@ -7,6 +7,85 @@ namespace Freexcel.App.Host.Tests;
 public sealed class SelectionPanePlannerTests
 {
     [Fact]
+    public void SelectionPaneDialogStatePlanner_FilterItems_AppliesSearchAndKindFilters()
+    {
+        var picture = DialogState(SelectionPaneObjectKind.Picture, "Logo", isVisible: true);
+        var hiddenShape = DialogState(SelectionPaneObjectKind.Shape, "Process Box", isVisible: false);
+        var textBox = DialogState(SelectionPaneObjectKind.TextBox, "Quarter Notes", isVisible: true);
+
+        var visibleMatches = SelectionPaneDialogStatePlanner.FilterItems(
+            [picture, hiddenShape, textBox],
+            "  notes  ",
+            "Visible");
+        var shapeMatches = SelectionPaneDialogStatePlanner.FilterItems(
+            [picture, hiddenShape, textBox],
+            "shape",
+            "All");
+
+        visibleMatches.Should().Equal(textBox);
+        shapeMatches.Should().Equal(hiddenShape);
+    }
+
+    [Fact]
+    public void SelectionPaneDialogStatePlanner_FindSameKindMoveTargetIndex_SkipsOtherKinds()
+    {
+        var frontPicture = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
+        var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
+        var backPicture = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+
+        var forwardTarget = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(
+            [frontPicture, shape, backPicture],
+            currentIndex: 2,
+            forward: true);
+        var backwardTarget = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(
+            [frontPicture, shape, backPicture],
+            currentIndex: 0,
+            forward: false);
+
+        forwardTarget.Should().Be(0);
+        backwardTarget.Should().Be(2);
+    }
+
+    [Fact]
+    public void SelectionPaneDialogStatePlanner_PlanMove_ReordersAgainstSameKindTarget()
+    {
+        var frontPicture = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
+        var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
+        var backPicture = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+
+        var plan = SelectionPaneDialogStatePlanner.PlanMove(
+            [frontPicture, shape, backPicture],
+            backPicture.Id,
+            forward: true);
+
+        plan.Should().NotBeNull();
+        plan!.OrderedIds.Should().Equal(backPicture.Id, shape.Id, frontPicture.Id);
+        plan.MoveChanges.Should().Equal(new SelectionPaneMoveChange(
+            SelectionPaneObjectKind.Picture,
+            backPicture.Id,
+            Forward: true));
+    }
+
+    [Fact]
+    public void SelectionPaneDialogStatePlanner_PlanDragReorder_ReordersAndPlansAdjacentMoves()
+    {
+        var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
+        var middle = DialogState(SelectionPaneObjectKind.Picture, "Middle", isVisible: true);
+        var back = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+
+        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+            [front, middle, back],
+            draggedId: back.Id,
+            targetId: front.Id);
+
+        plan.Should().NotBeNull();
+        plan!.OrderedIds.Should().Equal(back.Id, front.Id, middle.Id);
+        plan.MoveChanges.Should().Equal(
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back.Id, Forward: true),
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back.Id, Forward: true));
+    }
+
+    [Fact]
     public void BuildItems_ListsVisibleObjectsTopToBottomWithExcelLikeNames()
     {
         var wb = new Workbook("test");
@@ -241,7 +320,8 @@ public sealed class SelectionPanePlannerTests
         var hostSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
 
         source.Should().Contain("private readonly List<SelectionPaneMoveChange> _moveChanges = [];");
-        source.Should().Contain("_moveChanges.Add(new SelectionPaneMoveChange");
+        source.Should().Contain("SelectionPaneDialogStatePlanner.PlanMove");
+        source.Should().Contain("_moveChanges.AddRange(plan.MoveChanges)");
         source.Should().Contain("ApplySearchAndFilter(selected.Source.Id)");
         var acceptMoveBody = source.Substring(
             source.IndexOf("private void AcceptMove", StringComparison.Ordinal),
@@ -263,6 +343,7 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("_list.DragOver");
         source.Should().Contain("_list.Drop");
         source.Should().Contain("DragDrop.DoDragDrop");
+        source.Should().Contain("SelectionPaneDialogStatePlanner.PlanDragReorder");
         source.Should().Contain("CreateDragMoveChanges");
     }
 
@@ -270,5 +351,12 @@ public sealed class SelectionPanePlannerTests
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.State.cs")));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.State.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.Planning.cs")));
+
+    private static SelectionPaneDialogItemState DialogState(
+        SelectionPaneObjectKind kind,
+        string name,
+        bool isVisible) =>
+        new(kind, Guid.NewGuid(), name, isVisible);
 }
