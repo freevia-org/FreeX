@@ -436,11 +436,38 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialogResultFactory.cs"));
 
+        source.Should().Contain("TextToColumnsDialogPlanner.BuildPreviewRows");
+        source.Should().Contain("TextToColumnsDialogPlanner.TryParseDestination");
+        source.Should().Contain("TextToColumnsDialogPlanner.NormalizeColumnFormats");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.AddBreakPosition");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.MoveBreakPosition");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.RemoveBreakPosition");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.ParseBreakPositions");
         source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.TryParseBreakPositions");
+    }
+
+    [Fact]
+    public void TextToColumnsDialogPlanner_MapsColumnFormatState()
+    {
+        TextToColumnsDialogPlanner.TextQualifierFromSelectedIndex(1)
+            .Should().Be(TextToColumnsTextQualifier.SingleQuote);
+        TextToColumnsDialogPlanner.TextQualifierFromSelectedIndex(99)
+            .Should().Be(TextToColumnsTextQualifier.DoubleQuote);
+        TextToColumnsDialogPlanner.DateColumnFormatFromLabel("YDM")
+            .Should().Be(TextToColumnsColumnFormat.DateYDM);
+        TextToColumnsDialogPlanner.DateColumnFormatLabel(TextToColumnsColumnFormat.DateDYM)
+            .Should().Be("DYM");
+        TextToColumnsDialogPlanner.IsDateColumnFormat(TextToColumnsColumnFormat.Text)
+            .Should().BeFalse();
+        TextToColumnsDialogPlanner.BuildColumnFormats(
+                4,
+                new Dictionary<int, TextToColumnsColumnFormat>
+                {
+                    [1] = TextToColumnsColumnFormat.Text,
+                    [2] = TextToColumnsColumnFormat.General,
+                    [3] = TextToColumnsColumnFormat.General
+                })
+            .Should().Equal(TextToColumnsColumnFormat.General, TextToColumnsColumnFormat.Text);
     }
 
     [Fact]
