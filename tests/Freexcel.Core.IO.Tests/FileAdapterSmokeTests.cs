@@ -13081,6 +13081,53 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesCustomDocumentProperties()
+    {
+        var workbook = new Workbook("CustomDocumentPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom document properties"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddCustomDocumentProperties(source);
+
+        source.Position = 0;
+        XlsxFeatureInspector.Inspect(source).Features.Should().Contain(feature => feature.Kind == XlsxUnsupportedFeatureKind.SensitivityLabels);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var customProperties = LoadPackageXml(archive.GetEntry("docProps/custom.xml")!);
+        XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+        XNamespace docPropsVtNs = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+        customProperties.Root!
+            .Elements(customPropertiesNs + "property")
+            .Where(property =>
+                property.Attribute("name")?.Value == "FreexcelCustomProperty" &&
+                property.Element(docPropsVtNs + "lpwstr")?.Value == "kept")
+            .Should()
+            .ContainSingle();
+        customProperties.Root
+            .Elements(customPropertiesNs + "property")
+            .Where(property =>
+                property.Attribute("name")?.Value == "MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled" &&
+                property.Element(docPropsVtNs + "lpwstr")?.Value == "true")
+            .Should()
+            .ContainSingle();
+
+        saved.Position = 0;
+        XlsxFeatureInspector.Inspect(saved).Features.Should().Contain(feature => feature.Kind == XlsxUnsupportedFeatureKind.SensitivityLabels);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesRetentionTest");
@@ -19764,6 +19811,43 @@ public partial class FileAdapterSmokeTests
 
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
         }
+    }
+
+    private static void AddCustomDocumentProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+            XNamespace docPropsVtNs = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+
+            ReplacePackageXml(archive, "docProps/custom.xml", new XDocument(
+                new XElement(
+                    customPropertiesNs + "Properties",
+                    new XAttribute(XNamespace.Xmlns + "vt", docPropsVtNs),
+                    new XElement(
+                        customPropertiesNs + "property",
+                        new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                        new XAttribute("pid", "2"),
+                        new XAttribute("name", "FreexcelCustomProperty"),
+                        new XElement(docPropsVtNs + "lpwstr", "kept")),
+                    new XElement(
+                        customPropertiesNs + "property",
+                        new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                        new XAttribute("pid", "3"),
+                        new XAttribute("name", "MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled"),
+                        new XElement(docPropsVtNs + "lpwstr", "true")))));
+
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            var contentTypes = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypes,
+                contentTypeNs,
+                "/docProps/custom.xml",
+                "application/vnd.openxmlformats-officedocument.custom-properties+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        packageStream.Position = 0;
     }
 
     private static void AddMinimalCustomSheetViews(MemoryStream packageStream)
