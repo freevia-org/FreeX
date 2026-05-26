@@ -2727,11 +2727,11 @@
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,8,0">
                                 <CheckBox x:Name="ViewGridlinesChk" Content="Gridlines"              Margin="4,1" IsChecked="True" Checked="ViewGridlinesChk_Changed" Unchecked="ViewGridlinesChk_Changed"
                                           local:RibbonTooltip.Title="Gridlines"
-                                          local:RibbonTooltip.KeyTip="G"
+                                          local:RibbonTooltip.KeyTip="VG"
                                           local:RibbonTooltip.Description="Show or hide worksheet gridlines."/>
                                 <CheckBox x:Name="ViewHeadersChk"   Content="Headings" Margin="4,1" IsChecked="True" Checked="ViewHeadersChk_Changed"   Unchecked="ViewHeadersChk_Changed"
                                           local:RibbonTooltip.Title="Headings"
-                                          local:RibbonTooltip.KeyTip="H"
+                                          local:RibbonTooltip.KeyTip="VH"
                                           local:RibbonTooltip.Description="Show or hide row numbers and column letters."/>
                                 <CheckBox x:Name="ViewRulerChk"     Content="Ruler"                  Margin="4,1" IsChecked="True" Checked="ViewRulerChk_Changed"     Unchecked="ViewRulerChk_Changed"
                                           local:RibbonTooltip.Title="Ruler"
@@ -2739,7 +2739,7 @@
                                           local:RibbonTooltip.Description="Show or hide rulers in Page Layout view."/>
                                 <CheckBox x:Name="ViewFormulaBarChk" Content="Formula Bar" Margin="4,1" IsChecked="True" Checked="ViewFormulaBarChk_Changed" Unchecked="ViewFormulaBarChk_Changed"
                                           local:RibbonTooltip.Title="Formula Bar"
-                                          local:RibbonTooltip.KeyTip="FB"
+                                          local:RibbonTooltip.KeyTip="VF"
                                           local:RibbonTooltip.Description="Show or hide the formula bar."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Show" Style="{StaticResource GroupLbl}"/></Border>
