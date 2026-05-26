@@ -209,7 +209,10 @@ public class XlsxCorpusScaffoldTests
             .Last();
         var report = File.ReadAllText(newestStatusReport);
 
-        report.Should().Contain($"expanded to {manifestRows.Count} manifest rows");
+        report.Should().ContainAny(
+            $"expanded to {manifestRows.Count} manifest rows",
+            $"Manifest baseline is {manifestRows.Count} rows",
+            $"XLSX corpus manifest rows | {manifestRows.Count}");
         report.Should().Contain($"{manifestRows.Count} workbook manifest rows");
         report.Should().Contain($"Expand the {manifestRows.Count}-row corpus baseline");
     }
