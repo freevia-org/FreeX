@@ -62,6 +62,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-file-version-001" => true,
         "generated-workbook-file-recovery-001" => true,
         "generated-workbook-file-sharing-001" => true,
+        "generated-workbook-protection-native-001" => true,
         "generated-workbook-smart-tags-001" => true,
         "generated-workbook-function-groups-001" => true,
         "generated-workbook-views-001" => true,
@@ -292,6 +293,21 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-file-sharing-001" => CreatePackage(("xl/workbook.xml", """
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <fileSharing readOnlyRecommended="1" userName="FreexcelTest" revisionsPassword="1234"/>
+            </workbook>
+            """)),
+        "generated-workbook-protection-native-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                      xmlns:fx="urn:freexcel:test">
+              <workbookProtection lockStructure="1"
+                                  lockWindows="1"
+                                  workbookPassword="83AF"
+                                  algorithmName="SHA-512"
+                                  hashValue="def456"
+                                  saltValue="salt456"
+                                  spinCount="100000">
+                <fx:workbookProtectionNativeChild id="first"/>
+                <fx:workbookProtectionNativeChild id="second"/>
+              </workbookProtection>
             </workbook>
             """)),
         "generated-workbook-smart-tags-001" => CreatePackage(("xl/workbook.xml", """
@@ -691,6 +707,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-sharing-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-protection-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-function-groups-001", StringComparison.OrdinalIgnoreCase) &&
@@ -908,6 +926,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-file-sharing-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookFileSharingFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-protection-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookProtectionNativeFixup(archive);
             return;
         }
 
@@ -1561,6 +1585,32 @@ internal static class XlsxCorpusFixtureFactory
             new XAttribute("readOnlyRecommended", "1"),
             new XAttribute("userName", "FreexcelTest"),
             new XAttribute("revisionsPassword", "1234")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookProtectionNativeFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "workbookProtection").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "workbookProtection",
+            new XAttribute("lockStructure", "1"),
+            new XAttribute("lockWindows", "1"),
+            new XAttribute("workbookPassword", "83AF"),
+            new XAttribute("algorithmName", "SHA-512"),
+            new XAttribute("hashValue", "def456"),
+            new XAttribute("saltValue", "salt456"),
+            new XAttribute("spinCount", "100000"),
+            new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "first")),
+            new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "second"))));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 

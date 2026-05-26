@@ -5288,9 +5288,18 @@ public partial class FileAdapterSmokeTests
         loadedRule.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("{FREEXCEL-DV-NATIVE}", StringComparison.Ordinal));
         loadedRule.NativeContainerAttributes.Should().Contain("disablePrompts", "1");
         loadedRule.NativeContainerAttributes.Should().Contain("xWindow", "25");
+        loadedRule.NativeAttributes = new Dictionary<string, string>(loadedRule.NativeAttributes)
+        {
+            ["invalid validation attr"] = "skip"
+        };
+        loadedRule.NativeContainerAttributes = new Dictionary<string, string>(loadedRule.NativeContainerAttributes)
+        {
+            ["invalid validations attr"] = "skip"
+        };
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -5301,6 +5310,8 @@ public partial class FileAdapterSmokeTests
         savedDataValidations.Attribute("xWindow")!.Value.Should().Be("25");
         var savedValidation = savedDataValidations.Element(savedWorksheetNs + "dataValidation")!;
         savedValidation.Attribute("imeMode")!.Value.Should().Be("noControl");
+        savedDataValidations.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid validations attr");
+        savedValidation.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid validation attr");
         savedValidation.Element(savedWorksheetNs + "extLst")!
             .Element(savedWorksheetNs + "ext")!
             .Attribute("uri")!.Value.Should().Be("{FREEXCEL-DV-NATIVE}");
