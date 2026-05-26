@@ -153,6 +153,26 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_LastCommaFirstFullName_ReordersDelimitedNameParts()
+    {
+        var result = FlashFillService.Fill(
+            [("Lovelace, Ada", "Ada Lovelace"), ("Hopper, Grace", "Grace Hopper")],
+            ["Turing, Alan"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_LastCommaFirstFullName_ReturnsNullForMalformedRemainingSource()
+    {
+        var result = FlashFillService.Fill(
+            [("Lovelace, Ada", "Ada Lovelace"), ("Hopper, Grace", "Grace Hopper")],
+            ["Alan Turing"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_DigitMask_FormatsPhoneNumberByExample()
     {
         var result = FlashFillService.Fill(
