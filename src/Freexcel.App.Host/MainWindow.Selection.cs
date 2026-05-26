@@ -190,6 +190,15 @@ public partial class MainWindow
                 return;
             }
 
+            if (_borderDrawMode != BorderDrawMode.None)
+            {
+                SetActiveCell(newAddr);
+                _dragSelectActive = true;
+                SheetGrid.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
             if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
             {
                 ExtendSelection(_selectionAnchor.Value, newAddr);
@@ -787,6 +796,12 @@ public partial class MainWindow
         if (!_dragSelectActive) return;
         _dragSelectActive = false;
         SheetGrid.ReleaseMouseCapture();
+        if (_borderDrawMode != BorderDrawMode.None && SheetGrid.SelectedRange is { } borderDrawRange)
+        {
+            ApplyBorderDrawMode(borderDrawRange);
+            e.Handled = true;
+            return;
+        }
         GetFormulaRangeEntryEditor()?.Focus();
     }
 
