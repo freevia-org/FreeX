@@ -163,6 +163,58 @@ public class PerformanceBenchmarkTests
         allocated.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Benchmark_LargeRangeDependencyRebuild_UsesCompactRangeTracking()
+    {
+        var workbook = new Workbook("Benchmark");
+        var sheet = workbook.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        var formula = new CellAddress(sheet.Id, 1, 2);
+        var inside = new CellAddress(sheet.Id, 50000, 1);
+        var outside = new CellAddress(sheet.Id, 1, 3);
+
+        sheet.SetFormula(formula, "SUM(A1:A100000)");
+        sheet.SetCell(inside, new NumberValue(1));
+        sheet.SetCell(outside, new NumberValue(2));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var rebuildSw = Stopwatch.StartNew();
+        engine.RebuildFormulaDependencies(workbook);
+        rebuildSw.Stop();
+        var rebuildAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var insideSw = Stopwatch.StartNew();
+        var insideReport = engine.Recalculate(workbook, [inside]);
+        insideSw.Stop();
+        var insideAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var outsideSw = Stopwatch.StartNew();
+        var outsideReport = engine.Recalculate(workbook, [outside]);
+        outsideSw.Stop();
+        var outsideAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Large range dependency rebuild: {rebuildSw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{rebuildAllocated:N0} bytes allocated");
+        Console.WriteLine(
+            $"Large range inside-cell recalc: {insideSw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{insideAllocated:N0} bytes allocated");
+        Console.WriteLine(
+            $"Large range outside-cell recalc: {outsideSw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{outsideAllocated:N0} bytes allocated");
+
+        insideReport.RecalculatedCells.Should().Contain(formula);
+        outsideReport.RecalculatedCells.Should().NotContain(formula);
+        rebuildAllocated.Should().BeLessThan(10_000_000);
+    }
+
     /// <summary>
     /// Benchmark: Memory usage for 1,000,000 cells (values only, no formulas).
     /// Target: <200MB
