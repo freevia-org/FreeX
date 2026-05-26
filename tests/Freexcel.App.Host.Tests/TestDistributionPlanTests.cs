@@ -28,6 +28,7 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("file import/export type");
         source.Should().Contain("crash/session linkage");
         source.Should().Contain("workbook contents, formulas, filenames, or paths");
+        source.Should().Contain("exception messages and stack traces can occasionally contain sensitive values");
         source.Should().Contain("FREEXCEL_DIAGNOSTICS=0");
     }
 

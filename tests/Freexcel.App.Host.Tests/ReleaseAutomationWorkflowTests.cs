@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace Freexcel.App.Host.Tests;
@@ -32,6 +33,21 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$releaseName = \"Freexcel tester $releaseId ($shortSha)\"");
         workflow.Should().Contain("\"release_id=$releaseId\" >> $env:GITHUB_OUTPUT");
         workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile");
+    }
+
+    [Fact]
+    public void TesterReleaseWorkflow_DefaultsToStableReleaseWhenAdvertisingLatestDownload()
+    {
+        var workflowPath = WorkspaceFileLocator.Find(".github", "workflows", "tester-release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        workflow.Should().Contain("Download the stable latest asset: Freexcel-latest-win-x64.exe");
+
+        var prereleaseInput = Regex.Match(workflow, @"(?ms)^\s+prerelease:\s*$.*?^\s+type:\s+boolean\s*$");
+        prereleaseInput.Success.Should().BeTrue("the workflow should expose a prerelease dispatch input");
+        prereleaseInput.Value.Should().Contain(
+            "default: false",
+            "GitHub releases/latest excludes prereleases, so the advertised stable latest asset must be backed by stable releases by default");
     }
 
     [Fact]
