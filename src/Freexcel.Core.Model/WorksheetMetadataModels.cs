@@ -12,6 +12,8 @@ public sealed record WorksheetAutoFilterColumnModel
     public int ColumnId { get; init; }
     public IReadOnlyList<string> Values { get; init; }
     public bool IncludeBlank { get; init; }
+    public IReadOnlyList<WorksheetAutoFilterDateGroupItemModel> DateGroups { get; init; }
+    public IReadOnlyDictionary<string, string>? NativeFiltersAttributes { get; init; }
     public IReadOnlyList<WorksheetAutoFilterCustomFilterModel> CustomFilters { get; init; }
     public bool CustomFiltersAnd { get; init; }
     public string? CustomFiltersAndRaw { get; init; }
@@ -40,6 +42,8 @@ public sealed record WorksheetAutoFilterColumnModel
             null,
             null,
             null,
+            [],
+            null,
             string.IsNullOrWhiteSpace(NativeFilterXml) ? [] : [NativeFilterXml],
             null)
     {
@@ -62,6 +66,8 @@ public sealed record WorksheetAutoFilterColumnModel
             null,
             null,
             null,
+            null,
+            [],
             null,
             NativeFilterXmls,
             NativeAttributes)
@@ -88,6 +94,41 @@ public sealed record WorksheetAutoFilterColumnModel
             null,
             null,
             null,
+            null,
+            [],
+            null,
+            NativeFilterXmls,
+            NativeAttributes)
+    {
+    }
+
+    public WorksheetAutoFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<WorksheetAutoFilterCustomFilterModel> CustomFilters,
+        bool CustomFiltersAnd,
+        string? CustomFiltersAndRaw,
+        IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes,
+        WorksheetAutoFilterTop10Model? Top10,
+        WorksheetAutoFilterDynamicFilterModel? DynamicFilter,
+        WorksheetAutoFilterColorFilterModel? ColorFilter,
+        WorksheetAutoFilterIconFilterModel? IconFilter,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyDictionary<string, string>? NativeAttributes = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            CustomFilters,
+            CustomFiltersAnd,
+            CustomFiltersAndRaw,
+            NativeCustomFiltersAttributes,
+            Top10,
+            DynamicFilter,
+            ColorFilter,
+            IconFilter,
+            [],
             null,
             NativeFilterXmls,
             NativeAttributes)
@@ -117,6 +158,8 @@ public sealed record WorksheetAutoFilterColumnModel
             Top10,
             DynamicFilter,
             null,
+            null,
+            [],
             null,
             NativeFilterXmls,
             NativeAttributes)
@@ -148,6 +191,8 @@ public sealed record WorksheetAutoFilterColumnModel
             DynamicFilter,
             ColorFilter,
             null,
+            [],
+            null,
             NativeFilterXmls,
             NativeAttributes)
     {
@@ -165,12 +210,16 @@ public sealed record WorksheetAutoFilterColumnModel
         WorksheetAutoFilterDynamicFilterModel? DynamicFilter,
         WorksheetAutoFilterColorFilterModel? ColorFilter,
         WorksheetAutoFilterIconFilterModel? IconFilter,
+        IReadOnlyList<WorksheetAutoFilterDateGroupItemModel> DateGroups,
+        IReadOnlyDictionary<string, string>? NativeFiltersAttributes,
         IReadOnlyList<string> NativeFilterXmls,
         IReadOnlyDictionary<string, string>? NativeAttributes = null)
     {
         this.ColumnId = ColumnId;
         this.Values = Values;
         this.IncludeBlank = IncludeBlank;
+        this.DateGroups = DateGroups;
+        this.NativeFiltersAttributes = NativeFiltersAttributes;
         this.CustomFilters = CustomFilters;
         this.CustomFiltersAnd = CustomFiltersAnd;
         this.CustomFiltersAndRaw = CustomFiltersAndRaw;
@@ -187,6 +236,22 @@ public sealed record WorksheetAutoFilterColumnModel
 public sealed record WorksheetAutoFilterCustomFilterModel(
     string? Operator,
     string? Value,
+    IReadOnlyDictionary<string, string>? NativeAttributes = null);
+
+public sealed record WorksheetAutoFilterDateGroupItemModel(
+    int? Year = null,
+    int? Month = null,
+    int? Day = null,
+    int? Hour = null,
+    int? Minute = null,
+    int? Second = null,
+    string? DateTimeGrouping = null,
+    string? YearRaw = null,
+    string? MonthRaw = null,
+    string? DayRaw = null,
+    string? HourRaw = null,
+    string? MinuteRaw = null,
+    string? SecondRaw = null,
     IReadOnlyDictionary<string, string>? NativeAttributes = null);
 
 public sealed record WorksheetAutoFilterTop10Model(
