@@ -25,6 +25,7 @@ public sealed class ScenarioManagerDialog : Window
     private readonly string _defaultScenarioName;
     private readonly SheetId? _currentSheetId;
     private readonly Func<string, SheetId?>? _resolveSheetIdByName;
+    private Button? _addButton;
     private Button? _editButton;
     private Button? _deleteButton;
     private Button? _showButton;
@@ -106,7 +107,7 @@ public sealed class ScenarioManagerDialog : Window
         var sideButtons = new StackPanel { Margin = new Thickness(10, 20, 0, 0) };
         Grid.SetColumn(sideButtons, 1);
         body.Children.Add(sideButtons);
-        AddActionButton(sideButtons, "_Add...", ScenarioManagerAction.Add);
+        _addButton = AddActionButton(sideButtons, "_Add...", ScenarioManagerAction.Add, isDefault: _scenarioList.Items.Count == 0);
         _editButton = AddActionButton(sideButtons, "_Edit...", ScenarioManagerAction.Edit, isEnabled: false);
         _deleteButton = AddActionButton(sideButtons, "_Delete", ScenarioManagerAction.Delete, isEnabled: false);
         AddActionButton(sideButtons, "_List...", ScenarioManagerAction.List);
@@ -292,6 +293,7 @@ public sealed class ScenarioManagerDialog : Window
         }
 
         var hasSelection = selected is not null;
+        if (_addButton is not null) _addButton.IsDefault = !hasSelection;
         if (_editButton is not null) _editButton.IsEnabled = hasSelection;
         if (_deleteButton is not null) _deleteButton.IsEnabled = hasSelection;
         if (_showButton is not null)

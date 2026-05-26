@@ -317,6 +317,17 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("_showButton.IsDefault = hasSelection;");
     }
 
+    [Fact]
+    public void DialogSource_MakesAddTheDefaultActionWhenNoScenariosExist()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+
+        source.Should().Contain("private Button? _addButton;");
+        source.Should().Contain("_addButton = AddActionButton(sideButtons, \"_Add...\", ScenarioManagerAction.Add, isDefault: _scenarioList.Items.Count == 0);");
+        source.Should().Contain("_addButton.IsDefault = !hasSelection;");
+        source.Should().Contain("_showButton.IsDefault = hasSelection;");
+    }
+
     private static T GetField<T>(ScenarioManagerDialog dialog, string fieldName)
         where T : class
     {
