@@ -163,6 +163,7 @@ public sealed partial class AutoFilterDialog
     private void PopulateColorChoices(IReadOnlyList<AutoFilterColorOption> colorOptions)
     {
         _filterByColorPanel.Children.Clear();
+        _colorChoiceButtons.Clear();
         foreach (var section in colorOptions.GroupBy(option => option.Kind == AutoFilterColorFilterKind.FontColor ? "Font Color" : "Cell Color"))
         {
             _filterByColorPanel.Children.Add(new TextBlock
@@ -172,8 +173,14 @@ public sealed partial class AutoFilterDialog
             });
 
             var swatches = new WrapPanel();
+            KeyboardNavigation.SetDirectionalNavigation(swatches, KeyboardNavigationMode.Contained);
             foreach (var option in section)
-                swatches.Children.Add(CreateColorChoiceButton(option));
+            {
+                var button = CreateColorChoiceButton(option);
+                _colorChoiceButtons.Add(button);
+                swatches.Children.Add(button);
+            }
+
             _filterByColorPanel.Children.Add(swatches);
         }
 
@@ -190,6 +197,7 @@ public sealed partial class AutoFilterDialog
             Margin = new Thickness(0, 0, 6, 6),
             ToolTip = option.Label
         };
+        button.PreviewKeyDown += ColorChoiceButton_PreviewKeyDown;
 
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         content.Children.Add(CreateColorSwatch(option));
@@ -202,6 +210,41 @@ public sealed partial class AutoFilterDialog
         button.Content = content;
         button.Click += (_, _) => ApplyColorChoice(colorFilter);
         return button;
+    }
+
+    private void ColorChoiceButton_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not Button button)
+            return;
+
+        var currentIndex = _colorChoiceButtons.IndexOf(button);
+        if (currentIndex < 0)
+            return;
+
+        var targetIndex = e.Key switch
+        {
+            Key.Left or Key.Up => currentIndex - 1,
+            Key.Right or Key.Down => currentIndex + 1,
+            Key.Home => 0,
+            Key.End => _colorChoiceButtons.Count - 1,
+            _ => currentIndex
+        };
+
+        if (targetIndex == currentIndex)
+            return;
+
+        FocusColorChoiceButton(targetIndex);
+        e.Handled = true;
+    }
+
+    private void FocusColorChoiceButton(int index)
+    {
+        if (_colorChoiceButtons.Count == 0)
+            return;
+
+        var button = _colorChoiceButtons[Math.Clamp(index, 0, _colorChoiceButtons.Count - 1)];
+        button.Focus();
+        Keyboard.Focus(button);
     }
 
     private void ApplyColorChoice(AutoFilterColorFilter colorFilter)

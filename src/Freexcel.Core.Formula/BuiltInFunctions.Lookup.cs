@@ -353,6 +353,12 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue Indirect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+        => IndirectCore(args, ctx, unwrapSingleCell: true);
+
+    internal static ScalarValue IndirectReference(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+        => IndirectCore(args, ctx, unwrapSingleCell: false);
+
+    private static ScalarValue IndirectCore(IReadOnlyList<ScalarValue> args, IEvalContext ctx, bool unwrapSingleCell)
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
@@ -392,9 +398,12 @@ public static partial class BuiltInFunctions
                 ? !TryParseA1Ref(refText, out uint row, out uint col)
                 : !TryParseR1C1Ref(refText, ctx.CurrentCellAddress, out row, out col))
             return ErrorValue.Ref;
-        return sheetName is not null
-            ? ctx.GetCellValue(sheetName, row, col)
-            : ctx.GetCellValue(row, col);
+
+        return unwrapSingleCell
+            ? sheetName is not null
+                ? ctx.GetCellValue(sheetName, row, col)
+                : ctx.GetCellValue(row, col)
+            : BuildIndirectRange(ctx, sheetName, row, col, row, col);
     }
 
     private static ScalarValue BuildIndirectRange(
