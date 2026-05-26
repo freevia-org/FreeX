@@ -207,8 +207,7 @@ public partial class MainWindow
                          AddSheetButton.ActualWidth +
                          SheetNavRightBtn.ActualWidth;
         var available = Math.Max(80, SheetTabsRowGrid.ActualWidth - fixedWidth);
-        var maxTabViewportWidth = Math.Max(80, available * 2 / 3);
-        var targetWidth = Math.Min(tabContentWidth, maxTabViewportWidth);
+        var targetWidth = Math.Min(tabContentWidth, available);
 
         if (Math.Abs(SheetTabsScroller.Width - targetWidth) <= 0.5)
             return;
