@@ -467,7 +467,7 @@
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="BottomDouble"/></MenuItem.Icon>
                                                 </MenuItem>
                                                 <Separator/>
-                                                <MenuItem Header="Thick Box Border" local:RibbonTooltip.KeyTip="X" Click="BorderThickBoxMenuItem_Click">
+                                                <MenuItem Header="Thick Outside Borders" local:RibbonTooltip.KeyTip="X" Click="BorderThickBoxMenuItem_Click">
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="ThickBox"/></MenuItem.Icon>
                                                 </MenuItem>
                                                 <MenuItem Header="Top and Bottom Border" local:RibbonTooltip.KeyTip="U" Click="BorderTopAndBottomMenuItem_Click">
