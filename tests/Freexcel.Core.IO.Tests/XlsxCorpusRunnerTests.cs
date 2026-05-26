@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(12, "the generated metadata-pass manifest currently declares twelve deterministic package-retention rows");
+        rows.Should().HaveCount(13, "the generated metadata-pass manifest currently declares thirteen deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -496,6 +496,55 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-phonetic-properties-001");
         AssertWorksheetPhoneticProperties(saved, "generated-worksheet-phonetic-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSortStateRow_RetainsSortStateAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sort-state-001");
+        AssertWorksheetSortState(source, "generated-worksheet-sort-state-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-sort-state-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-sort-state-001");
+        AssertWorksheetSortState(saved, "generated-worksheet-sort-state-001 saved");
+    }
+
+    private static void AssertWorksheetSortState(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var autoFilter = worksheetXml.Root!.Element(worksheetNs + "autoFilter");
+        autoFilter.Should().NotBeNull(because);
+        autoFilter!.Attribute("ref")!.Value.Should().Be("A1:B3", because);
+        autoFilter.Descendants(worksheetNs + "filter")
+            .Single(filter => string.Equals(filter.Attribute("val")?.Value, "A", StringComparison.Ordinal))
+            .Should()
+            .NotBeNull(because);
+
+        var sortState = worksheetXml.Root.Element(worksheetNs + "sortState");
+        sortState.Should().NotBeNull(because);
+        sortState!.Attribute("ref")!.Value.Should().Be("A1:A3", because);
+        sortState.Attribute("caseSensitive")!.Value.Should().Be("1", because);
+        sortState.Attribute("sortMethod")!.Value.Should().Be("stroke", because);
+        sortState.Attribute("customSortStateFlag")!.Value.Should().Be("keep", because);
+
+        var sortCondition = sortState.Elements(worksheetNs + "sortCondition")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        sortCondition.Attribute("ref")!.Value.Should().Be("A2:A3", because);
+        sortCondition.Attribute("descending")!.Value.Should().Be("1", because);
+        sortCondition.Attribute("sortBy")!.Value.Should().Be("cellColor", because);
+        sortCondition.Attribute("customSortConditionFlag")!.Value.Should().Be("keep", because);
     }
 
     private static void AssertWorksheetPhoneticProperties(Stream package, string because)
