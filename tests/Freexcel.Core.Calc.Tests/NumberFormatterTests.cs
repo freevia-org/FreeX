@@ -85,6 +85,10 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("0*-", 12, 6, "12----")]
+    [InlineData("0*-\" kg\"", 12, 8, "12--- kg")]
+    [InlineData("0*-\\ kg", 12, 8, "12--- kg")]
+    [InlineData("0\" kg\"*-", 12, 8, "12 kg---")]
+    [InlineData("0*-0", 120, 6, "120---")]
     [InlineData("$* #,##0.00", 1234.5, 14, "$     1,234.50")]
     public void CustomNumberSubset_ExpandsFillDirectiveToRequestedCharacterWidth(
         string format,
@@ -596,6 +600,34 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("m/d/yyyy*-", 45292, 12, "1/1/2024----")]
+    [InlineData("h:mm*-\" hrs\"", 45292.5, 12, "12:00--- hrs")]
+    public void CustomNumberSubset_ExpandsDateTimeFillDirectiveAfterRenderedValue(
+        string format,
+        double value,
+        int targetWidthCharacters,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format, targetWidthCharacters);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("m/d/yyyy*-", 45292, 12, "1/1/2024----")]
+    [InlineData("h:mm*-\" hrs\"", 45292.5, 12, "12:00--- hrs")]
+    public void CustomNumberSubset_ExpandsDateTimeValueFillDirectiveAfterRenderedValue(
+        string format,
+        double value,
+        int targetWidthCharacters,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(value), format, targetWidthCharacters);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("h:mm:ss", 45292.52425925926, "12:34:56")]
     [InlineData("hh:mm AM/PM", 45292.56527777778, "01:34 PM")]
     [InlineData("m/d/yyyy h:mm", 45292.52430555556, "1/1/2024 12:35")]
@@ -673,6 +705,22 @@ public class NumberFormatterTests
         var result = NumberFormatter.Format(new NumberValue(1.5), format);
 
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_ExpandsElapsedTimeFillDirectiveAfterRenderedValue()
+    {
+        var result = NumberFormatter.Format(new NumberValue(1.5), "[h]:mm:ss*-", 12);
+
+        Assert.Equal("36:00:00----", result);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_ExpandsElapsedDateTimeValueFillDirectiveAfterRenderedValue()
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(1.5), "[h]:mm:ss*-", 12);
+
+        Assert.Equal("36:00:00----", result);
     }
 
     [Theory]

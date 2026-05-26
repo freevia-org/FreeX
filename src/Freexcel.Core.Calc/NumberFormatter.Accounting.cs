@@ -11,11 +11,14 @@ public static partial class NumberFormatter
             return text;
         }
 
-        if (TryGetFillDirective(format, out var fillChar, out var fillAfterNumber))
+        if (TryGetFillDirective(format, out var fillChar, out var fillPlacement, out var fillDirectiveIndex))
         {
             var fill = new string(fillChar, targetWidthCharacters.Value - text.Length);
-            if (fillAfterNumber)
-                return text + fill;
+            if (fillPlacement == FillDirectivePlacement.AfterNumber)
+            {
+                int insertionIndex = FindFillAfterNumberInsertionIndex(text, format, fillDirectiveIndex);
+                return text.Insert(insertionIndex, fill);
+            }
 
             int directiveFillIndex = FindAccountingFillInsertionIndex(text);
             return directiveFillIndex < 0
@@ -98,12 +101,23 @@ public static partial class NumberFormatter
         return false;
     }
 
-    private static bool TryGetFillDirective(string format, out char fillChar, out bool fillAfterNumber)
+    private enum FillDirectivePlacement
+    {
+        BeforeNumber,
+        AfterNumber
+    }
+
+    private static bool TryGetFillDirective(
+        string format,
+        out char fillChar,
+        out FillDirectivePlacement placement,
+        out int fillDirectiveIndex)
     {
         fillChar = ' ';
-        fillAfterNumber = false;
+        placement = FillDirectivePlacement.BeforeNumber;
+        fillDirectiveIndex = -1;
         bool inQuote = false;
-        int firstNumericPlaceholder = -1;
+        int firstValuePlaceholder = -1;
 
         for (int i = 0; i < format.Length; i++)
         {
@@ -120,18 +134,89 @@ public static partial class NumberFormatter
                 continue;
             }
 
-            if (!inQuote && firstNumericPlaceholder < 0 && IsNumericPlaceholder(c))
-                firstNumericPlaceholder = i;
+            if (!inQuote && firstValuePlaceholder < 0 && IsValuePlaceholderAt(format, i))
+                firstValuePlaceholder = i;
 
             if (!inQuote && c == '*' && i + 1 < format.Length)
             {
                 fillChar = format[i + 1];
-                fillAfterNumber = firstNumericPlaceholder >= 0;
+                fillDirectiveIndex = i;
+                placement = firstValuePlaceholder >= 0
+                    ? FillDirectivePlacement.AfterNumber
+                    : FillDirectivePlacement.BeforeNumber;
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static bool IsValuePlaceholderAt(string format, int index)
+    {
+        var c = format[index];
+        if (IsNumericPlaceholder(c))
+            return true;
+
+        if (c is 'y' or 'Y' or 'd' or 'D' or 'h' or 'H' or 'm' or 'M' or 's' or 'S')
+            return true;
+
+        if (c == '[' && index + 2 < format.Length)
+        {
+            var unit = format[index + 1];
+            return unit is 'h' or 'H' or 'm' or 'M' or 's' or 'S' &&
+                format.IndexOf(']', index + 2) > index;
+        }
+
+        return false;
+    }
+
+    private static int FindFillAfterNumberInsertionIndex(string text, string format, int fillDirectiveIndex)
+    {
+        var suffix = ExtractRenderedLiteralSuffix(format, fillDirectiveIndex + 2);
+        return suffix.Length > 0 && text.EndsWith(suffix, StringComparison.Ordinal)
+            ? text.Length - suffix.Length
+            : text.Length;
+    }
+
+    private static string ExtractRenderedLiteralSuffix(string format, int start)
+    {
+        var sb = new System.Text.StringBuilder();
+        bool inQuote = false;
+
+        for (int i = Math.Max(0, start); i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                sb.Append(format[++i]);
+                continue;
+            }
+
+            if (!inQuote && IsValuePlaceholderAt(format, i))
+                return "";
+
+            if (!inQuote && c == '_' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && c == '*' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
     }
 
     private static int FindAccountingFillInsertionIndex(string text)
