@@ -273,6 +273,87 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_BoundsLongCellTextOverlaysToVisiblePrintText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Long cell print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(
+                new CellAddress(sheet.Id, 1, 1),
+                new TextValue("visible prefix worksheet text hidden-tail-token"));
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 12));
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlays.Should().Contain(text => text.Contains("\u2026", StringComparison.Ordinal));
+            overlays.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_DoesNotEllipsizeCellOverlayWhenOnlyTrailingSpacesOverflow()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Trailing space cell print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("abcdefg  "));
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 1));
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlays.Should().Contain("abcdefg");
+            overlays.Should().NotContain(text => text.Contains("\u2026", StringComparison.Ordinal));
+        });
+    }
+
+    [Theory]
+    [InlineData(WorksheetPrintErrorValue.Blank, "")]
+    [InlineData(WorksheetPrintErrorValue.Dash, "--")]
+    [InlineData(WorksheetPrintErrorValue.NotAvailable, "#N/A")]
+    public void RenderWorksheet_AppliesPrintErrorOptionsBeforeCellTextOverlays(
+        WorksheetPrintErrorValue printErrorValue,
+        string expectedOverlayText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Printed error overlays");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), ErrorValue.DivByZero);
+            sheet.PrintErrorValue = printErrorValue;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            if (expectedOverlayText.Length == 0)
+            {
+                overlays.Should().NotContain("#DIV/0!");
+            }
+            else
+            {
+                overlays.Should().Contain(expectedOverlayText);
+                overlays.Should().NotContain("#DIV/0!");
+            }
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_DraftQualityKeepsCommentsAtEnd()
     {
         StaTestRunner.Run(() =>
