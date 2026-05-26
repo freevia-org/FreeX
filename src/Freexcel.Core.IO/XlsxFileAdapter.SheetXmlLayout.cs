@@ -187,76 +187,9 @@ public sealed partial class XlsxFileAdapter
         ZipArchiveEntry worksheetEntry,
         IReadOnlyList<CellStyle> differentialStyles)
     {
-        var hiddenRows = new HashSet<uint>();
-        var hiddenCols = new HashSet<uint>();
-        var rowOutlineLevels = new Dictionary<uint, int>();
-        var colOutlineLevels = new Dictionary<uint, int>();
-        var groupHiddenRows = new HashSet<uint>();
-        var groupHiddenCols = new HashSet<uint>();
-        var rowHeights = new Dictionary<uint, double>();
-        var columnWidths = new Dictionary<uint, double>();
         var worksheetXml = LoadXml(worksheetEntry);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-        foreach (var row in worksheetXml.Descendants(worksheetNs + "row"))
-        {
-            if (!uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
-                continue;
-
-            if (IsTruthy(row.Attribute("hidden")?.Value))
-                hiddenRows.Add(rowNumber);
-
-            if (ParseOptionalDouble(row.Attribute("ht")?.Value) is { } heightPoints && heightPoints > 0)
-                rowHeights[rowNumber] = heightPoints * (96.0 / 72.0);
-
-            var outlineStr = row.Attribute("outlineLevel")?.Value;
-            if (int.TryParse(outlineStr, out var outlineLevel) && outlineLevel > 0)
-            {
-                rowOutlineLevels[rowNumber] = outlineLevel;
-                if (IsTruthy(row.Attribute("collapsed")?.Value))
-                    groupHiddenRows.Add(rowNumber);
-            }
-        }
-
-        foreach (var col in worksheetXml.Descendants(worksheetNs + "col"))
-        {
-            if (!uint.TryParse(col.Attribute("min")?.Value, out var min))
-                continue;
-            if (!uint.TryParse(col.Attribute("max")?.Value, out var max))
-                continue;
-            if (min > max)
-                continue;
-
-            if (IsTruthy(col.Attribute("hidden")?.Value))
-            {
-                for (var colNumber = min; colNumber <= max; colNumber++)
-                    hiddenCols.Add(colNumber);
-            }
-
-            var colOutlineStr = col.Attribute("outlineLevel")?.Value;
-            if (int.TryParse(colOutlineStr, out var colOutlineLevel) && colOutlineLevel > 0)
-            {
-                var collapsed = IsTruthy(col.Attribute("collapsed")?.Value);
-                for (var colNumber = min; colNumber <= max; colNumber++)
-                {
-                    colOutlineLevels[colNumber] = colOutlineLevel;
-                    if (collapsed)
-                        groupHiddenCols.Add(colNumber);
-                }
-            }
-
-            if (IsTruthy(col.Attribute("customWidth")?.Value) &&
-                ParseOptionalDouble(col.Attribute("width")?.Value) is { } width &&
-                width > 0)
-            {
-                if (col.Attribute("style") is not null && width <= 9.2)
-                    continue;
-
-                width = Math.Floor(width);
-                for (var colNumber = min; colNumber <= max; colNumber++)
-                    columnWidths[colNumber] = width;
-            }
-        }
+        var rowColumnLayout = XlsxWorksheetRowColumnLayoutReader.Read(worksheetXml, worksheetNs);
 
         var protection = worksheetXml.Root?.Element(worksheetNs + "sheetProtection");
         var isProtected = IsTruthy(protection?.Attribute("sheet")?.Value);
@@ -308,14 +241,14 @@ public sealed partial class XlsxFileAdapter
         var sortState = XlsxWorksheetSortStateMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sortState"));
         var singleXmlCells = XlsxWorksheetSingleXmlCellMapper.Read(worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
         var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
-        var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
-        var explicitStyleOnlyCells = ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
+        var cachedFormulaErrors = XlsxWorksheetCellLayoutReader.ReadCachedFormulaErrors(worksheetXml, worksheetNs);
+        var explicitStyleOnlyCells = XlsxWorksheetCellLayoutReader.ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
         var codeName = sheetPr?.Attribute("codeName")?.Value;
 
         return new SheetXmlLayout(
-            hiddenRows,
-            hiddenCols,
+            rowColumnLayout.HiddenRows,
+            rowColumnLayout.HiddenCols,
             isProtected,
             passwordHash,
             protectionMetadata,
@@ -355,16 +288,16 @@ public sealed partial class XlsxFileAdapter
             ReadWorksheetHeaderFooterMetadata(headerFooter),
             background,
             headerFooterPictures,
-            rowOutlineLevels,
-            colOutlineLevels,
+            rowColumnLayout.RowOutlineLevels,
+            rowColumnLayout.ColOutlineLevels,
             ParseOptionalBool(outlinePr?.Attribute("summaryBelow")?.Value),
             ParseOptionalBool(outlinePr?.Attribute("summaryRight")?.Value),
             ParseOptionalBool(outlinePr?.Attribute("showOutlineSymbols")?.Value),
             ParseOptionalBool(outlinePr?.Attribute("applyStyles")?.Value),
-            groupHiddenRows,
-            groupHiddenCols,
-            rowHeights,
-            columnWidths,
+            rowColumnLayout.GroupHiddenRows,
+            rowColumnLayout.GroupHiddenCols,
+            rowColumnLayout.RowHeights,
+            rowColumnLayout.ColumnWidths,
             comments,
             drawingParts.ChartParts,
             drawingParts.PictureParts,
@@ -694,68 +627,6 @@ public sealed partial class XlsxFileAdapter
             : model;
     }
 
-    private static IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ReadExplicitStyleOnlyCells(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        var result = new List<(uint Row, uint Col, int StyleIndex)>();
-
-        foreach (var cell in worksheetXml.Descendants(worksheetNs + "c"))
-        {
-            if (!int.TryParse(cell.Attribute("s")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var styleIndex) ||
-                cell.Element(worksheetNs + "f") is not null ||
-                cell.Element(worksheetNs + "v") is not null ||
-                cell.Element(worksheetNs + "is") is not null)
-            {
-                continue;
-            }
-
-            var reference = cell.Attribute("r")?.Value;
-            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, SheetId.New(), out var address))
-                continue;
-
-            result.Add((address.Row, address.Col, styleIndex));
-        }
-
-        return result;
-    }
-
-    private static Dictionary<(uint Row, uint Col), ErrorValue> ReadCachedFormulaErrors(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        var result = new Dictionary<(uint Row, uint Col), ErrorValue>();
-
-        foreach (var cell in worksheetXml.Descendants(worksheetNs + "c"))
-        {
-            if (!string.Equals(cell.Attribute("t")?.Value, "e", StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (cell.Element(worksheetNs + "f") is null)
-                continue;
-            var rawValue = cell.Element(worksheetNs + "v")?.Value;
-            if (string.IsNullOrWhiteSpace(rawValue))
-                continue;
-            var reference = cell.Attribute("r")?.Value;
-            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, SheetId.New(), out var address))
-                continue;
-
-            result[(address.Row, address.Col)] = MapCachedFormulaError(rawValue);
-        }
-
-        return result;
-    }
-
-    private static ErrorValue MapCachedFormulaError(string rawValue) =>
-        rawValue.ToUpperInvariant() switch
-        {
-            "#NULL!" => ErrorValue.Null,
-            "#DIV/0!" => ErrorValue.DivByZero,
-            "#VALUE!" => ErrorValue.Value,
-            "#REF!" => ErrorValue.Ref,
-            "#NAME?" => ErrorValue.Name,
-            "#NUM!" => ErrorValue.Num,
-            "#N/A" => ErrorValue.NA,
-            "#SPILL!" => ErrorValue.Spill,
-            "#CALC!" => ErrorValue.Calc,
-            _ => new ErrorValue(rawValue)
-        };
-
     private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
     {
         range = default;
@@ -781,20 +652,7 @@ public sealed partial class XlsxFileAdapter
     }
 
     private static uint? ParsePaneSplit(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        if (uint.TryParse(value, out var integer))
-            return integer;
-
-        if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var floating) &&
-            floating > 0 &&
-            floating <= uint.MaxValue)
-            return (uint)Math.Round(floating);
-
-        return null;
-    }
+        => XlsxWorksheetXmlValueParser.ParsePaneSplit(value);
 
     private static CellAddress? ParseOptionalCellReference(string? reference)
     {
@@ -807,10 +665,10 @@ public sealed partial class XlsxFileAdapter
     }
 
     private static bool IsTruthy(string? value) =>
-        value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+        XlsxWorksheetXmlValueParser.IsTruthy(value);
 
     private static bool IsFalse(string? value) =>
-        value is "0" || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+        XlsxWorksheetXmlValueParser.IsFalse(value);
 
     private static bool? ParseOptionalBool(string? value)
     {
@@ -837,12 +695,7 @@ public sealed partial class XlsxFileAdapter
             : null;
 
     private static WorksheetViewMode ParseWorksheetViewMode(string? value) =>
-        value switch
-        {
-            "pageBreakPreview" => WorksheetViewMode.PageBreakPreview,
-            "pageLayout" => WorksheetViewMode.PageLayout,
-            _ => WorksheetViewMode.Normal
-        };
+        XlsxWorksheetXmlValueParser.ParseWorksheetViewMode(value);
 
     private static bool IsValidWorksheetRow(uint row) =>
         row is >= 1 and <= CellAddress.MaxRow;
@@ -857,10 +710,10 @@ public sealed partial class XlsxFileAdapter
         rotation == 255 || rotation is >= -90 and <= 90;
 
     private static uint ValidFrozenRowsOrZero(uint row) =>
-        row <= CellAddress.MaxRow ? row : 0;
+        XlsxWorksheetXmlValueParser.ValidFrozenRowsOrZero(row);
 
     private static uint ValidFrozenColumnsOrZero(uint column) =>
-        column <= CellAddress.MaxCol ? column : 0;
+        XlsxWorksheetXmlValueParser.ValidFrozenColumnsOrZero(column);
 
     private static bool IsSupportedFontSize(double fontSize) =>
         double.IsFinite(fontSize) && fontSize is >= 1 and <= 409;

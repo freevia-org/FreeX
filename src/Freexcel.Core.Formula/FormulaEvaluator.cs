@@ -888,8 +888,9 @@ public sealed class FormulaEvaluator
     private ScalarValue EvaluateIf(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count is < 2 or > 3) return ErrorValue.Value;
-        var cond = EvaluateNode(node.Arguments[0], context);
+        var cond = EvaluateArrayOperand(node.Arguments[0], context);
         if (cond is ErrorValue e) return e;
+        if (cond is RangeValue conditionRange) return EvaluateIfConditionRange(node, context, conditionRange);
         bool? taken = cond switch
         {
             BoolValue b     => b.Value,
@@ -902,6 +903,50 @@ public sealed class FormulaEvaluator
         if (taken.Value)  return EvaluateArrayOperand(node.Arguments[1], context);
         if (node.Arguments.Count == 3) return EvaluateArrayOperand(node.Arguments[2], context);
         return new BoolValue(false);
+    }
+
+    private ScalarValue EvaluateIfConditionRange(FunctionCallNode node, IEvalContext context, RangeValue conditionRange)
+    {
+        ScalarValue? trueBranch = null;
+        ScalarValue? falseBranch = null;
+        var cells = new ScalarValue[conditionRange.RowCount, conditionRange.ColCount];
+
+        for (int r = 0; r < conditionRange.RowCount; r++)
+            for (int c = 0; c < conditionRange.ColCount; c++)
+            {
+                var condition = conditionRange.Cells[r, c];
+                if (condition is ErrorValue error)
+                {
+                    cells[r, c] = error;
+                    continue;
+                }
+
+                bool? taken = condition switch
+                {
+                    BoolValue b     => b.Value,
+                    NumberValue n   => n.Value != 0,
+                    DateTimeValue d => d.Value != 0,
+                    BlankValue      => false,
+                    _               => null
+                };
+                if (taken is null)
+                {
+                    cells[r, c] = ErrorValue.Value;
+                    continue;
+                }
+
+                var selected = taken.Value
+                    ? trueBranch ??= EvaluateArrayOperand(node.Arguments[1], context)
+                    : falseBranch ??= node.Arguments.Count == 3
+                        ? EvaluateArrayOperand(node.Arguments[2], context)
+                        : new BoolValue(false);
+
+                cells[r, c] = selected is RangeValue selectedRange
+                    ? PickRangeElementForArrayResult(selectedRange, r, c, conditionRange.RowCount, conditionRange.ColCount)
+                    : selected;
+            }
+
+        return new RangeValue(cells, conditionRange.StartRow, conditionRange.StartCol) { SheetName = conditionRange.SheetName };
     }
 
     private ScalarValue EvaluateIfError(FunctionCallNode node, IEvalContext context)
