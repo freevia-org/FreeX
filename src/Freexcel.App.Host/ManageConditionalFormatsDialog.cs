@@ -146,6 +146,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             SelectionMode = SelectionMode.Single
         };
         _listView.SelectionChanged += ListView_SelectionChanged;
+        _listView.MouseDoubleClick += EditRule_Click;
+        _listView.KeyDown += ListView_KeyDown;
 
         _listView.View = CreateRulesGridView();
         root.Children.Add(_listView);
@@ -290,6 +292,20 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         var idx = _listView.SelectedIndex;
         _moveUpBtn.IsEnabled   = hasSelection && idx > 0;
         _moveDownBtn.IsEnabled = hasSelection && idx < _rules.Count - 1;
+    }
+
+    private void ListView_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            EditRule_Click(sender, e);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete)
+        {
+            DeleteRule_Click(sender, e);
+            e.Handled = true;
+        }
     }
 
     // ── OK / Apply ─────────────────────────────────────────────────────────────

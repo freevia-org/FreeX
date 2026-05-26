@@ -1,6 +1,5 @@
 using System.IO.Compression;
 using System.Xml.Linq;
-using System.Xml;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -41,7 +40,7 @@ internal static class XlsxWorksheetDimensionMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || string.Equals(attribute.Key, "ref", StringComparison.Ordinal))
                     continue;
 
-                TrySetNativeAttribute(dimension, attribute.Key, attribute.Value);
+                dimension.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
             }
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
@@ -58,22 +57,5 @@ internal static class XlsxWorksheetDimensionMetadataWriter
         }
 
         root.Add(dimension);
-    }
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
     }
 }

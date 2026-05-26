@@ -60,7 +60,7 @@ public static partial class ChartRenderer
         if (!ChartTypeSupport.IsRenderable(chart.Type))
             return null;
 
-        var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
+        var cellLookup = BuildChartCellLookup(chart, viewport);
 
         uint startRow = chart.DataRange.Start.Row;
         uint endRow   = chart.DataRange.End.Row;
@@ -469,6 +469,30 @@ public static partial class ChartRenderer
         ApplyAxisBounds(model, chart, theme);
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
         return model;
+    }
+
+    private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup(ChartModel chart, ViewportModel viewport)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>();
+        if (viewport.ChartDataCells is { Count: > 0 })
+        {
+            foreach (var cell in viewport.ChartDataCells.Where(cell => cell.SheetId == chart.DataRange.Start.Sheet))
+            {
+                lookup[(cell.Row, cell.Col)] = new DisplayCell(
+                    cell.Row,
+                    cell.Col,
+                    null,
+                    cell.DisplayText,
+                    null,
+                    StyleId.Default,
+                    null);
+            }
+        }
+
+        foreach (var cell in viewport.Cells)
+            lookup.TryAdd((cell.Row, cell.Col), cell);
+
+        return lookup;
     }
 
     private static LineSeries CreateLineSeries(ChartModel chart, string title, int seriesIndex, WorkbookTheme theme)

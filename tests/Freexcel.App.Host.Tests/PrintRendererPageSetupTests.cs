@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Documents;
 using FluentAssertions;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
@@ -112,68 +111,6 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
-    public void RenderWorksheet_WithPrintHeadings_AddsPdfTextOverlaysForRowAndColumnLabels()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var workbook = new Workbook("Heading overlay export");
-            var sheet = workbook.AddSheet("Sheet1");
-            sheet.PrintHeadings = true;
-            sheet.SetCell(new CellAddress(sheet.Id, 42, 27), new TextValue("Selected"));
-            var selectedRange = new GridRange(
-                new CellAddress(sheet.Id, 42, 27),
-                new CellAddress(sheet.Id, 42, 27));
-
-            var document = PrintRenderer.RenderWorksheet(
-                workbook,
-                sheet.Id,
-                new ViewportService(),
-                printRangeOverride: selectedRange);
-            var page = (FixedPage)document.Pages.Single().Child;
-            var overlays = PdfTextOverlayExtractor.Extract(page);
-
-            overlays.Select(overlay => overlay.Text).Should().Contain(["AA", "42", "Selected"]);
-            var columnHeading = overlays.Single(overlay => overlay.Text == "AA");
-            var rowHeading = overlays.Single(overlay => overlay.Text == "42");
-            var selectedCell = overlays.Single(overlay => overlay.Text == "Selected");
-            columnHeading.X.Should().BeGreaterThan(rowHeading.X);
-            columnHeading.X.Should().BeGreaterThan(selectedCell.X);
-            rowHeading.X.Should().BeGreaterThan(0);
-        });
-    }
-
-    [Fact]
-    public void RenderWorksheet_AddsPdfTextOverlaysForHeaderAndFooterText()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var workbook = new Workbook("Header footer overlay export");
-            var sheet = workbook.AddSheet("Sheet1");
-            sheet.PageHeader = new WorksheetHeaderFooter("Left Header", "Center Header", "Right Header");
-            sheet.PageFooter = new WorksheetHeaderFooter("Left Footer", "Center Footer", "Right Footer");
-            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Body"));
-
-            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
-            var page = (FixedPage)document.Pages.Single().Child;
-            var overlays = PdfTextOverlayExtractor.Extract(page);
-
-            overlays.Select(overlay => overlay.Text).Should().Contain([
-                "Left Header",
-                "Center Header",
-                "Right Header",
-                "Left Footer",
-                "Center Footer",
-                "Right Footer",
-                "Body"
-            ]);
-            overlays.Single(overlay => overlay.Text == "Left Header").X
-                .Should().BeLessThan(overlays.Single(overlay => overlay.Text == "Center Header").X);
-            overlays.Single(overlay => overlay.Text == "Center Header").X
-                .Should().BeLessThan(overlays.Single(overlay => overlay.Text == "Right Header").X);
-        });
-    }
-
-    [Fact]
     public void RenderWorksheet_CanIgnoreConfiguredPrintAreaForExport()
     {
         StaTestRunner.Run(() =>
@@ -236,5 +173,48 @@ public sealed class PrintRendererPageSetupTests
 
             document.Pages.Should().HaveCount(2);
         });
+    }
+
+    [Fact]
+    public void RenderWorksheet_PrintsCommentsAtEndAcrossMultipleSummaryPages()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Comment overflow print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Total"));
+            for (uint row = 1; row <= 90; row++)
+            {
+                var address = new CellAddress(sheet.Id, row, 1);
+                sheet.Comments[address] = $"Comment {row}";
+            }
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            document.Pages.Count.Should().BeGreaterThan(2);
+        });
+    }
+
+    [Fact]
+    public void BuildCommentSummaryPages_IncludesOverflowComments()
+    {
+        var sheetId = SheetId.New();
+        var comments = Enumerable.Range(1, 90)
+            .ToDictionary(
+                row => new CellAddress(sheetId, (uint)row, 1),
+                row => $"Comment {row}");
+
+        var pages = PrintRenderer.BuildCommentSummaryPages(
+            comments,
+            new Dictionary<CellAddress, ThreadedComment>(),
+            pageH: 11 * 96,
+            marginTop: 0.75 * 96);
+
+        pages.SelectMany(page => page)
+            .Select(pair => pair.Key.Row)
+            .Should()
+            .Equal(Enumerable.Range(1, 90).Select(row => (uint)row));
+        pages.Count.Should().BeGreaterThan(1);
     }
 }

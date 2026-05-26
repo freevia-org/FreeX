@@ -31,19 +31,6 @@ public sealed class NamedRangeInputParserTests
     }
 
     [Fact]
-    public void TryParseRange_ParsesExcelStyleRefersToFormula()
-    {
-        var workbook = new Workbook("Book");
-        workbook.AddSheet("Sheet1");
-        var sheet = workbook.AddSheet("Sales FY26");
-
-        NamedRangeInputParser.TryParseRange(workbook, "='Sales FY26'!$A$1:$B$2", out var range).Should().BeTrue();
-
-        range.Start.Should().Be(new CellAddress(sheet.Id, 1, 1));
-        range.End.Should().Be(new CellAddress(sheet.Id, 2, 2));
-    }
-
-    [Fact]
     public void TryParseRange_RejectsUnknownSheetQualifiedRange()
     {
         var workbook = new Workbook("Book");

@@ -18,31 +18,6 @@ internal static class FindReplaceDialogPlanner
         return cell is null ? null : StyleDiff.FromStyle(workbook.GetStyle(cell.StyleId));
     }
 
-    public static int FindPreviousResultIndexBeforeActiveCell(
-        Workbook workbook,
-        IReadOnlyList<FindResult> results,
-        CellAddress? activeCell,
-        FindSearchOrder searchOrder)
-    {
-        if (activeCell is null || results.Count == 0)
-            return -1;
-
-        var activeSheetIndex = SheetIndex(workbook, activeCell.Value.Sheet);
-        if (activeSheetIndex < 0)
-            return -1;
-
-        var previousIndex = -1;
-        for (var i = 0; i < results.Count; i++)
-        {
-            if (CompareAddress(workbook, results[i].Address, activeCell.Value, activeSheetIndex, searchOrder) > 0)
-                break;
-
-            previousIndex = i;
-        }
-
-        return previousIndex;
-    }
-
     private static FindResultRow CreateFindResultRow(Workbook workbook, FindResult result)
     {
         var sheet = workbook.GetSheet(result.Address.Sheet);
@@ -66,38 +41,6 @@ internal static class FindReplaceDialogPlanner
             .FirstOrDefault();
 
         return string.IsNullOrEmpty(namedRange.Key) ? "" : namedRange.Key;
-    }
-
-    private static int CompareAddress(
-        Workbook workbook,
-        CellAddress left,
-        CellAddress right,
-        int rightSheetIndex,
-        FindSearchOrder searchOrder)
-    {
-        var leftSheetIndex = SheetIndex(workbook, left.Sheet);
-        if (leftSheetIndex != rightSheetIndex)
-            return leftSheetIndex.CompareTo(rightSheetIndex);
-
-        if (searchOrder == FindSearchOrder.ByColumns)
-        {
-            var colComparison = left.Col.CompareTo(right.Col);
-            return colComparison != 0 ? colComparison : left.Row.CompareTo(right.Row);
-        }
-
-        var rowComparison = left.Row.CompareTo(right.Row);
-        return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
-    }
-
-    private static int SheetIndex(Workbook workbook, SheetId sheetId)
-    {
-        for (var i = 0; i < workbook.Sheets.Count; i++)
-        {
-            if (workbook.Sheets[i].Id.Equals(sheetId))
-                return i;
-        }
-
-        return -1;
     }
 
     public static bool ReplaceSingleMatch(

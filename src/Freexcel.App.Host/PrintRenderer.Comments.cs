@@ -7,6 +7,9 @@ namespace Freexcel.App.Host;
 
 public static partial class PrintRenderer
 {
+    private const double CommentSummaryHeaderHeight = 34.0;
+    private const double CommentSummaryLineHeight = 24.0;
+
     private static void DrawDisplayedComments(
         DrawingContext dc,
         IReadOnlyDictionary<CellAddress, string> comments,
@@ -69,8 +72,7 @@ public static partial class PrintRenderer
         double pageH,
         double marginLeft,
         double marginTop,
-        IReadOnlyDictionary<CellAddress, string> comments,
-        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments)
+        IReadOnlyList<KeyValuePair<CellAddress, string>> commentsForPage)
     {
         var visual = new DrawingVisual();
         using var dc = visual.RenderOpen();
@@ -79,18 +81,36 @@ public static partial class PrintRenderer
         var typeface = new Typeface("Segoe UI");
         DrawCommentText(dc, "Comments", new Point(marginLeft, marginTop), typeface, 14, FontWeights.SemiBold, pageW - marginLeft * 2);
 
-        var y = marginTop + 34;
-        foreach (var (address, comment) in GetPrintableComments(comments, threadedComments))
+        var y = marginTop + CommentSummaryHeaderHeight;
+        foreach (var (address, comment) in commentsForPage)
         {
-            if (y > pageH - marginTop - 24)
-                break;
-
             var line = $"{address.ToA1()}: {comment}";
             var height = DrawCommentText(dc, line, new Point(marginLeft, y), typeface, PrintFontSize, FontWeights.Normal, pageW - marginLeft * 2);
             y += Math.Max(18, height + 6);
         }
 
         return visual;
+    }
+
+    internal static IReadOnlyList<IReadOnlyList<KeyValuePair<CellAddress, string>>> BuildCommentSummaryPages(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
+        double pageH,
+        double marginTop)
+    {
+        var printableComments = GetPrintableComments(comments, threadedComments).ToList();
+        if (printableComments.Count == 0)
+            return [];
+
+        var bodyHeight = Math.Max(
+            CommentSummaryLineHeight,
+            pageH - marginTop * 2 - CommentSummaryHeaderHeight);
+        var commentsPerPage = Math.Max(1, (int)Math.Floor(bodyHeight / CommentSummaryLineHeight));
+
+        return printableComments
+            .Chunk(commentsPerPage)
+            .Select(chunk => (IReadOnlyList<KeyValuePair<CellAddress, string>>)chunk.ToList())
+            .ToList();
     }
 
     private static IEnumerable<KeyValuePair<CellAddress, string>> GetPrintableComments(
