@@ -77,6 +77,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-dimension-native-001" => true,
         "generated-worksheet-sheet-properties-001" => true,
         "generated-worksheet-protection-native-001" => true,
+        "generated-worksheet-protected-ranges-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -418,6 +419,22 @@ internal static class XlsxCorpusFixtureFactory
               </sheetProtection>
             </worksheet>
             """)),
+        "generated-worksheet-protected-ranges-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <sheetData>
+                <row r="1"><c r="A1" t="str"><v>locked</v></c></row>
+              </sheetData>
+              <protectedRanges>
+                <protectedRange name="NativeEditableRange" sqref="B2:C3" password="ABCD" securityDescriptor="D:PAI">
+                  <extLst><ext uri="{FREEXCEL-PROTECTED-RANGE-TEST}"/></extLst>
+                  <fx:protectedRangeNativeChild id="first"/>
+                  <fx:protectedRangeNativeChild id="second"/>
+                </protectedRange>
+                <protectedRange name="NativeMultiAreaRange" sqref="B2 C3" password="1234"/>
+              </protectedRanges>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -669,6 +686,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-sheet-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-protection-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-protected-ranges-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
@@ -943,6 +962,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-protection-native-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetProtectionNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-protected-ranges-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetProtectedRangesFixup(archive);
             return;
         }
 
@@ -1875,6 +1900,41 @@ internal static class XlsxCorpusFixtureFactory
             new XAttribute("scenarios", "1"),
             new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "first")),
             new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "second"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetProtectedRangesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "protectedRanges").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "protectedRanges",
+            new XElement(
+                worksheetNs + "protectedRange",
+                new XAttribute("name", "NativeEditableRange"),
+                new XAttribute("sqref", "B2:C3"),
+                new XAttribute("password", "ABCD"),
+                new XAttribute("securityDescriptor", "D:PAI"),
+                new XElement(
+                    worksheetNs + "extLst",
+                    new XElement(
+                        worksheetNs + "ext",
+                        new XAttribute("uri", "{FREEXCEL-PROTECTED-RANGE-TEST}"))),
+                new XElement(freexcelNs + "protectedRangeNativeChild", new XAttribute("id", "first")),
+                new XElement(freexcelNs + "protectedRangeNativeChild", new XAttribute("id", "second"))),
+            new XElement(
+                worksheetNs + "protectedRange",
+                new XAttribute("name", "NativeMultiAreaRange"),
+                new XAttribute("sqref", "B2 C3"),
+                new XAttribute("password", "1234"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 

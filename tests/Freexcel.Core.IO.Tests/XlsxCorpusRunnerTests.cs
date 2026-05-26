@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(37, "the generated metadata-pass manifest currently declares thirty-seven deterministic package-retention rows");
+        rows.Should().HaveCount(38, "the generated metadata-pass manifest currently declares thirty-eight deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -823,6 +823,27 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetProtectedRangesRow_RetainsProtectedRangesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-protected-ranges-001");
+        AssertWorksheetProtectedRanges(source, "generated-worksheet-protected-ranges-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        var allowEditRange = workbook.GetSheetAt(0).AllowEditRanges.Should().ContainSingle().Subject;
+        allowEditRange.Start.ToA1().Should().Be("B2");
+        allowEditRange.End.ToA1().Should().Be("C3");
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-protected-ranges-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-protected-ranges-001");
+        AssertWorksheetProtectedRanges(saved, "generated-worksheet-protected-ranges-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -1326,6 +1347,39 @@ public class XlsxCorpusRunnerTests
             .Select(element => element.Attribute("id")?.Value)
             .Should()
             .BeEquivalentTo(["first", "second"], because);
+    }
+
+    private static void AssertWorksheetProtectedRanges(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var protectedRanges = worksheetXml.Root!.Element(worksheetNs + "protectedRanges");
+        protectedRanges.Should().NotBeNull(because);
+        var ranges = protectedRanges!.Elements(worksheetNs + "protectedRange").ToArray();
+        ranges.Should().HaveCount(2, because);
+
+        var editableRange = ranges.Should()
+            .ContainSingle(element => (string?)element.Attribute("name") == "NativeEditableRange", because)
+            .Subject;
+        editableRange.Attribute("sqref")!.Value.Should().Be("B2:C3", because);
+        editableRange.Attribute("password")!.Value.Should().Be("ABCD", because);
+        editableRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI", because);
+        editableRange.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Attribute("uri")!.Value.Should().Be("{FREEXCEL-PROTECTED-RANGE-TEST}", because);
+        editableRange.Elements(freexcelNs + "protectedRangeNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
+
+        var nativeOnlyRange = ranges.Should()
+            .ContainSingle(element => (string?)element.Attribute("name") == "NativeMultiAreaRange", because)
+            .Subject;
+        nativeOnlyRange.Attribute("sqref")!.Value.Should().Be("B2 C3", because);
+        nativeOnlyRange.Attribute("password")!.Value.Should().Be("1234", because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)
