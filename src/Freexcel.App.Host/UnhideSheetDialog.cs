@@ -26,6 +26,7 @@ public sealed class UnhideSheetDialog : Window
         _sheetBox.ItemsSource = names;
         _sheetBox.SelectedItem = selected;
         _sheetBox.SelectionMode = SelectionMode.Single;
+        _sheetBox.MouseDoubleClick += (_, _) => Accept();
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Sheet:", Target = _sheetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });

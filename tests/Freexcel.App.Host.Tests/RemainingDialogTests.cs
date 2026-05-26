@@ -5,6 +5,8 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -779,6 +781,33 @@ public sealed class RemainingDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_sheetBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_sheetBox);");
+    }
+
+    [Fact]
+    public void UnhideSheetDialogSheetList_DoubleClickAcceptsSelectedSheet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new UnhideSheetDialog(["Hidden 1", "Hidden 2"]);
+            var sheetBox = GetField<ListBox>(dialog, "_sheetBox");
+            dialog.Dispatcher.BeginInvoke(() =>
+            {
+                sheetBox.SelectedItem = "Hidden 2";
+                sheetBox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                {
+                    RoutedEvent = Control.MouseDoubleClickEvent
+                });
+
+                dialog.Dispatcher.BeginInvoke(() =>
+                {
+                    if (dialog.DialogResult is null)
+                        dialog.Close();
+                }, DispatcherPriority.ContextIdle);
+            }, DispatcherPriority.ApplicationIdle);
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.Result.Should().Be(new UnhideSheetDialogResult("Hidden 2"));
+        });
     }
 
     [Fact]
