@@ -16,6 +16,20 @@ public sealed class FormulaEvaluatorPerformanceTests
         _output = output;
     }
 
+    [Fact]
+    public void FunctionArgumentClassification_UsesCachedLookupSets()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.Formula", "FormulaEvaluator.cs"));
+        var classificationHelpers = source[
+            source.IndexOf("private static bool IsAggregateFunction", StringComparison.Ordinal)..];
+
+        source.Should().Contain("private static readonly HashSet<string> AggregateFunctions");
+        source.Should().Contain("private static readonly HashSet<string> StructuredRangeFunctions");
+        classificationHelpers.Should().Contain("AggregateFunctions.Contains(name)");
+        classificationHelpers.Should().Contain("StructuredRangeFunctions.Contains(name)");
+        classificationHelpers.Should().NotContain("private static bool IsStructuredRangeFunction(string name) =>\r\n        name is");
+    }
+
     [Theory]
     [InlineData("=SUM(A1:A100000)", 5_000_050_000d)]
     [InlineData("=AVERAGE(A1:A100000)", 50_000.5d)]
@@ -452,5 +466,20 @@ public sealed class FormulaEvaluatorPerformanceTests
         return string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase)
             ? TimeSpan.FromSeconds(30)
             : TimeSpan.FromSeconds(2);
+    }
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 }
