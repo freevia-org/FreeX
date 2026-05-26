@@ -173,6 +173,18 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Reference { get; set; }
         public string? NativeXml { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+        public List<string>? NativeChildXmls { get; set; }
+        public List<WorksheetAutoFilterColumnDto> FilterColumns { get; set; } = [];
+    }
+
+    private class WorksheetAutoFilterColumnDto
+    {
+        public int ColumnId { get; set; }
+        public List<string> Values { get; set; } = [];
+        public bool IncludeBlank { get; set; }
+        public List<string> NativeFilterXmls { get; set; } = [];
+        public Dictionary<string, string>? NativeAttributes { get; set; }
     }
 
     private class WorksheetSmartTagsDto
