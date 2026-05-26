@@ -38,4 +38,32 @@ public sealed class DialogButtonRowFactoryTests
             accepted.Should().Be(1);
         });
     }
+
+    [Fact]
+    public void CreateOkOnly_BuildsSingleDefaultClosingButton()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var accepted = 0;
+
+            var row = DialogButtonRowFactory.CreateOkOnly(
+                () => accepted++,
+                buttonWidth: 76,
+                rowMargin: new Thickness(0, 8, 0, 0));
+
+            row.Orientation.Should().Be(Orientation.Horizontal);
+            row.HorizontalAlignment.Should().Be(HorizontalAlignment.Right);
+            row.Margin.Should().Be(new Thickness(0, 8, 0, 0));
+            row.Children.Count.Should().Be(1);
+
+            var ok = row.Children[0].Should().BeOfType<Button>().Subject;
+            ok.Content.Should().Be("_OK");
+            ok.Width.Should().Be(76);
+            ok.IsDefault.Should().BeTrue();
+            ok.IsCancel.Should().BeTrue();
+
+            ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            accepted.Should().Be(1);
+        });
+    }
 }
