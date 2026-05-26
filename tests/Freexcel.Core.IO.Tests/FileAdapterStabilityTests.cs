@@ -59,6 +59,26 @@ public sealed class FileAdapterStabilityTests
         reloaded.GetSheetAt(0).GetCell(2, 1)!.Value.Should().Be(new TextValue("Changed"));
     }
 
+    [Fact]
+    public void XlsxStabilityReplay_DoesNotDependOnCallerOwnedMemoryStreamBufferAfterLoad()
+    {
+        var adapter = new XlsxFileAdapter();
+        var originalBytes = SaveToBytes(adapter, CreateStableWorkbook(".xlsx"));
+        var callerOwnedBytes = originalBytes.ToArray();
+
+        var loaded = adapter.Load(new MemoryStream(
+            callerOwnedBytes,
+            index: 0,
+            count: callerOwnedBytes.Length,
+            writable: true,
+            publiclyVisible: true));
+
+        Array.Fill<byte>(callerOwnedBytes, 0);
+        var resavedBytes = SaveToBytes(adapter, loaded);
+
+        resavedBytes.Should().Equal(originalBytes);
+    }
+
     private static IReadOnlyList<IFileAdapter> RealAdapters() =>
     [
         new XlsxFileAdapter(),
