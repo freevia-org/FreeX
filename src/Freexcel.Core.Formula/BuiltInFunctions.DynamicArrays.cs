@@ -760,7 +760,11 @@ public static partial class BuiltInFunctions
             values.Add(args[0]);
         }
 
-        if (args.Count > 2 && args[2] is not BlankValue) padWith = args[2];
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            if (!TryGetScalarControlArgument(args[2], out padWith, out error)) return false;
+        }
+
         return values.Count > 0;
     }
 
