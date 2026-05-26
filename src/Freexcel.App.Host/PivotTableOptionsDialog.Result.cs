@@ -89,7 +89,7 @@ public sealed partial class PivotTableOptionsDialog
             subtotalPlacement,
             repeatItemLabels,
             blankLineAfterItems,
-            string.IsNullOrWhiteSpace(styleName) ? "PivotStyleLight16" : styleName.Trim(),
+            PivotStyleCatalog.NormalizeStyleName(styleName),
             showRowHeaders,
             showColumnHeaders,
             showRowStripes,

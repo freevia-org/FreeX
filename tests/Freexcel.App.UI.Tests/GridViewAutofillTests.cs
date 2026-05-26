@@ -19,6 +19,9 @@ public sealed class GridViewAutofillTests
             new CellAddress(sheet, 8, 6));
 
         target.Should().Be(new CellAddress(sheet, 8, 3));
+        GridAutofillPlanner.ConstrainTarget(source, new CellAddress(sheet, 8, 6))
+            .Should()
+            .Be(target);
     }
 
     [Fact]
@@ -48,12 +51,30 @@ public sealed class GridViewAutofillTests
                 columnHeaderHeight: 24)
             .Should()
             .Be(new GridAutoScrollRequest(1, 0));
+        GridAutofillPlanner.CalculateEdgeScrollIntent(
+                pointerX: 795,
+                pointerY: 120,
+                width: 800,
+                height: 600,
+                rowHeaderWidth: 48,
+                columnHeaderHeight: 24)
+            .Should()
+            .Be(new GridAutoScrollRequest(1, 0));
     }
 
     [Fact]
     public void CalculateAutofillEdgeScrollIntent_IgnoresPointerAwayFromEdges()
     {
         GridView.CalculateAutofillEdgeScrollIntent(
+                pointerX: 400,
+                pointerY: 300,
+                width: 800,
+                height: 600,
+                rowHeaderWidth: 48,
+                columnHeaderHeight: 24)
+            .Should()
+            .Be(new GridAutoScrollRequest(0, 0));
+        GridAutofillPlanner.CalculateEdgeScrollIntent(
                 pointerX: 400,
                 pointerY: 300,
                 width: 800,
