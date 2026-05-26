@@ -1251,18 +1251,34 @@ public sealed class FormatCellsDialogXamlTests
                 var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
                 var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
                 var usRegion = new RegionInfo("en-US");
+                var usCulture = CultureInfo.GetCultureInfo("en-US");
+                var frRegion = new RegionInfo("fr-FR");
+                var frCulture = CultureInfo.GetCultureInfo("fr-FR");
                 var usDollarLabel = $"{usRegion.CurrencySymbol} {usRegion.CurrencyNativeName}";
+                var usCultureLabel = $"{usRegion.CurrencySymbol} {usCulture.EnglishName}";
+                var frCultureLabel = $"{frRegion.CurrencySymbol} {frCulture.EnglishName}";
 
                 symbols.Items.Cast<string>().Should().Contain(usDollarLabel);
+                symbols.Items.Cast<string>().Should().Contain(usCultureLabel);
+                symbols.Items.Cast<string>().Should().Contain(frCultureLabel);
 
                 categories.SelectedItem = "Accounting";
                 decimals.Text = "2";
-                symbols.SelectedItem = usDollarLabel;
+                symbols.SelectedItem = usCultureLabel;
 
                 ClickOkForTest(dialog);
 
                 dialog.ResultDiff.Should().NotBeNull();
                 dialog.ResultDiff!.NumberFormat.Should().Be($"_({usRegion.CurrencySymbol}* #,##0.00_);_({usRegion.CurrencySymbol}* (#,##0.00);_({usRegion.CurrencySymbol}* \"-\"??_);_(@_)");
+
+                decimals.Text = "1";
+                symbols.SelectedItem = frCultureLabel;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff!.NumberFormat.Should().Be($"_({frRegion.CurrencySymbol}* #,##0.0_);_({frRegion.CurrencySymbol}* (#,##0.0);_({frRegion.CurrencySymbol}* \"-\"?_);_(@_)");
+                FormatCellsDialog.ResolveNumberFormat("$#,##0.00", 0, "Accounting", "2", usCultureLabel, 0)
+                    .Should().Be($"_({usRegion.CurrencySymbol}* #,##0.00_);_({usRegion.CurrencySymbol}* (#,##0.00);_({usRegion.CurrencySymbol}* \"-\"??_);_(@_)");
             }
             finally
             {
@@ -1297,6 +1313,89 @@ public sealed class FormatCellsDialogXamlTests
                 categories.SelectedItem = "Custom";
                 type.Text = "m/d/yyyy";
                 preview.Text.Should().Be("5/21/2026");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_UsesWidthAwareAccountingPreview()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var preview = GetControl<TextBlock>(dialog, "NumberPreview");
+                var usRegion = new RegionInfo("en-US");
+                var usCulture = CultureInfo.GetCultureInfo("en-US");
+                var usCultureLabel = $"{usRegion.CurrencySymbol} {usCulture.EnglishName}";
+
+                categories.SelectedItem = "Accounting";
+                decimals.Text = "2";
+                symbols.SelectedItem = "GBP";
+                preview.Text.Should().Be("GBP   1,234.56");
+
+                symbols.SelectedItem = usCultureLabel;
+                preview.Text.Should().Be("$     1,234.56");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_TextFormatWithLayoutDirectivePreviewsSampleText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var preview = GetControl<TextBlock>(dialog, "NumberPreview");
+                var type = GetControl<ComboBox>(dialog, "NumberFormatCombo");
+
+                categories.SelectedItem = "Custom";
+                type.Text = "@_* ";
+                preview.Text.Should().Be("Sample");
+
+                type.Text = ";;;@_* ";
+                preview.Text.Should().Be("Sample");
+
+                PreviewForFormat("@ 0_* ").Should().Be("Sample 0 ");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_EscapedOrQuotedLayoutCharactersDoNotForceAccountingPreview()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var preview = GetControl<TextBlock>(dialog, "NumberPreview");
+                var type = GetControl<ComboBox>(dialog, "NumberFormatCombo");
+
+                categories.SelectedItem = "Custom";
+                type.Text = @"@\*";
+                preview.Text.Should().Be("Sample*");
+                PreviewForFormat("\"*_\"@").Should().Be("*_Sample");
             }
             finally
             {
@@ -1459,6 +1558,31 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_BorderPreviewButtonsToggleExistingSidesOff()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var current = new CellStyle
+            {
+                BorderTop = new CellBorder(BorderStyle.Thin, CellColor.Black)
+            };
+            var dialog = ShowDialogForTest(current);
+            try
+            {
+                InvokeDialogHandler(dialog, "DlgBorderPreviewTopButton_Click");
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.BorderTop.Should().Be(new CellBorder(BorderStyle.None, CellColor.Black));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsClearFillIntoStyleDiff()
     {
         StaTestRunner.Run(() =>
@@ -1513,6 +1637,13 @@ public sealed class FormatCellsDialogXamlTests
         var field = typeof(FormatCellsDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static string PreviewForFormat(string format)
+    {
+        var method = typeof(FormatCellsDialog).GetMethod("PreviewForFormat", BindingFlags.Static | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        return method!.Invoke(null, [format]).Should().BeOfType<string>().Subject;
     }
 
     private static void ClickOkForTest(FormatCellsDialog dialog)

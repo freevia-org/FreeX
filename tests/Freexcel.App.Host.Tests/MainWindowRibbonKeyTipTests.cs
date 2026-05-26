@@ -10,6 +10,7 @@ using Freexcel.Core.Formula;
 using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 using Microsoft.Extensions.Logging.Abstractions;
+using SheetGridView = Freexcel.App.UI.GridView;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -132,11 +133,29 @@ public sealed class MainWindowRibbonKeyTipTests
         {
             using var harness = MainWindowHarness.Create();
 
+            harness.UndoQatIsEnabled.Should().BeFalse();
+            harness.RedoQatIsEnabled.Should().BeFalse();
+            harness.SelectActiveCell();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+            harness.HandleKeyTip(Key.D1);
+
+            harness.ActiveCellBold.Should().BeTrue();
+            harness.UndoQatIsEnabled.Should().BeTrue();
+            harness.RedoQatIsEnabled.Should().BeFalse();
+
             harness.HandleDirectTopLevelKeyTip(Key.D2).Should().BeTrue();
             harness.KeyTipScope.Should().Be("None");
+            harness.ActiveCellBold.Should().BeFalse();
+            harness.UndoQatIsEnabled.Should().BeFalse();
+            harness.RedoQatIsEnabled.Should().BeTrue();
 
             harness.HandleDirectTopLevelKeyTip(Key.D3).Should().BeTrue();
             harness.KeyTipScope.Should().Be("None");
+            harness.ActiveCellBold.Should().BeTrue();
+            harness.UndoQatIsEnabled.Should().BeTrue();
+            harness.RedoQatIsEnabled.Should().BeFalse();
         });
     }
 
@@ -208,6 +227,23 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void DataWhatIfKeyTip_OpensAnalysisMenuWithExcelChoices()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.A, Key.W);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Data");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Goal Seek...").Should().Be("G");
+            harness.ActiveMenuItemGestureText("Scenario Manager...").Should().Be("S");
+            harness.ActiveMenuItemGestureText("Data Table...").Should().Be("D");
+        });
+    }
+
+    [Fact]
     public void HomePasteKeyTip_OpensExcelStylePasteMenu()
     {
         RunSta(() =>
@@ -242,6 +278,24 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.NumberFormatDropDownIsOpen.Should().BeTrue();
             harness.NumberFormatBoxHasKeyboardFocus.Should().BeTrue();
             harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
+    public void HomeFormatKeyTip_OpensRowAndColumnSizingMenu()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.H, Key.O);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Home");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Row Height...").Should().Be("R");
+            harness.ActiveMenuItemGestureText("AutoFit Row Height").Should().Be("A");
+            harness.ActiveMenuItemGestureText("Column Width...").Should().Be("C");
+            harness.ActiveMenuItemGestureText("AutoFit Column Width").Should().Be("W");
         });
     }
 
@@ -373,6 +427,7 @@ public sealed class MainWindowRibbonKeyTipTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
+        private readonly Workbook _workbook;
         private readonly MethodInfo _enterKeyTipMode;
         private readonly MethodInfo _handleActiveRibbonKeyTip;
         private readonly MethodInfo _tryHandleDirectRibbonKeyTip;
@@ -384,9 +439,10 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly FieldInfo _activeMenuField;
         private readonly FieldInfo _recentFilesField;
 
-        private MainWindowHarness(MainWindow window)
+        private MainWindowHarness(MainWindow window, Workbook workbook)
         {
             _window = window;
+            _workbook = workbook;
             _enterKeyTipMode = typeof(MainWindow).GetMethod("EnterRibbonKeyTipMode", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "EnterRibbonKeyTipMode");
             _handleActiveRibbonKeyTip = typeof(MainWindow).GetMethod("HandleActiveRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -438,6 +494,34 @@ public sealed class MainWindowRibbonKeyTipTests
         public bool NumberFormatBoxHasKeyboardFocus =>
             (_window.FindName("NumberFormatBox") as ComboBox)?.IsKeyboardFocusWithin == true ||
             ReferenceEquals(Keyboard.FocusedElement, _window.FindName("NumberFormatBox"));
+
+        public bool UndoQatIsEnabled =>
+            (_window.FindName("UndoQatBtn") as Button)?.IsEnabled == true;
+
+        public bool RedoQatIsEnabled =>
+            (_window.FindName("RedoQatBtn") as Button)?.IsEnabled == true;
+
+        public bool ActiveCellBold
+        {
+            get
+            {
+                var sheet = _workbook.Sheets[0];
+                var address = new CellAddress(sheet.Id, 1, 1);
+                var styleId = sheet.GetCell(address)?.StyleId
+                    ?? sheet.GetStyleOnly(address.Row, address.Col)
+                    ?? StyleId.Default;
+                return _workbook.GetStyle(styleId).Bold;
+            }
+        }
+
+        public void SelectActiveCell()
+        {
+            var sheet = _workbook.Sheets[0];
+            var address = new CellAddress(sheet.Id, 1, 1);
+            if (_window.FindName("SheetGrid") is SheetGridView sheetGrid)
+                sheetGrid.SelectedRange = new GridRange(address, address);
+            PumpDispatcher();
+        }
 
         public string? ActiveMenuItemGestureText(string header) =>
             FindActiveMenuItem(header)?.InputGestureText;
@@ -499,7 +583,7 @@ public sealed class MainWindowRibbonKeyTipTests
             window.UpdateLayout();
             PumpDispatcher();
             configureWorkbook?.Invoke(workbookRef.Current);
-            return new MainWindowHarness(window);
+            return new MainWindowHarness(window, workbookRef.Current);
         }
 
         public void SetRibbonWidth(double width)

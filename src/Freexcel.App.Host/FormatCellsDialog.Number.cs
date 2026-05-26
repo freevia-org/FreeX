@@ -6,6 +6,8 @@ namespace Freexcel.App.Host;
 
 public partial class FormatCellsDialog
 {
+    private const int NumberPreviewAccountingWidth = 14;
+
     private sealed record NumberFormatOption(string Category, string Label, string Code, string Preview);
 
     private static readonly NumberFormatOption[] NumberFormatOptions =
@@ -225,6 +227,13 @@ public partial class FormatCellsDialog
                 {
                     AddSymbolLabel(labels, $"{region.CurrencySymbol} {currencyName}", region.CurrencySymbol);
                 }
+
+                var culture = CultureInfo.GetCultureInfo(cultureName);
+                if (!string.IsNullOrWhiteSpace(region.CurrencySymbol)
+                    && !string.IsNullOrWhiteSpace(culture.EnglishName))
+                {
+                    AddSymbolLabel(labels, $"{region.CurrencySymbol} {culture.EnglishName}", region.CurrencySymbol);
+                }
             }
             catch (ArgumentException)
             {
@@ -306,6 +315,9 @@ public partial class FormatCellsDialog
                 return NumberFormatter.Format(new DateTimeValue(sampleDate), format);
             }
 
+            if (HasNumericLayoutDirective(format))
+                return NumberFormatter.Format(new NumberValue(1234.56), format, NumberPreviewAccountingWidth);
+
             if (format.Contains('@', StringComparison.Ordinal))
                 return NumberFormatter.Format(new TextValue("Sample"), format);
 
@@ -315,6 +327,143 @@ public partial class FormatCellsDialog
         {
             return FindNumberFormatOption(text)?.Preview ?? "1234.56";
         }
+    }
+
+    private static bool HasNumericLayoutDirective(string format)
+    {
+        var sections = SplitFormatSections(format);
+        var numericSectionCount = Math.Min(sections.Count, 3);
+        for (var i = 0; i < numericSectionCount; i++)
+        {
+            if (SectionHasActiveLayoutDirective(sections[i]) &&
+                SectionHasNumericPlaceholder(sections[i]) &&
+                !SectionHasTextPlaceholder(sections[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static List<string> SplitFormatSections(string format)
+    {
+        var sections = new List<string>();
+        var section = new System.Text.StringBuilder();
+        var inQuote = false;
+        var inBracket = false;
+
+        for (var i = 0; i < format.Length; i++)
+        {
+            var c = format[i];
+            if (c == '"' && !inBracket)
+            {
+                inQuote = !inQuote;
+                section.Append(c);
+            }
+            else if (c == '\\' && !inQuote && i + 1 < format.Length)
+            {
+                section.Append(c);
+                section.Append(format[++i]);
+            }
+            else if (c == '[' && !inQuote)
+            {
+                inBracket = true;
+                section.Append(c);
+            }
+            else if (c == ']' && !inQuote)
+            {
+                inBracket = false;
+                section.Append(c);
+            }
+            else if (c == ';' && !inQuote && !inBracket)
+            {
+                sections.Add(section.ToString());
+                section.Clear();
+            }
+            else
+            {
+                section.Append(c);
+            }
+        }
+
+        sections.Add(section.ToString());
+        return sections;
+    }
+
+    private static bool SectionHasActiveLayoutDirective(string section)
+    {
+        var inQuote = false;
+        for (var i = 0; i < section.Length; i++)
+        {
+            var c = section[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < section.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && c is '_' or '*')
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool SectionHasNumericPlaceholder(string section)
+    {
+        var inQuote = false;
+        for (var i = 0; i < section.Length; i++)
+        {
+            var c = section[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < section.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && c is '0' or '#' or '?')
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool SectionHasTextPlaceholder(string section)
+    {
+        var inQuote = false;
+        for (var i = 0; i < section.Length; i++)
+        {
+            var c = section[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < section.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && c == '@')
+                return true;
+        }
+
+        return false;
     }
 
     private static bool LooksLikeDateTimeFormat(string format)

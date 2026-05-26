@@ -32,7 +32,7 @@ public sealed partial class Sheet
             FullCalculationOnLoad         = FullCalculationOnLoad,
             PhoneticProperties            = PhoneticProperties,
             PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
-            AutoFilter                    = AutoFilter,
+            AutoFilter                    = CloneAutoFilter(AutoFilter),
             SmartTags                     = SmartTags,
             DataConsolidation             = DataConsolidation,
             SortState                     = SortState,
@@ -417,6 +417,22 @@ public sealed partial class Sheet
         static CellAddress RemapAddress       (CellAddress a, SheetId id) => new(id, a.Row, a.Col);
         static GridRange   RemapRange         (GridRange   r, SheetId id) =>
             new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
+    }
+
+    private static WorksheetAutoFilterModel? CloneAutoFilter(WorksheetAutoFilterModel? autoFilter)
+    {
+        if (autoFilter is null)
+            return null;
+
+        var clone = new WorksheetAutoFilterModel(autoFilter.Reference, autoFilter.NativeXml)
+        {
+            NativeAttributes = autoFilter.NativeAttributes is null
+                ? null
+                : new Dictionary<string, string>(autoFilter.NativeAttributes, StringComparer.Ordinal),
+            NativeChildXmls = autoFilter.NativeChildXmls?.ToArray()
+        };
+        clone.FilterColumns.AddRange(autoFilter.FilterColumns);
+        return clone;
     }
 
     private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)

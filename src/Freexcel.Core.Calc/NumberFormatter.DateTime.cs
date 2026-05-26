@@ -141,8 +141,15 @@ public static partial class NumberFormatter
 
     private static bool TryResolveSpecialDateTimeLocaleToken(string format, out SpecialDateTimeLocaleToken token)
     {
-        var match = Regex.Match(format, @"^\s*\[\$-F(?<kind>400|800)\]\s*$", RegexOptions.IgnoreCase);
+        var match = Regex.Match(format, @"^\s*\[\$-F(?<kind>400|800)\](?<suffix>.*)$", RegexOptions.IgnoreCase);
         if (!match.Success)
+        {
+            token = SpecialDateTimeLocaleToken.LongDate;
+            return false;
+        }
+
+        var suffix = match.Groups["suffix"].Value.Trim();
+        if (suffix.Length > 0 && !IsDateTimeFormat(suffix))
         {
             token = SpecialDateTimeLocaleToken.LongDate;
             return false;

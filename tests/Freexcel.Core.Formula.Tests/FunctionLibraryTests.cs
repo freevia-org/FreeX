@@ -134,6 +134,33 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LegacyLookupFunctions_RangeScalarArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)), (1, 2, new TextValue("apple")), (1, 3, new NumberValue(100)),
+            (2, 1, new NumberValue(20)), (2, 2, new TextValue("banana")), (2, 3, new NumberValue(200)),
+            (3, 1, new NumberValue(30)), (3, 2, new TextValue("cherry")), (3, 3, new NumberValue(300)),
+            (1, 4, new NumberValue(20)), (2, 4, new NumberValue(30)),
+            (1, 5, new NumberValue(2)), (2, 5, new NumberValue(3)),
+            (1, 6, new NumberValue(0)), (2, 6, new NumberValue(1)),
+            (1, 7, new NumberValue(10)), (1, 8, new NumberValue(20)), (1, 9, new NumberValue(30)),
+            (2, 7, new TextValue("apple")), (2, 8, new TextValue("banana")), (2, 9, new TextValue("cherry")),
+            (3, 7, new NumberValue(100)), (3, 8, new NumberValue(200)), (3, 9, new NumberValue(300)));
+
+        AssertTextColumn(_eval.Evaluate("=VLOOKUP(D1:D2,A1:C3,2,FALSE)", sheet), "banana", "cherry");
+        AssertColumn(_eval.Evaluate("=VLOOKUP(20,A1:C3,E1:E2,FALSE)", sheet), new TextValue("banana"), new NumberValue(200));
+        _eval.Evaluate("=VLOOKUP(D1:D2,A1:C3,E1:F1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+
+        AssertTextColumn(_eval.Evaluate("=HLOOKUP(D1:D2,G1:I3,2,FALSE)", sheet), "banana", "cherry");
+        AssertColumn(_eval.Evaluate("=HLOOKUP(20,G1:I3,E1:E2,FALSE)", sheet), new TextValue("banana"), new NumberValue(200));
+        _eval.Evaluate("=HLOOKUP(D1:D2,G1:I3,E1:F1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+
+        AssertApproxColumn(_eval.Evaluate("=MATCH(D1:D2,A1:A3,0)", sheet), 2, 3);
+        AssertApproxColumn(_eval.Evaluate("=MATCH(20,A1:A3,F1:F2)", sheet), 2, 2);
+        _eval.Evaluate("=MATCH(D1:D2,A1:A3,E1:F1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Vlookup_NotFound_ReturnsNA()
     {
         var sheet = MakeSheet(
@@ -423,6 +450,20 @@ public class FunctionLibraryTests
         result.Cells[0, 1].Should().Be(new NumberValue(2));
         result.Cells[1, 0].Should().Be(new NumberValue(3));
         result.Cells[1, 1].Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Index_RowAndColumnNumberRanges_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)), (1, 3, new NumberValue(3)),
+            (2, 1, new NumberValue(4)), (2, 2, new NumberValue(5)), (2, 3, new NumberValue(6)),
+            (1, 4, new NumberValue(1)), (2, 4, new NumberValue(2)),
+            (1, 5, new NumberValue(3)), (2, 5, new NumberValue(2)));
+
+        AssertApproxColumn(_eval.Evaluate("=INDEX(A1:C2,D1:D2,E1:E2)", sheet), 3, 5);
+        AssertApproxColumn(_eval.Evaluate("=INDEX(A1:C2,D1:D2,2)", sheet), 2, 5);
+        _eval.Evaluate("=INDEX(A1:C2,D1:D2,E1:F1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -2690,6 +2731,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Randarray_AcceptsSpilledScalarControlArguments()
+    {
+        var result = _eval.Evaluate("=RANDARRAY(SEQUENCE(1,,2),SEQUENCE(1,,2),SEQUENCE(1,,5),SEQUENCE(1,,7),SEQUENCE(1,,TRUE))", MakeSheet());
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        foreach (var value in rv.Cells)
+        {
+            var number = value.Should().BeOfType<NumberValue>().Subject.Value;
+            number.Should().Be(Math.Truncate(number));
+            number.Should().BeInRange(5, 7);
+        }
+    }
+
+    [Fact]
     public void Randarray_WholeNumberIntegerRangeOverflow_ReturnsValueError()
     {
         _eval.Evaluate("=RANDARRAY(1,1,-9223372036854775808,9223372036854775807,TRUE)", MakeSheet()).Should().Be(ErrorValue.Value);
@@ -4877,6 +4934,15 @@ public class FunctionLibraryTests
             .Should().BeApproximately(1.0, 1e-10);
     }
 
+    [Fact] public void Correl_IgnoresNonnumericPairs()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(2)),(2,1,new TextValue("x")),(3,1,new NumberValue(6)),
+            (1,2,new NumberValue(1)),(2,2,new NumberValue(2)),(3,2,new NumberValue(3)));
+        ((NumberValue)_eval.Evaluate("=CORREL(A1:A3,B1:B3)", sheet)).Value
+            .Should().BeApproximately(1.0, 1e-10);
+    }
+
     [Fact] public void Correl_RangeError_PropagatesError()
     {
         var sheet = MakeSheet(
@@ -4915,6 +4981,15 @@ public class FunctionLibraryTests
         // FORECAST(8, known_y=A1:A3=[1,2,3], known_x=B1:B3=[2,4,6]) → predict y at x=8 → 4
         ((NumberValue)_eval.Evaluate("=FORECAST(8,A1:A3,B1:B3)", sheet)).Value
             .Should().BeApproximately(4.0, 1e-10);
+    }
+
+    [Fact] public void Forecast_IgnoresNonnumericPairs()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(2)),(2,1,new TextValue("x")),(3,1,new NumberValue(6)),
+            (1,2,new NumberValue(1)),(2,2,new NumberValue(2)),(3,2,new NumberValue(3)));
+        ((NumberValue)_eval.Evaluate("=FORECAST.LINEAR(4,A1:A3,B1:B3)", sheet)).Value
+            .Should().BeApproximately(8.0, 1e-10);
     }
 
     [Fact] public void Forecast_KnownYRangeError_PropagatesError()
@@ -6004,6 +6079,22 @@ public class FunctionLibraryTests
     // ── FILTER ────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Sequence_AcceptsSpilledScalarControlArguments()
+    {
+        var result = _eval.Evaluate("=SEQUENCE(SEQUENCE(1,,2),SEQUENCE(1,,3),SEQUENCE(1,,5),SEQUENCE(1,,2))", MakeSheet());
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(3);
+        rv.Cells[0, 0].Should().Be(new NumberValue(5));
+        rv.Cells[0, 1].Should().Be(new NumberValue(7));
+        rv.Cells[0, 2].Should().Be(new NumberValue(9));
+        rv.Cells[1, 0].Should().Be(new NumberValue(11));
+        rv.Cells[1, 1].Should().Be(new NumberValue(13));
+        rv.Cells[1, 2].Should().Be(new NumberValue(15));
+    }
+
+    [Fact]
     public void Sequence_NonFiniteRows_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
@@ -6383,6 +6474,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sort_AcceptsSpilledScalarControlArguments()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("B")), (1,2,new NumberValue(2)),
+            (2,1,new TextValue("A")), (2,2,new NumberValue(1)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(3)));
+
+        var rv = _eval.Evaluate("=SORT(A1:B3,SEQUENCE(1,,2),SEQUENCE(1,,-1))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rv.Cells[0, 0].Should().Be(new TextValue("C"));
+        rv.Cells[1, 0].Should().Be(new TextValue("B"));
+        rv.Cells[2, 0].Should().Be(new TextValue("A"));
+    }
+
+    [Fact]
     public void Sort_ZeroSortIndex_ReturnsValueError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
@@ -6484,6 +6591,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sortby_AcceptsSpilledScalarSortOrder()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(3)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(1)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(2)));
+
+        var rv = _eval.Evaluate("=SORTBY(A1:A3,B1:B3,SEQUENCE(1,,-1))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rv.Cells[0, 0].Should().Be(new TextValue("A"));
+        rv.Cells[1, 0].Should().Be(new TextValue("C"));
+        rv.Cells[2, 0].Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
     public void Sortby_MismatchedKeyShape_ReturnsValueError()
     {
         var sheet = MakeSheet(
@@ -6527,6 +6650,62 @@ public class FunctionLibraryTests
         dropped.RowCount.Should().Be(1);
         dropped.ColCount.Should().Be(1);
         dropped.Cells[0, 0].Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
+    public void TakeAndDrop_AcceptSpilledScalarSliceCounts()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new NumberValue(2)), (1,3,new NumberValue(3)),
+            (2,1,new NumberValue(4)), (2,2,new NumberValue(5)), (2,3,new NumberValue(6)),
+            (3,1,new NumberValue(7)), (3,2,new NumberValue(8)), (3,3,new NumberValue(9)));
+
+        var taken = _eval.Evaluate("=TAKE(A1:C3,SEQUENCE(1,,2),SEQUENCE(1,,2))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        taken.RowCount.Should().Be(2);
+        taken.ColCount.Should().Be(2);
+        taken.Cells[1, 1].Should().Be(new NumberValue(5));
+
+        var dropped = _eval.Evaluate("=DROP(A1:C3,SEQUENCE(1,,1),SEQUENCE(1,,1))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        dropped.RowCount.Should().Be(2);
+        dropped.ColCount.Should().Be(2);
+        dropped.Cells[0, 0].Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
+    public void DynamicArrayFunctions_AcceptSpilledScalarControlArguments()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new NumberValue(2)), (1,3,new NumberValue(1)),
+            (2,1,new NumberValue(3)), (2,2,new NumberValue(4)), (2,3,new NumberValue(3)),
+            (1,4,new NumberValue(5)), (1,5,new NumberValue(6)), (1,6,new NumberValue(7)));
+
+        var toCol = _eval.Evaluate("=TOCOL(A1:B2,,SEQUENCE(1,,1))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        toCol.Cells[0, 0].Should().Be(new NumberValue(1));
+        toCol.Cells[1, 0].Should().Be(new NumberValue(3));
+        toCol.Cells[2, 0].Should().Be(new NumberValue(2));
+        toCol.Cells[3, 0].Should().Be(new NumberValue(4));
+
+        var wrapped = _eval.Evaluate("=WRAPROWS(D1:F1,SEQUENCE(1,,2))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        wrapped.RowCount.Should().Be(2);
+        wrapped.ColCount.Should().Be(2);
+        wrapped.Cells[1, 0].Should().Be(new NumberValue(7));
+
+        var expanded = _eval.Evaluate("=EXPAND(A1:A1,SEQUENCE(1,,2),SEQUENCE(1,,2),0)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        expanded.RowCount.Should().Be(2);
+        expanded.ColCount.Should().Be(2);
+        expanded.Cells[1, 1].Should().Be(new NumberValue(0));
+
+        var uniqueByColumn = _eval.Evaluate("=UNIQUE(A1:C2,SEQUENCE(1,,1))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        uniqueByColumn.RowCount.Should().Be(2);
+        uniqueByColumn.ColCount.Should().Be(2);
+        uniqueByColumn.Cells[0, 0].Should().Be(new NumberValue(1));
+        uniqueByColumn.Cells[0, 1].Should().Be(new NumberValue(2));
     }
 
     [Fact]

@@ -52,18 +52,35 @@ jobs:
         id: meta
         shell: pwsh
         run: |
-          $appInfo = Get-Content -LiteralPath "src/Freexcel.App.Host/AppInfo.cs" -Raw
-          $versionMatch = [regex]::Match($appInfo, 'VersionText\s*=\s*"(?<version>[^"]+)"')
-          if (-not $versionMatch.Success) {
-            throw "Could not read VersionText from AppInfo.cs"
-          }
-
+          $runNumber = [int]$env:GITHUB_RUN_NUMBER
+          $runAttempt = [int]$env:GITHUB_RUN_ATTEMPT
           $versionLabel = "${{ inputs.release_version }}"
           if ([string]::IsNullOrWhiteSpace($versionLabel)) {
-            $versionLabel = $versionMatch.Groups["version"].Value
-            $versionLabel = $versionLabel -replace '^Version\s+', ''
-            $versionLabel = $versionLabel -replace '\s*\([^)]*\)\s*$', ''
-            $versionLabel = $versionLabel.Trim()
+            $progressPath = "release/progress.json"
+            if (-not (Test-Path -LiteralPath $progressPath)) {
+              throw "Could not read release progress metadata from $progressPath"
+            }
+
+            $releaseProgress = Get-Content -LiteralPath $progressPath -Raw | ConvertFrom-Json
+            foreach ($propertyName in @("major", "overallCompletion", "releasePatchBase", "releasePatchSource", "channel")) {
+              if (-not $releaseProgress.PSObject.Properties.Name.Contains($propertyName)) {
+                throw "release/progress.json is missing required property '$propertyName'."
+              }
+            }
+
+            if ($releaseProgress.releasePatchSource -ne "github_run_number") {
+              throw "Unsupported releasePatchSource '$($releaseProgress.releasePatchSource)'."
+            }
+
+            $major = [int]$releaseProgress.major
+            $overallCompletion = [int]$releaseProgress.overallCompletion
+            if ($overallCompletion -ge 99) { $minor = 9 }
+            elseif ($overallCompletion -ge 96) { $minor = 8 }
+            elseif ($overallCompletion -ge 93) { $minor = 7 }
+            elseif ($overallCompletion -ge 90) { $minor = 6 }
+            else { $minor = 5 }
+            $releasePatch = [int]$releaseProgress.releasePatchBase + $runNumber
+            $versionLabel = "$major.$minor.$releasePatch"
           }
 
           $versionSlug = $versionLabel.ToLowerInvariant()
@@ -75,10 +92,14 @@ jobs:
           }
 
           $shortSha = git rev-parse --short=8 HEAD
-          $releaseStamp = Get-Date -AsUTC -Format "yyyyMMdd-HHmmss"
-          $releaseId = "$versionSlug-$releaseStamp-run${{ github.run_number }}-attempt${{ github.run_attempt }}"
+          $releaseStamp = Get-Date -AsUTC -Format "yyyy-MM-dd-HH-mm-ss"
+          $releaseId = "$versionSlug-$releaseStamp-run$runNumber-attempt$runAttempt"
           $tag = "v$releaseId+$shortSha"
-          $releaseName = "Freexcel tester $releaseId ($shortSha)"
+          $displayVersion = $versionLabel.Trim()
+          if ($displayVersion -notmatch '^[vV]') {
+            $displayVersion = "v$displayVersion"
+          }
+          $releaseName = "Freexcel (Test Release) $displayVersion ($releaseStamp) Run $runNumber Attempt $runAttempt ($shortSha)"
 
           "version=$versionLabel" >> $env:GITHUB_OUTPUT
           "version_slug=$versionSlug" >> $env:GITHUB_OUTPUT

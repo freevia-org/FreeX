@@ -429,6 +429,37 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceApplyRangeSelection_UpdatesRangeBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SelectDataSourceDialog("A1:D12");
+
+            dialog.ApplyRangeSelection("Sheet2!B2:E20");
+
+            FindLogicalDescendants<TextBox>(dialog)
+                .Single()
+                .Text.Should().Be("Sheet2!B2:E20");
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresSelectDataSourceRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
+
+        source.Should().Contain("new SelectDataSourceDialog(");
+        source.Should().Contain("request => ApplySelectDataSourceRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplySelectDataSourceRangeSelection(");
+        source.Should().Contain("SelectDataSourceRangeSelectionRequest request");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
     public void SelectDataSourceDialogRangePicker_RefocusesDataRangeAfterRequest()
     {
         var source = ReadChartDialogSource();

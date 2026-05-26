@@ -340,6 +340,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue TimevalueScalar(ScalarValue value)
     {
         var text = ToText(value);
+        if (!TextHasTimeComponent(text)) return ErrorValue.Value;
         if (TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts.Days == 0)
             return new NumberValue(ts.TotalDays);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
@@ -359,11 +360,22 @@ public static partial class BuiltInFunctions
     {
         var text = ToText(value);
         if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
+        if (!TextHasDateComponent(text)) return ErrorValue.Value;
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
     }
+
+    private static bool TextHasTimeComponent(string text) =>
+        Regex.IsMatch(text, @"\d\s*:\s*\d") ||
+        Regex.IsMatch(text, @"\b(?:AM|PM)\b", RegexOptions.IgnoreCase);
+
+    private static bool TextHasDateComponent(string text) =>
+        Regex.IsMatch(text, @"\d+\s*[-/]\s*\d+") ||
+        Regex.IsMatch(text,
+            @"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b",
+            RegexOptions.IgnoreCase);
 
     private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
     {
@@ -647,10 +659,17 @@ public static partial class BuiltInFunctions
     {
         int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
         int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (IsExcelNasdLastDayOfFebruary(d1)) dd1 = 30;
+        if (IsExcelNasdLastDayOfFebruary(d2) && dd1 == 30) dd2 = 30;
         if (dd1 == 31) dd1 = 30;
         if (dd2 == 31 && dd1 == 30) dd2 = 30;
         return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
     }
+
+    private static bool IsExcelNasdLastDayOfFebruary(DateTime date) =>
+        date.Year != 1900 &&
+        date.Month == 2 &&
+        date.Day == DateTime.DaysInMonth(date.Year, 2);
 
     private static double Days30E360(DateTime d1, DateTime d2)
     {

@@ -1931,10 +1931,12 @@ public sealed class MainWindowSourceHygieneTests
         {
             "Bottom Double Border",
             "Inside Borders",
-            "Thick Box Border",
+            "Thick Outside Borders",
             "Top and Bottom Border",
             "Top and Thick Bottom Border",
             "Top and Double Bottom Border",
+            "Draw Border Grid",
+            "Erase Border",
             "Line Color",
             "Line Style",
             "Black",
@@ -1953,6 +1955,8 @@ public sealed class MainWindowSourceHygieneTests
             "BorderTopAndBottomMenuItem_Click",
             "BorderTopAndThickBottomMenuItem_Click",
             "BorderTopAndDoubleBottomMenuItem_Click",
+            "BorderDrawGridMenuItem_Click",
+            "BorderEraseMenuItem_Click",
             "BorderLineColorBlackMenuItem_Click",
             "BorderLineColorAccent1MenuItem_Click",
             "BorderLineStyleDashedMenuItem_Click",
@@ -1969,6 +1973,10 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
         source.Should().Contain("_borderPickerColor");
         source.Should().Contain("_borderPickerStyle");
+        source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.DrawGrid)");
+        source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Erase)");
+        source.Should().Contain("ApplyBorderDrawMode");
+        source.Should().Contain("BorderDrawPlanner.CreateDiff");
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
         source.Should().Contain("BorderShortcutService.GetInsideBorderDiff");
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
@@ -2107,6 +2115,12 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         source.Should().Contain("\"Row Height\",");
         source.Should().Contain("\"Column Width\",");
+        source.Should().Contain("var dialog = new RowHeightDialog(GetSelectedRowHeightDialogValue(range)) { Owner = this };");
+        source.Should().Contain("var dialog = new ColumnWidthDialog(GetSelectedColumnWidthDialogValue(range)) { Owner = this };");
+        source.Should().Contain("private double GetSelectedRowHeightDialogValue(GridRange range)");
+        source.Should().Contain("private double GetSelectedColumnWidthDialogValue(GridRange range)");
+        source.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
+        source.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
         source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
         source.Should().Contain("var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);");
         source.Should().Contain("var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);");
@@ -2123,6 +2137,34 @@ public sealed class MainWindowSourceHygieneTests
 
         source.Should().Contain("ConditionalFormatDialogFactory.Create(ruleType, range)");
         source.Should().NotContain("new ConditionalFormatDialog(ruleType, range)");
+    }
+
+    [Fact]
+    public void ConditionalFormattingRulesManager_ApplyUsesSameWorkbookCommandAsOk()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("new ManageConditionalFormatsDialog(");
+        source.Should().Contain("applyRules: ApplyManagedConditionalFormatRules)");
+        source.Should().Contain("private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)");
+        source.Should().Contain("new ReplaceAllConditionalFormatsCommand(sheetId, remapped)");
+        source.Should().Contain("GroupedSheetRangePlanner.CloneConditionalFormatForSheet(r, sheetId)");
+        CountOccurrences(source, "new ReplaceAllConditionalFormatsCommand(sheetId, remapped)").Should().Be(1);
+    }
+
+    [Fact]
+    public void ConditionalFormattingRulesManager_WiresAppliesToRangePickerCallback()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("requestAppliesToRangeSelection: request => ApplyConditionalFormatAppliesToRangeSelection(dlg, request)");
+        source.Should().Contain("private void ApplyConditionalFormatAppliesToRangeSelection(");
+        source.Should().Contain("ConditionalFormatAppliesToRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyAppliesToRangeSelection(request.RuleId, selectedRange);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
     }
 
     [Fact]

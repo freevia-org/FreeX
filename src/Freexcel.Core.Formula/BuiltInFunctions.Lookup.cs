@@ -8,19 +8,24 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Vlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         var table = args[1] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        if (args[2] is ErrorValue e2) return e2;
+        var rangeLookupArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[2], rangeLookupArg],
+            values => VlookupScalar(values[0], table, values[1], values[2]));
+    }
 
-        var lookupValue = args[0];
-        double rawCol = ToNumber(args[2]);
+    private static ScalarValue VlookupScalar(ScalarValue lookupValue, RangeValue table, ScalarValue columnIndexValue, ScalarValue rangeLookupValue)
+    {
+        if (lookupValue is ErrorValue e0) return e0;
+        if (columnIndexValue is ErrorValue e2) return e2;
+        if (rangeLookupValue is ErrorValue e3) return e3;
+        double rawCol = ToNumber(columnIndexValue);
         if (!double.IsFinite(rawCol) || rawCol > int.MaxValue) return ErrorValue.Value;
         int colIndex = (int)rawCol;
-        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        bool rangeLookup = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]); // default TRUE
+        bool rangeLookup = rangeLookupValue is BlankValue || ToBool(rangeLookupValue); // default TRUE
 
         if (colIndex < 1) return ErrorValue.Value;
         if (colIndex > (int)table.ColCount) return ErrorValue.Ref;
@@ -58,19 +63,24 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Hlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         var table = args[1] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        if (args[2] is ErrorValue e2) return e2;
+        var rangeLookupArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[2], rangeLookupArg],
+            values => HlookupScalar(values[0], table, values[1], values[2]));
+    }
 
-        var lookupValue = args[0];
-        double rawRow = ToNumber(args[2]);
+    private static ScalarValue HlookupScalar(ScalarValue lookupValue, RangeValue table, ScalarValue rowIndexValue, ScalarValue rangeLookupValue)
+    {
+        if (lookupValue is ErrorValue e0) return e0;
+        if (rowIndexValue is ErrorValue e2) return e2;
+        if (rangeLookupValue is ErrorValue e3) return e3;
+        double rawRow = ToNumber(rowIndexValue);
         if (!double.IsFinite(rawRow) || rawRow > int.MaxValue) return ErrorValue.Value;
         int rowIndex = (int)rawRow;
-        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        bool rangeLookup = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]);
+        bool rangeLookup = rangeLookupValue is BlankValue || ToBool(rangeLookupValue);
 
         if (rowIndex < 1) return ErrorValue.Value;
         if (rowIndex > (int)table.RowCount) return ErrorValue.Ref;
@@ -110,19 +120,25 @@ public static partial class BuiltInFunctions
         var table = args[0] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
-        if (args[1] is ErrorValue e1) return e1;
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var columnArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapScalarArgs([args[1], columnArg],
+            values => IndexScalar(table, values[0], values[1], args.Count == 2));
+    }
 
-        double rawRowNum = ToNumber(args[1]);
+    private static ScalarValue IndexScalar(RangeValue table, ScalarValue rowValue, ScalarValue columnValue, bool singleIndexArgument)
+    {
+        if (rowValue is ErrorValue e1) return e1;
+        if (columnValue is ErrorValue e2) return e2;
+        double rawRowNum = ToNumber(rowValue);
         if (!double.IsFinite(rawRowNum) || rawRowNum > int.MaxValue) return ErrorValue.Value;
         int rowNum = (int)rawRowNum;
-        double rawColNum = args.Count > 2 ? ToNumber(args[2]) : 1.0;
+        double rawColNum = columnValue is BlankValue ? 1.0 : ToNumber(columnValue);
         if (!double.IsFinite(rawColNum) || rawColNum > int.MaxValue) return ErrorValue.Value;
         int colNum = (int)rawColNum;
 
         // For a 1-D range with a single index argument, the index selects along the
         // only dimension (column for a 1-row range, row for a 1-column range).
-        if (args.Count == 2)
+        if (singleIndexArgument)
         {
             if (table.RowCount == 1) { colNum = rowNum; rowNum = 1; }
             else if (table.ColCount == 1) { /* rowNum already correct, colNum = 1 */ }
@@ -158,16 +174,21 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Match(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         var table = args[1] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (table.RowCount > 1 && table.ColCount > 1) return ErrorValue.NA;
+        var matchTypeArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapScalarArgs([args[0], matchTypeArg],
+            values => MatchScalar(values[0], table, values[1]));
+    }
 
-        var lookupValue = args[0];
-        double rawMatchType = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
+    private static ScalarValue MatchScalar(ScalarValue lookupValue, RangeValue table, ScalarValue matchTypeValue)
+    {
+        if (lookupValue is ErrorValue e0) return e0;
+        if (matchTypeValue is ErrorValue e2) return e2;
+        double rawMatchType = matchTypeValue is not BlankValue ? ToNumber(matchTypeValue) : 1;
         if (!double.IsFinite(rawMatchType)) return ErrorValue.NA;
         int matchType = (int)rawMatchType;
         if (matchType is not (-1 or 0 or 1)) return ErrorValue.NA;

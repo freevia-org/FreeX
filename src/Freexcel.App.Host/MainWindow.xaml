@@ -467,7 +467,7 @@
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="BottomDouble"/></MenuItem.Icon>
                                                 </MenuItem>
                                                 <Separator/>
-                                                <MenuItem Header="Thick Box Border" local:RibbonTooltip.KeyTip="X" Click="BorderThickBoxMenuItem_Click">
+                                                <MenuItem Header="Thick Outside Borders" local:RibbonTooltip.KeyTip="X" Click="BorderThickBoxMenuItem_Click">
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="ThickBox"/></MenuItem.Icon>
                                                 </MenuItem>
                                                 <MenuItem Header="Top and Bottom Border" local:RibbonTooltip.KeyTip="U" Click="BorderTopAndBottomMenuItem_Click">
@@ -478,6 +478,13 @@
                                                 </MenuItem>
                                                 <MenuItem Header="Top and Double Bottom Border" local:RibbonTooltip.KeyTip="J" Click="BorderTopAndDoubleBottomMenuItem_Click">
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="TopAndDoubleBottom"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <Separator/>
+                                                <MenuItem Header="Draw Border Grid" local:RibbonTooltip.KeyTip="G" Click="BorderDrawGridMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="All"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Erase Border" local:RibbonTooltip.KeyTip="E" Click="BorderEraseMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="None"/></MenuItem.Icon>
                                                 </MenuItem>
                                                 <Separator/>
                                                 <MenuItem Header="Line Color" local:RibbonTooltip.KeyTip="C">

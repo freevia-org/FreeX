@@ -366,7 +366,7 @@ public partial class MainWindow
         => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double, _borderPickerColor));
 
     private void BorderThickBoxMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerColor), "Thick Box Border");
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerColor), "Thick Outside Borders");
 
     private void BorderTopAndBottomMenuItem_Click(object sender, RoutedEventArgs e)
         => ApplyRangeBorderPreset(
@@ -382,6 +382,31 @@ public partial class MainWindow
         => ApplyRangeBorderPreset(
             (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Double, _borderPickerColor),
             "Top and Double Bottom Border");
+
+    private void BorderDrawGridMenuItem_Click(object sender, RoutedEventArgs e)
+        => BeginBorderDrawMode(BorderDrawMode.DrawGrid);
+
+    private void BorderEraseMenuItem_Click(object sender, RoutedEventArgs e)
+        => BeginBorderDrawMode(BorderDrawMode.Erase);
+
+    private void BeginBorderDrawMode(BorderDrawMode mode)
+    {
+        _borderDrawMode = mode;
+        CancelFormatPainter();
+        FocusSheetGridIfNeeded();
+    }
+
+    private void ApplyBorderDrawMode(GridRange range)
+    {
+        if (_borderDrawMode == BorderDrawMode.None)
+            return;
+
+        var mode = _borderDrawMode;
+        _borderDrawMode = BorderDrawMode.None;
+        SheetGrid.SelectedRange = range;
+        ApplyStyleDiff(BorderDrawPlanner.CreateDiff(mode, _borderPickerStyle, _borderPickerColor));
+        RefreshStatusBar();
+    }
 
     private void BorderLineColorBlackMenuItem_Click(object sender, RoutedEventArgs e)
         => _borderPickerColor = CellColor.Black;
@@ -528,9 +553,42 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
-        var dlg = new ManageConditionalFormatsDialog(sheet, SheetGrid.SelectedRange) { Owner = this };
+        ManageConditionalFormatsDialog? dlg = null;
+        dlg = new ManageConditionalFormatsDialog(
+            sheet,
+            SheetGrid.SelectedRange,
+            requestAppliesToRangeSelection: request => ApplyConditionalFormatAppliesToRangeSelection(dlg, request),
+            applyRules: ApplyManagedConditionalFormatRules) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultRules is null) return;
-        var newRules = dlg.ResultRules;
+        ApplyManagedConditionalFormatRules(dlg.ResultRules);
+    }
+
+    private void ApplyConditionalFormatAppliesToRangeSelection(
+        ManageConditionalFormatsDialog? dialog,
+        ConditionalFormatAppliesToRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyAppliesToRangeSelection(request.RuleId, selectedRange);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
+    private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)
+    {
         if (!TryExecuteGroupedSheetCommand(
                 "Manage Conditional Formatting Rules",
                 sheetId =>
@@ -682,7 +740,12 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
         var tableStyle = TableStyleGalleryPlanner.GetOption(variant);
         var tableStyleName = tableStyle.StyleName;
-        var dialog = new CreateTableDialog(_currentSheetId, FormatRangeReference(range.Start, range.End), tableStyleName) { Owner = this };
+        CreateTableDialog? dialog = null;
+        dialog = new CreateTableDialog(
+            _currentSheetId,
+            FormatRangeReference(range.Start, range.End),
+            tableStyleName,
+            request => ApplyCreateTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null)
             return;
 
@@ -697,6 +760,30 @@ public partial class MainWindow
                     tableStyle.Banding)))
             return;
         UpdateViewport();
+    }
+
+    private void ApplyCreateTableRangeSelection(
+        CreateTableDialog? dialog,
+        CreateTableRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End));
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void CellStylesBtn_Click(object sender, RoutedEventArgs e)

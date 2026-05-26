@@ -193,13 +193,27 @@ public sealed class ProtectionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
 
-        source.Should().Contain("new AllowEditRangeDialog(_currentSheetId, defaultRange, sheet.AllowEditRanges)");
+        source.Should().Contain("new AllowEditRangeDialog(");
         source.Should().Contain("AllowEditRangeDialogAction.Add");
         source.Should().Contain("new AllowEditRangeCommand(_currentSheetId, range)");
         source.Should().Contain("AllowEditRangeDialogAction.Remove");
         source.Should().Contain("new RemoveAllowEditRangeCommand(_currentSheetId, range)");
         source.Should().Contain("AllowEditRangeDialogAction.Clear");
         source.Should().Contain("new ClearAllowEditRangesCommand(_currentSheetId)");
+    }
+
+    [Fact]
+    public void AllowEditRangesWorkflow_WiresRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("request => ApplyAllowEditRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyAllowEditRangeSelection(");
+        source.Should().Contain("AllowEditRangeSelectionRequest request");
+        source.Should().Contain("dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End));");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
     }
 
     [Fact]
@@ -242,6 +256,27 @@ public sealed class ProtectionDialogTests
                 requests.Should().Equal(new AllowEditRangeSelectionRequest("$A$1:$C$10", CollapseDialog: true));
                 dialog.RangeSelectionRequest.Should().Be(requests[0]);
                 GetPrivateField<TextBox>(dialog, "_rangeBox").SelectionLength.Should().Be("$A$1:$C$10".Length + 2);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void AllowEditRangeDialogApplyRangeSelection_UpdatesRangeBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AllowEditRangeDialog(SheetId.New(), "$A$1:$C$10");
+            try
+            {
+                dialog.ApplyRangeSelection("$B$2:$D$8");
+
+                var rangeBox = GetPrivateField<TextBox>(dialog, "_rangeBox");
+                rangeBox.Text.Should().Be("$B$2:$D$8");
+                rangeBox.SelectionLength.Should().Be("$B$2:$D$8".Length);
             }
             finally
             {

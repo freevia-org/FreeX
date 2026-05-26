@@ -103,7 +103,10 @@ public partial class FormatCellsDialog
 
     private void ApplyBorderSide(ComboBox styleBox, TextBox colorBox)
     {
-        SetBorderSide(styleBox, colorBox, SelectedBorderLineStyle());
+        var nextStyle = BorderSideNeedsColor(styleBox)
+            ? BorderStyle.None
+            : SelectedBorderLineStyle();
+        SetBorderSide(styleBox, colorBox, nextStyle);
         UpdateBorderPreview();
     }
 

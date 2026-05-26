@@ -99,6 +99,49 @@ public sealed class GoalSeekDialogXamlTests
         handlerSource.Should().Contain("Keyboard.Focus(target);");
     }
 
+    [Fact]
+    public void ApplyRangeSelection_UpdatesRequestedCellBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var dialog = new GoalSeekDialog(sheetId, null);
+            dialog.Show();
+            try
+            {
+                dialog.ApplyRangeSelection(
+                    GoalSeekRangeSelectionTarget.SetCell,
+                    new CellAddress(sheetId, 3, 2));
+                dialog.ApplyRangeSelection(
+                    GoalSeekRangeSelectionTarget.ChangingCell,
+                    new CellAddress(sheetId, 7, 4));
+
+                GetControl<TextBox>(dialog, "SetCellBox").Text.Should().Be("B3");
+                GetControl<TextBox>(dialog, "ChangingCellBox").Text.Should().Be("D7");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresGoalSeekRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new GoalSeekDialog(");
+        source.Should().Contain("request => ApplyGoalSeekRangeSelection(dlg, request)");
+        source.Should().Contain("private void ApplyGoalSeekRangeSelection(");
+        source.Should().Contain("GoalSeekRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, selectedRange.Start);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
     [Theory]
     [InlineData("SetCellBox", GoalSeekRangeSelectionTarget.SetCell, "$A$1")]
     [InlineData("ChangingCellBox", GoalSeekRangeSelectionTarget.ChangingCell, "$B$2")]

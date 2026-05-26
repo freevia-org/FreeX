@@ -242,6 +242,7 @@ public partial class MainWindow
         CellAddressBox.Text = "A1";
         FormulaBar.Text = "";
         RefreshSheetTabs();
+        RefreshToolbar();
         UpdateViewport();
         RecordDiagnosticEvent("workbook_new");
     }

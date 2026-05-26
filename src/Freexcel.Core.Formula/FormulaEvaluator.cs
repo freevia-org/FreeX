@@ -423,7 +423,7 @@ public sealed class FormulaEvaluator
 
         // Expand range arguments into individual values for aggregate functions,
         // or wrap as RangeValue for structured functions that need 2-D access.
-        var expandedArgs = new List<ScalarValue>();
+        var expandedArgs = new List<ScalarValue>(node.Arguments.Count);
         for (var argIndex = 0; argIndex < node.Arguments.Count; argIndex++)
         {
             var arg = node.Arguments[argIndex];
@@ -588,10 +588,20 @@ public sealed class FormulaEvaluator
 
     private static void AddRangeValues(List<ScalarValue> expandedArgs, IReadOnlyList<ScalarValue> values, string functionName)
     {
+        var finalCount = (long)expandedArgs.Count + values.Count;
+        if (finalCount <= int.MaxValue)
+            expandedArgs.EnsureCapacity((int)finalCount);
+
         if (IsReferenceProvenanceAggregate(functionName))
-            expandedArgs.AddRange(values.Select(v => new ReferencedScalarValue(v)));
+        {
+            foreach (var value in values)
+                expandedArgs.Add(new ReferencedScalarValue(value));
+        }
         else
-            expandedArgs.AddRange(values);
+        {
+            foreach (var value in values)
+                expandedArgs.Add(value);
+        }
     }
 
     private static bool IsSingleDirectRangeFastAggregate(string functionName)
@@ -889,24 +899,69 @@ public sealed class FormulaEvaluator
             _               => null   // text condition is #VALUE! in Excel
         };
         if (taken is null) return ErrorValue.Value;
-        if (taken.Value)  return EvaluateNode(node.Arguments[1], context);
-        if (node.Arguments.Count == 3) return EvaluateNode(node.Arguments[2], context);
+        if (taken.Value)  return EvaluateArrayOperand(node.Arguments[1], context);
+        if (node.Arguments.Count == 3) return EvaluateArrayOperand(node.Arguments[2], context);
         return new BoolValue(false);
     }
 
     private ScalarValue EvaluateIfError(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 2) return ErrorValue.Value;
-        var value = EvaluateNode(node.Arguments[0], context);
-        return value is ErrorValue ? EvaluateNode(node.Arguments[1], context) : value;
+        var value = EvaluateArrayOperand(node.Arguments[0], context);
+        if (value is RangeValue range)
+        {
+            if (!RangeHasMatchingError(range, _ => true)) return value;
+            var fallback = EvaluateArrayOperand(node.Arguments[1], context);
+            return ReplaceRangeErrors(range, fallback, _ => true);
+        }
+
+        return value is ErrorValue ? EvaluateArrayOperand(node.Arguments[1], context) : value;
     }
 
     private ScalarValue EvaluateIfNa(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 2) return ErrorValue.Value;
-        var value = EvaluateNode(node.Arguments[0], context);
-        return value == ErrorValue.NA ? EvaluateNode(node.Arguments[1], context) : value;
+        var value = EvaluateArrayOperand(node.Arguments[0], context);
+        if (value is RangeValue range)
+        {
+            if (!RangeHasMatchingError(range, IsNAError)) return value;
+            var fallback = EvaluateArrayOperand(node.Arguments[1], context);
+            return ReplaceRangeErrors(range, fallback, IsNAError);
+        }
+
+        return value is ErrorValue e && IsNAError(e) ? EvaluateArrayOperand(node.Arguments[1], context) : value;
     }
+
+    private static bool RangeHasMatchingError(RangeValue range, Func<ErrorValue, bool> catches)
+    {
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                if (range.Cells[r, c] is ErrorValue error && catches(error))
+                    return true;
+
+        return false;
+    }
+
+    private static ScalarValue ReplaceRangeErrors(RangeValue range, ScalarValue fallback, Func<ErrorValue, bool> catches)
+    {
+        RangeValue? fallbackRange = fallback as RangeValue;
+        if (fallbackRange is not null && (fallbackRange.RowCount != range.RowCount || fallbackRange.ColCount != range.ColCount))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue error && catches(error)
+                    ? fallbackRange?.Cells[r, c] ?? fallback
+                    : value;
+            }
+
+        return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
+    }
+
+    private static bool IsNAError(ErrorValue error) => error.Code == ErrorValue.NA.Code;
 
     private ScalarValue EvaluateChoose(FunctionCallNode node, IEvalContext context)
     {
@@ -919,7 +974,7 @@ public sealed class FormulaEvaluator
         if (!double.IsFinite(rawIdx)) return ErrorValue.Value;
         int idx = (int)rawIdx;
         if (idx < 1 || idx >= node.Arguments.Count) return ErrorValue.Value;
-        return EvaluateNode(node.Arguments[idx], context);
+        return EvaluateArrayOperand(node.Arguments[idx], context);
     }
 
     private ScalarValue EvaluateIfs(FunctionCallNode node, IEvalContext context)
@@ -938,7 +993,7 @@ public sealed class FormulaEvaluator
                 _               => null
             };
             if (taken is null) return ErrorValue.Value;
-            if (taken.Value) return EvaluateNode(node.Arguments[i + 1], context);
+            if (taken.Value) return EvaluateArrayOperand(node.Arguments[i + 1], context);
         }
         return ErrorValue.NA;
     }
@@ -1180,9 +1235,9 @@ public sealed class FormulaEvaluator
             var val = EvaluateNode(node.Arguments[1 + i * 2], context);
             if (val is ErrorValue ve) return ve;
             if (BuiltInFunctions.ScalarEquals(expr, val))
-                return EvaluateNode(node.Arguments[1 + i * 2 + 1], context);
+                return EvaluateArrayOperand(node.Arguments[1 + i * 2 + 1], context);
         }
-        return hasDefault ? EvaluateNode(node.Arguments[^1], context) : ErrorValue.NA;
+        return hasDefault ? EvaluateArrayOperand(node.Arguments[^1], context) : ErrorValue.NA;
     }
 
     private static bool IsAggregateFunction(string name) =>
@@ -1316,7 +1371,7 @@ public sealed class FormulaEvaluator
         NumberValue => v,
         BlankValue => new NumberValue(0),
         BoolValue b => new NumberValue(b.Value ? 1 : 0),
-        TextValue t when double.TryParse(t.Value, System.Globalization.CultureInfo.InvariantCulture, out var d) =>
+        TextValue t when ExcelTextNumberParser.TryParse(t.Value, out var d) =>
             new NumberValue(d),
         TextValue => ErrorValue.Value,
         DateTimeValue dt => new NumberValue(dt.Value),
@@ -1420,9 +1475,9 @@ public sealed class FormulaEvaluator
 
         public IReadOnlyList<ScalarValue> GetRangeValues(uint startRow, uint startCol, uint endRow, uint endCol)
         {
-            var values = new List<ScalarValue>();
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
+            var values = CreateRangeValueList(r0, c0, r1, c1);
             for (var r = r0; r <= r1; r++)
                 for (var c = c0; c <= c1; c++)
                     values.Add(_sheet.GetValue(r, c));
@@ -1433,13 +1488,21 @@ public sealed class FormulaEvaluator
         {
             var target = _workbook?.GetSheet(sheetName);
             if (target is null) return [ErrorValue.Ref];
-            var values = new List<ScalarValue>();
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
+            var values = CreateRangeValueList(r0, c0, r1, c1);
             for (var r = r0; r <= r1; r++)
                 for (var c = c0; c <= c1; c++)
                     values.Add(target.GetValue(r, c));
             return values;
+        }
+
+        private static List<ScalarValue> CreateRangeValueList(uint startRow, uint startCol, uint endRow, uint endCol)
+        {
+            var count = ((long)endRow - startRow + 1) * ((long)endCol - startCol + 1);
+            return count <= int.MaxValue
+                ? new List<ScalarValue>((int)count)
+                : [];
         }
 
         public Freexcel.Core.Model.GridRange? TryResolveNamedRange(string name)

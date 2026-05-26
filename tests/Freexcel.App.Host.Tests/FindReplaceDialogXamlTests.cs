@@ -182,6 +182,26 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_ShowsReplaceActionsOnlyOnReplaceTab()
+    {
+        var document = LoadDialogXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        document.Descendants(presentation + "TabControl")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "FindReplaceTabs")
+            .Attribute("SelectionChanged")?.Value.Should().Be("FindReplaceTabs_SelectionChanged");
+
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceBtn", "Visibility", "Collapsed");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceAllBtn", "Visibility", "Collapsed");
+
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
+        source.Should().Contain("private void FindReplaceTabs_SelectionChanged");
+        source.Should().Contain("UpdateReplaceButtonVisibility();");
+        source.Should().Contain("FindReplaceTabs.SelectedItem == ReplaceTab ? Visibility.Visible : Visibility.Collapsed");
+    }
+
+    [Fact]
     public void ReplaceSingleMatch_ReplacesOnlyTheSelectedValueCell()
     {
         var workbook = new Workbook("Test");

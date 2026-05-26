@@ -265,13 +265,13 @@ public sealed partial class XlsxFileAdapter
 
             var generatedEntry = generatedArchive.GetEntry(chartExPartPath);
             if (generatedEntry is not null &&
-                !GeneratedChartMatchesSourceModel(sourceEntry, generatedEntry, includeTitle: false))
+                !GeneratedChartIsCompatibleWithSourceChartEx(sourceEntry, generatedEntry))
             {
                 continue;
             }
 
             if (generatedEntry is not null)
-                CopyChartExWithModeledTitle(sourceEntry, generatedEntry, generatedArchive);
+                CopyChartExWithModeledContent(sourceEntry, generatedEntry, generatedArchive);
             else
             {
                 generatedArchive.GetEntry(chartExPartPath)?.Delete();
@@ -287,13 +287,10 @@ public sealed partial class XlsxFileAdapter
         return XlsxChartPartReader.TryReadSupportedChart(sourceXml, sheetId, out var sourceChart) &&
                workbook.Sheets
                    .SelectMany(sheet => sheet.Charts)
-                   .Any(chart => ChartModelsMatch(sourceChart, chart, includeTitle: false));
+                   .Any(chart => sourceChart.Type == chart.Type);
     }
 
-    private static bool GeneratedChartMatchesSourceModel(
-        ZipArchiveEntry sourceEntry,
-        ZipArchiveEntry generatedEntry,
-        bool includeTitle)
+    private static bool GeneratedChartIsCompatibleWithSourceChartEx(ZipArchiveEntry sourceEntry, ZipArchiveEntry generatedEntry)
     {
         var sheetId = SheetId.New();
         var sourceXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
@@ -304,20 +301,17 @@ public sealed partial class XlsxFileAdapter
             return false;
         }
 
-        return ChartModelsMatch(sourceChart, generatedChart, includeTitle);
+        return sourceChart.Type == generatedChart.Type;
     }
 
     private static bool ChartModelsMatch(ChartModel sourceChart, ChartModel candidate) =>
-        ChartModelsMatch(sourceChart, candidate, includeTitle: true);
-
-    private static bool ChartModelsMatch(ChartModel sourceChart, ChartModel candidate, bool includeTitle) =>
         sourceChart.Type == candidate.Type &&
         RangesMatchIgnoringSheet(sourceChart.DataRange, candidate.DataRange) &&
         sourceChart.FirstRowIsHeader == candidate.FirstRowIsHeader &&
         sourceChart.FirstColIsCategories == candidate.FirstColIsCategories &&
-        (!includeTitle || string.Equals(sourceChart.Title ?? "", candidate.Title ?? "", StringComparison.Ordinal));
+        string.Equals(sourceChart.Title ?? "", candidate.Title ?? "", StringComparison.Ordinal);
 
-    private static void CopyChartExWithModeledTitle(
+    private static void CopyChartExWithModeledContent(
         ZipArchiveEntry sourceEntry,
         ZipArchiveEntry generatedEntry,
         ZipArchive generatedArchive)
@@ -327,15 +321,46 @@ public sealed partial class XlsxFileAdapter
         var generatedXml = XlsxPackageXmlEditor.LoadXml(generatedEntry);
         var sourceChart = sourceXml.Root?.Element(chartExNs + "chart");
         var generatedTitle = generatedXml.Root?.Element(chartExNs + "chart")?.Element(chartExNs + "title");
+        var generatedLegend = generatedXml.Root?.Element(chartExNs + "chart")?.Element(chartExNs + "legend");
+        var generatedChartData = generatedXml.Root?.Element(chartExNs + "chartData");
         if (sourceChart is not null)
         {
             sourceChart.Element(chartExNs + "title")?.Remove();
             if (generatedTitle is not null)
                 sourceChart.AddFirst(new XElement(generatedTitle));
+
+            sourceChart.Element(chartExNs + "legend")?.Remove();
+            if (generatedLegend is not null)
+                sourceChart.Add(new XElement(generatedLegend));
+
+            MergeChartExSeries(sourceChart, generatedXml, chartExNs);
         }
+
+        sourceXml.Root?.Element(chartExNs + "chartData")?.Remove();
+        if (generatedChartData is not null)
+            sourceXml.Root?.AddFirst(new XElement(generatedChartData));
 
         generatedArchive.GetEntry(sourceEntry.FullName)?.Delete();
         XlsxPackageXmlEditor.ReplaceXml(generatedArchive, sourceEntry.FullName, sourceXml);
+    }
+
+    private static void MergeChartExSeries(XElement sourceChart, XDocument generatedXml, XNamespace chartExNs)
+    {
+        var sourceRegion = sourceChart
+            .Element(chartExNs + "plotArea")
+            ?.Element(chartExNs + "plotAreaRegion");
+        var generatedSeries = generatedXml.Root?
+            .Element(chartExNs + "chart")
+            ?.Element(chartExNs + "plotArea")
+            ?.Element(chartExNs + "plotAreaRegion")
+            ?.Elements(chartExNs + "series")
+            .Select(element => new XElement(element))
+            .ToList();
+        if (sourceRegion is null || generatedSeries is null)
+            return;
+
+        sourceRegion.Elements(chartExNs + "series").Remove();
+        sourceRegion.Add(generatedSeries);
     }
 
     private static bool RangesMatchIgnoringSheet(GridRange left, GridRange right) =>

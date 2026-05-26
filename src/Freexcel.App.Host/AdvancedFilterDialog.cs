@@ -156,6 +156,25 @@ public sealed partial class AdvancedFilterDialog : Window
         FocusRangeSelectionInput(request.Target);
     }
 
+    public void ApplyRangeSelection(AdvancedFilterRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target switch
+        {
+            AdvancedFilterRangeSelectionTarget.CriteriaRange => _criteriaRangeBox,
+            AdvancedFilterRangeSelectionTarget.CopyTo => _copyToBox,
+            _ => _listRangeBox
+        };
+
+        textBox.Text = rangeText;
+        if (target == AdvancedFilterRangeSelectionTarget.CopyTo)
+        {
+            _copyToAnotherLocationButton.IsChecked = true;
+            UpdateCopyToState();
+        }
+
+        FocusRangeSelectionInput(textBox);
+    }
+
     private static void FocusRangeSelectionInput(TextBox target)
     {
         target.Focus();

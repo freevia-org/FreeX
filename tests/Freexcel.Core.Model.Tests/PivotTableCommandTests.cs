@@ -1566,11 +1566,15 @@ public sealed class PivotTableCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        workbook.Slicers.Should().ContainSingle().Which.Should().Match<SlicerModel>(slicer =>
+        var slicer = workbook.Slicers.Should().ContainSingle().Which;
+        slicer.Should().Match<SlicerModel>(slicer =>
             slicer.Name == "Category Slicer" &&
             slicer.CacheName == "Slicer_Category_Slicer" &&
             slicer.SourcePivotTableName == "PivotTable1" &&
             slicer.SourceFieldName == "Category");
+        slicer.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 2, 0),
+            new DrawingAnchorPoint(9, 0, 10, 0)));
 
         command.Revert(ctx);
 
@@ -1773,16 +1777,56 @@ public sealed class PivotTableCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        workbook.Timelines.Should().ContainSingle().Which.Should().Match<TimelineModel>(timeline =>
+        var timeline = workbook.Timelines.Should().ContainSingle().Which;
+        timeline.Should().Match<TimelineModel>(timeline =>
             timeline.Name == "Date Timeline" &&
             timeline.CacheName == "Timeline_Date_Timeline" &&
             timeline.SourcePivotTableName == "PivotTable1" &&
             timeline.SourceFieldName == "Date" &&
             timeline.StartDate == "2026-01-05" &&
             timeline.EndDate == "2026-02-02");
+        timeline.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 2, 0),
+            new DrawingAnchorPoint(9, 0, 10, 0)));
 
         command.Revert(ctx);
 
+        workbook.Timelines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddTimelineCommand_RejectsNonDateSourceField()
+    {
+        var workbook = new Workbook("AddTimelineNonDateFieldTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("Hardware"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("Services"));
+        sheet.SetCell(Addr(sheet, "B3"), new NumberValue(30));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddTimelineCommand("Category Timeline", "PivotTable1", "Category").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Timeline source field must contain dates.");
+        workbook.Timelines.Should().BeEmpty();
+
+        outcome = new AddTimelineCommand("Amount Timeline", "PivotTable1", "Amount").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Timeline source field must contain dates.");
         workbook.Timelines.Should().BeEmpty();
     }
 

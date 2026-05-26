@@ -97,6 +97,12 @@ public sealed partial class TextToColumnsDialog
     public static TextToColumnsRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
         new(currentText.Trim(), CollapseDialog: true);
 
+    public void ApplyRangeSelection(CellAddress destination)
+    {
+        _destinationBox.Text = destination.ToA1();
+        FocusRangeSelectionInput(_destinationBox);
+    }
+
     private DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
         DialogReferencePicker.CreateEditor(
             textBox,

@@ -532,18 +532,20 @@ public class ExportPlannerTests
     }
 
     [Theory]
-    [InlineData(null, 3, true, null)]
-    [InlineData(1, 3, true, null)]
-    [InlineData(3, 3, true, null)]
-    [InlineData(4, 3, false, "Page range starts after the last exportable page (3).")]
-    [InlineData(1, 0, false, "There are no exportable pages.")]
+    [InlineData(null, null, 3, true, null)]
+    [InlineData(1, 2, 3, true, null)]
+    [InlineData(3, 3, 3, true, null)]
+    [InlineData(4, 4, 3, false, "Page range starts after the last exportable page (3).")]
+    [InlineData(1, 4, 3, false, "Page range ends after the last exportable page (3).")]
+    [InlineData(1, 1, 0, false, "There are no exportable pages.")]
     public void TryValidatePageRange_ChecksRenderedPageCount(
         int? fromPage,
+        int? toPage,
         int pageCount,
         bool expectedSuccess,
         string? expectedError)
     {
-        var pageRange = fromPage is null ? null : new ExportPageRange(fromPage.Value, fromPage.Value);
+        var pageRange = fromPage is null || toPage is null ? null : new ExportPageRange(fromPage.Value, toPage.Value);
 
         var success = ExportPlanner.TryValidatePageRange(pageRange, pageCount, out var error);
 
@@ -1074,6 +1076,63 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForInlineUiContainerText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateInlineUiContainerTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Inline UI PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForNestedInlineUiContainerText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateNestedInlineUiContainerTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Nested Inline UI PDF Text");
+                pdfText.Should().Contain(@"Inline Header\nInline Body");
+                pdfText.Should().Contain(@"First Item\nSecond Item");
+                pdfText.Should().NotContain("Hidden Inline UI Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForAccessText()
     {
         StaTestRunner.Run(() =>
@@ -1505,6 +1564,29 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_RejectsPageRangeEndingAfterDocumentWithoutCreatingFile()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateDocument(pageCount: 2);
+
+            try
+            {
+                var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 3));
+
+                action.Should().Throw<InvalidOperationException>()
+                    .WithMessage("Page range ends after the last exportable page (2).");
+                File.Exists(path).Should().BeFalse();
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WithoutRequestedPropertiesOnlyWritesProducerMetadata()
     {
         StaTestRunner.Run(() =>
@@ -1712,6 +1794,67 @@ public class ExportPlannerTests
         text.Inlines.Add(new Run("Nested "));
         text.Inlines.Add(new Bold(new Run("Inline ")));
         text.Inlines.Add(new Italic(new Run("PDF Text")));
+        page.Children.Add(text);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateInlineUiContainerTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(190, 120);
+        var page = new FixedPage
+        {
+            Width = 190,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var text = new TextBlock { Margin = new System.Windows.Thickness(12) };
+        text.Inlines.Add(new Run("Inline "));
+        text.Inlines.Add(new InlineUIContainer(new TextBlock { Text = "UI " }));
+        text.Inlines.Add(new Run("PDF Text"));
+        page.Children.Add(text);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateNestedInlineUiContainerTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(230, 120);
+        var page = new FixedPage
+        {
+            Width = 230,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = "Nested " });
+        panel.Children.Add(new Border { Child = new TextBlock { Text = "Inline UI PDF Text" } });
+        panel.Children.Add(new HeaderedContentControl
+        {
+            Header = "Inline Header",
+            Content = new TextBlock { Text = "Inline Body" }
+        });
+        panel.Children.Add(new ListBox
+        {
+            Items =
+            {
+                new TextBlock { Text = "First Item" },
+                new TextBlock { Text = "Second Item" }
+            }
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Hidden Inline UI Text",
+            Visibility = System.Windows.Visibility.Collapsed
+        });
+        var text = new TextBlock { Margin = new System.Windows.Thickness(12) };
+        text.Inlines.Add(new InlineUIContainer(new Border { Child = panel }));
         page.Children.Add(text);
         var content = new PageContent();
         ((IAddChild)content).AddChild(page);

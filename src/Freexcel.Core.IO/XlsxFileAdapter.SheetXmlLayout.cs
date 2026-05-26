@@ -159,11 +159,7 @@ public sealed partial class XlsxFileAdapter
         XlsxXmlAttributeReader.ReadDoubleAttribute(element, attributeName);
 
     private static WorksheetAutoFilterModel? ReadWorksheetAutoFilter(XElement? autoFilter) =>
-        autoFilter is null
-            ? null
-            : new WorksheetAutoFilterModel(
-                autoFilter.Attribute("ref")?.Value,
-                autoFilter.ToString(SaveOptions.DisableFormatting));
+        XlsxWorksheetAutoFilterMapper.Read(autoFilter);
 
     private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false) =>
         XlsxXmlAttributeReader.ReadBoolAttribute(element, attributeName, defaultValue);

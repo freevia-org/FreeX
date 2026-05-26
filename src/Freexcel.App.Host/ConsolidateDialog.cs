@@ -119,6 +119,15 @@ public sealed partial class ConsolidateDialog : Window
         FocusRangeSelectionInput(request.Target);
     }
 
+    public void ApplyRangeSelection(ConsolidateRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target == ConsolidateRangeSelectionTarget.DestinationCell
+            ? _destinationBox
+            : _referenceBox;
+        textBox.Text = rangeText;
+        FocusRangeSelectionInput(textBox);
+    }
+
     private static void FocusRangeSelectionInput(TextBox target)
     {
         target.Focus();

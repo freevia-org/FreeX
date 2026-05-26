@@ -648,6 +648,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
         if (sourceBlockName == workbookNs + "smartTags")
             return sheet.SmartTags is null;
 
+        if (sourceBlockName == workbookNs + "autoFilter")
+            return sheet.AutoFilter is null;
+
         if (sourceBlockName == workbookNs + "legacyDrawingHF")
             return !XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet);
 

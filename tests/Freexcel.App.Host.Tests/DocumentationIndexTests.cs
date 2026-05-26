@@ -41,9 +41,44 @@ public sealed partial class DocumentationIndexTests
         report.Should().Contain("[OUTSTANDING_BUILD.md](OUTSTANDING_BUILD.md)");
         report.Should().Contain("[NEXT_PHASES_PLAN.md](NEXT_PHASES_PLAN.md)");
         report.Should().Contain("[COMMAND_SURFACE_PARITY.md](COMMAND_SURFACE_PARITY.md)");
+        report.Should().Contain("[MENU_TOOLBAR_PARITY.md](MENU_TOOLBAR_PARITY.md)");
         report.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
         report.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
         report.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
+    }
+
+    [Fact]
+    public void NewestStatusReport_KeyOpenItemsMatchOutstandingBuildHighestPriorityItems()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var outstandingBuild = File.ReadAllLines(Path.Combine(docsDirectory, "OUTSTANDING_BUILD.md"));
+        var report = File.ReadAllLines(newestStatusReport);
+
+        ReadNumberedBoldItems(outstandingBuild, "## Highest Priority Outstanding Work")
+            .Take(5)
+            .Should()
+            .Equal(ReadNumberedBoldItems(report, "## Remaining Outstanding Work"));
+    }
+
+    [Fact]
+    public void CurrentPlanningDocs_ConditionalFormattingRemainingScopeStaysAligned()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var outstandingBuild = File.ReadAllText(Path.Combine(docsDirectory, "OUTSTANDING_BUILD.md"));
+        var nextPhasesPlan = File.ReadAllText(Path.Combine(docsDirectory, "NEXT_PHASES_PLAN.md"));
+        var report = File.ReadAllText(newestStatusReport);
+
+        outstandingBuild.Should().Contain("Remaining: any deeper color-scale XLSX edge semantics.");
+        nextPhasesPlan.Should().Contain("Remaining polish is any deeper color-scale XLSX edge semantics as new gaps are found.");
+        report.Should().Contain("Phase 7D: Deeper color-scale XLSX edge semantics as new gaps are found");
+        nextPhasesPlan.Should().NotContain("rule-manager dialog matching Excel's full priority/manage-rules UX");
+        report.Should().NotContain("Remaining CF hardening beyond data bar/color scale advanced options");
     }
 
     [Fact]
@@ -67,6 +102,30 @@ public sealed partial class DocumentationIndexTests
         var declaredCount = int.Parse(UiEvidenceScreenshotCount().Match(catalog).Groups["count"].Value);
 
         declaredCount.Should().Be(screenshotCount);
+    }
+
+    [Fact]
+    public void UiTestCatalog_XamlClickWiredControlCountMatchesMainWindow()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+        var mainWindow = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var clickWiredCount = XamlClickHandler().Matches(mainWindow).Count;
+        var declaredCount = int.Parse(UiCatalogXamlClickWiredCount().Match(catalog).Groups["count"].Value);
+
+        declaredCount.Should().Be(clickWiredCount);
+    }
+
+    [Fact]
+    public void UiTestCatalog_UsesCanonicalBranchNeutralMetadata()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+
+        catalog.Should().Contain("Canonical path: `docs/UI_TEST_CATALOG.md`");
+        catalog.Should().NotContain("Last updated:");
+        catalog.Should().NotContain("Branch:");
+        catalog.Should().NotContain("Current catalog branch:");
     }
 
     [Fact]
@@ -120,12 +179,35 @@ public sealed partial class DocumentationIndexTests
         }
     }
 
+    private static IReadOnlyList<string> ReadNumberedBoldItems(IReadOnlyList<string> lines, string sectionHeading)
+    {
+        var sectionStart = Array.IndexOf(lines.ToArray(), sectionHeading);
+        sectionStart.Should().BeGreaterThanOrEqualTo(0);
+
+        return lines
+            .Skip(sectionStart + 1)
+            .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal))
+            .Select(line => NumberedBoldItem().Match(line))
+            .Where(match => match.Success)
+            .Select(match => match.Groups["title"].Value)
+            .ToArray();
+    }
+
     [GeneratedRegex(@"\[PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\]\(PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\)")]
     private static partial Regex ProjectStatusReportLink();
 
     [GeneratedRegex(@"(?<!!)\[[^\]]+\]\((?<target>[^)]+)\)")]
     private static partial Regex MarkdownLink();
 
+    [GeneratedRegex(@"^\d+\. \*\*(?<title>[^*]+)\*\*")]
+    private static partial Regex NumberedBoldItem();
+
     [GeneratedRegex(@"\| Existing UI evidence screenshots \| (?<count>\d+) \|")]
     private static partial Regex UiEvidenceScreenshotCount();
+
+    [GeneratedRegex(@"\| XAML click-wired controls \| (?<count>\d+) \|")]
+    private static partial Regex UiCatalogXamlClickWiredCount();
+
+    [GeneratedRegex(@"Click=""[^""]+""")]
+    private static partial Regex XamlClickHandler();
 }
