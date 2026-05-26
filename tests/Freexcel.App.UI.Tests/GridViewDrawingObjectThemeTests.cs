@@ -247,6 +247,30 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void GridObjectDragPlanner_HitTestsAnchorCellFromViewportMetrics()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(2, 20, 0), new RowMetric(3, 20, 20)],
+            [new ColMetric(4, 80, 0), new ColMetric(5, 80, 80)]);
+
+        GridObjectDragPlanner.HitTestAnchorCell(
+                viewport,
+                new Point(30 + 80 + 10, 18 + 20 + 10),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new CellAddress(default, 3, 5));
+        GridObjectDragPlanner.HitTestAnchorCell(
+                viewport,
+                new Point(4, 4),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void GridViewObjectDrag_DelegatesGeometryToPlanner()
     {
         var inputSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Input.cs"));
@@ -254,6 +278,7 @@ public sealed class GridViewDrawingObjectThemeTests
 
         inputSource.Should().Contain("GridObjectDragPlanner.CalculateDragRect(");
         dragSource.Should().Contain("GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad)");
+        dragSource.Should().Contain("GridObjectDragPlanner.HitTestAnchorCell(");
     }
 
     private static void RunOnStaThread(Action action)

@@ -1,4 +1,5 @@
 using System.Windows;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.UI;
 
@@ -61,5 +62,31 @@ public static class GridObjectDragPlanner
         if (nearBottom && inHorizontal) return ObjectDragKind.ResizeS;
         if (objectRect.Contains(position)) return ObjectDragKind.Move;
         return ObjectDragKind.None;
+    }
+
+    public static CellAddress? HitTestAnchorCell(
+        ViewportModel? viewport,
+        Point position,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        if (viewport is null)
+            return null;
+
+        foreach (var row in viewport.RowMetrics)
+        {
+            var top = row.TopOffset + columnHeaderHeight;
+            if (position.Y < top || position.Y >= top + row.Height)
+                continue;
+
+            foreach (var column in viewport.ColMetrics)
+            {
+                var left = column.LeftOffset + rowHeaderWidth;
+                if (position.X >= left && position.X < left + column.Width)
+                    return new CellAddress(default, row.Row, column.Col);
+            }
+        }
+
+        return null;
     }
 }
