@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -48,7 +49,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrimaryViewAttribute(attribute.Key))
                     continue;
 
-                sheetView.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(sheetView, attribute.Key, attribute.Value);
             }
 
             if (sheet.PrimaryViewMetadata.NativeChildXmls.Count > 0)
@@ -132,6 +133,23 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 continue;
 
             targetSelection.SetAttributeValue(attribute.Name, attribute.Value);
+        }
+    }
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
         }
     }
 }
