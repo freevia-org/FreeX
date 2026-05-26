@@ -5000,15 +5000,26 @@ public partial class FileAdapterSmokeTests
         loadedRule.NativeAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("cf-native");
         loadedRule.NativeChildXmls.Should().ContainSingle()
             .Which.Should().Contain("{FREEXCEL-CF-EXT}");
+        loadedRule.NativeContainerAttributes = new Dictionary<string, string>(loadedRule.NativeContainerAttributes)
+        {
+            ["invalid conditionalFormatting attr"] = "skip"
+        };
+        loadedRule.NativeAttributes = new Dictionary<string, string>(loadedRule.NativeAttributes)
+        {
+            ["invalid cfRule attr"] = "skip"
+        };
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         worksheetXml.Should().Contain("customBlockAttr=\"cf-container\"");
         worksheetXml.Should().Contain("customAttr=\"cf-native\"");
+        worksheetXml.Should().NotContain("invalid conditionalFormatting attr");
+        worksheetXml.Should().NotContain("invalid cfRule attr");
         worksheetXml.Should().Contain("extLst");
         worksheetXml.Should().Contain("{FREEXCEL-CF-CONTAINER-EXT}");
         worksheetXml.Should().Contain("{FREEXCEL-CF-EXT}");

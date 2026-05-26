@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -87,8 +88,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     {
         foreach (var (name, value) in cf.NativeContainerAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         foreach (var nativeChildXml in (cf.NativeContainerChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -210,8 +210,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         foreach (var (name, value) in cf.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && rule.Attribute(name) is null)
-                rule.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(rule, name, value);
         }
 
         foreach (var nativeChildXml in (cf.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -241,12 +240,8 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             : [];
         foreach (var (name, value) in cf.NativePayloadAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) &&
-                !modeledDataBarAttributes.Contains(name) &&
-                payload.Attribute(name) is null)
-            {
-                payload.SetAttributeValue(name, value);
-            }
+            if (!modeledDataBarAttributes.Contains(name))
+                TrySetNativeAttributeIfMissing(payload, name, value);
         }
 
         var modeledDataBarChildren = cf.RuleType == CfRuleType.DataBar
@@ -281,6 +276,30 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 new CfThresholdModel(CfThresholdType.Percent, "33"),
                 new CfThresholdModel(CfThresholdType.Percent, "67")
             ];
+
+    private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        try
+        {
+            var attributeName = XName.Get(name);
+            if (element.Attribute(attributeName) is not null)
+                return false;
+
+            element.SetAttributeValue(attributeName, value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
 
     private static XElement ToCfvoXml(XNamespace worksheetNs, CfThresholdType type, string? value)
     {
