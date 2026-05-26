@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(39, "the generated metadata-pass manifest currently declares thirty-nine deterministic package-retention rows");
+        rows.Should().HaveCount(40, "the generated metadata-pass manifest currently declares forty deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -550,6 +550,33 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-workbook-file-sharing-001");
         AssertWorkbookFileSharing(saved, "generated-workbook-file-sharing-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookProtectionNativeRow_RetainsProtectionAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-protection-native-001");
+        AssertWorkbookProtectionNative(source, "generated-workbook-protection-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.IsStructureProtected.Should().BeTrue();
+        workbook.StructureProtectionPassword.Should().Be("83AF");
+        workbook.ProtectionMetadata.Should().NotBeNull();
+        workbook.ProtectionMetadata!.NativeAttributes.Should().Contain("algorithmName", "SHA-512");
+        workbook.ProtectionMetadata.NativeAttributes.Should().Contain("hashValue", "def456");
+        workbook.ProtectionMetadata.NativeAttributes.Should().Contain("saltValue", "salt456");
+        workbook.ProtectionMetadata.NativeAttributes.Should().Contain("spinCount", "100000");
+        workbook.ProtectionMetadata.NativeAttributes.Should().Contain("lockWindows", "1");
+        workbook.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-workbook-protection-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-protection-native-001");
+        AssertWorkbookProtectionNative(saved, "generated-workbook-protection-native-001 saved");
     }
 
     [Fact]
@@ -1574,6 +1601,28 @@ public class XlsxCorpusRunnerTests
         fileSharing!.Attribute("readOnlyRecommended")!.Value.Should().Be("1", because);
         fileSharing.Attribute("userName")!.Value.Should().Be("FreexcelTest", because);
         fileSharing.Attribute("revisionsPassword")!.Value.Should().Be("1234", because);
+    }
+
+    private static void AssertWorkbookProtectionNative(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var protection = workbookXml.Root!.Element(workbookNs + "workbookProtection");
+        protection.Should().NotBeNull(because);
+        protection!.Attribute("lockStructure")!.Value.Should().Be("1", because);
+        protection.Attribute("lockWindows")!.Value.Should().Be("1", because);
+        protection.Attribute("workbookPassword")!.Value.Should().Be("83AF", because);
+        protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512", because);
+        protection.Attribute("hashValue")!.Value.Should().Be("def456", because);
+        protection.Attribute("saltValue")!.Value.Should().Be("salt456", because);
+        protection.Attribute("spinCount")!.Value.Should().Be("100000", because);
+        protection.Elements(freexcelNs + "workbookProtectionNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
     }
 
     private static void AssertWorkbookSmartTags(Stream package, string because)
