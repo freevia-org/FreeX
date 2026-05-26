@@ -1142,6 +1142,24 @@ public class ShortCircuitEvaluationTests
     }
 
     [Fact]
+    public void CHOOSE_ScalarIndexReturnsSelectedRangeBranch()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+
+        var result = _evaluator.Evaluate("=CHOOSE(2,A1:A2,B1:B2)", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(10));
+        result.Cells[1, 0].Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
     public void CHOOSE_OutOfRange_ReturnsValueError()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
