@@ -388,7 +388,7 @@ public static partial class BuiltInFunctions
 
         if (useA1
                 ? !TryParseA1Ref(refText, out uint row, out uint col)
-                : !TryParseR1C1Ref(refText, out row, out col))
+                : !TryParseR1C1Ref(refText, ctx.CurrentCellAddress, out row, out col))
             return ErrorValue.Ref;
         return sheetName is not null
             ? ctx.GetCellValue(sheetName, row, col)
