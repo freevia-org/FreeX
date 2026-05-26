@@ -363,8 +363,11 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_cropTopBox");
         source.Should().Contain("_cropRightBox");
         source.Should().Contain("_cropBottomBox");
-        source.Should().Contain("Left:");
-        source.Should().Contain("Right:");
+        source.Should().Contain("_Left:");
+        source.Should().Contain("_Top:");
+        source.Should().Contain("_Right:");
+        source.Should().Contain("_Bottom:");
+        source.Should().Contain("new Label { Content = label, Target = box");
     }
 
     [Fact]
