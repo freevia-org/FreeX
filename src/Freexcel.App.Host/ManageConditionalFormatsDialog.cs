@@ -402,4 +402,20 @@ public sealed partial class ManageConditionalFormatsDialog : Window
                 ?? LogicalTreeHelper.GetParent(current);
         }
     }
+
+    public void ApplyAppliesToRangeSelection(Guid ruleId, GridRange range)
+    {
+        var index = _rules
+            .Select((rule, ruleIndex) => new { rule, ruleIndex })
+            .FirstOrDefault(item => item.rule.Id == ruleId)
+            ?.ruleIndex;
+        if (index is null)
+            return;
+
+        var updated = CloneWithPriority(_rules[index.Value], index.Value + 1);
+        updated.AppliesTo = range;
+        _rules[index.Value] = updated;
+        _listView.SelectedItem = updated;
+        FocusRulesList();
+    }
 }
