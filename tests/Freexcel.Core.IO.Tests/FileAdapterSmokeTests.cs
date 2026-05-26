@@ -11628,6 +11628,66 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectDeletedSheetUnsupportedWorksheetArtifacts()
+    {
+        var workbook = new Workbook("DeletedSheetUnsupportedArtifactRemovalTest");
+        var removedSheet = workbook.AddSheet("Data");
+        removedSheet.SetCell(new CellAddress(removedSheet.Id, 1, 1), new TextValue("remove me"));
+        var keptSheet = workbook.AddSheet("Keep");
+        keptSheet.SetCell(new CellAddress(keptSheet.Id, 1, 1), new TextValue("keep me"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetWebPublishItemsPackage(source);
+        AddMinimalWorksheetOleObjectPackage(source);
+        AddMinimalWorksheetControlPackage(source);
+        AddMinimalWorksheetLegacyDrawingPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.RemoveSheet(loaded.GetSheet("Data")!.Id).Should().BeTrue();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/webPublishItems.xml").Should().BeNull();
+        archive.GetEntry("xl/embeddings/oleObject1.bin").Should().BeNull();
+        archive.GetEntry("xl/ctrlProps/ctrlProp1.xml").Should().BeNull();
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().BeNull();
+        archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels").Should().BeNull();
+        archive.GetEntry("xl/media/vmlImage1.png").Should().BeNull();
+        archive.GetEntry("xl/worksheets/sheet2.xml").Should().BeNull();
+        archive.GetEntry("xl/worksheets/_rels/sheet2.xml.rels").Should().BeNull();
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetText = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        worksheetText.Should().NotContain("webPublishItems");
+        worksheetText.Should().NotContain("oleObjects");
+        worksheetText.Should().NotContain("controls");
+        worksheetText.Should().NotContain("legacyDrawing");
+
+        if (archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels") is { } worksheetRelsEntry)
+        {
+            var worksheetRelsText = LoadPackageXml(worksheetRelsEntry).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            worksheetRelsText.Should().NotContain("rIdFreexcelWebPublishItems");
+            worksheetRelsText.Should().NotContain("rIdFreexcelOleObject");
+            worksheetRelsText.Should().NotContain("rIdFreexcelControl");
+            worksheetRelsText.Should().NotContain("rIdFreexcelLegacyDrawing");
+        }
+
+        var contentTypesText = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!)
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        contentTypesText.Should().NotContain("/xl/webPublishItems.xml");
+        contentTypesText.Should().NotContain("/xl/embeddings/oleObject1.bin");
+        contentTypesText.Should().NotContain("/xl/ctrlProps/ctrlProp1.xml");
+        contentTypesText.Should().NotContain("/xl/drawings/vmlDrawing1.vml");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesExternalWorksheetPictureReferenceAlongsideModelEdits()
     {
         var workbook = new Workbook("ExternalPictureRetentionTest");
@@ -16801,7 +16861,8 @@ public partial class FileAdapterSmokeTests
             {
                 NativeAttributes =
                 {
-                    ["unsupportedAttr"] = "kept"
+                    ["unsupportedAttr"] = "kept",
+                    ["invalid customPr attr"] = "skip"
                 },
                 NativeChildXmls =
                 [
@@ -16810,8 +16871,9 @@ public partial class FileAdapterSmokeTests
             }));
 
         var saved = new MemoryStream();
-        var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, saved);
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16826,6 +16888,7 @@ public partial class FileAdapterSmokeTests
         customProperty.Attribute("id")!.Value.Should().Be("7");
         customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept");
         customProperty.Elements(XName.Get("customPrChild", "urn:freexcel:test")).Should().ContainSingle();
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -19801,6 +19864,15 @@ public partial class FileAdapterSmokeTests
                 contentTypeNs,
                 "/xl/drawings/vmlDrawing1.vml",
                 "application/vnd.openxmlformats-officedocument.vmlDrawing");
+            if (!contentTypesXml.Root!.Elements(contentTypeNs + "Default").Any(element =>
+                    string.Equals(element.Attribute("Extension")?.Value, "png", StringComparison.OrdinalIgnoreCase)))
+            {
+                contentTypesXml.Root!.Add(new XElement(
+                    contentTypeNs + "Default",
+                    new XAttribute("Extension", "png"),
+                    new XAttribute("ContentType", "image/png")));
+            }
+
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
 
             var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
@@ -19826,12 +19898,29 @@ public partial class FileAdapterSmokeTests
             writer.Write("""
                 <xml xmlns:v="urn:schemas-microsoft-com:vml"
                      xmlns:o="urn:schemas-microsoft-com:office:office"
+                     xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
                      xmlns:x="urn:schemas-microsoft-com:office:excel">
                   <v:shape id="FreexcelLegacyDrawingShape" type="#_x0000_t201">
+                    <v:imagedata r:id="rIdFreexcelVmlImage"/>
                     <x:ClientData ObjectType="Note"/>
                   </v:shape>
                 </xml>
                 """);
+
+            var vmlRelsPath = "xl/drawings/_rels/vmlDrawing1.vml.rels";
+            ReplacePackageXml(archive, vmlRelsPath, new XDocument(
+                new XElement(
+                    packageRelNs + "Relationships",
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdFreexcelVmlImage"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                        new XAttribute("Target", "../media/vmlImage1.png")))));
+
+            archive.GetEntry("xl/media/vmlImage1.png")?.Delete();
+            var imageEntry = archive.CreateEntry("xl/media/vmlImage1.png");
+            using var imageStream = imageEntry.Open();
+            imageStream.Write([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
         }
 
         packageStream.Position = 0;

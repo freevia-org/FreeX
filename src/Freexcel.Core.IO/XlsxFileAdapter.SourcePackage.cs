@@ -17,15 +17,23 @@ public sealed partial class XlsxFileAdapter
         using var sourceStream = sourcePackage.OpenRead();
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
-        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, generatedArchive);
+        var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, generatedArchive);
+        var removedWorksheetPackageParts = GetRemovedWorksheetPackagePartPaths(sourceArchive, context);
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(
+            sourceArchive,
+            generatedArchive,
+            removedWorksheetPackageParts);
 
-        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive);
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive, removedWorksheetPackageParts);
         PreserveSourceChartExParts(workbook, sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
-        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(
+            sourceArchive,
+            generatedArchive,
+            generatedEntriesBeforeMerge,
+            removedWorksheetPackageParts);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         XlsxStylesheetMetadataPreserver.Preserve(sourceArchive, generatedArchive);
-        var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, generatedArchive);
         if (HasAnySourcePackagePart(sourceArchive, "xl/pivotCache/", "xl/pivotTables/"))
             XlsxPivotXmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
         if (HasSourcePackagePart(sourceArchive, "xl/tables/"))
@@ -51,6 +59,118 @@ public sealed partial class XlsxFileAdapter
 
     private static bool HasSourcePackagePart(ZipArchive archive, string prefix) =>
         archive.Entries.Any(entry => entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+    private static IReadOnlySet<string> GetRemovedWorksheetPackagePartPaths(
+        ZipArchive sourceArchive,
+        XlsxSourcePackagePreservationContext? context)
+    {
+        var excludedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (context is null)
+            return excludedPaths;
+
+        var sourceWorksheetPaths = context.SourceSheets
+            .Select(pair => new
+            {
+                pair.Key,
+                SourcePath = XlsxPackagePath.NormalizeZipPath(pair.Value.Replace('\\', '/'))
+            })
+            .Where(pair => IsWorksheetPartPath(pair.SourcePath))
+            .ToList();
+
+        foreach (var sourceSheet in sourceWorksheetPaths)
+        {
+            if (!context.TargetSheets.TryGetValue(sourceSheet.Key, out var targetPath) ||
+                !string.Equals(
+                    sourceSheet.SourcePath,
+                    XlsxPackagePath.NormalizeZipPath(targetPath.Replace('\\', '/')),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                excludedPaths.Add(sourceSheet.SourcePath);
+                excludedPaths.Add(XlsxPackagePath.GetRelationshipPartPath(sourceSheet.SourcePath));
+            }
+        }
+
+        var removedWorksheetPaths = sourceWorksheetPaths
+            .Where(pair => !context.TargetSheets.ContainsKey(pair.Key))
+            .Select(pair => pair.SourcePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (removedWorksheetPaths.Count == 0)
+            return excludedPaths;
+
+        var retainedWorksheetPaths = sourceWorksheetPaths
+            .Where(pair => context.TargetSheets.ContainsKey(pair.Key))
+            .Select(pair => pair.SourcePath);
+        var retainedTargets = retainedWorksheetPaths
+            .SelectMany(path => GetRelationshipDependencyPaths(sourceArchive, path, context.PackageRelNs))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worksheetPath in removedWorksheetPaths)
+        {
+            foreach (var targetPath in GetRelationshipDependencyPaths(sourceArchive, worksheetPath, context.PackageRelNs))
+            {
+                if (!retainedTargets.Contains(targetPath))
+                    excludedPaths.Add(targetPath);
+            }
+        }
+
+        return excludedPaths;
+    }
+
+    private static IEnumerable<string> GetRelationshipDependencyPaths(
+        ZipArchive archive,
+        string sourcePartPath,
+        XNamespace packageRelNs)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Queue<string>();
+        pending.Enqueue(sourcePartPath);
+
+        while (pending.Count > 0)
+        {
+            var currentPath = pending.Dequeue();
+            foreach (var targetPath in GetDirectRelationshipTargets(archive, currentPath, packageRelNs))
+            {
+                if (!visited.Add(targetPath))
+                    continue;
+
+                yield return targetPath;
+                var targetRelationshipsPath = XlsxPackagePath.GetRelationshipPartPath(targetPath);
+                if (archive.GetEntry(targetRelationshipsPath) is not null)
+                {
+                    yield return targetRelationshipsPath;
+                    pending.Enqueue(targetPath);
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<string> GetDirectRelationshipTargets(
+        ZipArchive archive,
+        string sourcePartPath,
+        XNamespace packageRelNs)
+    {
+        var relationshipPath = XlsxPackagePath.GetRelationshipPartPath(sourcePartPath);
+        var relationshipEntry = archive.GetEntry(relationshipPath);
+        if (relationshipEntry is null)
+            yield break;
+
+        var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
+        foreach (var relationship in relationshipsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+                continue;
+
+            yield return XlsxPackagePath.ResolveRelationshipTarget(sourcePartPath, target);
+        }
+    }
+
+    private static bool IsWorksheetPartPath(string path) =>
+        path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+        path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
     private static void PreserveSourceChartExParts(
         Workbook workbook,
