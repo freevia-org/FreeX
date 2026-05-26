@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Reflection;
 using FluentAssertions;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
@@ -69,6 +71,23 @@ public sealed class StatusBarLayoutTests
         });
     }
 
+    [Fact]
+    public void F6StatusBarFocus_StartsAtZoomOutAndTabStaysInZoomControls()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.CycleShellFocus(reverse: true);
+
+            harness.FocusedElementName.Should().Be("StatusZoomOutButton");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+
+            harness.FocusedElementName.Should().Be("ZoomSlider");
+        });
+    }
+
     private static Rect BoundsRelativeToWindow(FrameworkElement element, Window window) =>
         element.TransformToAncestor(window).TransformBounds(new Rect(new Size(element.ActualWidth, element.ActualHeight)));
 
@@ -87,5 +106,79 @@ public sealed class StatusBarLayoutTests
 
         public Sheet GetSheet(SheetId sheetId) =>
             Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
+    }
+
+    private sealed class MainWindowHarness : IDisposable
+    {
+        private readonly MainWindow _window;
+        private readonly MethodInfo _cycleShellFocus;
+        private readonly MethodInfo _tryHandleFocusedStatusBarKeyboardNavigation;
+
+        private MainWindowHarness(MainWindow window)
+        {
+            _window = window;
+            _cycleShellFocus = typeof(MainWindow)
+                .GetMethod("CycleShellFocus", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CycleShellFocus");
+            _tryHandleFocusedStatusBarKeyboardNavigation = typeof(MainWindow)
+                .GetMethod("TryHandleFocusedStatusBarKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedStatusBarKeyboardNavigation");
+        }
+
+        public string? FocusedElementName =>
+            Keyboard.FocusedElement is FrameworkElement element ? element.Name : null;
+
+        public void CycleShellFocus(bool reverse)
+        {
+            _cycleShellFocus.Invoke(_window, [reverse]);
+            PumpDispatcher();
+        }
+
+        public bool HandleFocusedStatusBarTab()
+        {
+            var source = PresentationSource.FromVisual(_window);
+            source.Should().NotBeNull("the test window must be visible before routing keyboard input");
+            var args = new KeyEventArgs(Keyboard.PrimaryDevice, source!, Environment.TickCount, Key.Tab)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent
+            };
+
+            var handled = (bool)_tryHandleFocusedStatusBarKeyboardNavigation.Invoke(_window, [args])!;
+            PumpDispatcher();
+            return handled;
+        }
+
+        public static MainWindowHarness Create()
+        {
+            var workbook = new Workbook("Book1");
+            workbook.AddSheet("Sheet1");
+            var workbookRef = new WorkbookRef { Current = workbook };
+            var graph = new DependencyGraph();
+            var evaluator = new FormulaEvaluator();
+            var window = new MainWindow(
+                NullLogger<MainWindow>.Instance,
+                new ViewportService(),
+                new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
+                new RecalcEngine(graph, evaluator),
+                [],
+                workbookRef,
+                workbook)
+            {
+                WindowState = WindowState.Normal,
+                Width = 1280,
+                Height = 720
+            };
+
+            window.Show();
+            window.UpdateLayout();
+            PumpDispatcher();
+            return new MainWindowHarness(window);
+        }
+
+        public void Dispose()
+        {
+            _window.Close();
+            PumpDispatcher();
+        }
     }
 }
