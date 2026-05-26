@@ -47,6 +47,9 @@ public static class ExcelWorksheetNavigationPlanner
     public static CellAddress FindVerticalDataBoundary(Sheet? sheet, CellAddress current, int rowDirection)
     {
         var startFull = CellHasData(sheet, current.Row, current.Col);
+        if (!startFull)
+            return FindVerticalDataBoundaryFromBlank(sheet, current, rowDirection);
+
         var row = current.Row;
         while (true)
         {
@@ -70,6 +73,9 @@ public static class ExcelWorksheetNavigationPlanner
     public static CellAddress FindHorizontalDataBoundary(Sheet? sheet, CellAddress current, int columnDirection)
     {
         var startFull = CellHasData(sheet, current.Row, current.Col);
+        if (!startFull)
+            return FindHorizontalDataBoundaryFromBlank(sheet, current, columnDirection);
+
         var column = current.Col;
         while (true)
         {
@@ -115,5 +121,81 @@ public static class ExcelWorksheetNavigationPlanner
 
         var value = sheet.GetValue(new CellAddress(sheet.Id, row, col));
         return value is not null and not BlankValue;
+    }
+
+    private static CellAddress FindVerticalDataBoundaryFromBlank(Sheet? sheet, CellAddress current, int rowDirection)
+    {
+        if (sheet is null)
+            return new CellAddress(
+                current.Sheet,
+                rowDirection > 0 ? CellAddress.MaxRow : 1,
+                current.Col);
+
+        uint? targetRow = null;
+        foreach (var address in sheet.EnumerateValueBearingCells())
+        {
+            if (address.Col != current.Col)
+                continue;
+
+            if (rowDirection > 0)
+            {
+                if (address.Row <= current.Row)
+                    continue;
+
+                if (targetRow is null || address.Row < targetRow.Value)
+                    targetRow = address.Row;
+            }
+            else
+            {
+                if (address.Row >= current.Row)
+                    continue;
+
+                if (targetRow is null || address.Row > targetRow.Value)
+                    targetRow = address.Row;
+            }
+        }
+
+        return new CellAddress(
+            current.Sheet,
+            targetRow ?? (rowDirection > 0 ? CellAddress.MaxRow : 1),
+            current.Col);
+    }
+
+    private static CellAddress FindHorizontalDataBoundaryFromBlank(Sheet? sheet, CellAddress current, int columnDirection)
+    {
+        if (sheet is null)
+            return new CellAddress(
+                current.Sheet,
+                current.Row,
+                columnDirection > 0 ? CellAddress.MaxCol : 1);
+
+        uint? targetColumn = null;
+        foreach (var address in sheet.EnumerateValueBearingCells())
+        {
+            if (address.Row != current.Row)
+                continue;
+
+            if (columnDirection > 0)
+            {
+                if (address.Col <= current.Col)
+                    continue;
+
+                if (targetColumn is null || address.Col < targetColumn.Value)
+                    targetColumn = address.Col;
+            }
+            else
+            {
+                if (address.Col >= current.Col)
+                    continue;
+
+                if (targetColumn is null || address.Col > targetColumn.Value)
+                    targetColumn = address.Col;
+            }
+        }
+
+        return new CellAddress(
+            current.Sheet,
+            current.Row,
+            targetColumn ?? (columnDirection > 0 ? CellAddress.MaxCol : 1));
     }
 }

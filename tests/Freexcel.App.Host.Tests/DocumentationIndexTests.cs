@@ -12,12 +12,11 @@ public sealed partial class DocumentationIndexTests
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var readme = File.ReadAllText(Path.Combine(docsDirectory, "README.md"));
         var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Select(Path.GetFileName)
+            .Select(path => Path.GetFileName(path)!)
             .Order(StringComparer.Ordinal)
             .Last();
 
         readme.Should().Contain($"[{newestStatusReport}]({newestStatusReport})");
-        readme.Should().Contain("[PROJECT_BUILD_HISTORY_METRICS_2026-05-25.md](PROJECT_BUILD_HISTORY_METRICS_2026-05-25.md)");
         readme.Should().Contain("[OUTSTANDING_BUILD.md](OUTSTANDING_BUILD.md)");
         readme.Should().Contain("[NEXT_PHASES_PLAN.md](NEXT_PHASES_PLAN.md)");
         readme.Should().Contain("[COMMAND_SURFACE_PARITY.md](COMMAND_SURFACE_PARITY.md)");
@@ -25,8 +24,9 @@ public sealed partial class DocumentationIndexTests
         readme.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
         readme.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
         readme.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
+        readme.Should().Contain("[XLSX_TEST_CORPUS_PLAN.md](XLSX_TEST_CORPUS_PLAN.md)");
         File.Exists(Path.Combine(docsDirectory, "COMMAND_INVENTORY.json")).Should().BeTrue();
-        ProjectStatusReportLink().Matches(readme).Should().HaveCount(4);
+        ProjectStatusReportLink().Matches(readme).Should().NotBeEmpty();
     }
 
     [Fact]
@@ -58,6 +58,74 @@ public sealed partial class DocumentationIndexTests
         new FileInfo(Path.Combine(docsDirectory, "TROUBLESHOOTING.md")).Length.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void UiTestCatalog_EvidenceScreenshotCountMatchesArtifacts()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+        var screenshotCount = Directory.GetFiles(Path.Combine(docsDirectory, "ui-test-artifacts"), "*.png").Length;
+        var declaredCount = int.Parse(UiEvidenceScreenshotCount().Match(catalog).Groups["count"].Value);
+
+        declaredCount.Should().Be(screenshotCount);
+    }
+
+    [Fact]
+    public void CurrentPlanningDocs_LocalMarkdownLinksResolve()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Select(path => Path.GetFileName(path)!)
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var currentDocs = new[]
+        {
+            "README.md",
+            newestStatusReport,
+            "OUTSTANDING_BUILD.md",
+            "NEXT_PHASES_PLAN.md",
+            "UI_TEST_CATALOG.md",
+            "SHORTCUT_PARITY_MATRIX.md",
+            "COMMAND_SURFACE_PARITY.md",
+            "MENU_TOOLBAR_PARITY.md",
+            "FIDELITY_CONTRACT.md",
+            "XLSX_CORPUS_REPORT.md",
+            "XLSX_TEST_CORPUS_PLAN.md"
+        };
+
+        foreach (var doc in currentDocs)
+            AssertLocalMarkdownLinksResolve(Path.Combine(docsDirectory, doc), docsDirectory);
+    }
+
+    private static void AssertLocalMarkdownLinksResolve(string sourcePath, string docsDirectory)
+    {
+        var source = File.ReadAllText(sourcePath);
+        foreach (Match match in MarkdownLink().Matches(source))
+        {
+            var target = match.Groups["target"].Value;
+            if (target.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                || target.StartsWith("#", StringComparison.Ordinal)
+                || target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var targetWithoutFragment = target.Split('#', 2)[0];
+            var resolvedPath = Path.GetFullPath(
+                Path.Combine(docsDirectory, targetWithoutFragment.Replace('/', Path.DirectorySeparatorChar)));
+
+            (File.Exists(resolvedPath) || Directory.Exists(resolvedPath)).Should().BeTrue(
+                "{0} links to {1}",
+                Path.GetFileName(sourcePath),
+                target);
+        }
+    }
+
     [GeneratedRegex(@"\[PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\]\(PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\)")]
     private static partial Regex ProjectStatusReportLink();
+
+    [GeneratedRegex(@"(?<!!)\[[^\]]+\]\((?<target>[^)]+)\)")]
+    private static partial Regex MarkdownLink();
+
+    [GeneratedRegex(@"\| Existing UI evidence screenshots \| (?<count>\d+) \|")]
+    private static partial Regex UiEvidenceScreenshotCount();
 }

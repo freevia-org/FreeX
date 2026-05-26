@@ -66,9 +66,13 @@ public static partial class PrintRenderer
 
     internal static double CalculateHeaderFooterLineHeight(
         WorksheetHeaderFooter value,
-        WorksheetHeaderFooterPictureSet pictures)
+        WorksheetHeaderFooterPictureSet pictures,
+        bool draftQuality = false)
     {
         var height = 18.0;
+        if (draftQuality)
+            return height;
+
         if (HasHeaderFooterPictureToken(value.Left) && pictures.Left is { } left)
             height = Math.Max(height, Math.Max(1, left.Height));
         if (HasHeaderFooterPictureToken(value.Center) && pictures.Center is { } center)

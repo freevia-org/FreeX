@@ -714,6 +714,22 @@ public sealed partial class Sheet
         return GetValue(address.Row, address.Col);
     }
 
+    /// <summary>Enumerate positions whose effective value is not blank, including spill values.</summary>
+    public IEnumerable<CellAddress> EnumerateValueBearingCells()
+    {
+        foreach (var ((row, col), cell) in _cells)
+        {
+            if (cell.Value is not BlankValue)
+                yield return new CellAddress(Id, row, col);
+        }
+
+        foreach (var ((row, col), value) in _spillValues)
+        {
+            if (value is not BlankValue && !_cells.ContainsKey((row, col)))
+                yield return new CellAddress(Id, row, col);
+        }
+    }
+
     /// <summary>Get all non-empty cell positions.</summary>
     public IReadOnlyCollection<(uint Row, uint Col)> GetOccupiedCells()
     {

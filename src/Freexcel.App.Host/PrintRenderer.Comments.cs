@@ -21,7 +21,8 @@ public static partial class PrintRenderer
         double colWidth,
         double rowHeight,
         double pageW,
-        double pageH)
+        double pageH,
+        bool blackAndWhite)
     {
         var overlays = WorksheetPageLayout.GetDisplayedCommentOverlays(
             comments,
@@ -31,9 +32,11 @@ public static partial class PrintRenderer
         if (overlays.Count == 0)
             return;
 
-        var fill = new SolidColorBrush(Color.FromRgb(255, 255, 225));
-        var border = new Pen(new SolidColorBrush(Color.FromRgb(128, 128, 128)), 0.75);
-        var indicator = new SolidColorBrush(Color.FromRgb(192, 0, 0));
+        var fill = blackAndWhite
+            ? Brushes.White
+            : new SolidColorBrush(Color.FromRgb(255, 255, 225));
+        var border = new Pen(blackAndWhite ? Brushes.Black : new SolidColorBrush(Color.FromRgb(128, 128, 128)), 0.75);
+        var indicator = blackAndWhite ? Brushes.Black : new SolidColorBrush(Color.FromRgb(192, 0, 0));
         var typeface = new Typeface("Segoe UI");
 
         foreach (var overlay in overlays)
