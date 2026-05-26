@@ -4256,6 +4256,40 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetProtectionNativeAttributeNames()
+    {
+        var workbook = new Workbook("AdvancedSheetProtectionInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+        sheet.IsProtected = true;
+        sheet.ProtectionMetadata = new WorksheetProtectionMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["algorithmName"] = "SHA-512",
+                ["validSheetProtectionAttr"] = "kept",
+                ["invalid sheetProtection attr"] = "skip"
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var protection = worksheetXml.Root!.Element(worksheetNs + "sheetProtection");
+        protection.Should().NotBeNull();
+        protection!.Attribute("sheet")!.Value.Should().Be("1");
+        protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512");
+        protection.Attribute("validSheetProtectionAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedAdvancedSheetProtection()
     {
         var workbook = new Workbook("AdvancedSheetProtectionRemovalTest");
