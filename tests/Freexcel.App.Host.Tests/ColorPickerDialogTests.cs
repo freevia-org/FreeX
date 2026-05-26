@@ -233,6 +233,34 @@ public sealed class ColorPickerDialogTests
     }
 
     [Fact]
+    public void SelectingSwatch_MarksOnlyTheChosenSwatch()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var initialColor = new CellColor(0x44, 0x72, 0xC4);
+            var newColor = new CellColor(0xED, 0x7D, 0x31);
+            var dialog = new ColorPickerDialog(initialColor);
+            try
+            {
+                var themePanel = (Panel)dialog.FindName("ThemeColorsPanel");
+                var initialButton = FindSwatchButton(themePanel, initialColor);
+                var newButton = FindSwatchButton(themePanel, newColor);
+
+                initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(2));
+
+                newButton.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
+
+                initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
+                newButton.BorderThickness.Should().Be(new System.Windows.Thickness(2));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void EditingCustomRgbComponents_UpdatesSelectedColorAndPreviewText()
     {
         StaTestRunner.Run(() =>
