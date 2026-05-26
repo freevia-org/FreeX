@@ -176,8 +176,14 @@ public partial class MainWindow
         UpdateSheetTabNavigation();
     }
 
+    private void SheetTabsRowGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateSheetTabNavigation();
+    }
+
     private void UpdateSheetTabNavigation()
     {
+        UpdateSheetTabViewportWidth();
         var canScroll = SheetTabsScroller.ScrollableWidth > SheetTabScrollEpsilon;
         SheetNavLeftBtn.Visibility = canScroll && SheetTabsScroller.HorizontalOffset > SheetTabScrollEpsilon
             ? Visibility.Visible
@@ -186,6 +192,29 @@ public partial class MainWindow
                                       SheetTabsScroller.HorizontalOffset < SheetTabsScroller.ScrollableWidth - SheetTabScrollEpsilon
             ? Visibility.Visible
             : Visibility.Hidden;
+    }
+
+    private void UpdateSheetTabViewportWidth()
+    {
+        if (SheetTabsRowGrid.ActualWidth <= 0)
+            return;
+
+        var tabContentWidth = Math.Max(SheetTabsControl.ActualWidth, SheetTabsControl.DesiredSize.Width);
+        if (tabContentWidth <= 0)
+            return;
+
+        var fixedWidth = SheetNavLeftBtn.ActualWidth +
+                         AddSheetButton.ActualWidth +
+                         SheetNavRightBtn.ActualWidth;
+        var available = Math.Max(80, SheetTabsRowGrid.ActualWidth - fixedWidth);
+        var maxTabViewportWidth = Math.Max(80, available * 2 / 3);
+        var targetWidth = Math.Min(tabContentWidth, maxTabViewportWidth);
+
+        if (Math.Abs(SheetTabsScroller.Width - targetWidth) <= 0.5)
+            return;
+
+        SheetTabsScroller.Width = targetWidth;
+        Dispatcher.BeginInvoke(UpdateSheetTabNavigation, DispatcherPriority.Loaded);
     }
 
     private void BringCurrentSheetTabIntoView()
