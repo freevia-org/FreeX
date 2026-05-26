@@ -433,6 +433,32 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void CollapsedInsertChartsKeyTip_RoutesThroughVisibleOverflowGroup()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRibbonTab("Insert", 800);
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.N);
+            harness.HandleKeyTip(Key.C);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Insert");
+            harness.VisibleCommandKeyTips("CH").Should().ContainSingle("Charts");
+            harness.KeyTipScope.Should().Be("Commands", "C should be treated as the first character of the collapsed Charts group keytip CH");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.HandleKeyTip(Key.H);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuIsOpen.Should().BeTrue();
+            harness.ActiveMenuItemGestureText("Recommended Charts").Should().Be("RC");
+            harness.ActiveMenuItemGestureText("Column Chart").Should().Be("CC");
+        });
+    }
+
+    [Fact]
     public void FormulasFunctionLibraryDynamicMenu_IsKeyTipRoutable()
     {
         RunSta(() =>
@@ -711,6 +737,25 @@ public sealed class MainWindowRibbonKeyTipTests
             _window.WindowState = WindowState.Normal;
             _window.Width = width;
             _window.UpdateLayout();
+            _updateRibbonCompactMode.Invoke(_window, [true]);
+            PumpDispatcher();
+        }
+
+        public void SelectRibbonTab(string header, double width)
+        {
+            if (_window.FindName("RibbonTabs") is TabControl ribbonTabs)
+            {
+                ribbonTabs.Width = width;
+                ribbonTabs.SelectedItem = ribbonTabs.Items
+                    .OfType<TabItem>()
+                    .First(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+            }
+
+            _window.WindowState = WindowState.Normal;
+            _window.Width = width;
+            _window.UpdateLayout();
+            PumpDispatcher();
+            PumpDispatcher();
             _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
