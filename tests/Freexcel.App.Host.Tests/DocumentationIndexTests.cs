@@ -26,6 +26,18 @@ public sealed partial class DocumentationIndexTests
         ProjectStatusReportLink().Matches(readme).Should().HaveCount(4);
     }
 
+    [Fact]
+    public void DocsReadme_LinksReleaseFacingUserDocs()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var readme = File.ReadAllText(Path.Combine(docsDirectory, "README.md"));
+
+        readme.Should().Contain("[USER_GUIDE.md](USER_GUIDE.md)");
+        readme.Should().Contain("[TROUBLESHOOTING.md](TROUBLESHOOTING.md)");
+        new FileInfo(Path.Combine(docsDirectory, "USER_GUIDE.md")).Length.Should().BeGreaterThan(0);
+        new FileInfo(Path.Combine(docsDirectory, "TROUBLESHOOTING.md")).Length.Should().BeGreaterThan(0);
+    }
+
     [GeneratedRegex(@"\[PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\]\(PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\)")]
     private static partial Regex ProjectStatusReportLink();
 }
