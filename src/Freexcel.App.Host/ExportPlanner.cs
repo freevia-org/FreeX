@@ -209,11 +209,22 @@ internal static partial class ExportPlanner
             return false;
         }
 
-        if (range is null || range.FromPage <= pageCount)
+        if (range is null)
             return true;
 
-        error = $"Page range starts after the last exportable page ({pageCount}).";
-        return false;
+        if (range.FromPage > pageCount)
+        {
+            error = $"Page range starts after the last exportable page ({pageCount}).";
+            return false;
+        }
+
+        if (range.ToPage > pageCount)
+        {
+            error = $"Page range ends after the last exportable page ({pageCount}).";
+            return false;
+        }
+
+        return true;
     }
 
     public static bool TryValidatePublishOptions(ExportOptions options, ExportFormat format, out string? error)

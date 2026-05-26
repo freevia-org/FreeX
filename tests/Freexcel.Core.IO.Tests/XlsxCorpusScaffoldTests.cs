@@ -97,7 +97,7 @@ public class XlsxCorpusScaffoldTests
         report.Should().Contain($"| Regression cached-result workbooks | {regressionCount} | {regressionCount} | 100% |");
         report.Should().Contain("| Feature bucket | Evidence | Pass rate |");
         report.Should().Contain("| PivotTables, pivot caches, and PivotChart binding |");
-        report.Should().Contain("| Slicers, timelines, external links, printer settings, custom XML |");
+        report.Should().Contain("| Slicers, timelines, external links, printer settings, calc chains, custom XML |");
     }
 
     [Fact]
@@ -105,6 +105,7 @@ public class XlsxCorpusScaffoldTests
     {
         var manifestRows = ReadManifestRows();
         var outstandingBuild = File.ReadAllText(FindWorkspaceFile("docs", "OUTSTANDING_BUILD.md"));
+        var nextPhasesPlan = File.ReadAllText(FindWorkspaceFile("docs", "NEXT_PHASES_PLAN.md"));
         var generatedCount = manifestRows.Count(row => row.SourceType == "generated");
         var publicCount = manifestRows.Count(row => row.SourceType == "public");
         var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
@@ -112,6 +113,8 @@ public class XlsxCorpusScaffoldTests
 
         outstandingBuild.Should().Contain(
             $"Current manifest has {manifestRows.Count} rows: {generatedCount} generated rows, {publicCount} public Tealeg rows, {localPrivateCount} optional local-private rows, and {regressionCount} regression formula-cache workbooks.");
+        nextPhasesPlan.Should().Contain($"current {manifestRows.Count}-row manifest baseline");
+        nextPhasesPlan.Should().NotContain("prior 90-row manifest baseline");
     }
 
     private static IReadOnlyList<ManifestRow> ReadManifestRows()

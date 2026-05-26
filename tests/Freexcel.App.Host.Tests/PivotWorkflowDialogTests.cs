@@ -164,6 +164,51 @@ public sealed class PivotWorkflowDialogTests
                 CollapseDialog: true));
     }
 
+    [Fact]
+    public void PivotTableApplyRangeSelection_UpdatesRequestedReferenceBox()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sales");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 20, 4));
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableDialog(workbook, sheet.Id, range);
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                dialog.ApplyRangeSelection(PivotTableRangeSelectionTarget.SourceRange, "Sales!A1:E40");
+                dialog.ApplyRangeSelection(PivotTableRangeSelectionTarget.DestinationRange, "Sales!H3");
+
+                textBoxes[0].Text.Should().Be("Sales!A1:E40");
+                textBoxes[1].Text.Should().Be("Sales!H3");
+                textBoxes[1].IsEnabled.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresPivotTableRangePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+
+        source.Should().Contain("new PivotTableDialog(");
+        source.Should().Contain("request => ApplyPivotTableRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyPivotTableRangeSelection(");
+        source.Should().Contain("PivotTableRangeSelectionRequest request");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
     [Theory]
     [InlineData("Select PivotTable source range", PivotTableRangeSelectionTarget.SourceRange, "Sales!A1:D20")]
     [InlineData("Select PivotTable location", PivotTableRangeSelectionTarget.DestinationRange, "Sales!F1")]
@@ -302,6 +347,44 @@ public sealed class PivotWorkflowDialogTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void PivotTableDataSourceApplyRangeSelection_UpdatesSourceBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableDataSourceDialog("Sales!A1:E200");
+            dialog.Show();
+            try
+            {
+                dialog.ApplyRangeSelection("Sales!B2:F40");
+
+                var sourceBox = FindVisualChildren<TextBox>(dialog).Single();
+                sourceBox.Text.Should().Be("Sales!B2:F40");
+                sourceBox.SelectionLength.Should().Be("Sales!B2:F40".Length);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresPivotTableDataSourceRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+
+        source.Should().Contain("new PivotTableDataSourceDialog(");
+        source.Should().Contain("request => ApplyPivotTableDataSourceRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyPivotTableDataSourceRangeSelection(");
+        source.Should().Contain("PivotTableDataSourceRangeSelectionRequest request");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
     }
 
     [Fact]

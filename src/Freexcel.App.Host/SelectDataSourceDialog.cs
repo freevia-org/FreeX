@@ -101,6 +101,12 @@ public sealed partial class SelectDataSourceDialog : Window
                 FocusRangeSelectionInput(request.Target);
             });
 
+    public void ApplyRangeSelection(string rangeText)
+    {
+        _rangeBox.Text = rangeText;
+        FocusRangeSelectionInput(_rangeBox);
+    }
+
     private static void FocusRangeSelectionInput(TextBox target)
     {
         target.Focus();

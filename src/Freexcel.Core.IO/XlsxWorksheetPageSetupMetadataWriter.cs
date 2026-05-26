@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -90,7 +91,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
             if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPageSetupAttribute(attribute.Key))
                 continue;
 
-            changed |= SetAttributeIfDifferent(pageSetup, XName.Get(attribute.Key), attribute.Value);
+            changed |= TrySetNativeAttributeIfDifferent(pageSetup, attribute.Key, attribute.Value);
         }
 
         if (metadata.NativeChildXmls.Count > 0)
@@ -192,6 +193,22 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
 
         element.SetAttributeValue(name, value);
         return true;
+    }
+
+    private static bool TrySetNativeAttributeIfDifferent(XElement element, string name, string value)
+    {
+        try
+        {
+            return SetAttributeIfDifferent(element, XName.Get(name), value);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 
     private static bool RemoveAttributeIfPresent(XElement element, XName name)

@@ -164,10 +164,6 @@ internal static class XlsxPackageMetadataMerger
         IReadOnlySet<string> generatedEntriesBeforeMerge,
         IReadOnlySet<string>? excludedSourceParts)
     {
-        var targetMode = relationship.Attribute("TargetMode")?.Value;
-        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
-            return false;
-
         var relationshipType = relationship.Attribute("Type")?.Value;
         if (string.Equals(
                 relationshipType,
@@ -180,6 +176,10 @@ internal static class XlsxPackageMetadataMerger
         var target = relationship.Attribute("Target")?.Value;
         if (string.IsNullOrWhiteSpace(target))
             return false;
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value;
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+            return true;
 
         var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
         if (IsExcludedSourcePart(targetPart, excludedSourceParts))

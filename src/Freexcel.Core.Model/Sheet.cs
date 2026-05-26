@@ -21,7 +21,49 @@ public sealed record HyperlinkMetadata(
     string ScreenTip = "",
     string Bookmark = "");
 
-public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml);
+public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml)
+{
+    public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
+    public IReadOnlyList<string>? NativeChildXmls { get; init; }
+    public List<WorksheetAutoFilterColumnModel> FilterColumns { get; } = [];
+}
+
+public sealed record WorksheetAutoFilterColumnModel
+{
+    public int ColumnId { get; init; }
+    public IReadOnlyList<string> Values { get; init; }
+    public bool IncludeBlank { get; init; }
+    public IReadOnlyList<string> NativeFilterXmls { get; init; }
+    public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
+
+    public WorksheetAutoFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank = false,
+        string? NativeFilterXml = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            string.IsNullOrWhiteSpace(NativeFilterXml) ? [] : [NativeFilterXml],
+            null)
+    {
+    }
+
+    public WorksheetAutoFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyDictionary<string, string>? NativeAttributes = null)
+    {
+        this.ColumnId = ColumnId;
+        this.Values = Values;
+        this.IncludeBlank = IncludeBlank;
+        this.NativeFilterXmls = NativeFilterXmls;
+        this.NativeAttributes = NativeAttributes;
+    }
+}
 
 public sealed class WorksheetProtectionMetadataModel
 {
@@ -712,6 +754,22 @@ public sealed partial class Sheet
     public ScalarValue GetValue(CellAddress address)
     {
         return GetValue(address.Row, address.Col);
+    }
+
+    /// <summary>Enumerate positions whose effective value is not blank, including spill values.</summary>
+    public IEnumerable<CellAddress> EnumerateValueBearingCells()
+    {
+        foreach (var ((row, col), cell) in _cells)
+        {
+            if (cell.Value is not BlankValue)
+                yield return new CellAddress(Id, row, col);
+        }
+
+        foreach (var ((row, col), value) in _spillValues)
+        {
+            if (value is not BlankValue && !_cells.ContainsKey((row, col)))
+                yield return new CellAddress(Id, row, col);
+        }
     }
 
     /// <summary>Get all non-empty cell positions.</summary>

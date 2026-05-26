@@ -76,6 +76,12 @@ public sealed class CreateTableDialog : Window
         FocusRangeBox();
     }
 
+    public void ApplyRangeSelection(string rangeText)
+    {
+        _rangeBox.Text = rangeText;
+        FocusRangeBox();
+    }
+
     private void FocusInitialKeyboardTarget()
     {
         FocusRangeBox();

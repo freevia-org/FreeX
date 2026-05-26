@@ -429,6 +429,37 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceApplyRangeSelection_UpdatesRangeBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SelectDataSourceDialog("A1:D12");
+
+            dialog.ApplyRangeSelection("Sheet2!B2:E20");
+
+            FindLogicalDescendants<TextBox>(dialog)
+                .Single()
+                .Text.Should().Be("Sheet2!B2:E20");
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresSelectDataSourceRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
+
+        source.Should().Contain("new SelectDataSourceDialog(");
+        source.Should().Contain("request => ApplySelectDataSourceRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplySelectDataSourceRangeSelection(");
+        source.Should().Contain("SelectDataSourceRangeSelectionRequest request");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
     public void SelectDataSourceDialogRangePicker_RefocusesDataRangeAfterRequest()
     {
         var source = ReadChartDialogSource();
@@ -1089,6 +1120,58 @@ public sealed class ChartDialogTests
         result.ToOptions().BubbleScale.Should().Be(150);
         result.ToOptions().ShowNegativeBubbles.Should().BeTrue();
         result.ToOptions().BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_ClampsFirstSliceAngleTo0To359()
+    {
+        ChartPieFormatDialogResult.CreateResult(-10, -1, 0.1, 0.55).FirstSliceAngle.Should().Be(0);
+        ChartPieFormatDialogResult.CreateResult(400, -1, 0.1, 0.55).FirstSliceAngle.Should().Be(359);
+        ChartPieFormatDialogResult.CreateResult(180, -1, 0.1, 0.55).FirstSliceAngle.Should().Be(180);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_ClampsExplodedSliceDistanceTo0To50Percent()
+    {
+        ChartPieFormatDialogResult.CreateResult(0, 0, -0.1, 0.55).ExplodedSliceDistance.Should().Be(0);
+        ChartPieFormatDialogResult.CreateResult(0, 0, 0.8, 0.55).ExplodedSliceDistance.Should().Be(0.5);
+        ChartPieFormatDialogResult.CreateResult(0, 0, 0.25, 0.55).ExplodedSliceDistance.Should().BeApproximately(0.25, 0.0001);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_ClampsDoughnutHoleSizeTo10To90Percent()
+    {
+        ChartPieFormatDialogResult.CreateResult(0, -1, 0.1, 0.05).DoughnutHoleSize.Should().Be(0.1);
+        ChartPieFormatDialogResult.CreateResult(0, -1, 0.1, 0.95).DoughnutHoleSize.Should().Be(0.9);
+        ChartPieFormatDialogResult.CreateResult(0, -1, 0.1, 0.75).DoughnutHoleSize.Should().BeApproximately(0.75, 0.0001);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_LoadsFromChart()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Doughnut,
+            FirstSliceAngle = 45,
+            ExplodedSliceIndex = 2,
+            ExplodedSliceDistance = 0.2,
+            DoughnutHoleSize = 0.6
+        };
+        var result = ChartPieFormatDialogResult.FromChart(chart);
+        result.FirstSliceAngle.Should().Be(45);
+        result.ExplodedSliceIndex.Should().Be(2);
+        result.ExplodedSliceDistance.Should().BeApproximately(0.2, 0.0001);
+        result.DoughnutHoleSize.Should().BeApproximately(0.6, 0.0001);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_MapsToLayoutOptions()
+    {
+        var result = ChartPieFormatDialogResult.CreateResult(90, 1, 0.3, 0.7);
+        result.ToOptions().FirstSliceAngle.Should().Be(90);
+        result.ToOptions().ExplodedSliceIndex.Should().Be(1);
+        result.ToOptions().ExplodedSliceDistance.Should().BeApproximately(0.3, 0.0001);
+        result.ToOptions().DoughnutHoleSize.Should().BeApproximately(0.7, 0.0001);
     }
 
     private static string ReadChartDialogSource() =>

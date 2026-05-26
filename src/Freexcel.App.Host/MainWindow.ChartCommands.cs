@@ -94,9 +94,11 @@ public partial class MainWindow
         if (!TryGetActiveNormalChart("Select Data Source", out var chart))
             return;
 
-        var dialog = new SelectDataSourceDialog(
+        SelectDataSourceDialog? dialog = null;
+        dialog = new SelectDataSourceDialog(
             FormatRangeReference(chart.DataRange.Start, chart.DataRange.End),
             chart.FirstColIsCategories,
+            request => ApplySelectDataSourceRangeSelection(dialog, request),
             sheetId: _currentSheetId)
         {
             Owner = this
@@ -121,6 +123,31 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+    }
+
+    private void ApplySelectDataSourceRangeSelection(
+        SelectDataSourceDialog? dialog,
+        SelectDataSourceRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void MoveChartBtn_Click(object sender, RoutedEventArgs e)
@@ -344,6 +371,27 @@ public partial class MainWindow
             return;
 
         ApplyChartLayoutDialogResult("Format Bubble Chart", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartPieFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Pie/Doughnut",
+                "Insert or select a pie or doughnut chart before changing pie options.",
+                out var chart))
+            return;
+
+        if (!ChartTypeSupport.SupportsFirstSliceAngle(chart.Type))
+        {
+            MessageBox.Show(this, "Pie format options only apply to pie and doughnut charts.", "Format Pie/Doughnut", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ChartPieFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Pie/Doughnut", chart, dialog.Result.ToOptions());
     }
 
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)

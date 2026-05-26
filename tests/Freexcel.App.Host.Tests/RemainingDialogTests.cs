@@ -579,6 +579,42 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialogApplyRangeSelection_UpdatesRequestedInput()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line);
+            try
+            {
+                dialog.ApplyRangeSelection(SparklineRangeSelectionTarget.DataRange, "Sheet2!A1:D6");
+                dialog.ApplyRangeSelection(SparklineRangeSelectionTarget.Location, "K5");
+
+                GetField<TextBox>(dialog, "_dataRangeBox").Text.Should().Be("Sheet2!A1:D6");
+                GetField<TextBox>(dialog, "_locationBox").Text.Should().Be("K5");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresSparklineRangePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+
+        source.Should().Contain("new SparklineDialog(");
+        source.Should().Contain("request => ApplySparklineRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplySparklineRangeSelection(");
+        source.Should().Contain("SparklineRangeSelectionRequest request");
+        source.Should().Contain("request.Target == SparklineRangeSelectionTarget.Location");
+        source.Should().Contain("FormatCellReference(selectedRange.Start)");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+    }
+
+    [Fact]
     public void SparklineDialog_ExposesRangePickerButtonsForDataAndLocation()
     {
         var source = ReadRemainingDialogSources();

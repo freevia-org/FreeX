@@ -21,6 +21,35 @@ public sealed class ExcelParityCoercionEdgeTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=\"50%\"+0", 0.5)]
+    [InlineData("=0+\"$1,234.50\"", 1234.5)]
+    [InlineData("=\"1/2/2024\"+1", 45294)]
+    [InlineData("=\"1:30 PM\"*24", 13.5)]
+    [InlineData("=\"2/29/1900\"+0.25", 60.25)]
+    [InlineData("=-\"50%\"", -0.5)]
+    [InlineData("=SUM(\"50%\",\"$1,234.50\")", 1235.0)]
+    [InlineData("=ABS(\"50%\")", 0.5)]
+    public void RichNumericText_IsCoercedByScalarMathAndOperators(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void ReferencedRichNumericText_IsCoercedByArithmeticOperators()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("50%")),
+            (2, 1, new TextValue("$1,234.50")),
+            (3, 1, new TextValue("1/2/2024")),
+            (4, 1, new TextValue("1:30 PM")));
+
+        _eval.Evaluate("=A1+0", sheet).Should().Be(new NumberValue(0.5));
+        _eval.Evaluate("=A2+0", sheet).Should().Be(new NumberValue(1234.5));
+        _eval.Evaluate("=A3+1", sheet).Should().Be(new NumberValue(45294));
+        _eval.Evaluate("=A4*24", sheet).Should().Be(new NumberValue(13.5));
+    }
+
     [Fact]
     public void ReferencedNumericText_IsIgnoredByAggregateRanges()
     {
@@ -34,6 +63,48 @@ public sealed class ExcelParityCoercionEdgeTests
         _eval.Evaluate("=NPV(0,A3)", sheet).Should().Be(new NumberValue(0));
         _eval.Evaluate("=COUNT(A1:A3)", sheet).Should().Be(new NumberValue(1));
         _eval.Evaluate("=COUNTA(A1:A3)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void SingleDirectRangeFastAggregates_PreserveDateAndBooleanReferenceRules()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 17));
+        var sheet = Sheet(
+            (1, 1, date),
+            (2, 1, new BoolValue(true)),
+            (3, 1, BlankValue.Instance));
+
+        _eval.Evaluate("=SUM(A1:A3)", sheet).Should().Be(new NumberValue(date.Value));
+        _eval.Evaluate("=AVERAGE(A1:A3)", sheet).Should().Be(new NumberValue(date.Value));
+        _eval.Evaluate("=MIN(A1:A3)", sheet).Should().Be(new NumberValue(date.Value));
+        _eval.Evaluate("=MAX(A1:A3)", sheet).Should().Be(new NumberValue(date.Value));
+        _eval.Evaluate("=COUNT(A1:A3)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void AggregateFastPath_DoesNotChangeMultiArgumentOrArraySemantics()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("2")),
+            (2, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=SUM(A1:A2,\"4\")", sheet).Should().Be(new NumberValue(7));
+        _eval.Evaluate("=COUNT(A1:A2,\"4\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SUM(SEQUENCE(2,1))", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void SingleDirectRangeFastAggregates_PreserveAllIgnoredRangeRules()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("2")),
+            (2, 1, new BoolValue(true)));
+
+        _eval.Evaluate("=SUM(A1:A3)", sheet).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=AVERAGE(A1:A3)", sheet).Should().Be(ErrorValue.DivByZero);
+        _eval.Evaluate("=MIN(A1:A3)", sheet).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=MAX(A1:A3)", sheet).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=COUNT(A1:A3)", sheet).Should().Be(new NumberValue(0));
     }
 
     [Fact]

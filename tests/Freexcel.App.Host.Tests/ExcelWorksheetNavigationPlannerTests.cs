@@ -1,10 +1,12 @@
+using System.Diagnostics;
 using System.Windows.Input;
 using FluentAssertions;
 using Freexcel.Core.Model;
+using Xunit.Abstractions;
 
 namespace Freexcel.App.Host.Tests;
 
-public sealed class ExcelWorksheetNavigationPlannerTests
+public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper output)
 {
     private static readonly SheetId SheetId = SheetId.New();
 
@@ -108,8 +110,131 @@ public sealed class ExcelWorksheetNavigationPlannerTests
     }
 
     [Fact]
+    public void FindVerticalDataBoundary_FromSparseBlankCellStopsOnDistantFilledCell()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 900_000, 7), new TextValue("Found"));
+
+        ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 2, 7),
+                rowDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, 900_000, 7));
+    }
+
+    [Fact]
+    public void FindHorizontalDataBoundary_FromSparseBlankCellStopsOnDistantFilledCell()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 5, 16_000), new TextValue("Found"));
+
+        ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 5, 2),
+                columnDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, 5, 16_000));
+    }
+
+    [Fact]
+    public void FindVerticalDataBoundary_FromBlankCellStopsOnSpillValue()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        var anchor = new CellAddress(SheetId, 10, 3);
+        sheet.SetCell(anchor, new NumberValue(1));
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[,]
+        {
+            { new NumberValue(1), new NumberValue(2) },
+            { new NumberValue(3), new TextValue("Spill") }
+        }));
+
+        ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 1, 4),
+                rowDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, 10, 4));
+
+        ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 11, 4),
+                rowDirection: -1)
+            .Should()
+            .Be(new CellAddress(SheetId, 10, 4));
+    }
+
+    [Fact]
+    public void FindHorizontalDataBoundary_FromBlankCellStopsOnHorizontalSpillValue()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        var anchor = new CellAddress(SheetId, 7, 20);
+        sheet.SetCell(anchor, new NumberValue(1));
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[,]
+        {
+            { new NumberValue(1), new NumberValue(2) },
+            { new NumberValue(3), new TextValue("Spill") }
+        }));
+
+        ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 8, 1),
+                columnDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, 8, 20));
+
+        ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 8, 21),
+                columnDirection: -1)
+            .Should()
+            .Be(new CellAddress(SheetId, 8, 20));
+    }
+
+    [Fact]
+    public void FindDataBoundary_RepeatedSparseBlankNavigationHasLowCost()
+    {
+        var sheet = new Sheet(SheetId, "Sparse");
+        sheet.SetCell(new CellAddress(SheetId, 900_000, 10), new TextValue("vertical"));
+        sheet.SetCell(new CellAddress(SheetId, 20, 16_000), new TextValue("horizontal"));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 100;
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        CellAddress vertical = default;
+        CellAddress horizontal = default;
+        for (var i = 0; i < repetitions; i++)
+        {
+            vertical = ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 1, 10),
+                rowDirection: 1);
+            horizontal = ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 20, 1),
+                columnDirection: 1);
+        }
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        vertical.Should().Be(new CellAddress(SheetId, 900_000, 10));
+        horizontal.Should().Be(new CellAddress(SheetId, 20, 16_000));
+        allocated.Should().BeLessThan(100_000);
+        output.WriteLine(
+            $"FindDataBoundary sparse blank navigation repeated {repetitions}x: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
+    }
+
+    [Fact]
     public void GetCtrlEndCell_UsesBottomRightUsedCellOrA1ForEmptySheets()
     {
+        ExcelWorksheetNavigationPlanner.GetCtrlEndCell(null, SheetId)
+            .Should()
+            .Be(new CellAddress(SheetId, 1, 1));
+
         var empty = new Sheet(SheetId, "Empty");
         ExcelWorksheetNavigationPlanner.GetCtrlEndCell(empty, SheetId)
             .Should()
@@ -122,5 +247,52 @@ public sealed class ExcelWorksheetNavigationPlannerTests
         ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId)
             .Should()
             .Be(new CellAddress(SheetId, 8, 7));
+    }
+
+    [Fact]
+    public void GetCtrlEndCell_UsesMaterializedCellsOnly()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        var anchor = new CellAddress(SheetId, 2, 2);
+        sheet.SetCell(anchor, new NumberValue(1));
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[,]
+        {
+            { new NumberValue(1), new NumberValue(2) },
+            { new NumberValue(3), new TextValue("Spill") }
+        }));
+
+        ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId)
+            .Should()
+            .Be(anchor);
+    }
+
+    [Fact]
+    public void GetCtrlEndCell_RepeatedLargeSheetNavigationHasLowAllocationCost()
+    {
+        var sheet = new Sheet(SheetId, "Large");
+        for (uint row = 1; row <= 200; row++)
+        {
+            for (uint col = 1; col <= 100; col++)
+                sheet.SetCell(new CellAddress(SheetId, row, col), new NumberValue(row + col));
+        }
+
+        _ = ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 25;
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        CellAddress target = default;
+        for (var i = 0; i < repetitions; i++)
+            target = ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId);
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        target.Should().Be(new CellAddress(SheetId, 200, 100));
+        output.WriteLine(
+            $"GetCtrlEndCell large sheet repeated {repetitions}x: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(100_000);
     }
 }

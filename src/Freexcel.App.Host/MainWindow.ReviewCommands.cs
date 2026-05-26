@@ -339,7 +339,12 @@ public partial class MainWindow
             return;
 
         var defaultRange = SheetGrid.SelectedRange?.ToString() ?? "A1:A1";
-        var dialog = new AllowEditRangeDialog(_currentSheetId, defaultRange, sheet.AllowEditRanges) { Owner = this };
+        AllowEditRangeDialog? dialog = null;
+        dialog = new AllowEditRangeDialog(
+            _currentSheetId,
+            defaultRange,
+            sheet.AllowEditRanges,
+            request => ApplyAllowEditRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         IWorkbookCommand? command = null;
@@ -368,6 +373,29 @@ public partial class MainWindow
 
         MessageBox.Show(successMessage, "Allow Edit Ranges", MessageBoxButton.OK, MessageBoxImage.Information);
     }
+
+    private void ApplyAllowEditRangeSelection(AllowEditRangeDialog? dialog, AllowEditRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End));
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
     private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();
 
     private async Task ShareWorkbookAsync()

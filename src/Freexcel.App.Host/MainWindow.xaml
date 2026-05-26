@@ -336,14 +336,18 @@
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <ComboBox x:Name="FontNameBox" Width="110" Height="22" Margin="1" Background="White"
+                                    <ComboBox x:Name="FontNameBox" Width="110" Height="22" Margin="1" IsEditable="True" IsTextSearchEnabled="True" Background="White"
                                               SelectionChanged="FontNameBox_SelectionChanged"
+                                              KeyDown="FontNameBox_KeyDown"
+                                              LostKeyboardFocus="FontNameBox_LostKeyboardFocus"
                                               AutomationProperties.Name="Font"
                                               local:RibbonTooltip.Title="Font"
                                               local:RibbonTooltip.KeyTip="FF"
                                               local:RibbonTooltip.Description="Change the font of the selected cells."/>
                                     <ComboBox x:Name="FontSizeBox" Width="40" Height="22" Margin="1" IsEditable="True" Background="White"
                                               SelectionChanged="FontSizeBox_SelectionChanged"
+                                              KeyDown="FontSizeBox_KeyDown"
+                                              LostKeyboardFocus="FontSizeBox_LostKeyboardFocus"
                                               AutomationProperties.Name="Font Size"
                                               local:RibbonTooltip.Title="Font Size"
                                               local:RibbonTooltip.KeyTip="FS"
@@ -463,7 +467,7 @@
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="BottomDouble"/></MenuItem.Icon>
                                                 </MenuItem>
                                                 <Separator/>
-                                                <MenuItem Header="Thick Box Border" local:RibbonTooltip.KeyTip="X" Click="BorderThickBoxMenuItem_Click">
+                                                <MenuItem Header="Thick Outside Borders" local:RibbonTooltip.KeyTip="X" Click="BorderThickBoxMenuItem_Click">
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="ThickBox"/></MenuItem.Icon>
                                                 </MenuItem>
                                                 <MenuItem Header="Top and Bottom Border" local:RibbonTooltip.KeyTip="U" Click="BorderTopAndBottomMenuItem_Click">
@@ -474,6 +478,13 @@
                                                 </MenuItem>
                                                 <MenuItem Header="Top and Double Bottom Border" local:RibbonTooltip.KeyTip="J" Click="BorderTopAndDoubleBottomMenuItem_Click">
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="TopAndDoubleBottom"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <Separator/>
+                                                <MenuItem Header="Draw Border Grid" local:RibbonTooltip.KeyTip="G" Click="BorderDrawGridMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="All"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Erase Border" local:RibbonTooltip.KeyTip="E" Click="BorderEraseMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="None"/></MenuItem.Icon>
                                                 </MenuItem>
                                                 <Separator/>
                                                 <MenuItem Header="Line Color" local:RibbonTooltip.KeyTip="C">
@@ -1370,6 +1381,9 @@
                                     <Button Content="Bubble Fmt"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBubbleFormatBtn_Click"
                                             local:RibbonTooltip.Title="Format Bubble Chart" local:RibbonTooltip.KeyTip="UB"
                                             local:RibbonTooltip.Description="Set bubble scale, negative bubble visibility, and size representation."/>
+                                    <Button Content="Pie Format"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieFormatBtn_Click"
+                                            local:RibbonTooltip.Title="Format Pie/Doughnut" local:RibbonTooltip.KeyTip="PI"
+                                            local:RibbonTooltip.Description="Set first slice angle, exploded slice, and doughnut hole size."/>
                                 </StackPanel>
                                 <StackPanel>
                                     <Button Content="Explode"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartExplodedSliceBtn_Click"

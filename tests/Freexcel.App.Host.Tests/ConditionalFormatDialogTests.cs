@@ -50,6 +50,7 @@ public sealed class ConditionalFormatDialogTests
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_formulaBox is { IsVisible: true }");
+        source.Should().Contain("_conditionKindBox.IsVisible");
         source.Should().Contain("_value1Box.IsVisible");
         source.Should().Contain("_topBottomRankBox.IsVisible");
         source.Should().Contain("_dataBarMinTypeBox.IsVisible");
@@ -123,6 +124,73 @@ public sealed class ConditionalFormatDialogTests
             FindLabel(dialog.Content, "_Minimum type:").Should().NotBeNull();
             FindNamedControl<Border>(dialog.Content, "DataBarPreview").Should().NotBeNull();
             GetControl<CheckBox>(dialog, "_dataBarShowValueBox").Content.Should().Be("_Show Bar Only");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void NewRuleDialog_ContainsShellShowsExcelConditionKindSelectors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Greater Than", RangeFor(SheetId.New())));
+
+            var conditionKind = GetControl<ComboBox>(dialog, "_conditionKindBox");
+            var cellOperator = GetControl<ComboBox>(dialog, "_cellValueOperatorBox");
+
+            conditionKind.Items.Cast<string>().Should().Contain([
+                "Cell Value",
+                "Specific Text",
+                "Dates Occurring",
+                "Blanks",
+                "No Blanks",
+                "Errors",
+                "No Errors"
+            ]);
+            conditionKind.SelectedItem.Should().Be("Cell Value");
+            cellOperator.SelectedItem.Should().Be("greater than");
+            FindLabel(dialog.Content, "Format only cells _with:").Should().NotBeNull();
+            FindLabel(dialog.Content, "_Operator:").Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void NewRuleDialog_ContainsShellCanCreateBlankRuleWithoutValue()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Greater Than", RangeFor(SheetId.New())));
+
+            GetControl<ComboBox>(dialog, "_conditionKindBox").SelectedItem = "Blanks";
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.Blanks);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void NewRuleDialog_ContainsShellCanCreateBetweenCellValueRule()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Greater Than", RangeFor(SheetId.New())));
+
+            GetControl<ComboBox>(dialog, "_cellValueOperatorBox").SelectedItem = "between";
+            GetControl<TextBox>(dialog, "_value1Box").Text = "5";
+            GetControl<TextBox>(dialog, "_value2Box").Text = "10";
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.CellValue);
+            dialog.ResultRule.Operator.Should().Be(CfOperator.Between);
+            dialog.ResultRule.Value1.Should().Be("5");
+            dialog.ResultRule.Value2.Should().Be("10");
 
             dialog.Close();
         });
@@ -855,6 +923,15 @@ public sealed class ConditionalFormatDialogTests
 
             dialog.Close();
         });
+    }
+
+    [Fact]
+    public void IconSetRule_ThresholdRows_IncludeIconOverrideDropdown()
+    {
+        var source = ReadConditionalFormatDialogSource();
+        source.Should().Contain("OverrideBox", "each threshold row should have an icon-override selector");
+        source.Should().Contain("CfIconOverride", "icon overrides use the model type");
+        source.Should().Contain("IconOverrides", "result should write back to IconOverrides");
     }
 
     private static ConditionalFormatDialog ShowDialogForTest(ConditionalFormatDialog dialog)

@@ -2,6 +2,9 @@ using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -107,6 +110,48 @@ public sealed class SortDialogTests
         source.Should().Contain("_levelsGrid.SelectedIndex = 0;");
         source.Should().Contain("_levelsGrid.Focus();");
         source.Should().Contain("Keyboard.Focus(_levelsGrid);");
+    }
+
+    [Fact]
+    public void ToolbarButtons_EnableOnlyValidLevelActions()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SortDialog([
+                new SortDialogLevel(0, true),
+                new SortDialogLevel(1, true)
+            ]);
+            dialog.Show();
+            try
+            {
+                var grid = GetControl<DataGrid>(dialog, "_levelsGrid");
+                var delete = GetControl<Button>(dialog, "_deleteLevelButton");
+                var copy = GetControl<Button>(dialog, "_copyLevelButton");
+                var moveUp = GetControl<Button>(dialog, "_moveUpButton");
+                var moveDown = GetControl<Button>(dialog, "_moveDownButton");
+
+                grid.SelectedIndex.Should().Be(0);
+                delete.IsEnabled.Should().BeTrue();
+                copy.IsEnabled.Should().BeTrue();
+                moveUp.IsEnabled.Should().BeFalse();
+                moveDown.IsEnabled.Should().BeTrue();
+
+                grid.SelectedIndex = 1;
+                moveUp.IsEnabled.Should().BeTrue();
+                moveDown.IsEnabled.Should().BeFalse();
+
+                delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                grid.Items.Count.Should().Be(1);
+                delete.IsEnabled.Should().BeFalse();
+                copy.IsEnabled.Should().BeTrue();
+                moveUp.IsEnabled.Should().BeFalse();
+                moveDown.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -380,4 +425,12 @@ public sealed class SortDialogTests
             "SortDialog.Types.cs",
             "SortOptionsDialog.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
+
+    private static T GetControl<T>(SortDialog dialog, string name)
+        where T : class
+    {
+        var field = typeof(SortDialog).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
 }

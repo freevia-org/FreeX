@@ -8,19 +8,24 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Vlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         var table = args[1] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        if (args[2] is ErrorValue e2) return e2;
+        var rangeLookupArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[2], rangeLookupArg],
+            values => VlookupScalar(values[0], table, values[1], values[2]));
+    }
 
-        var lookupValue = args[0];
-        double rawCol = ToNumber(args[2]);
+    private static ScalarValue VlookupScalar(ScalarValue lookupValue, RangeValue table, ScalarValue columnIndexValue, ScalarValue rangeLookupValue)
+    {
+        if (lookupValue is ErrorValue e0) return e0;
+        if (columnIndexValue is ErrorValue e2) return e2;
+        if (rangeLookupValue is ErrorValue e3) return e3;
+        double rawCol = ToNumber(columnIndexValue);
         if (!double.IsFinite(rawCol) || rawCol > int.MaxValue) return ErrorValue.Value;
         int colIndex = (int)rawCol;
-        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        bool rangeLookup = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]); // default TRUE
+        bool rangeLookup = rangeLookupValue is BlankValue || ToBool(rangeLookupValue); // default TRUE
 
         if (colIndex < 1) return ErrorValue.Value;
         if (colIndex > (int)table.ColCount) return ErrorValue.Ref;
@@ -58,19 +63,24 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Hlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         var table = args[1] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        if (args[2] is ErrorValue e2) return e2;
+        var rangeLookupArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[2], rangeLookupArg],
+            values => HlookupScalar(values[0], table, values[1], values[2]));
+    }
 
-        var lookupValue = args[0];
-        double rawRow = ToNumber(args[2]);
+    private static ScalarValue HlookupScalar(ScalarValue lookupValue, RangeValue table, ScalarValue rowIndexValue, ScalarValue rangeLookupValue)
+    {
+        if (lookupValue is ErrorValue e0) return e0;
+        if (rowIndexValue is ErrorValue e2) return e2;
+        if (rangeLookupValue is ErrorValue e3) return e3;
+        double rawRow = ToNumber(rowIndexValue);
         if (!double.IsFinite(rawRow) || rawRow > int.MaxValue) return ErrorValue.Value;
         int rowIndex = (int)rawRow;
-        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        bool rangeLookup = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]);
+        bool rangeLookup = rangeLookupValue is BlankValue || ToBool(rangeLookupValue);
 
         if (rowIndex < 1) return ErrorValue.Value;
         if (rowIndex > (int)table.RowCount) return ErrorValue.Ref;
@@ -110,19 +120,25 @@ public static partial class BuiltInFunctions
         var table = args[0] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
-        if (args[1] is ErrorValue e1) return e1;
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var columnArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapScalarArgs([args[1], columnArg],
+            values => IndexScalar(table, values[0], values[1], args.Count == 2));
+    }
 
-        double rawRowNum = ToNumber(args[1]);
+    private static ScalarValue IndexScalar(RangeValue table, ScalarValue rowValue, ScalarValue columnValue, bool singleIndexArgument)
+    {
+        if (rowValue is ErrorValue e1) return e1;
+        if (columnValue is ErrorValue e2) return e2;
+        double rawRowNum = ToNumber(rowValue);
         if (!double.IsFinite(rawRowNum) || rawRowNum > int.MaxValue) return ErrorValue.Value;
         int rowNum = (int)rawRowNum;
-        double rawColNum = args.Count > 2 ? ToNumber(args[2]) : 1.0;
+        double rawColNum = columnValue is BlankValue ? 1.0 : ToNumber(columnValue);
         if (!double.IsFinite(rawColNum) || rawColNum > int.MaxValue) return ErrorValue.Value;
         int colNum = (int)rawColNum;
 
         // For a 1-D range with a single index argument, the index selects along the
         // only dimension (column for a 1-row range, row for a 1-column range).
-        if (args.Count == 2)
+        if (singleIndexArgument)
         {
             if (table.RowCount == 1) { colNum = rowNum; rowNum = 1; }
             else if (table.ColCount == 1) { /* rowNum already correct, colNum = 1 */ }
@@ -158,16 +174,21 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Match(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         var table = args[1] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (table.RowCount > 1 && table.ColCount > 1) return ErrorValue.NA;
+        var matchTypeArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapScalarArgs([args[0], matchTypeArg],
+            values => MatchScalar(values[0], table, values[1]));
+    }
 
-        var lookupValue = args[0];
-        double rawMatchType = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
+    private static ScalarValue MatchScalar(ScalarValue lookupValue, RangeValue table, ScalarValue matchTypeValue)
+    {
+        if (lookupValue is ErrorValue e0) return e0;
+        if (matchTypeValue is ErrorValue e2) return e2;
+        double rawMatchType = matchTypeValue is not BlankValue ? ToNumber(matchTypeValue) : 1;
         if (!double.IsFinite(rawMatchType)) return ErrorValue.NA;
         int matchType = (int)rawMatchType;
         if (matchType is not (-1 or 0 or 1)) return ErrorValue.NA;
@@ -250,6 +271,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue XmatchScalar(ScalarValue lookupValue, IReadOnlyList<ScalarValue> lookupFlat, int matchMode, int searchMode)
     {
+        if (searchMode is 1 or -1)
+            return XmatchScalarLinear(lookupValue, lookupFlat, matchMode, searchMode);
+
         var indices = Enumerable.Range(0, lookupFlat.Count).ToList();
         if (searchMode is -1 or -2) indices.Reverse();
 
@@ -284,6 +308,47 @@ public static partial class BuiltInFunctions
         }
 
         var nextLargerError = TryFindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: false, out int nextLarger);
+        if (nextLargerError is not null) return nextLargerError;
+        return nextLarger >= 0 ? new NumberValue(nextLarger + 1) : ErrorValue.NA;
+    }
+
+    private static ScalarValue XmatchScalarLinear(ScalarValue lookupValue, IReadOnlyList<ScalarValue> lookupFlat, int matchMode, int searchMode)
+    {
+        int start = searchMode == 1 ? 0 : lookupFlat.Count - 1;
+        int end = searchMode == 1 ? lookupFlat.Count : -1;
+        int step = searchMode == 1 ? 1 : -1;
+
+        if (matchMode == 0)
+        {
+            for (int i = start; i != end; i += step)
+            {
+                if (lookupFlat[i] is ErrorValue err) return err;
+                if (ScalarEquals(lookupFlat[i], lookupValue))
+                    return new NumberValue(i + 1);
+            }
+            return ErrorValue.NA;
+        }
+
+        if (matchMode == 2)
+        {
+            string pattern = ToText(lookupValue);
+            for (int i = start; i != end; i += step)
+            {
+                if (lookupFlat[i] is ErrorValue err) return err;
+                if (lookupFlat[i] is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+                    return new NumberValue(i + 1);
+            }
+            return ErrorValue.NA;
+        }
+
+        if (matchMode == -1)
+        {
+            var error = TryFindApproximateMatchIndexLinear(lookupFlat, lookupValue, searchMode, nextSmaller: true, out int best);
+            if (error is not null) return error;
+            return best >= 0 ? new NumberValue(best + 1) : ErrorValue.NA;
+        }
+
+        var nextLargerError = TryFindApproximateMatchIndexLinear(lookupFlat, lookupValue, searchMode, nextSmaller: false, out int nextLarger);
         if (nextLargerError is not null) return nextLargerError;
         return nextLarger >= 0 ? new NumberValue(nextLarger + 1) : ErrorValue.NA;
     }
@@ -527,6 +592,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue XlookupScalar(ScalarValue lookupValue, IReadOnlyList<ScalarValue> lookupFlat, RangeValue returnArr, bool lookupIsVertical, ScalarValue ifNotFound, int matchMode, int searchMode)
     {
+        if (searchMode is 1 or -1)
+            return XlookupScalarLinear(lookupValue, lookupFlat, returnArr, lookupIsVertical, ifNotFound, matchMode, searchMode);
+
         var indices = Enumerable.Range(0, lookupFlat.Count).ToList();
         if (searchMode is -1 or -2) indices.Reverse();
 
@@ -566,6 +634,54 @@ public static partial class BuiltInFunctions
         }
     }
 
+    private static ScalarValue XlookupScalarLinear(
+        ScalarValue lookupValue,
+        IReadOnlyList<ScalarValue> lookupFlat,
+        RangeValue returnArr,
+        bool lookupIsVertical,
+        ScalarValue ifNotFound,
+        int matchMode,
+        int searchMode)
+    {
+        int start = searchMode == 1 ? 0 : lookupFlat.Count - 1;
+        int end = searchMode == 1 ? lookupFlat.Count : -1;
+        int step = searchMode == 1 ? 1 : -1;
+
+        if (matchMode == 0)
+        {
+            for (int i = start; i != end; i += step)
+            {
+                if (lookupFlat[i] is ErrorValue err) return err;
+                if (ScalarEquals(lookupFlat[i], lookupValue))
+                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
+            }
+            return ifNotFound;
+        }
+
+        if (matchMode == 2)
+        {
+            string pattern = ToText(lookupValue);
+            for (int i = start; i != end; i += step)
+            {
+                if (lookupFlat[i] is ErrorValue err) return err;
+                if (lookupFlat[i] is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
+            }
+            return ifNotFound;
+        }
+
+        if (matchMode == -1)
+        {
+            var error = TryFindApproximateMatchIndexLinear(lookupFlat, lookupValue, searchMode, nextSmaller: true, out int best);
+            if (error is not null) return error;
+            return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
+        }
+
+        var nextLargerError = TryFindApproximateMatchIndexLinear(lookupFlat, lookupValue, searchMode, nextSmaller: false, out int nextLarger);
+        if (nextLargerError is not null) return nextLargerError;
+        return nextLarger >= 0 ? XlookupReturnAt(returnArr, nextLarger, lookupIsVertical) : ifNotFound;
+    }
+
     private static ErrorValue? TryFindApproximateMatchIndex(
         IReadOnlyList<ScalarValue> lookupFlat,
         ScalarValue lookupValue,
@@ -586,6 +702,51 @@ public static partial class BuiltInFunctions
 
         int best = -1;
         foreach (int i in searchIndices)
+        {
+            if (lookupFlat[i] is ErrorValue err) return err;
+            int candidateVsLookup = CompareScalar(lookupFlat[i], lookupValue);
+            if (nextSmaller)
+            {
+                if (candidateVsLookup > 0) continue;
+                if (best < 0 || CompareScalar(lookupFlat[i], lookupFlat[best]) > 0)
+                    best = i;
+            }
+            else
+            {
+                if (candidateVsLookup < 0) continue;
+                if (best < 0 || CompareScalar(lookupFlat[i], lookupFlat[best]) < 0)
+                    best = i;
+            }
+        }
+
+        matchIndex = best;
+        return null;
+    }
+
+    private static ErrorValue? TryFindApproximateMatchIndexLinear(
+        IReadOnlyList<ScalarValue> lookupFlat,
+        ScalarValue lookupValue,
+        int searchMode,
+        bool nextSmaller,
+        out int matchIndex)
+    {
+        matchIndex = -1;
+        int start = searchMode == 1 ? 0 : lookupFlat.Count - 1;
+        int end = searchMode == 1 ? lookupFlat.Count : -1;
+        int step = searchMode == 1 ? 1 : -1;
+
+        for (int i = start; i != end; i += step)
+        {
+            if (lookupFlat[i] is ErrorValue err) return err;
+            if (ScalarEquals(lookupFlat[i], lookupValue))
+            {
+                matchIndex = i;
+                return null;
+            }
+        }
+
+        int best = -1;
+        for (int i = start; i != end; i += step)
         {
             if (lookupFlat[i] is ErrorValue err) return err;
             int candidateVsLookup = CompareScalar(lookupFlat[i], lookupValue);

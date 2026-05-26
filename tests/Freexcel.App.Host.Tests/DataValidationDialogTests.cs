@@ -281,10 +281,25 @@ public sealed class DataValidationDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
 
-        source.Should().Contain("new DataValidationDialog(existingRule)");
+        source.Should().Contain("new DataValidationDialog(existingRule, request => ApplyDataValidationRangeSelection(dlg, request))");
         source.Should().Contain("dlg.ApplyToSameSettings");
         source.Should().Contain("HasSameDataValidationSettings");
         source.Should().Contain("CompositeWorkbookCommand(\"Data Validation\", commands)");
+    }
+
+    [Fact]
+    public void MainWindow_WiresDataValidationRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
+
+        source.Should().Contain("private void ApplyDataValidationRangeSelection(");
+        source.Should().Contain("DataValidationRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("DataValidationService.FormatListSourceRange(");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, formulaText);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
     }
 
     [Fact]
@@ -493,6 +508,29 @@ public sealed class DataValidationDialogTests
                     CollapseDialog: true));
                 formula2Box.IsKeyboardFocusWithin.Should().BeTrue();
                 formula2Box.SelectionLength.Should().Be(formula2Box.Text.Length);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void ApplyRangeSelection_UpdatesRequestedFormulaBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog();
+            dialog.Show();
+            try
+            {
+                dialog.ApplyRangeSelection(DataValidationRangeSelectionTarget.Formula1, "=Sheet1!$B$2:$B$8");
+                dialog.ApplyRangeSelection(DataValidationRangeSelectionTarget.Formula2, "=Sheet1!$C$2:$C$8");
+
+                GetControl<TextBox>(dialog, "Formula1Box").Text.Should().Be("=Sheet1!$B$2:$B$8");
+                GetControl<TextBox>(dialog, "Formula2Box").Text.Should().Be("=Sheet1!$C$2:$C$8");
+                dialog.SelectionSource.Should().Be("=Sheet1!$C$2:$C$8");
             }
             finally
             {

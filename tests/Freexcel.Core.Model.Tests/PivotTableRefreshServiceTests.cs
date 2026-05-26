@@ -311,13 +311,25 @@ public sealed class PivotTableRefreshServiceTests
             .FillColor.Should().Be(new CellColor(182, 202, 214));
     }
 
-    [Fact]
-    public void Refresh_ResolvesSupportedLightPivotStyleFromWorkbookTheme()
+    [Theory]
+    [InlineData("PivotStyleLight16", WorkbookThemeColorSlot.Accent1)]
+    [InlineData("PivotStyleLight17", WorkbookThemeColorSlot.Accent2)]
+    [InlineData("PivotStyleLight18", WorkbookThemeColorSlot.Accent3)]
+    [InlineData("PivotStyleLight19", WorkbookThemeColorSlot.Accent4)]
+    [InlineData("PivotStyleLight20", WorkbookThemeColorSlot.Accent5)]
+    [InlineData("PivotStyleLight21", WorkbookThemeColorSlot.Accent6)]
+    [InlineData("pivotstylelight21", WorkbookThemeColorSlot.Accent6)]
+    public void Refresh_ResolvesSupportedLightPivotStyleFromWorkbookTheme(string styleName, WorkbookThemeColorSlot expectedSlot)
     {
         var workbook = new Workbook("PivotStyleLightThemeRenderTest")
         {
             Theme = WorkbookTheme.Office
                 .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 80, 120))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(120, 40, 20))
+                .WithColor(WorkbookThemeColorSlot.Accent3, new CellColor(25, 130, 60))
+                .WithColor(WorkbookThemeColorSlot.Accent4, new CellColor(40, 90, 180))
+                .WithColor(WorkbookThemeColorSlot.Accent5, new CellColor(150, 45, 140))
+                .WithColor(WorkbookThemeColorSlot.Accent6, new CellColor(80, 145, 35))
         };
         var sheet = workbook.AddSheet("Data");
         SeedSalesData(sheet);
@@ -327,7 +339,7 @@ public sealed class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "G6"),
-            StyleName = "PivotStyleLight16",
+            StyleName = styleName,
             ShowRowStripes = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
@@ -336,11 +348,11 @@ public sealed class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.8));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(expectedSlot, 0.8));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.95));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(expectedSlot, 0.95));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.9));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(expectedSlot, 0.9));
     }
 
     [Fact]
@@ -1292,6 +1304,143 @@ public sealed class PivotTableRefreshServiceTests
         Number(sheet, "F6").Should().Be(0);
         Number(sheet, "G6").Should().Be(25);
         Number(sheet, "H6").Should().Be(25);
+    }
+
+    [Fact]
+    public void Refresh_CompactMatrixWritesBottomSubtotalsPerColumn()
+    {
+        var workbook = new Workbook("PivotCompactMatrixSubtotalTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "J12"),
+            ReportLayout = PivotReportLayout.Compact,
+            ShowSubtotals = true,
+            StyleName = "PivotStyleMedium9"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F5").Should().Be("East Total");
+        Number(sheet, "G5").Should().Be(30);
+        Number(sheet, "H5").Should().Be(40);
+        Number(sheet, "I5").Should().Be(70);
+        Text(sheet, "F8").Should().Be("West Total");
+        Number(sheet, "G8").Should().Be(70);
+        Number(sheet, "H8").Should().Be(80);
+        Number(sheet, "I8").Should().Be(150);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().Be(new CellColor(221, 235, 247));
+    }
+
+    [Fact]
+    public void Refresh_CompactMatrixWritesTopSubtotalsPerColumn()
+    {
+        var workbook = new Workbook("PivotCompactMatrixTopSubtotalTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "J12"),
+            ReportLayout = PivotReportLayout.Compact,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            StyleName = "PivotStyleMedium9"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F3").Should().Be("East Total");
+        Number(sheet, "G3").Should().Be(30);
+        Number(sheet, "H3").Should().Be(40);
+        Number(sheet, "I3").Should().Be(70);
+        Text(sheet, "F4").Should().Be("East Q1");
+        Text(sheet, "F6").Should().Be("West Total");
+        Number(sheet, "G6").Should().Be(70);
+        Number(sheet, "H6").Should().Be(80);
+        Number(sheet, "I6").Should().Be(150);
+        Text(sheet, "F7").Should().Be("West Q1");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).FillColor.Should().Be(new CellColor(221, 235, 247));
+    }
+
+    [Fact]
+    public void Refresh_CompactMatrixBlankLineAfterItemsKeepsSpacerAfterTopSubtotalGroup()
+    {
+        var workbook = new Workbook("PivotCompactMatrixTopSubtotalBlankLineTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "J14"),
+            ReportLayout = PivotReportLayout.Compact,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            BlankLineAfterItems = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F3").Should().Be("East Total");
+        Text(sheet, "F4").Should().Be("East Q1");
+        Text(sheet, "F5").Should().Be("East Q2");
+        sheet.GetCell(Addr(sheet, "F6")).Should().BeNull();
+        Text(sheet, "F7").Should().Be("West Total");
+        Text(sheet, "F8").Should().Be("West Q1");
+        Text(sheet, "F9").Should().Be("West Q2");
+        sheet.GetCell(Addr(sheet, "F10")).Should().BeNull();
+        Text(sheet, "F11").Should().Be("Grand Total");
+    }
+
+    [Fact]
+    public void Refresh_CompactMatrixBlankLineAfterItemsKeepsSpacerAfterBottomSubtotal()
+    {
+        var workbook = new Workbook("PivotCompactMatrixSubtotalBlankLineTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "J14"),
+            ReportLayout = PivotReportLayout.Compact,
+            ShowSubtotals = true,
+            BlankLineAfterItems = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F5").Should().Be("East Total");
+        sheet.GetCell(Addr(sheet, "F6")).Should().BeNull();
+        Text(sheet, "F7").Should().Be("West Q1");
+        Text(sheet, "F9").Should().Be("West Total");
+        sheet.GetCell(Addr(sheet, "F10")).Should().BeNull();
+        Text(sheet, "F11").Should().Be("Grand Total");
     }
 
     [Fact]

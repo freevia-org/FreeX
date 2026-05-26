@@ -28,6 +28,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private readonly Sheet _sheet;
     private readonly GridRange? _selection;
     private readonly Action<ConditionalFormatAppliesToRangeSelectionRequest>? _requestAppliesToRangeSelection;
+    private readonly Action<IReadOnlyList<ConditionalFormat>>? _applyRules;
 
     // Working copy — bound to the ListView
     private readonly ObservableCollection<ConditionalFormat> _rules = [];
@@ -39,20 +40,25 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private readonly Button _deleteBtn;
     private readonly Button _moveUpBtn;
     private readonly Button _moveDownBtn;
+    private readonly Button _applyBtn;
 
     private const string ScopeSheet     = "This Worksheet";
     private const string ScopeSelection = "Current Selection";
+    private const string ScopeTable     = "This Table";
+    private const string DefaultNewRuleType = "Data Bar";
 
     public ConditionalFormatAppliesToRangeSelectionRequest? AppliesToRangeSelectionRequest { get; private set; }
 
     public ManageConditionalFormatsDialog(
         Sheet sheet,
         GridRange? selection,
-        Action<ConditionalFormatAppliesToRangeSelectionRequest>? requestAppliesToRangeSelection = null)
+        Action<ConditionalFormatAppliesToRangeSelectionRequest>? requestAppliesToRangeSelection = null,
+        Action<IReadOnlyList<ConditionalFormat>>? applyRules = null)
     {
         _sheet     = sheet;
         _selection = selection;
         _requestAppliesToRangeSelection = requestAppliesToRangeSelection;
+        _applyRules = applyRules;
 
         Title  = "Conditional Formatting Rules Manager";
         Width  = 560;
@@ -81,6 +87,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         });
 
         _scopeBox.Items.Add(ScopeSheet);
+        if (FindSelectionTableRange() is not null)
+            _scopeBox.Items.Add(ScopeTable);
         if (selection.HasValue) _scopeBox.Items.Add(ScopeSelection);
         _scopeBox.SelectedItem = selection.HasValue ? ScopeSelection : ScopeSheet;
         _scopeBox.SelectionChanged += ScopeBox_SelectionChanged;
@@ -99,12 +107,12 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
         var okBtn     = new Button { Content = "_OK",     Width = 72, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
         var cancelBtn = new Button { Content = "_Cancel", Width = 72, Margin = new Thickness(0, 0, 6, 0), IsCancel = true };
-        var applyBtn  = new Button { Content = "_Apply",  Width = 72 };
+        _applyBtn = new Button { Content = "_Apply",  Width = 72 };
         okBtn.Click    += OkBtn_Click;
-        applyBtn.Click += ApplyBtn_Click;
+        _applyBtn.Click += ApplyBtn_Click;
         bottomRow.Children.Add(okBtn);
         bottomRow.Children.Add(cancelBtn);
-        bottomRow.Children.Add(applyBtn);
+        bottomRow.Children.Add(_applyBtn);
         root.Children.Add(bottomRow);
 
         // ── Middle toolbar: New / Edit / Duplicate / Delete / reorder ──────────
@@ -146,6 +154,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             SelectionMode = SelectionMode.Single
         };
         _listView.SelectionChanged += ListView_SelectionChanged;
+        _listView.MouseDoubleClick += EditRule_Click;
+        _listView.KeyDown += ListView_KeyDown;
 
         _listView.View = CreateRulesGridView();
         root.Children.Add(_listView);
@@ -179,12 +189,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private void PopulateRules()
     {
         _rules.Clear();
-        bool filterToSelection = _selection.HasValue
-            && _scopeBox.SelectedItem is string s
-            && s == ScopeSelection;
+        var scopeRange = CurrentScopeRange();
 
-        var source = filterToSelection
-            ? _sheet.ConditionalFormats.Where(r => RangesOverlap(r.AppliesTo, _selection!.Value))
+        var source = scopeRange is { } range
+            ? _sheet.ConditionalFormats.Where(r => RangesOverlap(r.AppliesTo, range))
             : (IEnumerable<ConditionalFormat>)_sheet.ConditionalFormats;
 
         var priority = 1;
@@ -206,7 +214,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
                 new CellAddress(_sheet.Id, 1, 1),
                 new CellAddress(_sheet.Id, 1, 1));
 
-        var dlg = new NewConditionalFormatRuleDialog("Greater Than", defaultRange);
+        var dlg = new NewConditionalFormatRuleDialog(DefaultNewRuleType, defaultRange);
         dlg.Owner = this;
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } newRule)
         {
@@ -292,6 +300,20 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         _moveDownBtn.IsEnabled = hasSelection && idx < _rules.Count - 1;
     }
 
+    private void ListView_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            EditRule_Click(sender, e);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete)
+        {
+            DeleteRule_Click(sender, e);
+            e.Handled = true;
+        }
+    }
+
     // ── OK / Apply ─────────────────────────────────────────────────────────────
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
@@ -303,6 +325,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private void ApplyBtn_Click(object sender, RoutedEventArgs e)
     {
         CommitResult();
+        if (ResultRules is not null)
+            _applyRules?.Invoke(ResultRules);
     }
 
     private void CommitResult()
@@ -310,8 +334,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         ReassignPriorities();
         ResultRules = BuildResultRules(
             _sheet.ConditionalFormats,
-            _selection,
-            IsFilteringToSelection(),
+            CurrentScopeRange(),
+            IsFilteringToRange(),
             _rules);
     }
 
@@ -328,10 +352,27 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         }
     }
 
-    private bool IsFilteringToSelection() =>
-        _selection.HasValue
-        && _scopeBox.SelectedItem is string selectedScope
-        && selectedScope == ScopeSelection;
+    private bool IsFilteringToRange() => CurrentScopeRange() is not null;
+
+    private GridRange? CurrentScopeRange() =>
+        _scopeBox.SelectedItem is string selectedScope
+            ? selectedScope switch
+            {
+                ScopeSelection => _selection,
+                ScopeTable => FindSelectionTableRange(),
+                _ => null
+            }
+            : null;
+
+    private GridRange? FindSelectionTableRange()
+    {
+        if (_selection is not { } selection)
+            return null;
+
+        return _sheet.StructuredTables
+            .FirstOrDefault(table => RangesOverlap(table.Range, selection))
+            ?.Range;
+    }
 
     private void RangePickerButton_Click(object sender, RoutedEventArgs e)
     {
@@ -360,5 +401,21 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             current = System.Windows.Media.VisualTreeHelper.GetParent(current)
                 ?? LogicalTreeHelper.GetParent(current);
         }
+    }
+
+    public void ApplyAppliesToRangeSelection(Guid ruleId, GridRange range)
+    {
+        var index = _rules
+            .Select((rule, ruleIndex) => new { rule, ruleIndex })
+            .FirstOrDefault(item => item.rule.Id == ruleId)
+            ?.ruleIndex;
+        if (index is null)
+            return;
+
+        var updated = CloneWithPriority(_rules[index.Value], index.Value + 1);
+        updated.AppliesTo = range;
+        _rules[index.Value] = updated;
+        _listView.SelectedItem = updated;
+        FocusRulesList();
     }
 }

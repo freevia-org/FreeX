@@ -341,6 +341,52 @@ public sealed class NamedRangeDialogXamlTests
         handlerSource.Should().Contain("Keyboard.Focus(_refersToBox);");
     }
 
+    [Fact]
+    public void NamedRangeDialogsApplyRangeSelection_UpdateRequestedRefersToField()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            var manager = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
+            var definition = new NameDefinitionDialog(
+                new NameDefinitionDialogResult("Sales", "Workbook", "", "Sheet1!A1:C3"),
+                ["Workbook"]);
+            try
+            {
+                manager.ApplyRangeSelection(NamedRangeSelectionTarget.SelectedNameRefersTo, "Sheet2!B2:D8");
+                definition.ApplyRangeSelection("Sheet3!C4:E9");
+
+                GetControl<TextBox>(manager, "RefersToBox").Text.Should().Be("Sheet2!B2:D8");
+                GetControl<TextBox>(manager, "RefersToBox").SelectionLength.Should().Be("Sheet2!B2:D8".Length);
+                GetPrivateField<TextBox>(definition, "_refersToBox").Text.Should().Be("Sheet3!C4:E9");
+                GetPrivateField<TextBox>(definition, "_refersToBox").SelectionLength.Should().Be("Sheet3!C4:E9".Length);
+            }
+            finally
+            {
+                manager.Close();
+                definition.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresNamedRangePickersToCurrentSelection()
+    {
+        var formulaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormulaCommands.cs"));
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var source = formulaSource + Environment.NewLine + dataSource;
+
+        formulaSource.Should().Contain("request => ApplyNamedRangeSelection(dialog, request)");
+        dataSource.Should().Contain("request => ApplyNamedRangeSelection(dlg, request)");
+        source.Should().Contain("private void ApplyNamedRangeSelection(");
+        source.Should().Contain("NamedRangeSelectionRequest request");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
     private static T GetControl<T>(NamedRangeDialog dialog, string name)
         where T : class
     {

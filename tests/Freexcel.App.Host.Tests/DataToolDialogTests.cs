@@ -196,6 +196,45 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void MainWindow_WiresTextToColumnsDestinationPickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new TextToColumnsDialog(");
+        source.Should().Contain("request => ApplyTextToColumnsRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyTextToColumnsRangeSelection(");
+        source.Should().Contain("TextToColumnsRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyRangeSelection(selectedRange.Start);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
+    public void TextToColumnsApplyRangeSelection_UpdatesDestinationBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var dialog = new TextToColumnsDialog(["East,42"], new CellAddress(sheetId, 2, 6));
+            dialog.Show();
+            try
+            {
+                dialog.ApplyRangeSelection(new CellAddress(sheetId, 4, 8));
+
+                FindVisualChildren<TextBox>(dialog)
+                    .Single(box => box.Text == "H4")
+                    .Text.Should().Be("H4");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
     {
         var dialogSource = ReadTextToColumnsDialogSources();
@@ -880,6 +919,50 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void MainWindow_WiresAdvancedFilterReferencePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new AdvancedFilterDialog(");
+        source.Should().Contain("ResolveSheetIdByName,");
+        source.Should().Contain("request => ApplyAdvancedFilterRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyAdvancedFilterRangeSelection(");
+        source.Should().Contain("AdvancedFilterRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
+    public void AdvancedFilterApplyRangeSelection_UpdatesRequestedReferenceBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AdvancedFilterDialog(SheetId.New(), "A1:C12");
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                dialog.ApplyRangeSelection(AdvancedFilterRangeSelectionTarget.ListRange, "Sheet2!A1:D20");
+                dialog.ApplyRangeSelection(AdvancedFilterRangeSelectionTarget.CriteriaRange, "E1:F4");
+                dialog.ApplyRangeSelection(AdvancedFilterRangeSelectionTarget.CopyTo, "H1:J1");
+
+                textBoxes[0].Text.Should().Be("Sheet2!A1:D20");
+                textBoxes[1].Text.Should().Be("E1:F4");
+                textBoxes[2].Text.Should().Be("H1:J1");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
@@ -1148,6 +1231,45 @@ public sealed class DataToolDialogTests
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void MainWindow_WiresConsolidateReferencePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new ConsolidateDialog(");
+        source.Should().Contain("request => ApplyConsolidateRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyConsolidateRangeSelection(");
+        source.Should().Contain("ConsolidateRangeSelectionRequest request");
+        source.Should().Contain("request.Target == ConsolidateRangeSelectionTarget.DestinationCell");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("FormatCellReference(selectedRange.Start)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+    }
+
+    [Fact]
+    public void ConsolidateApplyRangeSelection_UpdatesRequestedReferenceBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConsolidateDialog(SheetId.New(), "A1:B3", "G10");
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                dialog.ApplyRangeSelection(ConsolidateRangeSelectionTarget.Reference, "Sheet2!A1:D20");
+                dialog.ApplyRangeSelection(ConsolidateRangeSelectionTarget.DestinationCell, "K5");
+
+                textBoxes[0].Text.Should().Be("Sheet2!A1:D20");
+                textBoxes[1].Text.Should().Be("K5");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Theory]
@@ -1473,6 +1595,52 @@ public sealed class DataToolDialogTests
                 CollapseDialog: true));
     }
 
+    [Fact]
+    public void MainWindow_WiresDataTableReferencePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new DataTableDialog(");
+        source.Should().Contain("request => ApplyDataTableRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyDataTableRangeSelection(");
+        source.Should().Contain("DataTableRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, selectedRange.Start);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
+    public void DataTableApplyRangeSelection_UpdatesRequestedInputBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var range = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 8, 5));
+            var dialog = new DataTableDialog(sheetId, range);
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                dialog.ApplyRangeSelection(
+                    DataTableRangeSelectionTarget.RowInputCell,
+                    new CellAddress(sheetId, 3, 1));
+                dialog.ApplyRangeSelection(
+                    DataTableRangeSelectionTarget.ColumnInputCell,
+                    new CellAddress(sheetId, 1, 6));
+
+                textBoxes[0].Text.Should().Be("A3");
+                textBoxes[1].Text.Should().Be("F1");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     [Theory]
     [InlineData("Select row input cell", DataTableRangeSelectionTarget.RowInputCell, "A1")]
     [InlineData("Select column input cell", DataTableRangeSelectionTarget.ColumnInputCell, "C1")]
@@ -1589,6 +1757,42 @@ public sealed class DataToolDialogTests
 
                 requests.Should().Equal(new CreateTableRangeSelectionRequest("A1:C12", CollapseDialog: true));
                 dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresCreateTableRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("new CreateTableDialog(");
+        source.Should().Contain("request => ApplyCreateTableRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyCreateTableRangeSelection(");
+        source.Should().Contain("CreateTableRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End));");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
+    public void CreateTableApplyRangeSelection_UpdatesRangeBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new CreateTableDialog(SheetId.New(), "A1:C12", "TableStyleMedium2");
+            dialog.Show();
+            try
+            {
+                dialog.ApplyRangeSelection("B2:D8");
+
+                FindVisualChildren<TextBox>(dialog).Single().Text.Should().Be("B2:D8");
             }
             finally
             {

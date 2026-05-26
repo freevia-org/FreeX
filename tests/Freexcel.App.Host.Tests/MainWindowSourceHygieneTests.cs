@@ -38,6 +38,22 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void MainWindowFileDrop_WiresWindowDropToWorkbookPlannerAndOpenFile()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var xaml = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml"));
+        var source = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.FileDrop.cs"));
+        var planner = File.ReadAllText(Path.Combine(appHostDirectory, "WorkbookDropPlanner.cs"));
+
+        xaml.Should().Contain("AllowDrop=\"True\"");
+        xaml.Should().Contain("DragOver=\"MainWindow_DragOver\"");
+        xaml.Should().Contain("Drop=\"MainWindow_Drop\"");
+        source.Should().Contain("WorkbookDropPlanner.SelectOpenableFile(paths, _fileAdapters)");
+        source.Should().Contain("await OpenFileAsync(path)");
+        planner.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, extension, out _)");
+    }
+
+    [Fact]
     public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
     {
         var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
@@ -1369,6 +1385,55 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void RibbonChartButtons_RouteThroughRenderableChartInsertionCommandPath()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = ReadChartCommandSource();
+
+        xaml.Should().Contain("Click=\"InsertChartPickerBtn_Click\"");
+        xaml.Should().Contain("Click=\"ChartColumnMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"ChartLineMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"ChartPieMenuItem_Click\"");
+        source.Should().Contain("private void InsertChartOfType(ChartType type)");
+        source.Should().Contain("ChartTypeSupport.IsRenderable(type)");
+        source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
+        source.Should().Contain("UpdateViewport();");
+    }
+
+    [Fact]
+    public void HyperlinkDialogAndCtrlClick_RouteThroughSetAndNavigatePlans()
+    {
+        var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "KeyboardShortcutMatcher.CommandRules.cs"));
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        keyboardSource.Should().Contain("KeyboardCommandShortcut.InsertHyperlink");
+        commandSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertHyperlink, InsertLinkBtn_Click)");
+        insertSource.Should().Contain("new HyperlinkDialog(prefill.Target, prefill.DisplayText) { Owner = this }");
+        insertSource.Should().Contain("new SetHyperlinkCommand(");
+        insertSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan");
+        insertSource.Should().Contain("TryNavigateToWorkbookReference(plan.Target)");
+        selectionSource.Should().Contain("(Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryOpenHyperlink(newAddr)");
+    }
+
+    [Fact]
+    public void FontDropdownSelection_SyncsThroughStyleDiffToolbarStateAndGridTypeface()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        var uiStateSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var renderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.UI", "GridView.Rendering.CellStyles.cs"));
+
+        xaml.Should().Contain("x:Name=\"FontNameBox\"");
+        xaml.Should().Contain("SelectionChanged=\"FontNameBox_SelectionChanged\"");
+        formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
+        uiStateSource.Should().Contain("FontNameBox.SelectedItem = state.FontName");
+        renderSource.Should().Contain("var fontName = string.IsNullOrWhiteSpace(style?.FontName)");
+        renderSource.Should().Contain("new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true)");
+    }
+
+    [Fact]
     public void InsertPivotTable_NewWorksheetDestination_UsesUndoableCommand()
     {
         var source = ReadPivotCommandSource();
@@ -1866,10 +1931,12 @@ public sealed class MainWindowSourceHygieneTests
         {
             "Bottom Double Border",
             "Inside Borders",
-            "Thick Box Border",
+            "Thick Outside Borders",
             "Top and Bottom Border",
             "Top and Thick Bottom Border",
             "Top and Double Bottom Border",
+            "Draw Border Grid",
+            "Erase Border",
             "Line Color",
             "Line Style",
             "Black",
@@ -1888,6 +1955,8 @@ public sealed class MainWindowSourceHygieneTests
             "BorderTopAndBottomMenuItem_Click",
             "BorderTopAndThickBottomMenuItem_Click",
             "BorderTopAndDoubleBottomMenuItem_Click",
+            "BorderDrawGridMenuItem_Click",
+            "BorderEraseMenuItem_Click",
             "BorderLineColorBlackMenuItem_Click",
             "BorderLineColorAccent1MenuItem_Click",
             "BorderLineStyleDashedMenuItem_Click",
@@ -1904,6 +1973,10 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
         source.Should().Contain("_borderPickerColor");
         source.Should().Contain("_borderPickerStyle");
+        source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.DrawGrid)");
+        source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Erase)");
+        source.Should().Contain("ApplyBorderDrawMode");
+        source.Should().Contain("BorderDrawPlanner.CreateDiff");
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
         source.Should().Contain("BorderShortcutService.GetInsideBorderDiff");
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
@@ -2042,6 +2115,12 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         source.Should().Contain("\"Row Height\",");
         source.Should().Contain("\"Column Width\",");
+        source.Should().Contain("var dialog = new RowHeightDialog(GetSelectedRowHeightDialogValue(range)) { Owner = this };");
+        source.Should().Contain("var dialog = new ColumnWidthDialog(GetSelectedColumnWidthDialogValue(range)) { Owner = this };");
+        source.Should().Contain("private double GetSelectedRowHeightDialogValue(GridRange range)");
+        source.Should().Contain("private double GetSelectedColumnWidthDialogValue(GridRange range)");
+        source.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
+        source.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
         source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
         source.Should().Contain("var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);");
         source.Should().Contain("var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);");
@@ -2058,6 +2137,34 @@ public sealed class MainWindowSourceHygieneTests
 
         source.Should().Contain("ConditionalFormatDialogFactory.Create(ruleType, range)");
         source.Should().NotContain("new ConditionalFormatDialog(ruleType, range)");
+    }
+
+    [Fact]
+    public void ConditionalFormattingRulesManager_ApplyUsesSameWorkbookCommandAsOk()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("new ManageConditionalFormatsDialog(");
+        source.Should().Contain("applyRules: ApplyManagedConditionalFormatRules)");
+        source.Should().Contain("private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)");
+        source.Should().Contain("new ReplaceAllConditionalFormatsCommand(sheetId, remapped)");
+        source.Should().Contain("GroupedSheetRangePlanner.CloneConditionalFormatForSheet(r, sheetId)");
+        CountOccurrences(source, "new ReplaceAllConditionalFormatsCommand(sheetId, remapped)").Should().Be(1);
+    }
+
+    [Fact]
+    public void ConditionalFormattingRulesManager_WiresAppliesToRangePickerCallback()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("requestAppliesToRangeSelection: request => ApplyConditionalFormatAppliesToRangeSelection(dlg, request)");
+        source.Should().Contain("private void ApplyConditionalFormatAppliesToRangeSelection(");
+        source.Should().Contain("ConditionalFormatAppliesToRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyAppliesToRangeSelection(request.RuleId, selectedRange);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
     }
 
     [Fact]

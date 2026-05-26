@@ -124,9 +124,18 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=DATEVALUE(\"1900-02-29\")", 60)]
     [InlineData("=DATEVALUE(\"3/1/1900\")", 61)]
     [InlineData("=DATEVALUE(\"2024-01-15\")", 45306)]
+    [InlineData("=DATEVALUE(\"1/2/2024 6:00 AM\")", 45293)]
     public void DateValue_ReturnsExcelSerialNumbers(string formula, double expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=DATEVALUE(\"12:00 PM\")")]
+    [InlineData("=DATEVALUE(\"23:59:59\")")]
+    public void DateValue_TimeOnlyText_ReturnsValueError(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
     }
 
     [Theory]
@@ -135,11 +144,20 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=TIMEVALUE(\"23:59:59\")", 0.999988425925926)]
     [InlineData("=TIMEVALUE(\"12:00 AM\")", 0)]
     [InlineData("=TIMEVALUE(\"12:00 PM\")", 0.5)]
+    [InlineData("=TIMEVALUE(\"1/2/2024 6:00 AM\")", 0.25)]
     public void TimeValue_ReturnsExcelDayFraction(string formula, double expected)
     {
         var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
 
         result.Value.Should().BeApproximately(expected, 1e-12);
+    }
+
+    [Theory]
+    [InlineData("=TIMEVALUE(\"1/2/2024\")")]
+    [InlineData("=TIMEVALUE(\"2024-01-02\")")]
+    public void TimeValue_DateOnlyText_ReturnsValueError(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
     }
 
     [Theory]
@@ -287,6 +305,10 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=DAYS(DATE(1900,3,1),DATE(1900,2,28))", 2)]
     [InlineData("=DAYS360(DATE(1900,1,1),DATE(1900,3,1))", 60)]
     [InlineData("=DAYS360(DATE(1900,2,28),DATE(1900,3,1))", 3)]
+    [InlineData("=DAYS360(DATE(2023,2,28),DATE(2023,3,31))", 30)]
+    [InlineData("=DAYS360(DATE(2024,2,29),DATE(2024,3,31))", 30)]
+    [InlineData("=DAYS360(DATE(2024,2,28),DATE(2024,3,31))", 33)]
+    [InlineData("=DAYS360(DATE(2024,2,29),DATE(2024,3,31),TRUE)", 31)]
     public void DayCountFunctions_UseExcelSerialBoundaries(string formula, double expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
@@ -296,6 +318,16 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=YEARFRAC(DATE(1900,1,1),DATE(1900,3,1),3)", 0.164383561643836)]
     [InlineData("=YEARFRAC(DATE(1900,2,28),DATE(1900,3,1),3)", 0.00547945205479452)]
     public void YearfracActual365_UsesExcelSerialBoundaries(string formula, double expected)
+    {
+        var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
+
+        result.Value.Should().BeApproximately(expected, 1e-12);
+    }
+
+    [Theory]
+    [InlineData("=YEARFRAC(DATE(2023,2,28),DATE(2023,3,31),0)", 30.0 / 360.0)]
+    [InlineData("=YEARFRAC(DATE(2024,2,29),DATE(2024,3,31),0)", 30.0 / 360.0)]
+    public void YearfracBasis0_UsesExcelUsDays360FebruaryRules(string formula, double expected)
     {
         var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
 
