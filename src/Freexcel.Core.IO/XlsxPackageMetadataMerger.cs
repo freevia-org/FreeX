@@ -5,7 +5,10 @@ namespace Freexcel.Core.IO;
 
 internal static class XlsxPackageMetadataMerger
 {
-    public static IReadOnlySet<string> CopyUnknownPackageParts(ZipArchive sourceArchive, ZipArchive targetArchive)
+    public static IReadOnlySet<string> CopyUnknownPackageParts(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        IReadOnlySet<string>? excludedSourceParts = null)
     {
         var generatedEntriesBeforeMerge = targetArchive.Entries
             .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
@@ -13,6 +16,8 @@ internal static class XlsxPackageMetadataMerger
 
         foreach (var sourceEntry in sourceArchive.Entries)
         {
+            if (IsExcludedSourcePart(sourceEntry.FullName, excludedSourceParts))
+                continue;
             if (IsPackageMetadataEntry(sourceEntry.FullName))
                 continue;
             if (targetArchive.GetEntry(sourceEntry.FullName) is not null)
@@ -33,7 +38,10 @@ internal static class XlsxPackageMetadataMerger
         sourceStream.CopyTo(targetStream);
     }
 
-    public static void MergeContentTypes(ZipArchive sourceArchive, ZipArchive targetArchive)
+    public static void MergeContentTypes(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        IReadOnlySet<string>? excludedSourceParts = null)
     {
         var sourceEntry = sourceArchive.GetEntry("[Content_Types].xml");
         var targetEntry = targetArchive.GetEntry("[Content_Types].xml");
@@ -68,6 +76,8 @@ internal static class XlsxPackageMetadataMerger
         foreach (var sourceOverride in sourceRoot.Elements(contentTypeNs + "Override"))
         {
             var partName = sourceOverride.Attribute("PartName")?.Value;
+            if (IsExcludedSourcePart(partName, excludedSourceParts))
+                continue;
             if (!string.IsNullOrWhiteSpace(partName) && existingOverrides.Add(partName))
                 targetRoot.Add(new XElement(sourceOverride));
         }
@@ -78,16 +88,23 @@ internal static class XlsxPackageMetadataMerger
     public static void MergeRelationshipParts(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
-        IReadOnlySet<string> generatedEntriesBeforeMerge)
+        IReadOnlySet<string> generatedEntriesBeforeMerge,
+        IReadOnlySet<string>? excludedSourceParts = null)
     {
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         foreach (var sourceEntry in sourceArchive.Entries.Where(entry =>
                      entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
         {
+            if (IsExcludedSourcePart(sourceEntry.FullName, excludedSourceParts))
+                continue;
+
             var targetEntry = targetArchive.GetEntry(sourceEntry.FullName);
             if (targetEntry is null)
             {
+                if (RelationshipsPartTargetsOnlyExcludedParts(sourceEntry, excludedSourceParts))
+                    continue;
+
                 CopyEntry(sourceEntry, targetArchive);
                 continue;
             }
@@ -111,7 +128,12 @@ internal static class XlsxPackageMetadataMerger
 
             foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
             {
-                if (!ShouldPreserveRelationship(sourceEntry.FullName, sourceRelationship, targetArchive, generatedEntriesBeforeMerge))
+                if (!ShouldPreserveRelationship(
+                        sourceEntry.FullName,
+                        sourceRelationship,
+                        targetArchive,
+                        generatedEntriesBeforeMerge,
+                        excludedSourceParts))
                     continue;
 
                 if (!existingRelationships.Add(RelationshipSignature(sourceRelationship)))
@@ -139,7 +161,8 @@ internal static class XlsxPackageMetadataMerger
         string relationshipPartPath,
         XElement relationship,
         ZipArchive targetArchive,
-        IReadOnlySet<string> generatedEntriesBeforeMerge)
+        IReadOnlySet<string> generatedEntriesBeforeMerge,
+        IReadOnlySet<string>? excludedSourceParts)
     {
         var targetMode = relationship.Attribute("TargetMode")?.Value;
         if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
@@ -159,9 +182,42 @@ internal static class XlsxPackageMetadataMerger
             return false;
 
         var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
+        if (IsExcludedSourcePart(targetPart, excludedSourceParts))
+            return false;
+
         return !string.IsNullOrWhiteSpace(targetPart) &&
                !generatedEntriesBeforeMerge.Contains(targetPart) &&
                targetArchive.GetEntry(targetPart) is not null;
+    }
+
+    private static bool RelationshipsPartTargetsOnlyExcludedParts(
+        ZipArchiveEntry relationshipEntry,
+        IReadOnlySet<string>? excludedSourceParts)
+    {
+        if (excludedSourceParts is null || excludedSourceParts.Count == 0)
+            return false;
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
+        var sourcePart = RelationshipPartToSourcePart(relationshipEntry.FullName);
+        var relationships = relationshipsXml.Root?.Elements(relationshipNs + "Relationship").ToList() ?? [];
+        return relationships.Count > 0 && relationships.All(relationship =>
+        {
+            if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var target = relationship.Attribute("Target")?.Value;
+            return !string.IsNullOrWhiteSpace(target) &&
+                   IsExcludedSourcePart(XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target), excludedSourceParts);
+        });
+    }
+
+    private static bool IsExcludedSourcePart(string? path, IReadOnlySet<string>? excludedSourceParts)
+    {
+        if (excludedSourceParts is null || excludedSourceParts.Count == 0 || string.IsNullOrWhiteSpace(path))
+            return false;
+
+        return excludedSourceParts.Contains(XlsxPackagePath.NormalizeZipPath(path.Replace('\\', '/').TrimStart('/')));
     }
 
     private static string RelationshipSignature(XElement relationship) =>
