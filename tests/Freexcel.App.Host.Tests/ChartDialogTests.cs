@@ -610,7 +610,12 @@ public sealed class ChartDialogTests
             "AddCombo(stack, \"_Dash style\"",
             "AddCombo(stack, \"_Marker\"",
             "AddCombo(stack, \"_Type\"",
-            "AddCombo(stack, \"_Direction\""
+            "AddCombo(stack, \"_Direction\"",
+            "AddNumericText(stack, \"_Gap width %\"",
+            "AddNumericText(stack, \"Series _overlap %\"",
+            "AddNumericText(stack, \"_First slice angle",
+            "AddNumericText(stack, \"_Bubble scale %\"",
+            "AddCombo(stack, \"Size _represents\""
         })
         {
             source.Should().Contain(helperCall);
@@ -643,7 +648,8 @@ public sealed class ChartDialogTests
                 "ChartDataLabelsDialog.cs",
                 "ChartErrorBarsDialog.cs",
                 "ChartTrendlineOptionsDialog.cs",
-                "ChartSeriesFormatDialog.cs"
+                "ChartSeriesFormatDialog.cs",
+                "ChartTypeFormatDialogs.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
 
