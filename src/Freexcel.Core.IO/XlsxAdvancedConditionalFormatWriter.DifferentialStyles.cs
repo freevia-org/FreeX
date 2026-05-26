@@ -111,8 +111,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         foreach (var (name, value) in style.NativeDifferentialAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && dxf.Attribute(name) is null)
-                dxf.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(dxf, name, value);
         }
 
         foreach (var nativeChildXml in (style.NativeDifferentialChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))

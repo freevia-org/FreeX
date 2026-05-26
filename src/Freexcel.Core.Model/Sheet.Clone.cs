@@ -158,17 +158,7 @@ public sealed partial class Sheet
         };
 
         CopyLayoutCollectionsTo(copy);
-
-        // Cells (deep copy)
-        foreach (var (address, cell) in EnumerateCells())
-            copy.SetCell(RemapAddress(address, newId), cell.Clone());
-
-        // Style-only overrides for empty cells
-        foreach (var ((row, col), styleId) in GetStyleOnlyEntries())
-            copy.SetStyleOnly(row, col, styleId);
-
-        // Merged regions
-        copy.ReplaceMergedRegions(MergedRegions.Select(r => RemapRange(r, newId)));
+        CopyCellContentTo(copy, newId);
 
         // Comments and hyperlinks
         foreach (var (address, comment) in Comments)
@@ -189,79 +179,8 @@ public sealed partial class Sheet
         foreach (var property in CustomProperties)
             copy.CustomProperties.Add(property);
 
-        // Pivot tables
         foreach (var pt in PivotTables)
-        {
-            var clonedPt = new PivotTableModel
-            {
-                Name        = pt.Name,
-                CacheId     = pt.CacheId,
-                SourceRange = RemapRange(pt.SourceRange, newId),
-                TargetRange = RemapRange(pt.TargetRange, newId),
-                PackagePart = pt.PackagePart,
-                CreatedVersion = pt.CreatedVersion,
-                UpdatedVersion = pt.UpdatedVersion,
-                MinRefreshableVersion = pt.MinRefreshableVersion,
-                DataOnRows = pt.DataOnRows,
-                FirstHeaderRow = pt.FirstHeaderRow,
-                FirstDataRow = pt.FirstDataRow,
-                FirstDataColumn = pt.FirstDataColumn,
-                ShowSubtotals = pt.ShowSubtotals,
-                SubtotalPlacement = pt.SubtotalPlacement,
-                ShowRowGrandTotals = pt.ShowRowGrandTotals,
-                ShowColumnGrandTotals = pt.ShowColumnGrandTotals,
-                RepeatItemLabels = pt.RepeatItemLabels,
-                BlankLineAfterItems = pt.BlankLineAfterItems,
-                ReportLayout = pt.ReportLayout,
-                CompactRowLabelIndent = pt.CompactRowLabelIndent,
-                StyleName = pt.StyleName,
-                ShowRowHeaders = pt.ShowRowHeaders,
-                ShowColumnHeaders = pt.ShowColumnHeaders,
-                ShowRowStripes = pt.ShowRowStripes,
-                ShowColumnStripes = pt.ShowColumnStripes,
-                ShowFieldHeaders = pt.ShowFieldHeaders,
-                ShowContextualTooltips = pt.ShowContextualTooltips,
-                ShowPropertiesInTooltips = pt.ShowPropertiesInTooltips,
-                ShowClassicLayout = pt.ShowClassicLayout,
-                MergeAndCenterLabels = pt.MergeAndCenterLabels,
-                ShowItemsWithNoDataOnRows = pt.ShowItemsWithNoDataOnRows,
-                ShowItemsWithNoDataOnColumns = pt.ShowItemsWithNoDataOnColumns,
-                PageOverThenDown = pt.PageOverThenDown,
-                PageWrap = pt.PageWrap,
-                EmptyValueText = pt.EmptyValueText,
-                ApplyNumberFormats = pt.ApplyNumberFormats,
-                ApplyBorderFormats = pt.ApplyBorderFormats,
-                ApplyFontFormats = pt.ApplyFontFormats,
-                ApplyPatternFormats = pt.ApplyPatternFormats,
-                AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
-                PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
-                ShowExpandCollapseButtons = pt.ShowExpandCollapseButtons,
-                EnableDrill = pt.EnableDrill,
-                AsteriskTotals = pt.AsteriskTotals,
-                MultipleFieldFilters = pt.MultipleFieldFilters,
-                EnableFieldDialog = pt.EnableFieldDialog,
-                EnableFieldProperties = pt.EnableFieldProperties,
-                EnableDataValueEditing = pt.EnableDataValueEditing,
-                PrintTitles = pt.PrintTitles,
-                PrintExpandCollapseButtons = pt.PrintExpandCollapseButtons,
-                AltTextTitle = pt.AltTextTitle,
-                AltTextDescription = pt.AltTextDescription,
-                DataCaption = pt.DataCaption,
-                GrandTotalCaption = pt.GrandTotalCaption,
-                MissingCaption = pt.MissingCaption,
-                ErrorCaption = pt.ErrorCaption
-            };
-            clonedPt.RowFields.AddRange(pt.RowFields);
-            clonedPt.ColumnFields.AddRange(pt.ColumnFields);
-            clonedPt.PageFields.AddRange(pt.PageFields);
-            clonedPt.DataFields.AddRange(pt.DataFields);
-            clonedPt.CalculatedFields.AddRange(pt.CalculatedFields);
-            clonedPt.CalculatedItems.AddRange(pt.CalculatedItems);
-            clonedPt.LabelFilters.AddRange(pt.LabelFilters);
-            clonedPt.ValueFilters.AddRange(pt.ValueFilters);
-            clonedPt.Sorts.AddRange(pt.Sorts);
-            copy.PivotTables.Add(clonedPt);
-        }
+            copy.PivotTables.Add(ClonePivotTable(pt, newId));
 
         // Structured tables
         foreach (var table in StructuredTables)
@@ -388,10 +307,90 @@ public sealed partial class Sheet
         // left empty here. The caller must copy those drawing collections separately.
 
         return copy;
+    }
 
-        static CellAddress RemapAddress       (CellAddress a, SheetId id) => new(id, a.Row, a.Col);
-        static GridRange   RemapRange         (GridRange   r, SheetId id) =>
-            new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
+    private void CopyCellContentTo(Sheet copy, SheetId newId)
+    {
+        foreach (var (address, cell) in EnumerateCells())
+            copy.SetCell(RemapAddress(address, newId), cell.Clone());
+
+        foreach (var ((row, col), styleId) in GetStyleOnlyEntries())
+            copy.SetStyleOnly(row, col, styleId);
+
+        copy.ReplaceMergedRegions(MergedRegions.Select(r => RemapRange(r, newId)));
+    }
+
+    private static PivotTableModel ClonePivotTable(PivotTableModel pt, SheetId newId)
+    {
+        var clonedPt = new PivotTableModel
+        {
+            Name        = pt.Name,
+            CacheId     = pt.CacheId,
+            SourceRange = RemapRange(pt.SourceRange, newId),
+            TargetRange = RemapRange(pt.TargetRange, newId),
+            PackagePart = pt.PackagePart,
+            CreatedVersion = pt.CreatedVersion,
+            UpdatedVersion = pt.UpdatedVersion,
+            MinRefreshableVersion = pt.MinRefreshableVersion,
+            DataOnRows = pt.DataOnRows,
+            FirstHeaderRow = pt.FirstHeaderRow,
+            FirstDataRow = pt.FirstDataRow,
+            FirstDataColumn = pt.FirstDataColumn,
+            ShowSubtotals = pt.ShowSubtotals,
+            SubtotalPlacement = pt.SubtotalPlacement,
+            ShowRowGrandTotals = pt.ShowRowGrandTotals,
+            ShowColumnGrandTotals = pt.ShowColumnGrandTotals,
+            RepeatItemLabels = pt.RepeatItemLabels,
+            BlankLineAfterItems = pt.BlankLineAfterItems,
+            ReportLayout = pt.ReportLayout,
+            CompactRowLabelIndent = pt.CompactRowLabelIndent,
+            StyleName = pt.StyleName,
+            ShowRowHeaders = pt.ShowRowHeaders,
+            ShowColumnHeaders = pt.ShowColumnHeaders,
+            ShowRowStripes = pt.ShowRowStripes,
+            ShowColumnStripes = pt.ShowColumnStripes,
+            ShowFieldHeaders = pt.ShowFieldHeaders,
+            ShowContextualTooltips = pt.ShowContextualTooltips,
+            ShowPropertiesInTooltips = pt.ShowPropertiesInTooltips,
+            ShowClassicLayout = pt.ShowClassicLayout,
+            MergeAndCenterLabels = pt.MergeAndCenterLabels,
+            ShowItemsWithNoDataOnRows = pt.ShowItemsWithNoDataOnRows,
+            ShowItemsWithNoDataOnColumns = pt.ShowItemsWithNoDataOnColumns,
+            PageOverThenDown = pt.PageOverThenDown,
+            PageWrap = pt.PageWrap,
+            EmptyValueText = pt.EmptyValueText,
+            ApplyNumberFormats = pt.ApplyNumberFormats,
+            ApplyBorderFormats = pt.ApplyBorderFormats,
+            ApplyFontFormats = pt.ApplyFontFormats,
+            ApplyPatternFormats = pt.ApplyPatternFormats,
+            AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
+            PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
+            ShowExpandCollapseButtons = pt.ShowExpandCollapseButtons,
+            EnableDrill = pt.EnableDrill,
+            AsteriskTotals = pt.AsteriskTotals,
+            MultipleFieldFilters = pt.MultipleFieldFilters,
+            EnableFieldDialog = pt.EnableFieldDialog,
+            EnableFieldProperties = pt.EnableFieldProperties,
+            EnableDataValueEditing = pt.EnableDataValueEditing,
+            PrintTitles = pt.PrintTitles,
+            PrintExpandCollapseButtons = pt.PrintExpandCollapseButtons,
+            AltTextTitle = pt.AltTextTitle,
+            AltTextDescription = pt.AltTextDescription,
+            DataCaption = pt.DataCaption,
+            GrandTotalCaption = pt.GrandTotalCaption,
+            MissingCaption = pt.MissingCaption,
+            ErrorCaption = pt.ErrorCaption
+        };
+        clonedPt.RowFields.AddRange(pt.RowFields);
+        clonedPt.ColumnFields.AddRange(pt.ColumnFields);
+        clonedPt.PageFields.AddRange(pt.PageFields);
+        clonedPt.DataFields.AddRange(pt.DataFields);
+        clonedPt.CalculatedFields.AddRange(pt.CalculatedFields);
+        clonedPt.CalculatedItems.AddRange(pt.CalculatedItems);
+        clonedPt.LabelFilters.AddRange(pt.LabelFilters);
+        clonedPt.ValueFilters.AddRange(pt.ValueFilters);
+        clonedPt.Sorts.AddRange(pt.Sorts);
+        return clonedPt;
     }
 
     private void CopyLayoutCollectionsTo(Sheet copy)
@@ -470,4 +469,10 @@ public sealed partial class Sheet
             }).ToList()
         };
     }
+
+    private static CellAddress RemapAddress(CellAddress address, SheetId id) =>
+        new(id, address.Row, address.Col);
+
+    private static GridRange RemapRange(GridRange range, SheetId id) =>
+        new(RemapAddress(range.Start, id), RemapAddress(range.End, id));
 }
