@@ -53,6 +53,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-smartart-diagrams-001" => true,
         "generated-printer-settings-001" => true,
         "generated-calc-chain-001" => true,
+        "generated-document-properties-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -151,6 +152,26 @@ internal static class XlsxCorpusFixtureFactory
               <c r="A1" i="1"/>
             </calcChain>
             """)),
+        "generated-document-properties-001" => CreatePackage(
+            ("docProps/core.xml", """
+                <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+                                   xmlns:dc="http://purl.org/dc/elements/1.1/"
+                                   xmlns:dcterms="http://purl.org/dc/terms/"
+                                   xmlns:dcmitype="http://purl.org/dc/dcmitype/"
+                                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                  <dc:title>Freexcel document property corpus</dc:title>
+                  <dc:subject>Stable document properties retained</dc:subject>
+                  <cp:keywords>xlsx parity</cp:keywords>
+                  <cp:lastModifiedBy>Freexcel Fixture</cp:lastModifiedBy>
+                </cp:coreProperties>
+                """),
+            ("docProps/app.xml", """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Application>Microsoft Excel</Application>
+                  <Company>Freexcel Test Lab</Company>
+                  <Manager>Workbook Fidelity</Manager>
+                </Properties>
+                """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -334,6 +355,8 @@ internal static class XlsxCorpusFixtureFactory
             "xl/webextensions/taskpanes.xml" => "application/vnd.ms-office.webextensiontaskpanes+xml",
             "xl/webextensions/webextension1.xml" => "application/vnd.ms-office.webextension+xml",
             "xl/webPublishItems.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.webPublishItems+xml",
+            "docProps/core.xml" => "application/vnd.openxmlformats-package.core-properties+xml",
+            "docProps/app.xml" => "application/vnd.openxmlformats-officedocument.extended-properties+xml",
             "docProps/custom.xml" => "application/vnd.openxmlformats-officedocument.custom-properties+xml",
             "xl/diagrams/data1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
             "xl/diagrams/layout1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
