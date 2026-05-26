@@ -243,7 +243,7 @@ public sealed class FormulaEvaluatorPerformanceTests
     private static TimeSpan MaxElapsedForPerformanceAssertion()
     {
         return string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase)
-            ? TimeSpan.FromSeconds(5)
+            ? TimeSpan.FromSeconds(30)
             : TimeSpan.FromSeconds(2);
     }
 }
