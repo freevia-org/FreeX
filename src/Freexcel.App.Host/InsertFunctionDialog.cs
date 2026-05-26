@@ -43,7 +43,7 @@ public sealed class InsertFunctionDialog : Window
         searchPanel.Children.Add(searchLabel);
         Grid.SetColumn(_searchBox, 1);
         searchPanel.Children.Add(_searchBox);
-        var go = new Button { Content = "_Go", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6), IsDefault = true };
+        var go = new Button { Content = "_Go", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6) };
         go.Click += (_, _) => RefreshList();
         Grid.SetColumn(go, 2);
         searchPanel.Children.Add(go);

@@ -137,6 +137,16 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void DialogCommands_ExposeOnlyOkAsTheDefaultAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
+
+        source.Should().Contain("var ok = new Button { Content = \"_OK\", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };");
+        source.Should().Contain("var go = new Button { Content = \"_Go\", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6) };");
+        source.Should().NotContain("Content = \"_Go\", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6), IsDefault = true");
+    }
+
+    [Fact]
     public void Dialog_ExposesExcelLikeSearchResultsAndHelpAffordances()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
