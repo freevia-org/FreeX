@@ -117,6 +117,21 @@ public class XlsxCorpusScaffoldTests
         nextPhasesPlan.Should().NotContain("prior 90-row manifest baseline");
     }
 
+    [Fact]
+    public void NewestStatusReport_StatesCurrentCorpusManifestCount()
+    {
+        var manifestRows = ReadManifestRows();
+        var docsDirectory = Path.GetDirectoryName(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"))!;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var report = File.ReadAllText(newestStatusReport);
+
+        report.Should().Contain($"expanded to {manifestRows.Count} manifest rows");
+        report.Should().Contain($"{manifestRows.Count} workbook manifest rows");
+        report.Should().Contain($"Expand the {manifestRows.Count}-row corpus baseline");
+    }
+
     private static IReadOnlyList<ManifestRow> ReadManifestRows()
     {
         var manifestPath = FindWorkspaceFile("test-corpus", "manifest.csv");
