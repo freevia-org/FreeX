@@ -637,11 +637,8 @@ public static partial class BuiltInFunctions
         var rv2 = args[1] is RangeValue range2
             ? range2
             : SingleCellArray(args[1]);
-        var (xs, xErr) = CollectRangeNumbers(rv1);
-        if (xErr is not null) return xErr;
-        var (ys, yErr) = CollectRangeNumbers(rv2);
-        if (yErr is not null) return yErr;
-        if (xs!.Count != ys!.Count) return ErrorValue.NA;
+        var (xs, ys, pairErr) = CollectPairedRangeNumbers(rv1, rv2);
+        if (pairErr is not null) return pairErr;
         int n = xs.Count;
         if (n < 2) return ErrorValue.DivByZero;
         double xMean = xs.Average();
@@ -671,11 +668,8 @@ public static partial class BuiltInFunctions
             : SingleCellArray(args[2]);
         double x    = ToNumber(args[0]);
         if (!double.IsFinite(x)) return ErrorValue.Num;
-        var (ys, yErr) = CollectRangeNumbers(knownY);
-        if (yErr is not null) return yErr;
-        var (xs, xErr) = CollectRangeNumbers(knownX);
-        if (xErr is not null) return xErr;
-        if (xs!.Count != ys!.Count) return ErrorValue.NA;
+        var (ys, xs, pairErr) = CollectPairedRangeNumbers(knownY, knownX);
+        if (pairErr is not null) return pairErr;
         int n = xs.Count;
         if (n < 2) return ErrorValue.DivByZero;
         double xMean = xs.Average();
@@ -691,6 +685,30 @@ public static partial class BuiltInFunctions
         double b = sXY / sXX;
         double a = yMean - b * xMean;
         return NumberResult(a + b * x);
+    }
+
+    private static (List<double> Left, List<double> Right, ErrorValue? Error) CollectPairedRangeNumbers(RangeValue left, RangeValue right)
+    {
+        if (left.RowCount * left.ColCount != right.RowCount * right.ColCount)
+            return ([], [], ErrorValue.NA);
+
+        var leftValues = new List<double>();
+        var rightValues = new List<double>();
+        for (int i = 0; i < left.RowCount * left.ColCount; i++)
+        {
+            var leftCell = left.Cells[i / left.ColCount, i % left.ColCount];
+            var rightCell = right.Cells[i / right.ColCount, i % right.ColCount];
+            if (leftCell is ErrorValue leftError) return ([], [], leftError);
+            if (rightCell is ErrorValue rightError) return ([], [], rightError);
+            if (TryCellNumber(leftCell, out double leftNumber) &&
+                TryCellNumber(rightCell, out double rightNumber))
+            {
+                leftValues.Add(leftNumber);
+                rightValues.Add(rightNumber);
+            }
+        }
+
+        return (leftValues, rightValues, null);
     }
 
     private static ScalarValue RankEq(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
