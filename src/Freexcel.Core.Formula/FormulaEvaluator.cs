@@ -899,8 +899,8 @@ public sealed class FormulaEvaluator
             _               => null   // text condition is #VALUE! in Excel
         };
         if (taken is null) return ErrorValue.Value;
-        if (taken.Value)  return EvaluateNode(node.Arguments[1], context);
-        if (node.Arguments.Count == 3) return EvaluateNode(node.Arguments[2], context);
+        if (taken.Value)  return EvaluateArrayOperand(node.Arguments[1], context);
+        if (node.Arguments.Count == 3) return EvaluateArrayOperand(node.Arguments[2], context);
         return new BoolValue(false);
     }
 
