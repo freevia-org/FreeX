@@ -16,6 +16,7 @@ public partial class ColorPickerDialog : Window
     private readonly CellColor? _currentColor;
     private CellColor? _customSpectrumBaseColor;
     private Button? _initialFocusButton;
+    private Button? _selectedSwatchButton;
 
     public ColorPickerDialog(CellColor? initialColor = null, bool allowNoColor = false)
     {
@@ -200,11 +201,14 @@ public partial class ColorPickerDialog : Window
             Padding = new Thickness(0),
             Background = ToBrush(swatch.Color),
             BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
             ToolTip = groupName is null ? swatch.Hex : $"{groupName} {swatch.Hex}",
             Tag = swatch.Color
         };
         button.Click += SwatchButton_Click;
         _initialFocusButton ??= button;
+        if (SelectedColor == swatch.Color)
+            MarkSelectedSwatch(button);
         return button;
     }
 
@@ -217,13 +221,62 @@ public partial class ColorPickerDialog : Window
 
     private void SwatchButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: CellColor color })
-            SelectColor(color, updateSpectrumBase: ReferenceEquals(((Button)sender).Parent, CustomSpectrumPanel));
+        if (sender is Button { Tag: CellColor color } button)
+        {
+            MarkSelectedSwatch(button);
+            SelectColor(
+                color,
+                updateSpectrumBase: ReferenceEquals(((Button)sender).Parent, CustomSpectrumPanel),
+                updateSwatchSelection: false);
+        }
     }
 
-    private void SelectColor(CellColor color, bool updateSpectrumBase = true)
+    private void MarkSelectedSwatch(Button button)
+    {
+        if (_selectedSwatchButton is not null)
+        {
+            _selectedSwatchButton.BorderBrush = Brushes.Gray;
+            _selectedSwatchButton.BorderThickness = new Thickness(1);
+        }
+
+        button.BorderBrush = Brushes.Black;
+        button.BorderThickness = new Thickness(2);
+        _selectedSwatchButton = button;
+    }
+
+    private void ClearSelectedSwatch()
+    {
+        if (_selectedSwatchButton is null)
+            return;
+
+        _selectedSwatchButton.BorderBrush = Brushes.Gray;
+        _selectedSwatchButton.BorderThickness = new Thickness(1);
+        _selectedSwatchButton = null;
+    }
+
+    private void UpdateSwatchSelection(CellColor color)
+    {
+        var matchingButton = ThemeColorsPanel.Children
+            .OfType<Button>()
+            .Concat(StandardColorsPanel.Children.OfType<Button>())
+            .Concat(CustomSpectrumPanel.Children.OfType<Button>())
+            .FirstOrDefault(button => button.Tag is CellColor swatchColor && swatchColor == color);
+
+        if (matchingButton is null)
+        {
+            ClearSelectedSwatch();
+            return;
+        }
+
+        MarkSelectedSwatch(matchingButton);
+    }
+
+    private void SelectColor(CellColor color, bool updateSpectrumBase = true, bool updateSwatchSelection = true)
     {
         SelectedColor = color;
+        if (updateSwatchSelection)
+            UpdateSwatchSelection(color);
+
         if (updateSpectrumBase)
         {
             _customSpectrumBaseColor = color;
