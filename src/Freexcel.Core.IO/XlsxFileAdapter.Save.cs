@@ -8,6 +8,13 @@ public sealed partial class XlsxFileAdapter
 {
     public void Save(Workbook workbook, Stream stream)
     {
+        if (SourcePackages.TryGetValue(workbook, out var sourcePackage) &&
+            sourcePackage.Matches(workbook))
+        {
+            sourcePackage.CopyTo(stream);
+            return;
+        }
+
         using var xlWorkbook = new XLWorkbook();
         xlWorkbook.CalculateMode = workbook.CalculationMode == WorkbookCalculationMode.Manual
             ? XLCalculateMode.Manual

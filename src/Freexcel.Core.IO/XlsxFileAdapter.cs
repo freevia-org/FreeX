@@ -78,8 +78,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
         var workbook = new Workbook("Untitled");
-        SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream));
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = uses1904DateSystem;
         workbook.Properties = workbookProperties;
@@ -389,6 +387,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     customView.IncludeHiddenRowsColumnsAndFilterSettings));
         }
 
+        SourcePackages.Remove(workbook);
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream, workbook));
         return workbook;
     }
 
