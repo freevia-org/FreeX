@@ -5221,6 +5221,24 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PPMT(A1:A2,B1:C1,60,10000)", sheet).Should().Be(ErrorValue.Value);
     }
 
+    [Fact]
+    public void CumipmtAndCumprinc_LeadingOneCellRateRange_BroadcastsAcrossStartArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.05 / 12)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=CUMIPMT(A1:A1,60,10000,B1:B2,12,0)", sheet),
+            ((NumberValue)_eval.Evaluate("=CUMIPMT(A1,60,10000,B1,12,0)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=CUMIPMT(A1,60,10000,B2,12,0)", sheet)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=CUMPRINC(A1:A1,60,10000,B1:B2,12,0)", sheet),
+            ((NumberValue)_eval.Evaluate("=CUMPRINC(A1,60,10000,B1,12,0)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=CUMPRINC(A1,60,10000,B2,12,0)", sheet)).Value);
+    }
+
     [Fact] public void Pmt_TypeError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
