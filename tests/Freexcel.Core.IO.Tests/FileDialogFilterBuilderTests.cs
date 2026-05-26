@@ -113,6 +113,23 @@ public sealed class FileDialogFilterBuilderTests
     }
 
     [Theory]
+    [InlineData("xlsx", ".xlsx")]
+    [InlineData(" .CSV ", ".CSV")]
+    [InlineData(".fxl", ".fxl")]
+    public void FileFormatResolver_NormalizesExtensionsForFilterAndAdapterMatching(string extension, string expected)
+    {
+        FileFormatResolver.NormalizeExtension(extension).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(".XLSX", "xlsx")]
+    [InlineData("", "unknown")]
+    public void FileFormatResolver_CreatesSafeFileTypeTokens(string extension, string expected)
+    {
+        FileFormatResolver.SafeFileTypeFromExtension(extension).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("XLSX", typeof(XlsxFileAdapter), ".xlsx", false)]
     [InlineData(".xlsm", typeof(XlsxFileAdapter), ".xlsm", false)]
     [InlineData("XLTX", typeof(XlsxFileAdapter), ".xltx", true)]

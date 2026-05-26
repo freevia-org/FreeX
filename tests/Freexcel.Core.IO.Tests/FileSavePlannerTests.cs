@@ -35,6 +35,14 @@ public sealed class FileSavePlannerTests
         target.Path.Should().Be("Book.FXJSON");
     }
 
+    [Fact]
+    public void TryResolveExistingPath_UsesSharedFileFormatResolver()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "FileSavePlanner.cs"));
+
+        source.Should().Contain("FileFormatResolver.FindSaveAdapter(adapters, extension, out _)");
+    }
+
     [Theory]
     [InlineData("Book.xlsm")]
     [InlineData("Template.xltx")]
@@ -74,5 +82,20 @@ public sealed class FileSavePlannerTests
         public IReadOnlyList<FileFormatDescriptor> Formats => formats;
         public Workbook Load(Stream stream) => throw new NotSupportedException();
         public void Save(Workbook workbook, Stream stream) => throw new NotSupportedException();
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, parts));
     }
 }
