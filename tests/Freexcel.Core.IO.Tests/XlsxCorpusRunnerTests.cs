@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(44, "the generated metadata-pass manifest currently declares forty-four deterministic package-retention rows");
+        rows.Should().HaveCount(45, "the generated metadata-pass manifest currently declares forty-five deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -649,6 +649,33 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-workbook-defined-names-native-001");
         AssertWorkbookDefinedNamesNative(saved, "generated-workbook-defined-names-native-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedStylesheetNativeMetadataRow_RetainsStylesheetMetadataAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-stylesheet-native-metadata-001");
+        AssertStylesheetNativeMetadata(source, "generated-stylesheet-native-metadata-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.IndexedColors.TryGetColor(1, out var color).Should().BeTrue();
+        color.Should().Be(CellColor.FromArgb(1, 2, 3));
+        workbook.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreexcelNativePivotStyle" &&
+            style.AppliesToPivotTables &&
+            !style.AppliesToTables &&
+            style.Elements.Any(element =>
+                element.Type == "wholeTable" &&
+                element.DifferentialFormatId == 0));
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-stylesheet-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-stylesheet-native-metadata-001");
+        AssertStylesheetNativeMetadata(saved, "generated-stylesheet-native-metadata-001 saved");
     }
 
     [Fact]
@@ -1859,6 +1886,57 @@ public class XlsxCorpusRunnerTests
         definedName.Attribute("name")!.Value.Should().Be("DynamicSalesRange", because);
         definedName.Attribute("hidden")!.Value.Should().Be("1", because);
         definedName.Value.Should().Be("1+1", because);
+    }
+
+    private static void AssertStylesheetNativeMetadata(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        var colors = stylesXml.Root!.Element(workbookNs + "colors");
+        colors.Should().NotBeNull(because);
+        colors!.ToString(SaveOptions.DisableFormatting).Should().Contain("rgb=\"FF010203\"", because);
+
+        var tableStyles = stylesXml.Root.Element(workbookNs + "tableStyles");
+        tableStyles.Should().NotBeNull(because);
+        tableStyles!.Attribute("defaultPivotStyle")!.Value.Should().Be("PivotStyleMedium9", because);
+        tableStyles.Elements(workbookNs + "tableStyle")
+            .Where(element => string.Equals(element.Attribute("name")?.Value, "FreexcelNativeTableStyle", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+        tableStyles.Elements(freexcelNs + "tableStylesNativeChild")
+            .Where(element => string.Equals(element.Attribute("value")?.Value, "kept", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+        tableStyles.Elements(workbookNs + "tableStyle")
+            .Where(element =>
+                string.Equals(element.Attribute("name")?.Value, "FreexcelNativePivotStyle", StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("pivot")?.Value, "1", StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("table")?.Value, "0", StringComparison.Ordinal) &&
+                string.Equals(element.Element(workbookNs + "tableStyleElement")?.Attribute("dxfId")?.Value, "0", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+
+        var differentialStyle = stylesXml.Root.Element(workbookNs + "dxfs")!
+            .Elements(workbookNs + "dxf")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        differentialStyle.Attribute("nativePivotDxf")!.Value.Should().Be("kept", because);
+        differentialStyle.Element(freexcelNs + "pivotStyleDxfNativeChild")!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept", because);
+
+        var extensionList = stylesXml.Root.Element(workbookNs + "extLst");
+        extensionList.Should().NotBeNull(because);
+        extensionList!.ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Contain("{FFEEDDCC-7788-6655-4433-22110099AABB}", because)
+            .And.Contain("FreexcelNativeStylesExtension", because);
     }
 
     private static void AssertHeaderFooterLegacyDrawingPackageGraph(Stream package, string because)
@@ -3910,6 +3988,7 @@ public class XlsxCorpusRunnerTests
     private static bool IsFidelityCriticalPart(string path) =>
         path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/styles.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase) ||
