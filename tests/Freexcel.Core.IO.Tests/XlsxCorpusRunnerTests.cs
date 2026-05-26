@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(42, "the generated metadata-pass manifest currently declares forty-two deterministic package-retention rows");
+        rows.Should().HaveCount(43, "the generated metadata-pass manifest currently declares forty-three deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -1057,6 +1057,52 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-custom-sheet-views-001");
         AssertWorksheetCustomSheetViews(saved, "generated-worksheet-custom-sheet-views-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetExtensionListRow_RetainsSparklineAndUnknownExtensionsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-extension-list-001");
+        AssertWorksheetExtensionList(source, "generated-worksheet-extension-list-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).Sparklines.Should().ContainSingle();
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-worksheet-extlst-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-extension-list-001");
+        AssertWorksheetExtensionList(saved, "generated-worksheet-extension-list-001 saved");
+    }
+
+    private static void AssertWorksheetExtensionList(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var extensionList = worksheetXml.Root!.Element(worksheetNs + "extLst");
+        extensionList.Should().NotBeNull(because);
+        extensionList!.Elements(worksheetNs + "ext")
+            .Where(extension => string.Equals(extension.Attribute("uri")?.Value, "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+        extensionList.Descendants(x14Ns + "sparklineGroups").Should().ContainSingle(because);
+
+        var unknownExtension = extensionList.Elements(worksheetNs + "ext")
+            .Where(extension => string.Equals(extension.Attribute("uri")?.Value, "{FFEEDDCC-BBAA-9988-7766-554433221100}", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        unknownExtension.Descendants(x15Ns + "futureMetadata")
+            .Where(metadata => string.Equals(metadata.Attribute("name")?.Value, "FreexcelUnknownWorksheetExtension", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
     }
 
     private static void AssertWorksheetCustomSheetViews(Stream package, string because)
