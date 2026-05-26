@@ -371,6 +371,8 @@ public static partial class BuiltInFunctions
         }
         if (useA1 && TryParseA1RangeRef(refText, out var startRow, out var startCol, out var endRow, out var endCol))
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
+        if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
+            return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
 
         if (useA1 && sheetName is null && ctx.TryResolveNamedRange(refText) is { } namedRange)
         {
@@ -427,6 +429,22 @@ public static partial class BuiltInFunctions
 
         return TryParseA1Ref(refText[..colon], out startRow, out startCol)
             && TryParseA1Ref(refText[(colon + 1)..], out endRow, out endCol);
+    }
+
+    private static bool TryParseR1C1RangeRef(
+        string refText,
+        CellAddress? currentCell,
+        out uint startRow,
+        out uint startCol,
+        out uint endRow,
+        out uint endCol)
+    {
+        startRow = startCol = endRow = endCol = 0;
+        int colon = refText.IndexOf(':');
+        if (colon < 0 || colon != refText.LastIndexOf(':')) return false;
+
+        return TryParseR1C1Ref(refText[..colon], currentCell, out startRow, out startCol)
+            && TryParseR1C1Ref(refText[(colon + 1)..], currentCell, out endRow, out endCol);
     }
 
     private static ScalarValue Address(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
