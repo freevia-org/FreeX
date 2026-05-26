@@ -1568,7 +1568,8 @@ public sealed class FormulaEvaluator
             return ErrorValue.NA;
         }
         if (cell is null || !cell.HasFormula) return ErrorValue.NA;
-        return new TextValue(cell.FormulaText!);
+        var formulaText = cell.FormulaText!;
+        return new TextValue(formulaText.StartsWith('=') ? formulaText : "=" + formulaText);
     }
 
     private ScalarValue EvaluateOffset(FunctionCallNode node, IEvalContext context)
