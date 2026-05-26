@@ -1534,6 +1534,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Find_LeadingOneCellFindTextRange_BroadcastsAcrossWithinTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 2, new TextValue("cat")),
+            (2, 2, new TextValue("bad")));
+
+        AssertColumn(_eval.Evaluate("=FIND(A1:A1,B1:B2)", sheet), new NumberValue(2), new NumberValue(2));
+    }
+
+    [Fact]
     public void Find_MismatchedFindAndWithinTextRanges_ReturnValueError()
     {
         var sheet = MakeSheet(
@@ -5168,6 +5179,21 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Pmt_LeadingOneCellRateRange_BroadcastsAcrossLaterArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.01)),
+            (1, 2, new NumberValue(12)),
+            (2, 2, new NumberValue(24)),
+            (1, 3, new NumberValue(1000)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=PMT(A1:A1,B1:B2,C1:C1)", sheet),
+            ((NumberValue)_eval.Evaluate("=PMT(A1,B1,C1)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=PMT(A1,B2,C1)", sheet)).Value);
+    }
+
+    [Fact]
     public void IpmtAndPpmt_SameShapeRateAndPeriodRanges_SpillElementwise()
     {
         var sheet = MakeSheet(
@@ -7246,8 +7272,10 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1,1,new TextValue("A")), (2,1,new TextValue("B")));
 
         _eval.Evaluate("=CHOOSEROWS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSEROWS(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=CHOOSEROWS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=CHOOSECOLS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSECOLS(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=CHOOSECOLS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
     }
 

@@ -484,7 +484,7 @@ public static partial class BuiltInFunctions
         var firstRange = first as RangeValue;
         var secondRange = second as RangeValue;
         var thirdRange = third as RangeValue;
-        var shape = firstRange ?? secondRange ?? thirdRange;
+        var shape = ChooseBroadcastShape(firstRange, secondRange, thirdRange);
         if (shape is null) return map(first, second, third);
         if ((firstRange is not null && !CanBroadcastToShape(firstRange, shape.RowCount, shape.ColCount)) ||
             (secondRange is not null && !CanBroadcastToShape(secondRange, shape.RowCount, shape.ColCount)) ||
@@ -510,6 +510,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue ValueAtBroadcastCell(RangeValue range, int row, int col) =>
         range.RowCount == 1 && range.ColCount == 1 ? range.Cells[0, 0] : range.Cells[row, col];
 
+    private static RangeValue? ChooseBroadcastShape(params RangeValue?[] ranges)
+    {
+        RangeValue? fallback = null;
+        foreach (var range in ranges)
+        {
+            if (range is null) continue;
+            fallback ??= range;
+            if (range.RowCount != 1 || range.ColCount != 1) return range;
+        }
+
+        return fallback;
+    }
+
     private static ScalarValue MapQuaternaryTextArgs(
         ScalarValue first,
         ScalarValue second,
@@ -521,7 +534,7 @@ public static partial class BuiltInFunctions
         var secondRange = second as RangeValue;
         var thirdRange = third as RangeValue;
         var fourthRange = fourth as RangeValue;
-        var shape = firstRange ?? secondRange ?? thirdRange ?? fourthRange;
+        var shape = ChooseBroadcastShape(firstRange, secondRange, thirdRange, fourthRange);
         if (shape is null) return map(first, second, third, fourth);
         if ((firstRange is not null && !CanBroadcastToShape(firstRange, shape.RowCount, shape.ColCount)) ||
             (secondRange is not null && !CanBroadcastToShape(secondRange, shape.RowCount, shape.ColCount)) ||
@@ -547,16 +560,19 @@ public static partial class BuiltInFunctions
         IReadOnlyList<ScalarValue> args,
         Func<IReadOnlyList<ScalarValue>, ScalarValue> map)
     {
-        RangeValue? shape = null;
-        foreach (var arg in args)
+        var ranges = new RangeValue?[args.Count];
+        for (int i = 0; i < args.Count; i++)
+            ranges[i] = args[i] as RangeValue;
+
+        var shape = ChooseBroadcastShape(ranges);
+        if (shape is null) return map(args);
+
+        foreach (var range in ranges)
         {
-            if (arg is not RangeValue range) continue;
-            shape ??= range;
+            if (range is null) continue;
             if (!CanBroadcastToShape(range, shape.RowCount, shape.ColCount))
                 return ErrorValue.Value;
         }
-
-        if (shape is null) return map(args);
 
         var cells = new ScalarValue[shape.RowCount, shape.ColCount];
         var scalarArgs = new ScalarValue[args.Count];
