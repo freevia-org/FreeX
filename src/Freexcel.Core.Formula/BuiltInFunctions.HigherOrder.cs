@@ -129,16 +129,16 @@ public static partial class BuiltInFunctions
     private static ScalarValue MakeArrayFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count != 3) return ErrorValue.Value;
-        if (args[0] is ErrorValue rowError) return rowError;
-        if (args[1] is ErrorValue colError) return colError;
+        if (!TryGetScalarControlArgument(args[0], out var rowsArg, out var rowsError)) return rowsError;
+        if (!TryGetScalarControlArgument(args[1], out var colsArg, out var colsError)) return colsError;
         if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 2) return ErrorValue.Value;
         double rawRows;
         double rawCols;
         try
         {
-            rawRows = ToNumber(args[0]);
-            rawCols = ToNumber(args[1]);
+            rawRows = ToNumber(rowsArg);
+            rawCols = ToNumber(colsArg);
         }
         catch (FormulaEvalException)
         {
