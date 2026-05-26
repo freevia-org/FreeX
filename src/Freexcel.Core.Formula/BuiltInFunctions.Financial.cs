@@ -968,16 +968,16 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupdaybs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double maturity   = ToNumber(args[1]);
-        int frequency     = (int)Math.Truncate(ToNumber(args[2]));
-        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 3, out int basis)) return ErrorValue.Num;
-        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupdaybsScalar(value, maturity, frequency, basis));
-        return CoupdaybsScalar(args[0], maturity, frequency, basis);
+        var basisArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], basisArg], values => CoupdaybsScalar(values[0], values[1], values[2], values[3]));
     }
 
-    private static ScalarValue CoupdaybsScalar(ScalarValue settlementValue, double maturity, int frequency, int basis)
+    private static ScalarValue CoupdaybsScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue frequencyValue, ScalarValue basisValue)
     {
+        double maturity = ToNumber(maturityValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         _ = basis;
         double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
@@ -990,16 +990,16 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupdays(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double maturity   = ToNumber(args[1]);
-        int frequency     = (int)Math.Truncate(ToNumber(args[2]));
-        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 3, out int basis)) return ErrorValue.Num;
-        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupdaysScalar(value, maturity, frequency, basis));
-        return CoupdaysScalar(args[0], maturity, frequency, basis);
+        var basisArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], basisArg], values => CoupdaysScalar(values[0], values[1], values[2], values[3]));
     }
 
-    private static ScalarValue CoupdaysScalar(ScalarValue settlementValue, double maturity, int frequency, int basis)
+    private static ScalarValue CoupdaysScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue frequencyValue, ScalarValue basisValue)
     {
+        double maturity = ToNumber(maturityValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -1015,16 +1015,16 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupdaysnc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double maturity   = ToNumber(args[1]);
-        int frequency     = (int)Math.Truncate(ToNumber(args[2]));
-        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
-        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupdaysncScalar(value, maturity, frequency));
-        return CoupdaysncScalar(args[0], maturity, frequency);
+        var basisArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], basisArg], values => CoupdaysncScalar(values[0], values[1], values[2], values[3]));
     }
 
-    private static ScalarValue CoupdaysncScalar(ScalarValue settlementValue, double maturity, int frequency)
+    private static ScalarValue CoupdaysncScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue frequencyValue, ScalarValue basisValue)
     {
+        double maturity = ToNumber(maturityValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out _)) return ErrorValue.Num;
         double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -1036,16 +1036,16 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupncd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double maturity   = ToNumber(args[1]);
-        int frequency     = (int)Math.Truncate(ToNumber(args[2]));
-        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
-        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupncdScalar(value, maturity, frequency));
-        return CoupncdScalar(args[0], maturity, frequency);
+        var basisArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], basisArg], values => CoupncdScalar(values[0], values[1], values[2], values[3]));
     }
 
-    private static ScalarValue CoupncdScalar(ScalarValue settlementValue, double maturity, int frequency)
+    private static ScalarValue CoupncdScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue frequencyValue, ScalarValue basisValue)
     {
+        double maturity = ToNumber(maturityValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out _)) return ErrorValue.Num;
         double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -1057,16 +1057,16 @@ public static partial class BuiltInFunctions
     private static ScalarValue Coupnum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double maturity   = ToNumber(args[1]);
-        int frequency     = (int)Math.Truncate(ToNumber(args[2]));
-        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
-        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CoupnumScalar(value, maturity, frequency));
-        return CoupnumScalar(args[0], maturity, frequency);
+        var basisArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], basisArg], values => CoupnumScalar(values[0], values[1], values[2], values[3]));
     }
 
-    private static ScalarValue CoupnumScalar(ScalarValue settlementValue, double maturity, int frequency)
+    private static ScalarValue CoupnumScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue frequencyValue, ScalarValue basisValue)
     {
+        double maturity = ToNumber(maturityValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out _)) return ErrorValue.Num;
         double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -1081,16 +1081,16 @@ public static partial class BuiltInFunctions
     private static ScalarValue Couppcd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double maturity   = ToNumber(args[1]);
-        int frequency     = (int)Math.Truncate(ToNumber(args[2]));
-        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
-        if (args[0] is RangeValue settlementRange) return MapUnaryTextRange(settlementRange, value => CouppcdScalar(value, maturity, frequency));
-        return CouppcdScalar(args[0], maturity, frequency);
+        var basisArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], basisArg], values => CouppcdScalar(values[0], values[1], values[2], values[3]));
     }
 
-    private static ScalarValue CouppcdScalar(ScalarValue settlementValue, double maturity, int frequency)
+    private static ScalarValue CouppcdScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue frequencyValue, ScalarValue basisValue)
     {
+        double maturity = ToNumber(maturityValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out _)) return ErrorValue.Num;
         double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;

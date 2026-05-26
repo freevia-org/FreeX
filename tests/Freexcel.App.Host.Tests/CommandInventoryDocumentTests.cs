@@ -27,6 +27,20 @@ public sealed class CommandInventoryDocumentTests
     }
 
     [Fact]
+    public void UiTestCatalog_CommandInventoryCountsMatchInventory()
+    {
+        var inventory = LoadInventory();
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var commandSurfaceInScope = inventory.CommandSurfaceTabs.Sum(tab => tab.Implemented + tab.Partial);
+        var menuToolbarInScope = inventory.MenuToolbarTabs.Sum(tab => tab.Implemented + tab.Partial);
+
+        catalog.Should().Contain(
+            $"| Command surface in-scope rows | {commandSurfaceInScope} | From `COMMAND_INVENTORY.json`: Implemented + Partial command-surface rows. |");
+        catalog.Should().Contain(
+            $"| Menu/toolbar in-scope rows | {menuToolbarInScope} | Includes the current Draw tab menu/toolbar delta. |");
+    }
+
+    [Fact]
     public void CommandInventory_DefinesCurrentSchemaAndTopLevelKeyTipExpectations()
     {
         var inventory = LoadInventory();
