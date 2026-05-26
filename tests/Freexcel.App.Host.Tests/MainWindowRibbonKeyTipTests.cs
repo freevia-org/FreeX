@@ -336,6 +336,44 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ViewWorkbookModeKeyTips_UpdateSheetViewMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.P);
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.L);
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout);
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.N);
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout, "N is the prefix for the Normal keytip NM");
+            harness.KeyTipScope.Should().Be("Commands");
+
+            harness.HandleKeyTip(Key.M);
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
     public void ViewFreezePanesMenuKeyTips_ApplyPresetsAndExitKeyTipMode()
     {
         RunSta(() =>
@@ -858,6 +896,8 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public bool FormulaBarIsVisible =>
             (_window.FindName("FormulaBarBorder") as FrameworkElement)?.Visibility == Visibility.Visible;
+
+        public WorksheetViewMode ActiveSheetViewMode => _workbook.Sheets[0].ViewMode;
 
         public (uint FrozenRows, uint FrozenCols) ActiveSheetFrozenPanes
         {
