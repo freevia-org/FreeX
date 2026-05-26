@@ -558,6 +558,21 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void DollarFractionHelpers_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        AssertApproxColumn(
+            EvalWithData("DOLLARDE(A1:A2,B1:B2)", (1, 1, 1.02), (2, 1, 2.16), (1, 2, 32.0), (2, 2, 16.0)),
+            Calc("DOLLARDE(1.02,32)"),
+            Calc("DOLLARDE(2.16,16)"));
+        AssertApproxColumn(
+            EvalWithData("DOLLARFR(A1:A2,B1:B2)", (1, 1, 1.0625), (2, 1, 2.5), (1, 2, 32.0), (2, 2, 16.0)),
+            Calc("DOLLARFR(1.0625,32)"),
+            Calc("DOLLARFR(2.5,16)"));
+
+        EvalWithData("DOLLARDE(A1:A2,B1:C1)", (1, 1, 1.02), (2, 1, 2.16), (1, 2, 32.0), (1, 3, 16.0)).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Dollarfr_InverseOfDollarde()
     {
         // DOLLARFR(1.0625, 32) = 1 + 0.0625*32/100 = 1.02
