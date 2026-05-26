@@ -16706,19 +16706,33 @@ public partial class FileAdapterSmokeTests
                 new WorksheetCellSmartTagsModel
                 {
                     Reference = "A1",
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["validCellSmartTagsAttr"] = "cell-kept",
+                        ["invalid cellSmartTags attr"] = "skip"
+                    },
                     Tags =
                     [
                         new WorksheetCellSmartTagModel
                         {
                             Type = "0",
                             Deleted = false,
+                            NativeAttributes = new Dictionary<string, string>
+                            {
+                                ["validCellSmartTagAttr"] = "tag-kept",
+                                ["invalid cellSmartTag attr"] = "skip"
+                            },
                             Properties =
                             [
                                 new WorksheetCellSmartTagPropertyModel
                                 {
                                     Key = "place",
                                     Value = "Seattle",
-                                    NativeAttributes = new Dictionary<string, string> { ["customSmartTagPropertyFlag"] = "keep" }
+                                    NativeAttributes = new Dictionary<string, string>
+                                    {
+                                        ["customSmartTagPropertyFlag"] = "keep",
+                                        ["invalid cellSmartTagPr attr"] = "skip"
+                                    }
                                 }
                             ]
                         }
@@ -16729,7 +16743,9 @@ public partial class FileAdapterSmokeTests
 
         var saved = new MemoryStream();
         var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, saved);
+        var save = () => adapter.Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16741,7 +16757,10 @@ public partial class FileAdapterSmokeTests
             .Which.Attribute("r")!.Value.Should().Be("A1");
         smartTags.Descendants(worksheetNs + "cellSmartTag").Should().ContainSingle()
             .Which.Attribute("deleted")!.Value.Should().Be("0");
+        smartTags.ToString().Should().Contain("validCellSmartTagsAttr=\"cell-kept\"");
+        smartTags.ToString().Should().Contain("validCellSmartTagAttr=\"tag-kept\"");
         smartTags.ToString().Should().Contain("customSmartTagPropertyFlag=\"keep\"");
+        smartTags.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         smartTags.ToString().Should().NotContain("wrongNamespace");
     }
 
