@@ -200,11 +200,12 @@ public static partial class BuiltInFunctions
             sortRows ??= keySortsRows;
 
             int sortOrder = 1;
-            if (i + 1 < args.Count && TryGetScalarControlArgument(args[i + 1], out var orderArg, out _))
+            if (i + 1 < args.Count)
             {
+                if (!TryGetScalarControlArgument(args[i + 1], out var orderArg, out var orderError)) return orderError;
                 if (orderArg is not BlankValue)
                 {
-                    if (orderArg is ErrorValue orderError) return orderError;
+                    if (orderArg is ErrorValue orderArgError) return orderArgError;
                     double orderRaw = ToNumber(orderArg);
                     if (!double.IsFinite(orderRaw)) return ErrorValue.Value;
                     sortOrder = (int)orderRaw;
