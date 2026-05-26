@@ -363,14 +363,6 @@ public static partial class BuiltInFunctions
         int requested = (int)raw;
         if (requested == 0)
         {
-            if (!isTake)
-            {
-                // DROP 0 → return entire array unchanged
-                start = 0;
-                count = dimensionLength;
-                return true;
-            }
-            // TAKE 0 → empty result
             start = 0;
             count = 0;
             error = ErrorValue.Calc;
