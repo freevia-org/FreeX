@@ -209,6 +209,21 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void FillSeriesStepDialog_DisablesDateUnitsUntilDateTypeSelected()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("_linearButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("_growthButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("_dateButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("_autoFillButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("private void UpdateDateUnitAvailability()");
+        source.Should().Contain("var isDateSeries = _dateButton.IsChecked == true;");
+        foreach (var button in new[] { "_dayButton", "_weekdayButton", "_monthButton", "_yearButton" })
+            source.Should().Contain($"{button}.IsEnabled = isDateSeries;");
+    }
+
+    [Fact]
     public void ZoomDialog_TryCreateResult_AcceptsPercentWithinExcelRange()
     {
         ZoomDialog.TryCreateResult("125", out var result, out _).Should().BeTrue();
