@@ -435,6 +435,50 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void ApplyCommand_CommitsRulesThroughCallbackWithoutClosingDialog()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var first = CreateRule(sheet.Id, 1, 1, 1);
+            var second = CreateRule(sheet.Id, 2, 1, 2);
+            sheet.ConditionalFormats.Add(first);
+            sheet.ConditionalFormats.Add(second);
+
+            IReadOnlyList<ConditionalFormat>? applied = null;
+            var dialog = new ManageConditionalFormatsDialog(
+                sheet,
+                selection: null,
+                applyRules: rules => applied = rules);
+
+            var listView = GetControl<ListView>(dialog, "_listView");
+            var moveDownButton = GetControl<Button>(dialog, "_moveDownBtn");
+            var applyButton = GetControl<Button>(dialog, "_applyBtn");
+
+            listView.SelectedIndex = 0;
+            moveDownButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            applyButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            applied.Should().NotBeNull();
+            applied!.Select(rule => rule.Id).Should().Equal(second.Id, first.Id);
+            applied.Select(rule => rule.Priority).Should().Equal(1, 2);
+            dialog.ResultRules.Should().BeEquivalentTo(applied);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ApplyCommand_DoesNotSetDialogResultOrCloseLikeOk()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("_applyRules?.Invoke(ResultRules);");
+        source.Should().Contain("private void ApplyBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().NotContain("private void ApplyBtn_Click(object sender, RoutedEventArgs e)\r\n    {\r\n        CommitResult();\r\n        DialogResult = true;");
+    }
+
+    [Fact]
     public void NewRuleCommand_OpensExcelStyleRuleTypeShellOnFirstCategory()
     {
         var source = ReadManageConditionalFormatsDialogSource();
