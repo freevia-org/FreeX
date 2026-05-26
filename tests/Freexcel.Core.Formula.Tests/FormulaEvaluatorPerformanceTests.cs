@@ -202,6 +202,33 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Theory]
+    [InlineData("=SUBTOTAL(9,A1:A100000)", 5_000_050_000d)]
+    [InlineData("=SUBTOTAL(1,A1:A100000)", 50_000.5d)]
+    [InlineData("=SUBTOTAL(2,A1:A100000)", 100_000d)]
+    public void SubtotalLargeRanges_AvoidsNumericListMaterialization(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeNumericSheet();
+
+        ((NumberValue)evaluator.Evaluate(formula, sheet)).Value.Should().BeApproximately(expected, 1e-10);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-10);
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Theory]
     [InlineData("=LARGE(A1:A100000,10)", 99_991d, 2_000_000)]
     [InlineData("=SMALL(A1:A100000,10)", 10d, 2_000_000)]
     [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 5_000_000)]

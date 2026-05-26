@@ -33,6 +33,7 @@ public sealed class ConditionalFormatDialogTests
         source.Should().Contain("CreateAccessLabel(\"_Icon set:\", _iconSetStyleBox)");
         source.Should().Contain("CreateAccessLabel(\"_Date period:\", _dateOccurringPeriodBox)");
         source.Should().Contain("CreateAccessLabel(\"Format cells that _contain:\", _duplicateValuesKindBox)");
+        source.Should().Contain("Content = \"_Format...\"");
         source.Should().Contain("Content = \"_Show value\"");
         source.Should().Contain("Content = \"_Reverse icon order\"");
         source.Should().Contain("Content = \"_Show Bar Only\"");
@@ -209,7 +210,7 @@ public sealed class ConditionalFormatDialogTests
                 "Yellow Fill with Dark Yellow Text",
                 "Custom Format..."
             ]);
-            FindButton(dialog.Content, "Format...").Should().NotBeNull();
+            FindButton(dialog.Content, "_Format...").Should().NotBeNull();
 
             dialog.Close();
         });

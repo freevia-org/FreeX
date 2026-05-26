@@ -7602,6 +7602,30 @@ public class FunctionLibraryTests
         result.Should().Be(new NumberValue(20));
     }
 
+    [Theory]
+    [InlineData(2, 8d)]
+    [InlineData(6, 201_600d)]
+    [InlineData(7, 2.138089935299395d)]
+    [InlineData(8, 2d)]
+    [InlineData(10, 4.571428571428571d)]
+    [InlineData(11, 4d)]
+    public void Subtotal_StatisticalAndProductFunctions_ReturnExpectedNumericResults(int functionNumber, double expected)
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, new NumberValue(4)),
+            (3, 1, new NumberValue(4)),
+            (4, 1, new NumberValue(4)),
+            (5, 1, new NumberValue(5)),
+            (6, 1, new NumberValue(5)),
+            (7, 1, new NumberValue(7)),
+            (8, 1, new NumberValue(9)));
+
+        var result = _eval.Evaluate($"=SUBTOTAL({functionNumber},A1:A8)", sheet);
+
+        result.Should().BeOfType<NumberValue>().Subject.Value.Should().BeApproximately(expected, 1e-12);
+    }
+
     [Fact]
     public void Subtotal_FuncNum4_Max_NoHiddenRows()
     {
@@ -7794,6 +7818,18 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1E308)), (2, 1, new NumberValue(1E308)));
         _eval.Evaluate("=SUBTOTAL(6,A1:A2)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Theory]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(10)]
+    [InlineData(11)]
+    public void Subtotal_OverflowingStatisticalFunction_PreservesNumError(int functionNumber)
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1E308)), (2, 1, new NumberValue(1E308)));
+
+        _eval.Evaluate($"=SUBTOTAL({functionNumber},A1:A2)", sheet).Should().Be(ErrorValue.Num);
     }
 
     [Fact]
