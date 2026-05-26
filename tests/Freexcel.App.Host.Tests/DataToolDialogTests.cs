@@ -570,6 +570,47 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void RemoveDuplicatesDialog_BulkButtonsReflectCurrentColumnSelectionState()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new RemoveDuplicatesDialog(
+                [
+                    new RemoveDuplicateColumnChoice(0, "Region", true),
+                    new RemoveDuplicateColumnChoice(1, "Sales", true)
+                ]);
+            dialog.Show();
+            try
+            {
+                var buttons = FindVisualChildren<Button>(dialog)
+                    .Where(button => button.Content is string)
+                    .ToDictionary(button => (string)button.Content);
+                var boxes = FindVisualChildren<CheckBox>(dialog)
+                    .Where(box => box.Content is "Region" or "Sales")
+                    .ToList();
+
+                buttons["_Select All"].IsEnabled.Should().BeFalse();
+                buttons["_Unselect All"].IsEnabled.Should().BeTrue();
+
+                buttons["_Unselect All"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                boxes.Should().AllSatisfy(box => box.IsChecked.Should().BeFalse());
+                buttons["_Select All"].IsEnabled.Should().BeTrue();
+                buttons["_Unselect All"].IsEnabled.Should().BeFalse();
+
+                boxes[0].IsChecked = true;
+
+                buttons["_Select All"].IsEnabled.Should().BeTrue();
+                buttons["_Unselect All"].IsEnabled.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_BuildsHeaderAwareColumnChoices()
     {
         var sheetId = SheetId.New();

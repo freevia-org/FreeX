@@ -58,6 +58,7 @@ public sealed class MainWindowSheetTabKeyboardTests
 
             addBounds.Left.Should().BeApproximately(scrollerBounds.Right + 2, 1.0);
             rightNavBounds.Left.Should().BeGreaterThan(addBounds.Right);
+            rightNavBounds.Left.Should().BeGreaterThan(addBounds.Right + 20);
             addSheet.Height.Should().Be(22);
         });
     }

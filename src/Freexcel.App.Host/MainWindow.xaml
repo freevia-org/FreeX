@@ -3555,6 +3555,7 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
@@ -3709,15 +3710,16 @@
                     </Button.Template>
                 </Button>
 
-                <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;" Width="20" Height="20" Padding="0"
+                <Button x:Name="SheetNavRightBtn" Grid.Column="4" Content="&gt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
                         Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="2,0,0,0"
+                        HorizontalAlignment="Right"
                         local:RibbonTooltip.Title="Scroll Tabs Right"
                         local:RibbonTooltip.KeyTip="SR"
                         local:RibbonTooltip.Description="Scroll the sheet tab list to the right."/>
 
                 <!-- Horizontal scrollbar (Excel-style, right of sheet tabs) -->
-                <ScrollBar x:Name="HorizontalScroll" Grid.Column="4"
+                <ScrollBar x:Name="HorizontalScroll" Grid.Column="5"
                            Orientation="Horizontal" Minimum="1" Maximum="16384" Value="1"
                            SmallChange="1" VerticalAlignment="Center" Margin="2,0"
                            AutomationProperties.Name="Horizontal Worksheet Scroll Bar"
