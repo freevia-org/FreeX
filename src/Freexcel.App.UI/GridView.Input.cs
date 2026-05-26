@@ -161,23 +161,14 @@ public partial class GridView
         double rowHeaderWidth,
         double columnHeaderHeight,
         double edgeThreshold = 24)
-    {
-        if (width <= 0 || height <= 0)
-            return new GridAutoScrollRequest(0, 0);
-
-        var horizontal = pointerX >= width - edgeThreshold
-            ? 1
-            : pointerX <= rowHeaderWidth + edgeThreshold
-                ? -1
-                : 0;
-        var vertical = pointerY >= height - edgeThreshold
-            ? 1
-            : pointerY <= columnHeaderHeight + edgeThreshold
-                ? -1
-                : 0;
-
-        return new GridAutoScrollRequest(horizontal, vertical);
-    }
+        => GridAutofillPlanner.CalculateEdgeScrollIntent(
+            pointerX,
+            pointerY,
+            width,
+            height,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            edgeThreshold);
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
