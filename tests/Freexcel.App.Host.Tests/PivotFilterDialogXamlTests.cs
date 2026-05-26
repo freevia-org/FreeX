@@ -70,6 +70,27 @@ public sealed class PivotFilterDialogXamlTests
         source.Should().Contain("Keyboard.Focus(FilterSearchBox);");
     }
 
+    [Fact]
+    public void PivotFieldFilterDialog_SelectAllCheckboxShowsMixedStateForPartialSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotFieldFilterDialog(["East", "West"], selectedItems: ["East"]);
+            dialog.Show();
+            try
+            {
+                var selectAll = GetControl<CheckBox>(dialog, "SelectAllCheckBox");
+
+                selectAll.IsThreeState.Should().BeTrue();
+                selectAll.IsChecked.Should().BeNull();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     [Theory]
     [InlineData("PivotLabelFilterDialog.xaml.cs", "LabelFilterKindBox")]
     [InlineData("PivotValueFilterDialog.xaml.cs", "ValueFilterKindBox")]
@@ -311,6 +332,15 @@ public sealed class PivotFilterDialogXamlTests
     private static T GetControl<T>(PivotValueFieldSettingsDialog dialog, string name)
     {
         var field = typeof(PivotValueFieldSettingsDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull($"control {name} should exist");
+        var value = field!.GetValue(dialog);
+        value.Should().BeOfType<T>();
+        return (T)value!;
+    }
+
+    private static T GetControl<T>(PivotFieldFilterDialog dialog, string name)
+    {
+        var field = typeof(PivotFieldFilterDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
         field.Should().NotBeNull($"control {name} should exist");
         var value = field!.GetValue(dialog);
         value.Should().BeOfType<T>();
