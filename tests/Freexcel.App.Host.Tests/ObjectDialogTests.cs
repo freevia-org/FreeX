@@ -169,8 +169,9 @@ public sealed class ObjectDialogTests
 
         objectSizeSource.Should().Contain("_widthBox");
         objectSizeSource.Should().Contain("_heightBox");
-        objectSizeSource.Should().Contain("Height:");
-        objectSizeSource.Should().Contain("Width:");
+        objectSizeSource.Should().Contain("_Height:");
+        objectSizeSource.Should().Contain("_Width:");
+        objectSizeSource.Should().Contain("new Label { Content = label, Target = box");
         objectSizeSource.Should().Contain("_lockAspectRatioBox");
         objectSizeSource.Should().Contain("Content = \"_Lock aspect ratio\"");
         objectSizeSource.Should().Contain("CalculateLockedAspectHeight");
