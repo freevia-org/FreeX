@@ -1408,6 +1408,58 @@ public sealed class FormatCellsDialogXamlTests
         });
     }
 
+    [Fact]
+    public void FormatCellsDialog_FillPatternPreviewRendersPatternBrush()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<TextBox>(dialog, "DlgFillColorBox").Text = "#FFFFFF";
+                GetControl<TextBox>(dialog, "DlgFillPatternColorBox").Text = "#5B9BD5";
+                GetControl<ComboBox>(dialog, "DlgFillPatternStyleBox").SelectedItem = "Diagonal Crosshatch";
+
+                GetControl<Border>(dialog, "DlgFillSamplePreview")
+                    .Background.Should().BeOfType<DrawingBrush>();
+                GetControl<Border>(dialog, "DlgFillPatternSamplePreview")
+                    .Background.Should().BeOfType<DrawingBrush>();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FillPatternPreviewClearsPatternBrushForNone()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var current = new CellStyle
+            {
+                FillColor = new CellColor(255, 255, 255),
+                FillPatternStyle = CellFillPatternStyle.DarkGrid,
+                FillPatternColor = new CellColor(91, 155, 213)
+            };
+            var dialog = ShowDialogForTest(current);
+            try
+            {
+                GetControl<ComboBox>(dialog, "DlgFillPatternStyleBox").SelectedItem = "None";
+
+                GetControl<Border>(dialog, "DlgFillSamplePreview")
+                    .Background.Should().NotBeOfType<DrawingBrush>();
+                GetControl<Border>(dialog, "DlgFillPatternSamplePreview")
+                    .Background.Should().NotBeOfType<DrawingBrush>();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     private static FormatCellsDialog ShowDialogForTest(CellStyle current)
     {
         var dialog = new FormatCellsDialog(current);
