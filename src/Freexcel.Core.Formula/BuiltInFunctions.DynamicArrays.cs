@@ -200,11 +200,12 @@ public static partial class BuiltInFunctions
             sortRows ??= keySortsRows;
 
             int sortOrder = 1;
-            if (i + 1 < args.Count && TryGetScalarControlArgument(args[i + 1], out var orderArg, out _))
+            if (i + 1 < args.Count)
             {
+                if (!TryGetScalarControlArgument(args[i + 1], out var orderArg, out var orderError)) return orderError;
                 if (orderArg is not BlankValue)
                 {
-                    if (orderArg is ErrorValue orderError) return orderError;
+                    if (orderArg is ErrorValue orderArgError) return orderArgError;
                     double orderRaw = ToNumber(orderArg);
                     if (!double.IsFinite(orderRaw)) return ErrorValue.Value;
                     sortOrder = (int)orderRaw;
@@ -749,15 +750,6 @@ public static partial class BuiltInFunctions
             return false;
         }
 
-        if (args[0] is RangeValue arr)
-        {
-            if (!TryReadVector(arr, values)) return false;
-        }
-        else
-        {
-            values.Add(args[0]);
-        }
-
         if (!TryGetScalarControlArgument(args[1], out var wrapCountArg, out error)) return false;
         double rawWrapCount = ToNumber(wrapCountArg);
         if (!double.IsFinite(rawWrapCount)) return false;
@@ -771,6 +763,15 @@ public static partial class BuiltInFunctions
         {
             error = ErrorValue.Num;
             return false;
+        }
+
+        if (args[0] is RangeValue arr)
+        {
+            if (!TryReadVector(arr, values)) return false;
+        }
+        else
+        {
+            values.Add(args[0]);
         }
 
         if (args.Count > 2 && args[2] is not BlankValue) padWith = args[2];
@@ -802,11 +803,11 @@ public static partial class BuiltInFunctions
         var arr = args[0] is RangeValue range
             ? range
             : new RangeValue(new[,] { { args[0] } });
-        if (!TryGetExpandDimension(args[1], arr.RowCount, out int rowCount)) return ErrorValue.Value;
+        if (!TryGetExpandDimension(args[1], arr.RowCount, out int rowCount, out var rowError)) return rowError;
         int colCount = arr.ColCount;
         if (args.Count > 2 && args[2] is not BlankValue)
         {
-            if (!TryGetExpandDimension(args[2], arr.ColCount, out colCount)) return ErrorValue.Value;
+            if (!TryGetExpandDimension(args[2], arr.ColCount, out colCount, out var colError)) return colError;
         }
 
         if (rowCount < arr.RowCount || colCount < arr.ColCount) return ErrorValue.Value;
@@ -820,12 +821,13 @@ public static partial class BuiltInFunctions
         return new RangeValue(result);
     }
 
-    private static bool TryGetExpandDimension(ScalarValue value, int originalLength, out int dimension)
+    private static bool TryGetExpandDimension(ScalarValue value, int originalLength, out int dimension, out ScalarValue error)
     {
         dimension = originalLength;
+        error = ErrorValue.Value;
         if (value is BlankValue) return true;
 
-        if (!TryGetScalarControlArgument(value, out var scalarValue, out _)) return false;
+        if (!TryGetScalarControlArgument(value, out var scalarValue, out error)) return false;
         double raw = ToNumber(scalarValue);
         if (!double.IsFinite(raw) || raw > int.MaxValue) return false;
         dimension = (int)raw;

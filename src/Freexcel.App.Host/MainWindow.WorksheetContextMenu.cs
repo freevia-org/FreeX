@@ -161,6 +161,12 @@ public partial class MainWindow
             case WorksheetContextMenuAction.AutoFitColumnWidth:
                 FormatAutoColMenuItem_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.Group:
+                GroupRowsBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.Ungroup:
+                UngroupRowsBtn_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.NewComment:
                 ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());
                 break;

@@ -6728,6 +6728,26 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sortby_SortOrderError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(2)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(1)));
+
+        _eval.Evaluate("=SORTBY(A1:A2,B1:B2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Sortby_RangeInSortOrderSlot_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(2)), (1,3,new NumberValue(3)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(1)), (2,3,new NumberValue(4)));
+
+        _eval.Evaluate("=SORTBY(A1:A2,B1:B2,C1:C2)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Sortby_MismatchedKeyShape_ReturnsValueError()
     {
         var sheet = MakeSheet(
@@ -7349,6 +7369,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_WrapCountError_PropagatesBeforeArrayShapeValidation()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new NumberValue(2)),
+            (2,1,new NumberValue(3)), (2,2,new NumberValue(4)));
+
+        _eval.Evaluate("=WRAPROWS(A1:B2,NA())", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=WRAPCOLS(A1:B2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void WraprowsAndWrapcols_HugeFiniteWrapCount_ReturnsNumError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
@@ -7466,6 +7497,15 @@ public class FunctionLibraryTests
     }
 
     // ── UNIQUE ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Expand_RowOrColumnError_PropagatesError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (1,2,new NumberValue(2)));
+
+        _eval.Evaluate("=EXPAND(A1:B1,NA())", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=EXPAND(A1:B1,2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
 
     [Fact]
     public void Expand_TooManyCells_ReturnsValueError()

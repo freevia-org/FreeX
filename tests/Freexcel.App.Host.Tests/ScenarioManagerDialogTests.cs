@@ -168,9 +168,78 @@ public sealed class ScenarioManagerDialogTests
     }
 
     [Fact]
+    public void ProjectSelectionFields_UsesSelectedScenarioFields()
+    {
+        var item = new ScenarioManagerItem(
+            "Best Case",
+            [],
+            "Revenue lift",
+            "B2:C4",
+            Hidden: true,
+            Locked: true);
+
+        var state = ScenarioManagerDialog.ProjectSelectionFields(item, currentScenarioNameText: "", defaultScenarioName: "Scenario 2");
+
+        state.Should().NotBeNull();
+        state!.ScenarioName.Should().Be("Best Case");
+        state.ChangingCellsText.Should().Be("B2:C4");
+        state.ResultCellsText.Should().Be("");
+        state.CommentText.Should().Be("Revenue lift");
+        state.Locked.Should().BeTrue();
+        state.Hidden.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ProjectSelectionFields_ResetsToDefaultWhenSelectionClearedAndNameBlank()
+    {
+        var state = ScenarioManagerDialog.ProjectSelectionFields(selected: null, currentScenarioNameText: " ", defaultScenarioName: "Scenario 1");
+
+        state.Should().NotBeNull();
+        state!.ScenarioName.Should().Be("Scenario 1");
+        state.ChangingCellsText.Should().Be("");
+        state.ResultCellsText.Should().Be("");
+        state.CommentText.Should().Be("");
+        state.Locked.Should().BeFalse();
+        state.Hidden.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ProjectSelectionFields_PreservesTypedFieldsWhenSelectionClearedAndNamePresent()
+    {
+        ScenarioManagerDialog.ProjectSelectionFields(selected: null, currentScenarioNameText: "Draft", defaultScenarioName: "Scenario 1")
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
+    public void ProjectAcceptResult_CapturesSelectedAndEditedFieldValues()
+    {
+        var selected = new ScenarioManagerItem("Best Case", [], null, "B2", Hidden: false, Locked: false);
+
+        var result = ScenarioManagerDialog.ProjectAcceptResult(
+            ScenarioManagerAction.Edit,
+            selected,
+            newScenarioName: "Better Case",
+            changingCellsText: "C3",
+            resultCellsText: "D4",
+            commentText: "Updated",
+            locked: true,
+            hidden: true);
+
+        result.Action.Should().Be(ScenarioManagerAction.Edit);
+        result.SelectedScenarioName.Should().Be("Best Case");
+        result.NewScenarioName.Should().Be("Better Case");
+        result.ChangingCellsText.Should().Be("C3");
+        result.ResultCellsText.Should().Be("D4");
+        result.CommentText.Should().Be("Updated");
+        result.Locked.Should().BeTrue();
+        result.Hidden.Should().BeTrue();
+    }
+
+    [Fact]
     public void DialogSource_UsesExcelLikeScenarioListAndSideButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+        var source = ReadScenarioManagerDialogSources();
 
         source.Should().Contain("ListBox");
         source.Should().Contain("Add...");
@@ -189,7 +258,7 @@ public sealed class ScenarioManagerDialogTests
     [Fact]
     public void DialogSource_ExposesKeyboardAccessKeysForFieldsActionsAndClose()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+        var source = ReadScenarioManagerDialogSources();
 
         source.Should().Contain("\"_Scenarios:\"");
         source.Should().Contain("\"Scenario _name:\"");
@@ -210,18 +279,20 @@ public sealed class ScenarioManagerDialogTests
     [Fact]
     public void DialogSource_FramesAddEditFieldsLikeExcel()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+        var source = ReadScenarioManagerDialogSources();
 
         source.Should().Contain("Scenario _name:");
         source.Should().Contain("Changing _cells:");
         source.Should().Contain("Comment:");
         source.Should().Contain("Add/Edit Scenario");
-        source.Should().Contain("_newNameBox.Text = selected.Name");
-        source.Should().Contain("_changingCellsBox.Text = selected.ChangingCellsText");
-        source.Should().Contain("_resultCellsBox.Text = \"\"");
-        source.Should().Contain("_commentBox.Text = selected.Comment ?? \"\"");
-        source.Should().Contain("_lockedBox.IsChecked = selected.Locked");
-        source.Should().Contain("_hiddenBox.IsChecked = selected.Hidden");
+        source.Should().Contain("ProjectSelectionFields(selected, _newNameBox.Text, _defaultScenarioName)");
+        source.Should().Contain("ApplySelectionFields(fields)");
+        source.Should().Contain("selected.Name");
+        source.Should().Contain("selected.ChangingCellsText");
+        source.Should().Contain("ResultCellsText: \"\"");
+        source.Should().Contain("selected.Comment ?? \"\"");
+        source.Should().Contain("selected.Locked");
+        source.Should().Contain("selected.Hidden");
     }
 
     [Fact]
@@ -258,7 +329,7 @@ public sealed class ScenarioManagerDialogTests
     [Fact]
     public void DialogSource_ReturnsChangingCellsAndCommentFields()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+        var source = ReadScenarioManagerDialogSources();
         var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ScenarioCommands.cs"));
 
         source.Should().Contain("public string? ChangingCellsText");
@@ -266,18 +337,26 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("public string? CommentText");
         source.Should().Contain("public bool ScenarioHidden");
         source.Should().Contain("public bool ScenarioLocked");
-        source.Should().Contain("ChangingCellsText = _changingCellsBox.Text");
-        source.Should().Contain("ResultCellsText = _resultCellsBox.Text");
-        source.Should().Contain("CommentText = _commentBox.Text");
-        source.Should().Contain("ScenarioLocked = _lockedBox.IsChecked == true");
-        source.Should().Contain("ScenarioHidden = _hiddenBox.IsChecked == true");
-        source.Should().Contain("if (RequiresScenarioName(action) && !TryValidateScenarioName(_newNameBox.Text, out var error))");
-        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario details.\", _newNameBox);");
-        source.Should().Contain("!TryValidateChangingCells(_changingCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error)");
-        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario details.\", _changingCellsBox);");
+        source.Should().Contain("ProjectAcceptResult(");
+        source.Should().Contain("_changingCellsBox.Text");
+        source.Should().Contain("_resultCellsBox.Text");
+        source.Should().Contain("_commentBox.Text");
+        source.Should().Contain("_lockedBox.IsChecked == true");
+        source.Should().Contain("_hiddenBox.IsChecked == true");
+        source.Should().Contain("ChangingCellsText = result.ChangingCellsText");
+        source.Should().Contain("ResultCellsText = result.ResultCellsText");
+        source.Should().Contain("CommentText = result.CommentText");
+        source.Should().Contain("ScenarioLocked = result.Locked");
+        source.Should().Contain("ScenarioHidden = result.Hidden");
+        source.Should().Contain("ValidateAcceptRequest(");
+        source.Should().Contain("!TryValidateScenarioName(scenarioName, out var error)");
+        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? \"Enter scenario details.\", ScenarioManagerValidationField.ScenarioName)");
+        source.Should().Contain("!TryValidateChangingCells(changingCellsText, currentSheetId, resolveSheetIdByName, out error)");
+        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? \"Enter scenario details.\", ScenarioManagerValidationField.ChangingCells)");
         source.Should().Contain("WorkbookRangeTextCodec.TryParseMany(currentSheetId.Value, resultCellsText, resolveSheetIdByName, out _)");
-        source.Should().Contain("!TryValidateResultCells(_resultCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error)");
-        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario result cells.\", _resultCellsBox);");
+        source.Should().Contain("!TryValidateResultCells(resultCellsText, currentSheetId, resolveSheetIdByName, out error)");
+        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? \"Enter scenario result cells.\", ScenarioManagerValidationField.ResultCells)");
+        source.Should().Contain("GetValidationTarget(failure.Field)");
         source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         source.Should().Contain("target.SelectAll();");
         handlerSource.Should().Contain("new ScenarioManagerDialog(_workbook, _currentSheetId, ResolveSheetIdByName)");
@@ -335,4 +414,10 @@ public sealed class ScenarioManagerDialogTests
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
+
+    private static string ReadScenarioManagerDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.Planning.cs")));
 }
