@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(30, "the generated metadata-pass manifest currently declares thirty deterministic package-retention rows");
+        rows.Should().HaveCount(31, "the generated metadata-pass manifest currently declares thirty-one deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -697,6 +697,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetPageBreaksRow_RetainsPageBreaksAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-page-breaks-001");
+        AssertWorksheetPageBreaks(source, "generated-worksheet-page-breaks-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-page-breaks-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-page-breaks-001");
+        AssertWorksheetPageBreaks(saved, "generated-worksheet-page-breaks-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -1063,6 +1081,41 @@ public class XlsxCorpusRunnerTests
         sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3", because);
         sheetFormat.Element(worksheetNs + "nativeSheetFormatChild")!
             .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetPageBreaks(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var rowBreaks = worksheetXml.Root!.Element(worksheetNs + "rowBreaks");
+        rowBreaks.Should().NotBeNull(because);
+        rowBreaks!.Attribute("count")!.Value.Should().Be("1", because);
+        rowBreaks.Attribute("manualBreakCount")!.Value.Should().Be("1", because);
+        var rowBreak = rowBreaks.Elements(worksheetNs + "brk")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        rowBreak.Attribute("id")!.Value.Should().Be("20", because);
+        rowBreak.Attribute("max")!.Value.Should().Be("16383", because);
+        rowBreak.Attribute("man")!.Value.Should().Be("1", because);
+        rowBreak.Attribute("pt")!.Value.Should().Be("1", because);
+        rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native", because);
+
+        var columnBreaks = worksheetXml.Root.Element(worksheetNs + "colBreaks");
+        columnBreaks.Should().NotBeNull(because);
+        columnBreaks!.Attribute("count")!.Value.Should().Be("1", because);
+        columnBreaks.Attribute("manualBreakCount")!.Value.Should().Be("1", because);
+        var columnBreak = columnBreaks.Elements(worksheetNs + "brk")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        columnBreak.Attribute("id")!.Value.Should().Be("5", because);
+        columnBreak.Attribute("max")!.Value.Should().Be("1048575", because);
+        columnBreak.Attribute("man")!.Value.Should().Be("1", because);
+        columnBreak.Attribute("pt")!.Value.Should().Be("1", because);
+        columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native", because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)

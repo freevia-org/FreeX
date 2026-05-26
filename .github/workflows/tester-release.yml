@@ -12,6 +12,10 @@ on:
         required: true
         default: false
         type: boolean
+      release_notes:
+        description: Optional tester-facing release notes to append to the generated notes
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -153,7 +157,17 @@ jobs:
           $uploadRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts\upload"
           New-Item -ItemType Directory -Force -Path $uploadRoot | Out-Null
           Copy-Item -LiteralPath $versionedMsix.FullName -Destination (Join-Path $uploadRoot $versionedMsix.Name) -Force
-          Copy-Item -LiteralPath $versionedMsix.FullName -Destination (Join-Path $uploadRoot "Freexcel-latest-win-x64.msix") -Force
+          $latestMsixPath = Join-Path $uploadRoot "Freexcel-latest-win-x64.msix"
+          Copy-Item -LiteralPath $versionedMsix.FullName -Destination $latestMsixPath -Force
+
+          $versionedHashPath = "$($versionedMsix.FullName).sha256"
+          if (-not (Test-Path -LiteralPath $versionedHashPath)) {
+            throw "Publish script did not create a versioned MSIX checksum."
+          }
+
+          Copy-Item -LiteralPath $versionedHashPath -Destination (Join-Path $uploadRoot "$($versionedMsix.Name).sha256") -Force
+          $latestHash = Get-FileHash -LiteralPath $latestMsixPath -Algorithm SHA256
+          Set-Content -LiteralPath "$latestMsixPath.sha256" -Value "$($latestHash.Hash.ToLowerInvariant())  Freexcel-latest-win-x64.msix" -Encoding ASCII
 
       - name: Upload versioned artifact
         uses: actions/upload-artifact@v7
@@ -183,10 +197,18 @@ jobs:
           path: artifacts/upload/Freexcel-latest-win-x64.msix
           if-no-files-found: error
 
+      - name: Upload MSIX checksum artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-msix-sha256
+          path: artifacts/upload/*.msix.sha256
+          if-no-files-found: error
+
       - name: Create or update GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          FREEXCEL_RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
           $tag = "${{ steps.meta.outputs.tag }}"
           $title = "${{ steps.meta.outputs.release_name }}"
@@ -200,6 +222,16 @@ jobs:
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
           The MSIX package is unsigned for local packaging validation; signing and Store submission remain release-gate tasks.
           "@
+          $extraNotes = $env:FREEXCEL_RELEASE_NOTES
+          if (-not [string]::IsNullOrWhiteSpace($extraNotes)) {
+            $notes = $notes.TrimEnd() + @"
+
+
+          Additional tester notes:
+
+          $extraNotes
+          "@
+          }
 
           $releaseExists = $false
           gh release view $tag *> $null
@@ -212,10 +244,21 @@ jobs:
             $prereleaseArgs += "--prerelease"
           }
 
-          if ($releaseExists) {
-            gh release edit $tag --title $title --notes $notes @prereleaseArgs
-          } else {
-            gh release create $tag --target $env:GITHUB_SHA --title $title --notes $notes @prereleaseArgs
+          $latestArgs = @()
+          if ("${{ inputs.prerelease }}" -ne "true") {
+            $latestArgs += "--latest"
           }
 
-          gh release upload $tag artifacts/upload/*.exe artifacts/upload/*.msix --clobber
+          $assetPaths = @(
+            "artifacts/upload/*.exe",
+            "artifacts/upload/*.msix",
+            "artifacts/upload/*.msix.sha256"
+          )
+
+          if ($releaseExists) {
+            gh release upload $tag @assetPaths --clobber
+            gh release edit $tag --title $title --notes $notes @prereleaseArgs @latestArgs
+          } else {
+            gh release create $tag @assetPaths --target $env:GITHUB_SHA --title $title --notes $notes --draft @prereleaseArgs
+            gh release edit $tag --draft=false @latestArgs
+          }
