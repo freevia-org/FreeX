@@ -271,6 +271,31 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void InsertShapesKeyTip_OpensShapeMenuAndInsertsRectangle()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRange(3, 2, 3, 2);
+
+            harness.OpenRibbonMenu(Key.N, Key.S, Key.H);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Insert");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Rectangle").Should().Be("R");
+            harness.ActiveMenuItemGestureText("Ellipse").Should().Be("E");
+            harness.ActiveMenuItemGestureText("Line").Should().Be("L");
+
+            harness.HandleKeyTip(Key.R);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.DrawingShapeCount.Should().Be(1);
+            harness.LastDrawingShapeKind.Should().Be(DrawingShapeKind.Rectangle);
+            harness.LastDrawingShapeAnchor.Should().Be((3u, 2u));
+        });
+    }
+
+    [Fact]
     public void HomePasteKeyTip_OpensExcelStylePasteMenu()
     {
         RunSta(() =>
@@ -568,6 +593,19 @@ public sealed class MainWindowRibbonKeyTipTests
         {
             var sheet = _workbook.Sheets[0];
             return sheet.RowOutlineLevels.TryGetValue(row, out var level) ? level : 0;
+        }
+
+        public int DrawingShapeCount => _workbook.Sheets[0].DrawingShapes.Count;
+
+        public DrawingShapeKind? LastDrawingShapeKind => _workbook.Sheets[0].DrawingShapes.LastOrDefault()?.Kind;
+
+        public (uint Row, uint Col)? LastDrawingShapeAnchor
+        {
+            get
+            {
+                var anchor = _workbook.Sheets[0].DrawingShapes.LastOrDefault()?.Anchor;
+                return anchor is { } value ? (value.Row, value.Col) : null;
+            }
         }
 
         public string? ActiveMenuItemGestureText(string header) =>
