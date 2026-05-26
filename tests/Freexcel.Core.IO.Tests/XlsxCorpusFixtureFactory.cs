@@ -61,6 +61,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
+        "generated-worksheet-custom-properties-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -249,6 +250,13 @@ internal static class XlsxCorpusFixtureFactory
               </dataConsolidate>
             </worksheet>
             """)),
+        "generated-worksheet-custom-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <customProperties>
+                <customPr name="FreexcelNativeProperty" id="1" unsupportedAttr="kept"/>
+              </customProperties>
+            </worksheet>
+            """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -403,6 +411,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-sort-state-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-data-consolidation-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-custom-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase));
 
     private static void EnsureKnownGapContentTypeOverrides(ZipArchive archive, IReadOnlyCollection<string> partNames)
@@ -566,6 +576,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-data-consolidation-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetDataConsolidationFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-custom-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetCustomPropertiesFixup(archive);
             return;
         }
 
@@ -1064,6 +1080,27 @@ internal static class XlsxCorpusFixtureFactory
                     new XAttribute("ref", "A1:B2"),
                     new XAttribute("sheet", "Data"),
                     new XAttribute("customDataRefFlag", "keep")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetCustomPropertiesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "customProperties").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "customProperties",
+            new XElement(
+                worksheetNs + "customPr",
+                new XAttribute("name", "FreexcelNativeProperty"),
+                new XAttribute("id", "1"),
+                new XAttribute("unsupportedAttr", "kept"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
