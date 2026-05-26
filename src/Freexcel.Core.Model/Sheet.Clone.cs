@@ -444,9 +444,33 @@ public sealed partial class Sheet
                 : new Dictionary<string, string>(autoFilter.NativeAttributes, StringComparer.Ordinal),
             NativeChildXmls = autoFilter.NativeChildXmls?.ToArray()
         };
-        clone.FilterColumns.AddRange(autoFilter.FilterColumns);
+        clone.FilterColumns.AddRange(autoFilter.FilterColumns.Select(CloneAutoFilterColumn));
         return clone;
     }
+
+    private static WorksheetAutoFilterColumnModel CloneAutoFilterColumn(WorksheetAutoFilterColumnModel column) =>
+        new(
+            column.ColumnId,
+            column.Values.ToArray(),
+            column.IncludeBlank,
+            column.CustomFilters.Select(CloneAutoFilterCustomFilter).ToArray(),
+            column.CustomFiltersAnd,
+            column.CustomFiltersAndRaw,
+            column.NativeCustomFiltersAttributes is null
+                ? null
+                : new Dictionary<string, string>(column.NativeCustomFiltersAttributes, StringComparer.Ordinal),
+            column.NativeFilterXmls.ToArray(),
+            column.NativeAttributes is null
+                ? null
+                : new Dictionary<string, string>(column.NativeAttributes, StringComparer.Ordinal));
+
+    private static WorksheetAutoFilterCustomFilterModel CloneAutoFilterCustomFilter(WorksheetAutoFilterCustomFilterModel filter) =>
+        new(
+            filter.Operator,
+            filter.Value,
+            filter.NativeAttributes is null
+                ? null
+                : new Dictionary<string, string>(filter.NativeAttributes, StringComparer.Ordinal));
 
     private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)
     {
