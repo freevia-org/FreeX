@@ -283,7 +283,8 @@ internal static class XlsxStructuredTableWriter
             TrySetNativeAttributeIfMissing(element, name, value);
         }
 
-        if (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank)
+        var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
+        if (!hasCustomFilters && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
         {
             element.Add(new XElement(
                 workbookNs + "filters",
@@ -291,18 +292,52 @@ internal static class XlsxStructuredTableWriter
                 filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value)))));
         }
 
+        if (hasCustomFilters)
+        {
+            var customFilters = new XElement(
+                workbookNs + "customFilters",
+                filterColumn.CustomFilters.Select(filter => ToCustomFilterXml(filter, workbookNs)));
+            if (filterColumn.CustomFiltersAndRaw is not null)
+                customFilters.SetAttributeValue("and", filterColumn.CustomFiltersAndRaw);
+            else if (filterColumn.CustomFiltersAnd)
+                customFilters.SetAttributeValue("and", "1");
+
+            foreach (var (name, value) in filterColumn.NativeCustomFiltersAttributes ?? new Dictionary<string, string>())
+            {
+                TrySetNativeAttributeIfMissing(customFilters, name, value);
+            }
+
+            element.Add(customFilters);
+        }
+
         foreach (var nativeFilterXml in filterColumn.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)))
         {
             try
             {
                 var nativeFilter = XElement.Parse(nativeFilterXml);
-                if (nativeFilter.Name.Namespace == workbookNs && nativeFilter.Name.LocalName != "filters")
+                if (nativeFilter.Name.Namespace == workbookNs && nativeFilter.Name.LocalName != "filters" && nativeFilter.Name.LocalName != "customFilters")
                     element.Add(nativeFilter);
             }
             catch
             {
                 // Ignore malformed native filter payloads from older saves; value filters above remain valid.
             }
+        }
+
+        return element;
+    }
+
+    private static XElement ToCustomFilterXml(StructuredTableCustomFilterModel filter, XNamespace workbookNs)
+    {
+        var element = new XElement(workbookNs + "customFilter");
+        if (filter.Operator is not null)
+            element.SetAttributeValue("operator", filter.Operator);
+        if (filter.Value is not null)
+            element.SetAttributeValue("val", filter.Value);
+
+        foreach (var (name, value) in filter.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         return element;
