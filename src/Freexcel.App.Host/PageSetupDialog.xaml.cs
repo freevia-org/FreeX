@@ -12,6 +12,12 @@ public enum PageSetupRangeSelectionTarget
     RepeatColumns
 }
 
+public enum PageSetupInitialFocusTarget
+{
+    PageOrientation,
+    RepeatRows
+}
+
 public sealed record PageSetupRangeSelectionRequest(
     PageSetupRangeSelectionTarget Target,
     string CurrentText,
@@ -22,6 +28,7 @@ public partial class PageSetupDialog : Window
     private readonly SheetId _sheetId;
     private readonly GridRange? _currentSelection;
     private readonly Action<PageSetupRangeSelectionRequest>? _requestRangeSelection;
+    private readonly PageSetupInitialFocusTarget _initialFocusTarget;
 
     public WorksheetPageOrientation Orientation { get; private set; }
     public WorksheetPaperSize PaperSize { get; private set; }
@@ -65,10 +72,12 @@ public partial class PageSetupDialog : Window
     public PageSetupDialog(
         Sheet sheet,
         GridRange? currentSelection = null,
-        Action<PageSetupRangeSelectionRequest>? requestRangeSelection = null)
+        Action<PageSetupRangeSelectionRequest>? requestRangeSelection = null,
+        PageSetupInitialFocusTarget initialFocusTarget = PageSetupInitialFocusTarget.PageOrientation)
     {
         InitializeComponent();
         _requestRangeSelection = requestRangeSelection;
+        _initialFocusTarget = initialFocusTarget;
         _sheetId = sheet.Id;
         _currentSelection = currentSelection is { } selection &&
                             selection.Start.Sheet == sheet.Id &&
