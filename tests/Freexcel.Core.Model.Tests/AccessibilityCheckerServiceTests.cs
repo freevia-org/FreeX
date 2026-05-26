@@ -491,36 +491,4 @@ public sealed class AccessibilityCheckerServiceTests
         AccessibilityCheckerService.FindIssues(workbook)
             .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
     }
-
-    [Theory]
-    [MemberData(nameof(VisibleScalarValues))]
-    public void FindIssues_FlagsLowContrastCellText_ForVisibleScalarValues(ScalarValue value, string expectedLocation)
-    {
-        var workbook = new Workbook("Accessibility");
-        var sheet = workbook.AddSheet("Sales");
-        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
-        {
-            FontColor = new CellColor(245, 245, 245)
-        });
-        var address = CellAddress.Parse(expectedLocation, sheet.Id);
-        sheet.SetCell(address, new Cell
-        {
-            Value = value,
-            StyleId = lowContrastStyle
-        });
-
-        var issue = AccessibilityCheckerService.FindIssues(workbook)
-            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
-
-        issue.Location.Should().Be(expectedLocation);
-    }
-
-    public static IEnumerable<object[]> VisibleScalarValues()
-    {
-        yield return [new TextValue("Visible text"), "A1"];
-        yield return [new NumberValue(42), "A2"];
-        yield return [new BoolValue(true), "A3"];
-        yield return [DateTimeValue.FromDateTime(new DateTime(2026, 5, 26)), "A4"];
-        yield return [ErrorValue.DivByZero, "A5"];
-    }
 }

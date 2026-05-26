@@ -129,7 +129,7 @@ public static class AccessibilityCheckerService
     {
         foreach (var (address, cell) in sheet.GetUsedCells())
         {
-            if (!HasVisibleCellText(cell.Value))
+            if (cell.Value is not TextValue text || string.IsNullOrWhiteSpace(text.Value))
                 continue;
 
             var style = workbook.GetStyle(cell.StyleId);
@@ -261,15 +261,6 @@ public static class AccessibilityCheckerService
             _ => null
         };
     }
-
-    private static bool HasVisibleCellText(ScalarValue value) =>
-        value switch
-        {
-            BlankValue => false,
-            TextValue text => !string.IsNullOrWhiteSpace(text.Value),
-            RangeValue => false,
-            _ => true
-        };
 
     private static double ContrastRatio(CellColor first, CellColor second)
     {
