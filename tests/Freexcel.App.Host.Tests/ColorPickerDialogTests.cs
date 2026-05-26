@@ -261,6 +261,38 @@ public sealed class ColorPickerDialogTests
     }
 
     [Fact]
+    public void EditingCustomColor_UpdatesSwatchSelectionWhenColorMatchesPalette()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var initialColor = new CellColor(0x44, 0x72, 0xC4);
+            var paletteColor = new CellColor(0xED, 0x7D, 0x31);
+            var dialog = new ColorPickerDialog(initialColor);
+            try
+            {
+                var themePanel = (Panel)dialog.FindName("ThemeColorsPanel");
+                var initialButton = FindSwatchButton(themePanel, initialColor);
+                var paletteButton = FindSwatchButton(themePanel, paletteColor);
+                var hex = (TextBox)dialog.FindName("CustomColorTextBox");
+
+                hex.Text = "#217346";
+
+                initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
+                paletteButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
+
+                hex.Text = "#ED7D31";
+
+                initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
+                paletteButton.BorderThickness.Should().Be(new System.Windows.Thickness(2));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void EditingCustomRgbComponents_UpdatesSelectedColorAndPreviewText()
     {
         StaTestRunner.Run(() =>

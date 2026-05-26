@@ -224,7 +224,10 @@ public partial class ColorPickerDialog : Window
         if (sender is Button { Tag: CellColor color } button)
         {
             MarkSelectedSwatch(button);
-            SelectColor(color, updateSpectrumBase: ReferenceEquals(((Button)sender).Parent, CustomSpectrumPanel));
+            SelectColor(
+                color,
+                updateSpectrumBase: ReferenceEquals(((Button)sender).Parent, CustomSpectrumPanel),
+                updateSwatchSelection: false);
         }
     }
 
@@ -241,9 +244,39 @@ public partial class ColorPickerDialog : Window
         _selectedSwatchButton = button;
     }
 
-    private void SelectColor(CellColor color, bool updateSpectrumBase = true)
+    private void ClearSelectedSwatch()
+    {
+        if (_selectedSwatchButton is null)
+            return;
+
+        _selectedSwatchButton.BorderBrush = Brushes.Gray;
+        _selectedSwatchButton.BorderThickness = new Thickness(1);
+        _selectedSwatchButton = null;
+    }
+
+    private void UpdateSwatchSelection(CellColor color)
+    {
+        var matchingButton = ThemeColorsPanel.Children
+            .OfType<Button>()
+            .Concat(StandardColorsPanel.Children.OfType<Button>())
+            .Concat(CustomSpectrumPanel.Children.OfType<Button>())
+            .FirstOrDefault(button => button.Tag is CellColor swatchColor && swatchColor == color);
+
+        if (matchingButton is null)
+        {
+            ClearSelectedSwatch();
+            return;
+        }
+
+        MarkSelectedSwatch(matchingButton);
+    }
+
+    private void SelectColor(CellColor color, bool updateSpectrumBase = true, bool updateSwatchSelection = true)
     {
         SelectedColor = color;
+        if (updateSwatchSelection)
+            UpdateSwatchSelection(color);
+
         if (updateSpectrumBase)
         {
             _customSpectrumBaseColor = color;
