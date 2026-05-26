@@ -163,6 +163,20 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_MoveAfterEnterToggleControlsDirectionEnabledState()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml.cs"));
+
+        xaml.Should().Contain("Checked=\"MoveAfterEnter_Changed\"");
+        xaml.Should().Contain("Unchecked=\"MoveAfterEnter_Changed\"");
+        source.Should().Contain("UpdateAfterEnterDirectionState();");
+        source.Should().Contain("private void MoveAfterEnter_Changed(object sender, RoutedEventArgs e)");
+        source.Should().Contain("private void UpdateAfterEnterDirectionState()");
+        source.Should().Contain("OptAfterEnterDirection.IsEnabled = OptMoveAfterEnter.IsChecked == true;");
+    }
+
+    [Fact]
     public void Viewport_MapsObjectPlaceholderOptionToGridDisplayMode()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));

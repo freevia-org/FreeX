@@ -269,7 +269,9 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
                         <CheckBox x:Name="OptMoveAfterEnter"
                                   Content="After pressing Enter, _move selection"
-                                  IsChecked="True" FontSize="12" Margin="0,0,0,8"/>
+                                  IsChecked="True" FontSize="12" Margin="0,0,0,8"
+                                  Checked="MoveAfterEnter_Changed"
+                                  Unchecked="MoveAfterEnter_Changed"/>
                         <Grid Margin="18,0,0,9">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160"/>
