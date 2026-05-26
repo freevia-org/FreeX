@@ -7,6 +7,8 @@ public sealed class NumberFormatterRegexCachePerformanceTests
 {
     [Theory]
     [InlineData("NumberFormatColorMapper.cs")]
+    [InlineData("NumberFormatter.DateTime.cs")]
+    [InlineData("NumberFormatter.Fractions.cs")]
     [InlineData("NumberFormatter.Sections.cs")]
     public void HotNumberFormatterParsers_UseCachedRegexInstances(string fileName)
     {
