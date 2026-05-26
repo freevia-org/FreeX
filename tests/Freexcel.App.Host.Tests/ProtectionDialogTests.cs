@@ -238,6 +238,24 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
+    public void AllowEditRangeDialogPlanner_BuildsRangeListAndButtonState()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2));
+
+        AllowEditRangeDialogPlanner.BuildExistingRangeItems([range]).Should().Equal(range.ToString());
+        AllowEditRangeDialogPlanner.BuildButtonState(rangeCount: 0, hasSelectedRange: false)
+            .Should()
+            .Be(new AllowEditRangeButtonState(false, false));
+        AllowEditRangeDialogPlanner.BuildButtonState(rangeCount: 1, hasSelectedRange: false)
+            .Should()
+            .Be(new AllowEditRangeButtonState(false, true));
+        AllowEditRangeDialogPlanner.BuildButtonState(rangeCount: 1, hasSelectedRange: true)
+            .Should()
+            .Be(new AllowEditRangeButtonState(true, true));
+    }
+
+    [Fact]
     public void AllowEditRangeDialogExistingRangesList_DoubleClickRemovesSelectedRange()
     {
         StaTestRunner.Run(() =>
@@ -357,5 +375,6 @@ public sealed class ProtectionDialogTests
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AllowEditRangeDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AllowEditRangeDialogPlanner.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogPlanner.cs")));
 }
