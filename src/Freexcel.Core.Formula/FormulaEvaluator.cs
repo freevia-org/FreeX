@@ -974,7 +974,7 @@ public sealed class FormulaEvaluator
         if (!double.IsFinite(rawIdx)) return ErrorValue.Value;
         int idx = (int)rawIdx;
         if (idx < 1 || idx >= node.Arguments.Count) return ErrorValue.Value;
-        return EvaluateNode(node.Arguments[idx], context);
+        return EvaluateArrayOperand(node.Arguments[idx], context);
     }
 
     private ScalarValue EvaluateIfs(FunctionCallNode node, IEvalContext context)

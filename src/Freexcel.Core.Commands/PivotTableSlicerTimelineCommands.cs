@@ -210,6 +210,9 @@ public sealed class AddTimelineCommand : IWorkbookCommand
             return new CommandOutcome(false, "Connected PivotTable field was not found.");
 
         var dateBounds = ReadDateBounds(sourceSheet, target.Value.PivotTable, sourceFieldIndex);
+        if (dateBounds.Start is null && dateBounds.End is null)
+            return new CommandOutcome(false, "Timeline source field must contain dates.");
+
         var timeline = new TimelineModel
         {
             Name = _timelineName.Trim(),
@@ -239,32 +242,15 @@ public sealed class AddTimelineCommand : IWorkbookCommand
         var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
         for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
         {
-            if (!TryGetDateOnly(sheet.GetValue(row, sourceColumn), out var date))
+            if (sheet.GetValue(row, sourceColumn) is not DateTimeValue dateTime)
                 continue;
+            var date = DateOnly.FromDateTime(dateTime.ToDateTime());
             start = start is null || date < start.Value ? date : start;
             end = end is null || date > end.Value ? date : end;
         }
 
         return (start?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
             end?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
-    }
-
-    private static bool TryGetDateOnly(ScalarValue value, out DateOnly date)
-    {
-        date = default;
-        switch (value)
-        {
-            case DateTimeValue dateTime:
-                date = DateOnly.FromDateTime(dateTime.ToDateTime());
-                return true;
-            case NumberValue number when number.Value > 0 && double.IsFinite(number.Value):
-                date = DateOnly.FromDateTime(DateTime.FromOADate(number.Value));
-                return true;
-            case TextValue text:
-                return DateOnly.TryParse(text.Value, System.Globalization.CultureInfo.InvariantCulture, out date);
-            default:
-                return false;
-        }
     }
 
 }
