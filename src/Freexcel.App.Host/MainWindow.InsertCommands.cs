@@ -39,10 +39,12 @@ public partial class MainWindow
     private void InsertSparkline(string type)
     {
         var selected = SheetGrid.SelectedRange;
-        var dialog = new SparklineDialog(
+        SparklineDialog? dialog = null;
+        dialog = new SparklineDialog(
             selected?.ToString() ?? "",
             "",
             SparklineInputParser.ParseDialogKindChoice(type),
+            request => ApplySparklineRangeSelection(dialog, request),
             sheetId: _currentSheetId)
         { Owner = this };
         if (dialog.ShowDialog() != true)
@@ -72,6 +74,33 @@ public partial class MainWindow
         SetActiveCell(location);
         EnsureCellVisible(location);
         UpdateViewport();
+    }
+
+    private void ApplySparklineRangeSelection(
+        SparklineDialog? dialog,
+        SparklineRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = request.Target == SparklineRangeSelectionTarget.Location
+            ? FormatCellReference(selectedRange.Start)
+            : FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void InsertLinkBtn_Click(object sender, RoutedEventArgs e)
