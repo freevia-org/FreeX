@@ -41,7 +41,8 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowItemsWithNoDataOnColumns = false,
     bool PageOverThenDown = false,
     int PageWrap = 0,
-    string? ErrorValueText = null);
+    string? ErrorValueText = null,
+    bool EnableDrill = true);
 
 public sealed partial class PivotTableOptionsDialog : Window
 {
@@ -81,6 +82,7 @@ public sealed partial class PivotTableOptionsDialog : Window
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
     private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
     private readonly CheckBox _enableRefreshBox = new() { Content = "_Enable refresh", IsChecked = true };
+    private readonly CheckBox _enableShowDetailsBox = new() { Content = "Enable Show De_tails", IsChecked = true };
     private readonly CheckBox _preserveSourceSortFilterBox = new()
     {
         Content = "Preserve source sort and _filter settings",
@@ -193,6 +195,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         AddCheckBox(dataPanel, _refreshOnOpenBox);
         AddCheckBox(dataPanel, _saveSourceDataBox);
         AddCheckBox(dataPanel, _enableRefreshBox);
+        AddCheckBox(dataPanel, _enableShowDetailsBox);
         AddCheckBox(dataPanel, _preserveSourceSortFilterBox);
         AddLabeledControl(dataPanel, "Retain items _deleted from the data source", _missingItemsLimitBox, MissingItemsLimitLabels);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Data options", dataPanel));
@@ -290,6 +293,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
         _saveSourceDataBox.IsChecked = result.SaveSourceData;
         _enableRefreshBox.IsChecked = result.EnableRefresh;
+        _enableShowDetailsBox.IsChecked = result.EnableDrill;
         _preserveSourceSortFilterBox.IsChecked = result.PreserveSourceSortFilter;
         _missingItemsLimitBox.SelectedItem = LabelForMissingItemsLimit(result.MissingItemsLimit);
         _showExpandCollapseBox.IsChecked = result.ShowExpandCollapseButtons;
@@ -344,7 +348,8 @@ public sealed partial class PivotTableOptionsDialog : Window
             showItemsWithNoDataOnColumns: _showItemsWithNoDataColumnsBox.IsChecked == true,
             pageOverThenDown: PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
             pageWrap: ParsePageWrap(_pageWrapBox.Text),
-            errorValueText: _errorValuesBox.Text);
+            errorValueText: _errorValuesBox.Text,
+            enableDrill: _enableShowDetailsBox.IsChecked == true);
         DialogResult = true;
     }
 

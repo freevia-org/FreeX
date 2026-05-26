@@ -636,7 +636,8 @@ public sealed class PivotWorkflowDialogTests
             mergeAndCenterLabels: true,
             pageOverThenDown: true,
             pageWrap: 4,
-            compactRowLabelIndent: 3);
+            compactRowLabelIndent: 3,
+            enableDrill: false);
 
         result.Should().BeEquivalentTo(new
         {
@@ -669,7 +670,8 @@ public sealed class PivotWorkflowDialogTests
             MergeAndCenterLabels = true,
             PageOverThenDown = true,
             PageWrap = 4,
-            CompactRowLabelIndent = 3
+            CompactRowLabelIndent = 3,
+            EnableDrill = false
         });
     }
 
@@ -713,6 +715,51 @@ public sealed class PivotWorkflowDialogTests
 
         blankResult.EmptyValueText.Should().BeNull();
         blankResult.ErrorValueText.Should().BeNull();
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_KeepsExistingPositionalOptionalOrder()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            true,
+            true,
+            true,
+            PivotSubtotalPlacement.Bottom,
+            false,
+            false,
+            "PivotStyleLight16",
+            true,
+            true,
+            false,
+            false,
+            PivotReportLayout.Tabular,
+            "empty",
+            true,
+            false,
+            false,
+            false,
+            0,
+            true,
+            true,
+            "title",
+            "description",
+            2,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            7,
+            "error");
+
+        result.ErrorValueText.Should().Be("error");
+        result.EnableDrill.Should().BeTrue();
     }
 
     [Fact]
@@ -779,7 +826,8 @@ public sealed class PivotWorkflowDialogTests
             MergeAndCenterLabels = true,
             PageOverThenDown = true,
             PageWrap = 2,
-            CompactRowLabelIndent = 5
+            CompactRowLabelIndent = 5,
+            EnableDrill = false
         };
 
         PivotTableOptionsDialog.FromPivotTable(pivotTable)
@@ -811,7 +859,8 @@ public sealed class PivotWorkflowDialogTests
                 MergeAndCenterLabels = true,
                 PageOverThenDown = true,
                 PageWrap = 2,
-                CompactRowLabelIndent = 5
+                CompactRowLabelIndent = 5,
+                EnableDrill = false
             });
     }
 
@@ -864,6 +913,7 @@ public sealed class PivotWorkflowDialogTests
             "_refreshOnOpenBox",
             "_enableRefreshBox",
             "_preserveSourceSortFilterBox",
+            "_enableShowDetailsBox",
             "_missingItemsLimitBox",
             "_fieldHeadersBox",
             "_showExpandCollapseBox",
@@ -993,11 +1043,32 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"_Preserve cell formatting on update\"",
             "Content = \"_Refresh data when opening the file\"",
             "Content = \"_Enable refresh\"",
+            "Content = \"Enable Show De_tails\"",
             "Content = \"Show expand/collapse _buttons\"",
             "Content = \"Set print _titles\"",
             "Content = \"Print expand/collapse _buttons when displayed on PivotTable\""
         })
             source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_DataTabAccessKeysAreUnique()
+    {
+        string[] dataTabLabels =
+        [
+            "_Refresh data when opening the file",
+            "_Save source data with file",
+            "_Enable refresh",
+            "Enable Show De_tails",
+            "Preserve source sort and _filter settings",
+            "Retain items _deleted from the data source"
+        ];
+
+        var accessKeys = dataTabLabels
+            .Select(label => char.ToUpperInvariant(label[label.IndexOf('_') + 1]))
+            .ToList();
+
+        accessKeys.Should().OnlyHaveUniqueItems();
     }
 
     [Fact]

@@ -32,6 +32,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _updateEmptyValueText;
     private readonly string? _errorCaption;
     private readonly bool _updateErrorCaption;
+    private readonly bool? _enableDrill;
     private readonly bool? _refreshOnOpen;
     private readonly bool? _saveSourceData;
     private readonly bool? _enableRefresh;
@@ -91,7 +92,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? pageOverThenDown = null,
         int? pageWrap = null,
         string? errorCaption = null,
-        bool updateErrorCaption = false)
+        bool updateErrorCaption = false,
+        bool? enableDrill = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -123,6 +125,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _updateEmptyValueText = updateEmptyValueText;
         _errorCaption = NormalizeOptionalText(errorCaption);
         _updateErrorCaption = updateErrorCaption;
+        _enableDrill = enableDrill;
         _refreshOnOpen = refreshOnOpen;
         _saveSourceData = saveSourceData;
         _enableRefresh = enableRefresh;
@@ -192,6 +195,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.EmptyValueText = _emptyValueText;
         if (_updateErrorCaption)
             pivotTable.ErrorCaption = _errorCaption;
+        if (_enableDrill is { } enableDrill)
+            pivotTable.EnableDrill = enableDrill;
         if (_printTitles is { } printTitles)
             pivotTable.PrintTitles = printTitles;
         if (_printExpandCollapseButtons is { } printExpandCollapseButtons)
@@ -276,7 +281,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool AutofitColumnsOnUpdate,
         bool PreserveFormattingOnUpdate,
         string? AltTextTitle,
-        string? AltTextDescription)
+        string? AltTextDescription,
+        bool EnableDrill)
     {
         public static PivotOptionsSnapshot Capture(PivotTableModel pivotTable, PivotCacheModel? cache) =>
             new(
@@ -315,7 +321,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.AutofitColumnsOnUpdate,
                 pivotTable.PreserveFormattingOnUpdate,
                 pivotTable.AltTextTitle,
-                pivotTable.AltTextDescription);
+                pivotTable.AltTextDescription,
+                pivotTable.EnableDrill);
 
         public void Restore(PivotTableModel pivotTable, PivotCacheModel? cache)
         {
@@ -350,6 +357,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.PreserveFormattingOnUpdate = PreserveFormattingOnUpdate;
             pivotTable.AltTextTitle = AltTextTitle;
             pivotTable.AltTextDescription = AltTextDescription;
+            pivotTable.EnableDrill = EnableDrill;
             if (cache is not null)
             {
                 if (RefreshOnLoad is { } refreshOnLoad)
