@@ -16525,21 +16525,30 @@ public partial class FileAdapterSmokeTests
             TopLabels = true,
             Link = true,
             NativeXml = "<dataConsolidate xmlns=\"urn:freexcel:wrong\" function=\"count\" wrongNamespace=\"1\" />",
-            NativeAttributes = new Dictionary<string, string> { ["customDataConsolidationFlag"] = "keep" },
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["customDataConsolidationFlag"] = "keep",
+                ["invalid dataConsolidate attr"] = "skip"
+            },
             References =
             [
                 new WorksheetDataConsolidationReferenceModel
                 {
                     Reference = "A1:B2",
                     Sheet = "Data",
-                    NativeAttributes = new Dictionary<string, string> { ["customDataRefFlag"] = "keep" }
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["customDataRefFlag"] = "keep",
+                        ["invalid dataRef attr"] = "skip"
+                    }
                 }
             ]
         };
 
         var saved = new MemoryStream();
-        var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, saved);
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16555,6 +16564,7 @@ public partial class FileAdapterSmokeTests
         dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep");
         dataConsolidate.Descendants(worksheetNs + "dataRef").Should().ContainSingle()
             .Which.Attribute("customDataRefFlag")!.Value.Should().Be("keep");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
