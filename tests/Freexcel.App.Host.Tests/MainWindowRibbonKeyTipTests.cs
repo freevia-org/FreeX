@@ -865,6 +865,46 @@ public sealed class MainWindowRibbonKeyTipTests
         });
     }
 
+    [Fact]
+    public void FormulasAutoSumAndCalculationOptionKeyTips_InvokeMenuItems()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetNumber(1, 2, 10);
+            harness.SetNumber(2, 2, 20);
+            harness.SelectRange(3, 2, 3, 2);
+
+            harness.OpenRibbonMenu(Key.M, Key.U);
+            harness.ActiveMenuItemGestureText("Average").Should().Be("A");
+            harness.ActiveMenuItemGestureText("Count Numbers").Should().Be("C");
+            harness.ActiveMenuItemGestureText("More…").Should().Be("F");
+            harness.HandleKeyTip(Key.A);
+
+            harness.CellFormulaText(3, 2).Should().Be("AVERAGE(B1:B2)");
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.WorkbookCalculationMode.Should().Be(WorkbookCalculationMode.Automatic);
+
+            harness.OpenRibbonMenu(Key.M, Key.O);
+            harness.ActiveMenuItemGestureText("Manual").Should().Be("M");
+            harness.HandleKeyTip(Key.M);
+
+            harness.WorkbookCalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.OpenRibbonMenu(Key.M, Key.O);
+            harness.ActiveMenuItemGestureText("Automatic").Should().Be("A");
+            harness.HandleKeyTip(Key.A);
+
+            harness.WorkbookCalculationMode.Should().Be(WorkbookCalculationMode.Automatic);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private static SharedMainWindowSession? SharedSession;
@@ -1013,6 +1053,8 @@ public sealed class MainWindowRibbonKeyTipTests
             }
         }
 
+        public WorkbookCalculationMode WorkbookCalculationMode => _workbook.CalculationMode;
+
         public (uint FrozenRows, uint FrozenCols) ActiveSheetFrozenPanes
         {
             get
@@ -1042,6 +1084,19 @@ public sealed class MainWindowRibbonKeyTipTests
                     ?? StyleId.Default;
                 return _workbook.GetStyle(styleId).Bold;
             }
+        }
+
+        public void SetNumber(uint row, uint col, double value)
+        {
+            var sheet = _workbook.Sheets[0];
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(value));
+            PumpDispatcher();
+        }
+
+        public string? CellFormulaText(uint row, uint col)
+        {
+            var sheet = _workbook.Sheets[0];
+            return sheet.GetCell(new CellAddress(sheet.Id, row, col))?.FormulaText;
         }
 
         public void SelectActiveCell()

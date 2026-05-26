@@ -375,7 +375,7 @@ public partial class MainWindow
     private void CalcOptionsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void CalcAutoMenuItem_Click(object sender, RoutedEventArgs e)
     {

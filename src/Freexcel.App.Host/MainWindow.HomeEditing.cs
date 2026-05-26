@@ -14,7 +14,7 @@ public partial class MainWindow
     private void AutoSumPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void FormulasAutoSumPickerBtn_Click(object sender, RoutedEventArgs e) { AutoSumPickerBtn_Click(sender, e); }
 

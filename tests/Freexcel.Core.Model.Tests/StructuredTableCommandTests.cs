@@ -331,6 +331,45 @@ public sealed class StructuredTableCommandTests
             .Should().Be(wb.GetStyle(preexistingBodyStyleId));
     }
 
+    [Theory]
+    [InlineData(2u)]
+    [InlineData(3u)]
+    public void CreateStyledStructuredTableCommand_UsesTableRelativeDataRowBanding(uint headerRow)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, headerRow, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, headerRow, 2), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, headerRow + 1, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, headerRow + 1, 2), new TextValue("Open"));
+        sheet.SetCell(new CellAddress(sheet.Id, headerRow + 2, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, headerRow + 2, 2), new TextValue("Closed"));
+        var ctx = new SimpleCtx(wb);
+        var firstDataRowFill = new CellColor(255, 255, 255);
+        var secondDataRowFill = new CellColor(222, 235, 247);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, headerRow, 1),
+            new CellAddress(sheet.Id, headerRow + 2, 2));
+        var command = new CreateStyledStructuredTableCommand(
+            sheet.Id,
+            range,
+            "TableStyleMedium2",
+            firstRowHasHeaders: true,
+            new StructuredTableStyleBanding(
+                HeaderFill: new CellColor(31, 78, 121),
+                OddRowFill: secondDataRowFill,
+                EvenRowFill: firstDataRowFill,
+                HeaderFontColor: CellColor.White));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, headerRow + 1, 1))!.StyleId)
+            .FillColor.Should().Be(firstDataRowFill);
+        wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, headerRow + 2, 1))!.StyleId)
+            .FillColor.Should().Be(secondDataRowFill);
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
