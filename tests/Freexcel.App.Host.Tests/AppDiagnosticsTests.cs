@@ -48,6 +48,39 @@ public sealed class AppDiagnosticsTests
     }
 
     [Fact]
+    public void FileStore_RecordEvent_AllowsPhaseSixUsageMetadataButDropsDocumentDetails()
+    {
+        using var temp = new TemporaryDirectory();
+        var store = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true));
+        var metadata = new AppDiagnosticsMetadata(
+            AppVersion: "Version Test",
+            SessionId: "session-1",
+            RuntimeDescription: ".NET Test",
+            OperatingSystemDescription: "Windows Test",
+            ProcessArchitecture: "X64");
+
+        store.RecordEvent("dialog_opened", metadata, new Dictionary<string, string?>
+        {
+            ["dialog"] = "OptionsDialog",
+            ["command"] = "Options",
+            ["status"] = "opened",
+            ["fileType"] = "xlsx",
+            ["formula"] = "=PRIVATE()",
+            ["path"] = "C:\\Users\\tester\\private.xlsx"
+        });
+
+        var line = File.ReadLines(Path.Combine(temp.Path, "events.jsonl")).Single();
+        line.Should().Contain("\"dialog\":\"OptionsDialog\"");
+        line.Should().Contain("\"command\":\"Options\"");
+        line.Should().Contain("\"status\":\"opened\"");
+        line.Should().Contain("\"fileType\":\"xlsx\"");
+        line.Should().NotContain("PRIVATE");
+        line.Should().NotContain("private.xlsx");
+        line.Should().NotContain("\"formula\"");
+        line.Should().NotContain("\"path\"");
+    }
+
+    [Fact]
     public void FileStore_RecordCrash_WritesCrashReportAndEvent()
     {
         using var temp = new TemporaryDirectory();

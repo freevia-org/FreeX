@@ -83,6 +83,7 @@ public partial class OptionsDialog : Window
         // Save
         OptDefaultFormat.ItemsSource = new[] { "Excel Workbook (.xlsx)", "Freexcel JSON (.json)" };
         OptDefaultFormat.SelectedIndex = _opts.DefaultFormat == ".json" ? 1 : 0;
+        OptCrashAnalytics.IsChecked = _opts.CrashAnalyticsEnabled;
 
         OptRecentFilesPath.Text = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -154,6 +155,8 @@ public partial class OptionsDialog : Window
                 _ => FreexcelObjectDisplay.All
             },
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
+            CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
+            CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
             PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
         };
         opts.Save();
