@@ -563,8 +563,8 @@ public sealed class PivotWorkflowDialogTests
     {
         var source = ReadPivotWorkflowSource();
 
-        source.Should().Contain("Recommended PivotCharts");
-        source.Should().Contain("All Charts");
+        source.Should().Contain("Header = \"_Recommended PivotCharts\"");
+        source.Should().Contain("Header = \"_All Charts\"");
         source.Should().Contain("private readonly ListBox _recommendedGallery");
         source.Should().Contain("CreateRecommendedChartsPanel(_recommendedGallery)");
         source.Should().Contain("SelectedGalleryChoice()");

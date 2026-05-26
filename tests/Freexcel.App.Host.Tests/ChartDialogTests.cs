@@ -115,8 +115,8 @@ public sealed class ChartDialogTests
     {
         var source = ReadChartTypeDialogSource();
 
-        source.Should().Contain("Recommended Charts");
-        source.Should().Contain("All Charts");
+        source.Should().Contain("Header = \"_Recommended Charts\"");
+        source.Should().Contain("Header = \"_All Charts\"");
         source.Should().Contain("Chart categories");
         source.Should().Contain("Chart subtype gallery");
         source.Should().Contain("Preview");
