@@ -130,6 +130,14 @@ public sealed class AllowEditRangeDialog : Window
     public static AllowEditRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
         new(currentText.Trim(), CollapseDialog: true);
 
+    public void ApplyRangeSelection(string rangeText)
+    {
+        _rangeBox.Text = rangeText;
+        _rangeBox.Focus();
+        _rangeBox.SelectAll();
+        Keyboard.Focus(_rangeBox);
+    }
+
     public static AllowEditRangeDialogResult CreateAddResult(GridRange range) =>
         new(AllowEditRangeDialogAction.Add, range);
 
