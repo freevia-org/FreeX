@@ -521,7 +521,8 @@ public class XlsxCorpusRunnerTests
 
         var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!).ToString();
 
-        chartXml.Should().Contain("treemapChart");
+        chartXml.Should().Contain("mapChart");
+        chartXml.Should().NotContain("treemapChart", "treemap charts have a renderable chartEx writer path now and should not anchor the unsupported-chart fixture");
         chartXml.Should().NotContain("radarChart", "radar charts are supported now and should not anchor the unsupported-chart fixture");
         chartXml.Should().NotContain("surfaceChart", "surface charts are supported now and should not anchor the unsupported-chart fixture");
     }
