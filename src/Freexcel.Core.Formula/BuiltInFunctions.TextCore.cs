@@ -552,7 +552,7 @@ public static partial class BuiltInFunctions
         {
             if (arg is not RangeValue range) continue;
             shape ??= range;
-            if (range.RowCount != shape.RowCount || range.ColCount != shape.ColCount)
+            if (!CanBroadcastToShape(range, shape.RowCount, shape.ColCount))
                 return ErrorValue.Value;
         }
 
@@ -564,7 +564,7 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < shape.ColCount; c++)
             {
                 for (int i = 0; i < args.Count; i++)
-                    scalarArgs[i] = args[i] is RangeValue range ? range.Cells[r, c] : args[i];
+                    scalarArgs[i] = args[i] is RangeValue range ? ValueAtBroadcastCell(range, r, c) : args[i];
                 cells[r, c] = map(scalarArgs);
             }
 
