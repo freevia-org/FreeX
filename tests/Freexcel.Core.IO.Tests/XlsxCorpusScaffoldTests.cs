@@ -128,6 +128,17 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusManifest_UsesPublicPassOnlyForPublicRows()
+    {
+        var manifestRows = ReadManifestRows();
+
+        manifestRows
+            .Where(row => row.ExpectedStatus == "public-pass")
+            .Should()
+            .OnlyContain(row => row.SourceType == "public", "`public-pass` is reserved for redistributed public corpus files");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
