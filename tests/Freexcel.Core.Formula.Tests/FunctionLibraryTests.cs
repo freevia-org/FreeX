@@ -7825,6 +7825,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Subtotal_FuncNumOneCellRange_IsScalarized()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(10)),
+            (2, 2, new NumberValue(20)));
+
+        _eval.Evaluate("=SUBTOTAL(A1:A1,B1:B2)", sheet).Should().Be(new NumberValue(30));
+    }
+
+    [Fact]
     public void Subtotal_FuncNum1_Average_NoHiddenRows()
     {
         var sheet = MakeSheet(

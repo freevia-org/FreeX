@@ -103,6 +103,64 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_AttachesTextOverlaysToHeaderFooterText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("HeaderFooterBook.xlsx");
+            var sheet = workbook.AddSheet("Summary");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Printed"));
+            sheet.PageHeader = new WorksheetHeaderFooter(
+                "Left page &[Page]",
+                "Center pages &[Pages]",
+                "Right file &[File] &[Picture]");
+            sheet.PageFooter = new WorksheetHeaderFooter(
+                "Left tab &[Tab]",
+                "Center footer",
+                "Right footer");
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlayTexts = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlayTexts.Should().Contain("Left page 1");
+            overlayTexts.Should().Contain("Center pages 1");
+            overlayTexts.Should().Contain("Right file HeaderFooterBook.xlsx");
+            overlayTexts.Should().Contain("Left tab Summary");
+            overlayTexts.Should().Contain("Center footer");
+            overlayTexts.Should().Contain("Right footer");
+            overlayTexts.Should().NotContain(text => text.Contains("&[Picture]", StringComparison.Ordinal));
+            overlayTexts.Should().NotContain(text => text.Contains("&G", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_BoundsLongHeaderFooterTextOverlaysToVisiblePrintText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Long header print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Printed"));
+            sheet.PageHeader = new WorksheetHeaderFooter(
+                $"{new string('x', 300)} hidden-tail-token",
+                "",
+                "");
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlayTexts = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlayTexts.Should().Contain(text => text.EndsWith("\u2026", StringComparison.Ordinal));
+            overlayTexts.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_DraftQualitySkipsDisplayedCommentGraphics()
     {
         StaTestRunner.Run(() =>
