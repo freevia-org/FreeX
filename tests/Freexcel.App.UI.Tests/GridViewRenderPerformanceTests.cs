@@ -74,6 +74,24 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderSparklines_AvoidsEmptyRenderAllocations()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Overlays.Sparklines.cs"));
+        var renderSparklines = source[
+            source.IndexOf("private void RenderSparklines(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private static SolidColorBrush FrozenBrush", StringComparison.Ordinal)];
+
+        renderSparklines.Should().Contain("Sparklines is not { Count: > 0 }");
+        renderSparklines.Should().Contain("SparklineValues is not { Count: > 0 }");
+        renderSparklines.IndexOf("Sparklines is not { Count: > 0 }", StringComparison.Ordinal)
+            .Should().BeLessThan(renderSparklines.IndexOf("ToDictionary", StringComparison.Ordinal));
+        source.Should().Contain("private static readonly SolidColorBrush SparklinePositiveBrush");
+        source.Should().Contain("private static readonly Pen SparklineLinePen");
+        renderSparklines.Should().NotContain("new SolidColorBrush");
+        renderSparklines.Should().NotContain("new Pen");
+    }
+
+    [Fact]
     public void RenderCells_ReusesCellColorBrushesWithinRenderPass()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
