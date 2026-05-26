@@ -86,6 +86,37 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         return rects;
     }
 
+    public static IReadOnlyList<Rect> CalculateSparklinePreviewRects(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var rows = viewport.RowMetrics
+            .Where(row => row.Row >= range.Start.Row && row.Row <= range.End.Row)
+            .ToList();
+        var col = viewport.ColMetrics.FirstOrDefault(col => col.Col >= range.Start.Col && col.Col <= range.End.Col);
+        if (rows.Count == 0 || col is null)
+            return [];
+
+        var rects = new List<Rect>(rows.Count);
+        foreach (var row in rows)
+        {
+            var height = Math.Max(4, Math.Floor(row.Height / 3));
+            var width = col.Width - 12;
+            if (width < 6)
+                continue;
+
+            rects.Add(new Rect(
+                col.LeftOffset + rowHeaderWidth + 6,
+                row.TopOffset + columnHeaderHeight + Math.Round((row.Height - height) / 2),
+                width,
+                height));
+        }
+
+        return rects;
+    }
+
     private static bool TryGetPreviewNumber(DisplayCell cell, out double value)
     {
         switch (cell.RawValue)

@@ -151,6 +151,10 @@ public sealed class QuickAnalysisPlannerTests
             .PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.TotalFormula);
         options.Single(option => option.Command == QuickAnalysisCommand.LineSparkline)
             .PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.LineSparkline);
+        options.Single(option => option.Command == QuickAnalysisCommand.ColumnSparkline)
+            .PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.ColumnSparkline);
+        options.Single(option => option.Command == QuickAnalysisCommand.WinLossSparkline)
+            .PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.WinLossSparkline);
     }
 
     [Fact]
@@ -219,6 +223,8 @@ public sealed class QuickAnalysisPlannerTests
     [InlineData(QuickAnalysisCommand.DataBar, QuickAnalysisPreviewVisualKind.DataBars)]
     [InlineData(QuickAnalysisCommand.Sum, QuickAnalysisPreviewVisualKind.TotalFormula)]
     [InlineData(QuickAnalysisCommand.LineSparkline, QuickAnalysisPreviewVisualKind.LineSparkline)]
+    [InlineData(QuickAnalysisCommand.ColumnSparkline, QuickAnalysisPreviewVisualKind.ColumnSparkline)]
+    [InlineData(QuickAnalysisCommand.WinLossSparkline, QuickAnalysisPreviewVisualKind.WinLossSparkline)]
     public void BuildHoverPreview_PreservesCommandAndVisualDescriptor(
         QuickAnalysisCommand command,
         QuickAnalysisPreviewVisualKind visualKind)
