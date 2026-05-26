@@ -52,18 +52,33 @@ jobs:
         id: meta
         shell: pwsh
         run: |
-          $appInfo = Get-Content -LiteralPath "src/Freexcel.App.Host/AppInfo.cs" -Raw
-          $versionMatch = [regex]::Match($appInfo, 'VersionText\s*=\s*"(?<version>[^"]+)"')
-          if (-not $versionMatch.Success) {
-            throw "Could not read VersionText from AppInfo.cs"
-          }
-
           $versionLabel = "${{ inputs.release_version }}"
           if ([string]::IsNullOrWhiteSpace($versionLabel)) {
-            $versionLabel = $versionMatch.Groups["version"].Value
-            $versionLabel = $versionLabel -replace '^Version\s+', ''
-            $versionLabel = $versionLabel -replace '\s*\([^)]*\)\s*$', ''
-            $versionLabel = $versionLabel.Trim()
+            $progressPath = "release/progress.json"
+            if (-not (Test-Path -LiteralPath $progressPath)) {
+              throw "Could not read release progress metadata from $progressPath"
+            }
+
+            $releaseProgress = Get-Content -LiteralPath $progressPath -Raw | ConvertFrom-Json
+            foreach ($propertyName in @("major", "overallCompletion", "releasePatchBase", "releasePatchSource", "channel")) {
+              if (-not $releaseProgress.PSObject.Properties.Name.Contains($propertyName)) {
+                throw "release/progress.json is missing required property '$propertyName'."
+              }
+            }
+
+            if ($releaseProgress.releasePatchSource -ne "github_run_number") {
+              throw "Unsupported releasePatchSource '$($releaseProgress.releasePatchSource)'."
+            }
+
+            $major = [int]$releaseProgress.major
+            $overallCompletion = [int]$releaseProgress.overallCompletion
+            if ($overallCompletion -ge 99) { $minor = 9 }
+            elseif ($overallCompletion -ge 96) { $minor = 8 }
+            elseif ($overallCompletion -ge 93) { $minor = 7 }
+            elseif ($overallCompletion -ge 90) { $minor = 6 }
+            else { $minor = 5 }
+            $releasePatch = [int]$releaseProgress.releasePatchBase + [int]${{ github.run_number }}
+            $versionLabel = "$major.$minor.$releasePatch"
           }
 
           $versionSlug = $versionLabel.ToLowerInvariant()

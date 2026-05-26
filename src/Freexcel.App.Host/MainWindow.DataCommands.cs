@@ -172,7 +172,12 @@ public partial class MainWindow
         var defaultList = SheetGrid.SelectedRange is { } selected
             ? FormatWorkbookRange(selected)
             : "A1:C10";
-        var dialog = new AdvancedFilterDialog(_currentSheetId, defaultList, ResolveSheetIdByName) { Owner = this };
+        AdvancedFilterDialog? dialog = null;
+        dialog = new AdvancedFilterDialog(
+            _currentSheetId,
+            defaultList,
+            ResolveSheetIdByName,
+            request => ApplyAdvancedFilterRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var result = dialog.Result;
@@ -194,6 +199,31 @@ public partial class MainWindow
         if (result.CopyToCell is { } destinationCell)
             SetActiveCell(destinationCell);
         UpdateViewport();
+    }
+
+    private void ApplyAdvancedFilterRangeSelection(
+        AdvancedFilterDialog? dialog,
+        AdvancedFilterRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private bool TryParseAdvancedFilterRange(string input, out GridRange range)
