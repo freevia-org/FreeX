@@ -6087,6 +6087,21 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Lookup_IgnoresErrorsInsideLookupVector()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, ErrorValue.DivByZero),
+            (3, 1, new NumberValue(2)),
+            (1, 2, new TextValue("first")),
+            (2, 2, new TextValue("skip")),
+            (3, 2, new TextValue("hit")));
+
+        _eval.Evaluate("=LOOKUP(2,A1:A3,B1:B3)", sheet)
+            .Should().Be(new TextValue("hit"));
+    }
+
+    [Fact]
     public void Lookup_ArrayForm_SearchesFirstRowAndReturnsLastRowWhenWiderThanTall()
     {
         var sheet = MakeSheet(
@@ -6094,6 +6109,16 @@ public class FunctionLibraryTests
             (2, 1, new TextValue("A")), (2, 2, new TextValue("B")), (2, 3, new TextValue("C")));
 
         _eval.Evaluate("=LOOKUP(2,A1:C2)", sheet).Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
+    public void Lookup_ArrayFormIgnoresErrorsInsideLookupVector()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, ErrorValue.DivByZero), (1, 3, new NumberValue(2)),
+            (2, 1, new TextValue("first")), (2, 2, new TextValue("skip")), (2, 3, new TextValue("hit")));
+
+        _eval.Evaluate("=LOOKUP(2,A1:C2)", sheet).Should().Be(new TextValue("hit"));
     }
 
     [Fact] public void Lookup_LookupVectorArgumentError_PropagatesError()
