@@ -1066,6 +1066,42 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_DoesNotWriteHiddenClippedWorksheetCellText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Clipped worksheet export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(
+                new CellAddress(sheet.Id, 1, 1),
+                new TextValue("visible prefix worksheet text hidden-tail-token"));
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 12));
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("visible");
+                pdfText.Should().NotContain("hidden-tail-token");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorkbookCells()
     {
         StaTestRunner.Run(() =>
