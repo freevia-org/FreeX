@@ -176,13 +176,6 @@ public static partial class RibbonCommandPresentationPlanner
         name == "zoom" ||
         name.Contains("zoom to 100") ||
         name.Contains("zoom to selection") ||
-        name.Contains("new window") ||
-        name.Contains("arrange all") ||
-        name.Contains("freeze panes") ||
-        name.Contains("switch windows") ||
-        name.Contains("side by side") ||
-        name.Contains("sync scrolling") ||
-        name.Contains("reset position") ||
         name == "macros" ||
         name.Contains("help online") ||
         name.Contains("contact support") ||

@@ -40,7 +40,9 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowItemsWithNoDataOnRows = false,
     bool ShowItemsWithNoDataOnColumns = false,
     bool PageOverThenDown = false,
-    int PageWrap = 0);
+    int PageWrap = 0,
+    string? ErrorValueText = null,
+    bool EnableDrill = true);
 
 public sealed partial class PivotTableOptionsDialog : Window
 {
@@ -74,11 +76,13 @@ public sealed partial class PivotTableOptionsDialog : Window
     private readonly CheckBox _rowStripesBox = new() { Content = "Banded _rows" };
     private readonly CheckBox _columnStripesBox = new() { Content = "Banded c_olumns" };
     private readonly TextBox _emptyCellsBox = new() { Width = 120 };
+    private readonly TextBox _errorValuesBox = new() { Width = 120 };
     private readonly CheckBox _autofitColumnsBox = new() { Content = "_Autofit column widths on update", IsChecked = true };
     private readonly CheckBox _preserveFormattingBox = new() { Content = "_Preserve cell formatting on update", IsChecked = true };
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
     private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
     private readonly CheckBox _enableRefreshBox = new() { Content = "_Enable refresh", IsChecked = true };
+    private readonly CheckBox _enableShowDetailsBox = new() { Content = "Enable Show De_tails", IsChecked = true };
     private readonly CheckBox _preserveSourceSortFilterBox = new()
     {
         Content = "Preserve source sort and _filter settings",
@@ -142,6 +146,7 @@ public sealed partial class PivotTableOptionsDialog : Window
 
         var formatPanel = PivotDialogLayout.CreateGroupPanel();
         AddLabeledControl(formatPanel, "For _empty cells show:", _emptyCellsBox);
+        AddLabeledControl(formatPanel, "For error _values show:", _errorValuesBox);
         AddCheckBox(formatPanel, _autofitColumnsBox);
         AddCheckBox(formatPanel, _preserveFormattingBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Format section", formatPanel));
@@ -190,6 +195,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         AddCheckBox(dataPanel, _refreshOnOpenBox);
         AddCheckBox(dataPanel, _saveSourceDataBox);
         AddCheckBox(dataPanel, _enableRefreshBox);
+        AddCheckBox(dataPanel, _enableShowDetailsBox);
         AddCheckBox(dataPanel, _preserveSourceSortFilterBox);
         AddLabeledControl(dataPanel, "Retain items _deleted from the data source", _missingItemsLimitBox, MissingItemsLimitLabels);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Data options", dataPanel));
@@ -281,11 +287,13 @@ public sealed partial class PivotTableOptionsDialog : Window
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
+        _errorValuesBox.Text = result.ErrorValueText ?? "";
         _autofitColumnsBox.IsChecked = result.AutofitColumnsOnUpdate;
         _preserveFormattingBox.IsChecked = result.PreserveFormattingOnUpdate;
         _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
         _saveSourceDataBox.IsChecked = result.SaveSourceData;
         _enableRefreshBox.IsChecked = result.EnableRefresh;
+        _enableShowDetailsBox.IsChecked = result.EnableDrill;
         _preserveSourceSortFilterBox.IsChecked = result.PreserveSourceSortFilter;
         _missingItemsLimitBox.SelectedItem = LabelForMissingItemsLimit(result.MissingItemsLimit);
         _showExpandCollapseBox.IsChecked = result.ShowExpandCollapseButtons;
@@ -317,29 +325,31 @@ public sealed partial class PivotTableOptionsDialog : Window
             _reportLayoutBox.SelectedItem is PivotReportLayout reportLayout
                 ? reportLayout
                 : PivotReportLayout.Tabular,
-            _emptyCellsBox.Text,
-            _refreshOnOpenBox.IsChecked == true,
-            _saveSourceDataBox.IsChecked == true,
-            _enableRefreshBox.IsChecked == true,
-            _preserveSourceSortFilterBox.IsChecked == true,
-            MissingItemsLimitForLabel(_missingItemsLimitBox.SelectedItem?.ToString()),
-            _printTitlesBox.IsChecked == true,
-            _printExpandCollapseBox.IsChecked == true,
-            _altTextTitleBox.Text,
-            _altTextDescriptionBox.Text,
-            ParseCompactRowLabelIndent(_compactIndentBox.Text),
-            _showExpandCollapseBox.IsChecked == true,
-            _autofitColumnsBox.IsChecked == true,
-            _preserveFormattingBox.IsChecked == true,
-            _fieldHeadersBox.IsChecked == true,
-            _contextualTooltipsBox.IsChecked == true,
-            _propertiesInTooltipsBox.IsChecked == true,
-            _classicLayoutBox.IsChecked == true,
-            _mergeLabelsBox.IsChecked == true,
-            _showItemsWithNoDataRowsBox.IsChecked == true,
-            _showItemsWithNoDataColumnsBox.IsChecked == true,
-            PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
-            ParsePageWrap(_pageWrapBox.Text));
+            emptyValueText: _emptyCellsBox.Text,
+            refreshOnOpen: _refreshOnOpenBox.IsChecked == true,
+            saveSourceData: _saveSourceDataBox.IsChecked == true,
+            enableRefresh: _enableRefreshBox.IsChecked == true,
+            preserveSourceSortFilter: _preserveSourceSortFilterBox.IsChecked == true,
+            missingItemsLimit: MissingItemsLimitForLabel(_missingItemsLimitBox.SelectedItem?.ToString()),
+            printTitles: _printTitlesBox.IsChecked == true,
+            printExpandCollapseButtons: _printExpandCollapseBox.IsChecked == true,
+            altTextTitle: _altTextTitleBox.Text,
+            altTextDescription: _altTextDescriptionBox.Text,
+            compactRowLabelIndent: ParseCompactRowLabelIndent(_compactIndentBox.Text),
+            showExpandCollapseButtons: _showExpandCollapseBox.IsChecked == true,
+            autofitColumnsOnUpdate: _autofitColumnsBox.IsChecked == true,
+            preserveFormattingOnUpdate: _preserveFormattingBox.IsChecked == true,
+            showFieldHeaders: _fieldHeadersBox.IsChecked == true,
+            showContextualTooltips: _contextualTooltipsBox.IsChecked == true,
+            showPropertiesInTooltips: _propertiesInTooltipsBox.IsChecked == true,
+            showClassicLayout: _classicLayoutBox.IsChecked == true,
+            mergeAndCenterLabels: _mergeLabelsBox.IsChecked == true,
+            showItemsWithNoDataOnRows: _showItemsWithNoDataRowsBox.IsChecked == true,
+            showItemsWithNoDataOnColumns: _showItemsWithNoDataColumnsBox.IsChecked == true,
+            pageOverThenDown: PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
+            pageWrap: ParsePageWrap(_pageWrapBox.Text),
+            errorValueText: _errorValuesBox.Text,
+            enableDrill: _enableShowDetailsBox.IsChecked == true);
         DialogResult = true;
     }
 

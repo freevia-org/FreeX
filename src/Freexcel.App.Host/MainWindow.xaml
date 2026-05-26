@@ -1841,7 +1841,7 @@
                                         local:RibbonTooltip.Description="Draw with a pen. Ink authoring is deferred in Freexcel."/>
                                 <Button Content="Pencil" Width="62" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Pencil"
-                                        local:RibbonTooltip.KeyTip="PC"
+                                        local:RibbonTooltip.KeyTip="N"
                                         local:RibbonTooltip.Description="Draw with a pencil. Ink authoring is deferred in Freexcel."/>
                                 <Button Content="Highlighter" Width="82" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Highlighter"
@@ -2428,7 +2428,7 @@
                                         local:RibbonTooltip.Description="Linked stock data types are deferred in Freexcel."/>
                                 <Button Content="Geography" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Geography"
-                                        local:RibbonTooltip.KeyTip="G"
+                                        local:RibbonTooltip.KeyTip="Y"
                                         local:RibbonTooltip.Description="Linked geography data types are deferred in Freexcel."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data Types" Style="{StaticResource GroupLbl}"/></Border>
@@ -2813,57 +2813,71 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Freeze Panes" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FreezePanesPickerBtn_Click"
-                                        local:RibbonTooltip.Title="Freeze Panes"
-                                        local:RibbonTooltip.KeyTip="FP"
-                                        local:RibbonTooltip.Description="Keep rows or columns visible while scrolling; creating frozen panes clears split panes.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Freeze Panes" local:RibbonTooltip.KeyTip="F" Click="FreezeAtSelectionMenuItem_Click"/>
-                                            <MenuItem Header="Freeze Top Row" local:RibbonTooltip.KeyTip="R" Click="FreezeTopRowMenuItem_Click"/>
-                                            <MenuItem Header="Freeze First Column" local:RibbonTooltip.KeyTip="C" Click="FreezeFirstColMenuItem_Click"/>
-                                            <Separator/>
-                                            <MenuItem Header="Unfreeze All" local:RibbonTooltip.KeyTip="U" Click="UnfreezeAllMenuItem_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <ToggleButton x:Name="SplitViewBtn" Content="Split" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="SplitViewBtn_Click"
-                                              local:RibbonTooltip.Title="Split"
-                                              local:RibbonTooltip.KeyTip="SP"
-                                              local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split; creating a split clears frozen panes."/>
-                                <Button Content="New Window" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="New Window"
-                                        local:RibbonTooltip.KeyTip="NW"
-                                        local:RibbonTooltip.Description="Deferred: requires multiple live windows over the same workbook session."/>
-                                <Button Content="Arrange All" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ArrangeAllPickerBtn_Click"
-                                        local:RibbonTooltip.Title="Arrange All"
-                                        local:RibbonTooltip.KeyTip="A"
-                                        local:RibbonTooltip.Description="Store the workbook-window arrangement to use when multi-window hosting is available.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu Opened="ArrangeAllContextMenu_Opened">
-                                            <MenuItem Header="Tiled"      Tag="Tiled"      IsCheckable="True" local:RibbonTooltip.KeyTip="T" Click="ArrangeAllMenuItem_Click"/>
-                                            <MenuItem Header="Horizontal" Tag="Horizontal" IsCheckable="True" local:RibbonTooltip.KeyTip="H" Click="ArrangeAllMenuItem_Click"/>
-                                            <MenuItem Header="Vertical"   Tag="Vertical"   IsCheckable="True" local:RibbonTooltip.KeyTip="V" Click="ArrangeAllMenuItem_Click"/>
-                                            <MenuItem Header="Cascade"    Tag="Cascade"    IsCheckable="True" local:RibbonTooltip.KeyTip="C" Click="ArrangeAllMenuItem_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <Button Content="View Side by Side" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="View Side by Side"
-                                        local:RibbonTooltip.KeyTip="B"
-                                        local:RibbonTooltip.Description="Deferred: requires multi-window workbook hosting and synchronized scroll routing."/>
-                                <Button Content="Synchronous Scrolling" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Synchronous Scrolling"
-                                        local:RibbonTooltip.KeyTip="SS"
-                                        local:RibbonTooltip.Description="Deferred: requires paired workbook windows with synchronized viewport state."/>
-                                <Button Content="Reset Window Position" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Reset Window Position"
-                                        local:RibbonTooltip.KeyTip="RP"
-                                        local:RibbonTooltip.Description="Deferred: requires paired workbook windows and side-by-side layout state."/>
-                                <Button Content="Switch Windows" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Switch Windows"
-                                        local:RibbonTooltip.KeyTip="W"
-                                        local:RibbonTooltip.Description="Deferred: requires a multi-window workbook registry."/>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Content="New Window" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="New Window"
+                                            local:RibbonTooltip.KeyTip="NW"
+                                            local:RibbonTooltip.Description="Deferred: requires multiple live windows over the same workbook session."/>
+                                    <Button Content="Arrange All" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ArrangeAllPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Arrange All"
+                                            local:RibbonTooltip.KeyTip="A"
+                                            local:RibbonTooltip.Description="Store the workbook-window arrangement to use when multi-window hosting is available.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu Opened="ArrangeAllContextMenu_Opened">
+                                                <MenuItem Header="Tiled"      Tag="Tiled"      IsCheckable="True" local:RibbonTooltip.KeyTip="T" Click="ArrangeAllMenuItem_Click"/>
+                                                <MenuItem Header="Horizontal" Tag="Horizontal" IsCheckable="True" local:RibbonTooltip.KeyTip="H" Click="ArrangeAllMenuItem_Click"/>
+                                                <MenuItem Header="Vertical"   Tag="Vertical"   IsCheckable="True" local:RibbonTooltip.KeyTip="V" Click="ArrangeAllMenuItem_Click"/>
+                                                <MenuItem Header="Cascade"    Tag="Cascade"    IsCheckable="True" local:RibbonTooltip.KeyTip="C" Click="ArrangeAllMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                    <Button Content="Freeze Panes" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FreezePanesPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Freeze Panes"
+                                            local:RibbonTooltip.KeyTip="FP"
+                                            local:RibbonTooltip.Description="Keep rows or columns visible while scrolling; creating frozen panes clears split panes.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Freeze Panes" local:RibbonTooltip.KeyTip="F" Click="FreezeAtSelectionMenuItem_Click"/>
+                                                <MenuItem Header="Freeze Top Row" local:RibbonTooltip.KeyTip="R" Click="FreezeTopRowMenuItem_Click"/>
+                                                <MenuItem Header="Freeze First Column" local:RibbonTooltip.KeyTip="C" Click="FreezeFirstColMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Unfreeze All" local:RibbonTooltip.KeyTip="U" Click="UnfreezeAllMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <ToggleButton x:Name="SplitViewBtn" Content="Split" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="SplitViewBtn_Click"
+                                                  local:RibbonTooltip.Title="Split"
+                                                  local:RibbonTooltip.KeyTip="SP"
+                                                  local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split; creating a split clears frozen panes."/>
+                                    <Button Content="Hide" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Hide"
+                                            local:RibbonTooltip.KeyTip="H"
+                                            local:RibbonTooltip.Description="Deferred: requires workbook-window visibility state."/>
+                                    <Button Content="Unhide" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Unhide"
+                                            local:RibbonTooltip.KeyTip="U"
+                                            local:RibbonTooltip.Description="Deferred: requires workbook-window visibility state."/>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Content="View Side by Side" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="View Side by Side"
+                                            local:RibbonTooltip.KeyTip="B"
+                                            local:RibbonTooltip.Description="Deferred: requires multi-window workbook hosting and synchronized scroll routing."/>
+                                    <Button Content="Synchronous Scrolling" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Synchronous Scrolling"
+                                            local:RibbonTooltip.KeyTip="SS"
+                                            local:RibbonTooltip.Description="Deferred: requires paired workbook windows with synchronized viewport state."/>
+                                    <Button Content="Reset Window Position" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Reset Window Position"
+                                            local:RibbonTooltip.KeyTip="RP"
+                                            local:RibbonTooltip.Description="Deferred: requires paired workbook windows and side-by-side layout state."/>
+                                    <Button Content="Switch Windows" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Switch Windows"
+                                            local:RibbonTooltip.KeyTip="W"
+                                            local:RibbonTooltip.Description="Deferred: requires a multi-window workbook registry."/>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Window" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>

@@ -137,19 +137,21 @@ public partial class MainWindow
             result.ShowRowStripes,
             result.ShowColumnStripes,
             result.ReportLayout,
-            result.EmptyValueText,
+            emptyValueText: result.EmptyValueText,
             updateEmptyValueText: true,
-            result.RefreshOnOpen,
-            result.SaveSourceData,
-            result.EnableRefresh,
-            result.PreserveSourceSortFilter,
-            result.MissingItemsLimit,
-            true,
-            result.PrintTitles,
-            result.PrintExpandCollapseButtons,
-            result.AltTextTitle,
-            result.AltTextDescription,
-            result.CompactRowLabelIndent,
+            errorCaption: result.ErrorValueText,
+            updateErrorCaption: true,
+            refreshOnOpen: result.RefreshOnOpen,
+            saveSourceData: result.SaveSourceData,
+            enableRefresh: result.EnableRefresh,
+            preserveSourceSortFilter: result.PreserveSourceSortFilter,
+            missingItemsLimit: result.MissingItemsLimit,
+            updateMissingItemsLimit: true,
+            printTitles: result.PrintTitles,
+            printExpandCollapseButtons: result.PrintExpandCollapseButtons,
+            altTextTitle: result.AltTextTitle,
+            altTextDescription: result.AltTextDescription,
+            compactRowLabelIndent: result.CompactRowLabelIndent,
             updateAltText: true,
             showExpandCollapseButtons: result.ShowExpandCollapseButtons,
             autofitColumnsOnUpdate: result.AutofitColumnsOnUpdate,
@@ -162,7 +164,8 @@ public partial class MainWindow
             showItemsWithNoDataOnRows: result.ShowItemsWithNoDataOnRows,
             showItemsWithNoDataOnColumns: result.ShowItemsWithNoDataOnColumns,
             pageOverThenDown: result.PageOverThenDown,
-            pageWrap: result.PageWrap);
+            pageWrap: result.PageWrap,
+            enableDrill: result.EnableDrill);
 
     private void ApplyPivotOptions(
         PivotTableModel pivotTable,
@@ -180,6 +183,8 @@ public partial class MainWindow
         PivotReportLayout reportLayout,
         string? emptyValueText = null,
         bool updateEmptyValueText = false,
+        string? errorCaption = null,
+        bool updateErrorCaption = false,
         bool? refreshOnOpen = null,
         bool? saveSourceData = null,
         bool? enableRefresh = null,
@@ -203,7 +208,8 @@ public partial class MainWindow
         bool? showItemsWithNoDataOnRows = null,
         bool? showItemsWithNoDataOnColumns = null,
         bool? pageOverThenDown = null,
-        int? pageWrap = null)
+        int? pageWrap = null,
+        bool? enableDrill = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -246,7 +252,10 @@ public partial class MainWindow
                     showItemsWithNoDataOnRows,
                     showItemsWithNoDataOnColumns,
                     pageOverThenDown,
-                    pageWrap),
+                    pageWrap,
+                    errorCaption,
+                    updateErrorCaption,
+                    enableDrill: enableDrill),
                 "PivotTable Options"))
             return;
 

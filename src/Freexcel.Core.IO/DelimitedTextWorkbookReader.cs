@@ -6,6 +6,20 @@ namespace Freexcel.Core.IO;
 
 internal static partial class DelimitedTextWorkbookReader
 {
+    private static readonly Dictionary<string, ErrorValue> ErrorValues = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["#DIV/0!"] = ErrorValue.DivByZero,
+        ["#VALUE!"] = ErrorValue.Value,
+        ["#REF!"] = ErrorValue.Ref,
+        ["#NAME?"] = ErrorValue.Name,
+        ["#NULL!"] = ErrorValue.Null,
+        ["#N/A"] = ErrorValue.NA,
+        ["#NUM!"] = ErrorValue.Num,
+        ["#CIRCULAR!"] = ErrorValue.Circular,
+        ["#SPILL!"] = ErrorValue.Spill,
+        ["#CALC!"] = ErrorValue.Calc
+    };
+
     public static Workbook Load(Stream stream, char delimiter, bool allowSeparatorDirective = false)
     {
         var workbook = new Workbook("Untitled");
@@ -269,72 +283,36 @@ internal static partial class DelimitedTextWorkbookReader
 
     private static bool TryReadError(string field, out ErrorValue error)
     {
-        if (string.Equals(field, "#DIV/0!", StringComparison.OrdinalIgnoreCase))
-        {
-            error = ErrorValue.DivByZero;
-            return true;
-        }
-
-        if (string.Equals(field, "#VALUE!", StringComparison.OrdinalIgnoreCase))
-        {
-            error = ErrorValue.Value;
-            return true;
-        }
-
-        if (string.Equals(field, "#REF!", StringComparison.OrdinalIgnoreCase))
-        {
-            error = ErrorValue.Ref;
-            return true;
-        }
-
-        if (string.Equals(field, "#NAME?", StringComparison.OrdinalIgnoreCase))
-        {
-            error = ErrorValue.Name;
-            return true;
-        }
-
-        if (string.Equals(field, "#NULL!", StringComparison.OrdinalIgnoreCase))
-        {
-            error = ErrorValue.Null;
-            return true;
-        }
-
-        if (string.Equals(field, "#N/A", StringComparison.OrdinalIgnoreCase))
-        {
-            error = ErrorValue.NA;
-            return true;
-        }
-
-        if (string.Equals(field, "#NUM!", StringComparison.OrdinalIgnoreCase))
-        {
-            error = ErrorValue.Num;
-            return true;
-        }
-
-        if (string.Equals(field, "#SPILL!", StringComparison.OrdinalIgnoreCase))
-        {
-            error = ErrorValue.Spill;
-            return true;
-        }
-
-        if (string.Equals(field, "#CALC!", StringComparison.OrdinalIgnoreCase))
-        {
-            error = ErrorValue.Calc;
-            return true;
-        }
-
-        error = null!;
-        return false;
+        return ErrorValues.TryGetValue(field, out error!);
     }
 
     private static bool TryParseIsoDateTime(string field, out DateTime dateTime)
     {
+        var trimmed = field.Trim();
         return DateTime.TryParseExact(
-            field,
+            trimmed,
             DateTimeFormats,
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
-            out dateTime);
+            out dateTime) ||
+            TryParseIsoDateTimeOffset(trimmed, out dateTime);
+    }
+
+    private static bool TryParseIsoDateTimeOffset(string field, out DateTime dateTime)
+    {
+        if (DateTimeOffset.TryParseExact(
+            field,
+            DateTimeOffsetFormats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var offset))
+        {
+            dateTime = offset.UtcDateTime;
+            return true;
+        }
+
+        dateTime = default;
+        return false;
     }
 
     private static bool TryParseTime(string field, out TimeSpan time)

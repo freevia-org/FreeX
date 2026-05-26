@@ -57,7 +57,7 @@ public sealed class ThreadedCommentDialogTests
 
     private static string ReadThreadedCommentDialogSource()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ThreadedCommentDialog.cs"));
         var start = source.IndexOf("public sealed class ThreadedCommentDialog", StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0);
         return source[start..];

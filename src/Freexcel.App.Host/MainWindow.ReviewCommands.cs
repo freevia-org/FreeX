@@ -100,7 +100,8 @@ public partial class MainWindow
     {
         var issues = AccessibilityCheckerService.FindIssues(_workbook);
         var dialog = new AccessibilityCheckerDialog(issues) { Owner = this };
-        dialog.ShowDialog();
+        if (dialog.ShowDialog() == true)
+            NavigateToCell(AccessibilityCheckerDialog.GetNavigationTarget(dialog.Result!.Issue));
     }
 
     private void SetAltTextBtn_Click(object sender, RoutedEventArgs e)

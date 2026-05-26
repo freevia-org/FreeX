@@ -480,8 +480,57 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_messageBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(_messageBox);");
+        source.Should().Contain("_issueList.Focus();");
+        source.Should().Contain("Keyboard.Focus(_issueList);");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_UsesIssueListAndGoToAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
+        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("public sealed record AccessibilityCheckerDialogResult");
+        source.Should().Contain("private readonly ListBox _issueList");
+        source.Should().Contain("private readonly Button _goToButton");
+        source.Should().Contain("Content = \"_Go To\"");
+        source.Should().Contain("_issueList.MouseDoubleClick +=");
+        source.Should().Contain("private void GoToSelectedIssue()");
+        reviewSource.Should().Contain("if (dialog.ShowDialog() == true)");
+        reviewSource.Should().Contain("NavigateToCell(AccessibilityCheckerDialog.GetNavigationTarget(dialog.Result!.Issue));");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_CleanStateUsesSingleExcelLikeOkButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
+
+        source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
+        source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_GetNavigationTarget_UsesFirstCellInIssueLocation()
+    {
+        var sheetId = SheetId.New();
+
+        AccessibilityCheckerDialog.GetNavigationTarget(new AccessibilityIssue(
+                AccessibilityIssueKind.ChartMissingTitle,
+                sheetId,
+                "Sheet1",
+                "C3:E8",
+                "Chart is missing a title."))
+            .Should()
+            .Be(new CellAddress(sheetId, 3, 3));
+
+        AccessibilityCheckerDialog.GetNavigationTarget(new AccessibilityIssue(
+                AccessibilityIssueKind.DefaultWorksheetName,
+                sheetId,
+                "Sheet1",
+                "Sheet1",
+                "Worksheet tab names should describe their contents."))
+            .Should()
+            .Be(new CellAddress(sheetId, 1, 1));
     }
 
     [Fact]
@@ -1059,6 +1108,7 @@ public sealed class RemainingDialogTests
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Layout.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewSettingsPanelFactory.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewToolbarPlanner.cs")));
@@ -1078,7 +1128,9 @@ public sealed class RemainingDialogTests
     private static string ReadObjectDialogSources() =>
         string.Join(
             Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextEntryDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ThreadedCommentDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
     private static T GetField<T>(object instance, string name)
         where T : class

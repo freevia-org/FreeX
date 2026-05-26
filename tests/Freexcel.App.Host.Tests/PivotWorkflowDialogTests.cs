@@ -636,38 +636,130 @@ public sealed class PivotWorkflowDialogTests
             mergeAndCenterLabels: true,
             pageOverThenDown: true,
             pageWrap: 4,
-            compactRowLabelIndent: 3);
+            compactRowLabelIndent: 3,
+            enableDrill: false);
 
-        result.Should().Be(new PivotTableOptionsDialogResult(
+        result.Should().BeEquivalentTo(new
+        {
+            ShowRowGrandTotals = true,
+            ShowColumnGrandTotals = false,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            RepeatItemLabels = false,
+            BlankLineAfterItems = true,
+            StyleName = "PivotStyleMedium9",
+            ShowRowHeaders = false,
+            ShowColumnHeaders = true,
+            ShowRowStripes = true,
+            ShowColumnStripes = false,
+            ReportLayout = PivotReportLayout.Outline,
+            EmptyValueText = "N/A",
+            ErrorValueText = (string?)null,
+            RefreshOnOpen = true,
+            SaveSourceData = false,
+            EnableRefresh = false,
+            PreserveSourceSortFilter = false,
+            MissingItemsLimit = 1_048_576,
+            ShowExpandCollapseButtons = false,
+            AutofitColumnsOnUpdate = false,
+            PreserveFormattingOnUpdate = false,
+            ShowFieldHeaders = false,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
+            PageOverThenDown = true,
+            PageWrap = 4,
+            CompactRowLabelIndent = 3,
+            EnableDrill = false
+        });
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_CapturesEmptyAndErrorValueText()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Tabular,
+            emptyValueText: "  N/A  ",
+            errorValueText: "  #VALUE!  ");
+
+        result.EmptyValueText.Should().Be("N/A");
+        result.ErrorValueText.Should().Be("#VALUE!");
+
+        var blankResult = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Tabular,
+            emptyValueText: " ",
+            errorValueText: " \t ");
+
+        blankResult.EmptyValueText.Should().BeNull();
+        blankResult.ErrorValueText.Should().BeNull();
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_KeepsExistingPositionalOptionalOrder()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            true,
+            true,
+            true,
+            PivotSubtotalPlacement.Bottom,
+            false,
+            false,
+            "PivotStyleLight16",
+            true,
             true,
             false,
-            true,
-            PivotSubtotalPlacement.Top,
             false,
-            true,
-            "PivotStyleMedium9",
-            false,
-            true,
-            true,
-            false,
-            PivotReportLayout.Outline,
-            "N/A",
+            PivotReportLayout.Tabular,
+            "empty",
             true,
             false,
             false,
             false,
-            1_048_576,
-            ShowExpandCollapseButtons: false,
-            AutofitColumnsOnUpdate: false,
-            PreserveFormattingOnUpdate: false,
-            ShowFieldHeaders: false,
-            ShowContextualTooltips: false,
-            ShowPropertiesInTooltips: false,
-            ShowClassicLayout: true,
-            MergeAndCenterLabels: true,
-            PageOverThenDown: true,
-            PageWrap: 4,
-            CompactRowLabelIndent: 3));
+            0,
+            true,
+            true,
+            "title",
+            "description",
+            2,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            7,
+            "error");
+
+        result.ErrorValueText.Should().Be("error");
+        result.EnableDrill.Should().BeTrue();
     }
 
     [Fact]
@@ -722,6 +814,7 @@ public sealed class PivotWorkflowDialogTests
             ShowRowStripes = true,
             ShowColumnStripes = true,
             EmptyValueText = "-",
+            ErrorCaption = "(error)",
             ShowExpandCollapseButtons = false,
             PrintExpandCollapseButtons = true,
             AutofitColumnsOnUpdate = false,
@@ -733,37 +826,42 @@ public sealed class PivotWorkflowDialogTests
             MergeAndCenterLabels = true,
             PageOverThenDown = true,
             PageWrap = 2,
-            CompactRowLabelIndent = 5
+            CompactRowLabelIndent = 5,
+            EnableDrill = false
         };
 
         PivotTableOptionsDialog.FromPivotTable(pivotTable)
             .Should()
-            .Be(new PivotTableOptionsDialogResult(
-                false,
-                true,
-                true,
-                PivotSubtotalPlacement.Top,
-                false,
-                true,
-                "PivotStyleDark4",
-                true,
-                false,
-                true,
-                true,
-                PivotReportLayout.Compact,
-                "-",
-                PrintExpandCollapseButtons: true,
-                ShowExpandCollapseButtons: false,
-                AutofitColumnsOnUpdate: false,
-                PreserveFormattingOnUpdate: false,
-                ShowFieldHeaders: false,
-                ShowContextualTooltips: false,
-                ShowPropertiesInTooltips: false,
-                ShowClassicLayout: true,
-                MergeAndCenterLabels: true,
-                PageOverThenDown: true,
-                PageWrap: 2,
-                CompactRowLabelIndent: 5));
+            .BeEquivalentTo(new
+            {
+                ShowRowGrandTotals = false,
+                ShowColumnGrandTotals = true,
+                ShowSubtotals = true,
+                SubtotalPlacement = PivotSubtotalPlacement.Top,
+                RepeatItemLabels = false,
+                BlankLineAfterItems = true,
+                StyleName = "PivotStyleDark4",
+                ShowRowHeaders = true,
+                ShowColumnHeaders = false,
+                ShowRowStripes = true,
+                ShowColumnStripes = true,
+                ReportLayout = PivotReportLayout.Compact,
+                EmptyValueText = "-",
+                ErrorValueText = "(error)",
+                PrintExpandCollapseButtons = true,
+                ShowExpandCollapseButtons = false,
+                AutofitColumnsOnUpdate = false,
+                PreserveFormattingOnUpdate = false,
+                ShowFieldHeaders = false,
+                ShowContextualTooltips = false,
+                ShowPropertiesInTooltips = false,
+                ShowClassicLayout = true,
+                MergeAndCenterLabels = true,
+                PageOverThenDown = true,
+                PageWrap = 2,
+                CompactRowLabelIndent = 5,
+                EnableDrill = false
+            });
     }
 
     [Fact]
@@ -815,6 +913,7 @@ public sealed class PivotWorkflowDialogTests
             "_refreshOnOpenBox",
             "_enableRefreshBox",
             "_preserveSourceSortFilterBox",
+            "_enableShowDetailsBox",
             "_missingItemsLimitBox",
             "_fieldHeadersBox",
             "_showExpandCollapseBox",
@@ -892,6 +991,7 @@ public sealed class PivotWorkflowDialogTests
             "AddLabeledControl(layoutPanel, \"_Report layout\", _reportLayoutBox",
             "AddLabeledControl(layoutPanel, \"When in compact form _indent row labels\", _compactIndentBox",
             "AddLabeledControl(formatPanel, \"For _empty cells show:\", _emptyCellsBox",
+            "AddLabeledControl(formatPanel, \"For error _values show:\", _errorValuesBox",
             "AddLabeledControl(dataPanel, \"Retain items _deleted from the data source\", _missingItemsLimitBox",
             "AddLabeledControl(filtersPanel, \"Subtotal _placement\", _subtotalPlacementBox",
             "AddLabeledControl(stylePanel, \"PivotTable _style\", _styleBox",
@@ -943,11 +1043,32 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"_Preserve cell formatting on update\"",
             "Content = \"_Refresh data when opening the file\"",
             "Content = \"_Enable refresh\"",
+            "Content = \"Enable Show De_tails\"",
             "Content = \"Show expand/collapse _buttons\"",
             "Content = \"Set print _titles\"",
             "Content = \"Print expand/collapse _buttons when displayed on PivotTable\""
         })
             source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_DataTabAccessKeysAreUnique()
+    {
+        string[] dataTabLabels =
+        [
+            "_Refresh data when opening the file",
+            "_Save source data with file",
+            "_Enable refresh",
+            "Enable Show De_tails",
+            "Preserve source sort and _filter settings",
+            "Retain items _deleted from the data source"
+        ];
+
+        var accessKeys = dataTabLabels
+            .Select(label => char.ToUpperInvariant(label[label.IndexOf('_') + 1]))
+            .ToList();
+
+        accessKeys.Should().OnlyHaveUniqueItems();
     }
 
     [Fact]

@@ -342,7 +342,10 @@ public partial class MainWindow
             if (PageLayoutViewHeadingsChk is not null)
                 PageLayoutViewHeadingsChk.IsChecked = SheetGrid.ShowHeaders;
             if (ViewRulerChk is not null)
+            {
                 ViewRulerChk.IsChecked = SheetGrid.ShowRulers;
+                ViewRulerChk.IsEnabled = sheet?.ViewMode == WorksheetViewMode.PageLayout;
+            }
             if (SplitViewBtn is not null)
                 SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null;
         }
