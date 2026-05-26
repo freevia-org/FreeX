@@ -697,7 +697,7 @@ public static partial class BuiltInFunctions
         bool ignoreErrors,
         List<ScalarValue> values)
     {
-        if (ignoreBlanks && (value is BlankValue || value is TextValue { Value.Length: 0 })) return;
+        if (ignoreBlanks && value is BlankValue) return;
         if (ignoreErrors && value is ErrorValue) return;
         values.Add(value);
     }

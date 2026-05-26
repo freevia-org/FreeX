@@ -7266,6 +7266,28 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TorowAndTocol_IgnoreBlanks_KeepsZeroLengthText()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("")),
+            (1,3,new NumberValue(2)));
+
+        var row = _eval.Evaluate("=TOROW(A1:C1,1)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        row.RowCount.Should().Be(1);
+        row.ColCount.Should().Be(2);
+        row.Cells[0, 0].Should().Be(new TextValue(""));
+        row.Cells[0, 1].Should().Be(new NumberValue(2));
+
+        var col = _eval.Evaluate("=TOCOL(A1:C1,1)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        col.RowCount.Should().Be(2);
+        col.ColCount.Should().Be(1);
+        col.Cells[0, 0].Should().Be(new TextValue(""));
+        col.Cells[1, 0].Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
     public void TorowAndTocol_AllValuesIgnored_ReturnCalcError()
     {
         var sheet = MakeSheet((1, 1, ErrorValue.NA));
