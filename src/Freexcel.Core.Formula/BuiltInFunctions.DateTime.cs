@@ -647,10 +647,17 @@ public static partial class BuiltInFunctions
     {
         int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
         int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (IsExcelNasdLastDayOfFebruary(d1)) dd1 = 30;
+        if (IsExcelNasdLastDayOfFebruary(d2) && dd1 == 30) dd2 = 30;
         if (dd1 == 31) dd1 = 30;
         if (dd2 == 31 && dd1 == 30) dd2 = 30;
         return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
     }
+
+    private static bool IsExcelNasdLastDayOfFebruary(DateTime date) =>
+        date.Year != 1900 &&
+        date.Month == 2 &&
+        date.Day == DateTime.DaysInMonth(date.Year, 2);
 
     private static double Days30E360(DateTime d1, DateTime d2)
     {
