@@ -74,6 +74,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-print-options-001" => true,
         "generated-worksheet-page-setup-native-001" => true,
         "generated-worksheet-header-footer-native-001" => true,
+        "generated-worksheet-dimension-native-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -385,6 +386,11 @@ internal static class XlsxCorpusFixtureFactory
               </headerFooter>
             </worksheet>
             """)),
+        "generated-worksheet-dimension-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <dimension ref="A1" nativeDimensionAttr="kept"/>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -630,6 +636,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-page-setup-native-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-dimension-native-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
@@ -886,6 +894,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetHeaderFooterNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-dimension-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetDimensionNativeFixup(archive);
             return;
         }
 
@@ -1750,6 +1764,24 @@ internal static class XlsxCorpusFixtureFactory
             new XElement(
                 worksheetNs + "nativeHeaderFooterChild",
                 new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetDimensionNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "dimension").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "dimension",
+            new XAttribute("ref", "A1"),
+            new XAttribute("nativeDimensionAttr", "kept")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
