@@ -1251,18 +1251,34 @@ public sealed class FormatCellsDialogXamlTests
                 var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
                 var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
                 var usRegion = new RegionInfo("en-US");
+                var usCulture = CultureInfo.GetCultureInfo("en-US");
+                var frRegion = new RegionInfo("fr-FR");
+                var frCulture = CultureInfo.GetCultureInfo("fr-FR");
                 var usDollarLabel = $"{usRegion.CurrencySymbol} {usRegion.CurrencyNativeName}";
+                var usCultureLabel = $"{usRegion.CurrencySymbol} {usCulture.EnglishName}";
+                var frCultureLabel = $"{frRegion.CurrencySymbol} {frCulture.EnglishName}";
 
                 symbols.Items.Cast<string>().Should().Contain(usDollarLabel);
+                symbols.Items.Cast<string>().Should().Contain(usCultureLabel);
+                symbols.Items.Cast<string>().Should().Contain(frCultureLabel);
 
                 categories.SelectedItem = "Accounting";
                 decimals.Text = "2";
-                symbols.SelectedItem = usDollarLabel;
+                symbols.SelectedItem = usCultureLabel;
 
                 ClickOkForTest(dialog);
 
                 dialog.ResultDiff.Should().NotBeNull();
                 dialog.ResultDiff!.NumberFormat.Should().Be($"_({usRegion.CurrencySymbol}* #,##0.00_);_({usRegion.CurrencySymbol}* (#,##0.00);_({usRegion.CurrencySymbol}* \"-\"??_);_(@_)");
+
+                decimals.Text = "1";
+                symbols.SelectedItem = frCultureLabel;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff!.NumberFormat.Should().Be($"_({frRegion.CurrencySymbol}* #,##0.0_);_({frRegion.CurrencySymbol}* (#,##0.0);_({frRegion.CurrencySymbol}* \"-\"?_);_(@_)");
+                FormatCellsDialog.ResolveNumberFormat("$#,##0.00", 0, "Accounting", "2", usCultureLabel, 0)
+                    .Should().Be($"_({usRegion.CurrencySymbol}* #,##0.00_);_({usRegion.CurrencySymbol}* (#,##0.00);_({usRegion.CurrencySymbol}* \"-\"??_);_(@_)");
             }
             finally
             {

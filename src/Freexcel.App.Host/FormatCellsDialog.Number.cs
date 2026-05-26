@@ -225,6 +225,13 @@ public partial class FormatCellsDialog
                 {
                     AddSymbolLabel(labels, $"{region.CurrencySymbol} {currencyName}", region.CurrencySymbol);
                 }
+
+                var culture = CultureInfo.GetCultureInfo(cultureName);
+                if (!string.IsNullOrWhiteSpace(region.CurrencySymbol)
+                    && !string.IsNullOrWhiteSpace(culture.EnglishName))
+                {
+                    AddSymbolLabel(labels, $"{region.CurrencySymbol} {culture.EnglishName}", region.CurrencySymbol);
+                }
             }
             catch (ArgumentException)
             {
