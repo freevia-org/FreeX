@@ -157,35 +157,7 @@ public sealed partial class Sheet
             ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
         };
 
-        // Collections: column/row dimensions
-        foreach (var (col, width) in ColumnWidths)
-            copy.ColumnWidths[col] = width;
-        foreach (var (row, height) in RowHeights)
-            copy.RowHeights[row] = height;
-
-        // Hidden rows/cols
-        foreach (var row in HiddenRows)
-            copy.HiddenRows.Add(row);
-        foreach (var row in FilterHiddenRows)
-            copy.FilterHiddenRows.Add(row);
-        foreach (var col in HiddenCols)
-            copy.HiddenCols.Add(col);
-
-        // Page breaks
-        foreach (var rowBreak in RowPageBreaks)
-            copy.RowPageBreaks.Add(rowBreak);
-        foreach (var colBreak in ColumnPageBreaks)
-            copy.ColumnPageBreaks.Add(colBreak);
-
-        // Previously missed: outline levels and group-hidden rows/cols
-        foreach (var (row, level) in RowOutlineLevels)
-            copy.RowOutlineLevels[row] = level;
-        foreach (var (col, level) in ColOutlineLevels)
-            copy.ColOutlineLevels[col] = level;
-        foreach (var row in GroupHiddenRows)
-            copy.GroupHiddenRows.Add(row);
-        foreach (var col in GroupHiddenCols)
-            copy.GroupHiddenCols.Add(col);
+        CopyLayoutCollectionsTo(copy);
 
         // Cells (deep copy)
         foreach (var (address, cell) in EnumerateCells())
@@ -420,6 +392,35 @@ public sealed partial class Sheet
         static CellAddress RemapAddress       (CellAddress a, SheetId id) => new(id, a.Row, a.Col);
         static GridRange   RemapRange         (GridRange   r, SheetId id) =>
             new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
+    }
+
+    private void CopyLayoutCollectionsTo(Sheet copy)
+    {
+        foreach (var (col, width) in ColumnWidths)
+            copy.ColumnWidths[col] = width;
+        foreach (var (row, height) in RowHeights)
+            copy.RowHeights[row] = height;
+
+        foreach (var row in HiddenRows)
+            copy.HiddenRows.Add(row);
+        foreach (var row in FilterHiddenRows)
+            copy.FilterHiddenRows.Add(row);
+        foreach (var col in HiddenCols)
+            copy.HiddenCols.Add(col);
+
+        foreach (var rowBreak in RowPageBreaks)
+            copy.RowPageBreaks.Add(rowBreak);
+        foreach (var colBreak in ColumnPageBreaks)
+            copy.ColumnPageBreaks.Add(colBreak);
+
+        foreach (var (row, level) in RowOutlineLevels)
+            copy.RowOutlineLevels[row] = level;
+        foreach (var (col, level) in ColOutlineLevels)
+            copy.ColOutlineLevels[col] = level;
+        foreach (var row in GroupHiddenRows)
+            copy.GroupHiddenRows.Add(row);
+        foreach (var col in GroupHiddenCols)
+            copy.GroupHiddenCols.Add(col);
     }
 
     private static WorksheetAutoFilterModel? CloneAutoFilter(WorksheetAutoFilterModel? autoFilter)
