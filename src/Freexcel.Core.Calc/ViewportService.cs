@@ -126,7 +126,56 @@ public sealed partial class ViewportService : IViewportService
                 bottomLeftRows)
             : null;
 
-        return new ViewportModel(cells, rowMetrics, colMetrics, frozenPanes, [], splitPanes);
+        var chartDataCells = request.IncludeObjects
+            ? BuildChartDataCells(workbook, sheet)
+            : [];
+
+        return new ViewportModel(cells, rowMetrics, colMetrics, frozenPanes, [], splitPanes, chartDataCells);
+    }
+
+    private static IReadOnlyList<ChartDataCell> BuildChartDataCells(Workbook workbook, Sheet sheet)
+    {
+        if (sheet.Charts.Count == 0)
+            return [];
+
+        var chartCells = new List<ChartDataCell>();
+        var seen = new HashSet<(SheetId SheetId, uint Row, uint Col)>();
+        foreach (var chart in sheet.Charts)
+        {
+            var sourceSheet = workbook.GetSheet(chart.DataRange.Start.Sheet);
+            if (sourceSheet is null)
+                continue;
+
+            for (uint row = chart.DataRange.Start.Row; row <= chart.DataRange.End.Row; row++)
+            {
+                for (uint col = chart.DataRange.Start.Col; col <= chart.DataRange.End.Col; col++)
+                {
+                    if (!seen.Add((sourceSheet.Id, row, col)))
+                        continue;
+
+                    var cell = sourceSheet.GetCell(row, col);
+                    if (cell is null)
+                    {
+                        chartCells.Add(new ChartDataCell(sourceSheet.Id, row, col, ""));
+                        continue;
+                    }
+
+                    var style = workbook.GetStyle(cell.StyleId);
+                    chartCells.Add(new ChartDataCell(
+                        sourceSheet.Id,
+                        row,
+                        col,
+                        GetDisplayText(
+                            workbook,
+                            sourceSheet,
+                            cell,
+                            ref style,
+                            EstimateCharacterWidth(sourceSheet.ColumnWidths.GetValueOrDefault(col, sourceSheet.DefaultColumnWidth)))));
+                }
+            }
+        }
+
+        return chartCells;
     }
 
 
@@ -438,9 +487,7 @@ public sealed partial class ViewportService : IViewportService
             style.NumberFormat,
             targetWidthCharacters,
             workbook.IndexedColors);
-        if (result.ThemeColor is { } themeColor)
-            style.FontColor = themeColor.Resolve(workbook.Theme);
-        else if (TryParseHexColor(result.ColorHex, out var color))
+        if (TryParseHexColor(result.ColorHex, out var color))
             style.FontColor = color;
 
         return result.Text;

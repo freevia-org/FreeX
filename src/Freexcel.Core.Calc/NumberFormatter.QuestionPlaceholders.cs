@@ -29,6 +29,9 @@ public static partial class NumberFormatter
         return false;
     }
 
+    private static bool ShouldRenderQuestionOnlyFormat(string prefix, string suffix) =>
+        string.IsNullOrWhiteSpace(prefix) && string.IsNullOrWhiteSpace(suffix);
+
     private static string FormatQuestionPlaceholderNumber(
         double value,
         string format,
