@@ -143,7 +143,7 @@
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="FindAllBtn" Content="Find _All" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>
-            <Button x:Name="FindNextBtn" Content="_Find Next" Width="80" Margin="0,0,8,0" Click="FindNext_Click"/>
+            <Button x:Name="FindNextBtn" Content="_Find Next" Width="80" Margin="0,0,8,0" IsDefault="True" Click="FindNext_Click"/>
             <Button x:Name="ReplaceBtn" Content="_Replace" Width="76" Margin="0,0,8,0" Visibility="Collapsed" Click="Replace_Click"/>
             <Button x:Name="ReplaceAllBtn" Content="_Replace All" Width="88" Margin="0,0,8,0" Visibility="Collapsed" Click="ReplaceAll_Click"/>
             <Button Content="_Close" Width="60" IsCancel="True" Click="Close_Click"/>
