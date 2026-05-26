@@ -36,6 +36,12 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.FocusedMenuHeader.Should().Be("Color Scale");
             harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ColorScale);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Icon Set");
+
+            harness.FocusedMenuHeader.Should().Be("Icon Set");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.IconSet);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
         });
     }
 

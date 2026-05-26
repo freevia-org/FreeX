@@ -81,6 +81,18 @@ public partial class GridView
                 foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
                     dc.DrawRectangle(QuickAnalysisColorScalePreviewBrushes[index++ % QuickAnalysisColorScalePreviewBrushes.Length], null, cell);
                 break;
+            case GridQuickAnalysisPreviewVisualKind.IconSet:
+                var iconIndex = 0;
+                foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+                {
+                    var radius = Math.Min(cell.Width, cell.Height) / 4;
+                    if (radius <= 0)
+                        continue;
+
+                    var center = new Point(cell.Left + radius + 2, cell.Top + cell.Height / 2);
+                    dc.DrawEllipse(QuickAnalysisIconSetPreviewBrushes[iconIndex++ % QuickAnalysisIconSetPreviewBrushes.Length], null, center, radius, radius);
+                }
+                break;
         }
     }
 

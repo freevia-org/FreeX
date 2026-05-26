@@ -335,6 +335,7 @@ public partial class MainWindow
         {
             QuickAnalysisPreviewVisualKind.DataBars => GridQuickAnalysisPreviewVisualKind.DataBars,
             QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale,
+            QuickAnalysisPreviewVisualKind.IconSet => GridQuickAnalysisPreviewVisualKind.IconSet,
             _ => GridQuickAnalysisPreviewVisualKind.None
         };
 }
