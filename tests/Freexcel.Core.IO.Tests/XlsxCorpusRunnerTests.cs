@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(29, "the generated metadata-pass manifest currently declares twenty-nine deterministic package-retention rows");
+        rows.Should().HaveCount(30, "the generated metadata-pass manifest currently declares thirty deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -679,6 +679,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetSheetFormatRow_RetainsSheetFormatAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sheet-format-001");
+        AssertWorksheetSheetFormat(source, "generated-worksheet-sheet-format-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-sheet-format-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-sheet-format-001");
+        AssertWorksheetSheetFormat(saved, "generated-worksheet-sheet-format-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -1029,6 +1047,22 @@ public class XlsxCorpusRunnerTests
         sheetView.Attribute("rightToLeft")!.Value.Should().Be("1", because);
         sheetView.Element(worksheetNs + "pivotSelection")!
             .Attribute("pane")!.Value.Should().Be("topRight", because);
+    }
+
+    private static void AssertWorksheetSheetFormat(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetFormat = worksheetXml.Root!.Element(worksheetNs + "sheetFormatPr");
+        sheetFormat.Should().NotBeNull(because);
+        sheetFormat!.Attribute("baseColWidth")!.Value.Should().Be("12", because);
+        sheetFormat.Attribute("zeroHeight")!.Value.Should().Be("1", because);
+        sheetFormat.Attribute("thickTop")!.Value.Should().Be("1", because);
+        sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3", because);
+        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)
