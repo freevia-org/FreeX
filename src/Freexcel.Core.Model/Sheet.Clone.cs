@@ -185,90 +185,11 @@ public sealed partial class Sheet
         foreach (var table in StructuredTables)
             copy.StructuredTables.Add(CloneStructuredTable(table, newId));
 
-        // Conditional formats
         foreach (var cf in ConditionalFormats)
-        {
-            var clonedFormat = new ConditionalFormat
-            {
-                AppliesTo            = RemapRange(cf.AppliesTo, newId),
-                Priority             = cf.Priority,
-                RuleType             = cf.RuleType,
-                Operator             = cf.Operator,
-                Value1               = cf.Value1,
-                Value2               = cf.Value2,
-                FormatIfTrue         = cf.FormatIfTrue?.Clone(),
-                MinColor             = cf.MinColor,
-                MidColor             = cf.MidColor,
-                MaxColor             = cf.MaxColor,
-                UseThreeColorScale   = cf.UseThreeColorScale,
-                MinThresholdType     = cf.MinThresholdType,
-                MinThresholdValue    = cf.MinThresholdValue,
-                MinThresholdGreaterThanOrEqual = cf.MinThresholdGreaterThanOrEqual,
-                MidThresholdType     = cf.MidThresholdType,
-                MidThresholdValue    = cf.MidThresholdValue,
-                MidThresholdGreaterThanOrEqual = cf.MidThresholdGreaterThanOrEqual,
-                MaxThresholdType     = cf.MaxThresholdType,
-                MaxThresholdValue    = cf.MaxThresholdValue,
-                MaxThresholdGreaterThanOrEqual = cf.MaxThresholdGreaterThanOrEqual,
-                DataBarColor         = cf.DataBarColor,
-                DataBarMinThresholdType = cf.DataBarMinThresholdType,
-                DataBarMinThresholdValue = cf.DataBarMinThresholdValue,
-                DataBarMaxThresholdType = cf.DataBarMaxThresholdType,
-                DataBarMaxThresholdValue = cf.DataBarMaxThresholdValue,
-                DataBarShowValue     = cf.DataBarShowValue,
-                DataBarMinLength     = cf.DataBarMinLength,
-                DataBarMaxLength     = cf.DataBarMaxLength,
-                DataBarGradient      = cf.DataBarGradient,
-                DataBarBorder        = cf.DataBarBorder,
-                DataBarAxisPosition  = cf.DataBarAxisPosition,
-                DataBarAxisColor     = cf.DataBarAxisColor,
-                DataBarNegativeFillColor = cf.DataBarNegativeFillColor,
-                DataBarNegativeBorderColor = cf.DataBarNegativeBorderColor,
-                AboveAverage         = cf.AboveAverage,
-                FormulaText          = cf.FormulaText,
-                IconSetStyle         = cf.IconSetStyle,
-                IconSetShowValue     = cf.IconSetShowValue,
-                IconSetReverse       = cf.IconSetReverse,
-                TopBottomRank        = cf.TopBottomRank,
-                TopBottomPercent     = cf.TopBottomPercent,
-                TextRuleText         = cf.TextRuleText,
-                DateOccurringPeriod  = cf.DateOccurringPeriod,
-                StopIfTrue           = cf.StopIfTrue,
-                NativeAttributes     = cf.NativeAttributes,
-                NativeChildXmls      = ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(cf.NativeChildXmls),
-                NativePayloadAttributes = cf.NativePayloadAttributes,
-                NativePayloadChildXmls = cf.NativePayloadChildXmls,
-                NativeContainerAttributes = cf.NativeContainerAttributes,
-                NativeContainerChildXmls = cf.NativeContainerChildXmls
-            };
-            clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
-            clonedFormat.IconOverrides.AddRange(cf.IconOverrides);
-            copy.ConditionalFormats.Add(clonedFormat);
-        }
+            copy.ConditionalFormats.Add(CloneConditionalFormat(cf, newId));
 
-        // Data validations
         foreach (var dv in DataValidations)
-            copy.DataValidations.Add(new DataValidation
-            {
-                AppliesTo         = RemapRange(dv.AppliesTo, newId),
-                Type              = dv.Type,
-                Operator          = dv.Operator,
-                Formula1          = dv.Formula1,
-                Formula2          = dv.Formula2,
-                AllowBlank        = dv.AllowBlank,
-                ShowDropdown      = dv.ShowDropdown,
-                AlertStyle        = dv.AlertStyle,
-                ShowInputMessage  = dv.ShowInputMessage,
-                ShowErrorMessage  = dv.ShowErrorMessage,
-                ErrorTitle        = dv.ErrorTitle,
-                ErrorMessage      = dv.ErrorMessage,
-                PromptTitle       = dv.PromptTitle,
-                PromptMessage     = dv.PromptMessage,
-                NativeAttributes  = dv.NativeAttributes,
-                NativeChildXmls   = dv.NativeChildXmls,
-                NativeContainerAttributes = dv.NativeContainerAttributes,
-                NativeContainerChildXmls = dv.NativeContainerChildXmls
-            });
+            copy.DataValidations.Add(CloneDataValidation(dv, newId));
 
         // Note: Charts, TextBoxes, DrawingShapes, Pictures, and Sparklines are intentionally
         // left empty here. The caller must copy those drawing collections separately.
@@ -394,6 +315,89 @@ public sealed partial class Sheet
         clonedTable.FilterColumns.AddRange(table.FilterColumns);
         return clonedTable;
     }
+
+    private static ConditionalFormat CloneConditionalFormat(ConditionalFormat cf, SheetId newId)
+    {
+        var clonedFormat = new ConditionalFormat
+        {
+            AppliesTo            = RemapRange(cf.AppliesTo, newId),
+            Priority             = cf.Priority,
+            RuleType             = cf.RuleType,
+            Operator             = cf.Operator,
+            Value1               = cf.Value1,
+            Value2               = cf.Value2,
+            FormatIfTrue         = cf.FormatIfTrue?.Clone(),
+            MinColor             = cf.MinColor,
+            MidColor             = cf.MidColor,
+            MaxColor             = cf.MaxColor,
+            UseThreeColorScale   = cf.UseThreeColorScale,
+            MinThresholdType     = cf.MinThresholdType,
+            MinThresholdValue    = cf.MinThresholdValue,
+            MinThresholdGreaterThanOrEqual = cf.MinThresholdGreaterThanOrEqual,
+            MidThresholdType     = cf.MidThresholdType,
+            MidThresholdValue    = cf.MidThresholdValue,
+            MidThresholdGreaterThanOrEqual = cf.MidThresholdGreaterThanOrEqual,
+            MaxThresholdType     = cf.MaxThresholdType,
+            MaxThresholdValue    = cf.MaxThresholdValue,
+            MaxThresholdGreaterThanOrEqual = cf.MaxThresholdGreaterThanOrEqual,
+            DataBarColor         = cf.DataBarColor,
+            DataBarMinThresholdType = cf.DataBarMinThresholdType,
+            DataBarMinThresholdValue = cf.DataBarMinThresholdValue,
+            DataBarMaxThresholdType = cf.DataBarMaxThresholdType,
+            DataBarMaxThresholdValue = cf.DataBarMaxThresholdValue,
+            DataBarShowValue     = cf.DataBarShowValue,
+            DataBarMinLength     = cf.DataBarMinLength,
+            DataBarMaxLength     = cf.DataBarMaxLength,
+            DataBarGradient      = cf.DataBarGradient,
+            DataBarBorder        = cf.DataBarBorder,
+            DataBarAxisPosition  = cf.DataBarAxisPosition,
+            DataBarAxisColor     = cf.DataBarAxisColor,
+            DataBarNegativeFillColor = cf.DataBarNegativeFillColor,
+            DataBarNegativeBorderColor = cf.DataBarNegativeBorderColor,
+            AboveAverage         = cf.AboveAverage,
+            FormulaText          = cf.FormulaText,
+            IconSetStyle         = cf.IconSetStyle,
+            IconSetShowValue     = cf.IconSetShowValue,
+            IconSetReverse       = cf.IconSetReverse,
+            TopBottomRank        = cf.TopBottomRank,
+            TopBottomPercent     = cf.TopBottomPercent,
+            TextRuleText         = cf.TextRuleText,
+            DateOccurringPeriod  = cf.DateOccurringPeriod,
+            StopIfTrue           = cf.StopIfTrue,
+            NativeAttributes     = cf.NativeAttributes,
+            NativeChildXmls      = ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(cf.NativeChildXmls),
+            NativePayloadAttributes = cf.NativePayloadAttributes,
+            NativePayloadChildXmls = cf.NativePayloadChildXmls,
+            NativeContainerAttributes = cf.NativeContainerAttributes,
+            NativeContainerChildXmls = cf.NativeContainerChildXmls
+        };
+        clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
+        clonedFormat.IconOverrides.AddRange(cf.IconOverrides);
+        return clonedFormat;
+    }
+
+    private static DataValidation CloneDataValidation(DataValidation dv, SheetId newId) =>
+        new()
+        {
+            AppliesTo         = RemapRange(dv.AppliesTo, newId),
+            Type              = dv.Type,
+            Operator          = dv.Operator,
+            Formula1          = dv.Formula1,
+            Formula2          = dv.Formula2,
+            AllowBlank        = dv.AllowBlank,
+            ShowDropdown      = dv.ShowDropdown,
+            AlertStyle        = dv.AlertStyle,
+            ShowInputMessage  = dv.ShowInputMessage,
+            ShowErrorMessage  = dv.ShowErrorMessage,
+            ErrorTitle        = dv.ErrorTitle,
+            ErrorMessage      = dv.ErrorMessage,
+            PromptTitle       = dv.PromptTitle,
+            PromptMessage     = dv.PromptMessage,
+            NativeAttributes  = dv.NativeAttributes,
+            NativeChildXmls   = dv.NativeChildXmls,
+            NativeContainerAttributes = dv.NativeContainerAttributes,
+            NativeContainerChildXmls = dv.NativeContainerChildXmls
+        };
 
     private void CopyLayoutCollectionsTo(Sheet copy)
     {
