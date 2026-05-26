@@ -1566,11 +1566,15 @@ public sealed class PivotTableCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        workbook.Slicers.Should().ContainSingle().Which.Should().Match<SlicerModel>(slicer =>
+        var slicer = workbook.Slicers.Should().ContainSingle().Which;
+        slicer.Should().Match<SlicerModel>(slicer =>
             slicer.Name == "Category Slicer" &&
             slicer.CacheName == "Slicer_Category_Slicer" &&
             slicer.SourcePivotTableName == "PivotTable1" &&
             slicer.SourceFieldName == "Category");
+        slicer.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 2, 0),
+            new DrawingAnchorPoint(9, 0, 10, 0)));
 
         command.Revert(ctx);
 
@@ -1773,13 +1777,17 @@ public sealed class PivotTableCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        workbook.Timelines.Should().ContainSingle().Which.Should().Match<TimelineModel>(timeline =>
+        var timeline = workbook.Timelines.Should().ContainSingle().Which;
+        timeline.Should().Match<TimelineModel>(timeline =>
             timeline.Name == "Date Timeline" &&
             timeline.CacheName == "Timeline_Date_Timeline" &&
             timeline.SourcePivotTableName == "PivotTable1" &&
             timeline.SourceFieldName == "Date" &&
             timeline.StartDate == "2026-01-05" &&
             timeline.EndDate == "2026-02-02");
+        timeline.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 2, 0),
+            new DrawingAnchorPoint(9, 0, 10, 0)));
 
         command.Revert(ctx);
 
