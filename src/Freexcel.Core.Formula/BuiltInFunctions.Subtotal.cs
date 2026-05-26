@@ -27,7 +27,7 @@ public static partial class BuiltInFunctions
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
-                    if (skipHidden ? ctx.IsRowHidden(absRow) : ctx.IsRowFilterHidden(absRow)) continue;
+                    if (ShouldSkipSubtotalRow(ctx, rv, absRow, skipHidden)) continue;
                     for (int c = 0; c < rv.ColCount; c++)
                     {
                         uint absCol = rv.StartCol + (uint)c;
@@ -65,6 +65,13 @@ public static partial class BuiltInFunctions
             11 => nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(SubtotalVarP(nums)),
             _  => ErrorValue.Value
         };
+    }
+
+    private static bool ShouldSkipSubtotalRow(IEvalContext ctx, RangeValue range, uint row, bool skipHidden)
+    {
+        return range.SheetName is null
+            ? skipHidden ? ctx.IsRowHidden(row) : ctx.IsRowFilterHidden(row)
+            : skipHidden ? ctx.IsRowHidden(range.SheetName, row) : ctx.IsRowFilterHidden(range.SheetName, row);
     }
 
     private static bool IsNestedSubtotalOrAggregateCell(IEvalContext ctx, RangeValue range, uint row, uint col)
