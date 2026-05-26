@@ -1044,6 +1044,30 @@ public class ShortCircuitEvaluationTests
     }
 
     [Fact]
+    public void IF_RangeConditionSelectsBranchElements()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new BoolValue(false));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new BoolValue(true));
+
+        var result = _evaluator.Evaluate("=IF(C1:C3,A1:A3,B1:B3)", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[1, 0].Should().Be(new NumberValue(20));
+        result.Cells[2, 0].Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void IF_ConditionIsError_PropagatesError()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
