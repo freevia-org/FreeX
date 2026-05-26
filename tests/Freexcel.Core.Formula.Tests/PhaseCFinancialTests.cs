@@ -128,6 +128,29 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void IpmtAndPpmt_TrailingRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        AssertApproxColumn(
+            EvalWithData("IPMT(0.05/12,1,A1:A2,B1:B2)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (2, 2, 12000.0)),
+            Calc("IPMT(0.05/12,1,60,10000)"),
+            Calc("IPMT(0.05/12,1,72,12000)"));
+        AssertApproxColumn(
+            EvalWithData("PPMT(0.05/12,1,A1:A2,B1:B2)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (2, 2, 12000.0)),
+            Calc("PPMT(0.05/12,1,60,10000)"),
+            Calc("PPMT(0.05/12,1,72,12000)"));
+        AssertApproxColumn(
+            EvalWithData("IPMT(0.05/12,1,60,10000,A1:A2,B1:B2)", (1, 1, 0.0), (2, 1, 500.0), (1, 2, 0.0), (2, 2, 1.0)),
+            Calc("IPMT(0.05/12,1,60,10000,0,0)"),
+            Calc("IPMT(0.05/12,1,60,10000,500,1)"));
+        AssertApproxColumn(
+            EvalWithData("PPMT(0.05/12,1,60,10000,A1:A2,B1:B2)", (1, 1, 0.0), (2, 1, 500.0), (1, 2, 0.0), (2, 2, 1.0)),
+            Calc("PPMT(0.05/12,1,60,10000,0,0)"),
+            Calc("PPMT(0.05/12,1,60,10000,500,1)"));
+
+        EvalWithData("IPMT(0.05/12,1,A1:A2,B1:C1)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (1, 3, 12000.0)).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Ipmt_PmtEqualsIpmtPlusPpmt_AllPeriods()
     {
         // For a standard loan, PMT = IPMT + PPMT for every period

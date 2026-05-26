@@ -101,6 +101,30 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void DataValidationDialog_OrdersAllowTypesLikeExcel()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
+        var expectedOrder = new[]
+        {
+            "Content=\"Any Value\"",
+            "Content=\"Whole Number\"",
+            "Content=\"Decimal\"",
+            "Content=\"List\"",
+            "Content=\"Date\"",
+            "Content=\"Time\"",
+            "Content=\"Text Length\"",
+            "Content=\"Custom\""
+        };
+
+        var positions = expectedOrder
+            .Select(marker => xaml.IndexOf(marker, StringComparison.Ordinal))
+            .ToArray();
+
+        positions.Should().OnlyContain(position => position >= 0);
+        positions.Should().BeInAscendingOrder();
+    }
+
+    [Fact]
     public void DataValidationDialog_ExposesKeyboardAccessKeysForOptionsAndButtons()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));

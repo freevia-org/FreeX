@@ -4256,6 +4256,40 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetProtectionNativeAttributeNames()
+    {
+        var workbook = new Workbook("AdvancedSheetProtectionInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+        sheet.IsProtected = true;
+        sheet.ProtectionMetadata = new WorksheetProtectionMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["algorithmName"] = "SHA-512",
+                ["validSheetProtectionAttr"] = "kept",
+                ["invalid sheetProtection attr"] = "skip"
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var protection = worksheetXml.Root!.Element(worksheetNs + "sheetProtection");
+        protection.Should().NotBeNull();
+        protection!.Attribute("sheet")!.Value.Should().Be("1");
+        protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512");
+        protection.Attribute("validSheetProtectionAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedAdvancedSheetProtection()
     {
         var workbook = new Workbook("AdvancedSheetProtectionRemovalTest");
@@ -4464,6 +4498,36 @@ public partial class FileAdapterSmokeTests
             .Select(element => element.Attribute("id")?.Value)
             .Should()
             .BeEquivalentTo("first", "second");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedAdvancedWorkbookProtection()
+    {
+        var workbook = new Workbook("AdvancedWorkbookProtectionRemovalTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdvancedWorkbookProtectionMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.ProtectionMetadata.Should().NotBeNull();
+        loaded.IsStructureProtected = false;
+        loaded.StructureProtectionPassword = null;
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        workbookXml.Root!.Element(workbookNs + "workbookProtection").Should().BeNull();
     }
 
     [Fact]
@@ -11630,6 +11694,34 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetSingleXmlCells()
+    {
+        var workbook = new Workbook("SingleXmlCellsRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSingleXmlCells(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SingleXmlCells = null;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        worksheetXml.Root!.Element(worksheetNs + "singleXmlCells").Should().BeNull();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorksheetSingleXmlCells()
     {
         var workbook = new Workbook("SingleXmlCellsNativeJson");
@@ -11707,6 +11799,49 @@ public partial class FileAdapterSmokeTests
         singleXmlCell.Attribute("r")!.Value.Should().Be("A1");
         singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1");
         singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetSingleXmlCellsNativeAttributeNames()
+    {
+        var workbook = new Workbook("SingleXmlCellsInvalidNativeAttributeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("mapped"));
+        sheet.SingleXmlCells = new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validSingleXmlCellsAttr"] = "kept",
+                ["invalid singleXmlCells attr"] = "skip"
+            },
+            Cells =
+            [
+                new WorksheetSingleXmlCellModel
+                {
+                    Id = 1,
+                    Reference = "A1",
+                    XmlCellPropertyId = 1,
+                    NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["validSingleXmlCellAttr"] = "cell-kept",
+                        ["invalid singleXmlCell attr"] = "skip"
+                    }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var xml = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        xml.Should().Contain("validSingleXmlCellsAttr=\"kept\"");
+        xml.Should().Contain("validSingleXmlCellAttr=\"cell-kept\"");
+        xml.Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -12404,7 +12539,8 @@ public partial class FileAdapterSmokeTests
                     ["validWorkbookProtectionAttr"] = "keep",
                     ["invalid workbookProtection attr"] = "skip"
                 }
-            }
+            },
+            IsStructureProtected = true
         };
         workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
         {
@@ -12835,6 +12971,35 @@ public partial class FileAdapterSmokeTests
 
         loaded.IndexedColors.TryGetColor(1, out var color).Should().BeTrue();
         color.Should().Be(CellColor.FromArgb(1, 2, 3));
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_PreservesThemeNumberFormatColorDirective()
+    {
+        var workbook = new Workbook("ThemeNumberFormatColorLoadTest")
+        {
+            Theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent2, CellColor.FromArgb(100, 120, 140))
+        };
+        var sheet = workbook.AddSheet("Data");
+        var style = new CellStyle { NumberFormat = "[ThemeColor Accent2 Tint 0.25]0.0" };
+        var styleId = workbook.RegisterStyle(style);
+        var cell = Cell.FromValue(new NumberValue(12.5));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        var loaded = adapter.Load(saved);
+
+        var loadedSheet = loaded.GetSheet("Data")!;
+        var loadedCell = loadedSheet.GetCell(1, 1)!;
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Accent2)
+            .Should().Be(CellColor.FromArgb(100, 120, 140));
+        loaded.GetStyle(loadedCell.StyleId).NumberFormat
+            .Should().Be("[ThemeColor Accent2 Tint 0.25]0.0");
     }
 
     [Fact]
@@ -13854,6 +14019,63 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetPageBreakNativeAttributeNames()
+    {
+        var workbook = new Workbook("WorksheetPageBreakInvalidNativeAttributeSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page breaks"));
+        sheet.RowPageBreaks.Add(20);
+        sheet.ColumnPageBreaks.Add(5);
+        sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validRowBreaksAttr"] = "kept",
+                ["invalid rowBreaks attr"] = "skip"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [20] = new(StringComparer.Ordinal)
+                {
+                    ["validRowBreakAttr"] = "row-kept",
+                    ["invalid rowBreak attr"] = "skip"
+                }
+            }
+        };
+        sheet.ColumnPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validColumnBreaksAttr"] = "kept",
+                ["invalid columnBreaks attr"] = "skip"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [5] = new(StringComparer.Ordinal)
+                {
+                    ["validColumnBreakAttr"] = "column-kept",
+                    ["invalid columnBreak attr"] = "skip"
+                }
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var xml = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        xml.Should().Contain("validRowBreaksAttr=\"kept\"");
+        xml.Should().Contain("validRowBreakAttr=\"row-kept\"");
+        xml.Should().Contain("validColumnBreaksAttr=\"kept\"");
+        xml.Should().Contain("validColumnBreakAttr=\"column-kept\"");
+        xml.Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetPageBreaks()
     {
         var workbook = new Workbook("WorksheetPageBreakRemoval");
@@ -13964,6 +14186,36 @@ public partial class FileAdapterSmokeTests
         printOptions.Should().NotBeNull();
         printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1");
         printOptions.Attribute("customAttr")!.Value.Should().Be("print-native");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetPrintOptionsNativeAttributeNames()
+    {
+        var workbook = new Workbook("WorksheetPrintOptionsInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Print options"));
+        sheet.PrintOptionsMetadata = new WorksheetPrintOptionsMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validPrintOptionsAttr"] = "kept",
+                ["invalid printOptions attr"] = "skip"
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
+        printOptions.Should().NotBeNull();
+        printOptions!.Attribute("validPrintOptionsAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -14152,6 +14404,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetPageMarginsNativeAttributeNames()
+    {
+        var workbook = new Workbook("WorksheetPageMarginsInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page margins"));
+        sheet.PageMarginsMetadata = new WorksheetPageMarginsMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validPageMarginsAttr"] = "kept",
+                ["invalid pageMargins attr"] = "skip"
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var pageMargins = worksheetXml.Root!.Element(worksheetNs + "pageMargins");
+        pageMargins.Should().NotBeNull();
+        pageMargins!.Attribute("validPageMarginsAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetHeaderFooterNativeAttributes()
     {
         var workbook = new Workbook("HeaderFooterNativeMetadata");
@@ -14188,6 +14470,37 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetHeaderFooterNativeAttributeNames()
+    {
+        var workbook = new Workbook("HeaderFooterInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.PageHeader = new WorksheetHeaderFooter("Left", "Center", "Right");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+        sheet.HeaderFooterMetadata = new WorksheetHeaderFooterMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validHeaderFooterAttr"] = "kept",
+                ["invalid headerFooter attr"] = "skip"
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
+        headerFooter.Should().NotBeNull();
+        headerFooter!.Attribute("validHeaderFooterAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetDimensionNativeAttributes()
     {
         var workbook = new Workbook("DimensionNativeMetadata");
@@ -14219,6 +14532,36 @@ public partial class FileAdapterSmokeTests
         dimension!.Attribute("nativeDimensionAttr").Should().NotBeNull();
         dimension.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept");
         dimension.Attribute("ref")!.Value.Should().Be("A1:A2");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetDimensionNativeAttributeNames()
+    {
+        var workbook = new Workbook("DimensionInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+        sheet.DimensionMetadata = new WorksheetDimensionMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validDimensionAttr"] = "kept",
+                ["invalid dimension attr"] = "skip"
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension");
+        dimension.Should().NotBeNull();
+        dimension!.Attribute("validDimensionAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -15030,6 +15373,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetSheetPropertiesNativeAttributeNames()
+    {
+        var workbook = new Workbook("SheetPropertiesInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sheet properties"));
+        sheet.SheetPropertiesMetadata = new WorksheetSheetPropertiesMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validSheetPrAttr"] = "kept",
+                ["invalid sheetPr attr"] = "skip"
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
+        sheetPr.Should().NotBeNull();
+        sheetPr!.Attribute("validSheetPrAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetIgnoredErrors()
     {
         var workbook = new Workbook("IgnoredErrorsRetentionTest");
@@ -15134,6 +15507,68 @@ public partial class FileAdapterSmokeTests
         ignoredError.Attribute("sqref")!.Value.Should().Be("A1");
         ignoredError.Attribute("twoDigitTextYear")!.Value.Should().Be("1");
         ignoredError.Attribute("nativeIgnoredError")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetDiagnosticsNativeAttributeNames()
+    {
+        var workbook = new Workbook("WorksheetDiagnosticsInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+        workbook.WatchedCells.Add(new CellAddress(sheet.Id, 1, 1));
+        sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["validIgnoredErrorsAttr"] = "kept",
+                ["invalid ignoredErrors attr"] = "skip"
+            },
+            ErrorNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["validIgnoredErrorAttr"] = "kept",
+                    ["invalid ignoredError attr"] = "skip"
+                }
+            }
+        };
+        sheet.CellWatchesMetadata = new WorksheetCellWatchesMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["validCellWatchesAttr"] = "kept",
+                ["invalid cellWatches attr"] = "skip"
+            },
+            WatchNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["validCellWatchAttr"] = "kept",
+                    ["invalid cellWatch attr"] = "skip"
+                }
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors");
+        var ignoredError = ignoredErrors!.Element(worksheetNs + "ignoredError")!;
+        var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
+        var cellWatch = cellWatches!.Element(worksheetNs + "cellWatch")!;
+
+        ignoredErrors.Attribute("validIgnoredErrorsAttr")!.Value.Should().Be("kept");
+        ignoredError.Attribute("validIgnoredErrorAttr")!.Value.Should().Be("kept");
+        cellWatches.Attribute("validCellWatchesAttr")!.Value.Should().Be("kept");
+        cellWatch.Attribute("validCellWatchAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -16015,7 +16450,11 @@ public partial class FileAdapterSmokeTests
             Reference = "A1:A2",
             CaseSensitive = true,
             NativeXml = "<sortState xmlns=\"urn:freexcel:wrong\" ref=\"Z1:Z2\" wrongNamespace=\"1\" />",
-            NativeAttributes = new Dictionary<string, string> { ["customSortStateFlag"] = "keep" },
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["customSortStateFlag"] = "keep",
+                ["invalid sortState attr"] = "skip"
+            },
             Conditions =
             [
                 new WorksheetSortConditionModel
@@ -16023,14 +16462,19 @@ public partial class FileAdapterSmokeTests
                     Reference = "A2:A2",
                     Descending = true,
                     SortBy = "cellColor",
-                    NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["customSortConditionFlag"] = "keep",
+                        ["invalid sortCondition attr"] = "skip"
+                    }
                 }
             ]
         };
 
         var saved = new MemoryStream();
-        var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, saved);
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16044,6 +16488,7 @@ public partial class FileAdapterSmokeTests
         sortState.Attribute("customSortStateFlag")!.Value.Should().Be("keep");
         sortState.Elements(worksheetNs + "sortCondition").Should().ContainSingle()
             .Which.Attribute("customSortConditionFlag")!.Value.Should().Be("keep");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -16142,21 +16587,30 @@ public partial class FileAdapterSmokeTests
             TopLabels = true,
             Link = true,
             NativeXml = "<dataConsolidate xmlns=\"urn:freexcel:wrong\" function=\"count\" wrongNamespace=\"1\" />",
-            NativeAttributes = new Dictionary<string, string> { ["customDataConsolidationFlag"] = "keep" },
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["customDataConsolidationFlag"] = "keep",
+                ["invalid dataConsolidate attr"] = "skip"
+            },
             References =
             [
                 new WorksheetDataConsolidationReferenceModel
                 {
                     Reference = "A1:B2",
                     Sheet = "Data",
-                    NativeAttributes = new Dictionary<string, string> { ["customDataRefFlag"] = "keep" }
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["customDataRefFlag"] = "keep",
+                        ["invalid dataRef attr"] = "skip"
+                    }
                 }
             ]
         };
 
         var saved = new MemoryStream();
-        var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, saved);
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16172,6 +16626,7 @@ public partial class FileAdapterSmokeTests
         dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep");
         dataConsolidate.Descendants(worksheetNs + "dataRef").Should().ContainSingle()
             .Which.Attribute("customDataRefFlag")!.Value.Should().Be("keep");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]

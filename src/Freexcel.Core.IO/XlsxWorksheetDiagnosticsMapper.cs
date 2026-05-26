@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -197,7 +198,7 @@ internal static class XlsxWorksheetDiagnosticsMapper
                 if (string.IsNullOrWhiteSpace(attribute.Key))
                     continue;
 
-                ignoredErrors.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(ignoredErrors, attribute.Key, attribute.Value);
             }
 
             foreach (var pair in ignoredCells)
@@ -220,7 +221,7 @@ internal static class XlsxWorksheetDiagnosticsMapper
                             continue;
                         }
 
-                        ignoredError.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                        TrySetNativeAttribute(ignoredError, attribute.Key, attribute.Value);
                     }
                 }
 
@@ -277,7 +278,7 @@ internal static class XlsxWorksheetDiagnosticsMapper
                 if (string.IsNullOrWhiteSpace(attribute.Key))
                     continue;
 
-                cellWatches.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(cellWatches, attribute.Key, attribute.Value);
             }
 
             foreach (var address in watchedCells)
@@ -294,7 +295,7 @@ internal static class XlsxWorksheetDiagnosticsMapper
                             continue;
                         }
 
-                        cellWatch.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                        TrySetNativeAttribute(cellWatch, attribute.Key, attribute.Value);
                     }
                 }
 
@@ -603,6 +604,23 @@ internal static class XlsxWorksheetDiagnosticsMapper
         }
 
         return changed;
+    }
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 
     private static bool IsTruthy(string? value) =>

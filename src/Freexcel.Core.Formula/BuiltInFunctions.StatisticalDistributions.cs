@@ -904,9 +904,12 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double stdev = ToNumber(args[1]), size = ToNumber(args[2]);
-        if (args[0] is RangeValue alphaRange) return MapUnaryTextRange(alphaRange, value => ConfidenceNormScalar(value, stdev, size));
-        return ConfidenceNormScalar(args[0], stdev, size);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ConfidenceNormScalar);
+    }
+
+    private static ScalarValue ConfidenceNormScalar(ScalarValue alphaValue, ScalarValue stdevValue, ScalarValue sizeValue)
+    {
+        return ConfidenceNormScalar(alphaValue, ToNumber(stdevValue), ToNumber(sizeValue));
     }
 
     private static ScalarValue ConfidenceNormScalar(ScalarValue alphaValue, double stdev, double size)
@@ -922,9 +925,12 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double stdev = ToNumber(args[1]), size = ToNumber(args[2]);
-        if (args[0] is RangeValue alphaRange) return MapUnaryTextRange(alphaRange, value => ConfidenceTScalar(value, stdev, size));
-        return ConfidenceTScalar(args[0], stdev, size);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ConfidenceTScalar);
+    }
+
+    private static ScalarValue ConfidenceTScalar(ScalarValue alphaValue, ScalarValue stdevValue, ScalarValue sizeValue)
+    {
+        return ConfidenceTScalar(alphaValue, ToNumber(stdevValue), ToNumber(sizeValue));
     }
 
     private static ScalarValue ConfidenceTScalar(ScalarValue alphaValue, double stdev, double size)

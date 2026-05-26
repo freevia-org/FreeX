@@ -158,11 +158,20 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ipmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nper  = ToNumber(args[2]);
-        double pv    = ToNumber(args[3]);
-        double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
-        return MapBinaryMathArgs(args[0], args[1], (rateValue, periodValue) => IpmtScalar(ToNumber(rateValue), periodValue, nper, pv, fv, type));
+        var fvArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        var typeArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], args[3], fvArg, typeArg], values => IpmtScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue IpmtScalar(ScalarValue rateValue, ScalarValue periodValue, ScalarValue nperValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (periodValue is ErrorValue periodError) return periodError;
+        if (nperValue is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return IpmtScalar(ToNumber(rateValue), periodValue, ToNumber(nperValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue IpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)
@@ -182,11 +191,20 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ppmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nper  = ToNumber(args[2]);
-        double pv    = ToNumber(args[3]);
-        double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
-        return MapBinaryMathArgs(args[0], args[1], (rateValue, periodValue) => PpmtScalar(ToNumber(rateValue), periodValue, nper, pv, fv, type));
+        var fvArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        var typeArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], args[3], fvArg, typeArg], values => PpmtScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue PpmtScalar(ScalarValue rateValue, ScalarValue periodValue, ScalarValue nperValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (periodValue is ErrorValue periodError) return periodError;
+        if (nperValue is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return PpmtScalar(ToNumber(rateValue), periodValue, ToNumber(nperValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue PpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)
