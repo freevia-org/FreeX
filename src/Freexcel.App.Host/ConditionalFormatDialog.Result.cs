@@ -119,6 +119,11 @@ public partial class ConditionalFormatDialog
 
                 cf.DataBarMinLength = minLength;
                 cf.DataBarMaxLength = maxLength;
+                cf.DataBarBorder = _dataBarBorderBox.IsChecked == true;
+                cf.DataBarAxisPosition = AxisPositionToXmlValue(_dataBarAxisPositionBox.SelectedItem as string);
+                cf.DataBarAxisColor = ParseOptionalRgbColor(_dataBarAxisColorBox.Text);
+                cf.DataBarNegativeFillColor = ParseOptionalRgbColor(_dataBarNegativeFillColorBox.Text);
+                cf.DataBarNegativeBorderColor = ParseOptionalRgbColor(_dataBarNegativeBorderColorBox.Text);
             }
             else if (cf.RuleType == CfRuleType.ColorScale)
             {

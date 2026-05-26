@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Globalization;
 using Freexcel.App.Host;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 using FluentAssertions;
 using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
@@ -45,6 +46,7 @@ public sealed class FormatCellsDialogXamlTests
         {
             "_Wrap text",
             "S_hrink to fit",
+            "_Merge cells",
             "_Normal font",
             "_Double underline",
             "_Strikethrough",
@@ -89,7 +91,7 @@ public sealed class FormatCellsDialogXamlTests
         foreach (var controlName in new[]
         {
             "NumberFormatCombo",
-            "DlgHAlignBox", "DlgVAlignBox", "DlgWrapTextCheck", "DlgShrinkToFitCheck",
+            "DlgHAlignBox", "DlgVAlignBox", "DlgWrapTextCheck", "DlgShrinkToFitCheck", "DlgMergeCellsCheck",
             "DlgIndentLevelBox", "DlgTextRotationBox",
             "DlgFontNameBox", "DlgFontSizeBox", "DlgFontStyleList",
             "DlgUnderlineStyleBox", "DlgNormalFontCheck", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
@@ -150,6 +152,8 @@ public sealed class FormatCellsDialogXamlTests
 
         xaml.Should().Contain("x:Name=\"DlgShrinkToFitCheck\"");
         xaml.Should().Contain("Content=\"S_hrink to fit\"");
+        xaml.Should().Contain("x:Name=\"DlgMergeCellsCheck\"");
+        xaml.Should().Contain("Content=\"_Merge cells\"");
     }
 
     [Fact]
@@ -1102,6 +1106,83 @@ public sealed class FormatCellsDialogXamlTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_MapsMergeCellsOnlyWhenChanged()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new FormatCellsDialog(new CellStyle(), FormatCellsDialogTab.Alignment, mergeCells: false);
+            dialog.Show();
+            try
+            {
+                GetControl<CheckBox>(dialog, "DlgMergeCellsCheck").IsChecked.Should().BeFalse();
+
+                ClickOkForTest(dialog);
+                dialog.ResultMergeCells.Should().BeNull();
+
+                GetControl<CheckBox>(dialog, "DlgMergeCellsCheck").IsChecked = true;
+                ClickOkForTest(dialog);
+                dialog.ResultMergeCells.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_MapsUnmergeWhenExistingMergeIsUnchecked()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new FormatCellsDialog(new CellStyle(), FormatCellsDialogTab.Alignment, mergeCells: true);
+            dialog.Show();
+            try
+            {
+                GetControl<CheckBox>(dialog, "DlgMergeCellsCheck").IsChecked.Should().BeTrue();
+                GetControl<CheckBox>(dialog, "DlgMergeCellsCheck").IsChecked = false;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultMergeCells.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsMergePlanner_CreatesMergeAndUnmergeCommandsForSelection()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+
+        var mergeCommands = FormatCellsMergePlanner.CreateMergeCommands(sheet, sheet.Id, range, mergeCells: true);
+
+        mergeCommands.Should().ContainSingle().Which.Should().BeOfType<MergeCellsCommand>();
+
+        sheet.AddMergedRegion(range);
+        FormatCellsMergePlanner.IsSelectionMerged(sheet, new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 1)))
+            .Should()
+            .BeTrue();
+
+        var unmergeCommands = FormatCellsMergePlanner.CreateMergeCommands(
+            sheet,
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            mergeCells: false);
+
+        unmergeCommands.Should().ContainSingle().Which.Should().BeOfType<UnmergeCellsCommand>();
     }
 
     [Fact]
