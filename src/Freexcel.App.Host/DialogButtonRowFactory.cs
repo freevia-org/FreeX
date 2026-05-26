@@ -30,4 +30,24 @@ internal static class DialogButtonRowFactory
         });
         return row;
     }
+
+    public static StackPanel CreateOkOnly(Action accept, double buttonWidth, Thickness rowMargin = default, string acceptContent = "_OK")
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = rowMargin
+        };
+        var ok = new Button
+        {
+            Content = acceptContent,
+            Width = buttonWidth,
+            IsDefault = true,
+            IsCancel = true
+        };
+        ok.Click += (_, _) => accept();
+        row.Children.Add(ok);
+        return row;
+    }
 }
