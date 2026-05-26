@@ -14215,10 +14215,12 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintOptionsMetadata.Should().NotBeNull();
         loadedSheet.PrintOptionsMetadata!.NativeAttributes.Should().Contain("gridLinesSet", "1");
         loadedSheet.PrintOptionsMetadata.NativeAttributes.Should().Contain("customAttr", "print-native");
+        loadedSheet.PrintOptionsMetadata.NativeAttributes["invalid printOptions attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14228,6 +14230,7 @@ public partial class FileAdapterSmokeTests
         printOptions.Should().NotBeNull();
         printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1");
         printOptions.Attribute("customAttr")!.Value.Should().Be("print-native");
+        printOptions.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid printOptions attr");
     }
 
     [Fact]

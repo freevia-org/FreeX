@@ -248,6 +248,77 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ViewFreezePanesMenuKeyTips_ApplyPresetsAndExitKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
+            harness.ActiveMenuItemGestureText("Freeze Top Row").Should().Be("R");
+            harness.HandleKeyTip(Key.R);
+
+            harness.ActiveSheetFrozenPanes.Should().Be((1u, 0u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
+            harness.ActiveMenuItemGestureText("Freeze First Column").Should().Be("C");
+            harness.HandleKeyTip(Key.C);
+
+            harness.ActiveSheetFrozenPanes.Should().Be((0u, 1u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.SelectRange(2, 2, 2, 2);
+            harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
+            harness.ActiveMenuItemGestureText("Freeze Panes").Should().Be("F");
+            harness.HandleKeyTip(Key.F);
+
+            harness.ActiveSheetFrozenPanes.Should().Be((1u, 1u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
+            harness.ActiveMenuItemGestureText("Unfreeze All").Should().Be("U");
+            harness.HandleKeyTip(Key.U);
+
+            harness.ActiveSheetFrozenPanes.Should().Be((0u, 0u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void ViewArrangeAllMenuKeyTips_UpdateWorkbookArrangementAndExitKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Tiled);
+
+            harness.OpenRibbonMenu(Key.W, Key.A);
+            harness.ActiveMenuItemGestureText("Tiled").Should().Be("T");
+            harness.ActiveMenuItemIsChecked("Tiled").Should().BeTrue();
+            harness.HandleKeyTip(Key.V);
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Vertical);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.W, Key.A);
+            harness.ActiveMenuItemGestureText("Cascade").Should().Be("C");
+            harness.ActiveMenuItemIsChecked("Vertical").Should().BeTrue();
+            harness.HandleKeyTip(Key.C);
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Cascade);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void FocusedRibbonTabAndEscape_StayInRibbonThenReturnToWorksheet()
     {
         RunSta(() =>
@@ -641,6 +712,15 @@ public sealed class MainWindowRibbonKeyTipTests
         public string? StatusZoomText =>
             (_window.FindName("StatusZoomText") as TextBlock)?.Text;
 
+        public (uint FrozenRows, uint FrozenCols) ActiveSheetFrozenPanes
+        {
+            get
+            {
+                var sheet = _workbook.Sheets[0];
+                return (sheet.FrozenRows, sheet.FrozenCols);
+            }
+        }
+
         public bool ActiveCellBold
         {
             get
@@ -699,8 +779,14 @@ public sealed class MainWindowRibbonKeyTipTests
         public string? ActiveMenuItemGestureText(string header) =>
             FindActiveMenuItem(header)?.InputGestureText;
 
+        public bool? ActiveMenuItemIsChecked(string header) =>
+            FindActiveMenuItem(header)?.IsChecked;
+
         public bool ActiveMenuItemSubmenuIsOpen(string header) =>
             FindActiveMenuItem(header)?.IsSubmenuOpen == true;
+
+        public WorkbookWindowArrangement WorkbookArrangement =>
+            _workbook.WindowArrangement;
 
         public IReadOnlyList<string> VisibleCommandKeyTips(string keyTip)
         {

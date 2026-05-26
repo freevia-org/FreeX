@@ -6,6 +6,7 @@ using Freexcel.Core.Commands;
 using Freexcel.Core.Calc;
 using Freexcel.Core.IO;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace Freexcel.App.Host;
 
@@ -32,6 +33,7 @@ public partial class MainWindow : Window
     private readonly StandaloneAltKeyTipTracker _standaloneAltKeyTipTracker = new();
     private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
     private string _ribbonKeyTipSequence = "";
+    private bool _legacyDataKeyTipSequence;
     private ContextMenu? _activeRibbonKeyTipMenu;
     private ItemsControl? _activeRibbonKeyTipItemsControl;
     private readonly WorkbookRef _workbookRef;
@@ -52,6 +54,9 @@ public partial class MainWindow : Window
     private bool _suppressAppViewOptionSync;
     private bool _isOpeningFile;
     private bool _isSavingFile;
+    private bool _workbookDirty;
+    private bool _suppressClosePrompt;
+    private bool _closeAfterSaveInProgress;
     private CellAddress? _selectionAnchor;
     private CellAddress? _selectionCursor;
     private ExcelSelectionMode _selectionMode = ExcelSelectionMode.Normal;
@@ -149,6 +154,7 @@ public partial class MainWindow : Window
         SheetGrid.ColumnResizing += OnColumnResizing;
         SheetGrid.RowResizing    += OnRowResizing;
         SheetGrid.AutofillRequested += OnAutofillRequested;
+        SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;
@@ -164,6 +170,7 @@ public partial class MainWindow : Window
         this.KeyUp += MainWindow_KeyUp;
         this.Deactivated += MainWindow_Deactivated;
         this.TextInput += MainWindow_TextInput;
+        Closing += MainWindow_Closing;
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
         FormulaBar.TextChanged += (_, _) =>
         {
