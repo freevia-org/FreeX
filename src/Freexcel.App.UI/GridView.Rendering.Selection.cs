@@ -121,6 +121,9 @@ public partial class GridView
             case GridQuickAnalysisPreviewVisualKind.WinLossSparkline:
                 DrawQuickAnalysisWinLossSparklinePreview(dc);
                 break;
+            case GridQuickAnalysisPreviewVisualKind.ColumnChart:
+                DrawQuickAnalysisColumnChartPreview(dc, rect.Value);
+                break;
         }
     }
 
@@ -178,6 +181,30 @@ public partial class GridView
             dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(sparkline.Left, sparkline.Top, barWidth, halfHeight));
             dc.DrawRectangle(QuickAnalysisWinLossNegativeBrush, null, new Rect(sparkline.Left + barWidth + gap, mid, barWidth, halfHeight));
             dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(sparkline.Left + (2 * (barWidth + gap)), sparkline.Top, barWidth, halfHeight));
+        }
+    }
+
+    private static void DrawQuickAnalysisColumnChartPreview(DrawingContext dc, Rect previewRect)
+    {
+        var chartRect = new Rect(
+            previewRect.Left + Math.Min(12, previewRect.Width * 0.12),
+            previewRect.Top + Math.Min(10, previewRect.Height * 0.18),
+            Math.Max(0, previewRect.Width * 0.72),
+            Math.Max(0, previewRect.Height * 0.58));
+        if (chartRect.Width <= 0 || chartRect.Height <= 0)
+            return;
+
+        var baseline = chartRect.Bottom;
+        dc.DrawLine(QuickAnalysisColumnChartAxisPen, new Point(chartRect.Left, baseline), new Point(chartRect.Right, baseline));
+
+        var gap = Math.Min(5.0, chartRect.Width / 14);
+        var barWidth = Math.Max(2, (chartRect.Width - (3 * gap)) / 4);
+        var heights = new[] { 0.42, 0.76, 0.58, 0.9 };
+        for (var i = 0; i < heights.Length; i++)
+        {
+            var height = chartRect.Height * heights[i];
+            var left = chartRect.Left + i * (barWidth + gap);
+            dc.DrawRectangle(QuickAnalysisColumnChartPreviewBrush, null, new Rect(left, baseline - height, barWidth, height));
         }
     }
 

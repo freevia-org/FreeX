@@ -343,6 +343,7 @@ public partial class MainWindow
             QuickAnalysisPreviewVisualKind.LineSparkline => GridQuickAnalysisPreviewVisualKind.LineSparkline,
             QuickAnalysisPreviewVisualKind.ColumnSparkline => GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
             QuickAnalysisPreviewVisualKind.WinLossSparkline => GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
+            QuickAnalysisPreviewVisualKind.ColumnChart => GridQuickAnalysisPreviewVisualKind.ColumnChart,
             _ => GridQuickAnalysisPreviewVisualKind.None
         };
 }
