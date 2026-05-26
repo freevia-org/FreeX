@@ -22,14 +22,22 @@ public sealed class GridViewMergeLookupPerformanceTests
     public void RebuildMergeLookup_BoundsLargeMergeWorkToVisibleMetrics()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.State.cs"));
-        var method = source[
+        var rebuildMethod = source[
             source.IndexOf("private void RebuildMergeLookup()", StringComparison.Ordinal)..
+            source.IndexOf("private Dictionary<uint, List<GridRange>> BuildVisibleRowMergeLookup", StringComparison.Ordinal)];
+        var rowIndexMethod = source[
+            source.IndexOf("private Dictionary<uint, List<GridRange>> BuildVisibleRowMergeLookup", StringComparison.Ordinal)..
             source.IndexOf("private DispatcherTimer?", StringComparison.Ordinal)];
 
-        method.Should().Contain("foreach (var rowMetric in Viewport.RowMetrics)");
-        method.Should().Contain("foreach (var colMetric in Viewport.ColMetrics)");
-        method.Should().NotContain("r <= merge.End.Row");
-        method.Should().NotContain("c <= merge.End.Col");
+        rebuildMethod.Should().Contain("var mergesByVisibleRow = BuildVisibleRowMergeLookup();");
+        rebuildMethod.Should().Contain("mergesByVisibleRow.TryGetValue(row, out var rowMerges)");
+        rebuildMethod.Should().Contain("foreach (var colMetric in Viewport.ColMetrics)");
+        rebuildMethod.Should().Contain("foreach (var merge in rowMerges)");
+        rebuildMethod.Should().NotContain("foreach (var merge in MergedRegions)");
+        rowIndexMethod.Should().Contain("foreach (var rowMetric in Viewport!.RowMetrics)");
+        rowIndexMethod.Should().Contain("foreach (var merge in MergedRegions!)");
+        rowIndexMethod.Should().NotContain("r <= merge.End.Row");
+        rowIndexMethod.Should().NotContain("c <= merge.End.Col");
     }
 
     [Fact]
