@@ -17452,6 +17452,50 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterIconFilterWithoutMaterializing()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterIconFilterRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Score"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterIconFilterMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.IconFilter.Should().NotBeNull();
+        loadedFilterColumn.IconFilter!.IconSet.Should().Be("3TrafficLights1");
+        loadedFilterColumn.IconFilter.IconId.Should().Be(2);
+        loadedFilterColumn.IconFilter.IconIdRaw.Should().Be("2");
+        loadedFilterColumn.IconFilter.NativeAttributes.Should().Contain("{urn:freexcel:test}iconFilterFlag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var iconFilter = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "iconFilter");
+        iconFilter.Should().NotBeNull();
+        iconFilter!.Attribute("iconSet")!.Value.Should().Be("3TrafficLights1");
+        iconFilter.Attribute("iconId")!.Value.Should().Be("2");
+        iconFilter.Attribute(XName.Get("iconFilterFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
     public void XlsxAdapter_FreshSave_WritesModeledWorksheetAutoFilterValues()
     {
         var workbook = new Workbook("WorksheetAutoFilterValuesTest");
@@ -17686,6 +17730,23 @@ public partial class FileAdapterSmokeTests
                 NativeAttributes: new Dictionary<string, string> { ["customColorFilterFlag"] = "keep" }),
             NativeFilterXmls: [],
             NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag5"] = "keep" }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            5,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: null,
+            ColorFilter: null,
+            IconFilter: new WorksheetAutoFilterIconFilterModel(
+                IconSet: "3Arrows",
+                IconId: 1,
+                NativeAttributes: new Dictionary<string, string> { ["customIconFilterFlag"] = "keep" }),
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag6"] = "keep" }));
 
         var stream = new MemoryStream();
         new NativeJsonAdapter().Save(workbook, stream);
@@ -17698,7 +17759,7 @@ public partial class FileAdapterSmokeTests
         autoFilter!.Reference.Should().Be("A1:D3");
         autoFilter.NativeAttributes.Should().Contain("customAutoFilterFlag", "keep");
         autoFilter.NativeChildXmls.Should().ContainSingle().Which.Should().Contain("extLst");
-        autoFilter.FilterColumns.Should().HaveCount(5);
+        autoFilter.FilterColumns.Should().HaveCount(6);
         var filterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 0);
         filterColumn.ColumnId.Should().Be(0);
         filterColumn.Values.Should().Equal("A");
@@ -17737,6 +17798,12 @@ public partial class FileAdapterSmokeTests
         colorFilterColumn.ColorFilter.CellColor.Should().BeTrue();
         colorFilterColumn.ColorFilter.NativeAttributes.Should().Contain("customColorFilterFlag", "keep");
         colorFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag5", "keep");
+        var iconFilterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 5);
+        iconFilterColumn.IconFilter.Should().NotBeNull();
+        iconFilterColumn.IconFilter!.IconSet.Should().Be("3Arrows");
+        iconFilterColumn.IconFilter.IconId.Should().Be(1);
+        iconFilterColumn.IconFilter.NativeAttributes.Should().Contain("customIconFilterFlag", "keep");
+        iconFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag6", "keep");
     }
 
     [Fact]
@@ -22039,6 +22106,31 @@ public partial class FileAdapterSmokeTests
                         new XAttribute("dxfId", "3"),
                         new XAttribute("cellColor", "0"),
                         new XAttribute(freexcelNs + "colorFilterFlag", "keep")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterIconFilterMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "iconFilter",
+                        new XAttribute("iconSet", "3TrafficLights1"),
+                        new XAttribute("iconId", "2"),
+                        new XAttribute(freexcelNs + "iconFilterFlag", "keep")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
