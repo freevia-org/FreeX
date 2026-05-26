@@ -6043,6 +6043,9 @@ public class FunctionLibraryTests
     [Fact] public void Address_R1C1RelativeRef_ReturnsString() =>
         _eval.Evaluate("=ADDRESS(2,3,4,FALSE)", MakeSheet()).Should().Be(new TextValue("R[2]C[3]"));
 
+    [Fact] public void Address_SimpleSheetTextDoesNotAddQuotes() =>
+        _eval.Evaluate("=ADDRESS(2,3,1,TRUE,\"Sheet1\")", MakeSheet()).Should().Be(new TextValue("Sheet1!$C$2"));
+
     [Fact] public void Address_SheetTextEscapesApostrophes() =>
         _eval.Evaluate("=ADDRESS(2,3,1,TRUE,\"O'Brien\")", MakeSheet()).Should().Be(new TextValue("'O''Brien'!$C$2"));
 
