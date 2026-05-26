@@ -890,13 +890,35 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("SpellCheckDialogAction.Add");
-        source.Should().Contain("Content = \"_Ignore\"");
+        source.Should().Contain("Content = \"Ignore _Once\"");
         source.Should().Contain("Content = \"_Change\"");
         source.Should().Contain("Content = \"_Change\", Width = 90, IsDefault = true");
-        source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("Content = \"Add to _Dictionary\"");
         source.Should().Contain("CreateIgnoreAllResult");
         source.Should().Contain("CreateReplaceAllResult(word, _replacementBox.Text)");
         source.Should().Contain("CreateAddResult");
+    }
+
+    [Fact]
+    public void SpellCheckDialog_ActionButtonsUseUniqueExcelLikeAccessKeys()
+    {
+        var labels = new[]
+        {
+            "Ignore _Once",
+            "Ignore _All",
+            "_Change",
+            "Change A_ll",
+            "Add to _Dictionary",
+            "Ca_ncel"
+        };
+
+        labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
+
+        var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
+        foreach (var label in labels)
+        {
+            source.Should().Contain($"Content = \"{label}\"");
+        }
     }
 
     [Fact]
@@ -976,6 +998,14 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = \"_Close Preview\"");
         source.Should().Contain("IsCancel = true");
         source.Should().Contain("closeButton.Click += (_, _) => Close();");
+    }
+
+    private static char GetAccessKey(string label)
+    {
+        var marker = label.IndexOf('_', StringComparison.Ordinal);
+        marker.Should().BeGreaterThanOrEqualTo(0);
+        marker.Should().BeLessThan(label.Length - 1);
+        return char.ToUpperInvariant(label[marker + 1]);
     }
 
     private static string ReadRemainingDialogSources()
