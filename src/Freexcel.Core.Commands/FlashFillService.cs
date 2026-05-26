@@ -29,6 +29,7 @@ public static partial class FlashFillService
             ?? TryDigitMask(examples)
             ?? TryStripThousandSeparators(examples)
             ?? TryExtractDigitsOnly(examples)
+            ?? TryThreeTokenNameDropMiddle(examples)
             ?? TryDelimitedPartReorder(examples)
             ?? TryExtractByDelimiter(examples)
             ?? TryPrefixTrim(examples)

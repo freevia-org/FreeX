@@ -209,6 +209,21 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void FillSeriesStepDialog_DisablesDateUnitsUntilDateTypeSelected()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("_linearButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("_growthButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("_dateButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("_autoFillButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("private void UpdateDateUnitAvailability()");
+        source.Should().Contain("var isDateSeries = _dateButton.IsChecked == true;");
+        foreach (var button in new[] { "_dayButton", "_weekdayButton", "_monthButton", "_yearButton" })
+            source.Should().Contain($"{button}.IsEnabled = isDateSeries;");
+    }
+
+    [Fact]
     public void ZoomDialog_TryCreateResult_AcceptsPercentWithinExcelRange()
     {
         ZoomDialog.TryCreateResult("125", out var result, out _).Should().BeTrue();
@@ -365,6 +380,8 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("IsCancel = true");
     }
 
     [Fact]
@@ -517,6 +534,17 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_periodsBox.Focus();");
         source.Should().Contain("_periodsBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_periodsBox);");
+    }
+
+    [Fact]
+    public void ForecastSheetDialog_UsesExcelLikeCreateDefaultAction()
+    {
+        var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
+        var helperSource = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed class ObjectRotationDialog");
+
+        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(\"Forecast _periods:\", _periodsBox, Accept, acceptContent: \"_Create\")");
+        helperSource.Should().Contain("string acceptContent = \"_OK\"");
+        helperSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72, acceptContent: acceptContent)");
     }
 
     [Fact]

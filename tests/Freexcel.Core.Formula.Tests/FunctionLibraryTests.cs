@@ -457,6 +457,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Index_OmittedRow_ReturnsEntireColumn()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)), (1, 3, new NumberValue(3)),
+            (2, 1, new NumberValue(4)), (2, 2, new NumberValue(5)), (2, 3, new NumberValue(6)));
+
+        var result = _eval.Evaluate("=INDEX(A1:C2,,2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(2));
+        result.Cells[1, 0].Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
     public void Index_ZeroColumn_ReturnsEntireRow()
     {
         var sheet = MakeSheet(
@@ -6034,6 +6048,16 @@ public class FunctionLibraryTests
             .Should().Be(new NumberValue(6));
     }
 
+    [Fact] public void Indirect_A1FullRowString_ReturnsRangeValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"1:1\"))", sheet)
+            .Should().Be(new NumberValue(3));
+    }
+
     [Fact] public void Indirect_InvalidR1C1String_ReturnsRefError()
     {
         _eval.Evaluate("=INDIRECT(\"R0C1\",FALSE)", MakeSheet()).Should().Be(ErrorValue.Ref);
@@ -6087,6 +6111,21 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Lookup_IgnoresErrorsInsideLookupVector()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, ErrorValue.DivByZero),
+            (3, 1, new NumberValue(2)),
+            (1, 2, new TextValue("first")),
+            (2, 2, new TextValue("skip")),
+            (3, 2, new TextValue("hit")));
+
+        _eval.Evaluate("=LOOKUP(2,A1:A3,B1:B3)", sheet)
+            .Should().Be(new TextValue("hit"));
+    }
+
+    [Fact]
     public void Lookup_ArrayForm_SearchesFirstRowAndReturnsLastRowWhenWiderThanTall()
     {
         var sheet = MakeSheet(
@@ -6094,6 +6133,16 @@ public class FunctionLibraryTests
             (2, 1, new TextValue("A")), (2, 2, new TextValue("B")), (2, 3, new TextValue("C")));
 
         _eval.Evaluate("=LOOKUP(2,A1:C2)", sheet).Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
+    public void Lookup_ArrayFormIgnoresErrorsInsideLookupVector()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, ErrorValue.DivByZero), (1, 3, new NumberValue(2)),
+            (2, 1, new TextValue("first")), (2, 2, new TextValue("skip")), (2, 3, new TextValue("hit")));
+
+        _eval.Evaluate("=LOOKUP(2,A1:C2)", sheet).Should().Be(new TextValue("hit"));
     }
 
     [Fact] public void Lookup_LookupVectorArgumentError_PropagatesError()

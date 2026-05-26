@@ -128,6 +128,52 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_AttachesTextOverlaysToDisplayedComments()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Displayed comment overlays");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Printed"));
+            sheet.Comments[a1] = "Displayed note PDF text";
+            sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page);
+
+            overlays.Should().ContainEquivalentOf(new
+            {
+                Text = "Displayed note PDF text",
+                FontSize = 9.0,
+                Bold = false
+            });
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_DraftQualitySkipsDisplayedCommentTextOverlays()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Draft comment overlays");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Printed"));
+            sheet.Comments[a1] = "Draft hidden note text";
+            sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+            sheet.PrintDraftQuality = true;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page);
+
+            overlays.Select(overlay => overlay.Text).Should().NotContain("Draft hidden note text");
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_BlackAndWhiteUsesNeutralDisplayedCommentChrome()
     {
         StaTestRunner.Run(() =>

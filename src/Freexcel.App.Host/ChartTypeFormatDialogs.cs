@@ -46,7 +46,7 @@ public sealed class ChartBarFormatDialog : Window
         var stack = new StackPanel();
         stack.Children.Add(CreateInlineHelp("Gap Width: space between bar clusters as a percentage of bar width (0–500). Overlap: how much adjacent bars overlap (–100 to 100)."));
         ChartDialogHelpers.AddNumericText(stack, "_Gap width %", _gapWidthBox, "Enter a gap width from 0 to 500.");
-        ChartDialogHelpers.AddNumericText(stack, "_Overlap %", _overlapBox, "Enter a bar overlap from −100 to 100.");
+        ChartDialogHelpers.AddNumericText(stack, "Series _overlap %", _overlapBox, "Enter a bar overlap from −100 to 100.");
         root.Children.Add(CreateGroupBox("Bar Options", stack));
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;

@@ -89,21 +89,7 @@ public partial class GridView
     }
 
     private ObjectDragKind HitTestObjectHandle(Point pos, Rect objRect)
-    {
-        if (objRect.IsEmpty) return ObjectDragKind.None;
-        double pad = HandleHitPad + HandleSize / 2;
-
-        bool nearRight  = Math.Abs(pos.X - objRect.Right) < pad;
-        bool nearBottom = Math.Abs(pos.Y - objRect.Bottom) < pad;
-        bool inVertical = pos.Y >= objRect.Top - pad && pos.Y <= objRect.Bottom + pad;
-        bool inHoriz    = pos.X >= objRect.Left - pad && pos.X <= objRect.Right + pad;
-
-        if (nearRight && nearBottom) return ObjectDragKind.ResizeSE;
-        if (nearRight && inVertical) return ObjectDragKind.ResizeE;
-        if (nearBottom && inHoriz)   return ObjectDragKind.ResizeS;
-        if (objRect.Contains(pos))   return ObjectDragKind.Move;
-        return ObjectDragKind.None;
-    }
+        => GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad);
 
     // Returns the cell address closest to the given screen coordinates (for anchor snapping)
     private CellAddress? HitTestAnchorCell(Point pos)

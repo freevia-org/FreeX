@@ -38,8 +38,16 @@ public sealed partial class RemoveDuplicatesDialog : Window
         var root = new StackPanel { Margin = new Thickness(12) };
         _hasHeadersBox.Checked += (_, _) => RefreshColumnLabels();
         _hasHeadersBox.Unchecked += (_, _) => RefreshColumnLabels();
+        _columnsPanel.Focusable = true;
+        _columnsPanel.GotKeyboardFocus += (_, _) => FocusFirstColumnChoice();
         root.Children.Add(_hasHeadersBox);
-        root.Children.Add(new TextBlock { Text = "Columns:", Margin = new Thickness(0, 0, 0, 4) });
+        root.Children.Add(new Label
+        {
+            Content = "_Columns:",
+            Target = _columnsPanel,
+            Margin = new Thickness(0, 0, 0, 4),
+            Padding = new Thickness(0)
+        });
         var bulkButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         var selectAllButton = new Button { Content = "_Select All", Width = 88, Margin = new Thickness(0, 0, 8, 0) };
         selectAllButton.Click += SelectAllButton_Click;

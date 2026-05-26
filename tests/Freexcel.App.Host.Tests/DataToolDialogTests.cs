@@ -692,6 +692,10 @@ public sealed class DataToolDialogTests
             "_Remove All"
         })
             source.Should().Contain($"Content = \"{content}\"");
+
+        source.Should().Contain("new Label { Content = \"_Add subtotal to:\", Target = _subtotalColumnPanel");
+        source.Should().Contain("_subtotalColumnPanel.Focusable = true");
+        source.Should().Contain("_subtotalColumnPanel.GotKeyboardFocus");
     }
 
     [Fact]
@@ -703,7 +707,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("SubtotalFunctionChoices");
         source.Should().Contain("ItemsSource = SubtotalFunctionChoices");
         source.Should().Contain("SelectedItem = \"Sum\"");
-        source.Should().Contain("new GroupBox { Header = \"Add subtotal to:\"");
+        source.Should().NotContain("Header = \"Add subtotal to:\"");
         source.Should().Contain("_subtotalColumnPanel");
     }
 
@@ -744,8 +748,8 @@ public sealed class DataToolDialogTests
         source.IndexOf("Content = \"_At each change in:\"", StringComparison.Ordinal).Should()
             .BeLessThan(source.IndexOf("Content = \"_Use function:\"", StringComparison.Ordinal));
         source.IndexOf("Content = \"_Use function:\"", StringComparison.Ordinal).Should()
-            .BeLessThan(source.IndexOf("Header = \"Add subtotal to:\"", StringComparison.Ordinal));
-        source.IndexOf("Header = \"Add subtotal to:\"", StringComparison.Ordinal).Should()
+            .BeLessThan(source.IndexOf("Content = \"_Add subtotal to:\"", StringComparison.Ordinal));
+        source.IndexOf("Content = \"_Add subtotal to:\"", StringComparison.Ordinal).Should()
             .BeLessThan(source.IndexOf("Content = \"_Replace current subtotals\"", StringComparison.Ordinal));
         source.Should().Contain("CreateSubtotalButtonRow");
     }
@@ -923,6 +927,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Content = \"_Filter the list, in-place\"");
         source.Should().Contain("Content = \"_Copy to another location\"");
         source.Should().Contain("Content = \"_Unique records only\"");
+        source.Should().Contain("new GroupBox { Header = \"Action\"");
+        source.Should().NotContain("Text = \"Action\"");
         source.Should().Contain("AddReferenceRow(rangesGrid, 0, \"_List range:\", _listRangeBox");
         source.Should().Contain("AddReferenceRow(rangesGrid, 1, \"_Criteria range:\", _criteriaRangeBox");
         source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
@@ -1176,6 +1182,7 @@ public sealed class DataToolDialogTests
     {
         ConsolidateDialog.SplitSourceRangeText("A1:B3; D5:E7").Should().Equal("A1:B3", "D5:E7");
         ConsolidateDialog.JoinSourceRanges(["A1:B3", "D5:E7"]).Should().Be("A1:B3; D5:E7");
+        ConsolidateDialogPlanner.JoinSourceRanges([" A1:B3 ", "", " D5:E7 "]).Should().Be("A1:B3; D5:E7");
     }
 
     [Theory]
@@ -1418,8 +1425,24 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_createLinksBox");
         source.Should().Contain("_Function:");
         source.Should().Contain("_Top row");
-        source.Should().Contain("_Left column");
+        source.Should().Contain("Left _column");
         source.Should().Contain("Create _links to source data");
+        var accessKeyLabels = new[]
+        {
+            "_Function:",
+            "_Reference:",
+            "_All references:",
+            "_Destination cell:",
+            "_Top row",
+            "Left _column",
+            "Create _links to source data"
+        };
+        accessKeyLabels
+            .GroupBy(GetAccessKey)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key}: {string.Join(", ", group)}")
+            .Should()
+            .BeEmpty();
         source.Should().Contain("Enum.GetValues<ConsolidateFunction>()");
         source.Should().Contain("FunctionLabel(function)");
         source.Should().Contain("ConsolidateFunction.CountNumbers => \"Count Numbers\"");
@@ -1437,7 +1460,14 @@ public sealed class DataToolDialogTests
 
     private static string ReadConsolidateDialogSources() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs")) +
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.Planning.cs"));
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.Planning.cs")) +
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialogPlanner.cs"));
+
+    private static char GetAccessKey(string label)
+    {
+        var index = label.IndexOf('_', StringComparison.Ordinal);
+        return char.ToUpperInvariant(label[index + 1]);
+    }
 
     [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()
@@ -1962,7 +1992,11 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_Unselect All");
         source.Should().Contain("_My data has headers");
         source.Should().Contain("_columnsPanel");
-        source.Should().Contain("Columns:");
+        source.Should().Contain("Content = \"_Columns:\"");
+        source.Should().Contain("Target = _columnsPanel");
+        source.Should().Contain("_columnsPanel.Focusable = true");
+        source.Should().Contain("_columnsPanel.GotKeyboardFocus");
+        source.Should().NotContain("new TextBlock { Text = \"Columns:\"");
         source.Should().Contain("SelectAllButton_Click");
         source.Should().Contain("UnselectAllButton_Click");
         source.Should().Contain("RefreshColumnLabels");

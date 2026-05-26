@@ -35,6 +35,7 @@ public static class QuickAnalysisPreviewIconFactory
                 AddLine(canvas, 6, 17, 28, 5, Brushes.Firebrick, 1.5);
                 break;
             case QuickAnalysisPreviewVisualKind.ColumnChart:
+            case QuickAnalysisPreviewVisualKind.ColumnSparkline:
                 AddBars(canvas, vertical: true, stacked: false);
                 break;
             case QuickAnalysisPreviewVisualKind.StackedColumnChart:

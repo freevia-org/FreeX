@@ -141,12 +141,8 @@ public sealed partial class AutoFilterDialog
     }
 
     private static bool IsBetweenOption(AutoFilterCriteriaOption option) =>
-        option.CriteriaPrefix.Equals("between:", StringComparison.OrdinalIgnoreCase) ||
-        option.CriteriaPrefix.Equals("datebetween:", StringComparison.OrdinalIgnoreCase);
+        AutoFilterDialogCriteriaPlanner.IsBetweenOption(option);
 
     private static bool IsTopBottomOption(AutoFilterCriteriaOption option) =>
-        option.CriteriaPrefix.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
-        option.CriteriaPrefix.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase) ||
-        option.CriteriaPrefix.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
-        option.CriteriaPrefix.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase);
+        AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option);
 }
