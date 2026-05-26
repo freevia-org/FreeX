@@ -42,6 +42,49 @@ public sealed class StatusBarCalculatorTests
     }
 
     [Fact]
+    public void Calculate_CountsOnlyNumericCellsAndIgnoresBlankTextAndErrors()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(4)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new TextValue("not counted")));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(BlankValue.Instance));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), Cell.FromValue(new ErrorValue("#VALUE!")));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), Cell.FromValue(new NumberValue(10)));
+
+        var stats = StatusBarCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 5)));
+
+        stats.Count.Should().Be(2);
+        stats.Sum.Should().Be(14);
+        stats.Average.Should().Be(7);
+        stats.Min.Should().Be(4);
+        stats.Max.Should().Be(10);
+    }
+
+    [Fact]
+    public void Calculate_NonnumericSelectionReturnsEmptyNumericStats()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("text")));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new ErrorValue("#N/A")));
+
+        var stats = StatusBarCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 2)));
+
+        stats.Count.Should().Be(0);
+        stats.Sum.Should().Be(0);
+        stats.Average.Should().BeNull();
+        stats.Min.Should().BeNull();
+        stats.Max.Should().BeNull();
+    }
+
+    [Fact]
     public void Calculate_LargeSelections_ScansSparseCellsWithoutCopyingUsedCellDictionary()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find(

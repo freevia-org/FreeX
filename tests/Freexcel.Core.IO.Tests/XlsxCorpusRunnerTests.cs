@@ -2462,12 +2462,16 @@ public class XlsxCorpusRunnerTests
             using var source = File.OpenRead(path);
             var workbook = adapter.Load(source);
             workbook.SheetCount.Should().BeGreaterThan(0, row.Id);
+            source.Position = 0;
+            AssertExpectedPublicPackageTags(row, source);
             var before = CapturePublicComparableSummary(workbook);
 
             using var saved = new MemoryStream();
             adapter.Save(workbook, saved);
             saved.Length.Should().BeGreaterThan(0, row.Id);
             AssertPackageHealth(saved, row.Id);
+            saved.Position = 0;
+            AssertExpectedPublicPackageTags(row, saved);
 
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
@@ -2698,6 +2702,20 @@ public class XlsxCorpusRunnerTests
                 .SelectMany(sheet => sheet.Cells)
                 .Should()
                 .Contain(cell => cell.Value.Kind == "Text" && !string.IsNullOrEmpty(cell.Value.Value), row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("shared-strings"))
+            summary.Sheets
+                .SelectMany(sheet => sheet.Cells)
+                .Should()
+                .Contain(cell => cell.Value.Kind == "Text" && !string.IsNullOrEmpty(cell.Value.Value), row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("cell-types"))
+            summary.Sheets
+                .SelectMany(sheet => sheet.Cells)
+                .Select(cell => cell.Value.Kind)
+                .Distinct(StringComparer.Ordinal)
+                .Should()
+                .HaveCountGreaterThanOrEqualTo(3, row.Id);
 
         if (tags.Contains("formulas"))
             summary.Sheets.Sum(sheet => sheet.FormulaCount).Should().BeGreaterThan(0, row.Id);
@@ -3950,6 +3968,31 @@ public class XlsxCorpusRunnerTests
         style.FillColor.HasValue && style.FillPatternStyle == CellFillPatternStyle.None
             ? CellFillPatternStyle.Solid
             : style.FillPatternStyle;
+
+    private static void AssertExpectedPublicPackageTags(ManifestRow row, Stream package)
+    {
+        if (row.SourceType != "public")
+            return;
+
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (!tags.Contains("styles") && !tags.Contains("formatting"))
+            return;
+
+        var originalPosition = package.CanSeek ? package.Position : 0;
+        if (package.CanSeek)
+            package.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+            archive.GetEntry("xl/styles.xml").Should().NotBeNull(row.Id);
+        }
+        finally
+        {
+            if (package.CanSeek)
+                package.Position = originalPosition;
+        }
+    }
 
     private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
         new(
