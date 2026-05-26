@@ -196,6 +196,15 @@ public sealed class DataTableDialog : Window
         FocusRangeSelectionInput(request.Target);
     }
 
+    public void ApplyRangeSelection(DataTableRangeSelectionTarget target, CellAddress address)
+    {
+        var textBox = target == DataTableRangeSelectionTarget.ColumnInputCell
+            ? _columnInputBox
+            : _rowInputBox;
+        textBox.Text = address.ToA1();
+        FocusRangeSelectionInput(textBox);
+    }
+
     private static void FocusRangeSelectionInput(TextBox target)
     {
         target.Focus();

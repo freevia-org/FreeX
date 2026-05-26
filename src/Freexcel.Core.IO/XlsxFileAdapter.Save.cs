@@ -65,6 +65,12 @@ public sealed partial class XlsxFileAdapter
                     xlSheet.Row((int)rowNum).Hide();
             }
 
+            foreach (var rowNum in sheet.FilterHiddenRows)
+            {
+                if (IsValidWorksheetRow(rowNum))
+                    xlSheet.Row((int)rowNum).Hide();
+            }
+
             foreach (var (rowNum, level) in sheet.RowOutlineLevels)
             {
                 if (IsValidWorksheetRow(rowNum))
