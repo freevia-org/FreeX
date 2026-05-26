@@ -5711,6 +5711,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Textjoin_IgnoreEmptyOneCellRange_CoercesToScalarBoolean()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (3, 1, new TextValue("b")),
+            (1, 2, new BoolValue(true)));
+
+        _eval.Evaluate("=TEXTJOIN(\"|\",B1:B1,A1:A3)", sheet).Should().Be(new TextValue("a|b"));
+    }
+
+    [Fact]
     public void Textjoin_DelimiterRange_CyclesDelimitersBetweenTextItems()
     {
         var sheet = MakeSheet(
@@ -7431,6 +7442,32 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_PadWithOneCellRange_UsesScalarValue()
+    {
+        var rowSheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(9)));
+        var rows = _eval.Evaluate("=WRAPROWS(A1:A1,2,B1:B1)", rowSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rows.RowCount.Should().Be(1);
+        rows.ColCount.Should().Be(2);
+        rows.Cells[0, 0].Should().Be(new NumberValue(1));
+        rows.Cells[0, 1].Should().Be(new NumberValue(9));
+
+        var colSheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 2, new TextValue("z")));
+        var cols = _eval.Evaluate("=WRAPCOLS(A1:A1,2,B1:B1)", colSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        cols.RowCount.Should().Be(2);
+        cols.ColCount.Should().Be(1);
+        cols.Cells[0, 0].Should().Be(new TextValue("a"));
+        cols.Cells[1, 0].Should().Be(new TextValue("z"));
+    }
+
+    [Fact]
     public void WraprowsAndWrapcols_OmittedPadWith_DefaultsToNA()
     {
         var rowSheet = MakeSheet(
@@ -7557,6 +7594,22 @@ public class FunctionLibraryTests
         rv.Cells[0, 0].Should().Be(new NumberValue(1));
         rv.Cells[0, 1].Should().Be(new TextValue("x"));
         rv.Cells[1, 0].Should().Be(new TextValue("x"));
+    }
+
+    [Fact]
+    public void Expand_PadWithOneCellRange_UsesScalarValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(9)));
+
+        var result = _eval.Evaluate("=EXPAND(A1:A1,2,2,B1:B1)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[0, 1].Should().Be(new NumberValue(9));
+        rv.Cells[1, 0].Should().Be(new NumberValue(9));
+        rv.Cells[1, 1].Should().Be(new NumberValue(9));
     }
 
     [Fact]
@@ -8441,6 +8494,18 @@ public class FunctionLibraryTests
             (2, 3, new TextValue(" ")));
 
         AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(1234.56), new NumberValue(1234.5));
+    }
+
+    [Fact]
+    public void Numbervalue_OneCellSeparatorRanges_BroadcastAcrossTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("1,2")),
+            (2, 1, new TextValue("3,4")),
+            (1, 2, new TextValue(",")),
+            (1, 3, new TextValue(".")));
+
+        AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B1,C1:C1)", sheet), new NumberValue(1.2), new NumberValue(3.4));
     }
 
     [Fact]

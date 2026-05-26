@@ -760,7 +760,11 @@ public static partial class BuiltInFunctions
             values.Add(args[0]);
         }
 
-        if (args.Count > 2 && args[2] is not BlankValue) padWith = args[2];
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            if (!TryGetScalarControlArgument(args[2], out padWith, out error)) return false;
+        }
+
         return values.Count > 0;
     }
 
@@ -799,7 +803,12 @@ public static partial class BuiltInFunctions
         if (rowCount < arr.RowCount || colCount < arr.ColCount) return ErrorValue.Value;
         if ((long)rowCount * colCount > 1_000_000) return ErrorValue.Value;
 
-        var padWith = args.Count > 3 && args[3] is not BlankValue ? args[3] : ErrorValue.NA;
+        var padWith = (ScalarValue)ErrorValue.NA;
+        if (args.Count > 3 && args[3] is not BlankValue)
+        {
+            if (!TryGetScalarControlArgument(args[3], out padWith, out var padError)) return padError;
+        }
+
         var result = CreateFilledRange(rowCount, colCount, padWith);
         for (int r = 0; r < arr.RowCount; r++)
             for (int c = 0; c < arr.ColCount; c++)

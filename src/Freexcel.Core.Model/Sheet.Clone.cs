@@ -493,6 +493,10 @@ public sealed partial class Sheet
             CloneAutoFilterDynamicFilter(column.DynamicFilter),
             CloneAutoFilterColorFilter(column.ColorFilter),
             CloneAutoFilterIconFilter(column.IconFilter),
+            column.DateGroups.Select(CloneAutoFilterDateGroup).ToArray(),
+            column.NativeFiltersAttributes is null
+                ? null
+                : new Dictionary<string, string>(column.NativeFiltersAttributes, StringComparer.Ordinal),
             column.NativeFilterXmls.ToArray(),
             column.NativeAttributes is null
                 ? null
@@ -505,6 +509,14 @@ public sealed partial class Sheet
             filter.NativeAttributes is null
                 ? null
                 : new Dictionary<string, string>(filter.NativeAttributes, StringComparer.Ordinal));
+
+    private static WorksheetAutoFilterDateGroupItemModel CloneAutoFilterDateGroup(WorksheetAutoFilterDateGroupItemModel dateGroup) =>
+        dateGroup with
+        {
+            NativeAttributes = dateGroup.NativeAttributes is null
+                ? null
+                : new Dictionary<string, string>(dateGroup.NativeAttributes, StringComparer.Ordinal)
+        };
 
     private static WorksheetAutoFilterTop10Model? CloneAutoFilterTop10(WorksheetAutoFilterTop10Model? top10) =>
         top10 is null
