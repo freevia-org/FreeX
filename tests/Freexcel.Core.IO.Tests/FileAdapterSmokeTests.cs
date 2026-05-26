@@ -19387,8 +19387,14 @@ public partial class FileAdapterSmokeTests
         var filter = table.FilterColumns.Should().ContainSingle().Subject;
         filter.ColumnId.Should().Be(1);
         filter.Values.Should().BeEmpty();
-        filter.NativeFilterXml.Should().Contain("customFilters");
-        filter.NativeFilterXml.Should().Contain("greaterThan");
+        filter.CustomFilters.Should().ContainSingle();
+        filter.CustomFilters[0].Operator.Should().Be("greaterThan");
+        filter.CustomFilters[0].Value.Should().Be("10");
+        filter.CustomFilters[0].NativeAttributes.Should().Contain("{urn:freexcel:test}customFilterNsFlag", "keep");
+        filter.NativeCustomFiltersAttributes.Should().Contain("customFiltersFlag", "keep");
+        filter.NativeCustomFiltersAttributes.Should().Contain("{urn:freexcel:test}customFiltersNsFlag", "keep");
+        filter.NativeFilterXmls.Should().BeEmpty();
+        loaded.GetSheetAt(0).FilterHiddenRows.Should().BeEmpty();
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -19398,6 +19404,9 @@ public partial class FileAdapterSmokeTests
         var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         tableXml.Should().Contain("customFilters");
         tableXml.Should().Contain("customFilter operator=\"greaterThan\" val=\"10\"");
+        tableXml.Should().Contain("customFiltersFlag=\"keep\"");
+        tableXml.Should().Contain("customFiltersNsFlag=\"keep\"");
+        tableXml.Should().Contain("customFilterNsFlag=\"keep\"");
     }
 
     [Fact]
@@ -19418,10 +19427,12 @@ public partial class FileAdapterSmokeTests
         var filter = table.FilterColumns.Should().ContainSingle().Subject;
         filter.ColumnId.Should().Be(1);
         filter.Values.Should().BeEmpty();
-        filter.NativeFilterXmls.Should().HaveCount(2);
-        filter.NativeFilterXmls[0].Should().Contain("customFilters");
-        filter.NativeFilterXmls[1].Should().Contain("extLst");
-        filter.NativeFilterXmls[1].Should().Contain("{FREEXCEL-TABLE-FILTER-EXT}");
+        filter.CustomFilters.Should().ContainSingle();
+        filter.CustomFilters[0].Operator.Should().Be("greaterThan");
+        filter.CustomFilters[0].Value.Should().Be("10");
+        filter.NativeFilterXmls.Should().ContainSingle();
+        filter.NativeFilterXmls[0].Should().Contain("extLst");
+        filter.NativeFilterXmls[0].Should().Contain("{FREEXCEL-TABLE-FILTER-EXT}");
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -22946,6 +22957,7 @@ public partial class FileAdapterSmokeTests
 
     private const string StructuredTableWithCustomFilterXml = """
         <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               xmlns:fx="urn:freexcel:test"
                id="1"
                name="Table1"
                displayName="Table1"
@@ -22953,8 +22965,8 @@ public partial class FileAdapterSmokeTests
                totalsRowShown="0">
           <autoFilter ref="A1:B3">
             <filterColumn colId="1">
-              <customFilters>
-                <customFilter operator="greaterThan" val="10"/>
+              <customFilters customFiltersFlag="keep" fx:customFiltersNsFlag="keep">
+                <customFilter operator="greaterThan" val="10" fx:customFilterNsFlag="keep"/>
               </customFilters>
             </filterColumn>
           </autoFilter>

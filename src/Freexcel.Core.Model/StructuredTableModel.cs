@@ -47,6 +47,10 @@ public sealed record StructuredTableFilterColumnModel
     public int ColumnId { get; init; }
     public IReadOnlyList<string> Values { get; init; }
     public bool IncludeBlank { get; init; }
+    public IReadOnlyList<StructuredTableCustomFilterModel> CustomFilters { get; init; }
+    public bool CustomFiltersAnd { get; init; }
+    public string? CustomFiltersAndRaw { get; init; }
+    public IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes { get; init; }
     public IReadOnlyList<string> NativeFilterXmls { get; init; }
     public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
     public string? NativeFilterXml => NativeFilterXmls.FirstOrDefault();
@@ -60,6 +64,10 @@ public sealed record StructuredTableFilterColumnModel
             ColumnId,
             Values,
             IncludeBlank,
+            [],
+            false,
+            null,
+            null,
             string.IsNullOrWhiteSpace(NativeFilterXml) ? [] : [NativeFilterXml],
             null)
     {
@@ -71,11 +79,65 @@ public sealed record StructuredTableFilterColumnModel
         bool IncludeBlank,
         IReadOnlyList<string> NativeFilterXmls,
         IReadOnlyDictionary<string, string>? NativeAttributes = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            [],
+            false,
+            null,
+            null,
+            NativeFilterXmls,
+            NativeAttributes)
+    {
+    }
+
+    public StructuredTableFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<StructuredTableCustomFilterModel> CustomFilters,
+        bool CustomFiltersAnd,
+        IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyDictionary<string, string>? NativeAttributes = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            CustomFilters,
+            CustomFiltersAnd,
+            null,
+            NativeCustomFiltersAttributes,
+            NativeFilterXmls,
+            NativeAttributes)
+    {
+    }
+
+    public StructuredTableFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<StructuredTableCustomFilterModel> CustomFilters,
+        bool CustomFiltersAnd,
+        string? CustomFiltersAndRaw,
+        IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyDictionary<string, string>? NativeAttributes = null)
     {
         this.ColumnId = ColumnId;
         this.Values = Values;
         this.IncludeBlank = IncludeBlank;
+        this.CustomFilters = CustomFilters;
+        this.CustomFiltersAnd = CustomFiltersAnd;
+        this.CustomFiltersAndRaw = CustomFiltersAndRaw;
+        this.NativeCustomFiltersAttributes = NativeCustomFiltersAttributes;
         this.NativeFilterXmls = NativeFilterXmls;
         this.NativeAttributes = NativeAttributes;
     }
 }
+
+public sealed record StructuredTableCustomFilterModel(
+    string? Operator,
+    string? Value,
+    IReadOnlyDictionary<string, string>? NativeAttributes = null);

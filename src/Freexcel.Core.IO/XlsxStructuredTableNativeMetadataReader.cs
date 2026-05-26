@@ -72,7 +72,7 @@ internal static class XlsxStructuredTableNativeMetadataReader
 
     public static IReadOnlyList<string> ReadFilterXmls(XElement filterColumn, XNamespace workbookNs) =>
         filterColumn.Elements()
-            .Where(element => element.Name != workbookNs + "filters")
+            .Where(element => element.Name != workbookNs + "filters" && element.Name != workbookNs + "customFilters")
             .Select(element => element.ToString(SaveOptions.DisableFormatting))
             .ToList();
 
