@@ -91,7 +91,7 @@ public sealed partial class PivotTableOptionsDialog : Window
     private readonly TextBox _altTextTitleBox = new();
     private readonly TextBox _altTextDescriptionBox = new() { AcceptsReturn = true, Height = 90, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly TabControl _tabs = new() { Margin = new Thickness(0, 0, 0, 12) };
-    private readonly TabItem _layoutTab = new() { Header = "Layout & Format" };
+    private readonly TabItem _layoutTab = new() { Header = "_Layout & Format" };
 
     public PivotTableOptionsDialogResult Result { get; private set; }
 
@@ -116,11 +116,11 @@ public sealed partial class PivotTableOptionsDialog : Window
 
         _layoutTab.Content = CreateLayoutAndFormatTab();
         _tabs.Items.Add(_layoutTab);
-        _tabs.Items.Add(new TabItem { Header = "Totals & Filters", Content = CreateTotalsAndFiltersTab() });
-        _tabs.Items.Add(new TabItem { Header = "Display", Content = CreateDisplayTab() });
-        _tabs.Items.Add(new TabItem { Header = "Printing", Content = CreatePrintingTab() });
-        _tabs.Items.Add(new TabItem { Header = "Data", Content = CreateDataTab() });
-        _tabs.Items.Add(new TabItem { Header = "Alt Text", Content = CreateAltTextTab() });
+        _tabs.Items.Add(new TabItem { Header = "_Totals & Filters", Content = CreateTotalsAndFiltersTab() });
+        _tabs.Items.Add(new TabItem { Header = "_Display", Content = CreateDisplayTab() });
+        _tabs.Items.Add(new TabItem { Header = "_Printing", Content = CreatePrintingTab() });
+        _tabs.Items.Add(new TabItem { Header = "_Data", Content = CreateDataTab() });
+        _tabs.Items.Add(new TabItem { Header = "_Alt Text", Content = CreateAltTextTab() });
 
         root.Children.Add(_tabs);
         root.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
