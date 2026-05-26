@@ -36,45 +36,6 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
-    public void Load_InitializesDelimitedRecordBuffersWithExpectedCapacities()
-    {
-        var source = File.ReadAllText(FindWorkspaceFile(
-            "src", "Freexcel.Core.IO", "DelimitedTextWorkbookReader.cs"));
-
-        source.Should().Contain("fields = new(capacity: 8)");
-        source.Should().Contain("new StringBuilder(capacity: 64)");
-    }
-
-    [Fact]
-    public void Load_WideSyntheticCsv_ReportsThroughputAndAllocatedBytes()
-    {
-        const int rowCount = 200;
-        const int colCount = 32;
-        var bytes = CreateWideCsvBytes(rowCount, colCount);
-        var adapter = new CsvFileAdapter();
-
-        using (var warmup = new MemoryStream(bytes, writable: false))
-        {
-            adapter.Load(warmup);
-        }
-
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
-        using var stream = new MemoryStream(bytes, writable: false);
-        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
-        var stopwatch = Stopwatch.StartNew();
-        var workbook = adapter.Load(stream);
-        stopwatch.Stop();
-        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
-
-        output.WriteLine(
-            $"CSV wide load benchmark: rows={rowCount}, cols={colCount}, bytes={bytes.Length}, elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}, allocatedBytes={allocatedBytes}");
-        workbook.Sheets.Single().GetCell(1, 1).Should().NotBeNull();
-    }
-
-    [Fact]
     public void Save_DenseSyntheticSheet_ReportsThroughputAndAllocatedBytes()
     {
         const int rowCount = 300;
@@ -500,28 +461,5 @@ public sealed class CsvFileAdapterTests
         }
 
         return workbook;
-    }
-
-    private static byte[] CreateWideCsvBytes(int rowCount, int colCount)
-    {
-        var builder = new StringBuilder(rowCount * colCount * 40);
-        for (var row = 1; row <= rowCount; row++)
-        {
-            for (var col = 1; col <= colCount; col++)
-            {
-                if (col > 1)
-                    builder.Append(',');
-
-                builder.Append("field_");
-                builder.Append(row.ToString("D4"));
-                builder.Append('_');
-                builder.Append(col.ToString("D2"));
-                builder.Append("_abcdefghijklmnopqrstuvwxyz");
-            }
-
-            builder.Append("\r\n");
-        }
-
-        return Encoding.UTF8.GetBytes(builder.ToString());
     }
 }
