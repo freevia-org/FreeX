@@ -7479,6 +7479,15 @@ public class FunctionLibraryTests
     // ── UNIQUE ────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Expand_RowOrColumnError_PropagatesError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (1,2,new NumberValue(2)));
+
+        _eval.Evaluate("=EXPAND(A1:B1,NA())", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=EXPAND(A1:B1,2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Expand_TooManyCells_ReturnsValueError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
