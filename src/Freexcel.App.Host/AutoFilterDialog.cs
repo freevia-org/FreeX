@@ -75,6 +75,7 @@ public sealed partial class AutoFilterDialog : Window
     private readonly Button _clearFilterButton = new() { Content = "_Clear Filter From", Margin = new Thickness(0, 8, 0, 0) };
     private readonly GroupBox _filterByColorGroup = new() { Header = "Filter by Color", Visibility = Visibility.Collapsed };
     private readonly StackPanel _filterByColorPanel = new();
+    private readonly List<Button> _colorChoiceButtons = [];
     private readonly Button _textFiltersButton = new() { Content = "_Text Filters", Visibility = Visibility.Collapsed };
     private readonly Button _numberFiltersButton = new() { Content = "_Number Filters", Visibility = Visibility.Collapsed };
     private readonly Button _dateFiltersButton = new() { Content = "_Date Filters", Visibility = Visibility.Collapsed };

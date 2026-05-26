@@ -43,7 +43,7 @@ public partial class FormatCellsDialog : Window
             (int)FormatCellsDialogTab.Alignment => DlgHAlignBox,
             (int)FormatCellsDialogTab.Font => DlgFontNameBox,
             (int)FormatCellsDialogTab.Fill => DlgFillColorBox,
-            (int)FormatCellsDialogTab.Border => DlgBorderLineStyleBox,
+            (int)FormatCellsDialogTab.Border => DlgBorderLineStyleList,
             (int)FormatCellsDialogTab.Protection => DlgLockedCheck,
             _ => NumberCategoryList
         };

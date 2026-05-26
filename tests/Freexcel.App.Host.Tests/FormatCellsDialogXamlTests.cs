@@ -1,7 +1,9 @@
 using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using System.Globalization;
 using Freexcel.App.Host;
 using Freexcel.Core.Commands;
@@ -77,10 +79,32 @@ public sealed class FormatCellsDialogXamlTests
         source.Should().Contain("DlgHAlignBox");
         source.Should().Contain("DlgFontNameBox");
         source.Should().Contain("DlgFillColorBox");
-        source.Should().Contain("DlgBorderLineStyleBox");
+        source.Should().Contain("DlgBorderLineStyleList");
         source.Should().Contain("DlgLockedCheck");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void FormatCellsDialogOpenedOnBorderTab_FocusesVisibleLineStyleList()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle(), FormatCellsDialogTab.Border);
+            try
+            {
+                var lineStyleList = GetControl<ListBox>(dialog, "DlgBorderLineStyleList");
+                var hiddenLineStyleBox = GetControl<ComboBox>(dialog, "DlgBorderLineStyleBox");
+
+                lineStyleList.IsVisible.Should().BeTrue();
+                hiddenLineStyleBox.IsVisible.Should().BeFalse();
+                FocusManager.GetFocusedElement(dialog).Should().BeSameAs(lineStyleList);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -426,7 +450,7 @@ public sealed class FormatCellsDialogXamlTests
 
         foreach (var target in new[]
         {
-            "Content=\"_Style:\" Target=\"{Binding ElementName=DlgBorderLineStyleBox}\"",
+            "Content=\"_Style:\" Target=\"{Binding ElementName=DlgBorderLineStyleList}\"",
             "Content=\"_Color:\" Target=\"{Binding ElementName=DlgBorderLineColorBox}\""
         })
             xaml.Should().Contain(target);
@@ -1613,11 +1637,23 @@ public sealed class FormatCellsDialogXamlTests
         });
     }
 
-    private static FormatCellsDialog ShowDialogForTest(CellStyle current)
+    private static FormatCellsDialog ShowDialogForTest(
+        CellStyle current,
+        FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
-        var dialog = new FormatCellsDialog(current);
+        var dialog = new FormatCellsDialog(current, initialTab);
         dialog.Show();
+        PumpDispatcher();
         return dialog;
+    }
+
+    private static void PumpDispatcher()
+    {
+        var frame = new DispatcherFrame();
+        Dispatcher.CurrentDispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
     }
 
     private static string ReadFormatCellsDialogSource()

@@ -351,6 +351,18 @@ public sealed class AutoFilterDialogTests
     {
         var source = ReadAutoFilterDialogSources();
 
+        source.Should().Contain("private readonly List<Button> _colorChoiceButtons");
+        source.Should().Contain("_colorChoiceButtons.Clear();");
+        source.Should().Contain("_colorChoiceButtons.Add(button);");
+        source.Should().Contain("KeyboardNavigation.SetDirectionalNavigation(swatches, KeyboardNavigationMode.Contained);");
+        source.Should().Contain("button.PreviewKeyDown += ColorChoiceButton_PreviewKeyDown;");
+        source.Should().Contain("private void ColorChoiceButton_PreviewKeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("Key.Left or Key.Up => currentIndex - 1");
+        source.Should().Contain("Key.Right or Key.Down => currentIndex + 1");
+        source.Should().Contain("Key.Home => 0");
+        source.Should().Contain("Key.End => _colorChoiceButtons.Count - 1");
+        source.Should().Contain("private void FocusColorChoiceButton(int index)");
+        source.Should().Contain("Keyboard.Focus(button);");
         source.Should().Contain("button.Click += (_, _) => ApplyColorChoice(colorFilter);");
         source.Should().Contain("private void ApplyColorChoice(AutoFilterColorFilter colorFilter)");
         source.Should().Contain("Result = BuildResult(");
