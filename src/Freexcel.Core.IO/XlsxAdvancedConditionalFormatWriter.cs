@@ -161,7 +161,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             case CfRuleType.IconSet:
             {
                 var thresholdXmls = GetIconSetThresholds(cf)
-                    .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value));
+                    .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value, threshold.GreaterThanOrEqual));
                 var overrideXmls = cf.IconOverrides.Select(o => new XElement(
                     worksheetNs + "cfIcon",
                     new XAttribute("iconSet", o.IconSet),
