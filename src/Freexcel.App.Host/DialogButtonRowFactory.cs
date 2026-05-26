@@ -5,7 +5,7 @@ namespace Freexcel.App.Host;
 
 internal static class DialogButtonRowFactory
 {
-    public static StackPanel Create(Action accept, double buttonWidth, Thickness rowMargin = default)
+    public static StackPanel Create(Action accept, double buttonWidth, Thickness rowMargin = default, string acceptContent = "_OK")
     {
         var row = new StackPanel
         {
@@ -15,7 +15,7 @@ internal static class DialogButtonRowFactory
         };
         var ok = new Button
         {
-            Content = "_OK",
+            Content = acceptContent,
             Width = buttonWidth,
             Margin = new Thickness(0, 0, 8, 0),
             IsDefault = true
