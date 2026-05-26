@@ -53,6 +53,7 @@ public static partial class RibbonCommandPresentationPlanner
 
         var name = title.Trim().ToLowerInvariant();
         return IsInsertChartType(name) ||
+               name is "recommended chart" or "recommended charts" ||
                name is "column" or
                        "stack col" or
                        "100% col" or
