@@ -42,6 +42,33 @@ public sealed class WorkbookRangeTextCodecTests
     }
 
     [Fact]
+    public void TryParseMany_AcceptsCommaSeparatedRangesAcrossSheets()
+    {
+        var defaultSheetId = SheetId.New();
+        var outputsSheetId = SheetId.New();
+
+        WorkbookRangeTextCodec.TryParseMany(
+            defaultSheetId,
+            "B2,'Output, Sheet'!D5:E5",
+            name => name == "Output, Sheet" ? outputsSheetId : null,
+            out var ranges).Should().BeTrue();
+
+        ranges.Should().HaveCount(2);
+        ranges[0].Start.Should().Be(new CellAddress(defaultSheetId, 2, 2));
+        ranges[0].End.Should().Be(new CellAddress(defaultSheetId, 2, 2));
+        ranges[1].Start.Should().Be(new CellAddress(outputsSheetId, 5, 4));
+        ranges[1].End.Should().Be(new CellAddress(outputsSheetId, 5, 5));
+    }
+
+    [Fact]
+    public void TryParseMany_RejectsIfAnyRangeIsMalformed()
+    {
+        WorkbookRangeTextCodec.TryParseMany(SheetId.New(), "A1,not a range", _ => null, out _)
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
     public void Format_OmitsCurrentSheetName()
     {
         var sheetId = SheetId.New();

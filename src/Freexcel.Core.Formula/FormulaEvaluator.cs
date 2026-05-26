@@ -1680,6 +1680,7 @@ public sealed class FormulaEvaluator
         private readonly Freexcel.Core.Model.Workbook? _workbook;
         private readonly FormulaEvaluator _evaluator;
         private readonly Freexcel.Core.Model.CellAddress? _currentCellAddress;
+        private Dictionary<string, Freexcel.Core.Model.Sheet?>? _sheetNameCache;
 
         public SheetEvalContext(
             Sheet sheet,
@@ -1697,7 +1698,7 @@ public sealed class FormulaEvaluator
 
         public ScalarValue GetCellValue(string sheetName, uint row, uint col)
         {
-            var target = _workbook?.GetSheet(sheetName);
+            var target = ResolveSheet(sheetName);
             if (target is null) return ErrorValue.Ref;
             return target.GetValue(row, col);
         }
@@ -1715,7 +1716,7 @@ public sealed class FormulaEvaluator
 
         public IReadOnlyList<ScalarValue> GetRangeValues(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol)
         {
-            var target = _workbook?.GetSheet(sheetName);
+            var target = ResolveSheet(sheetName);
             if (target is null) return [ErrorValue.Ref];
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
@@ -1745,7 +1746,7 @@ public sealed class FormulaEvaluator
         public string? TryGetSheetName(Freexcel.Core.Model.SheetId sheetId)
             => _workbook?.GetSheet(sheetId)?.Name;
 
-        public bool SheetExists(string sheetName) => _workbook?.GetSheet(sheetName) is not null;
+        public bool SheetExists(string sheetName) => ResolveSheet(sheetName) is not null;
 
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
 
@@ -1766,7 +1767,7 @@ public sealed class FormulaEvaluator
         public Freexcel.Core.Model.Cell? TryGetCell(uint row, uint col) => _sheet.GetCell(row, col);
 
         public Freexcel.Core.Model.Cell? TryGetCell(string sheetName, uint row, uint col)
-            => _workbook?.GetSheet(sheetName)?.GetCell(row, col);
+            => ResolveSheet(sheetName)?.GetCell(row, col);
 
         public ScalarValue? TryResolveLambdaBinding(string name) => null;
 
@@ -1777,6 +1778,19 @@ public sealed class FormulaEvaluator
             for (int i = 0; i < lambda.Parameters.Count; i++)
                 bindings[lambda.Parameters[i]] = args[i];
             return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(this, bindings, _evaluator));
+        }
+
+        private Freexcel.Core.Model.Sheet? ResolveSheet(string sheetName)
+        {
+            if (_workbook is null) return null;
+
+            _sheetNameCache ??= new Dictionary<string, Freexcel.Core.Model.Sheet?>(StringComparer.OrdinalIgnoreCase);
+            if (_sheetNameCache.TryGetValue(sheetName, out var cachedSheet))
+                return cachedSheet;
+
+            var resolvedSheet = _workbook.GetSheet(sheetName);
+            _sheetNameCache[sheetName] = resolvedSheet;
+            return resolvedSheet;
         }
     }
 

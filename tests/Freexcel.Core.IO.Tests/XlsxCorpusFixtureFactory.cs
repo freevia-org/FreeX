@@ -64,6 +64,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-views-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
+        "generated-worksheet-single-xml-cells-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -271,6 +272,13 @@ internal static class XlsxCorpusFixtureFactory
               <cellWatches nativeContainer="kept">
                 <cellWatch r="A1" nativeWatch="kept"/>
               </cellWatches>
+            </worksheet>
+            """)),
+        "generated-worksheet-single-xml-cells-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <singleXmlCells nativeSingleXmlCellsAttr="kept">
+                <singleXmlCell id="1" r="A1" xmlCellPrId="1" nativeSingleXmlCellAttr="cell-kept"/>
+              </singleXmlCells>
             </worksheet>
             """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
@@ -498,6 +506,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-single-xml-cells-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-sort-state-001", StringComparison.OrdinalIgnoreCase) &&
@@ -692,6 +702,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetCellWatchesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-single-xml-cells-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSingleXmlCellsFixup(archive);
             return;
         }
 
@@ -1308,6 +1324,29 @@ internal static class XlsxCorpusFixtureFactory
                 worksheetNs + "cellWatch",
                 new XAttribute("r", "A1"),
                 new XAttribute("nativeWatch", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSingleXmlCellsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "singleXmlCells").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "singleXmlCells",
+            new XAttribute("nativeSingleXmlCellsAttr", "kept"),
+            new XElement(
+                worksheetNs + "singleXmlCell",
+                new XAttribute("id", "1"),
+                new XAttribute("r", "A1"),
+                new XAttribute("xmlCellPrId", "1"),
+                new XAttribute("nativeSingleXmlCellAttr", "cell-kept"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
