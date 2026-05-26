@@ -16315,10 +16315,15 @@ public partial class FileAdapterSmokeTests
             Sheet = "Data",
             NativeAttributes = new Dictionary<string, string> { ["customDataRefFlag"] = "keep" }
         });
+        loadedData.NativeAttributes["invalid dataConsolidate attr"] = "skip";
+        loadedData.References[0].NativeAttributes["invalid dataRef attr"] = "skip";
+        loadedData.NativeXml = null;
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16332,6 +16337,7 @@ public partial class FileAdapterSmokeTests
         dataConsolidate.ToString().Should().Contain("ref=\"A1:B2\"");
         dataConsolidate.ToString().Should().Contain("sheet=\"Data\"");
         dataConsolidate.ToString().Should().Contain("customDataRefFlag=\"keep\"");
+        dataConsolidate.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
