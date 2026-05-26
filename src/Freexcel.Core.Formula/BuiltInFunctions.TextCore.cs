@@ -486,23 +486,29 @@ public static partial class BuiltInFunctions
         var thirdRange = third as RangeValue;
         var shape = firstRange ?? secondRange ?? thirdRange;
         if (shape is null) return map(first, second, third);
-        if ((firstRange is not null && (firstRange.RowCount != shape.RowCount || firstRange.ColCount != shape.ColCount)) ||
-            (secondRange is not null && (secondRange.RowCount != shape.RowCount || secondRange.ColCount != shape.ColCount)) ||
-            (thirdRange is not null && (thirdRange.RowCount != shape.RowCount || thirdRange.ColCount != shape.ColCount)))
+        if ((firstRange is not null && !CanBroadcastToShape(firstRange, shape.RowCount, shape.ColCount)) ||
+            (secondRange is not null && !CanBroadcastToShape(secondRange, shape.RowCount, shape.ColCount)) ||
+            (thirdRange is not null && !CanBroadcastToShape(thirdRange, shape.RowCount, shape.ColCount)))
             return ErrorValue.Value;
 
         var cells = new ScalarValue[shape.RowCount, shape.ColCount];
         for (int r = 0; r < shape.RowCount; r++)
             for (int c = 0; c < shape.ColCount; c++)
             {
-                var firstValue = firstRange is null ? first : firstRange.Cells[r, c];
-                var secondValue = secondRange is null ? second : secondRange.Cells[r, c];
-                var thirdValue = thirdRange is null ? third : thirdRange.Cells[r, c];
+                var firstValue = firstRange is null ? first : ValueAtBroadcastCell(firstRange, r, c);
+                var secondValue = secondRange is null ? second : ValueAtBroadcastCell(secondRange, r, c);
+                var thirdValue = thirdRange is null ? third : ValueAtBroadcastCell(thirdRange, r, c);
                 cells[r, c] = map(firstValue, secondValue, thirdValue);
             }
 
         return new RangeValue(cells);
     }
+
+    private static bool CanBroadcastToShape(RangeValue range, int rows, int cols) =>
+        (range.RowCount == rows && range.ColCount == cols) || (range.RowCount == 1 && range.ColCount == 1);
+
+    private static ScalarValue ValueAtBroadcastCell(RangeValue range, int row, int col) =>
+        range.RowCount == 1 && range.ColCount == 1 ? range.Cells[0, 0] : range.Cells[row, col];
 
     private static ScalarValue MapQuaternaryTextArgs(
         ScalarValue first,
