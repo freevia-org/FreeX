@@ -37,6 +37,21 @@ public sealed class WatchWindowMessageFormatterTests
     }
 
     [Fact]
+    public void WatchWindowDialog_DeleteKeyAndSelectionStateMirrorDeleteWatchButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+
+        source.Should().Contain("private readonly Button _deleteButton");
+        source.Should().Contain("_listView.SelectionChanged += (_, _) => UpdateDeleteButtonState();");
+        source.Should().Contain("_listView.KeyDown += ListView_KeyDown;");
+        source.Should().Contain("private void ListView_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("if (e.Key == Key.Delete)");
+        source.Should().Contain("DeleteSelectedWatch();");
+        source.Should().Contain("private void UpdateDeleteButtonState()");
+        source.Should().Contain("_deleteButton.IsEnabled = _listView.SelectedItems.Count > 0;");
+    }
+
+    [Fact]
     public void WatchWindowDialog_WiresAddWatchToCurrentSelectionWorkflow()
     {
         var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));

@@ -13746,10 +13746,13 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrimaryViewMetadata!.NativeAttributes.Should().Contain("showZeros", "0");
         loadedSheet.PrimaryViewMetadata.NativeAttributes.Should().Contain("rightToLeft", "1");
         loadedSheet.PrimaryViewMetadata.NativeChildXmls.Should().Contain(xml => xml.Contains("pivotSelection", StringComparison.Ordinal));
+        loadedSheet.PrimaryViewMetadata.NativeAttributes["invalid primaryView attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -13763,6 +13766,7 @@ public partial class FileAdapterSmokeTests
         sheetView.Attribute("showZeros")!.Value.Should().Be("0");
         sheetView.Attribute("rightToLeft").Should().NotBeNull();
         sheetView.Attribute("rightToLeft")!.Value.Should().Be("1");
+        sheetView.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         sheetView.Element(worksheetNs + "pivotSelection").Should().NotBeNull();
         sheetView.Element(worksheetNs + "pivotSelection")!.Attribute("pane")!.Value.Should().Be("topRight");
     }

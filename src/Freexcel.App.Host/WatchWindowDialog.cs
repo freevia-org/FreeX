@@ -16,6 +16,7 @@ public sealed class WatchWindowDialog : Window
     private readonly Action<CellAddress> _removeWatch;
     private readonly ObservableCollection<WatchWindowRow> _rows = [];
     private readonly ListView _listView;
+    private readonly Button _deleteButton;
 
     public WatchWindowDialog(
         Func<IReadOnlyList<WatchWindowEntry>> getEntries,
@@ -73,9 +74,9 @@ public sealed class WatchWindowDialog : Window
         refresh.Click += (_, _) => Refresh();
         buttons.Children.Add(refresh);
 
-        var delete = new Button { Content = "_Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        delete.Click += (_, _) => DeleteSelectedWatch();
-        buttons.Children.Add(delete);
+        _deleteButton = new Button { Content = "_Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _deleteButton.Click += (_, _) => DeleteSelectedWatch();
+        buttons.Children.Add(_deleteButton);
 
         var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         close.Click += (_, _) => Close();
@@ -83,6 +84,8 @@ public sealed class WatchWindowDialog : Window
 
         _listView = new ListView { ItemsSource = _rows, SelectionMode = SelectionMode.Extended };
         _listView.MouseDoubleClick += ListView_MouseDoubleClick;
+        _listView.SelectionChanged += (_, _) => UpdateDeleteButtonState();
+        _listView.KeyDown += ListView_KeyDown;
         _listView.View = new System.Windows.Controls.GridView
         {
             Columns =
@@ -115,6 +118,7 @@ public sealed class WatchWindowDialog : Window
                 entry.FormulaText ?? "",
                 entry.Address));
         }
+        UpdateDeleteButtonState();
     }
 
     private void DeleteSelectedWatch()
@@ -133,12 +137,27 @@ public sealed class WatchWindowDialog : Window
         Refresh();
         if (_rows.Count > 0)
             _listView.SelectedIndex = Math.Min(Math.Max(0, selectedIndex), _rows.Count - 1);
+        UpdateDeleteButtonState();
     }
 
     private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (_listView.SelectedItem is WatchWindowRow row)
             _navigateTo(row.Address);
+    }
+
+    private void ListView_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete)
+        {
+            DeleteSelectedWatch();
+            e.Handled = true;
+        }
+    }
+
+    private void UpdateDeleteButtonState()
+    {
+        _deleteButton.IsEnabled = _listView.SelectedItems.Count > 0;
     }
 
     private void FocusInitialKeyboardTarget()

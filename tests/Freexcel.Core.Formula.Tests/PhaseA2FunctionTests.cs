@@ -59,6 +59,22 @@ public class PhaseA2FunctionTests
         _eval.Evaluate("=ISREF(MyData)", sheet, wb).Should().Be(new BoolValue(true));
     }
 
+    [Fact]
+    public void IsRef_OffsetReference_ReturnsTrue()
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=ISREF(OFFSET(A1,0,0))", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void IsRef_IndirectReference_ReturnsTrue()
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=ISREF(INDIRECT(\"A1\"))", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
     // ── ISFORMULA ────────────────────────────────────────────────────────────
 
     [Fact]

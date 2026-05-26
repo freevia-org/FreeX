@@ -388,6 +388,8 @@ public sealed class ChartDialogTests
         source.Should().Contain("_Add series");
         source.Should().Contain("_Edit series");
         source.Should().Contain("_Edit Axis Labels");
+        source.Should().Contain("_seriesList.MouseDoubleClick += EditSeriesButton_Click;");
+        source.Should().Contain("_axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;");
         source.Should().Contain("Name and values are inferred from the selected chart range.");
     }
 
