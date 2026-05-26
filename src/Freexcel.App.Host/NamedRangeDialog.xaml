@@ -35,7 +35,8 @@
         </DockPanel>
 
         <GroupBox Grid.Row="1" Header="_Defined Names">
-            <ListView x:Name="NamesList" SelectionChanged="NamesList_SelectionChanged">
+            <ListView x:Name="NamesList" SelectionChanged="NamesList_SelectionChanged"
+                      MouseDoubleClick="NamesList_MouseDoubleClick">
                 <ListView.View>
                     <GridView>
                         <GridViewColumn Header="Name" Width="130"
