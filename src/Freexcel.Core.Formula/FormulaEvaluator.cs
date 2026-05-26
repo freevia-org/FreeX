@@ -1530,7 +1530,7 @@ public sealed class FormulaEvaluator
                 : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
             return new BoolValue(cell?.HasFormula == true);
         }
-        if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET")
+        if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
         {
             var reference = EvaluateReferenceReturningFunction(fn, context);
             if (reference is ErrorValue error) return error;
@@ -1574,7 +1574,7 @@ public sealed class FormulaEvaluator
                 ? context.TryGetCell(sheetName, r.Start.Row, r.Start.Col)
                 : context.TryGetCell(r.Start.Row, r.Start.Col);
         }
-        else if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET")
+        else if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
         {
             var reference = EvaluateReferenceReturningFunction(fn, context);
             if (reference is ErrorValue error) return error == ErrorValue.Value ? ErrorValue.NA : error;
@@ -1643,9 +1643,24 @@ public sealed class FormulaEvaluator
         return node.FunctionName switch
         {
             "OFFSET"   => EvaluateOffsetReference(node, context),
-            "INDIRECT" => EvaluateNode(node, context),
+            "INDIRECT" => EvaluateIndirectReference(node, context),
             _          => ErrorValue.Value
         };
+    }
+
+    private ScalarValue EvaluateIndirectReference(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count is < 1 or > 2) return ErrorValue.Value;
+
+        var args = new List<ScalarValue>(node.Arguments.Count);
+        foreach (var argument in node.Arguments)
+        {
+            var value = EvaluateNode(argument, context);
+            if (value is ErrorValue error) return error;
+            args.Add(value);
+        }
+
+        return BuiltInFunctions.IndirectReference(args, context);
     }
 
     private ScalarValue EvaluateOffset(FunctionCallNode node, IEvalContext context)
