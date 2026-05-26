@@ -126,6 +126,36 @@ public partial class MainWindow
         e.Handled = true;
     }
 
+    private void OnAutofillEdgeScrollRequested(Freexcel.App.UI.GridAutoScrollRequest request)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (request.HorizontalDirection != 0)
+        {
+            var (maximum, value) = ViewportScrollCalculator.CalculateDragAutoScroll(
+                HorizontalScroll.Value,
+                HorizontalScroll.Maximum,
+                request.HorizontalDirection,
+                step: 1,
+                HorizontalScroll.ViewportSize,
+                GetScrollableColumnLimit(sheet));
+            HorizontalScroll.Maximum = maximum;
+            HorizontalScroll.Value = value;
+        }
+
+        if (request.VerticalDirection != 0)
+        {
+            var (maximum, value) = ViewportScrollCalculator.CalculateDragAutoScroll(
+                VerticalScroll.Value,
+                VerticalScroll.Maximum,
+                request.VerticalDirection,
+                step: 1,
+                VerticalScroll.ViewportSize,
+                GetScrollableRowLimit(sheet));
+            VerticalScroll.Maximum = maximum;
+            VerticalScroll.Value = value;
+        }
+    }
+
     private bool TryScrollIndependentSplitPane(bool horizontal, int notches)
     {
         if (SheetGrid.Viewport?.SplitPanes is null)
@@ -519,6 +549,21 @@ public partial class MainWindow
             currentMaximum,
             wheelNotches,
             stepPerNotch,
+            visibleSpan,
+            absoluteLimit);
+
+    public static (double Maximum, double Value) CalculateDragAutoScroll(
+        double currentValue,
+        double currentMaximum,
+        int direction,
+        double step,
+        double visibleSpan,
+        uint absoluteLimit) =>
+        ViewportScrollCalculator.CalculateDragAutoScroll(
+            currentValue,
+            currentMaximum,
+            direction,
+            step,
             visibleSpan,
             absoluteLimit);
 

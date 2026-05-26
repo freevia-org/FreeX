@@ -244,7 +244,17 @@ public partial class MainWindow
         RefreshSheetTabs();
         RefreshToolbar();
         UpdateViewport();
+        MarkWorkbookSaved();
         RecordDiagnosticEvent("workbook_new");
+    }
+
+    private async Task RequestNewWorkbookAsync()
+    {
+        if (!await ConfirmSaveBeforeDestructiveActionAsync("Save changes before creating a new workbook?"))
+            return;
+
+        CreateNewWorkbook();
+        HideStartScreen();
     }
 
     private async Task OpenFileAsync(string path)
@@ -272,6 +282,7 @@ public partial class MainWindow
             InvalidateNavigationCaches();
             _currentFilePath = result.OpenedAsTemplate ? null : path;
             UpdateTitleBar();
+            MarkWorkbookSaved();
 
             _recentFiles.AddOrUpdate(path);
             ShowOpenProgress("Opening workbook", "Loading file (preparing view)", 98);
@@ -359,10 +370,10 @@ public partial class MainWindow
 
     // Start screen button handlers
     private void SsBackBtn_Click(object sender, RoutedEventArgs e)       => HideStartScreen();
-    private void SsNewBtn_Click(object sender, RoutedEventArgs e)        { CreateNewWorkbook(); HideStartScreen(); }
-    private void SsBlankWorkbook_Click(object sender, RoutedEventArgs e) { CreateNewWorkbook(); HideStartScreen(); }
+    private async void SsNewBtn_Click(object sender, RoutedEventArgs e)        => await RequestNewWorkbookAsync();
+    private async void SsBlankWorkbook_Click(object sender, RoutedEventArgs e) => await RequestNewWorkbookAsync();
     private void SsOpenBtn_Click(object sender, RoutedEventArgs e)       => OpenButton_Click(sender, e);
-    private void SsCloseBtn_Click(object sender, RoutedEventArgs e)      => Application.Current.Shutdown();
+    private void SsCloseBtn_Click(object sender, RoutedEventArgs e)      => Close();
     private void SsHomeRibbonBtn_Click(object sender, RoutedEventArgs e) => ShowStartScreen();
 
     private void RibbonTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -543,8 +554,11 @@ public partial class MainWindow
         await SaveWorkbookWithDialogAsync();
     }
 
-    private async void SaveAsButton_Click(object sender, RoutedEventArgs e) =>
-        await SaveWorkbookWithDialogAsync();
+    private async void SaveAsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (await SaveWorkbookWithDialogAsync())
+            HideStartScreen();
+    }
 
     private async Task<bool> SaveWorkbookWithDialogAsync()
     {
@@ -587,6 +601,7 @@ public partial class MainWindow
             await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
             _currentFilePath = target.Path;
             _recentFiles.AddOrUpdate(target.Path);
+            MarkWorkbookSaved();
             UpdateTitleBar();
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
             {

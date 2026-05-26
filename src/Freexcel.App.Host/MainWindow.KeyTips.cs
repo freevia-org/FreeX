@@ -21,6 +21,7 @@ public partial class MainWindow
         _ribbonKeyTipMode.Enter();
         _ribbonKeyTipScope = scope;
         _ribbonKeyTipSequence = "";
+        _legacyDataKeyTipSequence = false;
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
         ShowKeyTipOverlay(scope);
@@ -34,6 +35,7 @@ public partial class MainWindow
         _ribbonKeyTipMode.Cancel();
         _ribbonKeyTipScope = RibbonKeyTipScope.None;
         _ribbonKeyTipSequence = "";
+        _legacyDataKeyTipSequence = false;
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
         ClearKeyTipOverlay();
@@ -61,8 +63,12 @@ public partial class MainWindow
             if (HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence))
                 return;
 
-            if (TryHandleTopLevelRibbonKeyTip(_ribbonKeyTipSequence))
+            var topLevelSequence = _ribbonKeyTipSequence;
+            if (TryHandleTopLevelRibbonKeyTip(topLevelSequence))
+            {
                 EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+                _legacyDataKeyTipSequence = string.Equals(topLevelSequence, "D", StringComparison.OrdinalIgnoreCase);
+            }
             else if (TryInvokeTopLevelQatKeyTip(_ribbonKeyTipSequence))
                 ExitRibbonKeyTipMode();
             else
@@ -79,6 +85,14 @@ public partial class MainWindow
             else if (!HasActiveMenuItemKeyTipPrefix(_ribbonKeyTipSequence))
                 ExitRibbonKeyTipMode();
 
+            return;
+        }
+
+        if (_legacyDataKeyTipSequence &&
+            string.Equals(_ribbonKeyTipSequence, "FF", StringComparison.OrdinalIgnoreCase))
+        {
+            FilterButton_Click(this, new RoutedEventArgs());
+            ExitRibbonKeyTipMode();
             return;
         }
 
@@ -101,6 +115,7 @@ public partial class MainWindow
         if (TryHandleTopLevelRibbonKeyTip(token))
         {
             EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+            _legacyDataKeyTipSequence = string.Equals(token, "D", StringComparison.OrdinalIgnoreCase);
             return true;
         }
 
