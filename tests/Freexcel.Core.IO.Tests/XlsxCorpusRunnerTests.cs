@@ -182,6 +182,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedCorpusRows_IncludeMultiAreaDataValidationCoverage()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("multi-area-validation"))
+            .ToArray();
+
+        rows.Should().ContainSingle("Excel data-validation sqref can cover discontiguous ranges and should not narrow to the first range");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        rows.Select(row => XlsxCorpusFixtureFactory.Create(row.Id))
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.DataValidations)
+            .Should().Contain(validation => validation.AdditionalRanges.Count > 0);
+    }
+
+    [Fact]
     public void GeneratedKnownGapRows_DeclareExpectedWarningsAndNotes()
     {
         var rows = ReadManifestRows()
@@ -3867,7 +3885,8 @@ public class XlsxCorpusRunnerTests
             validation.ErrorMessage ?? "",
             validation.PromptTitle ?? "",
             validation.PromptMessage ?? "",
-            ToRangeSummary(validation.AppliesTo));
+            ToRangeSummary(validation.AppliesTo),
+            validation.AdditionalRanges.Select(ToRangeSummary).ToArray());
 
     private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
     {
@@ -4925,7 +4944,8 @@ public class XlsxCorpusRunnerTests
         string ErrorMessage,
         string PromptTitle,
         string PromptMessage,
-        ChartRangeSummary AppliesTo);
+        ChartRangeSummary AppliesTo,
+        IReadOnlyList<ChartRangeSummary> AdditionalRanges);
 
     private sealed record ConditionalFormatSummary(
         CfRuleType RuleType,

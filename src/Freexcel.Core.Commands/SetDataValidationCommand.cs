@@ -25,8 +25,12 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
-        if (_rule.AppliesTo.Start.Sheet != _sheetId || _rule.AppliesTo.End.Sheet != _sheetId)
+        if (_rule.AppliesTo.Start.Sheet != _sheetId ||
+            _rule.AppliesTo.End.Sheet != _sheetId ||
+            _rule.AdditionalRanges.Any(range => range.Start.Sheet != _sheetId || range.End.Sheet != _sheetId))
+        {
             return new CommandOutcome(false, "Data validation range must be on the target sheet.");
+        }
         if (!Enum.IsDefined(_rule.Type))
             return new CommandOutcome(false, "Data validation type is not supported.");
         if (!Enum.IsDefined(_rule.Operator))
@@ -96,14 +100,16 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
         for (var i = sheet.DataValidations.Count - 1; i >= 0; i--)
         {
             var rule = sheet.DataValidations[i];
-            if (!Intersects(rule.AppliesTo, _range))
+            var allRanges = new[] { rule.AppliesTo }.Concat(rule.AdditionalRanges).ToArray();
+            if (!allRanges.Any(range => Intersects(range, _range)))
                 continue;
 
             _removed.Add((i, rule));
             sheet.DataValidations.RemoveAt(i);
-            var replacements = Subtract(rule.AppliesTo, _range)
-                .Select(range => CloneForRange(rule, range))
+            var remainingRanges = allRanges
+                .SelectMany(range => Subtract(range, _range))
                 .ToList();
+            var replacements = BuildReplacementRules(rule, remainingRanges).ToList();
             for (var r = replacements.Count - 1; r >= 0; r--)
             {
                 var replacement = replacements[r];
@@ -186,4 +192,7 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
             PromptTitle = source.PromptTitle,
             PromptMessage = source.PromptMessage
         };
+
+    private static IEnumerable<DataValidation> BuildReplacementRules(DataValidation source, IReadOnlyList<GridRange> ranges) =>
+        ranges.Select(range => CloneForRange(source, range));
 }

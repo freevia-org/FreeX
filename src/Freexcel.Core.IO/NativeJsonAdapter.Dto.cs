@@ -519,6 +519,7 @@ public sealed partial class NativeJsonAdapter
     private class DataValidationDto
     {
         public string? AppliesTo { get; set; }
+        public List<string>? AdditionalRanges { get; set; }
         public DvType Type { get; set; } = DvType.Any;
         public DvOperator Operator { get; set; } = DvOperator.Between;
         public string? Formula1 { get; set; }

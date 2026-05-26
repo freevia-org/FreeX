@@ -114,8 +114,9 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         GridRange range,
         string? hostSheetName,
         int rowDelta,
-        int colDelta) =>
-        new()
+        int colDelta)
+    {
+        var clone = new DataValidation
         {
             AppliesTo = range,
             Type = source.Type,
@@ -132,6 +133,9 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
             PromptTitle = source.PromptTitle,
             PromptMessage = source.PromptMessage
         };
+        clone.AdditionalRanges.AddRange(source.AdditionalRanges);
+        return clone;
+    }
 
     private static string? RewriteValidationFormula(string? formula, string? hostSheetName, int rowDelta, int colDelta)
     {

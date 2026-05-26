@@ -376,8 +376,9 @@ public sealed partial class Sheet
         return clonedFormat;
     }
 
-    private static DataValidation CloneDataValidation(DataValidation dv, SheetId newId) =>
-        new()
+    private static DataValidation CloneDataValidation(DataValidation dv, SheetId newId)
+    {
+        var clone = new DataValidation
         {
             AppliesTo         = RemapRange(dv.AppliesTo, newId),
             Type              = dv.Type,
@@ -398,6 +399,9 @@ public sealed partial class Sheet
             NativeContainerAttributes = dv.NativeContainerAttributes,
             NativeContainerChildXmls = dv.NativeContainerChildXmls
         };
+        clone.AdditionalRanges.AddRange(dv.AdditionalRanges.Select(range => RemapRange(range, newId)));
+        return clone;
+    }
 
     private void CopyLayoutCollectionsTo(Sheet copy)
     {

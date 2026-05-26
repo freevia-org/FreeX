@@ -57,7 +57,10 @@ public static partial class DataValidationService
     /// Returns all validation rules that apply to the given cell address.
     /// </summary>
     public static IEnumerable<DataValidation> GetApplicable(Sheet sheet, CellAddress addr)
-        => sheet.DataValidations.Where(dv => dv.AppliesTo.Contains(addr));
+        => sheet.DataValidations.Where(dv => AppliesTo(dv, addr));
+
+    public static bool AppliesTo(DataValidation dv, CellAddress addr) =>
+        dv.AppliesTo.Contains(addr) || dv.AdditionalRanges.Any(range => range.Contains(addr));
 
     public static InputPrompt? GetInputPrompt(Sheet sheet, CellAddress addr)
     {
