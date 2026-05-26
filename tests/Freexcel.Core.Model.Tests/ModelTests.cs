@@ -359,6 +359,33 @@ public class SheetCloneTests
     }
 
     [Fact]
+    public void Sheet_Clone_RemapCellsStylesAndMergedRegionsToNewSheetId()
+    {
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("S");
+        var sourceAddress = new CellAddress(src.Id, 2, 3);
+        var sourceCell = Cell.FromValue(new TextValue("value"));
+        sourceCell.StyleId = new StyleId(7);
+        src.SetCell(sourceAddress, sourceCell);
+        src.SetStyleOnly(4, 5, new StyleId(8));
+        src.AddMergedRegion(new GridRange(
+            new CellAddress(src.Id, 6, 1),
+            new CellAddress(src.Id, 7, 2)));
+        var newId = SheetId.New();
+
+        var copy = src.Clone(newId, "Copy");
+
+        var clonedAddress = new CellAddress(newId, 2, 3);
+        copy.GetCell(clonedAddress).Should().NotBeSameAs(sourceCell);
+        copy.GetCell(clonedAddress)!.Value.Should().Be(new TextValue("value"));
+        copy.GetCell(clonedAddress)!.StyleId.Should().Be(new StyleId(7));
+        copy.GetStyleOnly(4, 5).Should().Be(new StyleId(8));
+        copy.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(newId, 6, 1),
+            new CellAddress(newId, 7, 2)));
+    }
+
+    [Fact]
     public void Sheet_Clone_DropsExistingConditionalFormatX14IdNativeChild()
     {
         var wb = new Workbook("T");

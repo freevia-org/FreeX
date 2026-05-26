@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(41, "the generated metadata-pass manifest currently declares forty-one deterministic package-retention rows");
+        rows.Should().HaveCount(42, "the generated metadata-pass manifest currently declares forty-two deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -962,6 +962,32 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetAutoFilterMetadataRow_RetainsAutoFilterAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-auto-filter-metadata-001");
+        AssertWorksheetAutoFilterMetadata(source, "generated-worksheet-auto-filter-metadata-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        var loadedAutoFilter = workbook.GetSheetAt(0).AutoFilter;
+        loadedAutoFilter.Should().NotBeNull();
+        loadedAutoFilter!.Reference.Should().Be("A1:B3");
+        var loadedFilterColumn = loadedAutoFilter.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.ColumnId.Should().Be(0);
+        loadedFilterColumn.Values.Should().Equal("A");
+        loadedFilterColumn.IncludeBlank.Should().BeTrue();
+        workbook.GetSheetAt(0).FilterHiddenRows.Should().Contain(3u);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-auto-filter-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-auto-filter-metadata-001");
+        AssertWorksheetAutoFilterMetadata(saved, "generated-worksheet-auto-filter-metadata-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetCustomPropertiesRow_RetainsCustomPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-custom-properties-001");
@@ -1155,6 +1181,29 @@ public class XlsxCorpusRunnerTests
         dataRef.Attribute("ref")!.Value.Should().Be("A1:B2", because);
         dataRef.Attribute("sheet")!.Value.Should().Be("Data", because);
         dataRef.Attribute("customDataRefFlag")!.Value.Should().Be("keep", because);
+    }
+
+    private static void AssertWorksheetAutoFilterMetadata(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var autoFilter = worksheetXml.Root!.Element(worksheetNs + "autoFilter");
+        autoFilter.Should().NotBeNull(because);
+        autoFilter!.Attribute("ref")!.Value.Should().Be("A1:B3", because);
+        var filterColumn = autoFilter.Elements(worksheetNs + "filterColumn")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        filterColumn.Attribute("colId")!.Value.Should().Be("0", because);
+        var filters = filterColumn.Element(worksheetNs + "filters");
+        filters.Should().NotBeNull(because);
+        filters!.Attribute("blank")!.Value.Should().Be("1", because);
+        filters.Elements(worksheetNs + "filter")
+            .Where(filter => string.Equals(filter.Attribute("val")?.Value, "A", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
     }
 
     private static void AssertWorksheetSortState(Stream package, string because)
