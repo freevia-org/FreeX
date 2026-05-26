@@ -148,12 +148,23 @@ internal static class XlsxWorksheetAutoFilterMapper
         var hasDynamicFilter = filterColumn.DynamicFilter is not null;
         var hasColorFilter = filterColumn.ColorFilter is not null;
         var hasIconFilter = filterColumn.IconFilter is not null;
-        if (!hasCustomFilters && !hasTop10 && !hasDynamicFilter && !hasColorFilter && !hasIconFilter && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
+        if (!hasCustomFilters && !hasTop10 && !hasDynamicFilter && !hasColorFilter && !hasIconFilter &&
+            (filterColumn.Values.Count > 0 ||
+             filterColumn.IncludeBlank ||
+             filterColumn.DateGroups.Count > 0 ||
+             filterColumn.NativeFiltersAttributes?.Count > 0))
         {
-            element.Add(new XElement(
+            var filters = new XElement(
                 worksheetNs + "filters",
                 filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
-                filterColumn.Values.Select(value => new XElement(worksheetNs + "filter", new XAttribute("val", value)))));
+                filterColumn.Values.Select(value => new XElement(worksheetNs + "filter", new XAttribute("val", value))),
+                filterColumn.DateGroups.Select(dateGroup => ToDateGroupItemXml(dateGroup, worksheetNs)));
+            foreach (var (name, value) in filterColumn.NativeFiltersAttributes ?? new Dictionary<string, string>())
+            {
+                TrySetNativeAttributeIfMissing(filters, name, value);
+            }
+
+            element.Add(filters);
         }
 
         if (hasCustomFilters)
@@ -229,6 +240,34 @@ internal static class XlsxWorksheetAutoFilterMapper
         }
 
         return element;
+    }
+
+    private static XElement ToDateGroupItemXml(WorksheetAutoFilterDateGroupItemModel dateGroup, XNamespace worksheetNs)
+    {
+        var element = new XElement(worksheetNs + "dateGroupItem");
+        SetRawOrIntAttribute(element, "year", dateGroup.YearRaw, dateGroup.Year);
+        SetRawOrIntAttribute(element, "month", dateGroup.MonthRaw, dateGroup.Month);
+        SetRawOrIntAttribute(element, "day", dateGroup.DayRaw, dateGroup.Day);
+        SetRawOrIntAttribute(element, "hour", dateGroup.HourRaw, dateGroup.Hour);
+        SetRawOrIntAttribute(element, "minute", dateGroup.MinuteRaw, dateGroup.Minute);
+        SetRawOrIntAttribute(element, "second", dateGroup.SecondRaw, dateGroup.Second);
+        if (!string.IsNullOrWhiteSpace(dateGroup.DateTimeGrouping))
+            element.SetAttributeValue("dateTimeGrouping", dateGroup.DateTimeGrouping);
+
+        foreach (var (name, value) in dateGroup.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            TrySetNativeAttributeIfMissing(element, name, value);
+        }
+
+        return element;
+    }
+
+    private static void SetRawOrIntAttribute(XElement element, string name, string? rawValue, int? value)
+    {
+        if (rawValue is not null)
+            element.SetAttributeValue(name, rawValue);
+        else if (value is not null)
+            element.SetAttributeValue(name, value.Value.ToString(CultureInfo.InvariantCulture));
     }
 
     private static XElement ToDynamicFilterXml(WorksheetAutoFilterDynamicFilterModel dynamicFilter, XNamespace worksheetNs)
@@ -363,6 +402,10 @@ internal static class XlsxWorksheetAutoFilterMapper
             var nativeAttributes = column.Attributes()
                 .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "colId")
                 .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+            var nativeFiltersAttributes = filters?
+                .Attributes()
+                .Where(attribute => !IsWorksheetAutoFilterModeledAttribute(attribute, "blank"))
+                .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
             var customFiltersAnd = XlsxXmlAttributeReader.ReadBoolAttribute(customFilters, "and");
             var nativeCustomFiltersAttributes = customFilters?
                 .Attributes()
@@ -391,11 +434,18 @@ internal static class XlsxWorksheetAutoFilterMapper
                 ReadDynamicFilter(dynamicFilter),
                 ReadColorFilter(colorFilter),
                 ReadIconFilter(iconFilter),
+                filters?
+                    .Elements(worksheetNs + "dateGroupItem")
+                    .Select(ReadDateGroupItem)
+                    .ToArray() ?? [],
+                nativeFiltersAttributes?.Count > 0 ? nativeFiltersAttributes : null,
                 nativeFilters,
                 nativeAttributes.Count == 0 ? null : nativeAttributes);
             if (filterColumn.ColumnId >= 0 &&
                 (filterColumn.Values.Count > 0 ||
                  filterColumn.IncludeBlank ||
+                 filterColumn.DateGroups.Count > 0 ||
+                 filterColumn.NativeFiltersAttributes?.Count > 0 ||
                  filterColumn.CustomFilters.Count > 0 ||
                  filterColumn.CustomFiltersAndRaw is not null ||
                  filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
@@ -426,6 +476,35 @@ internal static class XlsxWorksheetAutoFilterMapper
             CellColor: XlsxXmlAttributeReader.ReadBoolAttribute(colorFilter, "cellColor", defaultValue: true),
             DifferentialFormatIdRaw: colorFilter.Attribute("dxfId")?.Value,
             CellColorRaw: colorFilter.Attribute("cellColor")?.Value,
+            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
+    }
+
+    private static WorksheetAutoFilterDateGroupItemModel ReadDateGroupItem(XElement dateGroup)
+    {
+        var nativeAttributes = dateGroup.Attributes()
+            .Where(attribute =>
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "year") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "month") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "day") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "hour") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "minute") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "second") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "dateTimeGrouping"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return new WorksheetAutoFilterDateGroupItemModel(
+            Year: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "year"),
+            Month: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "month"),
+            Day: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "day"),
+            Hour: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "hour"),
+            Minute: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "minute"),
+            Second: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "second"),
+            DateTimeGrouping: dateGroup.Attribute("dateTimeGrouping")?.Value,
+            YearRaw: dateGroup.Attribute("year")?.Value,
+            MonthRaw: dateGroup.Attribute("month")?.Value,
+            DayRaw: dateGroup.Attribute("day")?.Value,
+            HourRaw: dateGroup.Attribute("hour")?.Value,
+            MinuteRaw: dateGroup.Attribute("minute")?.Value,
+            SecondRaw: dateGroup.Attribute("second")?.Value,
             NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
     }
 
@@ -512,6 +591,8 @@ internal static class XlsxWorksheetAutoFilterMapper
             if (filterColumn.CustomFilters.Count > 0 ||
                 filterColumn.CustomFiltersAndRaw is not null ||
                 filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
+                filterColumn.DateGroups.Count > 0 ||
+                filterColumn.NativeFiltersAttributes?.Count > 0 ||
                 filterColumn.ColorFilter is not null ||
                 filterColumn.IconFilter is not null ||
                 filterColumn.NativeFilterXmls.Count > 0)
