@@ -40,6 +40,8 @@ public sealed partial class SelectDataSourceDialog : Window
         stack.Children.Add(CreateReferenceEditor(_rangeBox, "Select chart data range"));
         _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
         stack.Children.Add(_switchRowColumnBox);
+        _seriesList.MouseDoubleClick += EditSeriesButton_Click;
+        _axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;
         stack.Children.Add(CreateSourceListPanel(
             "Legend Entries (Series)",
             "Series list",
