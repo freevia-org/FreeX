@@ -16,8 +16,10 @@ public sealed partial class FindReplaceDialog : Window
     private IReadOnlyList<FindResult> _results = [];
     private int _currentIndex = -1;
     private string _lastSearch = string.Empty;
+    private string _lastSearchKey = string.Empty;
     private StyleDiff? _findFormatDiff;
     private StyleDiff? _replaceFormatDiff;
+    private bool _syncingSearchText;
 
     public FindReplaceDialog(
         Func<Workbook> getWorkbook,
@@ -86,20 +88,41 @@ public sealed partial class FindReplaceDialog : Window
         if (e.Key == System.Windows.Input.Key.Enter) FindNext();
     }
 
+    private void FindBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_syncingSearchText)
+            return;
+
+        _syncingSearchText = true;
+        try
+        {
+            if (ReferenceEquals(sender, FindBox))
+                ReplaceFindBox.Text = FindBox.Text;
+            else if (ReferenceEquals(sender, ReplaceFindBox))
+                FindBox.Text = ReplaceFindBox.Text;
+        }
+        finally
+        {
+            _syncingSearchText = false;
+        }
+    }
+
     private void FindNext()
     {
         var search = SearchText;
         if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
 
-        if (search != _lastSearch)
-        {
-            _currentIndex = -1;
-            _lastSearch = search;
-        }
+        var options = CreateFindOptions();
+        var searchKey = CreateSearchKey(search, options);
+        var isNewSearch = searchKey != _lastSearchKey;
+        if (isNewSearch)
+            _lastSearchKey = searchKey;
+
+        _lastSearch = search;
 
         _results = FindReplaceService.Find(
             _getWorkbook(), search,
-            CreateFindOptions(),
+            options,
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true);
 
@@ -110,6 +133,15 @@ public sealed partial class FindReplaceDialog : Window
             StatusLabel.Text = "No matches found.";
             _currentIndex = -1;
             return;
+        }
+
+        if (isNewSearch)
+        {
+            _currentIndex = FindReplaceDialogPlanner.FindPreviousResultIndexBeforeActiveCell(
+                _getWorkbook(),
+                _results,
+                _getActiveSelectionCell(),
+                options.SearchOrder);
         }
 
         _currentIndex = (_currentIndex + 1) % _results.Count;
@@ -124,10 +156,12 @@ public sealed partial class FindReplaceDialog : Window
         if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
 
         _lastSearch = search;
+        var options = CreateFindOptions();
+        _lastSearchKey = CreateSearchKey(search, options);
         _currentIndex = -1;
         _results = FindReplaceService.Find(
             _getWorkbook(), search,
-            CreateFindOptions(),
+            options,
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true);
 
@@ -230,6 +264,20 @@ public sealed partial class FindReplaceDialog : Window
                 _ => FindLookIn.Values
             },
             RequiredFormat: _findFormatDiff);
+
+    private string CreateSearchKey(string search, FindOptions options) =>
+        string.Join(
+            "|",
+            search,
+            MatchCaseBox.IsChecked == true,
+            MatchEntireBox.IsChecked == true,
+            options.Within,
+            options.CurrentSheetId?.ToString() ?? "",
+            options.SearchOrder,
+            options.LookIn,
+            FormatKey(options.RequiredFormat));
+
+    private static string FormatKey(StyleDiff? format) => format?.GetHashCode().ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
 
     private void PickFormat(ref StyleDiff? target, params Button[] buttons)
     {

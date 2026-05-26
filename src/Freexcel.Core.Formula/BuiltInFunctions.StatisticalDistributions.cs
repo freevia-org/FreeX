@@ -593,11 +593,15 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        double d1 = Math.Truncate(ToNumber(args[1]));
-        double d2 = Math.Truncate(ToNumber(args[2]));
-        bool cum = ToBool(args[3]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => FDistScalar(value, d1, d2, cum));
-        return FDistScalar(args[0], d1, d2, cum);
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], FDistScalar);
+    }
+
+    private static ScalarValue FDistScalar(ScalarValue xValue, ScalarValue d1Value, ScalarValue d2Value, ScalarValue cumulativeValue)
+    {
+        double d1 = Math.Truncate(ToNumber(d1Value));
+        double d2 = Math.Truncate(ToNumber(d2Value));
+        bool cum = ToBool(cumulativeValue);
+        return FDistScalar(xValue, d1, d2, cum);
     }
 
     private static ScalarValue FDistScalar(ScalarValue xValue, double d1, double d2, bool cum)
@@ -612,10 +616,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double d1 = Math.Truncate(ToNumber(args[1]));
-        double d2 = Math.Truncate(ToNumber(args[2]));
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => FDistRtScalar(value, d1, d2));
-        return FDistRtScalar(args[0], d1, d2);
+        return MapTernaryTextArgs(args[0], args[1], args[2], FDistRtScalar);
+    }
+
+    private static ScalarValue FDistRtScalar(ScalarValue xValue, ScalarValue d1Value, ScalarValue d2Value)
+    {
+        double d1 = Math.Truncate(ToNumber(d1Value));
+        double d2 = Math.Truncate(ToNumber(d2Value));
+        return FDistRtScalar(xValue, d1, d2);
     }
 
     private static ScalarValue FDistRtScalar(ScalarValue xValue, double d1, double d2)
@@ -630,10 +638,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double d1 = Math.Truncate(ToNumber(args[1]));
-        double d2 = Math.Truncate(ToNumber(args[2]));
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => FInvScalar(value, d1, d2));
-        return FInvScalar(args[0], d1, d2);
+        return MapTernaryTextArgs(args[0], args[1], args[2], FInvScalar);
+    }
+
+    private static ScalarValue FInvScalar(ScalarValue probabilityValue, ScalarValue d1Value, ScalarValue d2Value)
+    {
+        double d1 = Math.Truncate(ToNumber(d1Value));
+        double d2 = Math.Truncate(ToNumber(d2Value));
+        return FInvScalar(probabilityValue, d1, d2);
     }
 
     private static ScalarValue FInvScalar(ScalarValue probabilityValue, double d1, double d2)
@@ -648,10 +660,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double d1 = Math.Truncate(ToNumber(args[1]));
-        double d2 = Math.Truncate(ToNumber(args[2]));
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => FInvRtScalar(value, d1, d2));
-        return FInvRtScalar(args[0], d1, d2);
+        return MapTernaryTextArgs(args[0], args[1], args[2], FInvRtScalar);
+    }
+
+    private static ScalarValue FInvRtScalar(ScalarValue probabilityValue, ScalarValue d1Value, ScalarValue d2Value)
+    {
+        double d1 = Math.Truncate(ToNumber(d1Value));
+        double d2 = Math.Truncate(ToNumber(d2Value));
+        return FInvRtScalar(probabilityValue, d1, d2);
     }
 
     private static ScalarValue FInvRtScalar(ScalarValue probabilityValue, double d1, double d2)
@@ -685,10 +701,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double df = Math.Truncate(ToNumber(args[1]));
-        bool cum = ToBool(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ChiSqDistScalar(value, df, cum));
-        return ChiSqDistScalar(args[0], df, cum);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ChiSqDistScalar);
+    }
+
+    private static ScalarValue ChiSqDistScalar(ScalarValue xValue, ScalarValue dfValue, ScalarValue cumulativeValue)
+    {
+        double df = Math.Truncate(ToNumber(dfValue));
+        bool cum = ToBool(cumulativeValue);
+        return ChiSqDistScalar(xValue, df, cum);
     }
 
     private static ScalarValue ChiSqDistScalar(ScalarValue xValue, double df, bool cum)
@@ -702,9 +722,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double df = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ChiSqDistRtScalar(value, df));
-        return ChiSqDistRtScalar(args[0], df);
+        return MapBinaryMathArgs(args[0], args[1], ChiSqDistRtScalar);
+    }
+
+    private static ScalarValue ChiSqDistRtScalar(ScalarValue xValue, ScalarValue dfValue)
+    {
+        double df = Math.Truncate(ToNumber(dfValue));
+        return ChiSqDistRtScalar(xValue, df);
     }
 
     private static ScalarValue ChiSqDistRtScalar(ScalarValue xValue, double df)
@@ -718,9 +742,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double df = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ChiSqInvScalar(value, df));
-        return ChiSqInvScalar(args[0], df);
+        return MapBinaryMathArgs(args[0], args[1], ChiSqInvScalar);
+    }
+
+    private static ScalarValue ChiSqInvScalar(ScalarValue probabilityValue, ScalarValue dfValue)
+    {
+        double df = Math.Truncate(ToNumber(dfValue));
+        return ChiSqInvScalar(probabilityValue, df);
     }
 
     private static ScalarValue ChiSqInvScalar(ScalarValue probabilityValue, double df)
@@ -734,9 +762,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double df = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ChiSqInvRtScalar(value, df));
-        return ChiSqInvRtScalar(args[0], df);
+        return MapBinaryMathArgs(args[0], args[1], ChiSqInvRtScalar);
+    }
+
+    private static ScalarValue ChiSqInvRtScalar(ScalarValue probabilityValue, ScalarValue dfValue)
+    {
+        double df = Math.Truncate(ToNumber(dfValue));
+        return ChiSqInvRtScalar(probabilityValue, df);
     }
 
     private static ScalarValue ChiSqInvRtScalar(ScalarValue probabilityValue, double df)
@@ -872,9 +904,12 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double stdev = ToNumber(args[1]), size = ToNumber(args[2]);
-        if (args[0] is RangeValue alphaRange) return MapUnaryTextRange(alphaRange, value => ConfidenceNormScalar(value, stdev, size));
-        return ConfidenceNormScalar(args[0], stdev, size);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ConfidenceNormScalar);
+    }
+
+    private static ScalarValue ConfidenceNormScalar(ScalarValue alphaValue, ScalarValue stdevValue, ScalarValue sizeValue)
+    {
+        return ConfidenceNormScalar(alphaValue, ToNumber(stdevValue), ToNumber(sizeValue));
     }
 
     private static ScalarValue ConfidenceNormScalar(ScalarValue alphaValue, double stdev, double size)
@@ -890,9 +925,12 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double stdev = ToNumber(args[1]), size = ToNumber(args[2]);
-        if (args[0] is RangeValue alphaRange) return MapUnaryTextRange(alphaRange, value => ConfidenceTScalar(value, stdev, size));
-        return ConfidenceTScalar(args[0], stdev, size);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ConfidenceTScalar);
+    }
+
+    private static ScalarValue ConfidenceTScalar(ScalarValue alphaValue, ScalarValue stdevValue, ScalarValue sizeValue)
+    {
+        return ConfidenceTScalar(alphaValue, ToNumber(stdevValue), ToNumber(sizeValue));
     }
 
     private static ScalarValue ConfidenceTScalar(ScalarValue alphaValue, double stdev, double size)
@@ -1018,10 +1056,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double lambda = ToNumber(args[1]);
-        bool cum = ToBool(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => PoissonDistScalar(value, lambda, cum));
-        return PoissonDistScalar(args[0], lambda, cum);
+        return MapTernaryTextArgs(args[0], args[1], args[2], PoissonDistScalar);
+    }
+
+    private static ScalarValue PoissonDistScalar(ScalarValue xValue, ScalarValue lambdaValue, ScalarValue cumulativeValue)
+    {
+        double lambda = ToNumber(lambdaValue);
+        bool cum = ToBool(cumulativeValue);
+        return PoissonDistScalar(xValue, lambda, cum);
     }
 
     private static ScalarValue PoissonDistScalar(ScalarValue xValue, double lambda, bool cum)
@@ -1077,10 +1119,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double lambda = ToNumber(args[1]);
-        bool cum = ToBool(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ExponDistScalar(value, lambda, cum));
-        return ExponDistScalar(args[0], lambda, cum);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ExponDistScalar);
+    }
+
+    private static ScalarValue ExponDistScalar(ScalarValue xValue, ScalarValue lambdaValue, ScalarValue cumulativeValue)
+    {
+        double lambda = ToNumber(lambdaValue);
+        bool cum = ToBool(cumulativeValue);
+        return ExponDistScalar(xValue, lambda, cum);
     }
 
     private static ScalarValue ExponDistScalar(ScalarValue xValue, double lambda, bool cum)

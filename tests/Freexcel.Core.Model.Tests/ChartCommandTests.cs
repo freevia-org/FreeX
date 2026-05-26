@@ -2224,6 +2224,121 @@ public sealed class ChartCommandTests
         sheet.Charts[0].ExplodedSliceDistance.Should().Be(0.2);
     }
 
+    [Fact]
+    public void ChartTypeSupport_IdentifiesBarGapWidthChartTypes()
+    {
+        var supportedTypes = new[]
+        {
+            ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.ThreeDColumn,
+            ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar
+        };
+        var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
+
+        supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsBarGapWidth(type));
+        unsupportedTypes.Should().OnlyContain(type => !ChartTypeSupport.SupportsBarGapWidth(type));
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_AppliesBarGapWidthToBarChart()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var chart = new ChartModel { Type = ChartType.Column, DataRange = CreateChartRange(sheet) };
+        sheet.Charts.Add(chart);
+
+        var command = new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BarGapWidth: 200));
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.BarGapWidth.Should().Be(200);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_ClampsBarGapWidthTo0To500()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var chart = new ChartModel { Type = ChartType.Column, DataRange = CreateChartRange(sheet) };
+        sheet.Charts.Add(chart);
+
+        new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BarGapWidth: -10)).Apply(ctx);
+        chart.BarGapWidth.Should().Be(0);
+
+        new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BarGapWidth: 600)).Apply(ctx);
+        chart.BarGapWidth.Should().Be(500);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_AppliesBarOverlapToBarChart()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var chart = new ChartModel { Type = ChartType.Bar, DataRange = CreateChartRange(sheet) };
+        sheet.Charts.Add(chart);
+
+        new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BarOverlap: -30)).Apply(ctx);
+        chart.BarOverlap.Should().Be(-30);
+
+        new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BarOverlap: -200)).Apply(ctx);
+        chart.BarOverlap.Should().Be(-100);
+
+        new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BarOverlap: 200)).Apply(ctx);
+        chart.BarOverlap.Should().Be(100);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_AppliesBubbleScaleAndOptions()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var chart = new ChartModel { Type = ChartType.Bubble, DataRange = CreateChartRange(sheet) };
+        sheet.Charts.Add(chart);
+
+        new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BubbleScale: 150, ShowNegativeBubbles: true, BubbleSizeRepresents: ChartBubbleSizeRepresents.Width)).Apply(ctx);
+
+        chart.BubbleScale.Should().Be(150);
+        chart.ShowNegativeBubbles.Should().BeTrue();
+        chart.BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_ClampsBubbleScaleTo1To300()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var chart = new ChartModel { Type = ChartType.Bubble, DataRange = CreateChartRange(sheet) };
+        sheet.Charts.Add(chart);
+
+        new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BubbleScale: 0)).Apply(ctx);
+        chart.BubbleScale.Should().Be(1);
+
+        new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BubbleScale: 400)).Apply(ctx);
+        chart.BubbleScale.Should().Be(300);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_UndoRestoresBarGapWidthAndOverlap()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var chart = new ChartModel { Type = ChartType.Column, DataRange = CreateChartRange(sheet), BarGapWidth = 100, BarOverlap = 10 };
+        sheet.Charts.Add(chart);
+
+        var command = new SetChartLayoutCommand(sheet.Id, chart.Id, new ChartLayoutOptions(BarGapWidth: 250, BarOverlap: 50));
+        command.Apply(ctx);
+        chart.BarGapWidth.Should().Be(250);
+        chart.BarOverlap.Should().Be(50);
+
+        command.Revert(ctx);
+        chart.BarGapWidth.Should().Be(100);
+        chart.BarOverlap.Should().Be(10);
+    }
+
     private static GridRange CreateChartRange(Sheet sheet) =>
         new(
             new CellAddress(sheet.Id, 1, 1),

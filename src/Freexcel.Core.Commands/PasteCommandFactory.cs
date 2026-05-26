@@ -16,7 +16,8 @@ public static class PasteCommandFactory
     public static IWorkbookCommand CreateExternalTextPasteCommand(
         SheetId targetSheetId,
         CellAddress destination,
-        IReadOnlyList<IReadOnlyList<string>> rows)
+        IReadOnlyList<IReadOnlyList<string>> rows,
+        bool preserveText = false)
     {
         var edits = new List<(CellAddress Address, Cell Cell)>();
         for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
@@ -27,7 +28,8 @@ public static class PasteCommandFactory
                     targetSheetId,
                     destination.Row + (uint)rowIndex,
                     destination.Col + (uint)colIndex);
-                edits.Add((address, Cell.FromValue(ParseClipboardValue(rows[rowIndex][colIndex]))));
+                var text = rows[rowIndex][colIndex];
+                edits.Add((address, Cell.FromValue(preserveText ? new TextValue(text) : ParseClipboardValue(text))));
             }
         }
 

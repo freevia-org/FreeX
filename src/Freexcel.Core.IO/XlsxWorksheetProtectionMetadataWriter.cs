@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -28,6 +29,13 @@ internal static class XlsxWorksheetProtectionMetadataWriter
             if (root is null)
                 continue;
 
+            if (!sheet.IsProtected)
+            {
+                root.Element(worksheetNs + "sheetProtection")?.Remove();
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+                continue;
+            }
+
             var protection = root.Element(worksheetNs + "sheetProtection");
             if (protection is null)
             {
@@ -44,7 +52,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                     continue;
                 }
 
-                protection.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
             }
 
             protection.Elements().Remove();
@@ -87,5 +95,22 @@ internal static class XlsxWorksheetProtectionMetadataWriter
         }
 
         root.Add(protection);
+    }
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 }

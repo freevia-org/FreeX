@@ -420,9 +420,18 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("ConfigureFilterFamilySubmenu(menuPlan);");
         source.Should().Contain("private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)");
         source.Should().Contain("new ContextMenu()");
+        source.Should().Contain("submenu.Opened += AutoFilterFamilySubmenu_Opened;");
+        source.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips(submenu.Items.OfType<MenuItem>());");
         source.Should().Contain("parentButton.ContextMenu = submenu;");
         source.Should().Contain("menuItem.Click += (_, _) => ApplyFilterFamilyChild(child);");
+        source.Should().Contain("private static void AutoFilterFamilySubmenu_Opened(object sender, RoutedEventArgs e)");
+        source.Should().Contain("Keyboard.Focus(firstEnabledItem);");
         source.Should().Contain("private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)");
+        source.Should().Contain("FocusSelectedCriteriaInput(option);");
+        source.Should().Contain("private void FocusSelectedCriteriaInput(AutoFilterCriteriaOption? option)");
+        source.Should().Contain("FocusCriteriaInput(_betweenMinBox);");
+        source.Should().Contain("FocusCriteriaInput(_topBottomCountBox);");
+        source.Should().Contain("FocusCriteriaInput(_criteriaValueBox);");
         source.Should().Contain("AutoFilterMenuEntryKind.FilterFamilyCommand");
     }
 

@@ -208,7 +208,10 @@ public sealed partial class XlsxFileAdapter
                         new CellAddress(sheet.Id, change.Address.Row, change.Address.Col),
                         change.Value))
                     .ToList(),
-                scenario.Comment);
+                scenario.Comment,
+                scenario.Hidden,
+                scenario.Locked,
+                scenario.User);
 
             if (loadedScenarioNames.Add(remappedScenario.Name))
             {

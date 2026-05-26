@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
 
@@ -64,19 +65,31 @@ internal static partial class XlsxWorksheetMetadataPreserver
         return changed;
     }
 
-    private static bool MergeWorksheetSheetViews(XElement? sourceSheetViews, XElement targetRoot, XNamespace workbookNs)
+    private static bool MergeWorksheetSheetViews(
+        XElement? sourceSheetViews,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        Sheet? sheet)
     {
         if (sourceSheetViews is null)
             return false;
 
-        var sourceViews = sourceSheetViews.Elements(workbookNs + "sheetView").ToList();
+        var modeledAdditionalViewIds = sheet?.AdditionalViews?.Views
+            .Select(view => view.WorkbookViewId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sourceViews = sourceSheetViews
+            .Elements(workbookNs + "sheetView")
+            .Where(view => ShouldPreserveWorksheetSheetView(view, modeledAdditionalViewIds))
+            .ToList();
         if (sourceViews.Count == 0)
             return false;
 
         var targetSheetViews = targetRoot.Element(workbookNs + "sheetViews");
         if (targetSheetViews is null)
         {
-            targetRoot.AddFirst(new XElement(sourceSheetViews));
+            targetRoot.AddFirst(new XElement(sourceSheetViews.Name, sourceSheetViews.Attributes(), sourceViews.Select(view => new XElement(view))));
             return true;
         }
 
@@ -115,6 +128,18 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    private static bool ShouldPreserveWorksheetSheetView(XElement sourceView, HashSet<string>? modeledAdditionalViewIds)
+    {
+        var workbookViewId = sourceView.Attribute("workbookViewId")?.Value;
+        if (string.IsNullOrWhiteSpace(workbookViewId) ||
+            string.Equals(workbookViewId, "0", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return modeledAdditionalViewIds?.Contains(workbookViewId) == true;
     }
 
 }

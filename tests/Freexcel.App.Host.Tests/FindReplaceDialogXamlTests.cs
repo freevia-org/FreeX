@@ -65,6 +65,41 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_SharesFindWhatTextAcrossFindAndReplaceTabs()
+    {
+        var document = LoadDialogXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        AssertNamedElementHasAttribute(document, presentation, xaml, "TextBox", "FindBox", "TextChanged", "FindBox_TextChanged");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "TextBox", "ReplaceFindBox", "TextChanged", "FindBox_TextChanged");
+
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            workbook.AddSheet("Sheet1");
+            var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+            var dialog = new FindReplaceDialog(() => workbook, commandBus, _ => { });
+            dialog.Show();
+            try
+            {
+                var findBox = GetPrivateControl<TextBox>(dialog, "FindBox");
+                var replaceFindBox = GetPrivateControl<TextBox>(dialog, "ReplaceFindBox");
+
+                findBox.Text = "budget";
+                replaceFindBox.Text.Should().Be("budget");
+
+                replaceFindBox.Text = "forecast";
+                findBox.Text.Should().Be("forecast");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void Dialog_ExposesExcelLikeOptionsAndFindAllSurface()
     {
         var document = LoadDialogXaml();
@@ -275,6 +310,142 @@ public sealed class FindReplaceDialogXamlTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void FindNext_StartsAfterActiveCellForNewSearch()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Budget");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var b1 = new CellAddress(sheet.Id, 1, 2);
+            var a2 = new CellAddress(sheet.Id, 2, 1);
+            sheet.SetCell(a1, new TextValue("match first"));
+            sheet.SetCell(b1, new TextValue("match next"));
+            sheet.SetCell(a2, new TextValue("match later"));
+            var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+            CellAddress? navigated = null;
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                commandBus,
+                address => navigated = address,
+                getCurrentSheetId: () => sheet.Id,
+                getActiveSelectionCell: () => a1);
+            dialog.Show();
+            try
+            {
+                GetPrivateControl<TextBox>(dialog, "FindBox").Text = "match";
+
+                InvokePrivate(dialog, "FindNext_Click");
+
+                navigated.Should().Be(b1);
+                GetPrivateControl<TextBlock>(dialog, "StatusLabel").Text.Should().Be("Match 2 of 3");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FindNext_ReseedsAfterActiveCellWhenSearchOrderChanges()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Budget");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var b1 = new CellAddress(sheet.Id, 1, 2);
+            var a2 = new CellAddress(sheet.Id, 2, 1);
+            sheet.SetCell(a1, new TextValue("match first"));
+            sheet.SetCell(b1, new TextValue("match by rows"));
+            sheet.SetCell(a2, new TextValue("match by columns"));
+            var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+            CellAddress? navigated = null;
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                commandBus,
+                address => navigated = address,
+                getCurrentSheetId: () => sheet.Id,
+                getActiveSelectionCell: () => a1);
+            dialog.Show();
+            try
+            {
+                GetPrivateControl<TextBox>(dialog, "FindBox").Text = "match";
+
+                InvokePrivate(dialog, "FindNext_Click");
+                navigated.Should().Be(b1);
+
+                GetPrivateControl<ComboBox>(dialog, "SearchCombo").SelectedIndex = 1;
+                InvokePrivate(dialog, "FindNext_Click");
+
+                navigated.Should().Be(a2);
+                GetPrivateControl<TextBlock>(dialog, "StatusLabel").Text.Should().Be("Match 2 of 3");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FindPreviousResultIndexBeforeActiveCell_UsesWorkbookOrderAndWraps()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Budget");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var results = new[]
+        {
+            new FindResult(a1, "match first"),
+            new FindResult(b1, "match by rows"),
+            new FindResult(a2, "match later")
+        };
+
+        FindReplaceDialogPlanner.FindPreviousResultIndexBeforeActiveCell(
+                workbook,
+                results,
+                a1,
+                FindSearchOrder.ByRows)
+            .Should()
+            .Be(0);
+
+        FindReplaceDialogPlanner.FindPreviousResultIndexBeforeActiveCell(
+                workbook,
+                results,
+                new CellAddress(sheet.Id, 99, 99),
+                FindSearchOrder.ByRows)
+            .Should()
+            .Be(2);
+    }
+
+    [Fact]
+    public void FindPreviousResultIndexBeforeActiveCell_UsesColumnMajorOrder()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Budget");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var results = new[]
+        {
+            new FindResult(a1, "match first"),
+            new FindResult(a2, "match by columns"),
+            new FindResult(b1, "match later")
+        };
+
+        FindReplaceDialogPlanner.FindPreviousResultIndexBeforeActiveCell(
+                workbook,
+                results,
+                a1,
+                FindSearchOrder.ByColumns)
+            .Should()
+            .Be(0);
     }
 
     [Fact]

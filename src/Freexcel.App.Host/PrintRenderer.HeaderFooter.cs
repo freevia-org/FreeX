@@ -57,6 +57,7 @@ public static partial class PrintRenderer
         dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pageW, pageH));
         DrawHeaderFooter(
             dc,
+            textOverlays,
             pageW,
             pageH,
             marginLeft,
@@ -85,7 +86,7 @@ public static partial class PrintRenderer
         var gridTop = contentTop + measurement.HeaderHeight;
 
         if (printHeadings)
-            DrawPrintHeadings(dc, contentLeft, contentTop, measurement, pageRows, pageColumns);
+            DrawPrintHeadings(dc, textOverlays, contentLeft, contentTop, measurement, pageRows, pageColumns);
 
         dc.DrawRectangle(null, new Pen(Brushes.Black, 0.5),
             new Rect(gridLeft, gridTop, colWidth * pageColumns.Count, rowHeight * pageRows.Count));
