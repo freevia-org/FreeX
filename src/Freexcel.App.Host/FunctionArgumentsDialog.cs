@@ -48,8 +48,9 @@ public sealed partial class FunctionArgumentsDialog : Window
             Margin = new Thickness(0, 0, 0, 12)
         });
 
-        foreach (var argument in _arguments)
-            AddArgumentRow(body, argument);
+        var argumentLabels = CreateArgumentLabels(_arguments);
+        for (var index = 0; index < _arguments.Count; index++)
+            AddArgumentRow(body, _arguments[index], argumentLabels[index]);
 
         body.Children.Add(new TextBlock { Text = "Formula result:", Margin = new Thickness(0, 12, 0, 2) });
         _formulaPreview.FontWeight = FontWeights.SemiBold;
@@ -80,7 +81,35 @@ public sealed partial class FunctionArgumentsDialog : Window
         return $"{normalized}({string.Join(", ", cleaned)})";
     }
 
-    private void AddArgumentRow(Panel body, FunctionArgumentSpec argument)
+    public static IReadOnlyList<string> CreateArgumentLabels(IEnumerable<FunctionArgumentSpec> arguments)
+    {
+        var usedAccessKeys = new HashSet<char>();
+        return arguments.Select(argument => CreateArgumentLabel(argument.Name, usedAccessKeys)).ToList();
+    }
+
+    private static string CreateArgumentLabel(string argumentName, ISet<char> usedAccessKeys)
+    {
+        var accessIndex = -1;
+        for (var index = 0; index < argumentName.Length; index++)
+        {
+            var candidate = argumentName[index];
+            if (!char.IsLetterOrDigit(candidate))
+                continue;
+
+            var normalized = char.ToUpperInvariant(candidate);
+            if (!usedAccessKeys.Add(normalized))
+                continue;
+
+            accessIndex = index;
+            break;
+        }
+
+        var label = string.Concat(argumentName.Select((character, index) =>
+            $"{(index == accessIndex ? "_" : "")}{(character == '_' ? "__" : character)}"));
+        return $"{label}:";
+    }
+
+    private void AddArgumentRow(Panel body, FunctionArgumentSpec argument, string labelText)
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
@@ -94,7 +123,7 @@ public sealed partial class FunctionArgumentsDialog : Window
 
         var label = new Label
         {
-            Content = argument.Optional ? $"{argument.Name}:" : $"{argument.Name}:",
+            Content = labelText,
             Target = box,
             Padding = new Thickness(0),
             VerticalAlignment = VerticalAlignment.Center

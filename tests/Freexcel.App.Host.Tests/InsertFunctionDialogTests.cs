@@ -94,6 +94,23 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void FunctionArgumentsDialog_ArgumentLabelsExposeAccessKeysAndTargets()
+    {
+        FunctionArgumentsDialog.CreateArgumentLabels(FunctionArgumentsDialog.GetArgumentSpecs("IF"))
+            .Should()
+            .Equal("_Logical__test:", "_Value__if__true:", "V_alue__if__false:");
+
+        var xlookupLabels = FunctionArgumentsDialog.CreateArgumentLabels(FunctionArgumentsDialog.GetArgumentSpecs("XLOOKUP"));
+        xlookupLabels.Should().AllSatisfy(label => label.Should().Contain("_"));
+        xlookupLabels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
+
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
+        source.Should().Contain("AddArgumentRow(body, _arguments[index], argumentLabels[index])");
+        source.Should().Contain("Content = labelText");
+        source.Should().Contain("Target = box");
+    }
+
+    [Fact]
     public void FunctionArgumentsDialogOpenedFromKeyboard_FocusesFirstArgumentBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
@@ -161,5 +178,15 @@ public sealed class InsertFunctionDialogTests
         source.Should().Contain("_Help on this function");
         source.Should().Contain("FunctionArgumentsDialog");
         source.Should().Contain("argumentsDialog.ResultFormula");
+    }
+
+    private static char GetAccessKey(string label)
+    {
+        var index = label.IndexOf('_', StringComparison.Ordinal);
+        while (index >= 0 && index + 1 < label.Length && label[index + 1] == '_')
+            index = label.IndexOf('_', index + 2);
+
+        index.Should().BeGreaterThanOrEqualTo(0);
+        return char.ToUpperInvariant(label[index + 1]);
     }
 }
