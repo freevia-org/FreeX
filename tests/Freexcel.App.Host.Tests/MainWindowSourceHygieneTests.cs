@@ -138,8 +138,9 @@ public sealed class MainWindowSourceHygieneTests
 
         xaml.Should().Contain("Content=\"Save _As\"");
         xaml.Should().Contain("Click=\"SaveAsButton_Click\"");
-        backstageSource.Should().Contain("private async void SaveAsButton_Click(object sender, RoutedEventArgs e) =>");
+        backstageSource.Should().Contain("private async void SaveAsButton_Click(object sender, RoutedEventArgs e)");
         backstageSource.Should().Contain("await SaveWorkbookWithDialogAsync();");
+        backstageSource.Should().Contain("HideStartScreen();");
     }
 
     [Fact]
