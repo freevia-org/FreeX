@@ -60,6 +60,13 @@ public partial class MainWindow
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
         }
 
+        while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
+               CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: false))
+        {
+            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+            SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
+        }
+
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
         _ribbonCompact = compacted;
     }

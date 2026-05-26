@@ -140,6 +140,21 @@ internal static class PdfTextOverlayExtractor
                 contentControl.FontStyle == FontStyles.Italic || contentControl.FontStyle == FontStyles.Oblique,
                 ResolveColor(contentControl.Foreground)));
         }
+        else if (element is ComboBox { IsDropDownOpen: false } comboBox)
+        {
+            if (ExtractComboBoxSelectionText(comboBox) is { Length: > 0 } comboBoxText)
+            {
+                overlays.Add(new PdfTextOverlay(
+                    comboBoxText,
+                    x,
+                    y,
+                    comboBox.FontSize,
+                    comboBox.FontFamily.Source,
+                    comboBox.FontWeight >= FontWeights.SemiBold,
+                    comboBox.FontStyle == FontStyles.Italic || comboBox.FontStyle == FontStyles.Oblique,
+                    ResolveColor(comboBox.Foreground)));
+            }
+        }
         else if (element is ItemsControl itemsControl && ExtractItemsText(itemsControl) is { Length: > 0 } itemsText)
         {
             overlays.Add(new PdfTextOverlay(
@@ -184,10 +199,9 @@ internal static class PdfTextOverlayExtractor
 
         if (element is ItemsControl itemsControlWithElementItems)
         {
-            foreach (var item in itemsControlWithElementItems.Items)
+            foreach (var item in EnumerateVisibleItemElements(itemsControlWithElementItems))
             {
-                if (item is UIElement itemElement)
-                    Extract(itemElement, x, y, overlays);
+                Extract(item, x, y, overlays);
             }
         }
     }
@@ -235,6 +249,30 @@ internal static class PdfTextOverlayExtractor
         }
 
         return string.Join("\n", parts);
+    }
+
+    private static string ExtractComboBoxSelectionText(ComboBox comboBox)
+    {
+        if (comboBox.IsEditable && !string.IsNullOrWhiteSpace(comboBox.Text))
+            return comboBox.Text;
+
+        var text = ExtractInlineUiTextPart(comboBox.SelectionBoxItem);
+        if (!string.IsNullOrWhiteSpace(text))
+            return text;
+
+        return ExtractInlineUiTextPart(comboBox.SelectedItem);
+    }
+
+    private static IEnumerable<UIElement> EnumerateVisibleItemElements(ItemsControl itemsControl)
+    {
+        if (itemsControl is ComboBox { IsDropDownOpen: false })
+            yield break;
+
+        foreach (var item in itemsControl.Items)
+        {
+            if (item is UIElement itemElement)
+                yield return itemElement;
+        }
     }
 
     private static string ExtractFlowDocumentText(FlowDocument? document)
@@ -296,6 +334,9 @@ internal static class PdfTextOverlayExtractor
                 return;
             case FlowDocumentScrollViewer flowDocumentViewer:
                 parts.Add(ExtractFlowDocumentText(flowDocumentViewer.Document));
+                return;
+            case ComboBox { IsDropDownOpen: false } comboBox:
+                parts.Add(ExtractComboBoxSelectionText(comboBox));
                 return;
             case HeaderedContentControl headeredContentControl:
                 AppendJoinedInlineUiText(

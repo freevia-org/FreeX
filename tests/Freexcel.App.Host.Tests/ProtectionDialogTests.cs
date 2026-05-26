@@ -1,6 +1,8 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 using FluentAssertions;
 using Freexcel.Core.Model;
 using System.IO;
@@ -231,6 +233,36 @@ public sealed class ProtectionDialogTests
         AllowEditRangeDialog.CreateClearResult()
             .Should()
             .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Clear, null));
+    }
+
+    [Fact]
+    public void AllowEditRangeDialogExistingRangesList_DoubleClickRemovesSelectedRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2));
+            var dialog = new AllowEditRangeDialog(sheetId, "C3:D4", [range]);
+            var existingRangesBox = GetPrivateField<ListBox>(dialog, "_existingRangesBox");
+
+            dialog.Dispatcher.BeginInvoke(() =>
+            {
+                existingRangesBox.SelectedIndex = 0;
+                existingRangesBox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                {
+                    RoutedEvent = Control.MouseDoubleClickEvent
+                });
+
+                dialog.Dispatcher.BeginInvoke(() =>
+                {
+                    if (dialog.DialogResult is null)
+                        dialog.Close();
+                }, DispatcherPriority.ContextIdle);
+            }, DispatcherPriority.ApplicationIdle);
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.Result.Should().Be(AllowEditRangeDialog.CreateRemoveResult(range));
+        });
     }
 
     [Fact]
