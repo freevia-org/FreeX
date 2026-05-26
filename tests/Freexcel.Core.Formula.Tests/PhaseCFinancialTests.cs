@@ -627,6 +627,27 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void DiscountSettlementFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 44197.0), (2, 2, 44228.0),
+            (1, 3, 97.0), (2, 3, 98.0),
+            (1, 4, 100.0), (2, 4, 110.0),
+            (1, 5, 0.0), (2, 5, 1.0),
+            (1, 6, 90.0), (2, 6, 95.0),
+            (1, 7, 0.05), (2, 7, 0.04)
+        };
+
+        AssertApproxColumn(EvalWithData("DISC(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2)", cells), Calc("DISC(43831,44197,97,100,0)"), Calc("DISC(43862,44228,98,110,1)"));
+        AssertApproxColumn(EvalWithData("INTRATE(A1:A2,B1:B2,F1:F2,D1:D2,E1:E2)", cells), Calc("INTRATE(43831,44197,90,100,0)"), Calc("INTRATE(43862,44228,95,110,1)"));
+        AssertApproxColumn(EvalWithData("RECEIVED(A1:A2,B1:B2,D1:D2,G1:G2,E1:E2)", cells), Calc("RECEIVED(43831,44197,100,0.05,0)"), Calc("RECEIVED(43862,44228,110,0.04,1)"));
+
+        EvalWithData("DISC(A1:A2,B1:C1,97,100,0)", cells).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Disc_InvalidBasis_ReturnsNumError()
     {
         CalcError("DISC(43831,44197,97,100,5)").Should().Be("#NUM!");
