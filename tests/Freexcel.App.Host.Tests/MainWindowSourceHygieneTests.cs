@@ -38,6 +38,22 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void MainWindowFileDrop_WiresWindowDropToWorkbookPlannerAndOpenFile()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var xaml = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml"));
+        var source = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.FileDrop.cs"));
+        var planner = File.ReadAllText(Path.Combine(appHostDirectory, "WorkbookDropPlanner.cs"));
+
+        xaml.Should().Contain("AllowDrop=\"True\"");
+        xaml.Should().Contain("DragOver=\"MainWindow_DragOver\"");
+        xaml.Should().Contain("Drop=\"MainWindow_Drop\"");
+        source.Should().Contain("WorkbookDropPlanner.SelectOpenableFile(paths, _fileAdapters)");
+        source.Should().Contain("await OpenFileAsync(path)");
+        planner.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, extension, out _)");
+    }
+
+    [Fact]
     public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
     {
         var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
