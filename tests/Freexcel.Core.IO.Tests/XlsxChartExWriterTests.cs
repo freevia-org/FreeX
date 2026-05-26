@@ -136,7 +136,7 @@ public sealed class XlsxChartExWriterTests
     }
 
     [Fact]
-    public void Save_LoadedEditedChartExModelKeepsGeneratedChartPartInsteadOfSourcePart()
+    public void Save_LoadedEditedChartExModelKeepsNativePayloadAndAppliesModeledTitle()
     {
         var source = SaveWorkbookWithChart(ChartType.Treemap);
         using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
@@ -157,7 +157,7 @@ public sealed class XlsxChartExWriterTests
         using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var savedChartXml = LoadPackageXml(savedArchive.GetEntry("xl/charts/chart1.xml")!);
         savedChartXml.ToString(SaveOptions.DisableFormatting)
-            .Should().NotContain("original-source-chart")
+            .Should().Contain("original-source-chart")
             .And.Contain("Edited ChartEx Title");
     }
 
