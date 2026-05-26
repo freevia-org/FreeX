@@ -28,14 +28,80 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         });
     }
 
+    [Fact]
+    public void KeyboardWorksheetContextMenu_WithWholeRowSelectionShowsRowScopedCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectWholeRows(3, 4);
+            harness.OpenKeyboardContextMenu();
+
+            harness.FocusedMenuHeader.Should().Be("Cu_t");
+            harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
+            harness.OpenMenuHeaders.Should().ContainInOrder([
+                "Cu_t",
+                "_Copy",
+                "_Paste",
+                "Insert Row _Above",
+                "Delete _Row(s)",
+                "Row _Height...",
+                "AutoFit Row He_ight",
+                "_Hide Rows",
+                "Unhide Ro_ws",
+                "_Group",
+                "_Ungroup",
+                "_Format Cells...",
+                "Clear C_ontents"
+            ]);
+            harness.OpenMenuHeaders.Should().NotContain("Column _Width...");
+            harness.OpenMenuHeaders.Should().NotContain("Insert Column _Left");
+        });
+    }
+
+    [Fact]
+    public void KeyboardWorksheetContextMenu_WithWholeColumnSelectionShowsColumnScopedCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectWholeColumns(2, 3);
+            harness.OpenKeyboardContextMenu();
+
+            harness.FocusedMenuHeader.Should().Be("Cu_t");
+            harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
+            harness.OpenMenuHeaders.Should().ContainInOrder([
+                "Cu_t",
+                "_Copy",
+                "_Paste",
+                "Insert Column _Left",
+                "Delete _Column(s)",
+                "Column _Width...",
+                "AutoFit Column Wi_dth",
+                "Hide Col_umns",
+                "Unhide Co_lumns",
+                "_Group",
+                "_Ungroup",
+                "_Format Cells...",
+                "Clear C_ontents"
+            ]);
+            harness.OpenMenuHeaders.Should().NotContain("Row _Height...");
+            harness.OpenMenuHeaders.Should().NotContain("Insert Row _Above");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
+        private readonly Workbook _workbook;
         private readonly MethodInfo _openKeyboardContextMenu;
 
-        private MainWindowHarness(MainWindow window)
+        private MainWindowHarness(MainWindow window, Workbook workbook)
         {
             _window = window;
+            _workbook = workbook;
             _openKeyboardContextMenu = typeof(MainWindow)
                 .GetMethod("OpenKeyboardContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "OpenKeyboardContextMenu");
@@ -51,6 +117,26 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             ActiveContextMenu?.Items.OfType<MenuItem>()
                 .Select(item => item.Header?.ToString() ?? "")
                 .ToList() ?? [];
+
+        public void SelectWholeRows(uint startRow, uint endRow)
+        {
+            var sheet = _workbook.Sheets[0];
+            var range = new GridRange(
+                new CellAddress(sheet.Id, startRow, 1),
+                new CellAddress(sheet.Id, endRow, CellAddress.MaxCol));
+            SheetGrid.SelectedRange = range;
+            PumpDispatcher();
+        }
+
+        public void SelectWholeColumns(uint startCol, uint endCol)
+        {
+            var sheet = _workbook.Sheets[0];
+            var range = new GridRange(
+                new CellAddress(sheet.Id, 1, startCol),
+                new CellAddress(sheet.Id, CellAddress.MaxRow, endCol));
+            SheetGrid.SelectedRange = range;
+            PumpDispatcher();
+        }
 
         public void OpenKeyboardContextMenu()
         {
@@ -82,8 +168,11 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             window.Show();
             window.UpdateLayout();
             PumpDispatcher();
-            return new MainWindowHarness(window);
+            return new MainWindowHarness(window, workbook);
         }
+
+        private Freexcel.App.UI.GridView SheetGrid =>
+            (Freexcel.App.UI.GridView)_window.FindName("SheetGrid");
 
         private ContextMenu? ActiveContextMenu
         {
