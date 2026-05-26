@@ -4255,10 +4255,13 @@ public partial class FileAdapterSmokeTests
         loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("objects", "1"));
         loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("scenarios", "1"));
         loadedSheet.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
+        loadedSheet.ProtectionMetadata.NativeAttributes["invalid protection attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -4272,6 +4275,7 @@ public partial class FileAdapterSmokeTests
         (protection.Attribute("spinCount")?.Value).Should().Be("100000");
         (protection.Attribute("objects")?.Value).Should().Be("1");
         (protection.Attribute("scenarios")?.Value).Should().Be("1");
+        protection.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         protection.Elements(XName.Get("sheetProtectionNativeChild", "urn:freexcel:test"))
             .Select(element => element.Attribute("id")?.Value)
             .Should()
