@@ -80,7 +80,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeCalculationProperties(sourceCalculationProperties, targetRoot, workbookNs))
             changed = true;
-        if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
+        if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs, workbook.AdditionalViews is not null))
             changed = true;
         if (MergeCustomWorkbookViews(sourceCustomWorkbookViews, targetRoot, workbookNs, XlsxCustomViewMapper.GetModeledIds(workbook)))
             changed = true;
@@ -321,7 +321,11 @@ internal static class XlsxWorkbookMetadataPreserver
             modeledAttributes);
     }
 
-    private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
+    private static bool MergeWorkbookViews(
+        XElement? sourceBookViews,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        bool preserveAdditionalViews)
     {
         var sourceViews = sourceBookViews?
             .Elements(workbookNs + "workbookView")
@@ -333,7 +337,14 @@ internal static class XlsxWorkbookMetadataPreserver
         var targetBookViews = targetRoot.Element(workbookNs + "bookViews");
         if (targetBookViews is null)
         {
-            targetRoot.AddFirst(new XElement(sourceBookViews!));
+            var clonedBookViews = new XElement(sourceBookViews!);
+            if (!preserveAdditionalViews)
+            {
+                foreach (var view in clonedBookViews.Elements(workbookNs + "workbookView").Skip(1).ToList())
+                    view.Remove();
+            }
+
+            targetRoot.AddFirst(clonedBookViews);
             return true;
         }
 
@@ -346,8 +357,11 @@ internal static class XlsxWorkbookMetadataPreserver
 
         var changed = false;
         var mergedTargetViewKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var sourceView in sourceViews)
+        foreach (var (sourceView, index) in sourceViews.Select((view, index) => (view, index)))
         {
+            if (!preserveAdditionalViews && index > 0)
+                continue;
+
             var raw = sourceView.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
             if (existingRawViews.Contains(raw))
                 continue;
