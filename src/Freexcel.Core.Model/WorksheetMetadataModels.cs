@@ -19,6 +19,7 @@ public sealed record WorksheetAutoFilterColumnModel
     public WorksheetAutoFilterTop10Model? Top10 { get; init; }
     public WorksheetAutoFilterDynamicFilterModel? DynamicFilter { get; init; }
     public WorksheetAutoFilterColorFilterModel? ColorFilter { get; init; }
+    public WorksheetAutoFilterIconFilterModel? IconFilter { get; init; }
     public IReadOnlyList<string> NativeFilterXmls { get; init; }
     public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
 
@@ -33,6 +34,7 @@ public sealed record WorksheetAutoFilterColumnModel
             IncludeBlank,
             [],
             false,
+            null,
             null,
             null,
             null,
@@ -60,6 +62,7 @@ public sealed record WorksheetAutoFilterColumnModel
             null,
             null,
             null,
+            null,
             NativeFilterXmls,
             NativeAttributes)
     {
@@ -82,6 +85,7 @@ public sealed record WorksheetAutoFilterColumnModel
             CustomFiltersAnd,
             null,
             NativeCustomFiltersAttributes,
+            null,
             null,
             null,
             null,
@@ -113,6 +117,7 @@ public sealed record WorksheetAutoFilterColumnModel
             Top10,
             DynamicFilter,
             null,
+            null,
             NativeFilterXmls,
             NativeAttributes)
     {
@@ -131,6 +136,37 @@ public sealed record WorksheetAutoFilterColumnModel
         WorksheetAutoFilterColorFilterModel? ColorFilter,
         IReadOnlyList<string> NativeFilterXmls,
         IReadOnlyDictionary<string, string>? NativeAttributes = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            CustomFilters,
+            CustomFiltersAnd,
+            CustomFiltersAndRaw,
+            NativeCustomFiltersAttributes,
+            Top10,
+            DynamicFilter,
+            ColorFilter,
+            null,
+            NativeFilterXmls,
+            NativeAttributes)
+    {
+    }
+
+    public WorksheetAutoFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<WorksheetAutoFilterCustomFilterModel> CustomFilters,
+        bool CustomFiltersAnd,
+        string? CustomFiltersAndRaw,
+        IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes,
+        WorksheetAutoFilterTop10Model? Top10,
+        WorksheetAutoFilterDynamicFilterModel? DynamicFilter,
+        WorksheetAutoFilterColorFilterModel? ColorFilter,
+        WorksheetAutoFilterIconFilterModel? IconFilter,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyDictionary<string, string>? NativeAttributes = null)
     {
         this.ColumnId = ColumnId;
         this.Values = Values;
@@ -142,6 +178,7 @@ public sealed record WorksheetAutoFilterColumnModel
         this.Top10 = Top10;
         this.DynamicFilter = DynamicFilter;
         this.ColorFilter = ColorFilter;
+        this.IconFilter = IconFilter;
         this.NativeFilterXmls = NativeFilterXmls;
         this.NativeAttributes = NativeAttributes;
     }
@@ -176,6 +213,12 @@ public sealed record WorksheetAutoFilterColorFilterModel(
     bool CellColor = true,
     string? DifferentialFormatIdRaw = null,
     string? CellColorRaw = null,
+    IReadOnlyDictionary<string, string>? NativeAttributes = null);
+
+public sealed record WorksheetAutoFilterIconFilterModel(
+    string? IconSet = null,
+    int? IconId = null,
+    string? IconIdRaw = null,
     IReadOnlyDictionary<string, string>? NativeAttributes = null);
 
 public sealed class WorksheetProtectionMetadataModel
