@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(6, "the generated metadata-pass manifest currently declares six deterministic package-retention rows");
+        rows.Should().HaveCount(7, "the generated metadata-pass manifest currently declares seven deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -388,6 +388,55 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-calc-chain-001");
         AssertCalcChainReference(saved, "generated-calc-chain-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedDocumentPropertiesRow_RetainsStableDocumentPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-document-properties-001");
+        AssertStableDocumentProperties(source, "generated-document-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-document-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-document-properties-001");
+        AssertStableDocumentProperties(saved, "generated-document-properties-001 saved");
+    }
+
+    private static void AssertStableDocumentProperties(Stream package, string because)
+    {
+        XNamespace corePropertiesNs = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+        XNamespace dcNs = "http://purl.org/dc/elements/1.1/";
+        XNamespace extendedPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var coreProperties = LoadPackageXml(archive.GetEntry("docProps/core.xml")!);
+        coreProperties.Root!.Name.Should().Be(corePropertiesNs + "coreProperties", because);
+        coreProperties.Root.Element(dcNs + "title")!.Value.Should().Be("Freexcel document property corpus", because);
+        coreProperties.Root.Element(dcNs + "subject")!.Value.Should().Be("Stable document properties retained", because);
+        coreProperties.Root.Element(corePropertiesNs + "keywords")!.Value.Should().Be("xlsx parity", because);
+        coreProperties.Root.Element(corePropertiesNs + "lastModifiedBy")!.Value.Should().Be("Freexcel Fixture", because);
+
+        var appProperties = LoadPackageXml(archive.GetEntry("docProps/app.xml")!);
+        appProperties.Root!.Name.Should().Be(extendedPropertiesNs + "Properties", because);
+        appProperties.Root.Element(extendedPropertiesNs + "Application")!.Value.Should().Be("Microsoft Excel", because);
+        appProperties.Root.Element(extendedPropertiesNs + "Company")!.Value.Should().Be("Freexcel Test Lab", because);
+        appProperties.Root.Element(extendedPropertiesNs + "Manager")!.Value.Should().Be("Workbook Fidelity", because);
+
+        var packageRelsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value.TrimStart('/'), "docProps/app.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
     }
 
     private static void AssertCalcChainReference(Stream package, string because)
