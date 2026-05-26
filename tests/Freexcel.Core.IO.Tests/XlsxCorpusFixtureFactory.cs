@@ -620,10 +620,16 @@ internal static class XlsxCorpusFixtureFactory
             "rIdFreexcelCustomXml1",
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
             "customXml/item1.xml");
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelCustomXmlExternalSchema1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+            "https://schemas.freexcel.example/customXml/schema1.xsd",
+            "External");
         ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
     }
 
-    private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target)
+    private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target, string? targetMode = null)
     {
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         relationshipsXml.Root?.Elements(packageRelNs + "Relationship")
@@ -633,7 +639,8 @@ internal static class XlsxCorpusFixtureFactory
             packageRelNs + "Relationship",
             new XAttribute("Id", id),
             new XAttribute("Type", type),
-            new XAttribute("Target", target)));
+            new XAttribute("Target", target),
+            string.IsNullOrWhiteSpace(targetMode) ? null : new XAttribute("TargetMode", targetMode)));
     }
 
     private static void EnsureContentTypeOverride(XDocument contentTypes, string partName, string contentType)

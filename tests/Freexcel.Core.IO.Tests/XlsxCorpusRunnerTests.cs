@@ -371,6 +371,14 @@ public class XlsxCorpusRunnerTests
                 string.Equals(rel.Attribute("Target")?.Value, "customXml/item1.xml", StringComparison.OrdinalIgnoreCase))
             .Should()
             .ContainSingle(because);
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "https://schemas.freexcel.example/customXml/schema1.xsd", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
 
         var itemRelsXml = LoadPackageXml(archive.GetEntry("customXml/_rels/item1.xml.rels")!);
         itemRelsXml.Root!
