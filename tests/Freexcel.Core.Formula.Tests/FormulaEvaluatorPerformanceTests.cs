@@ -46,6 +46,53 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Fact]
+    public void CrossSheetSingleDirectRangeAggregate_CachesSheetNameLookup()
+    {
+        var evaluator = new FormulaEvaluator();
+        var workbook = MakeWorkbookWithDataSheetAfterLookupNoise();
+        var formulaSheet = workbook.GetSheet("Formula")!;
+        var dataSheet = workbook.GetSheet("Data")!;
+        const string crossSheetFormula = "=SUM(Data!A1:A100000)";
+        const string sameSheetFormula = "=SUM(A1:A100000)";
+        const double expected = 5_000_050_000d;
+
+        evaluator.Evaluate(crossSheetFormula, formulaSheet, workbook).Should().Be(new NumberValue(expected));
+        evaluator.Evaluate(sameSheetFormula, dataSheet, workbook).Should().Be(new NumberValue(expected));
+        evaluator.Evaluate("=SUM(data!A1:A2)", formulaSheet, workbook).Should().Be(new NumberValue(3d));
+        evaluator.Evaluate("=SUM(Missing!A1:A2)", formulaSheet, workbook).Should().Be(ErrorValue.Ref);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeSameSheetBytes = GC.GetAllocatedBytesForCurrentThread();
+        var sameSheetStopwatch = Stopwatch.StartNew();
+        var sameSheetResult = evaluator.Evaluate(sameSheetFormula, dataSheet, workbook);
+        sameSheetStopwatch.Stop();
+        var sameSheetAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeSameSheetBytes;
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeCrossSheetBytes = GC.GetAllocatedBytesForCurrentThread();
+        var crossSheetStopwatch = Stopwatch.StartNew();
+        var crossSheetResult = evaluator.Evaluate(crossSheetFormula, formulaSheet, workbook);
+        crossSheetStopwatch.Stop();
+        var crossSheetAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeCrossSheetBytes;
+
+        sameSheetResult.Should().Be(new NumberValue(expected));
+        crossSheetResult.Should().Be(new NumberValue(expected));
+        _output.WriteLine(
+            $"{sameSheetFormula}: elapsed={sameSheetStopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={sameSheetAllocatedBytes:N0} bytes");
+        _output.WriteLine(
+            $"{crossSheetFormula}: elapsed={crossSheetStopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={crossSheetAllocatedBytes:N0} bytes");
+
+        crossSheetAllocatedBytes.Should().BeLessThan(1_000_000);
+        crossSheetStopwatch.Elapsed.Should().BeLessThan(sameSheetStopwatch.Elapsed * 4 + TimeSpan.FromMilliseconds(10));
+    }
+
+    [Fact]
     public void MultiRangeAggregateExpansion_AvoidsExcessAllocationChurn()
     {
         var evaluator = new FormulaEvaluator();
@@ -216,6 +263,20 @@ public sealed class FormulaEvaluatorPerformanceTests
         for (uint row = 1; row <= RowCount; row++)
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
         return sheet;
+    }
+
+    private static Workbook MakeWorkbookWithDataSheetAfterLookupNoise()
+    {
+        var workbook = new Workbook();
+        workbook.AddSheet("Formula");
+        for (var index = 0; index < 500; index++)
+            workbook.AddSheet($"Noise{index}");
+
+        var dataSheet = workbook.AddSheet("Data");
+        for (uint row = 1; row <= RowCount; row++)
+            dataSheet.SetCell(new CellAddress(dataSheet.Id, row, 1), new NumberValue(row));
+
+        return workbook;
     }
 
     private static Sheet MakeConditionalAggregateSheet()
