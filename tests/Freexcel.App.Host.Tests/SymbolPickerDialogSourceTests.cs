@@ -108,8 +108,20 @@ public sealed class SymbolPickerDialogSourceTests
 
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("Header = \"Symbols\"");
-        source.Should().Contain("Header = \"Special Characters\"");
+        source.Should().Contain("Header = \"_Symbols\"");
+        source.Should().Contain("Header = \"Special _Characters\"");
+    }
+
+    [Fact]
+    public void Dialog_ExposesAccessKeysForSymbolTabsAndFocusesSymbolGridOnOpen()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("Header = \"_Symbols\"");
+        source.Should().Contain("Header = \"Special _Characters\"");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget(grid);");
+        source.Should().Contain("private static void FocusInitialKeyboardTarget(UniformGrid grid)");
+        source.Should().Contain("Keyboard.Focus(firstSymbol);");
     }
 
     [Theory]

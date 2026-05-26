@@ -16966,7 +16966,11 @@ public partial class FileAdapterSmokeTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
         sheet.AutoFilter = new WorksheetAutoFilterModel("A1:A3", null)
         {
-            NativeAttributes = new Dictionary<string, string> { ["customAutoFilterFlag"] = "keep" },
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["customAutoFilterFlag"] = "keep",
+                ["invalid autoFilter attr"] = "skip"
+            },
             NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-WORKSHEET-AUTOFILTER}\"/></extLst>"]
         };
         sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
@@ -16974,10 +16978,15 @@ public partial class FileAdapterSmokeTests
             ["A"],
             IncludeBlank: true,
             NativeFilterXmls: ["<customFilters xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><customFilter operator=\"equal\" val=\"A\"/></customFilters>"],
-            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag"] = "keep" }));
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["customFilterColumnFlag"] = "keep",
+                ["invalid filterColumn attr"] = "skip"
+            }));
 
         var saved = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, saved);
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16987,10 +16996,12 @@ public partial class FileAdapterSmokeTests
         autoFilter.Should().NotBeNull();
         autoFilter!.Attribute("ref")!.Value.Should().Be("A1:A3");
         autoFilter.Attribute("customAutoFilterFlag")!.Value.Should().Be("keep");
+        autoFilter.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid autoFilter attr");
         autoFilter.Element(worksheetNs + "extLst").Should().NotBeNull();
         var filterColumn = autoFilter.Element(worksheetNs + "filterColumn");
         filterColumn.Should().NotBeNull();
         filterColumn!.Attribute("customFilterColumnFlag")!.Value.Should().Be("keep");
+        filterColumn.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid filterColumn attr");
         filterColumn.Element(worksheetNs + "filters")!.Attribute("blank")!.Value.Should().Be("1");
         filterColumn.Element(worksheetNs + "filters")!.Element(worksheetNs + "filter")!.Attribute("val")!.Value.Should().Be("A");
         filterColumn.Element(worksheetNs + "customFilters").Should().NotBeNull();

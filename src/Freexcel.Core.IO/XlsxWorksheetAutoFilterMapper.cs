@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 using System.Globalization;
@@ -120,8 +121,7 @@ internal static class XlsxWorksheetAutoFilterMapper
             autoFilter.FilterColumns.Select(filterColumn => ToFilterColumnXml(filterColumn, worksheetNs)));
         foreach (var (name, value) in autoFilter.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         foreach (var nativeChildXml in autoFilter.NativeChildXmls ?? [])
@@ -140,8 +140,7 @@ internal static class XlsxWorksheetAutoFilterMapper
             new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
         foreach (var (name, value) in filterColumn.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         if (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank)
@@ -176,6 +175,25 @@ internal static class XlsxWorksheetAutoFilterMapper
         catch
         {
             return null;
+        }
+    }
+
+    private static void TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        try
+        {
+            var attributeName = XName.Get(name);
+            if (element.Attribute(attributeName) is null)
+                element.SetAttributeValue(attributeName, value);
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (XmlException)
+        {
         }
     }
 
