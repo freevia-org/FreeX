@@ -80,13 +80,13 @@ public sealed class GoToSpecialDialog : Window
             new(GoToSpecialKind.Comments, "Co_mments"),
             new(GoToSpecialKind.CurrentRegion, "Current _region"),
             new(GoToSpecialKind.RowDifferences, "Row _differences"),
-            new(GoToSpecialKind.ColumnDifferences, "Column dif_ferences"),
+            new(GoToSpecialKind.ColumnDifferences, "Column diff_erences"),
             new(GoToSpecialKind.LastCell, "_Last cell"),
-            new(GoToSpecialKind.ConditionalFormats, "Conditional _formats"),
+            new(GoToSpecialKind.ConditionalFormats, "Conditional forma_ts"),
             new(GoToSpecialKind.Objects, "_Objects"),
             new(GoToSpecialKind.Precedents, "_Precedents"),
-            new(GoToSpecialKind.Dependents, "_Dependents"),
-            new(GoToSpecialKind.DataValidation, "_Data validation"),
+            new(GoToSpecialKind.Dependents, "Depe_ndents"),
+            new(GoToSpecialKind.DataValidation, "Data valid_ation"),
             new(GoToSpecialKind.VisibleCellsOnly, "_Visible cells only")
         ];
 
