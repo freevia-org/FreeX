@@ -152,7 +152,8 @@ public static partial class BuiltInFunctions
         if (options < 0 || options > 7) return ErrorValue.Value;
 
         bool ignoreErrors = options == 2 || options == 3 || options == 6 || options == 7;
-        // Hidden-row ignore (options 1, 3, 5, 7) is not honored here — see header note.
+        bool ignoreHiddenRows = options == 1 || options == 3 || options == 5 || options == 7;
+        bool ignoreNestedAggregates = options <= 3;
 
         bool needsK = funcNum is >= 14 and <= 19;
         if (needsK && args.Count < 4) return ErrorValue.Value;
@@ -171,7 +172,7 @@ public static partial class BuiltInFunctions
             }
             if (arg is RangeValue rv)
             {
-                foreach (var cell in rv.Flatten())
+                foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows, ignoreNestedAggregates))
                 {
                     if (cell is ErrorValue ce)
                     {
@@ -212,7 +213,7 @@ public static partial class BuiltInFunctions
                     }
                     if (arg is RangeValue rv)
                     {
-                        foreach (var cell in rv.Flatten())
+                        foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows, ignoreNestedAggregates))
                         {
                             if (cell is ErrorValue ce)
                             {
@@ -314,6 +315,32 @@ public static partial class BuiltInFunctions
             default:
                 return ErrorValue.Value;
         }
+    }
+
+    private static IEnumerable<ScalarValue> AggregateVisibleCells(
+        RangeValue range,
+        IEvalContext ctx,
+        bool ignoreHiddenRows,
+        bool ignoreNestedAggregates)
+    {
+        for (int r = 0; r < range.RowCount; r++)
+        {
+            uint absRow = range.StartRow + (uint)r;
+            if (ignoreHiddenRows && IsAggregateRowHidden(ctx, range, absRow)) continue;
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                uint absCol = range.StartCol + (uint)c;
+                if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, range, absRow, absCol)) continue;
+                yield return range.Cells[r, c];
+            }
+        }
+    }
+
+    private static bool IsAggregateRowHidden(IEvalContext ctx, RangeValue range, uint row)
+    {
+        return range.SheetName is null
+            ? ctx.IsRowHidden(row)
+            : ctx.IsRowHidden(range.SheetName, row);
     }
 
     private static double PercentileIncCalc(List<double> nums, double p)

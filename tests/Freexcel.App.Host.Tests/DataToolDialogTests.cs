@@ -397,6 +397,19 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsFixedWidthRulerPlanner_MapsBreaksAndNearestHit()
+    {
+        TextToColumnsFixedWidthRulerPlanner.PositionFromRulerX(110, rulerWidth: 440, maxLength: 20)
+            .Should().Be(5);
+        TextToColumnsFixedWidthRulerPlanner.RulerXFromPosition(10, rulerWidth: 440, maxLength: 20)
+            .Should().Be(220);
+        TextToColumnsFixedWidthRulerPlanner.FindNearestBreakIndex([4, 8, 12], x: 178, tolerance: 5, rulerWidth: 440, maxLength: 20)
+            .Should().Be(1);
+        TextToColumnsFixedWidthRulerPlanner.FindNearestBreakIndex([4, 8, 12], x: 178, tolerance: 1, rulerWidth: 440, maxLength: 20)
+            .Should().Be(-1);
+    }
+
+    [Fact]
     public void TextToColumnsResult_CapturesTextQualifierAndConsecutiveDelimiterChoice()
     {
         var result = TextToColumnsDialog.CreateResult(

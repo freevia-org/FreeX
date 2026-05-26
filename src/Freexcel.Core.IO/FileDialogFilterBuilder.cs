@@ -51,6 +51,14 @@ public static class FileDialogFilterBuilder
         return FindAdapter(adapters, extension, candidate => candidate.CanSave, out format);
     }
 
+    public static string SafeFileTypeFromExtension(string extension)
+    {
+        var normalizedExtension = NormalizeExtension(extension);
+        return normalizedExtension.Length > 1
+            ? normalizedExtension[1..].ToLowerInvariant()
+            : "unknown";
+    }
+
     private static IFileAdapter? FindAdapter(
         IEnumerable<IFileAdapter> adapters,
         string extension,

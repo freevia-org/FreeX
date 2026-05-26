@@ -44,6 +44,9 @@ public sealed partial class CustomViewsDialog : Window
     private void ViewsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) =>
         UpdateButtons();
 
+    private void ViewsList_MouseDoubleClick(object sender, MouseButtonEventArgs e) =>
+        ShowButton_Click(sender, e);
+
     private void UpdateButtons()
     {
         var hasSelection = ViewsList?.SelectedItem is CustomViewViewModel;

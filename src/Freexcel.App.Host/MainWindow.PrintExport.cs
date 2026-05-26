@@ -43,9 +43,12 @@ public partial class MainWindow
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
-        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null) { Owner = this };
+        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage) { Owner = this };
         if (optionsDialog.ShowDialog() != true)
             return;
+
+        _options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;
+        _options.Save();
 
         var saveDlg = new Microsoft.Win32.SaveFileDialog
         {
@@ -108,6 +111,7 @@ public partial class MainWindow
                 MessageBoxImage.Information);
             RecordDiagnosticEvent("export_completed", new Dictionary<string, string?>
             {
+                ["fileType"] = "pdf",
                 ["format"] = "pdf",
                 ["scope"] = options.Scope.ToString()
             });
@@ -117,6 +121,7 @@ public partial class MainWindow
         {
             RecordDiagnosticEvent("export_failed", new Dictionary<string, string?>
             {
+                ["fileType"] = "pdf",
                 ["format"] = "pdf",
                 ["scope"] = options.Scope.ToString(),
                 ["reason"] = ex.GetType().Name
@@ -188,6 +193,7 @@ public partial class MainWindow
 
             RecordDiagnosticEvent("export_completed", new Dictionary<string, string?>
             {
+                ["fileType"] = "xps",
                 ["format"] = "xps",
                 ["scope"] = options.Scope.ToString()
             });
@@ -197,6 +203,7 @@ public partial class MainWindow
         {
             RecordDiagnosticEvent("export_failed", new Dictionary<string, string?>
             {
+                ["fileType"] = "xps",
                 ["format"] = "xps",
                 ["scope"] = options.Scope.ToString(),
                 ["reason"] = ex.GetType().Name

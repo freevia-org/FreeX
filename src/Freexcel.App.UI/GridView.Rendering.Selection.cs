@@ -44,65 +44,21 @@ public partial class GridView
         GridRange range,
         double rowHeaderWidth,
         double columnHeaderHeight) =>
-        SelectionMarqueeLayoutPlanner.CalculateVisibleSelectionRect(viewport, range, rowHeaderWidth, columnHeaderHeight);
+        QuickAnalysisPreviewLayoutPlanner.CalculatePreviewRect(viewport, range, rowHeaderWidth, columnHeaderHeight);
 
     public static IReadOnlyList<Rect> CalculateQuickAnalysisDataBarPreviewRects(
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,
-        double columnHeaderHeight)
-    {
-        var numericCells = viewport.Cells
-            .Where(cell => cell.Row >= range.Start.Row
-                && cell.Row <= range.End.Row
-                && cell.Col >= range.Start.Col
-                && cell.Col <= range.End.Col
-                && TryGetPreviewNumber(cell, out _))
-            .ToList();
-        if (numericCells.Count == 0)
-            return [];
+        double columnHeaderHeight) =>
+        QuickAnalysisPreviewLayoutPlanner.CalculateDataBarPreviewRects(viewport, range, rowHeaderWidth, columnHeaderHeight);
 
-        var max = numericCells
-            .Select(cell => TryGetPreviewNumber(cell, out var value) ? Math.Max(0, value) : 0)
-            .DefaultIfEmpty(0)
-            .Max();
-
-        var rows = viewport.RowMetrics.ToDictionary(row => row.Row);
-        var cols = viewport.ColMetrics.ToDictionary(col => col.Col);
-        var rects = new List<Rect>();
-        foreach (var cell in numericCells)
-        {
-            if (!rows.TryGetValue(cell.Row, out var row) || !cols.TryGetValue(cell.Col, out var col))
-                continue;
-
-            TryGetPreviewNumber(cell, out var value);
-            var fraction = max <= 0 ? 0 : Math.Clamp(Math.Max(0, value) / max, 0, 1);
-            var availableWidth = Math.Max(0, col.Width - 6);
-            rects.Add(new Rect(
-                col.LeftOffset + rowHeaderWidth + 3,
-                row.TopOffset + columnHeaderHeight + 4,
-                Math.Round(availableWidth * fraction, 3),
-                Math.Max(0, row.Height - 8)));
-        }
-
-        return rects;
-    }
-
-    private static bool TryGetPreviewNumber(DisplayCell cell, out double value)
-    {
-        switch (cell.RawValue)
-        {
-            case NumberValue number:
-                value = number.Value;
-                return true;
-            case DateTimeValue dateTime:
-                value = dateTime.Value;
-                return true;
-            default:
-                value = 0;
-                return false;
-        }
-    }
+    public static IReadOnlyList<Rect> CalculateQuickAnalysisCellPreviewRects(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight) =>
+        QuickAnalysisPreviewLayoutPlanner.CalculateCellPreviewRects(viewport, range, rowHeaderWidth, columnHeaderHeight);
 
     private void RenderQuickAnalysisPreview(DrawingContext dc)
     {

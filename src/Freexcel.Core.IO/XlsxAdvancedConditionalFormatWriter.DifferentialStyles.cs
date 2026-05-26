@@ -14,7 +14,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     {
         var rules = workbook.Sheets
             .SelectMany(sheet => sheet.ConditionalFormats)
-            .Where(cf => IsAdvancedConditionalFormat(cf) && cf.FormatIfTrue is not null)
+            .Where(cf => XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(cf) && cf.FormatIfTrue is not null)
             .ToList();
         if (rules.Count == 0)
             return new Dictionary<Guid, int>();

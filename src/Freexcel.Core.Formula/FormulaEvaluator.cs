@@ -888,8 +888,9 @@ public sealed class FormulaEvaluator
     private ScalarValue EvaluateIf(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count is < 2 or > 3) return ErrorValue.Value;
-        var cond = EvaluateNode(node.Arguments[0], context);
+        var cond = EvaluateArrayOperand(node.Arguments[0], context);
         if (cond is ErrorValue e) return e;
+        if (cond is RangeValue conditionRange) return EvaluateIfConditionRange(node, context, conditionRange);
         bool? taken = cond switch
         {
             BoolValue b     => b.Value,
@@ -902,6 +903,50 @@ public sealed class FormulaEvaluator
         if (taken.Value)  return EvaluateArrayOperand(node.Arguments[1], context);
         if (node.Arguments.Count == 3) return EvaluateArrayOperand(node.Arguments[2], context);
         return new BoolValue(false);
+    }
+
+    private ScalarValue EvaluateIfConditionRange(FunctionCallNode node, IEvalContext context, RangeValue conditionRange)
+    {
+        ScalarValue? trueBranch = null;
+        ScalarValue? falseBranch = null;
+        var cells = new ScalarValue[conditionRange.RowCount, conditionRange.ColCount];
+
+        for (int r = 0; r < conditionRange.RowCount; r++)
+            for (int c = 0; c < conditionRange.ColCount; c++)
+            {
+                var condition = conditionRange.Cells[r, c];
+                if (condition is ErrorValue error)
+                {
+                    cells[r, c] = error;
+                    continue;
+                }
+
+                bool? taken = condition switch
+                {
+                    BoolValue b     => b.Value,
+                    NumberValue n   => n.Value != 0,
+                    DateTimeValue d => d.Value != 0,
+                    BlankValue      => false,
+                    _               => null
+                };
+                if (taken is null)
+                {
+                    cells[r, c] = ErrorValue.Value;
+                    continue;
+                }
+
+                var selected = taken.Value
+                    ? trueBranch ??= EvaluateArrayOperand(node.Arguments[1], context)
+                    : falseBranch ??= node.Arguments.Count == 3
+                        ? EvaluateArrayOperand(node.Arguments[2], context)
+                        : new BoolValue(false);
+
+                cells[r, c] = selected is RangeValue selectedRange
+                    ? PickRangeElementForArrayResult(selectedRange, r, c, conditionRange.RowCount, conditionRange.ColCount)
+                    : selected;
+            }
+
+        return new RangeValue(cells, conditionRange.StartRow, conditionRange.StartCol) { SheetName = conditionRange.SheetName };
     }
 
     private ScalarValue EvaluateIfError(FunctionCallNode node, IEvalContext context)
@@ -1034,8 +1079,9 @@ public sealed class FormulaEvaluator
         if (node.Arguments.Count < 2 || node.Arguments.Count % 2 != 0) return ErrorValue.Value;
         for (int i = 0; i < node.Arguments.Count - 1; i += 2)
         {
-            var cond = EvaluateNode(node.Arguments[i], context);
+            var cond = EvaluateArrayOperand(node.Arguments[i], context);
             if (cond is ErrorValue e) return e;
+            if (cond is RangeValue conditionRange) return EvaluateIfsConditionRange(node, context, conditionRange);
             bool? taken = cond switch
             {
                 BoolValue b     => b.Value,
@@ -1047,6 +1093,67 @@ public sealed class FormulaEvaluator
             if (taken is null) return ErrorValue.Value;
             if (taken.Value) return EvaluateArrayOperand(node.Arguments[i + 1], context);
         }
+        return ErrorValue.NA;
+    }
+
+    private ScalarValue EvaluateIfsConditionRange(FunctionCallNode node, IEvalContext context, RangeValue firstConditionRange)
+    {
+        var conditionCache = new Dictionary<int, ScalarValue> { [0] = firstConditionRange };
+        var resultCache = new Dictionary<int, ScalarValue>();
+        var cells = new ScalarValue[firstConditionRange.RowCount, firstConditionRange.ColCount];
+
+        for (int r = 0; r < firstConditionRange.RowCount; r++)
+            for (int c = 0; c < firstConditionRange.ColCount; c++)
+                cells[r, c] = EvaluateIfsElement(node, context, conditionCache, resultCache, firstConditionRange, r, c);
+
+        return new RangeValue(cells, firstConditionRange.StartRow, firstConditionRange.StartCol) { SheetName = firstConditionRange.SheetName };
+    }
+
+    private ScalarValue EvaluateIfsElement(
+        FunctionCallNode node,
+        IEvalContext context,
+        Dictionary<int, ScalarValue> conditionCache,
+        Dictionary<int, ScalarValue> resultCache,
+        RangeValue shape,
+        int row,
+        int col)
+    {
+        for (int i = 0; i < node.Arguments.Count - 1; i += 2)
+        {
+            if (!conditionCache.TryGetValue(i, out var condition))
+            {
+                condition = EvaluateArrayOperand(node.Arguments[i], context);
+                conditionCache[i] = condition;
+            }
+
+            var conditionElement = condition is RangeValue conditionRange
+                ? PickRangeElementForArrayResult(conditionRange, row, col, shape.RowCount, shape.ColCount)
+                : condition;
+
+            if (conditionElement is ErrorValue error) return error;
+            bool? taken = conditionElement switch
+            {
+                BoolValue b     => b.Value,
+                NumberValue n   => n.Value != 0,
+                DateTimeValue d => d.Value != 0,
+                BlankValue      => false,
+                _               => null
+            };
+            if (taken is null) return ErrorValue.Value;
+            if (!taken.Value) continue;
+
+            int resultIndex = i + 1;
+            if (!resultCache.TryGetValue(resultIndex, out var result))
+            {
+                result = EvaluateArrayOperand(node.Arguments[resultIndex], context);
+                resultCache[resultIndex] = result;
+            }
+
+            return result is RangeValue resultRange
+                ? PickRangeElementForArrayResult(resultRange, row, col, shape.RowCount, shape.ColCount)
+                : result;
+        }
+
         return ErrorValue.NA;
     }
 
@@ -1278,8 +1385,9 @@ public sealed class FormulaEvaluator
     private ScalarValue EvaluateSwitch(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count < 3) return ErrorValue.Value;
-        var expr = EvaluateNode(node.Arguments[0], context);
+        var expr = EvaluateArrayOperand(node.Arguments[0], context);
         if (expr is ErrorValue e) return e;
+        if (expr is RangeValue exprRange) return EvaluateSwitchExpressionRange(node, context, exprRange);
         bool hasDefault = (node.Arguments.Count - 1) % 2 == 1;
         int pairCount = (node.Arguments.Count - 1) / 2;
         for (int i = 0; i < pairCount; i++)
@@ -1290,6 +1398,75 @@ public sealed class FormulaEvaluator
                 return EvaluateArrayOperand(node.Arguments[1 + i * 2 + 1], context);
         }
         return hasDefault ? EvaluateArrayOperand(node.Arguments[^1], context) : ErrorValue.NA;
+    }
+
+    private ScalarValue EvaluateSwitchExpressionRange(FunctionCallNode node, IEvalContext context, RangeValue exprRange)
+    {
+        var valueCache = new Dictionary<int, ScalarValue>();
+        var resultCache = new Dictionary<int, ScalarValue>();
+        var cells = new ScalarValue[exprRange.RowCount, exprRange.ColCount];
+
+        for (int r = 0; r < exprRange.RowCount; r++)
+            for (int c = 0; c < exprRange.ColCount; c++)
+                cells[r, c] = EvaluateSwitchElement(node, context, valueCache, resultCache, exprRange, r, c);
+
+        return new RangeValue(cells, exprRange.StartRow, exprRange.StartCol) { SheetName = exprRange.SheetName };
+    }
+
+    private ScalarValue EvaluateSwitchElement(
+        FunctionCallNode node,
+        IEvalContext context,
+        Dictionary<int, ScalarValue> valueCache,
+        Dictionary<int, ScalarValue> resultCache,
+        RangeValue exprRange,
+        int row,
+        int col)
+    {
+        var expr = exprRange.Cells[row, col];
+        if (expr is ErrorValue error) return error;
+
+        bool hasDefault = (node.Arguments.Count - 1) % 2 == 1;
+        int pairCount = (node.Arguments.Count - 1) / 2;
+        for (int i = 0; i < pairCount; i++)
+        {
+            int valueIndex = 1 + i * 2;
+            if (!valueCache.TryGetValue(valueIndex, out var value))
+            {
+                value = EvaluateArrayOperand(node.Arguments[valueIndex], context);
+                valueCache[valueIndex] = value;
+            }
+
+            var valueElement = value is RangeValue valueRange
+                ? PickRangeElementForArrayResult(valueRange, row, col, exprRange.RowCount, exprRange.ColCount)
+                : value;
+
+            if (valueElement is ErrorValue valueError) return valueError;
+            if (!BuiltInFunctions.ScalarEquals(expr, valueElement)) continue;
+
+            int resultIndex = valueIndex + 1;
+            if (!resultCache.TryGetValue(resultIndex, out var result))
+            {
+                result = EvaluateArrayOperand(node.Arguments[resultIndex], context);
+                resultCache[resultIndex] = result;
+            }
+
+            return result is RangeValue resultRange
+                ? PickRangeElementForArrayResult(resultRange, row, col, exprRange.RowCount, exprRange.ColCount)
+                : result;
+        }
+
+        if (!hasDefault) return ErrorValue.NA;
+
+        int defaultIndex = node.Arguments.Count - 1;
+        if (!resultCache.TryGetValue(defaultIndex, out var defaultResult))
+        {
+            defaultResult = EvaluateArrayOperand(node.Arguments[defaultIndex], context);
+            resultCache[defaultIndex] = defaultResult;
+        }
+
+        return defaultResult is RangeValue defaultRange
+            ? PickRangeElementForArrayResult(defaultRange, row, col, exprRange.RowCount, exprRange.ColCount)
+            : defaultResult;
     }
 
     private static bool IsAggregateFunction(string name) =>
@@ -1572,6 +1749,14 @@ public sealed class FormulaEvaluator
 
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
 
+        public bool IsRowHidden(string sheetName, uint row)
+            => _workbook?.GetSheet(sheetName)?.IsRowEffectivelyHidden(row) ?? false;
+
+        public bool IsRowFilterHidden(uint row) => _sheet.FilterHiddenRows.Contains(row);
+
+        public bool IsRowFilterHidden(string sheetName, uint row)
+            => _workbook?.GetSheet(sheetName)?.FilterHiddenRows.Contains(row) ?? false;
+
         public Freexcel.Core.Model.Sheet? CurrentSheet => _sheet;
 
         public Freexcel.Core.Model.Workbook? CurrentWorkbook => _workbook;
@@ -1619,6 +1804,9 @@ public sealed class FormulaEvaluator
         public string? TryGetSheetName(Freexcel.Core.Model.SheetId id) => _inner.TryGetSheetName(id);
         public bool SheetExists(string sn) => _inner.SheetExists(sn);
         public bool IsRowHidden(uint row) => _inner.IsRowHidden(row);
+        public bool IsRowHidden(string sn, uint row) => _inner.IsRowHidden(sn, row);
+        public bool IsRowFilterHidden(uint row) => _inner.IsRowFilterHidden(row);
+        public bool IsRowFilterHidden(string sn, uint row) => _inner.IsRowFilterHidden(sn, row);
         public Freexcel.Core.Model.Sheet? CurrentSheet => _inner.CurrentSheet;
         public Freexcel.Core.Model.Workbook? CurrentWorkbook => _inner.CurrentWorkbook;
         public Freexcel.Core.Model.CellAddress? CurrentCellAddress => _inner.CurrentCellAddress;

@@ -26,33 +26,12 @@ public sealed record AccessibilityIssue(
 
 public static class AccessibilityCheckerService
 {
-    private static readonly HashSet<string> GenericHyperlinkDisplayTexts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "click here",
-        "here",
-        "link",
-        "more",
-        "read more",
-        "learn more"
-    };
-
-    private static readonly HashSet<string> GenericAltTexts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "image",
-        "picture",
-        "photo",
-        "shape",
-        "text box",
-        "object",
-        "graphic"
-    };
-
     public static IReadOnlyList<AccessibilityIssue> FindIssues(Workbook workbook)
     {
         var issues = new List<AccessibilityIssue>();
         foreach (var sheet in workbook.Sheets)
         {
-            if (IsDefaultWorksheetName(sheet.Name))
+            if (AccessibilityTextRules.IsDefaultWorksheetName(sheet.Name))
             {
                 issues.Add(new AccessibilityIssue(
                     AccessibilityIssueKind.DefaultWorksheetName,
@@ -87,7 +66,7 @@ public static class AccessibilityCheckerService
             foreach (var (address, target) in sheet.Hyperlinks)
             {
                 if (sheet.GetCell(address)?.Value is TextValue displayText &&
-                    IsDescriptiveHyperlinkText(displayText.Value, target))
+                    AccessibilityTextRules.IsDescriptiveHyperlinkText(displayText.Value, target))
                     continue;
 
                 issues.Add(new AccessibilityIssue(
@@ -111,7 +90,7 @@ public static class AccessibilityCheckerService
                     continue;
                 }
 
-                if (IsGenericChartTitle(chart.Title))
+                if (AccessibilityTextRules.IsGenericChartTitle(chart.Title))
                 {
                     issues.Add(new AccessibilityIssue(
                         AccessibilityIssueKind.GenericChartTitle,
@@ -215,7 +194,7 @@ public static class AccessibilityCheckerService
             return;
         }
 
-        if (IsGenericAltText(altText))
+        if (AccessibilityTextRules.IsGenericAltText(altText))
         {
             issues.Add(new AccessibilityIssue(
                 AccessibilityIssueKind.GenericAltText,
@@ -225,40 +204,6 @@ public static class AccessibilityCheckerService
                 $"{objectType} alternate text should describe the object."));
         }
     }
-
-    private static bool IsDescriptiveHyperlinkText(string displayText, string target)
-    {
-        var text = displayText.Trim();
-        return text.Length > 0 &&
-            !GenericHyperlinkDisplayTexts.Contains(text) &&
-            !string.Equals(text, target.Trim(), StringComparison.OrdinalIgnoreCase) &&
-            !LooksLikeUrl(text);
-    }
-
-    private static bool LooksLikeUrl(string text) =>
-        (Uri.TryCreate(text, UriKind.Absolute, out var uri) &&
-            (uri.Scheme == Uri.UriSchemeHttp ||
-             uri.Scheme == Uri.UriSchemeHttps ||
-             uri.Scheme == Uri.UriSchemeMailto ||
-             uri.Scheme == Uri.UriSchemeFtp)) ||
-        text.StartsWith("www.", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsGenericAltText(string altText)
-    {
-        var text = altText.Trim();
-        return GenericAltTexts.Contains(text) ||
-            text.StartsWith("picture ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "picture ") ||
-            text.StartsWith("image ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "image ") ||
-            text.StartsWith("shape ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "shape ") ||
-            text.StartsWith("text box ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "text box ");
-    }
-
-    private static bool IsNumberSuffix(string text, string prefix) =>
-        int.TryParse(text[prefix.Length..], out _);
-
-    private static bool IsDefaultWorksheetName(string name) =>
-        name.StartsWith("Sheet", StringComparison.OrdinalIgnoreCase) &&
-        int.TryParse(name["Sheet".Length..], out _);
 
     private static string? ReadHeaderText(Sheet sheet, CellAddress headerAddress, string? columnName)
     {
@@ -274,13 +219,6 @@ public static class AccessibilityCheckerService
             ErrorValue error => error.Code,
             _ => null
         };
-    }
-
-    private static bool IsGenericChartTitle(string title)
-    {
-        var text = title.Trim();
-        return string.Equals(text, "Chart Title", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(text, "Title", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FormatRange(GridRange range) =>

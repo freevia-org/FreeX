@@ -50,18 +50,26 @@ public sealed class AppDiagnostics : IAppDiagnostics
 {
     private readonly AppDiagnosticsFileStore _fileStore;
     private readonly AppDiagnosticsMetadata _metadata;
+    private readonly ICrashAnalytics _crashAnalytics;
 
-    public AppDiagnostics(AppDiagnosticsFileStore fileStore, AppDiagnosticsMetadata metadata)
+    public AppDiagnostics(
+        AppDiagnosticsFileStore fileStore,
+        AppDiagnosticsMetadata metadata,
+        ICrashAnalytics? crashAnalytics = null)
     {
         _fileStore = fileStore;
         _metadata = metadata;
+        _crashAnalytics = crashAnalytics ?? new DisabledCrashAnalytics();
     }
 
     public void RecordEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null)
     {
         try
         {
-            _fileStore.RecordEvent(eventName, _metadata, properties);
+            var safeProperties = AppDiagnosticsFileStore.SanitizeProperties(properties)
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            _fileStore.RecordEvent(eventName, _metadata, safeProperties);
+            _crashAnalytics.RecordBreadcrumb(eventName, safeProperties);
         }
         catch
         {
@@ -71,15 +79,26 @@ public sealed class AppDiagnostics : IAppDiagnostics
 
     public string RecordCrash(Exception exception, string source)
     {
+        var reportPath = string.Empty;
         try
         {
-            return _fileStore.RecordCrash(exception, source, _metadata);
+            reportPath = _fileStore.RecordCrash(exception, source, _metadata);
         }
         catch
         {
-            // Crash reporting is best-effort; preserve the original failure path.
-            return string.Empty;
+            // Local crash reporting is best-effort; preserve the original failure path.
         }
+
+        try
+        {
+            _crashAnalytics.CaptureCrash(exception, source);
+        }
+        catch
+        {
+            // Remote crash reporting must never suppress local diagnostics.
+        }
+
+        return reportPath;
     }
 }
 
@@ -94,6 +113,7 @@ public sealed class AppDiagnosticsFileStore
     private static readonly HashSet<string> AllowedPropertyNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "command",
+        "dialog",
         "extension",
         "fileType",
         "format",
@@ -171,7 +191,7 @@ public sealed class AppDiagnosticsFileStore
             ["processArchitecture"] = metadata.ProcessArchitecture
         };
 
-    private static IEnumerable<KeyValuePair<string, string?>> SanitizeProperties(
+    public static IEnumerable<KeyValuePair<string, string?>> SanitizeProperties(
         IReadOnlyDictionary<string, string?>? properties)
     {
         if (properties is null)
