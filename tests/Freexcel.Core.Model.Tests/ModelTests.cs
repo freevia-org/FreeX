@@ -493,11 +493,48 @@ public class SheetCloneTests
         var copy = src.Clone(SheetId.New(), "Copy");
 
         var clonedRule = copy.ConditionalFormats.Should().ContainSingle().Subject;
+        clonedRule.AppliesTo.Start.Sheet.Should().Be(copy.Id);
+        clonedRule.AppliesTo.End.Sheet.Should().Be(copy.Id);
         clonedRule.Id.Should().NotBe(src.ConditionalFormats.Single().Id);
         clonedRule.NativeChildXmls.Should().HaveCount(2);
         clonedRule.NativeChildXmls.Should().Contain(xml => xml.Contains("{FUTURE}", StringComparison.Ordinal));
         clonedRule.NativeChildXmls.Should().Contain(xml => xml.Contains("future", StringComparison.Ordinal));
         clonedRule.NativeChildXmls.Should().NotContain(xml => xml.Contains("11111111-2222-3333-4444-555555555555", StringComparison.Ordinal));
         clonedRule.NativePayloadChildXmls.Should().BeEquivalentTo(src.ConditionalFormats.Single().NativePayloadChildXmls);
+    }
+
+    [Fact]
+    public void Sheet_Clone_RemapDataValidationRangeAndPreservesNativeMetadata()
+    {
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("S");
+        var nativeAttributes = new Dictionary<string, string> { ["uid"] = "{validation}" };
+        var nativeChildXmls = new[] { """<ext custom="kept" />""" };
+        src.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(src.Id, 3, 2),
+                new CellAddress(src.Id, 6, 2)),
+            Type = DvType.List,
+            Formula1 = "\"A,B\"",
+            AllowBlank = false,
+            ErrorTitle = "Invalid",
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        });
+        var newId = SheetId.New();
+
+        var copy = src.Clone(newId, "Copy");
+
+        var clonedValidation = copy.DataValidations.Should().ContainSingle().Subject;
+        clonedValidation.Should().NotBeSameAs(src.DataValidations.Single());
+        clonedValidation.AppliesTo.Should().Be(new GridRange(
+            new CellAddress(newId, 3, 2),
+            new CellAddress(newId, 6, 2)));
+        clonedValidation.Type.Should().Be(DvType.List);
+        clonedValidation.AllowBlank.Should().BeFalse();
+        clonedValidation.ErrorTitle.Should().Be("Invalid");
+        clonedValidation.NativeAttributes.Should().BeSameAs(nativeAttributes);
+        clonedValidation.NativeChildXmls.Should().BeSameAs(nativeChildXmls);
     }
 }
