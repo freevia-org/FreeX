@@ -290,6 +290,62 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void PageLayoutSetupMenuKeyTips_UpdatePrintSettings()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.ActiveSheetPageMargins.Should().Be(WorksheetPageMargins.Narrow);
+            harness.ActiveSheetPageOrientation.Should().Be(WorksheetPageOrientation.Portrait);
+            harness.ActiveSheetPaperSize.Should().Be(WorksheetPaperSize.A4);
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.P);
+            harness.VisibleCommandKeyTips("M").Should().ContainSingle("Margins");
+            harness.HandleKeyTip(Key.Escape);
+
+            harness.OpenRibbonMenu(Key.P, Key.M);
+            harness.ActiveMenuItemGestureText("Wide").Should().Be("W");
+            harness.HandleKeyTip(Key.W);
+
+            harness.ActiveSheetPageMargins.Should().Be(WorksheetPageMargins.Wide);
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.OpenRibbonMenu(Key.P, Key.O, Key.R);
+            harness.ActiveMenuItemGestureText("Landscape").Should().Be("L");
+            harness.HandleKeyTip(Key.L);
+
+            harness.ActiveSheetPageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.OpenRibbonMenu(Key.P, Key.S, Key.Z);
+            harness.ActiveMenuItemGestureText("Legal (8.5x14)").Should().Be("G");
+            harness.HandleKeyTip(Key.G);
+
+            harness.ActiveSheetPaperSize.Should().Be(WorksheetPaperSize.Legal);
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.SelectRange(2, 2, 4, 3);
+            harness.ActiveSheetPrintArea.Should().BeNull();
+            harness.OpenRibbonMenu(Key.P, Key.P, Key.A);
+            harness.ActiveMenuItemGestureText("Set Print Area").Should().Be("S");
+            harness.HandleKeyTip(Key.S);
+
+            harness.ActiveSheetPrintArea.Should().Be((2u, 2u, 4u, 3u));
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.OpenRibbonMenu(Key.P, Key.P, Key.A);
+            harness.ActiveMenuItemGestureText("Clear Print Area").Should().Be("C");
+            harness.HandleKeyTip(Key.C);
+
+            harness.ActiveSheetPrintArea.Should().BeNull();
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void ViewZoomCommandKeyTips_ResetAndFitSelection()
     {
         RunSta(() =>
@@ -940,6 +996,23 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public IReadOnlyList<uint> ActiveSheetColumnPageBreaks => _workbook.Sheets[0].ColumnPageBreaks.ToList();
 
+        public WorksheetPageMargins ActiveSheetPageMargins => _workbook.Sheets[0].PageMargins;
+
+        public WorksheetPageOrientation ActiveSheetPageOrientation => _workbook.Sheets[0].PageOrientation;
+
+        public WorksheetPaperSize ActiveSheetPaperSize => _workbook.Sheets[0].PaperSize;
+
+        public (uint StartRow, uint StartCol, uint EndRow, uint EndCol)? ActiveSheetPrintArea
+        {
+            get
+            {
+                var range = _workbook.Sheets[0].PrintArea;
+                return range is { } value
+                    ? (value.Start.Row, value.Start.Col, value.End.Row, value.End.Col)
+                    : null;
+            }
+        }
+
         public (uint FrozenRows, uint FrozenCols) ActiveSheetFrozenPanes
         {
             get
@@ -1211,7 +1284,10 @@ public sealed class MainWindowRibbonKeyTipTests
             foreach (var keyTip in commandKeyTips)
                 HandleKeyTip(keyTip);
 
-            ActiveMenuIsOpen.Should().BeTrue();
+            ActiveMenuIsOpen.Should().BeTrue(
+                "the ribbon keytip sequence {0},{1} should open a menu",
+                tabKeyTip,
+                string.Join(",", commandKeyTips));
         }
 
         private void ResetUiState()

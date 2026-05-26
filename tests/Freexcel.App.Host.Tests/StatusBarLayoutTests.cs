@@ -212,6 +212,8 @@ public sealed class StatusBarLayoutTests
             };
 
             window.Show();
+            if (window.FindName("FormulaBarBorder") is FrameworkElement formulaBarBorder)
+                formulaBarBorder.Visibility = Visibility.Visible;
             window.UpdateLayout();
             PumpDispatcher();
             return new MainWindowHarness(window);
