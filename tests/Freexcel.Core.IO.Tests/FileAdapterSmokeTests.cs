@@ -17407,6 +17407,51 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterColorFilterWithoutMaterializing()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterColorFilterRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterColorFilterMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.ColorFilter.Should().NotBeNull();
+        loadedFilterColumn.ColorFilter!.DifferentialFormatId.Should().Be(3);
+        loadedFilterColumn.ColorFilter.DifferentialFormatIdRaw.Should().Be("3");
+        loadedFilterColumn.ColorFilter.CellColor.Should().BeFalse();
+        loadedFilterColumn.ColorFilter.CellColorRaw.Should().Be("0");
+        loadedFilterColumn.ColorFilter.NativeAttributes.Should().Contain("{urn:freexcel:test}colorFilterFlag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var colorFilter = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "colorFilter");
+        colorFilter.Should().NotBeNull();
+        colorFilter!.Attribute("dxfId")!.Value.Should().Be("3");
+        colorFilter.Attribute("cellColor")!.Value.Should().Be("0");
+        colorFilter.Attribute(XName.Get("colorFilterFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
     public void XlsxAdapter_FreshSave_WritesModeledWorksheetAutoFilterValues()
     {
         var workbook = new Workbook("WorksheetAutoFilterValuesTest");
@@ -17625,6 +17670,22 @@ public partial class FileAdapterSmokeTests
                 NativeAttributes: new Dictionary<string, string> { ["customDynamicFilterFlag"] = "keep" }),
             NativeFilterXmls: [],
             NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag4"] = "keep" }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            4,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: null,
+            ColorFilter: new WorksheetAutoFilterColorFilterModel(
+                DifferentialFormatId: 7,
+                CellColor: true,
+                NativeAttributes: new Dictionary<string, string> { ["customColorFilterFlag"] = "keep" }),
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag5"] = "keep" }));
 
         var stream = new MemoryStream();
         new NativeJsonAdapter().Save(workbook, stream);
@@ -17637,7 +17698,7 @@ public partial class FileAdapterSmokeTests
         autoFilter!.Reference.Should().Be("A1:D3");
         autoFilter.NativeAttributes.Should().Contain("customAutoFilterFlag", "keep");
         autoFilter.NativeChildXmls.Should().ContainSingle().Which.Should().Contain("extLst");
-        autoFilter.FilterColumns.Should().HaveCount(4);
+        autoFilter.FilterColumns.Should().HaveCount(5);
         var filterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 0);
         filterColumn.ColumnId.Should().Be(0);
         filterColumn.Values.Should().Equal("A");
@@ -17670,6 +17731,12 @@ public partial class FileAdapterSmokeTests
         dynamicFilterColumn.DynamicFilter!.Type.Should().Be("belowAverage");
         dynamicFilterColumn.DynamicFilter.NativeAttributes.Should().Contain("customDynamicFilterFlag", "keep");
         dynamicFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag4", "keep");
+        var colorFilterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 4);
+        colorFilterColumn.ColorFilter.Should().NotBeNull();
+        colorFilterColumn.ColorFilter!.DifferentialFormatId.Should().Be(7);
+        colorFilterColumn.ColorFilter.CellColor.Should().BeTrue();
+        colorFilterColumn.ColorFilter.NativeAttributes.Should().Contain("customColorFilterFlag", "keep");
+        colorFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag5", "keep");
     }
 
     [Fact]
@@ -21947,6 +22014,31 @@ public partial class FileAdapterSmokeTests
                         worksheetNs + "dynamicFilter",
                         new XAttribute("type", "thisMonth"),
                         new XAttribute("val", "45000")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterColorFilterMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "colorFilter",
+                        new XAttribute("dxfId", "3"),
+                        new XAttribute("cellColor", "0"),
+                        new XAttribute(freexcelNs + "colorFilterFlag", "keep")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
