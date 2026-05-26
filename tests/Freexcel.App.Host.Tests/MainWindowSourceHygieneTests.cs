@@ -1369,6 +1369,55 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void RibbonChartButtons_RouteThroughRenderableChartInsertionCommandPath()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = ReadChartCommandSource();
+
+        xaml.Should().Contain("Click=\"InsertChartPickerBtn_Click\"");
+        xaml.Should().Contain("Click=\"ChartColumnMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"ChartLineMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"ChartPieMenuItem_Click\"");
+        source.Should().Contain("private void InsertChartOfType(ChartType type)");
+        source.Should().Contain("ChartTypeSupport.IsRenderable(type)");
+        source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
+        source.Should().Contain("UpdateViewport();");
+    }
+
+    [Fact]
+    public void HyperlinkDialogAndCtrlClick_RouteThroughSetAndNavigatePlans()
+    {
+        var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "KeyboardShortcutMatcher.CommandRules.cs"));
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        keyboardSource.Should().Contain("KeyboardCommandShortcut.InsertHyperlink");
+        commandSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertHyperlink, InsertLinkBtn_Click)");
+        insertSource.Should().Contain("new HyperlinkDialog(prefill.Target, prefill.DisplayText) { Owner = this }");
+        insertSource.Should().Contain("new SetHyperlinkCommand(");
+        insertSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan");
+        insertSource.Should().Contain("TryNavigateToWorkbookReference(plan.Target)");
+        selectionSource.Should().Contain("(Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryOpenHyperlink(newAddr)");
+    }
+
+    [Fact]
+    public void FontDropdownSelection_SyncsThroughStyleDiffToolbarStateAndGridTypeface()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        var uiStateSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var renderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.UI", "GridView.Rendering.CellStyles.cs"));
+
+        xaml.Should().Contain("x:Name=\"FontNameBox\"");
+        xaml.Should().Contain("SelectionChanged=\"FontNameBox_SelectionChanged\"");
+        formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
+        uiStateSource.Should().Contain("FontNameBox.SelectedItem = state.FontName");
+        renderSource.Should().Contain("var fontName = string.IsNullOrWhiteSpace(style?.FontName)");
+        renderSource.Should().Contain("new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true)");
+    }
+
+    [Fact]
     public void InsertPivotTable_NewWorksheetDestination_UsesUndoableCommand()
     {
         var source = ReadPivotCommandSource();

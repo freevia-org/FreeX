@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using FluentAssertions;
 using Freexcel.App.Host;
 using Freexcel.Core.Model;
@@ -39,6 +40,31 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
                 visibleSpan: 40,
                 absoluteLimit: CellAddress.MaxRow)
             .Should().Be((43d, 43d));
+    }
+
+    [Fact]
+    public void CalculateWheelScroll_UsesNormalizedTouchpadDeltaForSmallVerticalMovement()
+    {
+        var notches = ViewportScrollCalculator.NormalizeWheelNotches(-30);
+
+        ViewportScrollCalculator.CalculateWheelScroll(
+                currentValue: 1,
+                currentMaximum: 40,
+                wheelNotches: notches,
+                stepPerNotch: 3,
+                visibleSpan: 40,
+                absoluteLimit: CellAddress.MaxRow)
+            .Should()
+            .Be((40d, 4d));
+    }
+
+    [Fact]
+    public void MainWindowWheelHandler_NormalizesRawMouseWheelDeltaBeforeScrolling()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+
+        source.Should().Contain("ViewportScrollCalculator.NormalizeWheelNotches(e.Delta)");
+        source.Should().Contain("ViewportScrollCalculator.CalculateWheelScroll");
     }
 
     [Theory]

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
+using System.Windows;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -89,5 +90,38 @@ public sealed class ClipboardPastePlannerTests
         ClipboardPastePlanner.ShouldUseInternalClipboard(internalText, currentClipboardText)
             .Should()
             .Be(expected);
+    }
+
+    [Fact]
+    public void ExternalPaste_UsesRealWindowsClipboardTextAndRejectsStaleInternalCopy()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var previousText = Clipboard.ContainsText() ? Clipboard.GetText() : null;
+            try
+            {
+                Clipboard.SetText("alpha\t42\r\nbeta\t99");
+                var clipboardText = Clipboard.GetText();
+
+                ClipboardPastePlanner.ShouldUseInternalClipboard("old internal copy", clipboardText)
+                    .Should()
+                    .BeFalse("real OS clipboard text changed after the internal copy was captured");
+
+                ClipboardSerializer.Deserialize(clipboardText)
+                    .Should()
+                    .BeEquivalentTo(new[]
+                    {
+                        new[] { "alpha", "42" },
+                        new[] { "beta", "99" }
+                    });
+            }
+            finally
+            {
+                if (previousText is not null)
+                    Clipboard.SetText(previousText);
+                else
+                    Clipboard.Clear();
+            }
+        });
     }
 }
