@@ -326,7 +326,7 @@ public static partial class BuiltInFunctions
         for (int r = 0; r < range.RowCount; r++)
         {
             uint absRow = range.StartRow + (uint)r;
-            if (ignoreHiddenRows && ctx.IsRowHidden(absRow)) continue;
+            if (ignoreHiddenRows && IsAggregateRowHidden(ctx, range, absRow)) continue;
             for (int c = 0; c < range.ColCount; c++)
             {
                 uint absCol = range.StartCol + (uint)c;
@@ -334,6 +334,13 @@ public static partial class BuiltInFunctions
                 yield return range.Cells[r, c];
             }
         }
+    }
+
+    private static bool IsAggregateRowHidden(IEvalContext ctx, RangeValue range, uint row)
+    {
+        return range.SheetName is null
+            ? ctx.IsRowHidden(row)
+            : ctx.IsRowHidden(range.SheetName, row);
     }
 
     private static double PercentileIncCalc(List<double> nums, double p)
