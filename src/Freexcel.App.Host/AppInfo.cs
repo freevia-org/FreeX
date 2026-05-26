@@ -2,7 +2,7 @@ namespace Freexcel.App.Host;
 
 public static class AppInfo
 {
-    public const string VersionText = "Version 0.5 (Phase 5)";
+    public const string VersionText = "Version 0.5 (Tester Release)";
     public const string HelpUrl = "https://github.com/tony-xmelon/Freexcel";
     public const string FeedbackUrl = "https://github.com/tony-xmelon/Freexcel/issues/new";
     public const string LatestReleaseUrl = "https://github.com/tony-xmelon/Freexcel/releases/latest";

@@ -22,7 +22,7 @@ public sealed class FormulaEvaluator
         var parser = new Parser(tokens);
         var ast = parser.Parse();
         var context = new SheetEvalContext(sheet, workbook, this, currentCell);
-        return EvaluateNode(ast, context);
+        return NormalizeTopLevelResult(EvaluateNode(ast, context));
     }
 
     /// <summary>
@@ -35,8 +35,11 @@ public sealed class FormulaEvaluator
         Freexcel.Core.Model.CellAddress? currentCell = null)
     {
         var context = new SheetEvalContext(sheet, workbook, this, currentCell);
-        return EvaluateNode(ast, context);
+        return NormalizeTopLevelResult(EvaluateNode(ast, context));
     }
+
+    private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
+        value is LambdaValue ? ErrorValue.Calc : value;
 
     /// <summary>
     /// Evaluate an AST node recursively.

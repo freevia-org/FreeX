@@ -103,6 +103,7 @@ public sealed partial class SortDialog : Window
             Margin = new Thickness(0, 0, 0, 12)
         };
         _levelsGrid.SelectionChanged += (_, _) => UpdateToolbarButtonStates();
+        _levelsGrid.KeyDown += LevelsGrid_KeyDown;
         _sortByColumn = new DataGridComboBoxColumn
         {
             Header = "Sort by",
@@ -248,6 +249,15 @@ public sealed partial class SortDialog : Window
         _levelsGrid.Focus();
         Keyboard.Focus(_levelsGrid);
         UpdateToolbarButtonStates();
+    }
+
+    private void LevelsGrid_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete && _deleteLevelButton.IsEnabled)
+        {
+            _deleteLevelButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            e.Handled = true;
+        }
     }
 
     private void UpdateToolbarButtonStates()

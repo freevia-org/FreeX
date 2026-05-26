@@ -14400,10 +14400,12 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.PageMarginsMetadata.Should().NotBeNull();
         loadedSheet.PageMarginsMetadata!.NativeAttributes.Should().Contain("customAttr", "page-margins-native");
+        loadedSheet.PageMarginsMetadata.NativeAttributes["invalid pageMargins attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14417,6 +14419,7 @@ public partial class FileAdapterSmokeTests
         pageMargins.Attribute("footer")!.Value.Should().Be("0.45");
         pageMargins.Attribute("customAttr").Should().NotBeNull();
         pageMargins.Attribute("customAttr")!.Value.Should().Be("page-margins-native");
+        pageMargins.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid pageMargins attr");
     }
 
     [Fact]
