@@ -311,13 +311,25 @@ public sealed class PivotTableRefreshServiceTests
             .FillColor.Should().Be(new CellColor(182, 202, 214));
     }
 
-    [Fact]
-    public void Refresh_ResolvesSupportedLightPivotStyleFromWorkbookTheme()
+    [Theory]
+    [InlineData("PivotStyleLight16", WorkbookThemeColorSlot.Accent1)]
+    [InlineData("PivotStyleLight17", WorkbookThemeColorSlot.Accent2)]
+    [InlineData("PivotStyleLight18", WorkbookThemeColorSlot.Accent3)]
+    [InlineData("PivotStyleLight19", WorkbookThemeColorSlot.Accent4)]
+    [InlineData("PivotStyleLight20", WorkbookThemeColorSlot.Accent5)]
+    [InlineData("PivotStyleLight21", WorkbookThemeColorSlot.Accent6)]
+    [InlineData("pivotstylelight21", WorkbookThemeColorSlot.Accent6)]
+    public void Refresh_ResolvesSupportedLightPivotStyleFromWorkbookTheme(string styleName, WorkbookThemeColorSlot expectedSlot)
     {
         var workbook = new Workbook("PivotStyleLightThemeRenderTest")
         {
             Theme = WorkbookTheme.Office
                 .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 80, 120))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(120, 40, 20))
+                .WithColor(WorkbookThemeColorSlot.Accent3, new CellColor(25, 130, 60))
+                .WithColor(WorkbookThemeColorSlot.Accent4, new CellColor(40, 90, 180))
+                .WithColor(WorkbookThemeColorSlot.Accent5, new CellColor(150, 45, 140))
+                .WithColor(WorkbookThemeColorSlot.Accent6, new CellColor(80, 145, 35))
         };
         var sheet = workbook.AddSheet("Data");
         SeedSalesData(sheet);
@@ -327,7 +339,7 @@ public sealed class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "G6"),
-            StyleName = "PivotStyleLight16",
+            StyleName = styleName,
             ShowRowStripes = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
@@ -336,11 +348,11 @@ public sealed class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.8));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(expectedSlot, 0.8));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.95));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(expectedSlot, 0.95));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.9));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(expectedSlot, 0.9));
     }
 
     [Fact]

@@ -340,6 +340,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue TimevalueScalar(ScalarValue value)
     {
         var text = ToText(value);
+        if (!TextHasTimeComponent(text)) return ErrorValue.Value;
         if (TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts.Days == 0)
             return new NumberValue(ts.TotalDays);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
@@ -359,11 +360,22 @@ public static partial class BuiltInFunctions
     {
         var text = ToText(value);
         if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
+        if (!TextHasDateComponent(text)) return ErrorValue.Value;
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
     }
+
+    private static bool TextHasTimeComponent(string text) =>
+        Regex.IsMatch(text, @"\d\s*:\s*\d") ||
+        Regex.IsMatch(text, @"\b(?:AM|PM)\b", RegexOptions.IgnoreCase);
+
+    private static bool TextHasDateComponent(string text) =>
+        Regex.IsMatch(text, @"\d+\s*[-/]\s*\d+") ||
+        Regex.IsMatch(text,
+            @"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b",
+            RegexOptions.IgnoreCase);
 
     private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
     {

@@ -76,8 +76,8 @@ internal static partial class DelimitedTextWorkbookReader
 
     internal static bool TryReadRecord(TextReader reader, char delimiter, out List<DelimitedTextField> fields)
     {
-        fields = [];
-        var current = new StringBuilder();
+        fields = new(capacity: 8);
+        var current = new StringBuilder(capacity: 64);
         var inQuotes = false;
         var atFieldStart = true;
         var currentWasQuoted = false;
