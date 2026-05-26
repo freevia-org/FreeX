@@ -522,6 +522,17 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ForecastSheetDialog_UsesExcelLikeCreateDefaultAction()
+    {
+        var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
+        var helperSource = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed class ObjectRotationDialog");
+
+        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(\"Forecast _periods:\", _periodsBox, Accept, acceptContent: \"_Create\")");
+        helperSource.Should().Contain("string acceptContent = \"_OK\"");
+        helperSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72, acceptContent: acceptContent)");
+    }
+
+    [Fact]
     public void ForecastSheetDialogInvalidPeriods_ShowsOwnedWarningAndRefocusesInput()
     {
         var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
