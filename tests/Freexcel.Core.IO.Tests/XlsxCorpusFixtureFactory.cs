@@ -67,6 +67,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-function-groups-001" => true,
         "generated-workbook-views-001" => true,
         "generated-workbook-defined-names-native-001" => true,
+        "generated-stylesheet-native-metadata-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
         "generated-worksheet-single-xml-cells-001" => true,
@@ -346,6 +347,40 @@ internal static class XlsxCorpusFixtureFactory
                 <definedName name="DynamicSalesRange" hidden="1">1+1</definedName>
               </definedNames>
             </workbook>
+            """)),
+        "generated-stylesheet-native-metadata-001" => CreatePackage(("xl/styles.xml", """
+            <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                        xmlns:fx="urn:freexcel:test">
+              <colors>
+                <indexedColors>
+                  <rgbColor rgb="FF010203"/>
+                </indexedColors>
+              </colors>
+              <dxfs count="1">
+                <dxf nativePivotDxf="kept">
+                  <fill>
+                    <patternFill patternType="solid">
+                      <fgColor rgb="FFABCDEF"/>
+                    </patternFill>
+                  </fill>
+                  <fx:pivotStyleDxfNativeChild value="kept"/>
+                </dxf>
+              </dxfs>
+              <tableStyles defaultPivotStyle="PivotStyleMedium9">
+                <fx:tableStylesNativeChild value="kept"/>
+                <tableStyle name="FreexcelNativeTableStyle" pivot="0" table="1" count="1">
+                  <tableStyleElement type="wholeTable" dxfId="0"/>
+                </tableStyle>
+                <tableStyle name="FreexcelNativePivotStyle" pivot="1" table="0" count="1">
+                  <tableStyleElement type="wholeTable" dxfId="0"/>
+                </tableStyle>
+              </tableStyles>
+              <extLst>
+                <ext uri="{FFEEDDCC-7788-6655-4433-22110099AABB}">
+                  <FreexcelNativeStylesExtension/>
+                </ext>
+              </extLst>
+            </styleSheet>
             """)),
         "generated-worksheet-ignored-errors-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -776,6 +811,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-defined-names-native-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-stylesheet-native-metadata-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/styles.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
@@ -1023,6 +1060,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-defined-names-native-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookDefinedNamesNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-stylesheet-native-metadata-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyStylesheetNativeMetadataFixup(archive);
             return;
         }
 
@@ -1821,6 +1864,73 @@ internal static class XlsxCorpusFixtureFactory
                 new XAttribute("hidden", "1"),
                 "1+1")));
         ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyStylesheetNativeMetadataFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var stylesPath = "xl/styles.xml";
+        var stylesEntry = archive.GetEntry(stylesPath);
+        if (stylesEntry is null)
+            return;
+
+        var stylesXml = LoadPackageXml(stylesEntry);
+        stylesXml.Root?.Elements(workbookNs + "colors").Remove();
+        stylesXml.Root?.Elements(workbookNs + "dxfs").Remove();
+        stylesXml.Root?.Elements(workbookNs + "tableStyles").Remove();
+        stylesXml.Root?.Elements(workbookNs + "extLst").Remove();
+        stylesXml.Root?.Add(
+            new XElement(
+                workbookNs + "colors",
+                new XElement(
+                    workbookNs + "indexedColors",
+                    new XElement(workbookNs + "rgbColor", new XAttribute("rgb", "FF010203")))),
+            new XElement(
+                workbookNs + "dxfs",
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "dxf",
+                    new XAttribute("nativePivotDxf", "kept"),
+                    new XElement(
+                        workbookNs + "fill",
+                        new XElement(
+                            workbookNs + "patternFill",
+                            new XAttribute("patternType", "solid"),
+                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FFABCDEF")))),
+                    new XElement(freexcelNs + "pivotStyleDxfNativeChild", new XAttribute("value", "kept")))),
+            new XElement(
+                workbookNs + "tableStyles",
+                new XAttribute("defaultPivotStyle", "PivotStyleMedium9"),
+                new XElement(freexcelNs + "tableStylesNativeChild", new XAttribute("value", "kept")),
+                new XElement(
+                    workbookNs + "tableStyle",
+                    new XAttribute("name", "FreexcelNativeTableStyle"),
+                    new XAttribute("pivot", "0"),
+                    new XAttribute("table", "1"),
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "tableStyleElement",
+                        new XAttribute("type", "wholeTable"),
+                        new XAttribute("dxfId", "0"))),
+                new XElement(
+                    workbookNs + "tableStyle",
+                    new XAttribute("name", "FreexcelNativePivotStyle"),
+                    new XAttribute("pivot", "1"),
+                    new XAttribute("table", "0"),
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "tableStyleElement",
+                        new XAttribute("type", "wholeTable"),
+                        new XAttribute("dxfId", "0")))),
+            new XElement(
+                workbookNs + "extLst",
+                new XElement(
+                    workbookNs + "ext",
+                    new XAttribute("uri", "{FFEEDDCC-7788-6655-4433-22110099AABB}"),
+                    new XElement(workbookNs + "FreexcelNativeStylesExtension"))));
+        ReplacePackageXml(archive, stylesPath, stylesXml);
     }
 
     private static void ApplyWorksheetIgnoredErrorsFixup(ZipArchive archive)
