@@ -191,76 +191,9 @@ public sealed partial class XlsxFileAdapter
         ZipArchiveEntry worksheetEntry,
         IReadOnlyList<CellStyle> differentialStyles)
     {
-        var hiddenRows = new HashSet<uint>();
-        var hiddenCols = new HashSet<uint>();
-        var rowOutlineLevels = new Dictionary<uint, int>();
-        var colOutlineLevels = new Dictionary<uint, int>();
-        var groupHiddenRows = new HashSet<uint>();
-        var groupHiddenCols = new HashSet<uint>();
-        var rowHeights = new Dictionary<uint, double>();
-        var columnWidths = new Dictionary<uint, double>();
         var worksheetXml = LoadXml(worksheetEntry);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-        foreach (var row in worksheetXml.Descendants(worksheetNs + "row"))
-        {
-            if (!uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
-                continue;
-
-            if (IsTruthy(row.Attribute("hidden")?.Value))
-                hiddenRows.Add(rowNumber);
-
-            if (ParseOptionalDouble(row.Attribute("ht")?.Value) is { } heightPoints && heightPoints > 0)
-                rowHeights[rowNumber] = heightPoints * (96.0 / 72.0);
-
-            var outlineStr = row.Attribute("outlineLevel")?.Value;
-            if (int.TryParse(outlineStr, out var outlineLevel) && outlineLevel > 0)
-            {
-                rowOutlineLevels[rowNumber] = outlineLevel;
-                if (IsTruthy(row.Attribute("collapsed")?.Value))
-                    groupHiddenRows.Add(rowNumber);
-            }
-        }
-
-        foreach (var col in worksheetXml.Descendants(worksheetNs + "col"))
-        {
-            if (!uint.TryParse(col.Attribute("min")?.Value, out var min))
-                continue;
-            if (!uint.TryParse(col.Attribute("max")?.Value, out var max))
-                continue;
-            if (min > max)
-                continue;
-
-            if (IsTruthy(col.Attribute("hidden")?.Value))
-            {
-                for (var colNumber = min; colNumber <= max; colNumber++)
-                    hiddenCols.Add(colNumber);
-            }
-
-            var colOutlineStr = col.Attribute("outlineLevel")?.Value;
-            if (int.TryParse(colOutlineStr, out var colOutlineLevel) && colOutlineLevel > 0)
-            {
-                var collapsed = IsTruthy(col.Attribute("collapsed")?.Value);
-                for (var colNumber = min; colNumber <= max; colNumber++)
-                {
-                    colOutlineLevels[colNumber] = colOutlineLevel;
-                    if (collapsed)
-                        groupHiddenCols.Add(colNumber);
-                }
-            }
-
-            if (IsTruthy(col.Attribute("customWidth")?.Value) &&
-                ParseOptionalDouble(col.Attribute("width")?.Value) is { } width &&
-                width > 0)
-            {
-                if (col.Attribute("style") is not null && width <= 9.2)
-                    continue;
-
-                width = Math.Floor(width);
-                for (var colNumber = min; colNumber <= max; colNumber++)
-                    columnWidths[colNumber] = width;
-            }
-        }
+        var rowColumnLayout = XlsxWorksheetRowColumnLayoutReader.Read(worksheetXml, worksheetNs);
 
         var protection = worksheetXml.Root?.Element(worksheetNs + "sheetProtection");
         var isProtected = IsTruthy(protection?.Attribute("sheet")?.Value);
@@ -318,8 +251,8 @@ public sealed partial class XlsxFileAdapter
         var codeName = sheetPr?.Attribute("codeName")?.Value;
 
         return new SheetXmlLayout(
-            hiddenRows,
-            hiddenCols,
+            rowColumnLayout.HiddenRows,
+            rowColumnLayout.HiddenCols,
             isProtected,
             passwordHash,
             protectionMetadata,
@@ -359,16 +292,16 @@ public sealed partial class XlsxFileAdapter
             ReadWorksheetHeaderFooterMetadata(headerFooter),
             background,
             headerFooterPictures,
-            rowOutlineLevels,
-            colOutlineLevels,
+            rowColumnLayout.RowOutlineLevels,
+            rowColumnLayout.ColOutlineLevels,
             ParseOptionalBool(outlinePr?.Attribute("summaryBelow")?.Value),
             ParseOptionalBool(outlinePr?.Attribute("summaryRight")?.Value),
             ParseOptionalBool(outlinePr?.Attribute("showOutlineSymbols")?.Value),
             ParseOptionalBool(outlinePr?.Attribute("applyStyles")?.Value),
-            groupHiddenRows,
-            groupHiddenCols,
-            rowHeights,
-            columnWidths,
+            rowColumnLayout.GroupHiddenRows,
+            rowColumnLayout.GroupHiddenCols,
+            rowColumnLayout.RowHeights,
+            rowColumnLayout.ColumnWidths,
             comments,
             drawingParts.ChartParts,
             drawingParts.PictureParts,
