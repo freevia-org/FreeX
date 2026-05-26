@@ -7172,19 +7172,31 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Vstack_ErrorArgument_PropagatesError()
+    public void Vstack_ScalarErrorArgument_SpillsErrorAsCell()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=VSTACK(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+        var result = _eval.Evaluate("=VSTACK(A1:A1,NA())", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[1, 0].Should().Be(ErrorValue.NA);
     }
 
     [Fact]
-    public void Hstack_ErrorArgument_PropagatesError()
+    public void Hstack_ScalarErrorArgument_SpillsErrorAsCell()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=HSTACK(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+        var result = _eval.Evaluate("=HSTACK(A1:A1,NA())", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(2);
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[0, 1].Should().Be(ErrorValue.NA);
     }
 
     [Fact]
@@ -7251,6 +7263,28 @@ public class FunctionLibraryTests
         rv.ColCount.Should().Be(2);
         rv.Cells[0, 0].Should().Be(new NumberValue(1));
         rv.Cells[0, 1].Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void TorowAndTocol_IgnoreBlanks_KeepsZeroLengthText()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("")),
+            (1,3,new NumberValue(2)));
+
+        var row = _eval.Evaluate("=TOROW(A1:C1,1)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        row.RowCount.Should().Be(1);
+        row.ColCount.Should().Be(2);
+        row.Cells[0, 0].Should().Be(new TextValue(""));
+        row.Cells[0, 1].Should().Be(new NumberValue(2));
+
+        var col = _eval.Evaluate("=TOCOL(A1:C1,1)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        col.RowCount.Should().Be(2);
+        col.ColCount.Should().Be(1);
+        col.Cells[0, 0].Should().Be(new TextValue(""));
+        col.Cells[1, 0].Should().Be(new NumberValue(2));
     }
 
     [Fact]
