@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
@@ -7,6 +8,8 @@ namespace Freexcel.App.UI;
 
 public partial class GridView
 {
+    private static readonly ConcurrentDictionary<uint, string> ColumnHeaderCache = new();
+
     private void RenderFreezeDivider(DrawingContext dc)
     {
         if (Viewport?.FrozenPanes == null) return;
@@ -96,5 +99,5 @@ public partial class GridView
     internal static string FormatColumnHeader(uint column, bool useR1C1ReferenceStyle) =>
         useR1C1ReferenceStyle
             ? column.ToString(CultureInfo.InvariantCulture)
-            : CellAddress.NumberToColumnName(column);
+            : ColumnHeaderCache.GetOrAdd(column, static col => CellAddress.NumberToColumnName(col));
 }

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
 using FluentAssertions;
@@ -46,6 +47,30 @@ public sealed class GridViewRenderPerformanceTests
 
         renderHeaders.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
         renderHeaders.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
+    }
+
+    [Fact]
+    public void RenderHeaders_CachesA1ColumnLabelsAcrossRenderPasses()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.Headers.cs"));
+        var formatColumnHeader = source[
+            source.IndexOf("internal static string FormatColumnHeader", StringComparison.Ordinal)..];
+
+        source.Should().Contain("private static readonly ConcurrentDictionary<uint, string> ColumnHeaderCache = new();");
+        formatColumnHeader.Should().Contain("ColumnHeaderCache.GetOrAdd(column");
+        formatColumnHeader.Should().Contain("CellAddress.NumberToColumnName(col)");
+    }
+
+    [Fact]
+    public void FormatColumnHeader_UsesA1NamesOrR1C1Numbers()
+    {
+        var formatColumnHeader = typeof(GridView).GetMethod(
+            "FormatColumnHeader",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        formatColumnHeader.Should().NotBeNull();
+        formatColumnHeader!.Invoke(null, [27u, false]).Should().Be("AA");
+        formatColumnHeader.Invoke(null, [27u, true]).Should().Be("27");
     }
 
     [Fact]
