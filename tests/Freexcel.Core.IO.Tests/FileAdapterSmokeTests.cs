@@ -17204,6 +17204,88 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MaterializesAndPreservesWorksheetAutoFilterTop10()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterTop10RetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterTop10Metadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.Top10.Should().NotBeNull();
+        loadedFilterColumn.Top10!.Top.Should().BeTrue();
+        loadedFilterColumn.Top10.Percent.Should().BeFalse();
+        loadedFilterColumn.Top10.Value.Should().Be(2);
+        loadedFilterColumn.Top10.FilterValue.Should().Be(20);
+        loadedFilterColumn.Top10.ValueRaw.Should().Be("2");
+        loadedFilterColumn.Top10.NativeAttributes.Should().Contain("{urn:freexcel:test}top10Flag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().Equal(2u);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var top10 = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "top10");
+        top10.Should().NotBeNull();
+        top10!.Attribute("val")!.Value.Should().Be("2");
+        top10.Attribute("filterVal")!.Value.Should().Be("20");
+        top10.Attribute(XName.Get("top10Flag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesWorksheetAutoFilterTop10DefaultValue()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterTop10DefaultTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:A2", null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: new WorksheetAutoFilterTop10Model(),
+            NativeFilterXmls: []));
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "top10")!
+            .Attribute("val")!
+            .Value
+            .Should()
+            .Be("10");
+    }
+
+    [Fact]
     public void XlsxAdapter_FreshSave_WritesModeledWorksheetAutoFilterValues()
     {
         var workbook = new Workbook("WorksheetAutoFilterValuesTest");
@@ -17368,7 +17450,7 @@ public partial class FileAdapterSmokeTests
     {
         var workbook = new Workbook("WorksheetAutoFilterNativeJsonTest");
         var sheet = workbook.AddSheet("Data");
-        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B3", null)
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:C3", null)
         {
             NativeAttributes = new Dictionary<string, string> { ["customAutoFilterFlag"] = "keep" },
             NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"/>"]
@@ -17388,6 +17470,25 @@ public partial class FileAdapterSmokeTests
             NativeCustomFiltersAttributes: new Dictionary<string, string> { ["customFiltersFlag"] = "keep" },
             NativeFilterXmls: [],
             NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag2"] = "keep" }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            2,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: new WorksheetAutoFilterTop10Model(
+                Top: false,
+                Percent: true,
+                Value: 25,
+                FilterValue: 10,
+                PercentRaw: "1",
+                ValueRaw: "25",
+                FilterValueRaw: "10",
+                NativeAttributes: new Dictionary<string, string> { ["customTop10Flag"] = "keep" }),
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag3"] = "keep" }));
 
         var stream = new MemoryStream();
         new NativeJsonAdapter().Save(workbook, stream);
@@ -17397,10 +17498,10 @@ public partial class FileAdapterSmokeTests
 
         var autoFilter = loaded.GetSheetAt(0).AutoFilter;
         autoFilter.Should().NotBeNull();
-        autoFilter!.Reference.Should().Be("A1:B3");
+        autoFilter!.Reference.Should().Be("A1:C3");
         autoFilter.NativeAttributes.Should().Contain("customAutoFilterFlag", "keep");
         autoFilter.NativeChildXmls.Should().ContainSingle().Which.Should().Contain("extLst");
-        autoFilter.FilterColumns.Should().HaveCount(2);
+        autoFilter.FilterColumns.Should().HaveCount(3);
         var filterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 0);
         filterColumn.ColumnId.Should().Be(0);
         filterColumn.Values.Should().Equal("A");
@@ -17419,6 +17520,15 @@ public partial class FileAdapterSmokeTests
         customFilterColumn.CustomFilters[0].NativeAttributes.Should().Contain("customFilterFlag", "keep");
         customFilterColumn.NativeFilterXmls.Should().BeEmpty();
         customFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag2", "keep");
+        var top10Column = autoFilter.FilterColumns.Single(column => column.ColumnId == 2);
+        top10Column.Top10.Should().NotBeNull();
+        top10Column.Top10!.Top.Should().BeFalse();
+        top10Column.Top10.Percent.Should().BeTrue();
+        top10Column.Top10.PercentRaw.Should().Be("1");
+        top10Column.Top10.Value.Should().Be(25);
+        top10Column.Top10.FilterValue.Should().Be(10);
+        top10Column.Top10.NativeAttributes.Should().Contain("customTop10Flag", "keep");
+        top10Column.NativeAttributes.Should().Contain("customFilterColumnFlag3", "keep");
     }
 
     [Fact]
@@ -21624,6 +21734,31 @@ public partial class FileAdapterSmokeTests
                             worksheetNs + "customFilter",
                             new XAttribute("operator", "equal"),
                             new XAttribute("val", ""))))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterTop10Metadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                        new XAttribute("ref", "A1:A5"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "top10",
+                        new XAttribute("val", "2"),
+                        new XAttribute("filterVal", "20"),
+                        new XAttribute(freexcelNs + "top10Flag", "keep")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

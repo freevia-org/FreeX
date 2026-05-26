@@ -45,7 +45,7 @@ internal static class XlsxWorksheetAutoFilterMapper
             return;
         }
 
-        var filters = BuildFilters(autoFilter, range).ToList();
+        var filters = BuildFilters(sheet, autoFilter, range).ToList();
         if (filters.Count != autoFilter.FilterColumns.Count)
             return;
 
@@ -144,7 +144,8 @@ internal static class XlsxWorksheetAutoFilterMapper
         }
 
         var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
-        if (!hasCustomFilters && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
+        var hasTop10 = filterColumn.Top10 is not null;
+        if (!hasCustomFilters && !hasTop10 && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
         {
             element.Add(new XElement(
                 worksheetNs + "filters",
@@ -170,10 +171,46 @@ internal static class XlsxWorksheetAutoFilterMapper
             element.Add(customFilters);
         }
 
+        if (!hasCustomFilters && filterColumn.Top10 is { } top10)
+            element.Add(ToTop10Xml(top10, worksheetNs));
+
         foreach (var nativeFilterXml in filterColumn.NativeFilterXmls)
         {
-            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters", "customFilters") is { } nativeFilter)
+            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters", "customFilters", "top10") is { } nativeFilter)
                 element.Add(nativeFilter);
+        }
+
+        return element;
+    }
+
+    private static XElement ToTop10Xml(WorksheetAutoFilterTop10Model top10, XNamespace worksheetNs)
+    {
+        var element = new XElement(worksheetNs + "top10");
+        if (top10.TopRaw is not null)
+            element.SetAttributeValue("top", top10.TopRaw);
+        else if (!top10.Top)
+            element.SetAttributeValue("top", "0");
+
+        if (top10.PercentRaw is not null)
+            element.SetAttributeValue("percent", top10.PercentRaw);
+        else if (top10.Percent)
+            element.SetAttributeValue("percent", "1");
+
+        if (top10.ValueRaw is not null)
+            element.SetAttributeValue("val", top10.ValueRaw);
+        else if (top10.Value is not null)
+            element.SetAttributeValue("val", top10.Value.Value.ToString(CultureInfo.InvariantCulture));
+        else
+            element.SetAttributeValue("val", "10");
+
+        if (top10.FilterValueRaw is not null)
+            element.SetAttributeValue("filterVal", top10.FilterValueRaw);
+        else if (top10.FilterValue is not null)
+            element.SetAttributeValue("filterVal", top10.FilterValue.Value.ToString(CultureInfo.InvariantCulture));
+
+        foreach (var (name, value) in top10.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         return element;
@@ -246,8 +283,9 @@ internal static class XlsxWorksheetAutoFilterMapper
         {
             var filters = column.Element(worksheetNs + "filters");
             var customFilters = column.Element(worksheetNs + "customFilters");
+            var top10 = column.Element(worksheetNs + "top10");
             var nativeFilters = column.Elements()
-                .Where(element => element.Name != worksheetNs + "filters" && element.Name != worksheetNs + "customFilters")
+                .Where(element => element.Name != worksheetNs + "filters" && element.Name != worksheetNs + "customFilters" && element.Name != worksheetNs + "top10")
                 .Select(element => element.ToString(SaveOptions.DisableFormatting))
                 .ToArray();
             var nativeAttributes = column.Attributes()
@@ -277,6 +315,7 @@ internal static class XlsxWorksheetAutoFilterMapper
                 customFiltersAnd,
                 customFilters?.Attribute("and")?.Value,
                 nativeCustomFiltersAttributes?.Count > 0 ? nativeCustomFiltersAttributes : null,
+                ReadTop10(top10),
                 nativeFilters,
                 nativeAttributes.Count == 0 ? null : nativeAttributes);
             if (filterColumn.ColumnId >= 0 &&
@@ -285,12 +324,37 @@ internal static class XlsxWorksheetAutoFilterMapper
                  filterColumn.CustomFilters.Count > 0 ||
                  filterColumn.CustomFiltersAndRaw is not null ||
                  filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
+                 filterColumn.Top10 is not null ||
                  filterColumn.NativeFilterXmls.Count > 0 ||
                  filterColumn.NativeAttributes?.Count > 0))
             {
                 yield return filterColumn;
             }
         }
+    }
+
+    private static WorksheetAutoFilterTop10Model? ReadTop10(XElement? top10)
+    {
+        if (top10 is null)
+            return null;
+
+        var nativeAttributes = top10.Attributes()
+            .Where(attribute =>
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "top") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "percent") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "val") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "filterVal"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return new WorksheetAutoFilterTop10Model(
+            Top: XlsxXmlAttributeReader.ReadBoolAttribute(top10, "top", defaultValue: true),
+            Percent: XlsxXmlAttributeReader.ReadBoolAttribute(top10, "percent"),
+            Value: XlsxXmlAttributeReader.ReadDoubleAttribute(top10, "val"),
+            FilterValue: XlsxXmlAttributeReader.ReadDoubleAttribute(top10, "filterVal"),
+            TopRaw: top10.Attribute("top")?.Value,
+            PercentRaw: top10.Attribute("percent")?.Value,
+            ValueRaw: top10.Attribute("val")?.Value,
+            FilterValueRaw: top10.Attribute("filterVal")?.Value,
+            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
     }
 
     private static IReadOnlyDictionary<string, string>? ReadCustomFilterNativeAttributes(XElement filter)
@@ -306,7 +370,7 @@ internal static class XlsxWorksheetAutoFilterMapper
     private static bool IsWorksheetAutoFilterModeledAttribute(XAttribute attribute, string localName) =>
         attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == localName;
 
-    private static IEnumerable<WorksheetAutoFilterState> BuildFilters(WorksheetAutoFilterModel autoFilter, GridRange range)
+    private static IEnumerable<WorksheetAutoFilterState> BuildFilters(Sheet sheet, WorksheetAutoFilterModel autoFilter, GridRange range)
     {
         foreach (var filterColumn in autoFilter.FilterColumns)
         {
@@ -320,11 +384,55 @@ internal static class XlsxWorksheetAutoFilterMapper
                 continue;
             }
 
+            var column = range.Start.Col + (uint)filterColumn.ColumnId;
+            if (filterColumn.Top10 is { } top10)
+            {
+                yield return new WorksheetAutoFilterState(
+                    column,
+                    null,
+                    false,
+                    BuildTop10KeptRows(sheet, range, column, top10));
+                continue;
+            }
+
             yield return new WorksheetAutoFilterState(
-                range.Start.Col + (uint)filterColumn.ColumnId,
+                column,
                 new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
-                filterColumn.IncludeBlank);
+                filterColumn.IncludeBlank,
+                null);
         }
+    }
+
+    private static HashSet<uint> BuildTop10KeptRows(Sheet sheet, GridRange range, uint column, WorksheetAutoFilterTop10Model top10)
+    {
+        var value = top10.Value ?? 10;
+        if (value <= 0)
+            return [];
+
+        var rankedRows = new List<(uint Row, double Value)>();
+        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
+        {
+            if (sheet.GetValue(row, column) is NumberValue number)
+                rankedRows.Add((row, number.Value));
+        }
+
+        var keepCount = top10.Percent
+            ? (uint)Math.Ceiling(rankedRows.Count * Math.Min(value, 100) / 100.0)
+            : (uint)Math.Floor(value);
+        if (top10.FilterValue is { } threshold)
+        {
+            return rankedRows
+                .Where(item => top10.Top ? item.Value >= threshold : item.Value <= threshold)
+                .Select(item => item.Row)
+                .ToHashSet();
+        }
+
+        return rankedRows
+            .OrderBy(item => top10.Top ? -item.Value : item.Value)
+            .ThenBy(item => item.Row)
+            .Take((int)Math.Min(keepCount, (uint)rankedRows.Count))
+            .Select(item => item.Row)
+            .ToHashSet();
     }
 
     private static bool RowMatchesAllFilters(
@@ -334,10 +442,17 @@ internal static class XlsxWorksheetAutoFilterMapper
     {
         foreach (var filter in filters)
         {
+            if (filter.AllowedRows is not null)
+            {
+                if (!filter.AllowedRows.Contains(row))
+                    return false;
+                continue;
+            }
+
             var text = ToFilterText(sheet.GetValue(row, filter.Column));
             if (text.Length == 0 && filter.IncludeBlank)
                 continue;
-            if (!filter.AllowedValues.Contains(text))
+            if (filter.AllowedValues is null || !filter.AllowedValues.Contains(text))
                 return false;
         }
 
@@ -399,6 +514,7 @@ internal static class XlsxWorksheetAutoFilterMapper
 
     private sealed record WorksheetAutoFilterState(
         uint Column,
-        HashSet<string> AllowedValues,
-        bool IncludeBlank);
+        HashSet<string>? AllowedValues,
+        bool IncludeBlank,
+        HashSet<uint>? AllowedRows);
 }
