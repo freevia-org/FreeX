@@ -140,9 +140,19 @@ public sealed class CsvFileAdapter : IFileAdapter
         writer.Write('"');
     }
 
-    private static bool ShouldQuoteCsvField(string value, bool isTextValue) =>
-        value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r') ||
-        (isTextValue && IsFormulaLikeText(value));
+    private static bool ShouldQuoteCsvField(string value, bool isTextValue)
+    {
+        if (isTextValue && IsFormulaLikeText(value))
+            return true;
+
+        foreach (var ch in value)
+        {
+            if (ch is ',' or '"' or '\n' or '\r')
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool IsFormulaLikeText(string value) =>
         value[0] is '=' or '+' or '-' or '@';

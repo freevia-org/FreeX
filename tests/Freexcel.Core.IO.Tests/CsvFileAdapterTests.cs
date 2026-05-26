@@ -478,11 +478,12 @@ public sealed class CsvFileAdapterTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("a,b"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("say \"hi\""));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("line\nbreak"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("carriage\rreturn"));
 
         using var stream = new MemoryStream();
         new CsvFileAdapter().Save(workbook, stream);
 
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"a,b\",\"say \"\"hi\"\"\",\"line\nbreak\"\r\n");
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"a,b\",\"say \"\"hi\"\"\",\"line\nbreak\",\"carriage\rreturn\"\r\n");
     }
 
     [Fact]
