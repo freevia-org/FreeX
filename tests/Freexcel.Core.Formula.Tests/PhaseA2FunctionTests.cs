@@ -109,11 +109,11 @@ public class PhaseA2FunctionTests
     // ── FORMULATEXT ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void FormulaText_FormulaCell_ReturnsFormulaWithoutEquals()
+    public void FormulaText_FormulaCell_ReturnsFormulaWithEquals()
     {
         var (wb, sheet) = MakeWb();
         sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "SUM(B1:B3)");
-        _eval.Evaluate("=FORMULATEXT(A1)", sheet, wb).Should().Be(new TextValue("SUM(B1:B3)"));
+        _eval.Evaluate("=FORMULATEXT(A1)", sheet, wb).Should().Be(new TextValue("=SUM(B1:B3)"));
     }
 
     [Fact]
@@ -189,6 +189,15 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Offset_ZeroHeightOrWidth_ReturnsRefError()
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(42)));
+
+        _eval.Evaluate("=OFFSET(A1,0,0,0,1)", sheet, wb).Should().Be(ErrorValue.Ref);
+        _eval.Evaluate("=OFFSET(A1,0,0,1,0)", sheet, wb).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
     public void Offset_IsVolatile()
     {
         BuiltInFunctions.IsVolatile("OFFSET").Should().BeTrue();
@@ -250,6 +259,16 @@ public class PhaseA2FunctionTests
     {
         var (wb, sheet) = MakeWb();
         _eval.Evaluate("=CELL(\"bogus\",A1)", sheet, wb).Should().Be(ErrorValue.Value);
+    }
+
+    [Theory]
+    [InlineData("=CELL(\"address\",1+1)")]
+    [InlineData("=CELL(\"contents\",\"x\")")]
+    public void Cell_NonReferenceSecondArgument_ReturnsValueError(string formula)
+    {
+        var (wb, sheet) = MakeWb();
+
+        _eval.Evaluate(formula, sheet, wb).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

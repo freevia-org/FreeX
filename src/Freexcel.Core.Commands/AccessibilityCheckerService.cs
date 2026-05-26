@@ -55,13 +55,28 @@ public static class AccessibilityCheckerService
             }
 
             foreach (var picture in sheet.Pictures)
+            {
+                if (!picture.IsVisible)
+                    continue;
+
                 AddAltTextIssue(issues, sheet, picture.Anchor, "Picture", picture.AltText);
+            }
 
             foreach (var shape in sheet.DrawingShapes)
+            {
+                if (!shape.IsVisible)
+                    continue;
+
                 AddAltTextIssue(issues, sheet, shape.Anchor, "Shape", shape.AltText);
+            }
 
             foreach (var textBox in sheet.TextBoxes)
+            {
+                if (!textBox.IsVisible)
+                    continue;
+
                 AddAltTextIssue(issues, sheet, textBox.Anchor, "Text box", textBox.AltText);
+            }
 
             foreach (var (address, target) in sheet.Hyperlinks)
             {
@@ -79,6 +94,9 @@ public static class AccessibilityCheckerService
 
             foreach (var chart in sheet.Charts)
             {
+                if (!chart.IsVisible)
+                    continue;
+
                 if (string.IsNullOrWhiteSpace(chart.Title))
                 {
                     issues.Add(new AccessibilityIssue(

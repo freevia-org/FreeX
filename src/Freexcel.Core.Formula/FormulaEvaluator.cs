@@ -420,7 +420,7 @@ public sealed class FormulaEvaluator
             return EvaluateShortCircuit(node, context);
 
         // AST-aware functions: must inspect the raw argument nodes before evaluation.
-        if (node.FunctionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET")
+        if (node.FunctionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET" or "CELL")
             return EvaluateAstAware(node, context);
 
         var (func, minArgs, maxArgs) = BuiltInFunctions.Get(node.FunctionName);
@@ -1465,6 +1465,7 @@ public sealed class FormulaEvaluator
             "ISREF"        => EvaluateIsRef(node, context),
             "ISFORMULA"    => EvaluateIsFormula(node, context),
             "FORMULATEXT"  => EvaluateFormulaText(node, context),
+            "CELL"         => EvaluateCellInfo(node, context),
             "OFFSET"       => EvaluateOffset(node, context),
             "LET"          => EvaluateLet(node, context),
             "LAMBDA"       => EvaluateLambda(node, context),
@@ -1568,7 +1569,54 @@ public sealed class FormulaEvaluator
             return ErrorValue.NA;
         }
         if (cell is null || !cell.HasFormula) return ErrorValue.NA;
-        return new TextValue(cell.FormulaText!);
+        var formulaText = cell.FormulaText!;
+        return new TextValue(formulaText.StartsWith('=') ? formulaText : "=" + formulaText);
+    }
+
+    private ScalarValue EvaluateCellInfo(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count is < 1 or > 2) return ErrorValue.Value;
+
+        var infoType = EvaluateNode(node.Arguments[0], context);
+        if (infoType is ErrorValue error) return error;
+        if (node.Arguments.Count == 1)
+            return BuiltInFunctions.CellInfo([infoType], context);
+
+        var reference = EvaluateCellReferenceArgument(node.Arguments[1], context);
+        return reference is ErrorValue refError
+            ? refError
+            : BuiltInFunctions.CellInfo([infoType, reference], context);
+    }
+
+    private ScalarValue EvaluateCellReferenceArgument(FormulaNode node, IEvalContext context)
+    {
+        if (TryAsRangeRef(node, out var range))
+        {
+            if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+                return ErrorValue.Ref;
+            return BuildRangeValue(range, context);
+        }
+
+        if (node is CellRefNode cellRef)
+        {
+            if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
+                return ErrorValue.Ref;
+            return BuildRangeValue(new RangeRefNode(cellRef, cellRef, cellRef.SheetName), context);
+        }
+
+        if (node is NamedRangeNode named)
+        {
+            var rangeRef = context.TryResolveNamedRange(named.Name);
+            return rangeRef is null ? ErrorValue.Name : BuildRangeValue(rangeRef.Value, context);
+        }
+
+        if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
+        {
+            var value = EvaluateNode(fn, context);
+            return value is ErrorValue or RangeValue ? value : ErrorValue.Value;
+        }
+
+        return ErrorValue.Value;
     }
 
     private ScalarValue EvaluateOffset(FunctionCallNode node, IEvalContext context)

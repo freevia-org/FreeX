@@ -149,6 +149,93 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_IgnoresHiddenDrawingObjectsForAltTextChecks()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            IsVisible = false
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = PictureKind.Image,
+            AltText = "Picture 1",
+            IsVisible = false
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            IsVisible = false
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Shape",
+            IsVisible = false
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 1),
+            Text = "Hidden annotation",
+            IsVisible = false
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 6, 1),
+            Text = "Hidden annotation",
+            AltText = "Text box",
+            IsVisible = false
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i =>
+                i.Kind == AccessibilityIssueKind.MissingAltText ||
+                i.Kind == AccessibilityIssueKind.GenericAltText)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresHiddenChartsForTitleChecks()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            IsVisible = false
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = dataRange,
+            Title = "Chart Title",
+            IsVisible = false
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i =>
+                i.Kind == AccessibilityIssueKind.ChartMissingTitle ||
+                i.Kind == AccessibilityIssueKind.GenericChartTitle)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
     public void FindIssues_FlagsHyperlinksWhoseDisplayTextIsTheUrl()
     {
         var workbook = new Workbook("Accessibility");

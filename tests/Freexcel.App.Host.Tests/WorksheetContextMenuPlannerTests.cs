@@ -129,7 +129,23 @@ public sealed class WorksheetContextMenuPlannerTests
     [InlineData("Paste", "_Paste")]
     [InlineData("Paste Special...", "Paste _Special...")]
     [InlineData("Insert Copied Cells...", "Insert Copied _Cells...")]
+    [InlineData("Insert...", "_Insert...")]
+    [InlineData("Insert Row Above", "Insert Row _Above")]
+    [InlineData("Insert Row Below", "Insert Row _Below")]
+    [InlineData("Insert Column Left", "Insert Column _Left")]
+    [InlineData("Insert Column Right", "Insert Column _Right")]
+    [InlineData("Delete...", "_Delete...")]
+    [InlineData("Delete Row(s)", "Delete _Row(s)")]
+    [InlineData("Delete Column(s)", "Delete _Column(s)")]
     [InlineData("Quick Analysis", "_Quick Analysis")]
+    [InlineData("Hide Rows", "_Hide Rows")]
+    [InlineData("Unhide Rows", "Unhide Ro_ws")]
+    [InlineData("Row Height...", "Row _Height...")]
+    [InlineData("AutoFit Row Height", "AutoFit Row He_ight")]
+    [InlineData("Hide Columns", "Hide Col_umns")]
+    [InlineData("Unhide Columns", "Unhide Co_lumns")]
+    [InlineData("Column Width...", "Column _Width...")]
+    [InlineData("AutoFit Column Width", "AutoFit Column Wi_dth")]
     [InlineData("Edit Comment...", "_Edit Comment...")]
     [InlineData("Resolve Comment", "Resol_ve Comment")]
     [InlineData("Delete Comment", "Delete _Comment")]
@@ -288,8 +304,20 @@ public sealed class WorksheetContextMenuPlannerTests
             "AutoFit Row Height",
             "Hide Rows",
             "Unhide Rows",
+            "Group",
+            "Ungroup",
             "Format Cells...",
             "Clear Contents");
+        commands.Single(command => command.Header == "Group").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Group",
+                WorksheetContextMenuAction.Group,
+                AccessHeader: "_Group"));
+        commands.Single(command => command.Header == "Ungroup").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Ungroup",
+                WorksheetContextMenuAction.Ungroup,
+                AccessHeader: "_Ungroup"));
         commands.Single(command => command.Header == "Format Cells...").Should().BeEquivalentTo(
             new WorksheetContextMenuCommand(
                 "Format Cells...",
@@ -320,8 +348,20 @@ public sealed class WorksheetContextMenuPlannerTests
             "AutoFit Column Width",
             "Hide Columns",
             "Unhide Columns",
+            "Group",
+            "Ungroup",
             "Format Cells...",
             "Clear Contents");
+        commands.Single(command => command.Header == "Group").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Group",
+                WorksheetContextMenuAction.Group,
+                AccessHeader: "_Group"));
+        commands.Single(command => command.Header == "Ungroup").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Ungroup",
+                WorksheetContextMenuAction.Ungroup,
+                AccessHeader: "_Ungroup"));
         commands.Single(command => command.Header == "Format Cells...").Should().BeEquivalentTo(
             new WorksheetContextMenuCommand(
                 "Format Cells...",

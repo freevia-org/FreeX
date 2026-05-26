@@ -55,18 +55,9 @@ public partial class WorkbookThemeDialog : Window
         BodyFontBox.Text = theme.MinorFontName;
         EffectsBox.Text = theme.EffectsName;
 
-        Dark1ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Dark1));
-        Light1ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Light1));
-        Dark2ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Dark2));
-        Light2ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Light2));
-        Accent1ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent1));
-        Accent2ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent2));
-        Accent3ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent3));
-        Accent4ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent4));
-        Accent5ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent5));
-        Accent6ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent6));
-        HyperlinkColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Hyperlink));
-        FollowedHyperlinkColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.FollowedHyperlink));
+        foreach (var field in ThemeColorFields())
+            field.TextBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(field.Slot));
+
         UpdatePreview();
         UpdateColorPickerSwatches();
     }
@@ -112,15 +103,9 @@ public partial class WorkbookThemeDialog : Window
         PreviewBodyText.FontFamily = new FontFamily(string.IsNullOrWhiteSpace(BodyFontBox.Text) ? "Aptos" : BodyFontBox.Text);
 
         PreviewAccentStrip.Children.Clear();
-        foreach (var colorBox in new[]
-                 {
-                     Accent1ColorBox,
-                     Accent2ColorBox,
-                     Accent3ColorBox,
-                     Accent4ColorBox,
-                     Accent5ColorBox,
-                     Accent6ColorBox
-                 })
+        foreach (var colorBox in ThemeColorFields()
+                     .Where(field => field.IsAccent)
+                     .Select(field => field.TextBox))
         {
             PreviewAccentStrip.Children.Add(new Border
             {
@@ -134,9 +119,9 @@ public partial class WorkbookThemeDialog : Window
 
     private void UpdateColorPickerSwatches()
     {
-        foreach (var (textBox, button) in ThemeColorPickerPairs())
+        foreach (var field in ThemeColorFields())
         {
-            button.Background = new SolidColorBrush(ToMediaColor(ParsePreviewColor(textBox.Text)));
+            field.Button.Background = new SolidColorBrush(ToMediaColor(ParsePreviewColor(field.TextBox.Text)));
         }
     }
 
@@ -156,62 +141,31 @@ public partial class WorkbookThemeDialog : Window
 
     private IEnumerable<TextBox> ThemeColorTextBoxes()
     {
-        foreach (var (textBox, _) in ThemeColorPickerPairs())
-            yield return textBox;
-    }
-
-    private IEnumerable<(TextBox TextBox, Button Button)> ThemeColorPickerPairs()
-    {
-        yield return (Dark1ColorBox, Dark1ColorPickerButton);
-        yield return (Light1ColorBox, Light1ColorPickerButton);
-        yield return (Dark2ColorBox, Dark2ColorPickerButton);
-        yield return (Light2ColorBox, Light2ColorPickerButton);
-        yield return (Accent1ColorBox, Accent1ColorPickerButton);
-        yield return (Accent2ColorBox, Accent2ColorPickerButton);
-        yield return (Accent3ColorBox, Accent3ColorPickerButton);
-        yield return (Accent4ColorBox, Accent4ColorPickerButton);
-        yield return (Accent5ColorBox, Accent5ColorPickerButton);
-        yield return (Accent6ColorBox, Accent6ColorPickerButton);
-        yield return (HyperlinkColorBox, HyperlinkColorPickerButton);
-        yield return (FollowedHyperlinkColorBox, FollowedHyperlinkColorPickerButton);
+        foreach (var field in ThemeColorFields())
+            yield return field.TextBox;
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryReadThemeColor(Dark1ColorBox, out var dark1) ||
-            !TryReadThemeColor(Light1ColorBox, out var light1) ||
-            !TryReadThemeColor(Dark2ColorBox, out var dark2) ||
-            !TryReadThemeColor(Light2ColorBox, out var light2) ||
-            !TryReadThemeColor(Accent1ColorBox, out var accent1) ||
-            !TryReadThemeColor(Accent2ColorBox, out var accent2) ||
-            !TryReadThemeColor(Accent3ColorBox, out var accent3) ||
-            !TryReadThemeColor(Accent4ColorBox, out var accent4) ||
-            !TryReadThemeColor(Accent5ColorBox, out var accent5) ||
-            !TryReadThemeColor(Accent6ColorBox, out var accent6) ||
-            !TryReadThemeColor(HyperlinkColorBox, out var hyperlink) ||
-            !TryReadThemeColor(FollowedHyperlinkColorBox, out var followedHyperlink))
+        var colors = new Dictionary<WorkbookThemeColorSlot, CellColor>();
+        foreach (var field in ThemeColorFields())
         {
-            return;
+            if (!TryReadThemeColor(field.TextBox, out var color))
+                return;
+
+            colors[field.Slot] = color;
         }
 
-        ResultTheme = WorkbookThemeWorkflow.CreateCustomTheme(
-                _initialTheme,
-                ThemeNameBox.Text,
-                HeadingFontBox.Text,
-                BodyFontBox.Text,
-                EffectsBox.Text)
-            .WithColor(WorkbookThemeColorSlot.Dark1, dark1)
-            .WithColor(WorkbookThemeColorSlot.Light1, light1)
-            .WithColor(WorkbookThemeColorSlot.Dark2, dark2)
-            .WithColor(WorkbookThemeColorSlot.Light2, light2)
-            .WithColor(WorkbookThemeColorSlot.Accent1, accent1)
-            .WithColor(WorkbookThemeColorSlot.Accent2, accent2)
-            .WithColor(WorkbookThemeColorSlot.Accent3, accent3)
-            .WithColor(WorkbookThemeColorSlot.Accent4, accent4)
-            .WithColor(WorkbookThemeColorSlot.Accent5, accent5)
-            .WithColor(WorkbookThemeColorSlot.Accent6, accent6)
-            .WithColor(WorkbookThemeColorSlot.Hyperlink, hyperlink)
-            .WithColor(WorkbookThemeColorSlot.FollowedHyperlink, followedHyperlink);
+        var theme = WorkbookThemeWorkflow.CreateCustomTheme(
+            _initialTheme,
+            ThemeNameBox.Text,
+            HeadingFontBox.Text,
+            BodyFontBox.Text,
+            EffectsBox.Text);
+        foreach (var field in ThemeColorFields())
+            theme = theme.WithColor(field.Slot, colors[field.Slot]);
+
+        ResultTheme = theme;
         DialogResult = true;
     }
 
