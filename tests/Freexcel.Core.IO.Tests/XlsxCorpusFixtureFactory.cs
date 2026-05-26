@@ -58,6 +58,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-extension-list-001" => true,
         "generated-workbook-file-version-001" => true,
         "generated-workbook-file-recovery-001" => true,
+        "generated-workbook-smart-tags-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
@@ -222,6 +223,14 @@ internal static class XlsxCorpusFixtureFactory
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <fileRecoveryPr autoRecover="1" crashSave="1" customRecoveryFlag="keep" repairLoad="0"/>
               <fileRecoveryPr dataExtractLoad="1" repairLoad="1"/>
+            </workbook>
+            """)),
+        "generated-workbook-smart-tags-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <smartTagPr embed="1" show="all" customSmartTagFlag="keep"/>
+              <smartTagTypes customSmartTagTypesFlag="keep">
+                <smartTagType namespaceUri="urn:schemas-microsoft-com:office:smarttags" name="place" customSmartTagTypeFlag="keep"/>
+              </smartTagTypes>
             </workbook>
             """)),
         "generated-worksheet-ignored-errors-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
@@ -451,6 +460,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
@@ -613,6 +624,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookFileRecoveryFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookSmartTagsFixup(archive);
             return;
         }
 
@@ -1083,6 +1100,35 @@ internal static class XlsxCorpusFixtureFactory
                 workbookNs + "fileRecoveryPr",
                 new XAttribute("dataExtractLoad", "1"),
                 new XAttribute("repairLoad", "1")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookSmartTagsFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "smartTagPr").Remove();
+        workbookXml.Root?.Elements(workbookNs + "smartTagTypes").Remove();
+        workbookXml.Root?.Add(
+            new XElement(
+                workbookNs + "smartTagPr",
+                new XAttribute("embed", "1"),
+                new XAttribute("show", "all"),
+                new XAttribute("customSmartTagFlag", "keep")),
+            new XElement(
+                workbookNs + "smartTagTypes",
+                new XAttribute("customSmartTagTypesFlag", "keep"),
+                new XElement(
+                    workbookNs + "smartTagType",
+                    new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
+                    new XAttribute("name", "place"),
+                    new XAttribute("customSmartTagTypeFlag", "keep"))));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
