@@ -1,5 +1,7 @@
 using FluentAssertions;
+using Freexcel.App.UI;
 using System.IO;
+using System.Reflection;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -28,5 +30,41 @@ public sealed class QuickAnalysisHoverPreviewTests
         source.Should().Contain("SheetGrid.QuickAnalysisPreviewVisual = MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind)");
         source.Should().Contain("SheetGrid.QuickAnalysisPreviewVisual = GridQuickAnalysisPreviewVisualKind.None");
         source.Should().Contain("private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(");
+    }
+
+    [Theory]
+    [InlineData(QuickAnalysisPreviewVisualKind.Highlight, GridQuickAnalysisPreviewVisualKind.Highlight)]
+    [InlineData(QuickAnalysisPreviewVisualKind.ClearFormat, GridQuickAnalysisPreviewVisualKind.ClearFormat)]
+    [InlineData(QuickAnalysisPreviewVisualKind.TotalFormula, GridQuickAnalysisPreviewVisualKind.TotalFormula)]
+    [InlineData(QuickAnalysisPreviewVisualKind.Table, GridQuickAnalysisPreviewVisualKind.Table)]
+    [InlineData(QuickAnalysisPreviewVisualKind.LineSparkline, GridQuickAnalysisPreviewVisualKind.LineSparkline)]
+    [InlineData(QuickAnalysisPreviewVisualKind.ColumnSparkline, GridQuickAnalysisPreviewVisualKind.ColumnSparkline)]
+    [InlineData(QuickAnalysisPreviewVisualKind.WinLossSparkline, GridQuickAnalysisPreviewVisualKind.WinLossSparkline)]
+    public void MapQuickAnalysisPreviewVisual_MapsLightweightPreviewFamilies(
+        QuickAnalysisPreviewVisualKind hostKind,
+        GridQuickAnalysisPreviewVisualKind expectedGridKind)
+    {
+        MapQuickAnalysisPreviewVisual(hostKind).Should().Be(expectedGridKind);
+    }
+
+    [Theory]
+    [InlineData(QuickAnalysisPreviewVisualKind.ColumnChart)]
+    [InlineData(QuickAnalysisPreviewVisualKind.StackedColumnChart)]
+    [InlineData(QuickAnalysisPreviewVisualKind.LineChart)]
+    [InlineData(QuickAnalysisPreviewVisualKind.PieChart)]
+    [InlineData(QuickAnalysisPreviewVisualKind.BarChart)]
+    [InlineData(QuickAnalysisPreviewVisualKind.AreaChart)]
+    [InlineData(QuickAnalysisPreviewVisualKind.ScatterChart)]
+    public void MapQuickAnalysisPreviewVisual_LeavesUnsupportedChartFamiliesWithoutGridVisual(
+        QuickAnalysisPreviewVisualKind hostKind)
+    {
+        MapQuickAnalysisPreviewVisual(hostKind).Should().Be(GridQuickAnalysisPreviewVisualKind.None);
+    }
+
+    private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind kind)
+    {
+        var method = typeof(MainWindow).GetMethod("MapQuickAnalysisPreviewVisual", BindingFlags.NonPublic | BindingFlags.Static);
+        method.Should().NotBeNull();
+        return ((GridQuickAnalysisPreviewVisualKind?)method!.Invoke(null, [kind])).Should().NotBeNull().And.Subject!.Value;
     }
 }

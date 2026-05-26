@@ -60,6 +60,13 @@ public partial class GridView
         double columnHeaderHeight) =>
         QuickAnalysisPreviewLayoutPlanner.CalculateCellPreviewRects(viewport, range, rowHeaderWidth, columnHeaderHeight);
 
+    public static IReadOnlyList<Rect> CalculateQuickAnalysisSparklinePreviewRects(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight) =>
+        QuickAnalysisPreviewLayoutPlanner.CalculateSparklinePreviewRects(viewport, range, rowHeaderWidth, columnHeaderHeight);
+
     private void RenderQuickAnalysisPreview(DrawingContext dc)
     {
         if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
@@ -70,11 +77,91 @@ public partial class GridView
             return;
 
         dc.DrawRectangle(QuickAnalysisPreviewBrush, QuickAnalysisPreviewPen, rect.Value);
-        if (QuickAnalysisPreviewVisual != GridQuickAnalysisPreviewVisualKind.DataBars)
+        switch (QuickAnalysisPreviewVisual)
+        {
+            case GridQuickAnalysisPreviewVisualKind.DataBars:
+                foreach (var bar in CalculateQuickAnalysisDataBarPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+                    dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, bar);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.Highlight:
+                DrawQuickAnalysisCellOverlays(dc, QuickAnalysisHighlightPreviewBrush, QuickAnalysisHighlightPreviewPen);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.ClearFormat:
+                DrawQuickAnalysisCellOverlays(dc, QuickAnalysisClearFormatPreviewBrush, QuickAnalysisClearFormatPreviewPen);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.TotalFormula:
+                DrawQuickAnalysisCellOverlays(dc, QuickAnalysisTotalPreviewBrush, QuickAnalysisTotalPreviewPen);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.Table:
+                DrawQuickAnalysisCellOverlays(dc, QuickAnalysisTablePreviewBrush, QuickAnalysisTablePreviewPen);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.LineSparkline:
+                DrawQuickAnalysisLineSparklinePreview(dc);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.ColumnSparkline:
+                DrawQuickAnalysisColumnSparklinePreview(dc);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.WinLossSparkline:
+                DrawQuickAnalysisWinLossSparklinePreview(dc);
+                break;
+        }
+    }
+
+    private void DrawQuickAnalysisCellOverlays(DrawingContext dc, Brush brush, Pen pen)
+    {
+        if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
             return;
 
-        foreach (var bar in CalculateQuickAnalysisDataBarPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
-            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, bar);
+        foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+            dc.DrawRectangle(brush, pen, cell);
+    }
+
+    private void DrawQuickAnalysisLineSparklinePreview(DrawingContext dc)
+    {
+        if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
+            return;
+
+        foreach (var sparkline in CalculateQuickAnalysisSparklinePreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+        {
+            var y1 = sparkline.Bottom;
+            var y2 = sparkline.Top;
+            var y3 = sparkline.Top + sparkline.Height * 0.65;
+            dc.DrawLine(QuickAnalysisSparklinePreviewPen, new Point(sparkline.Left, y1), new Point(sparkline.Left + sparkline.Width * 0.45, y2));
+            dc.DrawLine(QuickAnalysisSparklinePreviewPen, new Point(sparkline.Left + sparkline.Width * 0.45, y2), new Point(sparkline.Right, y3));
+        }
+    }
+
+    private void DrawQuickAnalysisColumnSparklinePreview(DrawingContext dc)
+    {
+        if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
+            return;
+
+        foreach (var sparkline in CalculateQuickAnalysisSparklinePreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+        {
+            var gap = Math.Min(2.0, sparkline.Width / 8);
+            var barWidth = Math.Max(1, (sparkline.Width - (2 * gap)) / 3);
+            var x = sparkline.Left;
+            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x, sparkline.Top + sparkline.Height * 0.35, barWidth, sparkline.Height * 0.65));
+            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x + barWidth + gap, sparkline.Top, barWidth, sparkline.Height));
+            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x + 2 * (barWidth + gap), sparkline.Top + sparkline.Height * 0.55, barWidth, sparkline.Height * 0.45));
+        }
+    }
+
+    private void DrawQuickAnalysisWinLossSparklinePreview(DrawingContext dc)
+    {
+        if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
+            return;
+
+        foreach (var sparkline in CalculateQuickAnalysisSparklinePreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+        {
+            var gap = Math.Min(2.0, sparkline.Width / 8);
+            var barWidth = Math.Max(1, (sparkline.Width - (2 * gap)) / 3);
+            var halfHeight = Math.Max(2, sparkline.Height / 2);
+            var mid = sparkline.Top + sparkline.Height / 2;
+            dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(sparkline.Left, sparkline.Top, barWidth, halfHeight));
+            dc.DrawRectangle(QuickAnalysisWinLossNegativeBrush, null, new Rect(sparkline.Left + barWidth + gap, mid, barWidth, halfHeight));
+            dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(sparkline.Left + (2 * (barWidth + gap)), sparkline.Top, barWidth, halfHeight));
+        }
     }
 
     private void RenderSelection(DrawingContext dc)
