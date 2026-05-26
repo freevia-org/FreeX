@@ -154,8 +154,8 @@ public partial class MainWindow
     private IReadOnlyList<CellAddress> ParseScenarioResultCells(string? resultCellsText)
     {
         if (!string.IsNullOrWhiteSpace(resultCellsText) &&
-            WorkbookRangeTextCodec.TryParse(_currentSheetId, resultCellsText, ResolveSheetIdByName, out var range))
-            return range.AllCells().ToList();
+            WorkbookRangeTextCodec.TryParseMany(_currentSheetId, resultCellsText, ResolveSheetIdByName, out var ranges))
+            return ranges.SelectMany(range => range.AllCells()).Distinct().ToList();
 
         return [];
     }
