@@ -66,6 +66,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-smart-tags-001" => true,
         "generated-workbook-function-groups-001" => true,
         "generated-workbook-views-001" => true,
+        "generated-workbook-defined-names-native-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
         "generated-worksheet-single-xml-cells-001" => true,
@@ -337,6 +338,13 @@ internal static class XlsxCorpusFixtureFactory
               <customWorkbookViews>
                 <customWorkbookView name="FreexcelView" guid="{22222222-2222-2222-2222-222222222222}" autoUpdate="0" mergeInterval="0" personalView="0" includePrintSettings="1" includeHiddenRowCol="1"/>
               </customWorkbookViews>
+            </workbook>
+            """)),
+        "generated-workbook-defined-names-native-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <definedNames>
+                <definedName name="DynamicSalesRange" hidden="1">1+1</definedName>
+              </definedNames>
             </workbook>
             """)),
         "generated-worksheet-ignored-errors-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
@@ -766,6 +774,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-views-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-defined-names-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
@@ -1007,6 +1017,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-views-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookViewsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-defined-names-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookDefinedNamesNativeFixup(archive);
             return;
         }
 
@@ -1783,6 +1799,27 @@ internal static class XlsxCorpusFixtureFactory
                 new XAttribute("personalView", "0"),
                 new XAttribute("includePrintSettings", "1"),
                 new XAttribute("includeHiddenRowCol", "1"))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookDefinedNamesNativeFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "definedNames").Remove();
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "definedNames",
+            new XElement(
+                workbookNs + "definedName",
+                new XAttribute("name", "DynamicSalesRange"),
+                new XAttribute("hidden", "1"),
+                "1+1")));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
