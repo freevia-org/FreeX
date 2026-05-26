@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(11, "the generated metadata-pass manifest currently declares eleven deterministic package-retention rows");
+        rows.Should().HaveCount(12, "the generated metadata-pass manifest currently declares twelve deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -478,6 +478,38 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-cell-watches-001");
         AssertWorksheetCellWatches(saved, "generated-worksheet-cell-watches-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
+        AssertWorksheetPhoneticProperties(source, "generated-worksheet-phonetic-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-phonetic-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-phonetic-properties-001");
+        AssertWorksheetPhoneticProperties(saved, "generated-worksheet-phonetic-properties-001 saved");
+    }
+
+    private static void AssertWorksheetPhoneticProperties(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
+        phoneticProperties.Should().NotBeNull(because);
+        phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1", because);
+        phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana", because);
+        phoneticProperties.Attribute("alignment")!.Value.Should().Be("center", because);
+        phoneticProperties.Attribute("nativeOnly")!.Value.Should().Be("kept", because);
     }
 
     private static void AssertWorksheetCellWatches(Stream package, string because)
