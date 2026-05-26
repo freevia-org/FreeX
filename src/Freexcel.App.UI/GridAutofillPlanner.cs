@@ -1,4 +1,5 @@
 using Freexcel.Core.Model;
+using System.Windows;
 
 namespace Freexcel.App.UI;
 
@@ -38,5 +39,50 @@ public static class GridAutofillPlanner
                 : 0;
 
         return new GridAutoScrollRequest(horizontal, vertical);
+    }
+
+    public static CellAddress? CalculateDragTarget(
+        ViewportModel viewport,
+        GridRange source,
+        Point pointer,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var srcTopRow = viewport.RowMetrics.FirstOrDefault(r => r.Row == source.Start.Row);
+        var srcBottomRow = viewport.RowMetrics.FirstOrDefault(r => r.Row == source.End.Row);
+        var srcLeftCol = viewport.ColMetrics.FirstOrDefault(c => c.Col == source.Start.Col);
+        var srcRightCol = viewport.ColMetrics.FirstOrDefault(c => c.Col == source.End.Col);
+
+        if (srcTopRow is null || srcBottomRow is null || srcLeftCol is null || srcRightCol is null)
+            return null;
+
+        var srcTop = srcTopRow.TopOffset + columnHeaderHeight;
+        var srcBottom = srcBottomRow.TopOffset + columnHeaderHeight + srcBottomRow.Height;
+        var srcLeft = srcLeftCol.LeftOffset + rowHeaderWidth;
+        var srcRight = srcRightCol.LeftOffset + rowHeaderWidth + srcRightCol.Width;
+
+        var boundTop = Math.Min(srcTop, pointer.Y);
+        var boundBottom = Math.Max(srcBottom, pointer.Y);
+        var boundLeft = Math.Min(srcLeft, pointer.X);
+        var boundRight = Math.Max(srcRight, pointer.X);
+
+        CellAddress? target = null;
+        foreach (var row in viewport.RowMetrics)
+        {
+            var midY = row.TopOffset + columnHeaderHeight + row.Height / 2;
+            if (midY < boundTop || midY > boundBottom)
+                continue;
+
+            foreach (var column in viewport.ColMetrics)
+            {
+                var midX = column.LeftOffset + rowHeaderWidth + column.Width / 2;
+                if (midX < boundLeft || midX > boundRight)
+                    continue;
+
+                target = new CellAddress(default, row.Row, column.Col);
+            }
+        }
+
+        return target;
     }
 }

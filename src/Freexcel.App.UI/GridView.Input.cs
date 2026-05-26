@@ -75,40 +75,13 @@ public partial class GridView
                 AutofillEdgeScrollRequested?.Invoke(scrollRequest);
 
             var src = _autofillSourceRange.Value;
-
-            var srcTopRow    = Viewport.RowMetrics.FirstOrDefault(r => r.Row == src.Start.Row);
-            var srcBottomRow = Viewport.RowMetrics.FirstOrDefault(r => r.Row == src.End.Row);
-            var srcLeftCol   = Viewport.ColMetrics.FirstOrDefault(c => c.Col == src.Start.Col);
-            var srcRightCol  = Viewport.ColMetrics.FirstOrDefault(c => c.Col == src.End.Col);
-
-            if (srcTopRow != null && srcBottomRow != null && srcLeftCol != null && srcRightCol != null)
-            {
-                double srcTop    = srcTopRow.TopOffset    + EffectiveColHeaderHeight;
-                double srcBottom = srcBottomRow.TopOffset + EffectiveColHeaderHeight + srcBottomRow.Height;
-                double srcLeft   = srcLeftCol.LeftOffset  + ActualRowHeaderWidth;
-                double srcRight  = srcRightCol.LeftOffset + ActualRowHeaderWidth + srcRightCol.Width;
-
-                double boundTop    = Math.Min(srcTop,    pos.Y);
-                double boundBottom = Math.Max(srcBottom, pos.Y);
-                double boundLeft   = Math.Min(srcLeft,   pos.X);
-                double boundRight  = Math.Max(srcRight,  pos.X);
-
-                CellAddress? newTarget = null;
-                foreach (var rm in Viewport.RowMetrics)
-                {
-                    double midY = rm.TopOffset + EffectiveColHeaderHeight + rm.Height / 2;
-                    if (midY < boundTop || midY > boundBottom) continue;
-                    foreach (var cm in Viewport.ColMetrics)
-                    {
-                        double midX = cm.LeftOffset + ActualRowHeaderWidth + cm.Width / 2;
-                        if (midX < boundLeft || midX > boundRight) continue;
-                        newTarget = new CellAddress(default, rm.Row, cm.Col);
-                    }
-                }
-
-                if (newTarget.HasValue)
-                    _autofillTarget = ConstrainAutofillTarget(src, newTarget.Value);
-            }
+            if (GridAutofillPlanner.CalculateDragTarget(
+                    Viewport,
+                    src,
+                    pos,
+                    ActualRowHeaderWidth,
+                    EffectiveColHeaderHeight) is { } newTarget)
+                _autofillTarget = ConstrainAutofillTarget(src, newTarget);
 
             InvalidateVisual();
             return;
