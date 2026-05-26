@@ -5970,6 +5970,17 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SUM(INDIRECT(\"Data!A1:A3\"))", sheet, wb).Should().Be(new NumberValue(6));
     }
 
+    [Fact] public void Indirect_UnquotedSheetNameWithSpace_ReturnsRefError()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var data = wb.AddSheet("My Sheet");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new NumberValue(42));
+
+        _eval.Evaluate("=INDIRECT(\"My Sheet!A1\")", sheet, wb).Should().Be(ErrorValue.Ref);
+        _eval.Evaluate("=INDIRECT(\"'My Sheet'!A1\")", sheet, wb).Should().Be(new NumberValue(42));
+    }
+
     [Fact] public void Indirect_NamedRangeString_ReturnsRangeValue()
     {
         var wb = new Workbook("T");
