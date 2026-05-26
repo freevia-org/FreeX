@@ -290,6 +290,35 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ViewArrangeAllMenuKeyTips_UpdateWorkbookArrangementAndExitKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Tiled);
+
+            harness.OpenRibbonMenu(Key.W, Key.A);
+            harness.ActiveMenuItemGestureText("Tiled").Should().Be("T");
+            harness.ActiveMenuItemIsChecked("Tiled").Should().BeTrue();
+            harness.HandleKeyTip(Key.V);
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Vertical);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.W, Key.A);
+            harness.ActiveMenuItemGestureText("Cascade").Should().Be("C");
+            harness.ActiveMenuItemIsChecked("Vertical").Should().BeTrue();
+            harness.HandleKeyTip(Key.C);
+
+            harness.WorkbookArrangement.Should().Be(WorkbookWindowArrangement.Cascade);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void FocusedRibbonTabAndEscape_StayInRibbonThenReturnToWorksheet()
     {
         RunSta(() =>
@@ -750,8 +779,14 @@ public sealed class MainWindowRibbonKeyTipTests
         public string? ActiveMenuItemGestureText(string header) =>
             FindActiveMenuItem(header)?.InputGestureText;
 
+        public bool? ActiveMenuItemIsChecked(string header) =>
+            FindActiveMenuItem(header)?.IsChecked;
+
         public bool ActiveMenuItemSubmenuIsOpen(string header) =>
             FindActiveMenuItem(header)?.IsSubmenuOpen == true;
+
+        public WorkbookWindowArrangement WorkbookArrangement =>
+            _workbook.WindowArrangement;
 
         public IReadOnlyList<string> VisibleCommandKeyTips(string keyTip)
         {
