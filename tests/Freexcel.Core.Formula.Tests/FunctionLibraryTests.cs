@@ -6781,19 +6781,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Take_And_Drop_TreatScalarArrayAsSingleCellArray()
+    public void Take_TreatsScalarArrayAsSingleCellArray()
     {
         var taken = _eval.Evaluate("=TAKE(5,1)", MakeSheet())
             .Should().BeOfType<RangeValue>().Subject;
         taken.RowCount.Should().Be(1);
         taken.ColCount.Should().Be(1);
         taken.Cells[0, 0].Should().Be(new NumberValue(5));
-
-        var dropped = _eval.Evaluate("=DROP(5,0)", MakeSheet())
-            .Should().BeOfType<RangeValue>().Subject;
-        dropped.RowCount.Should().Be(1);
-        dropped.ColCount.Should().Be(1);
-        dropped.Cells[0, 0].Should().Be(new NumberValue(5));
     }
 
     [Fact]
@@ -6949,6 +6943,16 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
         _eval.Evaluate("=TAKE(A1:A1,0)", sheet).Should().Be(ErrorValue.Calc);
+    }
+
+    [Fact]
+    public void Drop_ZeroRowsOrColumns_ReturnsCalcError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (1,2,new NumberValue(2)));
+
+        _eval.Evaluate("=DROP(A1:B1,0)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=DROP(A1:B1,,0)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=DROP(5,0)", MakeSheet()).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]

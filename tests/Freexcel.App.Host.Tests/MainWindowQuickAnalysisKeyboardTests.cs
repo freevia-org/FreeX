@@ -33,6 +33,27 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         });
     }
 
+    [Fact]
+    public void KeyboardQuickAnalysisMenu_WithNoSelectionReportsUnsupportedState()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(1, 1, 3, 2);
+            harness.OpenQuickAnalysisMenu();
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.DataBars);
+
+            harness.ClearSelection();
+            harness.OpenQuickAnalysisMenu();
+
+            harness.FocusedMenuHeader.Should().BeNull();
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.None);
+            harness.QuickAnalysisPreviewRange.Should().BeNull();
+            harness.StatusText.Should().Be("Select a range to use Quick Analysis.");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -73,12 +94,21 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             }
         }
 
+        public string StatusText =>
+            ((TextBlock)_window.FindName("StatusReadyText")).Text;
+
         public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
         {
             var sheet = _workbook.Sheets[0];
             SheetGrid.SelectedRange = new GridRange(
                 new CellAddress(sheet.Id, startRow, startCol),
                 new CellAddress(sheet.Id, endRow, endCol));
+            PumpDispatcher();
+        }
+
+        public void ClearSelection()
+        {
+            SheetGrid.SelectedRange = null;
             PumpDispatcher();
         }
 
