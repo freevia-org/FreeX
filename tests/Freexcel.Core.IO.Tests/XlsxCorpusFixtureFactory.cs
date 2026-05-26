@@ -2795,7 +2795,7 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "B1", new TextValue("Quantity"));
         Set(sheet, "A2", new TextValue("Apple"));
         Set(sheet, "B2", new NumberValue(5));
-        sheet.DataValidations.Add(new DataValidation
+        var listValidation = new DataValidation
         {
             AppliesTo = Range(sheet, "A2", "A10"),
             Type = DvType.List,
@@ -2804,7 +2804,9 @@ internal static class XlsxCorpusFixtureFactory
             ErrorMessage = "Choose a listed item.",
             PromptTitle = "Pick a fruit",
             PromptMessage = "Select Apple, Banana, or Cherry."
-        });
+        };
+        listValidation.AdditionalRanges.Add(Range(sheet, "C2", "C10"));
+        sheet.DataValidations.Add(listValidation);
         sheet.DataValidations.Add(new DataValidation
         {
             AppliesTo = Range(sheet, "B2", "B10"),

@@ -16,7 +16,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
-    private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
+    private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;

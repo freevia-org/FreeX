@@ -68,8 +68,9 @@ public static class GroupedSheetRangePlanner
         return clone;
     }
 
-    public static DataValidation CloneDataValidationForSheet(DataValidation source, SheetId sheetId) =>
-        new()
+    public static DataValidation CloneDataValidationForSheet(DataValidation source, SheetId sheetId)
+    {
+        var clone = new DataValidation
         {
             AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId),
             Type = source.Type,
@@ -90,4 +91,7 @@ public static class GroupedSheetRangePlanner
             NativeContainerAttributes = source.NativeContainerAttributes,
             NativeContainerChildXmls = source.NativeContainerChildXmls
         };
+        clone.AdditionalRanges.AddRange(source.AdditionalRanges.Select(range => RemapRangeToSheet(range, sheetId)));
+        return clone;
+    }
 }
