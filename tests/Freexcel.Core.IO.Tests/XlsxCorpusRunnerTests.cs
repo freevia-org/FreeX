@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(16, "the generated metadata-pass manifest currently declares sixteen deterministic package-retention rows");
+        rows.Should().HaveCount(17, "the generated metadata-pass manifest currently declares seventeen deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -568,6 +568,51 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-smart-tags-001");
         AssertWorksheetSmartTags(saved, "generated-worksheet-smart-tags-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetScenariosRow_RetainsScenariosAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-scenarios-001");
+        AssertWorksheetScenarios(source, "generated-worksheet-scenarios-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-worksheet-scenarios-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-scenarios-001");
+        AssertWorksheetScenarios(saved, "generated-worksheet-scenarios-001 saved");
+    }
+
+    private static void AssertWorksheetScenarios(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios");
+        scenarios.Should().NotBeNull(because);
+
+        var scenario = scenarios!.Elements(worksheetNs + "scenario")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        scenario.Attribute("name")!.Value.Should().Be("BestCase", because);
+        scenario.Attribute("comment")!.Value.Should().Be("Scenario comment", because);
+        scenario.Attribute("hidden")!.Value.Should().Be("1", because);
+        scenario.Attribute("locked")!.Value.Should().Be("1", because);
+        scenario.Attribute("user")!.Value.Should().Be("FreexcelTest", because);
+
+        var inputCells = scenario.Elements(worksheetNs + "inputCells")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        inputCells.Attribute("r")!.Value.Should().Be("A1", because);
+        inputCells.Attribute("val")!.Value.Should().Be("42", because);
     }
 
     private static void AssertWorksheetSmartTags(Stream package, string because)
