@@ -457,6 +457,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Index_OmittedRow_ReturnsEntireColumn()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)), (1, 3, new NumberValue(3)),
+            (2, 1, new NumberValue(4)), (2, 2, new NumberValue(5)), (2, 3, new NumberValue(6)));
+
+        var result = _eval.Evaluate("=INDEX(A1:C2,,2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(2));
+        result.Cells[1, 0].Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
     public void Index_ZeroColumn_ReturnsEntireRow()
     {
         var sheet = MakeSheet(
