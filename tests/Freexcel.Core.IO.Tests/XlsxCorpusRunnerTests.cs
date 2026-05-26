@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(26, "the generated metadata-pass manifest currently declares twenty-six deterministic package-retention rows");
+        rows.Should().HaveCount(27, "the generated metadata-pass manifest currently declares twenty-seven deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -424,6 +424,24 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-header-footer-legacy-drawing-001");
         AssertHeaderFooterLegacyDrawingPackageGraph(saved, "generated-header-footer-legacy-drawing-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetLegacyDrawingRow_RetainsPackageGraphAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-legacy-drawing-001");
+        AssertWorksheetLegacyDrawingPackageGraph(source, "generated-worksheet-legacy-drawing-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-worksheet-legacy-drawing-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-legacy-drawing-001");
+        AssertWorksheetLegacyDrawingPackageGraph(saved, "generated-worksheet-legacy-drawing-001 saved");
     }
 
     [Fact]
@@ -1164,6 +1182,46 @@ public class XlsxCorpusRunnerTests
                 string.Equals(rel.Attribute("Target")?.Value, "../media/headerFooterImage1.png", StringComparison.OrdinalIgnoreCase))
             .Should()
             .ContainSingle(because);
+    }
+
+    private static void AssertWorksheetLegacyDrawingPackageGraph(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull(because);
+        archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels").Should().NotBeNull(because);
+        archive.GetEntry("xl/media/vmlImage1.png").Should().NotBeNull(because);
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var legacyDrawing = worksheetXml.Root!.Element(worksheetNs + "legacyDrawing");
+        legacyDrawing.Should().NotBeNull(because);
+        legacyDrawing!.Attribute(officeRelNs + "id")!.Value.Should().Be("rIdFreexcelLegacyDrawing", because);
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var hasLegacyDrawingRelationship = worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Count(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, "rIdFreexcelLegacyDrawing", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../drawings/vmlDrawing1.vml", StringComparison.OrdinalIgnoreCase)) == 1;
+        hasLegacyDrawingRelationship.Should().BeTrue(because);
+
+        var vmlDrawing = LoadPackageXml(archive.GetEntry("xl/drawings/vmlDrawing1.vml")!);
+        vmlDrawing.Descendants()
+            .Single(element => string.Equals(element.Name.LocalName, "shape", StringComparison.OrdinalIgnoreCase))
+            .Attribute("id")!.Value.Should().Be("FreexcelLegacyDrawingShape", because);
+
+        var vmlRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels")!);
+        var hasImageRelationship = vmlRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Count(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, "rIdFreexcelVmlImage", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../media/vmlImage1.png", StringComparison.OrdinalIgnoreCase)) == 1;
+        hasImageRelationship.Should().BeTrue(because);
     }
 
     private static void AssertStableDocumentProperties(Stream package, string because)
