@@ -55,7 +55,7 @@ public sealed class AccessibilityCheckerDialog : Window
         _messageBox.MinHeight = 80;
         _messageBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_messageBox);
-        stack.Children.Add(DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
+        stack.Children.Add(DialogButtonRowFactory.CreateOkOnly(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;
     }
 
