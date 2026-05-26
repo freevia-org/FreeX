@@ -749,15 +749,6 @@ public static partial class BuiltInFunctions
             return false;
         }
 
-        if (args[0] is RangeValue arr)
-        {
-            if (!TryReadVector(arr, values)) return false;
-        }
-        else
-        {
-            values.Add(args[0]);
-        }
-
         if (!TryGetScalarControlArgument(args[1], out var wrapCountArg, out error)) return false;
         double rawWrapCount = ToNumber(wrapCountArg);
         if (!double.IsFinite(rawWrapCount)) return false;
@@ -771,6 +762,15 @@ public static partial class BuiltInFunctions
         {
             error = ErrorValue.Num;
             return false;
+        }
+
+        if (args[0] is RangeValue arr)
+        {
+            if (!TryReadVector(arr, values)) return false;
+        }
+        else
+        {
+            values.Add(args[0]);
         }
 
         if (args.Count > 2 && args[2] is not BlankValue) padWith = args[2];
