@@ -43,6 +43,18 @@ public sealed class ThreadedCommentDialogTests
         source.Should().Contain("Keyboard.Focus(target);");
     }
 
+    [Fact]
+    public void DialogSource_CommentAndReplyLabelsTargetEntryBoxesAndCancelHasAccessKey()
+    {
+        var source = ReadThreadedCommentDialogSource();
+
+        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Target = _rootBox");
+        source.Should().Contain("Target = _replyBox");
+        source.Should().Contain("existing is null ? \"_Comment:\" : \"Edit _comment:\"");
+        source.Should().Contain("Content = \"_Reply:\"");
+    }
+
     private static string ReadThreadedCommentDialogSource()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));

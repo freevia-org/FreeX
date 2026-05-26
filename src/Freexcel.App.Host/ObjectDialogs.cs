@@ -312,7 +312,7 @@ public sealed class ThreadedCommentDialog : Window
 
         // Button row at bottom
         var ok = new Button { Content = existing is null ? "_Add" : "_Reply", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0) };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 80 };
+        var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 80 };
         ok.Click += (_, _) => SubmitThreadedCommentDialog(existing);
         var btnRow = new StackPanel
         {
@@ -339,11 +339,11 @@ public sealed class ThreadedCommentDialog : Window
         var inner = new StackPanel();
         inner.Children.Add(scroll);
         _rootBox.Text = existing?.Text ?? "";
-        inner.Children.Add(new Label { Content = existing is null ? "_Comment:" : "Edit _comment:", Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
+        inner.Children.Add(new Label { Content = existing is null ? "_Comment:" : "Edit _comment:", Target = _rootBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
         inner.Children.Add(_rootBox);
         if (existing is not null)
         {
-            inner.Children.Add(new Label { Content = "_Reply:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+            inner.Children.Add(new Label { Content = "_Reply:", Target = _replyBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
             _replyBox.PreviewKeyDown += (_, e) =>
             {
                 if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Enter)
