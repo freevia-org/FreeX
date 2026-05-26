@@ -448,6 +448,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void WorkbookStatisticsDialog_UsesSingleExcelLikeOkButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs"));
+
+        source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
+        source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
+    }
+
+    [Fact]
     public void AccessibilityCheckerDialog_CreateMessage_ReportsCleanAndIssueStates()
     {
         AccessibilityCheckerDialog.CreateMessage([])
