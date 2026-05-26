@@ -23,19 +23,12 @@ public partial class GridView
     }
 
     private bool IsOnAutofillHandle(Point pos)
-    {
-        if (Viewport == null || !SelectedRange.HasValue) return false;
-        var range = SelectedRange.Value;
-        var endRow = Viewport.RowMetrics.FirstOrDefault(r => r.Row == range.End.Row);
-        var endCol = Viewport.ColMetrics.FirstOrDefault(c => c.Col == range.End.Col);
-        if (endRow == null || endCol == null) return false;
-
-        const double handleSize = 6;
-        double hx = endCol.LeftOffset + endCol.Width + ActualRowHeaderWidth - handleSize / 2;
-        double hy = endRow.TopOffset + endRow.Height + EffectiveColHeaderHeight - handleSize / 2;
-        return pos.X >= hx - 3 && pos.X <= hx + handleSize + 3
-            && pos.Y >= hy - 3 && pos.Y <= hy + handleSize + 3;
-    }
+        => GridAutofillPlanner.IsOnHandle(
+            Viewport,
+            SelectedRange,
+            pos,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight);
 
     private WorksheetPageMarginEdge? HitTestPageMarginGuide(Point pos)
     {

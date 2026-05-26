@@ -122,6 +122,74 @@ public sealed class GridViewAutofillTests
             .BeNull();
     }
 
+    [Fact]
+    public void IsOnHandle_ReturnsTrueForHandleCenterAndPaddedBoundary()
+    {
+        var sheet = SheetId.New();
+        var selectedRange = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+
+        GridAutofillPlanner.IsOnHandle(
+                CreateViewport(),
+                selectedRange,
+                new System.Windows.Point(30 + 120 - 3 + 3, 18 + 60 - 3 + 3),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeTrue();
+        GridAutofillPlanner.IsOnHandle(
+                CreateViewport(),
+                selectedRange,
+                new System.Windows.Point(30 + 120 - 6, 18 + 60 - 6),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeTrue("the existing hit test includes a 3px pad around the 6px handle");
+    }
+
+    [Fact]
+    public void IsOnHandle_ReturnsFalseAwayFromHandleOrWhenMetricsAreMissing()
+    {
+        var sheet = SheetId.New();
+        var selectedRange = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+
+        GridAutofillPlanner.IsOnHandle(
+                CreateViewport(),
+                selectedRange,
+                new System.Windows.Point(30 + 120 + 10, 18 + 60 + 10),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse();
+        GridAutofillPlanner.IsOnHandle(
+                null,
+                selectedRange,
+                new System.Windows.Point(30 + 120, 18 + 60),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse();
+        GridAutofillPlanner.IsOnHandle(
+                CreateViewport(),
+                null,
+                new System.Windows.Point(30 + 120, 18 + 60),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse();
+        GridAutofillPlanner.IsOnHandle(
+                CreateViewport(),
+                new GridRange(new CellAddress(sheet, 99, 2), new CellAddress(sheet, 99, 3)),
+                new System.Windows.Point(30 + 120, 18 + 60),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse();
+    }
+
     private static ViewportModel CreateViewport() =>
         new(
             [],

@@ -85,4 +85,30 @@ public static class GridAutofillPlanner
 
         return target;
     }
+
+    public static bool IsOnHandle(
+        ViewportModel? viewport,
+        GridRange? selectedRange,
+        Point pointer,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double handleSize = 6,
+        double hitPadding = 3)
+    {
+        if (viewport is null || !selectedRange.HasValue)
+            return false;
+
+        var range = selectedRange.Value;
+        var endRow = viewport.RowMetrics.FirstOrDefault(r => r.Row == range.End.Row);
+        var endColumn = viewport.ColMetrics.FirstOrDefault(c => c.Col == range.End.Col);
+        if (endRow is null || endColumn is null)
+            return false;
+
+        var left = endColumn.LeftOffset + endColumn.Width + rowHeaderWidth - handleSize / 2;
+        var top = endRow.TopOffset + endRow.Height + columnHeaderHeight - handleSize / 2;
+        return pointer.X >= left - hitPadding &&
+            pointer.X <= left + handleSize + hitPadding &&
+            pointer.Y >= top - hitPadding &&
+            pointer.Y <= top + handleSize + hitPadding;
+    }
 }
