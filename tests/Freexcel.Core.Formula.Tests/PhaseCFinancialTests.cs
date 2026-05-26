@@ -1121,6 +1121,32 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void OddCouponFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43900.0), (2, 1, 43910.0),
+            (1, 2, 44562.0), (2, 2, 44592.0),
+            (1, 3, 43831.0), (2, 3, 43840.0),
+            (1, 4, 44197.0), (2, 4, 44228.0),
+            (1, 5, 0.05), (2, 5, 0.06),
+            (1, 6, 0.05), (2, 6, 0.07),
+            (1, 7, 100.0), (2, 7, 110.0),
+            (1, 8, 2.0), (2, 8, 4.0),
+            (1, 9, 0.0), (2, 9, 1.0),
+            (1, 10, 44197.0), (2, 10, 44228.0),
+            (1, 11, 99.0), (2, 11, 101.0)
+        };
+
+        AssertApproxColumn(EvalWithData("ODDFPRICE(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2,F1:F2,G1:G2,H1:H2,I1:I2)", cells), Calc("ODDFPRICE(43900,44562,43831,44197,0.05,0.05,100,2,0)"), Calc("ODDFPRICE(43910,44592,43840,44228,0.06,0.07,110,4,1)"));
+        AssertApproxColumn(EvalWithData("ODDFYIELD(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2,K1:K2,G1:G2,H1:H2,I1:I2)", cells), Calc("ODDFYIELD(43900,44562,43831,44197,0.05,99,100,2,0)"), Calc("ODDFYIELD(43910,44592,43840,44228,0.06,101,110,4,1)"));
+        AssertApproxColumn(EvalWithData("ODDLPRICE(A1:A2,J1:J2,C1:C2,E1:E2,F1:F2,G1:G2,H1:H2,I1:I2)", cells), Calc("ODDLPRICE(43900,44197,43831,0.05,0.05,100,2,0)"), Calc("ODDLPRICE(43910,44228,43840,0.06,0.07,110,4,1)"));
+        AssertApproxColumn(EvalWithData("ODDLYIELD(A1:A2,J1:J2,C1:C2,E1:E2,K1:K2,G1:G2,H1:H2,I1:I2)", cells), Calc("ODDLYIELD(43900,44197,43831,0.05,99,100,2,0)"), Calc("ODDLYIELD(43910,44228,43840,0.06,101,110,4,1)"));
+
+        EvalWithData("ODDFPRICE(A1:A2,B1:C1,43831,44197,0.05,0.05,100,2,0)", cells).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Accrint_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
     {
         var cells = new[]

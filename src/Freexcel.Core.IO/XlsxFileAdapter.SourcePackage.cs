@@ -321,12 +321,17 @@ public sealed partial class XlsxFileAdapter
         var generatedXml = XlsxPackageXmlEditor.LoadXml(generatedEntry);
         var sourceChart = sourceXml.Root?.Element(chartExNs + "chart");
         var generatedTitle = generatedXml.Root?.Element(chartExNs + "chart")?.Element(chartExNs + "title");
+        var generatedLegend = generatedXml.Root?.Element(chartExNs + "chart")?.Element(chartExNs + "legend");
         var generatedChartData = generatedXml.Root?.Element(chartExNs + "chartData");
         if (sourceChart is not null)
         {
             sourceChart.Element(chartExNs + "title")?.Remove();
             if (generatedTitle is not null)
                 sourceChart.AddFirst(new XElement(generatedTitle));
+
+            sourceChart.Element(chartExNs + "legend")?.Remove();
+            if (generatedLegend is not null)
+                sourceChart.Add(new XElement(generatedLegend));
 
             MergeChartExSeries(sourceChart, generatedXml, chartExNs);
         }
