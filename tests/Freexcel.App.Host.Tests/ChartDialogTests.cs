@@ -159,6 +159,18 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTypeGalleries_DoubleClickAcceptsSelectedSubtype()
+    {
+        var source = ReadChartTypeDialogSource();
+
+        source.Should().Contain("_recommendedGallery.MouseDoubleClick += (_, _) => Accept();");
+        source.Should().Contain("_subtypeGallery.MouseDoubleClick += (_, _) => Accept();");
+        source.Should().Contain("private void Accept()");
+        source.Should().Contain("_subtypeGallery.MouseDoubleClick += (_, _) => AcceptSelectedChartType();");
+        source.Should().Contain("private void AcceptSelectedChartType()");
+    }
+
+    [Fact]
     public void ChangeChartTypeDialog_PreselectsCurrentTypeAndBuildsResult()
     {
         StaTestRunner.Run(() =>
