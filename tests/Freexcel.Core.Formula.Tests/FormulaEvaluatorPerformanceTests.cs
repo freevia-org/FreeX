@@ -114,7 +114,35 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(11_500_000);
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Fact]
+    public void NamedRangeAggregate_AvoidsRangeExpansion()
+    {
+        var evaluator = new FormulaEvaluator();
+        var workbook = MakeWorkbookWithNamedNumericRange();
+        var sheet = workbook.GetSheet("Sheet1")!;
+        const string formula = "=SUM(BigInputs)";
+        const double expected = 5_000_050_000d;
+
+        evaluator.Evaluate(formula, sheet, workbook).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet, workbook);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
@@ -275,6 +303,20 @@ public sealed class FormulaEvaluatorPerformanceTests
         var dataSheet = workbook.AddSheet("Data");
         for (uint row = 1; row <= RowCount; row++)
             dataSheet.SetCell(new CellAddress(dataSheet.Id, row, 1), new NumberValue(row));
+
+        return workbook;
+    }
+
+    private static Workbook MakeWorkbookWithNamedNumericRange()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        for (uint row = 1; row <= RowCount; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+
+        workbook.DefineNamedRange("BigInputs", new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, RowCount, 1)));
 
         return workbook;
     }
