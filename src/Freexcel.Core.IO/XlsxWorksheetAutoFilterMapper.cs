@@ -146,7 +146,8 @@ internal static class XlsxWorksheetAutoFilterMapper
         var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
         var hasTop10 = filterColumn.Top10 is not null;
         var hasDynamicFilter = filterColumn.DynamicFilter is not null;
-        if (!hasCustomFilters && !hasTop10 && !hasDynamicFilter && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
+        var hasColorFilter = filterColumn.ColorFilter is not null;
+        if (!hasCustomFilters && !hasTop10 && !hasDynamicFilter && !hasColorFilter && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
         {
             element.Add(new XElement(
                 worksheetNs + "filters",
@@ -176,11 +177,34 @@ internal static class XlsxWorksheetAutoFilterMapper
             element.Add(ToTop10Xml(top10, worksheetNs));
         else if (!hasCustomFilters && filterColumn.DynamicFilter is { } dynamicFilter)
             element.Add(ToDynamicFilterXml(dynamicFilter, worksheetNs));
+        else if (!hasCustomFilters && filterColumn.ColorFilter is { } colorFilter)
+            element.Add(ToColorFilterXml(colorFilter, worksheetNs));
 
         foreach (var nativeFilterXml in filterColumn.NativeFilterXmls)
         {
-            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters", "customFilters", "top10", "dynamicFilter") is { } nativeFilter)
+            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters", "customFilters", "top10", "dynamicFilter", "colorFilter") is { } nativeFilter)
                 element.Add(nativeFilter);
+        }
+
+        return element;
+    }
+
+    private static XElement ToColorFilterXml(WorksheetAutoFilterColorFilterModel colorFilter, XNamespace worksheetNs)
+    {
+        var element = new XElement(worksheetNs + "colorFilter");
+        if (colorFilter.DifferentialFormatIdRaw is not null)
+            element.SetAttributeValue("dxfId", colorFilter.DifferentialFormatIdRaw);
+        else if (colorFilter.DifferentialFormatId is not null)
+            element.SetAttributeValue("dxfId", colorFilter.DifferentialFormatId.Value.ToString(CultureInfo.InvariantCulture));
+
+        if (colorFilter.CellColorRaw is not null)
+            element.SetAttributeValue("cellColor", colorFilter.CellColorRaw);
+        else if (!colorFilter.CellColor)
+            element.SetAttributeValue("cellColor", "0");
+
+        foreach (var (name, value) in colorFilter.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         return element;
@@ -309,8 +333,9 @@ internal static class XlsxWorksheetAutoFilterMapper
             var customFilters = column.Element(worksheetNs + "customFilters");
             var top10 = column.Element(worksheetNs + "top10");
             var dynamicFilter = column.Element(worksheetNs + "dynamicFilter");
+            var colorFilter = column.Element(worksheetNs + "colorFilter");
             var nativeFilters = column.Elements()
-                .Where(element => element.Name != worksheetNs + "filters" && element.Name != worksheetNs + "customFilters" && element.Name != worksheetNs + "top10" && element.Name != worksheetNs + "dynamicFilter")
+                .Where(element => element.Name != worksheetNs + "filters" && element.Name != worksheetNs + "customFilters" && element.Name != worksheetNs + "top10" && element.Name != worksheetNs + "dynamicFilter" && element.Name != worksheetNs + "colorFilter")
                 .Select(element => element.ToString(SaveOptions.DisableFormatting))
                 .ToArray();
             var nativeAttributes = column.Attributes()
@@ -342,6 +367,7 @@ internal static class XlsxWorksheetAutoFilterMapper
                 nativeCustomFiltersAttributes?.Count > 0 ? nativeCustomFiltersAttributes : null,
                 ReadTop10(top10),
                 ReadDynamicFilter(dynamicFilter),
+                ReadColorFilter(colorFilter),
                 nativeFilters,
                 nativeAttributes.Count == 0 ? null : nativeAttributes);
             if (filterColumn.ColumnId >= 0 &&
@@ -352,12 +378,31 @@ internal static class XlsxWorksheetAutoFilterMapper
                  filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
                  filterColumn.Top10 is not null ||
                  filterColumn.DynamicFilter is not null ||
+                 filterColumn.ColorFilter is not null ||
                  filterColumn.NativeFilterXmls.Count > 0 ||
                  filterColumn.NativeAttributes?.Count > 0))
             {
                 yield return filterColumn;
             }
         }
+    }
+
+    private static WorksheetAutoFilterColorFilterModel? ReadColorFilter(XElement? colorFilter)
+    {
+        if (colorFilter is null)
+            return null;
+
+        var nativeAttributes = colorFilter.Attributes()
+            .Where(attribute =>
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "dxfId") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "cellColor"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return new WorksheetAutoFilterColorFilterModel(
+            DifferentialFormatId: XlsxXmlAttributeReader.ReadIntAttribute(colorFilter, "dxfId"),
+            CellColor: XlsxXmlAttributeReader.ReadBoolAttribute(colorFilter, "cellColor", defaultValue: true),
+            DifferentialFormatIdRaw: colorFilter.Attribute("dxfId")?.Value,
+            CellColorRaw: colorFilter.Attribute("cellColor")?.Value,
+            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
     }
 
     private static WorksheetAutoFilterDynamicFilterModel? ReadDynamicFilter(XElement? dynamicFilter)
@@ -426,6 +471,7 @@ internal static class XlsxWorksheetAutoFilterMapper
             if (filterColumn.CustomFilters.Count > 0 ||
                 filterColumn.CustomFiltersAndRaw is not null ||
                 filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
+                filterColumn.ColorFilter is not null ||
                 filterColumn.NativeFilterXmls.Count > 0)
             {
                 continue;
