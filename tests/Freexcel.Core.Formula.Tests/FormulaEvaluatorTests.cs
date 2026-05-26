@@ -1047,6 +1047,22 @@ public class ShortCircuitEvaluationTests
         result.Should().Be(new TextValue("err"));
     }
 
+    [Fact]
+    public void IFERROR_ReplacesErrorsElementwiseInArrayValues()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(0));
+
+        var result = _evaluator.Evaluate("=IFERROR(100/A1:A2,\"err\")", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(10));
+        result.Cells[1, 0].Should().Be(new TextValue("err"));
+    }
+
     // ── IFNA ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1065,6 +1081,24 @@ public class ShortCircuitEvaluationTests
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
         var result = _evaluator.Evaluate("=IFNA(42,\"caught\")", sheet, wb);
         result.Should().Be(new NumberValue(42), "IFNA must not intercept non-error values");
+    }
+
+    [Fact]
+    public void IFNA_ReplacesOnlyNaErrorsElementwiseInArrayValues()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), ErrorValue.NA);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), ErrorValue.DivByZero);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(7));
+
+        var result = _evaluator.Evaluate("=IFNA(A1:A3,\"na\")", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new TextValue("na"));
+        result.Cells[1, 0].Should().Be(ErrorValue.DivByZero);
+        result.Cells[2, 0].Should().Be(new NumberValue(7));
     }
 
     // ── CHOOSE short-circuit ──────────────────────────────────────────────

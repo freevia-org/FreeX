@@ -97,7 +97,7 @@ public class XlsxCorpusScaffoldTests
         report.Should().Contain($"| Regression cached-result workbooks | {regressionCount} | {regressionCount} | 100% |");
         report.Should().Contain("| Feature bucket | Evidence | Pass rate |");
         report.Should().Contain("| PivotTables, pivot caches, and PivotChart binding |");
-        report.Should().Contain("| Slicers, timelines, external links, printer settings, custom XML |");
+        report.Should().Contain("| Slicers, timelines, external links, printer settings, calc chains, custom XML |");
     }
 
     [Fact]
