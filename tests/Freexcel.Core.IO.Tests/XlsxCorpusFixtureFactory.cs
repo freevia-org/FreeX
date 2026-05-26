@@ -64,6 +64,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-custom-properties-001" => true,
         "generated-worksheet-smart-tags-001" => true,
         "generated-worksheet-scenarios-001" => true,
+        "generated-worksheet-custom-sheet-views-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -279,6 +280,15 @@ internal static class XlsxCorpusFixtureFactory
               </scenarios>
             </worksheet>
             """)),
+        "generated-worksheet-custom-sheet-views-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <customSheetViews>
+                <customSheetView guid="{11111111-1111-1111-1111-111111111111}" scale="120" showGridLines="0" showRowCol="0" state="visible">
+                  <pane xSplit="1" ySplit="1" topLeftCell="B2" activePane="bottomRight"/>
+                </customSheetView>
+              </customSheetViews>
+            </worksheet>
+            """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -439,6 +449,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-smart-tags-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-scenarios-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-custom-sheet-views-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase));
 
     private static void EnsureKnownGapContentTypeOverrides(ZipArchive archive, IReadOnlyCollection<string> partNames)
@@ -620,6 +632,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-scenarios-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetScenariosFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-custom-sheet-views-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetCustomSheetViewsFixup(archive);
             return;
         }
 
@@ -1197,6 +1215,35 @@ internal static class XlsxCorpusFixtureFactory
                     worksheetNs + "inputCells",
                     new XAttribute("r", "A1"),
                     new XAttribute("val", "42")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetCustomSheetViewsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "customSheetViews").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "customSheetViews",
+            new XElement(
+                worksheetNs + "customSheetView",
+                new XAttribute("guid", "{11111111-1111-1111-1111-111111111111}"),
+                new XAttribute("scale", "120"),
+                new XAttribute("showGridLines", "0"),
+                new XAttribute("showRowCol", "0"),
+                new XAttribute("state", "visible"),
+                new XElement(
+                    worksheetNs + "pane",
+                    new XAttribute("xSplit", "1"),
+                    new XAttribute("ySplit", "1"),
+                    new XAttribute("topLeftCell", "B2"),
+                    new XAttribute("activePane", "bottomRight")))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 

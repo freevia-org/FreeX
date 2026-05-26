@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(17, "the generated metadata-pass manifest currently declares seventeen deterministic package-retention rows");
+        rows.Should().HaveCount(18, "the generated metadata-pass manifest currently declares eighteen deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -586,6 +586,48 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-scenarios-001");
         AssertWorksheetScenarios(saved, "generated-worksheet-scenarios-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetCustomSheetViewsRow_RetainsCustomSheetViewsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-custom-sheet-views-001");
+        AssertWorksheetCustomSheetViews(source, "generated-worksheet-custom-sheet-views-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-custom-sheet-views-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-custom-sheet-views-001");
+        AssertWorksheetCustomSheetViews(saved, "generated-worksheet-custom-sheet-views-001 saved");
+    }
+
+    private static void AssertWorksheetCustomSheetViews(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var customSheetView = worksheetXml.Root!
+            .Element(worksheetNs + "customSheetViews")!
+            .Elements(worksheetNs + "customSheetView")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        customSheetView.Attribute("guid")!.Value.Should().Be("{11111111-1111-1111-1111-111111111111}", because);
+        customSheetView.Attribute("scale")!.Value.Should().Be("120", because);
+        customSheetView.Attribute("showGridLines")!.Value.Should().Be("0", because);
+        customSheetView.Attribute("showRowCol")!.Value.Should().Be("0", because);
+        customSheetView.Attribute("state")!.Value.Should().Be("visible", because);
+
+        var pane = customSheetView.Element(worksheetNs + "pane");
+        pane.Should().NotBeNull(because);
+        pane!.Attribute("topLeftCell")!.Value.Should().Be("B2", because);
+        pane.Attribute("activePane")!.Value.Should().Be("bottomRight", because);
     }
 
     private static void AssertWorksheetScenarios(Stream package, string because)
