@@ -594,12 +594,6 @@ public static partial class BuiltInFunctions
 
         foreach (var arg in args)
         {
-            if (arg is ErrorValue e)
-            {
-                error = e;
-                return false;
-            }
-
             arrays.Add(arg is RangeValue arr
                 ? arr
                 : new RangeValue(new[,] { { arg } }));
@@ -703,7 +697,7 @@ public static partial class BuiltInFunctions
         bool ignoreErrors,
         List<ScalarValue> values)
     {
-        if (ignoreBlanks && (value is BlankValue || value is TextValue { Value.Length: 0 })) return;
+        if (ignoreBlanks && value is BlankValue) return;
         if (ignoreErrors && value is ErrorValue) return;
         values.Add(value);
     }
