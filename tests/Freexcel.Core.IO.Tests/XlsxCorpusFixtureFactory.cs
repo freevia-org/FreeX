@@ -78,6 +78,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-sheet-properties-001" => true,
         "generated-worksheet-protection-native-001" => true,
         "generated-worksheet-protected-ranges-001" => true,
+        "generated-worksheet-cell-structure-native-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -435,6 +436,39 @@ internal static class XlsxCorpusFixtureFactory
               </protectedRanges>
             </worksheet>
             """)),
+        "generated-worksheet-cell-structure-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <cols nativeColsAttr="kept">
+                <col min="2" max="2" width="14" customWidth="1" bestFit="1" phonetic="1" customAttr="column-native"/>
+              </cols>
+              <sheetData nativeSheetDataAttr="kept">
+                <row r="1"><c r="A1"><v>3.14</v></c></row>
+                <row r="2" thickTop="1" ph="1" customAttr="row-native">
+                  <c r="A2" cm="2" vm="1" ph="1" customAttr="cell-native">
+                    <f t="array" ref="A2:A2" ca="1" customAttr="formula-native">A1*2</f>
+                    <v>6.28</v>
+                    <fx:cellNativeChild value="kept"/>
+                    <extLst>
+                      <ext uri="{FREEXCEL-CELL-EXT}">
+                        <fx:cellExt value="cell-extension"/>
+                      </ext>
+                    </extLst>
+                  </c>
+                  <fx:rowNativeChild value="kept"/>
+                  <extLst>
+                    <ext uri="{FREEXCEL-ROW-EXT}">
+                      <fx:rowExt value="row-extension"/>
+                    </ext>
+                  </extLst>
+                </row>
+                <row r="4"><c r="A4" t="str"><v>merged</v></c></row>
+              </sheetData>
+              <mergeCells count="1" nativeMergeContainerAttr="kept">
+                <mergeCell ref="A4:B5" nativeMergeCellAttr="kept"/>
+              </mergeCells>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -688,6 +722,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-protection-native-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-protected-ranges-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-cell-structure-native-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
@@ -968,6 +1004,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-protected-ranges-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetProtectedRangesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-cell-structure-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetCellStructureNativeFixup(archive);
             return;
         }
 
@@ -1935,6 +1977,98 @@ internal static class XlsxCorpusFixtureFactory
                 new XAttribute("name", "NativeMultiAreaRange"),
                 new XAttribute("sqref", "B2 C3"),
                 new XAttribute("password", "1234"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetCellStructureNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "cols").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "sheetData").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "mergeCells").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "cols",
+            new XAttribute("nativeColsAttr", "kept"),
+            new XElement(
+                worksheetNs + "col",
+                new XAttribute("min", "2"),
+                new XAttribute("max", "2"),
+                new XAttribute("width", "14"),
+                new XAttribute("customWidth", "1"),
+                new XAttribute("bestFit", "1"),
+                new XAttribute("phonetic", "1"),
+                new XAttribute("customAttr", "column-native"))));
+
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "sheetData",
+            new XAttribute("nativeSheetDataAttr", "kept"),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "1"),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "A1"),
+                    new XElement(worksheetNs + "v", "3.14"))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "2"),
+                new XAttribute("thickTop", "1"),
+                new XAttribute("ph", "1"),
+                new XAttribute("customAttr", "row-native"),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "A2"),
+                    new XAttribute("cm", "2"),
+                    new XAttribute("vm", "1"),
+                    new XAttribute("ph", "1"),
+                    new XAttribute("customAttr", "cell-native"),
+                    new XElement(
+                        worksheetNs + "f",
+                        new XAttribute("t", "array"),
+                        new XAttribute("ref", "A2:A2"),
+                        new XAttribute("ca", "1"),
+                        new XAttribute("customAttr", "formula-native"),
+                        "A1*2"),
+                    new XElement(worksheetNs + "v", "6.28"),
+                    new XElement(freexcelNs + "cellNativeChild", new XAttribute("value", "kept")),
+                    new XElement(
+                        worksheetNs + "extLst",
+                        new XElement(
+                            worksheetNs + "ext",
+                            new XAttribute("uri", "{FREEXCEL-CELL-EXT}"),
+                            new XElement(freexcelNs + "cellExt", new XAttribute("value", "cell-extension"))))),
+                new XElement(freexcelNs + "rowNativeChild", new XAttribute("value", "kept")),
+                new XElement(
+                    worksheetNs + "extLst",
+                    new XElement(
+                        worksheetNs + "ext",
+                        new XAttribute("uri", "{FREEXCEL-ROW-EXT}"),
+                        new XElement(freexcelNs + "rowExt", new XAttribute("value", "row-extension"))))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "4"),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "A4"),
+                    new XAttribute("t", "str"),
+                    new XElement(worksheetNs + "v", "merged")))));
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "mergeCells",
+            new XAttribute("count", "1"),
+            new XAttribute("nativeMergeContainerAttr", "kept"),
+            new XElement(
+                worksheetNs + "mergeCell",
+                new XAttribute("ref", "A4:B5"),
+                new XAttribute("nativeMergeCellAttr", "kept"))));
+
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 

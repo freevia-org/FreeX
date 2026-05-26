@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(38, "the generated metadata-pass manifest currently declares thirty-eight deterministic package-retention rows");
+        rows.Should().HaveCount(39, "the generated metadata-pass manifest currently declares thirty-nine deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -844,6 +844,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetCellStructureNativeRow_RetainsNativeMetadataAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-cell-structure-native-001");
+        AssertWorksheetCellStructureNative(source, "generated-worksheet-cell-structure-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-cell-structure-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-cell-structure-native-001");
+        AssertWorksheetCellStructureNative(saved, "generated-worksheet-cell-structure-native-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -1380,6 +1398,76 @@ public class XlsxCorpusRunnerTests
             .Subject;
         nativeOnlyRange.Attribute("sqref")!.Value.Should().Be("B2 C3", because);
         nativeOnlyRange.Attribute("password")!.Value.Should().Be("1234", because);
+    }
+
+    private static void AssertWorksheetCellStructureNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var cols = worksheetXml.Root!.Element(worksheetNs + "cols");
+        cols.Should().NotBeNull(because);
+        cols!.Attribute("nativeColsAttr")!.Value.Should().Be("kept", because);
+        var column = cols.Elements(worksheetNs + "col")
+            .Where(element => (string?)element.Attribute("min") == "2" && (string?)element.Attribute("max") == "2")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        column.Attribute("bestFit")!.Value.Should().Be("1", because);
+        column.Attribute("phonetic")!.Value.Should().Be("1", because);
+        column.Attribute("customAttr")!.Value.Should().Be("column-native", because);
+
+        var sheetData = worksheetXml.Root.Element(worksheetNs + "sheetData");
+        sheetData.Should().NotBeNull(because);
+        sheetData!.Attribute("nativeSheetDataAttr")!.Value.Should().Be("kept", because);
+        var row = sheetData.Elements(worksheetNs + "row")
+            .Where(element => (string?)element.Attribute("r") == "2")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        row.Attribute("thickTop")!.Value.Should().Be("1", because);
+        row.Attribute("ph")!.Value.Should().Be("1", because);
+        row.Attribute("customAttr")!.Value.Should().Be("row-native", because);
+        row.Element(freexcelNs + "rowNativeChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+        row.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Element(freexcelNs + "rowExt")!
+            .Attribute("value")!.Value.Should().Be("row-extension", because);
+
+        var cell = row.Elements(worksheetNs + "c")
+            .Where(element => (string?)element.Attribute("r") == "A2")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        cell.Attribute("cm")!.Value.Should().Be("2", because);
+        cell.Attribute("vm")!.Value.Should().Be("1", because);
+        cell.Attribute("ph")!.Value.Should().Be("1", because);
+        cell.Attribute("customAttr")!.Value.Should().Be("cell-native", because);
+        cell.Element(freexcelNs + "cellNativeChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+        cell.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Element(freexcelNs + "cellExt")!
+            .Attribute("value")!.Value.Should().Be("cell-extension", because);
+        var formula = cell.Element(worksheetNs + "f");
+        formula.Should().NotBeNull(because);
+        formula!.Attribute("t")!.Value.Should().Be("array", because);
+        formula.Attribute("ref")!.Value.Should().Be("A2:A2", because);
+        formula.Attribute("ca")!.Value.Should().Be("1", because);
+        formula.Attribute("customAttr")!.Value.Should().Be("formula-native", because);
+
+        var mergeCells = worksheetXml.Root.Element(worksheetNs + "mergeCells");
+        mergeCells.Should().NotBeNull(because);
+        mergeCells!.Attribute("nativeMergeContainerAttr")!.Value.Should().Be("kept", because);
+        var mergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
+            .Where(element => (string?)element.Attribute("ref") == "A4:B5")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        mergeCell.Attribute("nativeMergeCellAttr")!.Value.Should().Be("kept", because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)
