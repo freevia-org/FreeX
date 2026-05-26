@@ -101,6 +101,19 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_DoesNotListCompletedLocalPrivateManifestRowsAsOpenGap()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Count(row => row.SourceType == "local-private")
+            .Should().BeGreaterThan(0, "optional local-private workbook rows are already represented in the manifest");
+        report.Should().NotContain(
+            "Add local-private workbook rows",
+            "the report gap list should not ask for manifest rows after they exist");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
