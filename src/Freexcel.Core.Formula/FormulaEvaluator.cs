@@ -402,34 +402,37 @@ public sealed class FormulaEvaluator
 
     private ScalarValue EvaluateFunction(FunctionCallNode node, IEvalContext context)
     {
+        var functionName = node.FunctionName;
+
         // LET-scoped lambda bindings: a name like "double" resolves to a LambdaValue
         // before any built-in lookup, allowing user-defined functions to shadow nothing.
-        var lambdaBinding = context.TryResolveLambdaBinding(node.FunctionName);
+        var lambdaBinding = context.TryResolveLambdaBinding(functionName);
         if (lambdaBinding is LambdaValue lv)
             return InvokeLambdaWithArgs(lv, node.Arguments, context);
 
         // LET and LAMBDA are AST-aware special forms not in the built-in registry.
-        if (node.FunctionName is "LET" or "LAMBDA")
+        if (functionName is "LET" or "LAMBDA")
             return EvaluateAstAware(node, context);
 
-        if (!BuiltInFunctions.Exists(node.FunctionName))
+        if (!BuiltInFunctions.TryGet(functionName, out var entry))
             return ErrorValue.Name;
 
         // Short-circuit functions evaluate arguments lazily to avoid propagating errors from untaken branches.
-        if (node.FunctionName is "IF" or "IFERROR" or "IFNA" or "CHOOSE" or "IFS" or "SWITCH")
+        if (functionName is "IF" or "IFERROR" or "IFNA" or "CHOOSE" or "IFS" or "SWITCH")
             return EvaluateShortCircuit(node, context);
 
         // AST-aware functions: must inspect the raw argument nodes before evaluation.
-        if (node.FunctionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET" or "CELL")
+        if (functionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET" or "CELL")
             return EvaluateAstAware(node, context);
 
-        var (func, minArgs, maxArgs) = BuiltInFunctions.Get(node.FunctionName);
+        var (func, minArgs, maxArgs) = entry;
 
-        bool isStructured = IsStructuredRangeFunction(node.FunctionName);
+        bool isStructured = IsStructuredRangeFunction(functionName);
+        bool isAggregate = IsAggregateFunction(functionName);
 
         if (node.Arguments.Count >= minArgs &&
-            (IsAggregateFunction(node.FunctionName) || node.Arguments.Count <= maxArgs) &&
-            TryEvaluateRangeOnlyFastAggregate(node.FunctionName, node.Arguments, context, out var fastAggregate))
+            (isAggregate || node.Arguments.Count <= maxArgs) &&
+            TryEvaluateRangeOnlyFastAggregate(functionName, node.Arguments, context, out var fastAggregate))
         {
             return fastAggregate;
         }
@@ -463,14 +466,14 @@ public sealed class FormulaEvaluator
                         : context.GetRangeValues(
                             range.Start.Row, range.Start.ColumnNumber,
                             range.End.Row, range.End.ColumnNumber);
-                    AddRangeValues(expandedArgs, values, node.FunctionName);
+                    AddRangeValues(expandedArgs, values, functionName);
                 }
             }
-            else if (arg is StringNode directText && IsDirectTextCoercingAggregate(node.FunctionName))
+            else if (arg is StringNode directText && IsDirectTextCoercingAggregate(functionName))
             {
                 expandedArgs.Add(new DirectTextLiteralValue(directText.Value));
             }
-            else if (arg is CellRefNode structuredCell && IsConditionalAggregateRangeArgument(node.FunctionName, argIndex))
+            else if (arg is CellRefNode structuredCell && IsConditionalAggregateRangeArgument(functionName, argIndex))
             {
                 if (structuredCell.SheetName is not null && !context.SheetExists(structuredCell.SheetName))
                 {
@@ -480,7 +483,7 @@ public sealed class FormulaEvaluator
 
                 expandedArgs.Add(BuildRangeValue(new RangeRefNode(structuredCell, structuredCell, structuredCell.SheetName), context));
             }
-            else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(node.FunctionName, argIndex))
+            else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(functionName, argIndex))
             {
                 if (aggregateCell.SheetName is not null && !context.SheetExists(aggregateCell.SheetName))
                 {
@@ -493,7 +496,7 @@ public sealed class FormulaEvaluator
                     : context.GetCellValue(aggregateCell.Row, aggregateCell.ColumnNumber);
                 expandedArgs.Add(new ReferencedScalarValue(value));
             }
-            else if (arg is CellRefNode cell && IsSingleCellReferenceRangeFunction(node.FunctionName))
+            else if (arg is CellRefNode cell && IsSingleCellReferenceRangeFunction(functionName))
             {
                 if (cell.SheetName is not null && !context.SheetExists(cell.SheetName))
                 {
@@ -512,7 +515,7 @@ public sealed class FormulaEvaluator
                     if (isStructured && lambdaBound is RangeValue)
                         expandedArgs.Add(lambdaBound);
                     else if (!isStructured && lambdaBound is RangeValue flatRv)
-                        AddRangeValues(expandedArgs, flatRv.Flatten(), node.FunctionName);
+                        AddRangeValues(expandedArgs, flatRv.Flatten(), functionName);
                     else
                         expandedArgs.Add(lambdaBound);
                 }
@@ -541,7 +544,7 @@ public sealed class FormulaEvaluator
                                 : context.GetRangeValues(
                                     r.Start.Row, r.Start.Col,
                                     r.End.Row, r.End.Col);
-                            AddRangeValues(expandedArgs, values, node.FunctionName);
+                            AddRangeValues(expandedArgs, values, functionName);
                         }
                     }
                 }
@@ -549,8 +552,8 @@ public sealed class FormulaEvaluator
             else
             {
                 var value = EvaluateNode(arg, context);
-                if (!isStructured && IsAggregateFunction(node.FunctionName) && value is RangeValue rangeValue)
-                    AddRangeValues(expandedArgs, rangeValue.Flatten(), node.FunctionName);
+                if (!isStructured && isAggregate && value is RangeValue rangeValue)
+                    AddRangeValues(expandedArgs, rangeValue.Flatten(), functionName);
                 else
                     expandedArgs.Add(value);
             }
@@ -560,7 +563,7 @@ public sealed class FormulaEvaluator
         if (node.Arguments.Count < minArgs)
             return ErrorValue.Value;
         // Enforce maximum only for non-aggregate functions (aggregates accept unbounded ranges).
-        if (!IsAggregateFunction(node.FunctionName) && node.Arguments.Count > maxArgs)
+        if (!isAggregate && node.Arguments.Count > maxArgs)
             return ErrorValue.Value;
 
         try

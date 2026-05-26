@@ -482,6 +482,10 @@ public static partial class BuiltInFunctions
     /// <summary>Get a function by name.</summary>
     public static (FormulaFunction Func, int MinArgs, int MaxArgs) Get(string name) => Functions[name];
 
+    /// <summary>Try to get a function by name.</summary>
+    public static bool TryGet(string name, out (FormulaFunction Func, int MinArgs, int MaxArgs) entry) =>
+        Functions.TryGetValue(name, out entry);
+
     /// <summary>Validate argument count for a function.</summary>
     public static bool ValidateArgCount(string name, int count)
     {
