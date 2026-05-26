@@ -164,7 +164,8 @@ public partial class MainWindow
             showItemsWithNoDataOnRows: result.ShowItemsWithNoDataOnRows,
             showItemsWithNoDataOnColumns: result.ShowItemsWithNoDataOnColumns,
             pageOverThenDown: result.PageOverThenDown,
-            pageWrap: result.PageWrap);
+            pageWrap: result.PageWrap,
+            enableDrill: result.EnableDrill);
 
     private void ApplyPivotOptions(
         PivotTableModel pivotTable,
@@ -207,7 +208,8 @@ public partial class MainWindow
         bool? showItemsWithNoDataOnRows = null,
         bool? showItemsWithNoDataOnColumns = null,
         bool? pageOverThenDown = null,
-        int? pageWrap = null)
+        int? pageWrap = null,
+        bool? enableDrill = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -252,7 +254,8 @@ public partial class MainWindow
                     pageOverThenDown,
                     pageWrap,
                     errorCaption,
-                    updateErrorCaption),
+                    updateErrorCaption,
+                    enableDrill: enableDrill),
                 "PivotTable Options"))
             return;
 
