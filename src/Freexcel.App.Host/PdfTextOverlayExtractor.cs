@@ -260,7 +260,88 @@ internal static class PdfTextOverlayExtractor
                 foreach (var child in span.Inlines)
                     AppendInlineText(child, parts);
                 break;
+            case InlineUIContainer { Child: UIElement child }:
+                if (ExtractInlineUiText(child) is { Length: > 0 } childText)
+                    parts.Add(childText);
+                break;
         }
+    }
+
+    private static string ExtractInlineUiText(UIElement element)
+    {
+        var parts = new List<string>();
+        AppendInlineUiText(element, parts);
+        return string.Concat(parts);
+    }
+
+    private static void AppendInlineUiText(object? value, List<string> parts)
+    {
+        switch (value)
+        {
+            case null:
+                return;
+            case UIElement { Visibility: not Visibility.Visible }:
+                return;
+            case TextBlock textBlock:
+                parts.Add(ExtractText(textBlock));
+                return;
+            case AccessText accessText:
+                parts.Add(NormalizeAccessText(accessText.Text));
+                return;
+            case TextBox textBox:
+                parts.Add(textBox.Text);
+                return;
+            case RichTextBox richTextBox:
+                parts.Add(ExtractFlowDocumentText(richTextBox.Document));
+                return;
+            case FlowDocumentScrollViewer flowDocumentViewer:
+                parts.Add(ExtractFlowDocumentText(flowDocumentViewer.Document));
+                return;
+            case HeaderedContentControl headeredContentControl:
+                AppendJoinedInlineUiText(
+                    [
+                        ExtractInlineUiTextPart(headeredContentControl.Header),
+                        ExtractInlineUiTextPart(headeredContentControl.Content)
+                    ],
+                    parts);
+                return;
+            case ContentControl contentControl:
+                AppendInlineUiText(contentControl.Content, parts);
+                return;
+            case ItemsControl itemsControl:
+                AppendJoinedInlineUiText(
+                    itemsControl.Items.Cast<object?>().Select(ExtractInlineUiTextPart),
+                    parts);
+                return;
+            case Panel panel:
+                foreach (UIElement child in panel.Children)
+                    AppendInlineUiText(child, parts);
+                return;
+            case Decorator { Child: UIElement child }:
+                AppendInlineUiText(child, parts);
+                return;
+            case UIElement:
+                return;
+            default:
+                var text = value.ToString();
+                if (!string.IsNullOrWhiteSpace(text))
+                    parts.Add(text);
+                return;
+        }
+    }
+
+    private static string ExtractInlineUiTextPart(object? value)
+    {
+        var parts = new List<string>();
+        AppendInlineUiText(value, parts);
+        return string.Concat(parts);
+    }
+
+    private static void AppendJoinedInlineUiText(IEnumerable<string> values, List<string> parts)
+    {
+        var joined = string.Join("\n", values.Where(value => !string.IsNullOrWhiteSpace(value)));
+        if (joined.Length > 0)
+            parts.Add(joined);
     }
 
     private static string NormalizeAccessText(string text)
