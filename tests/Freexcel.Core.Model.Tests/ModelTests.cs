@@ -327,6 +327,38 @@ public class SheetCloneTests
     }
 
     [Fact]
+    public void Sheet_Clone_CopiesLayoutCollections()
+    {
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("S");
+        src.ColumnWidths[2] = 18.5;
+        src.RowHeights[4] = 33.25;
+        src.HiddenRows.Add(6);
+        src.FilterHiddenRows.Add(7);
+        src.HiddenCols.Add(3);
+        src.RowPageBreaks.Add(20);
+        src.ColumnPageBreaks.Add(5);
+        src.RowOutlineLevels[5] = 2;
+        src.ColOutlineLevels[3] = 1;
+        src.GroupHiddenRows.Add(5);
+        src.GroupHiddenCols.Add(3);
+
+        var copy = src.Clone(SheetId.New(), "Copy");
+
+        copy.ColumnWidths.Should().ContainKey(2).WhoseValue.Should().Be(18.5);
+        copy.RowHeights.Should().ContainKey(4).WhoseValue.Should().Be(33.25);
+        copy.HiddenRows.Should().Contain(6u);
+        copy.FilterHiddenRows.Should().Contain(7u);
+        copy.HiddenCols.Should().Contain(3u);
+        copy.RowPageBreaks.Should().Contain(20u);
+        copy.ColumnPageBreaks.Should().Contain(5u);
+        copy.RowOutlineLevels.Should().ContainKey(5).WhoseValue.Should().Be(2);
+        copy.ColOutlineLevels.Should().ContainKey(3).WhoseValue.Should().Be(1);
+        copy.GroupHiddenRows.Should().Contain(5u);
+        copy.GroupHiddenCols.Should().Contain(3u);
+    }
+
+    [Fact]
     public void Sheet_Clone_DropsExistingConditionalFormatX14IdNativeChild()
     {
         var wb = new Workbook("T");
