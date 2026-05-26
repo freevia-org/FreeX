@@ -124,6 +124,15 @@ public sealed class SymbolPickerDialogSourceTests
         source.Should().Contain("Keyboard.Focus(firstSymbol);");
     }
 
+    [Fact]
+    public void Dialog_NamesSymbolGridAndSpecialCharacterListForAccessibility()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("AutomationProperties.SetName(grid, \"Symbols\");");
+        source.Should().Contain("AutomationProperties.SetName(specialList, \"Special characters\");");
+    }
+
     [Theory]
     [InlineData("03C0", "\u03c0")]
     [InlineData("U+2192", "\u2192")]
