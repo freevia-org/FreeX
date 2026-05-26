@@ -487,12 +487,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Db(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
-        double month   = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 12;
-        if (args[3] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => DbScalar(cost, salvage, life, value, month));
-        return DbScalar(cost, salvage, life, args[3], month);
+        var monthArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], monthArg], values => DbScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue DbScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue periodValue, ScalarValue monthValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        double month = monthValue is BlankValue ? 12 : ToNumber(monthValue);
+        return DbScalar(cost, salvage, life, periodValue, month);
     }
 
     private static ScalarValue DbScalar(double cost, double salvage, double life, ScalarValue periodValue, double month)
@@ -526,12 +531,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ddb(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
-        double factor  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 2.0;
-        if (args[3] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => DdbScalar(cost, salvage, life, value, factor));
-        return DdbScalar(cost, salvage, life, args[3], factor);
+        var factorArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], factorArg], values => DdbScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue DdbScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue periodValue, ScalarValue factorValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        double factor = factorValue is BlankValue ? 2.0 : ToNumber(factorValue);
+        return DdbScalar(cost, salvage, life, periodValue, factor);
     }
 
     private static ScalarValue DdbScalar(double cost, double salvage, double life, ScalarValue periodValue, double factor)
@@ -557,14 +567,20 @@ public static partial class BuiltInFunctions
     private static ScalarValue Vdb(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost        = ToNumber(args[0]);
-        double salvage     = ToNumber(args[1]);
-        double life        = ToNumber(args[2]);
-        double startPeriod = ToNumber(args[3]);
-        double factor      = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 2.0;
-        bool noSwitch      = args.Count > 6 && args[6] is not BlankValue && ToBool(args[6]);
-        if (args[4] is RangeValue endPeriodRange) return MapUnaryTextRange(endPeriodRange, value => VdbScalar(cost, salvage, life, startPeriod, value, factor, noSwitch));
-        return VdbScalar(cost, salvage, life, startPeriod, args[4], factor, noSwitch);
+        var factorArg = args.Count > 5 ? args[5] : BlankValue.Instance;
+        var noSwitchArg = args.Count > 6 ? args[6] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], factorArg, noSwitchArg], values => VdbScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
+    }
+
+    private static ScalarValue VdbScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue startPeriodValue, ScalarValue endPeriodValue, ScalarValue factorValue, ScalarValue noSwitchValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        double startPeriod = ToNumber(startPeriodValue);
+        double factor = factorValue is BlankValue ? 2.0 : ToNumber(factorValue);
+        bool noSwitch = noSwitchValue is not BlankValue && ToBool(noSwitchValue);
+        return VdbScalar(cost, salvage, life, startPeriod, endPeriodValue, factor, noSwitch);
     }
 
     private static ScalarValue VdbScalar(double cost, double salvage, double life, double startPeriod, ScalarValue endPeriodValue, double factor, bool noSwitch)
@@ -606,11 +622,15 @@ public static partial class BuiltInFunctions
     private static ScalarValue Syd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
-        if (args[3] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => SydScalar(cost, salvage, life, value));
-        return SydScalar(cost, salvage, life, args[3]);
+        return MapScalarArgs([args[0], args[1], args[2], args[3]], values => SydScalar(values[0], values[1], values[2], values[3]));
+    }
+
+    private static ScalarValue SydScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue periodValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        return SydScalar(cost, salvage, life, periodValue);
     }
 
     private static ScalarValue SydScalar(double cost, double salvage, double life, ScalarValue periodValue)
@@ -1795,10 +1815,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        if (args[2] is RangeValue lifeRange) return MapUnaryTextRange(lifeRange, value => SlnScalar(cost, salvage, value));
-        return SlnScalar(cost, salvage, args[2]);
+        return MapScalarArgs([args[0], args[1], args[2]], values => SlnScalar(values[0], values[1], values[2]));
+    }
+
+    private static ScalarValue SlnScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        return SlnScalar(cost, salvage, lifeValue);
     }
 
     private static ScalarValue SlnScalar(double cost, double salvage, ScalarValue lifeValue)
