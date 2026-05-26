@@ -5132,6 +5132,21 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Pmt_OneCellControlRanges_BroadcastAcrossRateArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.01)),
+            (2, 1, new NumberValue(0.02)),
+            (1, 2, new NumberValue(12)),
+            (1, 3, new NumberValue(1000)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=PMT(A1:A2,B1:B1,C1:C1)", sheet),
+            ((NumberValue)_eval.Evaluate("=PMT(A1,B1,C1)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=PMT(A2,B1,C1)", sheet)).Value);
+    }
+
+    [Fact]
     public void IpmtAndPpmt_SameShapeRateAndPeriodRanges_SpillElementwise()
     {
         var sheet = MakeSheet(
