@@ -19,11 +19,18 @@ public sealed partial class ViewportService
 
             var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
             var iconCount = GetIconSetCount(style);
-            var iconIndex = ResolveIconSetIndex(rule, cellValue, cache.Min, cache.Max, iconCount);
-            if (rule.IconSetReverse)
-                iconIndex = iconCount - 1 - iconIndex;
+            var bucketIndex = ResolveIconSetIndex(rule, cellValue, cache.Min, cache.Max, iconCount);
 
-            return new ConditionalFormatIcon(style, iconIndex, iconCount, rule.IconSetShowValue);
+            if (rule.IconOverrides.Count == iconCount)
+            {
+                var ovr = rule.IconOverrides[bucketIndex];
+                return new ConditionalFormatIcon(ovr.IconSet, ovr.IconId, iconCount, rule.IconSetShowValue);
+            }
+
+            if (rule.IconSetReverse)
+                bucketIndex = iconCount - 1 - bucketIndex;
+
+            return new ConditionalFormatIcon(style, bucketIndex, iconCount, rule.IconSetShowValue);
         }
 
         return null;

@@ -4923,6 +4923,44 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_RoundTrip_ConditionalFormat_IconSet_WithIconOverrides_Survives()
+    {
+        var adapter = new XlsxFileAdapter();
+        var workbook = new Workbook("CfIconOverrides");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 3; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+        var cf = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            RuleType = CfRuleType.IconSet,
+            Priority = 1,
+            IconSetStyle = "3TrafficLights1"
+        };
+        cf.IconSetThresholds.AddRange([
+            new CfThresholdModel(CfThresholdType.Percent, "33"),
+            new CfThresholdModel(CfThresholdType.Percent, "66")
+        ]);
+        cf.IconOverrides.AddRange([
+            new CfIconOverride("3Arrows", 2),
+            new CfIconOverride("NoIcons", 0),
+            new CfIconOverride("3TrafficLights1", 0)
+        ]);
+        sheet.ConditionalFormats.Add(cf);
+
+        using var ms = new MemoryStream();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        var iconSet = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        iconSet.IconOverrides.Should().HaveCount(3);
+        iconSet.IconOverrides[0].Should().Be(new CfIconOverride("3Arrows", 2));
+        iconSet.IconOverrides[1].Should().Be(new CfIconOverride("NoIcons", 0));
+        iconSet.IconOverrides[2].Should().Be(new CfIconOverride("3TrafficLights1", 0));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsAdvancedConditionalFormatNativeMetadata()
     {
         var workbook = new Workbook("CfNativeMetadata");
