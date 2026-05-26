@@ -119,6 +119,68 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         });
     }
 
+    [Fact]
+    public void KeyboardWorksheetContextMenu_WithShapeAtActiveCellShowsShapeScopedCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.AddShapeAt(3, 3);
+            harness.SelectCell(3, 3);
+
+            harness.ContextMenuTargetKind(3, 3).Should().Be("Shape");
+            harness.OpenKeyboardContextMenu();
+
+            harness.FocusedMenuHeader.Should().Be("_Format Shape...");
+            harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
+            harness.OpenMenuHeaders.Should().ContainInOrder([
+                "_Format Shape...",
+                "_Size and Properties...",
+                "_Rotate...",
+                "Shape _Fill...",
+                "Shape _Outline...",
+                "Edit _Alt Text...",
+                "_Selection Pane...",
+                "Bring _Forward",
+                "Send _Backward"
+            ]);
+            harness.OpenMenuHeaders.Should().NotContain("_Format Cells...");
+            harness.OpenMenuHeaders.Should().NotContain("Cu_t");
+        });
+    }
+
+    [Fact]
+    public void KeyboardWorksheetContextMenu_WithTextBoxAtActiveCellShowsTextBoxScopedCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.AddTextBoxAt(4, 4);
+            harness.SelectCell(4, 4);
+
+            harness.ContextMenuTargetKind(4, 4).Should().Be("TextBox");
+            harness.OpenKeyboardContextMenu();
+
+            harness.FocusedMenuHeader.Should().Be("_Format Text Box...");
+            harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
+            harness.OpenMenuHeaders.Should().ContainInOrder([
+                "_Format Text Box...",
+                "_Size and Properties...",
+                "_Rotate...",
+                "Shape _Fill...",
+                "Shape _Outline...",
+                "Edit _Alt Text...",
+                "_Selection Pane..."
+            ]);
+            harness.OpenMenuHeaders.Should().NotContain("Bring _Forward");
+            harness.OpenMenuHeaders.Should().NotContain("Send _Backward");
+            harness.OpenMenuHeaders.Should().NotContain("_Format Cells...");
+            harness.OpenMenuHeaders.Should().NotContain("Cu_t");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -162,6 +224,30 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             {
                 Anchor = new CellAddress(sheet.Id, row, col),
                 Name = "Logo"
+            });
+            PumpDispatcher();
+        }
+
+        public void AddShapeAt(uint row, uint col)
+        {
+            var sheet = CurrentSheet;
+            sheet.DrawingShapes.Add(new DrawingShapeModel
+            {
+                Anchor = new CellAddress(sheet.Id, row, col),
+                Kind = DrawingShapeKind.Rectangle,
+                Name = "Rectangle 1"
+            });
+            PumpDispatcher();
+        }
+
+        public void AddTextBoxAt(uint row, uint col)
+        {
+            var sheet = CurrentSheet;
+            sheet.TextBoxes.Add(new TextBoxModel
+            {
+                Anchor = new CellAddress(sheet.Id, row, col),
+                Name = "Text Box 1",
+                Text = "Note"
             });
             PumpDispatcher();
         }
