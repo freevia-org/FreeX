@@ -68,7 +68,11 @@ public partial class MainWindow
         }
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range), range.Start) { Owner = this };
+        TextToColumnsDialog? dialog = null;
+        dialog = new TextToColumnsDialog(
+            TextToColumnsDialog.BuildPreviewRows(sheet, range),
+            range.Start,
+            request => ApplyTextToColumnsRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var currentRange = SheetGrid.SelectedRange ?? range;
@@ -93,6 +97,30 @@ public partial class MainWindow
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
+    }
+
+    private void ApplyTextToColumnsRangeSelection(
+        TextToColumnsDialog? dialog,
+        TextToColumnsRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(selectedRange.Start);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, TextToColumnsDialogResult result)
