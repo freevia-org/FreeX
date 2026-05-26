@@ -944,6 +944,7 @@ public sealed class ConditionalFormatDialogTests
         string.Join(Environment.NewLine, new[]
         {
             "ConditionalFormatDialog.cs",
+            "ConditionalFormatDialog.Catalog.cs",
             "ConditionalFormatDialog.ColorEditors.cs",
             "ConditionalFormatDialog.IconSets.cs",
             "ConditionalFormatDialog.Parsing.cs",
