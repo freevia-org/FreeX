@@ -34,6 +34,34 @@ internal static class GridDrawingObjectPlanner
     public static Rect EnsureMinimumControlRect(Rect rect) =>
         new(rect.Left, rect.Top, Math.Max(80, rect.Width), Math.Max(44, rect.Height));
 
+    public static bool TryCreateAnchoredObjectRect(
+        ViewportModel? viewport,
+        CellAddress anchor,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double width,
+        double height,
+        double minimumWidth,
+        double minimumHeight,
+        out Rect rect)
+    {
+        rect = default;
+        if (viewport is null)
+            return false;
+
+        var row = viewport.RowMetrics.FirstOrDefault(r => r.Row == anchor.Row);
+        var col = viewport.ColMetrics.FirstOrDefault(c => c.Col == anchor.Col);
+        if (row is null || col is null)
+            return false;
+
+        rect = new Rect(
+            col.LeftOffset + rowHeaderWidth,
+            row.TopOffset + columnHeaderHeight,
+            Math.Max(minimumWidth, width),
+            Math.Max(minimumHeight, height));
+        return true;
+    }
+
     public static string GetNativeControlCaption(string? caption, string name, string? shapeName)
     {
         if (!string.IsNullOrWhiteSpace(caption))
