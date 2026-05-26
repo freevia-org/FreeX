@@ -5998,6 +5998,17 @@ public class FunctionLibraryTests
             .Should().Be(new NumberValue(123));
     }
 
+    [Fact] public void Indirect_R1C1RangeString_ReturnsRangeValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"R1C1:R3C1\",FALSE))", sheet)
+            .Should().Be(new NumberValue(6));
+    }
+
     [Fact] public void Indirect_InvalidR1C1String_ReturnsRefError()
     {
         _eval.Evaluate("=INDIRECT(\"R0C1\",FALSE)", MakeSheet()).Should().Be(ErrorValue.Ref);
