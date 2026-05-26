@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -42,8 +43,8 @@ public sealed class HyperlinkDialog : Window
         ShowInTaskbar = false;
 
         var root = new DockPanel { Margin = new Thickness(16) };
+        var linkTypePanel = new StackPanel { Width = 170, Margin = new Thickness(0, 0, 12, 0) };
         _linkTypes.Width = 170;
-        _linkTypes.Margin = new Thickness(0, 0, 12, 0);
         _linkTypes.ItemsSource = new[]
         {
             "Existing File or Web Page",
@@ -52,8 +53,11 @@ public sealed class HyperlinkDialog : Window
             "E-mail Address"
         };
         _linkTypes.SelectedIndex = 0;
-        DockPanel.SetDock(_linkTypes, Dock.Left);
-        root.Children.Add(_linkTypes);
+        AutomationProperties.SetName(_linkTypes, "Link to");
+        linkTypePanel.Children.Add(new Label { Content = "Link _to:", Target = _linkTypes, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        linkTypePanel.Children.Add(_linkTypes);
+        DockPanel.SetDock(linkTypePanel, Dock.Left);
+        root.Children.Add(linkTypePanel);
 
         var grid = DialogGrid(3);
         AddTextRow(grid, 0, "Text to _display:", _displayBox, displayText);

@@ -565,6 +565,15 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void HyperlinkDialog_LabelsLinkTypeListWithAccessKeyTarget()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs"));
+
+        source.Should().Contain("new Label { Content = \"Link _to:\", Target = _linkTypes");
+        source.Should().Contain("AutomationProperties.SetName(_linkTypes, \"Link to\");");
+    }
+
+    [Fact]
     public void HyperlinkDialog_AcceptWarnsAndRefocusesBlankTarget()
     {
         var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
