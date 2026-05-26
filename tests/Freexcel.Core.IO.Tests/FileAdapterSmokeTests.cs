@@ -16862,6 +16862,14 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        var loadedAutoFilter = loaded.GetSheetAt(0).AutoFilter;
+        loadedAutoFilter.Should().NotBeNull();
+        loadedAutoFilter!.Reference.Should().Be("A1:B3");
+        var loadedFilterColumn = loadedAutoFilter.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.ColumnId.Should().Be(0);
+        loadedFilterColumn.Values.Should().Equal("A");
+        loadedFilterColumn.IncludeBlank.Should().BeTrue();
+        loaded.GetSheetAt(0).FilterHiddenRows.Should().Contain(3u);
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -16877,6 +16885,74 @@ public partial class FileAdapterSmokeTests
         autoFilter.ToString().Should().Contain("colId=\"0\"");
         autoFilter.ToString().Should().Contain("blank=\"1\"");
         autoFilter.ToString().Should().Contain("val=\"A\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetAutoFilterValues()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterValuesTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:A3", null)
+        {
+            NativeAttributes = new Dictionary<string, string> { ["customAutoFilterFlag"] = "keep" },
+            NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-WORKSHEET-AUTOFILTER}\"/></extLst>"]
+        };
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: true,
+            NativeFilterXmls: ["<customFilters xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><customFilter operator=\"equal\" val=\"A\"/></customFilters>"],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag"] = "keep" }));
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var autoFilter = worksheetXml.Root!.Element(worksheetNs + "autoFilter");
+        autoFilter.Should().NotBeNull();
+        autoFilter!.Attribute("ref")!.Value.Should().Be("A1:A3");
+        autoFilter.Attribute("customAutoFilterFlag")!.Value.Should().Be("keep");
+        autoFilter.Element(worksheetNs + "extLst").Should().NotBeNull();
+        var filterColumn = autoFilter.Element(worksheetNs + "filterColumn");
+        filterColumn.Should().NotBeNull();
+        filterColumn!.Attribute("customFilterColumnFlag")!.Value.Should().Be("keep");
+        filterColumn.Element(worksheetNs + "filters")!.Attribute("blank")!.Value.Should().Be("1");
+        filterColumn.Element(worksheetNs + "filters")!.Element(worksheetNs + "filter")!.Attribute("val")!.Value.Should().Be("A");
+        filterColumn.Element(worksheetNs + "customFilters").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesFilterHiddenRowsAsHiddenRows()
+    {
+        var workbook = new Workbook("WorksheetFilterHiddenRowsTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:A3", null);
+        sheet.FilterHiddenRows.Add(3);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Elements(worksheetNs + "row")
+            .Single(row => row.Attribute("r")?.Value == "3")
+            .Attribute("hidden")!
+            .Value
+            .Should()
+            .Be("1");
     }
 
     [Fact]
@@ -16911,6 +16987,71 @@ public partial class FileAdapterSmokeTests
         orderedElements.Should().Contain("mergeCells");
         orderedElements.IndexOf("autoFilter").Should().BeLessThan(orderedElements.IndexOf("mergeCells"));
         worksheetXml.Root!.Element(worksheetNs + "autoFilter")!.Attribute("ref")!.Value.Should().Be("A1:B2");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetAutoFilter()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).AutoFilter.Should().NotBeNull();
+        loaded.GetSheetAt(0).AutoFilter = null;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!.Element(worksheetNs + "autoFilter").Should().BeNull();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetAutoFilterValues()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterNativeJsonTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:A3", null)
+        {
+            NativeAttributes = new Dictionary<string, string> { ["customAutoFilterFlag"] = "keep" },
+            NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"/>"]
+        };
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: true,
+            NativeFilterXmls: ["<customFilters xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"/>"],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag"] = "keep" }));
+
+        var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = new NativeJsonAdapter().Load(stream);
+
+        var autoFilter = loaded.GetSheetAt(0).AutoFilter;
+        autoFilter.Should().NotBeNull();
+        autoFilter!.Reference.Should().Be("A1:A3");
+        autoFilter.NativeAttributes.Should().Contain("customAutoFilterFlag", "keep");
+        autoFilter.NativeChildXmls.Should().ContainSingle().Which.Should().Contain("extLst");
+        var filterColumn = autoFilter.FilterColumns.Should().ContainSingle().Subject;
+        filterColumn.ColumnId.Should().Be(0);
+        filterColumn.Values.Should().Equal("A");
+        filterColumn.IncludeBlank.Should().BeTrue();
+        filterColumn.NativeFilterXmls.Should().ContainSingle().Which.Should().Contain("customFilters");
+        filterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag", "keep");
     }
 
     [Fact]

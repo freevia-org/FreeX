@@ -21,7 +21,49 @@ public sealed record HyperlinkMetadata(
     string ScreenTip = "",
     string Bookmark = "");
 
-public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml);
+public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml)
+{
+    public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
+    public IReadOnlyList<string>? NativeChildXmls { get; init; }
+    public List<WorksheetAutoFilterColumnModel> FilterColumns { get; } = [];
+}
+
+public sealed record WorksheetAutoFilterColumnModel
+{
+    public int ColumnId { get; init; }
+    public IReadOnlyList<string> Values { get; init; }
+    public bool IncludeBlank { get; init; }
+    public IReadOnlyList<string> NativeFilterXmls { get; init; }
+    public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
+
+    public WorksheetAutoFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank = false,
+        string? NativeFilterXml = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            string.IsNullOrWhiteSpace(NativeFilterXml) ? [] : [NativeFilterXml],
+            null)
+    {
+    }
+
+    public WorksheetAutoFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyDictionary<string, string>? NativeAttributes = null)
+    {
+        this.ColumnId = ColumnId;
+        this.Values = Values;
+        this.IncludeBlank = IncludeBlank;
+        this.NativeFilterXmls = NativeFilterXmls;
+        this.NativeAttributes = NativeAttributes;
+    }
+}
 
 public sealed class WorksheetProtectionMetadataModel
 {
