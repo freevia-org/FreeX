@@ -31,5 +31,4 @@ public sealed partial class NativeJsonAdapter
 
     private static HeaderFooterDto FromHeaderFooter(WorksheetHeaderFooter value) =>
         new() { Left = value.Left, Center = value.Center, Right = value.Right };
-
 }
