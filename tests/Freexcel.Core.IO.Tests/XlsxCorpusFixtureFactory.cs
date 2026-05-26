@@ -69,6 +69,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-cell-watches-001" => true,
         "generated-worksheet-single-xml-cells-001" => true,
         "generated-worksheet-sheet-views-001" => true,
+        "generated-worksheet-sheet-format-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -340,6 +341,13 @@ internal static class XlsxCorpusFixtureFactory
               </sheetViews>
             </worksheet>
             """)),
+        "generated-worksheet-sheet-format-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetFormatPr baseColWidth="12" zeroHeight="1" thickTop="1" outlineLevelRow="3">
+                <nativeSheetFormatChild value="kept"/>
+              </sheetFormatPr>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -576,6 +584,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-sheet-views-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-sheet-format-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-sort-state-001", StringComparison.OrdinalIgnoreCase) &&
@@ -801,6 +811,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-sheet-views-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetSheetViewsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-sheet-format-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSheetFormatFixup(archive);
             return;
         }
 
@@ -1539,6 +1555,29 @@ internal static class XlsxCorpusFixtureFactory
                 new XElement(
                     worksheetNs + "pivotSelection",
                     new XAttribute("pane", "topRight")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSheetFormatFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetFormatPr").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "sheetFormatPr",
+            new XAttribute("baseColWidth", "12"),
+            new XAttribute("zeroHeight", "1"),
+            new XAttribute("thickTop", "1"),
+            new XAttribute("outlineLevelRow", "3"),
+            new XElement(
+                worksheetNs + "nativeSheetFormatChild",
+                new XAttribute("value", "kept"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
