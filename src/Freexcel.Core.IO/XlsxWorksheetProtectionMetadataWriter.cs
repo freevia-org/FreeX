@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -52,7 +51,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                     continue;
                 }
 
-                TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
+                protection.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
             }
 
             protection.Elements().Remove();
@@ -95,22 +94,5 @@ internal static class XlsxWorksheetProtectionMetadataWriter
         }
 
         root.Add(protection);
-    }
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
     }
 }

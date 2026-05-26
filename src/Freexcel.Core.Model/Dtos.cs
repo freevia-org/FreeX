@@ -67,7 +67,14 @@ public sealed record ViewportModel(
     IReadOnlyList<ColMetric> ColMetrics,
     FrozenPaneState? FrozenPanes = null,
     IReadOnlyList<OverlayPrimitive> Overlays = null!,
-    SplitPaneState? SplitPanes = null);
+    SplitPaneState? SplitPanes = null,
+    IReadOnlyList<ChartDataCell> ChartDataCells = null!);
+
+public sealed record ChartDataCell(
+    SheetId SheetId,
+    uint Row,
+    uint Col,
+    string DisplayText);
 
 public sealed record RowMetric(uint Row, double Height, double TopOffset);
 public sealed record ColMetric(uint Col, double Width, double LeftOffset);

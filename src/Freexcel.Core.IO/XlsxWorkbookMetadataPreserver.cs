@@ -76,11 +76,11 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
             changed = true;
-        if (MergeWorkbookProtection(sourceWorkbookProtection, targetRoot, workbookNs, workbook))
+        if (MergeWorkbookProtection(sourceWorkbookProtection, targetRoot, workbookNs))
             changed = true;
         if (MergeCalculationProperties(sourceCalculationProperties, targetRoot, workbookNs))
             changed = true;
-        if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs, workbook.AdditionalViews is not null))
+        if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
             changed = true;
         if (MergeCustomWorkbookViews(sourceCustomWorkbookViews, targetRoot, workbookNs, XlsxCustomViewMapper.GetModeledIds(workbook)))
             changed = true;
@@ -224,18 +224,9 @@ internal static class XlsxWorkbookMetadataPreserver
         return changed;
     }
 
-    private static bool MergeWorkbookProtection(
-        XElement? sourceWorkbookProtection,
-        XElement targetRoot,
-        XNamespace workbookNs,
-        Workbook workbook)
+    private static bool MergeWorkbookProtection(XElement? sourceWorkbookProtection, XElement targetRoot, XNamespace workbookNs)
     {
         if (sourceWorkbookProtection is null)
-            return false;
-
-        if (!workbook.IsStructureProtected &&
-            string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword) &&
-            !HasRevisionProtectionMetadata(workbook.ProtectionMetadata))
             return false;
 
         var targetWorkbookProtection = targetRoot.Element(workbookNs + "workbookProtection");
@@ -291,10 +282,6 @@ internal static class XlsxWorkbookMetadataPreserver
         return changed;
     }
 
-    private static bool HasRevisionProtectionMetadata(WorkbookProtectionMetadataModel? metadata) =>
-        metadata?.NativeAttributes.ContainsKey("lockRevision") == true ||
-        metadata?.NativeAttributes.ContainsKey("revisionsPassword") == true;
-
     private static bool MergeWorkbookProperties(XElement? sourceWorkbookProperties, XElement targetRoot, XNamespace workbookNs)
     {
         if (sourceWorkbookProperties is null)
@@ -321,11 +308,7 @@ internal static class XlsxWorkbookMetadataPreserver
             modeledAttributes);
     }
 
-    private static bool MergeWorkbookViews(
-        XElement? sourceBookViews,
-        XElement targetRoot,
-        XNamespace workbookNs,
-        bool preserveAdditionalViews)
+    private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
     {
         var sourceViews = sourceBookViews?
             .Elements(workbookNs + "workbookView")
@@ -337,14 +320,7 @@ internal static class XlsxWorkbookMetadataPreserver
         var targetBookViews = targetRoot.Element(workbookNs + "bookViews");
         if (targetBookViews is null)
         {
-            var clonedBookViews = new XElement(sourceBookViews!);
-            if (!preserveAdditionalViews)
-            {
-                foreach (var view in clonedBookViews.Elements(workbookNs + "workbookView").Skip(1).ToList())
-                    view.Remove();
-            }
-
-            targetRoot.AddFirst(clonedBookViews);
+            targetRoot.AddFirst(new XElement(sourceBookViews!));
             return true;
         }
 
@@ -357,11 +333,8 @@ internal static class XlsxWorkbookMetadataPreserver
 
         var changed = false;
         var mergedTargetViewKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (sourceView, index) in sourceViews.Select((view, index) => (view, index)))
+        foreach (var sourceView in sourceViews)
         {
-            if (!preserveAdditionalViews && index > 0)
-                continue;
-
             var raw = sourceView.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
             if (existingRawViews.Contains(raw))
                 continue;

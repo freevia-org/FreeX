@@ -46,7 +46,6 @@ public sealed partial class AutoFilterDialog
             _ => _textFiltersButton
         };
         var submenu = new ContextMenu();
-        submenu.Opened += AutoFilterFamilySubmenu_Opened;
         foreach (var child in family.Children)
         {
             var menuItem = new MenuItem
@@ -58,21 +57,7 @@ public sealed partial class AutoFilterDialog
             submenu.Items.Add(menuItem);
         }
 
-        MenuKeyTipAssigner.AssignUniqueKeyTips(submenu.Items.OfType<MenuItem>());
         parentButton.ContextMenu = submenu;
-    }
-
-    private static void AutoFilterFamilySubmenu_Opened(object sender, RoutedEventArgs e)
-    {
-        if (sender is not ContextMenu submenu)
-            return;
-
-        var firstEnabledItem = submenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
-        if (firstEnabledItem is null)
-            return;
-
-        firstEnabledItem.Focus();
-        Keyboard.Focus(firstEnabledItem);
     }
 
     private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)
@@ -91,34 +76,7 @@ public sealed partial class AutoFilterDialog
         if (option?.RequiresValue == false)
             _criteriaBox.Text = child.Value;
         else
-            FocusSelectedCriteriaInput(option);
-    }
-
-    private void FocusSelectedCriteriaInput(AutoFilterCriteriaOption? option)
-    {
-        if (option is null || !option.RequiresValue)
-            return;
-
-        if (IsBetweenOption(option))
-        {
-            FocusCriteriaInput(_betweenMinBox);
-            return;
-        }
-
-        if (IsTopBottomOption(option))
-        {
-            FocusCriteriaInput(_topBottomCountBox);
-            return;
-        }
-
-        FocusCriteriaInput(_criteriaValueBox);
-    }
-
-    private static void FocusCriteriaInput(TextBox target)
-    {
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+            _criteriaValueBox.Focus();
     }
 
     public static (string Ascending, string Descending) GetSortLabels(AutoFilterMenuFilterKind filterKind) =>

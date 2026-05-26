@@ -19,9 +19,9 @@ public static partial class NumberFormatter
     {
         var parsed = SelectDateTimeSection(oaDate, sections, indexedColors);
         if (parsed.Format == "")
-            return new FormatResult("", parsed.ColorHex, parsed.ThemeColor);
+            return new FormatResult("", parsed.ColorHex);
 
-        return new FormatResult(FormatDateTime(oaDate, parsed.Format), parsed.ColorHex, parsed.ThemeColor);
+        return new FormatResult(FormatDateTime(oaDate, parsed.Format), parsed.ColorHex);
     }
 
     private static ParsedSection SelectDateTimeSection(

@@ -592,6 +592,7 @@ public partial class MainWindow
             RefreshToolbar();
             RefreshStatusBar();
             RefreshValidationDropdown();
+            UpdateCommentPreview(merge.Value.Start);
             return;
         }
 
@@ -607,6 +608,7 @@ public partial class MainWindow
         RefreshToolbar();
         RefreshStatusBar();
         RefreshValidationDropdown();
+        UpdateCommentPreview(addr);
     }
 
     private void SelectCurrentRegionOrAll()
@@ -732,14 +734,40 @@ public partial class MainWindow
 
     private void SheetGrid_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (!_dragSelectActive || e.LeftButton != MouseButtonState.Pressed) return;
-        if (_selectionAnchor is not { } anchor) return;
         var hitAddr = HitTestCell(e.GetPosition(SheetGrid));
+        if (!_dragSelectActive || e.LeftButton != MouseButtonState.Pressed)
+        {
+            if (hitAddr.HasValue)
+                UpdateCommentPreview(hitAddr.Value);
+            else
+                ClearCommentPreview();
+            return;
+        }
+
+        if (_selectionAnchor is not { } anchor) return;
         if (hitAddr.HasValue && GetFormulaRangeEntryEditor() is not null)
             TryApplyFormulaRangeSelection(hitAddr.Value, extendSelection: true);
         else if (hitAddr.HasValue)
             ExtendSelection(anchor, hitAddr.Value);
     }
+
+    private void UpdateCommentPreview(CellAddress address)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+        {
+            ClearCommentPreview();
+            return;
+        }
+
+        var preview = CommentNavigationPlanner.FormatCellCommentPreview(
+            sheet.Comments,
+            sheet.ThreadedComments,
+            new CellAddress(_currentSheetId, address.Row, address.Col));
+        SheetGrid.ToolTip = preview;
+    }
+
+    private void ClearCommentPreview() => SheetGrid.ToolTip = null;
 
     private void SheetGrid_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {

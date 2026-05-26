@@ -69,13 +69,10 @@ public sealed partial class NamedRangeDialog : Window
     {
         var sheet = wb.GetSheet(range.Start.Sheet);
         var sheetName = sheet?.Name ?? "Sheet1";
-        var start = FormatAbsoluteAddress(range.Start);
-        var end = FormatAbsoluteAddress(range.End);
-        return $"={PivotUiPlanner.QuoteSheetNameForReference(sheetName)}!{start}:{end}";
+        var start = range.Start.ToA1();
+        var end = range.End.ToA1();
+        return $"{sheetName}!{start}:{end}";
     }
-
-    private static string FormatAbsoluteAddress(CellAddress address) =>
-        $"${CellAddress.NumberToColumnName(address.Col)}${address.Row}";
 
     private static string FormatValue(GridRange range, Workbook wb) =>
         FormatRange(range, wb);
