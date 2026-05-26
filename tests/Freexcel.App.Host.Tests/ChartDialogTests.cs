@@ -348,7 +348,7 @@ public sealed class ChartDialogTests
     {
         var source = ReadChartDialogSource();
 
-        source.Should().Contain("Content = \"_Object in sheet\"");
+        source.Should().Contain("Content = \"_Object in:\"");
         source.Should().Contain("Content = \"_New chart sheet\"");
         source.Should().Contain("Content = \"_Target name:\"");
         source.Should().Contain("Content = \"_Chart data range:\"");
