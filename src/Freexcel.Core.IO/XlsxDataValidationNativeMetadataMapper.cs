@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -207,11 +208,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
         var changed = false;
         foreach (var (name, value) in source.NativeContainerAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && dataValidations.Attribute(name) is null)
-            {
-                dataValidations.SetAttributeValue(name, value);
-                changed = true;
-            }
+            changed |= TrySetNativeAttributeIfMissing(dataValidations, name, value);
         }
 
         foreach (var nativeChildXml in (source.NativeContainerChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -242,11 +239,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
         var changed = false;
         foreach (var (name, value) in source.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && validationElement.Attribute(name) is null)
-            {
-                validationElement.SetAttributeValue(name, value);
-                changed = true;
-            }
+            changed |= TrySetNativeAttributeIfMissing(validationElement, name, value);
         }
 
         foreach (var nativeChildXml in (source.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -267,6 +260,30 @@ internal static class XlsxDataValidationNativeMetadataMapper
         }
 
         return changed;
+    }
+
+    private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        try
+        {
+            var attributeName = XName.Get(name);
+            if (element.Attribute(attributeName) is not null)
+                return false;
+
+            element.SetAttributeValue(attributeName, value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 }
 
