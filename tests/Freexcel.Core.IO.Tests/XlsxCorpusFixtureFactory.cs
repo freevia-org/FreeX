@@ -60,6 +60,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-file-recovery-001" => true,
         "generated-workbook-smart-tags-001" => true,
         "generated-workbook-function-groups-001" => true,
+        "generated-workbook-views-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
@@ -239,6 +240,17 @@ internal static class XlsxCorpusFixtureFactory
               <functionGroups builtInGroupCount="16" customFunctionGroupFlag="keep">
                 <functionGroup name="FreexcelNativeFunctions" customGroupFlag="keep"/>
               </functionGroups>
+            </workbook>
+            """)),
+        "generated-workbook-views-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <bookViews>
+                <workbookView visibility="visible" showSheetTabs="0" tabRatio="700" firstSheet="0" activeTab="0"/>
+                <workbookView visibility="hidden" minimized="1" showHorizontalScroll="0" showVerticalScroll="0" showSheetTabs="0" tabRatio="700" firstSheet="0" activeTab="0" customWorkbookViewFlag="kept"/>
+              </bookViews>
+              <customWorkbookViews>
+                <customWorkbookView name="FreexcelView" guid="{22222222-2222-2222-2222-222222222222}" autoUpdate="0" mergeInterval="0" personalView="0" includePrintSettings="1" includeHiddenRowCol="1"/>
+              </customWorkbookViews>
             </workbook>
             """)),
         "generated-worksheet-ignored-errors-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
@@ -472,6 +484,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-function-groups-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-views-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
@@ -646,6 +660,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-function-groups-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookFunctionGroupsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-views-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookViewsFixup(archive);
             return;
         }
 
@@ -1167,6 +1187,52 @@ internal static class XlsxCorpusFixtureFactory
                 workbookNs + "functionGroup",
                 new XAttribute("name", "FreexcelNativeFunctions"),
                 new XAttribute("customGroupFlag", "keep"))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookViewsFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "bookViews").Remove();
+        workbookXml.Root?.Elements(workbookNs + "customWorkbookViews").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "bookViews",
+            new XElement(
+                workbookNs + "workbookView",
+                new XAttribute("visibility", "visible"),
+                new XAttribute("showSheetTabs", "0"),
+                new XAttribute("tabRatio", "700"),
+                new XAttribute("firstSheet", "0"),
+                new XAttribute("activeTab", "0")),
+            new XElement(
+                workbookNs + "workbookView",
+                new XAttribute("visibility", "hidden"),
+                new XAttribute("minimized", "1"),
+                new XAttribute("showHorizontalScroll", "0"),
+                new XAttribute("showVerticalScroll", "0"),
+                new XAttribute("showSheetTabs", "0"),
+                new XAttribute("tabRatio", "700"),
+                new XAttribute("firstSheet", "0"),
+                new XAttribute("activeTab", "0"),
+                new XAttribute("customWorkbookViewFlag", "kept"))));
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "customWorkbookViews",
+            new XElement(
+                workbookNs + "customWorkbookView",
+                new XAttribute("name", "FreexcelView"),
+                new XAttribute("guid", "{22222222-2222-2222-2222-222222222222}"),
+                new XAttribute("autoUpdate", "0"),
+                new XAttribute("mergeInterval", "0"),
+                new XAttribute("personalView", "0"),
+                new XAttribute("includePrintSettings", "1"),
+                new XAttribute("includeHiddenRowCol", "1"))));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
