@@ -19356,6 +19356,75 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_SkipsInvalidStructuredTableNativeAttributeNames()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableInvalidNativeAttributesTest");
+        var sheet = workbook.GetSheetAt(0);
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HasAutoFilter = true,
+            TotalsRowShown = false,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["headerRowDxfId"] = "2",
+                ["invalid table attr"] = "skip"
+            },
+            NativeAutoFilterAttributes = new Dictionary<string, string>
+            {
+                ["customAutoFilterFlag"] = "keep",
+                ["invalid autoFilter attr"] = "skip"
+            },
+            NativeStyleInfoAttributes = new Dictionary<string, string>
+            {
+                ["pivot"] = "0",
+                ["invalid styleInfo attr"] = "skip"
+            }
+        };
+        table.Columns.Add(new StructuredTableColumnModel(
+            1,
+            "Category",
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["uniqueName"] = "CategoryNative",
+                ["invalid column attr"] = "skip"
+            }));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: false,
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["hiddenButton"] = "1",
+                ["invalid filterColumn attr"] = "skip"
+            }));
+        sheet.StructuredTables.Add(table);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        var save = () => adapter.Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("headerRowDxfId=\"2\"");
+        tableXml.Should().Contain("customAutoFilterFlag=\"keep\"");
+        tableXml.Should().Contain("pivot=\"0\"");
+        tableXml.Should().Contain("uniqueName=\"CategoryNative\"");
+        tableXml.Should().Contain("hiddenButton=\"1\"");
+        tableXml.Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_MaterializesStructuredTableAutoFilterValuesIntoHiddenRows()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableFilterVisibilityTest");
