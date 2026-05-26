@@ -319,6 +319,38 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ViewSplitKeyTip_TogglesSheetSplitAndExitsKeyTipMode()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(2, 2, 2, 2);
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.S);
+
+            harness.KeyTipScope.Should().Be("Commands", "S is a visible prefix for Split and Synchronous Scrolling on the View tab");
+            harness.ActiveSheetSplitPanes.Should().Be((null, null));
+
+            harness.HandleKeyTip(Key.P);
+
+            harness.ActiveSheetSplitPanes.Should().Be((2u, 2u));
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.S);
+            harness.HandleKeyTip(Key.P);
+
+            harness.ActiveSheetSplitPanes.Should().Be((null, null));
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
     public void FocusedRibbonTabAndEscape_StayInRibbonThenReturnToWorksheet()
     {
         RunSta(() =>
@@ -718,6 +750,15 @@ public sealed class MainWindowRibbonKeyTipTests
             {
                 var sheet = _workbook.Sheets[0];
                 return (sheet.FrozenRows, sheet.FrozenCols);
+            }
+        }
+
+        public (uint? SplitRow, uint? SplitColumn) ActiveSheetSplitPanes
+        {
+            get
+            {
+                var sheet = _workbook.Sheets[0];
+                return (sheet.SplitRow, sheet.SplitColumn);
             }
         }
 
