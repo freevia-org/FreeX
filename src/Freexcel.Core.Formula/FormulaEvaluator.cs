@@ -49,6 +49,7 @@ public sealed class FormulaEvaluator
             StringNode s => new TextValue(s.Value),
             BooleanNode b => new BoolValue(b.Value),
             OmittedArgumentNode => BlankValue.Instance,
+            ArrayConstantNode array => EvaluateArrayConstant(array, context),
             ErrorNode err => err.Error,
             CellRefNode cell when cell.SheetName is not null
                 => context.GetCellValue(cell.SheetName, cell.Row, cell.ColumnNumber),
@@ -64,6 +65,19 @@ public sealed class FormulaEvaluator
             FunctionCallNode func => EvaluateFunction(func, context),
             _ => throw new FormulaEvalException("#VALUE!", $"Unknown node type: {node.GetType().Name}")
         };
+    }
+
+    private ScalarValue EvaluateArrayConstant(ArrayConstantNode node, IEvalContext context)
+    {
+        int rowCount = node.Rows.Count;
+        int colCount = node.Rows[0].Count;
+        var cells = new ScalarValue[rowCount, colCount];
+
+        for (int r = 0; r < rowCount; r++)
+            for (int c = 0; c < colCount; c++)
+                cells[r, c] = EvaluateNode(node.Rows[r][c], context);
+
+        return new RangeValue(cells);
     }
 
     private static ScalarValue EvaluateNamedRange(NamedRangeNode node, IEvalContext context)

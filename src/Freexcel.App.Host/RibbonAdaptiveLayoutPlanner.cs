@@ -25,9 +25,6 @@ public static class RibbonAdaptiveLayoutPlanner
             if (Fits(availableWidth, groups, states))
                 return states;
 
-            if (index == 0 && groups.Count > 1)
-                continue;
-
             states[index] = RibbonAdaptiveGroupState.Collapsed;
             if (Fits(availableWidth, groups, states))
                 return states;
@@ -57,7 +54,7 @@ public static class RibbonAdaptiveLayoutPlanner
 
         if (IsInsertRibbonGroupSet(groupNames))
         {
-            ApplyInsertBreakpointOverrides(availableWidth, states);
+            ApplyInsertBreakpointOverrides(availableWidth, groupNames, states);
             return states;
         }
 
@@ -95,6 +92,32 @@ public static class RibbonAdaptiveLayoutPlanner
         if (IsTinyRibbonGroupSet(groupNames))
             return true;
 
+        if (IsDataRibbonGroupSet(groupNames))
+        {
+            ApplyPriorityCollapse(
+                states,
+                groupNames,
+                availableWidth <= 1120
+                    ? ["Queries & Connections", "Forecast", "Outline"]
+                    : availableWidth <= 1320
+                        ? ["Forecast", "Outline"]
+                        : []);
+            return true;
+        }
+
+        if (IsPageLayoutRibbonGroupSet(groupNames))
+        {
+            ApplyPriorityCollapse(
+                states,
+                groupNames,
+                availableWidth <= 1120
+                    ? ["Themes", "Arrange"]
+                    : availableWidth <= 1320
+                        ? ["Arrange"]
+                        : []);
+            return true;
+        }
+
         var firstCollapsedIndex = GetFirstCollapsedIndexForKnownTab(availableWidth, groupNames);
         if (firstCollapsedIndex is null)
             return false;
@@ -108,10 +131,10 @@ public static class RibbonAdaptiveLayoutPlanner
         if (availableWidth <= 760)
             return 0;
 
-        if (IsDataRibbonGroupSet(groupNames) || IsViewRibbonGroupSet(groupNames) || IsReviewRibbonGroupSet(groupNames))
+        if (IsViewRibbonGroupSet(groupNames) || IsReviewRibbonGroupSet(groupNames))
             return availableWidth <= 1120 ? 2 : availableWidth <= 1320 ? 3 : null;
 
-        if (IsPageLayoutRibbonGroupSet(groupNames) || IsDrawRibbonGroupSet(groupNames))
+        if (IsDrawRibbonGroupSet(groupNames))
             return availableWidth <= 1120 ? 1 : availableWidth <= 1320 ? 2 : null;
 
         return null;
@@ -121,6 +144,18 @@ public static class RibbonAdaptiveLayoutPlanner
     {
         for (var i = Math.Clamp(firstCollapsedIndex, 0, states.Length); i < states.Length; i++)
             states[i] = RibbonAdaptiveGroupState.Collapsed;
+    }
+
+    private static void ApplyPriorityCollapse(
+        RibbonAdaptiveGroupState[] states,
+        IReadOnlyList<string> groupNames,
+        IReadOnlyList<string> collapsedGroups)
+    {
+        foreach (var groupName in collapsedGroups)
+        {
+            if (TryFindGroupIndex(groupNames, groupName, out var index))
+                states[index] = RibbonAdaptiveGroupState.Collapsed;
+        }
     }
 
     private static bool Fits(
@@ -199,6 +234,7 @@ public static class RibbonAdaptiveLayoutPlanner
 
     private static void ApplyInsertBreakpointOverrides(
         double availableWidth,
+        IReadOnlyList<string> groupNames,
         RibbonAdaptiveGroupState[] states)
     {
         if (availableWidth <= 760)
@@ -216,15 +252,19 @@ public static class RibbonAdaptiveLayoutPlanner
             if (states.Length > 0)
                 states[0] = RibbonAdaptiveGroupState.SmallWithLabels;
 
-            for (var i = 1; i < states.Length; i++)
-                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            ApplyPriorityCollapse(
+                states,
+                groupNames,
+                ["Illustrations", "Add-ins", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"]);
             return;
         }
 
         if (availableWidth <= 1320)
         {
-            for (var i = 3; i < states.Length; i++)
-                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            ApplyPriorityCollapse(
+                states,
+                groupNames,
+                ["Add-ins", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"]);
         }
     }
 

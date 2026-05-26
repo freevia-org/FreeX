@@ -2001,7 +2001,7 @@
                         <!-- ▌Page Setup ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Margins" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageMarginsBtn_Click"
                                         local:RibbonTooltip.Title="Margins"
                                         local:RibbonTooltip.KeyTip="M"
@@ -2027,7 +2027,7 @@
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Size" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Size"
+                                        local:RibbonTooltip.Title="Paper Size"
                                         local:RibbonTooltip.KeyTip="SZ"
                                         local:RibbonTooltip.Description="Choose a paper size for the printed page.">
                                     <Button.ContextMenu>
@@ -2727,7 +2727,7 @@
                                           local:RibbonTooltip.Title="Gridlines"
                                           local:RibbonTooltip.KeyTip="G"
                                           local:RibbonTooltip.Description="Show or hide worksheet gridlines."/>
-                                <CheckBox x:Name="ViewHeadersChk"   Content="Row and Column Headers" Margin="4,1" IsChecked="True" Checked="ViewHeadersChk_Changed"   Unchecked="ViewHeadersChk_Changed"
+                                <CheckBox x:Name="ViewHeadersChk"   Content="Headings" Margin="4,1" IsChecked="True" Checked="ViewHeadersChk_Changed"   Unchecked="ViewHeadersChk_Changed"
                                           local:RibbonTooltip.Title="Headings"
                                           local:RibbonTooltip.KeyTip="H"
                                           local:RibbonTooltip.Description="Show or hide row numbers and column letters."/>
