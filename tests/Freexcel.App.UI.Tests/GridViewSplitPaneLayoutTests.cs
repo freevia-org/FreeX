@@ -593,6 +593,43 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void FormulaTraceLayoutPlanner_ReturnsMultipleLayoutsWithMetricLookups()
+    {
+        var sheetId = SheetId.New();
+        var otherSheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 24, 20), new RowMetric(4, 30, 44)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(4, 100, 144)],
+            null,
+            []);
+
+        var arrows = FormulaTraceLayoutPlanner.CalculateLayouts(
+            viewport,
+            [
+                new FormulaTraceArrow(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+                new FormulaTraceArrow(new CellAddress(sheetId, 4, 4), new CellAddress(sheetId, 8, 4)),
+                new FormulaTraceArrow(new CellAddress(otherSheetId, 1, 1), new CellAddress(sheetId, 1, 1))
+            ],
+            sheetId);
+
+        arrows.Should().Equal(
+            new FormulaTraceArrowLayout(
+                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new Point(GridView.RowHeaderWidth + 64 + 40, GridView.ColHeaderHeight + 20 + 12)),
+            new FormulaTraceArrowLayout(
+                new Point(GridView.RowHeaderWidth + 144 + 50, GridView.ColHeaderHeight + 44 + 15),
+                new Point(GridView.RowHeaderWidth + 144 + 50, GridView.ColHeaderHeight + 44 + 15),
+                FormulaTraceArrowLayoutKind.OffscreenMarker,
+                new CellAddress(sheetId, 8, 4)),
+            new FormulaTraceArrowLayout(
+                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                FormulaTraceArrowLayoutKind.CrossSheetMarker,
+                new CellAddress(otherSheetId, 1, 1)));
+    }
+
+    [Fact]
     public void CalculateFormulaTraceArrowLayouts_ReturnsMarkersForCrossSheetAndOffscreenCells()
     {
         var sheetId = SheetId.New();
