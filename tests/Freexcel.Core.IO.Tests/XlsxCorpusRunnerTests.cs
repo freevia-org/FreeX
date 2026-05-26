@@ -354,6 +354,49 @@ public class XlsxCorpusRunnerTests
         AssertCustomXmlPackageGraph(saved, "generated-custom-xml-001 saved");
     }
 
+    [Fact]
+    public void GeneratedCustomDocPropsRow_RetainsCustomDocumentPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-custom-docprops-001");
+        AssertCustomDocumentProperties(source, "generated-custom-docprops-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-custom-docprops-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-custom-docprops-001");
+        AssertCustomDocumentProperties(saved, "generated-custom-docprops-001 saved");
+    }
+
+    private static void AssertCustomDocumentProperties(Stream package, string because)
+    {
+        XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var customProperties = LoadPackageXml(archive.GetEntry("docProps/custom.xml")!);
+        var propertiesByName = customProperties.Root!
+            .Elements(customPropertiesNs + "property")
+            .ToDictionary(property => property.Attribute("name")?.Value ?? "", StringComparer.OrdinalIgnoreCase);
+        propertiesByName.Should().ContainKey("Department", because);
+        propertiesByName["Department"].Value.Should().Be("Compliance", because);
+        propertiesByName.Should().ContainKey("MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled", because);
+        propertiesByName["MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled"].Value.Should().Be("true", because);
+
+        var packageRelsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "docProps/custom.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+    }
+
     private static void AssertCustomXmlPackageGraph(Stream package, string because)
     {
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
