@@ -186,6 +186,8 @@ public sealed partial class NativeJsonAdapter
         public int ColumnId { get; set; }
         public List<string> Values { get; set; } = [];
         public bool IncludeBlank { get; set; }
+        public List<WorksheetAutoFilterDateGroupItemDto> DateGroups { get; set; } = [];
+        public Dictionary<string, string>? NativeFiltersAttributes { get; set; }
         public List<WorksheetAutoFilterCustomFilterDto> CustomFilters { get; set; } = [];
         public bool CustomFiltersAnd { get; set; }
         public string? CustomFiltersAndRaw { get; set; }
@@ -202,6 +204,24 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Operator { get; set; }
         public string? Value { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+    }
+
+    private class WorksheetAutoFilterDateGroupItemDto
+    {
+        public int? Year { get; set; }
+        public int? Month { get; set; }
+        public int? Day { get; set; }
+        public int? Hour { get; set; }
+        public int? Minute { get; set; }
+        public int? Second { get; set; }
+        public string? DateTimeGrouping { get; set; }
+        public string? YearRaw { get; set; }
+        public string? MonthRaw { get; set; }
+        public string? DayRaw { get; set; }
+        public string? HourRaw { get; set; }
+        public string? MinuteRaw { get; set; }
+        public string? SecondRaw { get; set; }
         public Dictionary<string, string>? NativeAttributes { get; set; }
     }
 
