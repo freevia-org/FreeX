@@ -496,6 +496,15 @@ public class ExportPlannerTests
         source.Should().Contain("Keyboard.Focus(_pdfLanguageBox);");
     }
 
+    [Fact]
+    public void ExportOptionsDialog_SeedsPdfLanguageFromPersistedOption()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null)");
+        source.Should().Contain("_pdfLanguageBox.Text = ExportPlanner.NormalizePdfLanguage(initialPdfLanguage);");
+    }
+
     [Theory]
     [InlineData("", "", true, null, null)]
     [InlineData("2", "4", true, 2, 4)]
@@ -2511,8 +2520,12 @@ public class ExportPlannerTests
     public void ExportWorkflow_UsesOptionsDialogSelectionRangeAndOpenAfterPublish()
     {
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
+        var optionsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FreexcelOptions.cs"));
 
-        printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null)");
+        optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;");
+        printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage)");
+        printExport.Should().Contain("_options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;");
+        printExport.Should().Contain("_options.Save();");
         printExport.Should().Contain("saveDlg.FilterIndex == 2");
         printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
         printExport.Should().Contain("RenderExportDocument(options)");
@@ -2544,7 +2557,8 @@ public class ExportPlannerTests
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewToolbarPlanner.cs")));
 
     private static string? ReadPrintScaling(PdfDocument pdf) =>
         pdf.Internals.Catalog.Elements

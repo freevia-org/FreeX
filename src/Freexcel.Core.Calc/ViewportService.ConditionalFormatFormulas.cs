@@ -5,6 +5,8 @@ namespace Freexcel.Core.Calc;
 
 public sealed partial class ViewportService
 {
+    private static readonly FormulaEvaluator _cfEvaluator = new();
+
     private static bool MatchesFormula(ConditionalFormat cf, Sheet sheet, CellAddress addr, Workbook workbook)
     {
         if (string.IsNullOrWhiteSpace(cf.FormulaText)) return false;

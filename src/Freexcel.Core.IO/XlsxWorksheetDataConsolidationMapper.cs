@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -28,7 +27,7 @@ internal static class XlsxWorksheetDataConsolidationMapper
                 .ToList() ?? []
         };
 
-        ReadNativeAttributes(dataConsolidate, model.NativeAttributes, ["function", "leftLabels", "topLabels", "link"]);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(dataConsolidate, model.NativeAttributes, ["function", "leftLabels", "topLabels", "link"]);
         return model;
     }
 
@@ -68,7 +67,7 @@ internal static class XlsxWorksheetDataConsolidationMapper
             Sheet = element.Attribute("sheet")?.Value,
             Name = element.Attribute("name")?.Value
         };
-        ReadNativeAttributes(element, model.NativeAttributes, ["ref", "sheet", "name"]);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(element, model.NativeAttributes, ["ref", "sheet", "name"]);
         return model;
     }
 
@@ -89,11 +88,11 @@ internal static class XlsxWorksheetDataConsolidationMapper
         }
 
         var element = new XElement(WorksheetNs + "dataConsolidate");
-        ApplyNativeAttributes(element, model.NativeAttributes, ["function", "leftLabels", "topLabels", "link"]);
-        element.SetAttributeValue("function", NullIfWhiteSpace(model.Function));
-        element.SetAttributeValue("leftLabels", ToBoolAttribute(model.LeftLabels));
-        element.SetAttributeValue("topLabels", ToBoolAttribute(model.TopLabels));
-        element.SetAttributeValue("link", ToBoolAttribute(model.Link));
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, model.NativeAttributes, ["function", "leftLabels", "topLabels", "link"]);
+        element.SetAttributeValue("function", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Function));
+        element.SetAttributeValue("leftLabels", XlsxWorksheetNativeMetadataHelpers.ToBoolAttribute(model.LeftLabels));
+        element.SetAttributeValue("topLabels", XlsxWorksheetNativeMetadataHelpers.ToBoolAttribute(model.TopLabels));
+        element.SetAttributeValue("link", XlsxWorksheetNativeMetadataHelpers.ToBoolAttribute(model.Link));
 
         if (model.References.Count > 0)
         {
@@ -109,61 +108,10 @@ internal static class XlsxWorksheetDataConsolidationMapper
     private static XElement ToXml(WorksheetDataConsolidationReferenceModel model)
     {
         var element = new XElement(WorksheetNs + "dataRef");
-        ApplyNativeAttributes(element, model.NativeAttributes, ["ref", "sheet", "name"]);
-        element.SetAttributeValue("ref", NullIfWhiteSpace(model.Reference));
-        element.SetAttributeValue("sheet", NullIfWhiteSpace(model.Sheet));
-        element.SetAttributeValue("name", NullIfWhiteSpace(model.Name));
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, model.NativeAttributes, ["ref", "sheet", "name"]);
+        element.SetAttributeValue("ref", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Reference));
+        element.SetAttributeValue("sheet", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Sheet));
+        element.SetAttributeValue("name", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Name));
         return element;
     }
-
-    private static void ReadNativeAttributes(
-        XElement element,
-        Dictionary<string, string> target,
-        IReadOnlyCollection<string> modeledNames)
-    {
-        foreach (var attribute in element.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || modeledNames.Contains(attribute.Name.LocalName, StringComparer.Ordinal))
-                continue;
-
-            target[attribute.Name.ToString()] = attribute.Value;
-        }
-    }
-
-    private static void ApplyNativeAttributes(
-        XElement element,
-        Dictionary<string, string> attributes,
-        IReadOnlyCollection<string> modeledNames)
-    {
-        foreach (var attribute in attributes)
-        {
-            if (string.IsNullOrWhiteSpace(attribute.Key) || modeledNames.Contains(attribute.Key, StringComparer.Ordinal))
-                continue;
-
-            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
-        }
-    }
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
-    }
-
-    private static string? ToBoolAttribute(bool? value) =>
-        value is { } boolValue ? boolValue ? "1" : "0" : null;
-
-    private static string? NullIfWhiteSpace(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value;
 }
