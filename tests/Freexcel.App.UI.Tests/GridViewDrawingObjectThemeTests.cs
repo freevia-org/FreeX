@@ -202,6 +202,60 @@ public sealed class GridViewDrawingObjectThemeTests
         });
     }
 
+    [Fact]
+    public void GridObjectDragPlanner_CalculatesMoveResizeAndHandleTargets()
+    {
+        var start = new Rect(10, 20, 80, 40);
+
+        GridObjectDragPlanner.CalculateDragRect(
+                ObjectDragKind.Move,
+                start,
+                new Point(15, 25),
+                new Point(35, 45))
+            .Should()
+            .Be(new Rect(30, 40, 80, 40));
+        GridObjectDragPlanner.CalculateDragRect(
+                ObjectDragKind.ResizeSE,
+                start,
+                new Point(90, 60),
+                new Point(100, 75))
+            .Should()
+            .Be(new Rect(10, 20, 90, 55));
+        GridObjectDragPlanner.CalculateDragRect(
+                ObjectDragKind.ResizeE,
+                start,
+                new Point(90, 60),
+                new Point(0, 60))
+            .Width.Should().Be(8);
+        GridObjectDragPlanner.CalculateDragRect(
+                ObjectDragKind.ResizeS,
+                start,
+                new Point(90, 60),
+                new Point(90, 10))
+            .Height.Should().Be(8);
+
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Bottom), start)
+            .Should().Be(ObjectDragKind.ResizeSE);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Top + 10), start)
+            .Should().Be(ObjectDragKind.ResizeE);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 10, start.Bottom), start)
+            .Should().Be(ObjectDragKind.ResizeS);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 10, start.Top + 10), start)
+            .Should().Be(ObjectDragKind.Move);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left - 20, start.Top - 20), start)
+            .Should().Be(ObjectDragKind.None);
+    }
+
+    [Fact]
+    public void GridViewObjectDrag_DelegatesGeometryToPlanner()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var dragSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.ObjectDrag.cs"));
+
+        inputSource.Should().Contain("GridObjectDragPlanner.CalculateDragRect(");
+        dragSource.Should().Contain("GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad)");
+    }
+
     private static void RunOnStaThread(Action action)
     {
         Exception? exception = null;
