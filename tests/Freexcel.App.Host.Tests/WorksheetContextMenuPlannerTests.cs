@@ -176,6 +176,9 @@ public sealed class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ClearHyperlinks).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.PickFromDropDown).IsEnabled.Should().BeFalse();
     }
 
     [Fact]
@@ -195,6 +198,26 @@ public sealed class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Header == "Clear Hyperlinks").IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildCommands_EnablesFilterContextEntriesOnlyForFilterOrDropdownTargets()
+    {
+        var filterHeaderCommands = WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(
+                HasAutoFilterHeaderTarget: true,
+                HasDropdownTarget: true));
+
+        filterHeaderCommands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeTrue();
+        filterHeaderCommands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeTrue();
+        filterHeaderCommands.Single(command => command.Action == WorksheetContextMenuAction.PickFromDropDown).IsEnabled.Should().BeTrue();
+
+        var validationDropdownCommands = WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasDropdownTarget: true));
+
+        validationDropdownCommands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeFalse();
+        validationDropdownCommands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeFalse();
+        validationDropdownCommands.Single(command => command.Action == WorksheetContextMenuAction.PickFromDropDown).IsEnabled.Should().BeTrue();
     }
 
     [Fact]
@@ -376,4 +399,125 @@ public sealed class WorksheetContextMenuPlannerTests
             "Unhide Rows"
         ]);
     }
+
+    [Theory]
+    [MemberData(nameof(TargetSpecificCommandEnvelopeCases))]
+    public void BuildCommands_TargetSpecificMenusExposeOnlyExpectedCommandFamilies(
+        WorksheetContextMenuTargetKind targetKind,
+        string[] expectedHeaders,
+        string[] absentHeaders)
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(targetKind);
+
+        commands.Select(command => command.Header)
+            .Where(header => header.Length > 0)
+            .Should()
+            .Contain(expectedHeaders)
+            .And.NotContain(absentHeaders);
+    }
+
+    public static TheoryData<WorksheetContextMenuTargetKind, string[], string[]> TargetSpecificCommandEnvelopeCases => new()
+    {
+        {
+            WorksheetContextMenuTargetKind.Worksheet,
+            [
+                "Insert...",
+                "Custom Sort...",
+                "Quick Analysis",
+                "Data Validation...",
+                "New Comment",
+                "Format Cells..."
+            ],
+            [
+                "Format Picture...",
+                "Format Shape...",
+                "Format Text Box...",
+                "Group",
+                "Ungroup"
+            ]
+        },
+        {
+            WorksheetContextMenuTargetKind.RowSelection,
+            [
+                "Insert Row Above",
+                "Delete Row(s)",
+                "Row Height...",
+                "AutoFit Row Height",
+                "Group",
+                "Ungroup"
+            ],
+            [
+                "Insert...",
+                "Data Validation...",
+                "Column Width...",
+                "Format Picture..."
+            ]
+        },
+        {
+            WorksheetContextMenuTargetKind.ColumnSelection,
+            [
+                "Insert Column Left",
+                "Delete Column(s)",
+                "Column Width...",
+                "AutoFit Column Width",
+                "Group",
+                "Ungroup"
+            ],
+            [
+                "Insert...",
+                "Data Validation...",
+                "Row Height...",
+                "Format Picture..."
+            ]
+        },
+        {
+            WorksheetContextMenuTargetKind.Picture,
+            [
+                "Format Picture...",
+                "Crop...",
+                "Reset Crop",
+                "Edit Alt Text...",
+                "Selection Pane..."
+            ],
+            [
+                "Insert...",
+                "Format Cells...",
+                "Format Shape...",
+                "Group"
+            ]
+        },
+        {
+            WorksheetContextMenuTargetKind.Shape,
+            [
+                "Format Shape...",
+                "Size and Properties...",
+                "Rotate...",
+                "Bring Forward",
+                "Send Backward"
+            ],
+            [
+                "Insert...",
+                "Format Cells...",
+                "Format Picture...",
+                "Format Text Box..."
+            ]
+        },
+        {
+            WorksheetContextMenuTargetKind.TextBox,
+            [
+                "Format Text Box...",
+                "Size and Properties...",
+                "Rotate...",
+                "Shape Fill...",
+                "Shape Outline..."
+            ],
+            [
+                "Insert...",
+                "Format Cells...",
+                "Format Picture...",
+                "Bring Forward",
+                "Send Backward"
+            ]
+        }
+    };
 }

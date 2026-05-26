@@ -121,75 +121,24 @@ internal static class TextToColumnsDialogResultFactory
     public static IReadOnlyList<int> AddFixedWidthBreakPosition(
         IReadOnlyList<int> breakPositions,
         int position,
-        int maxLength)
-    {
-        if (maxLength <= 1)
-            return breakPositions.Distinct().Order().ToList();
-
-        var clamped = Math.Clamp(position, 1, maxLength - 1);
-        return breakPositions
-            .Append(clamped)
-            .Distinct()
-            .Order()
-            .ToList();
-    }
+        int maxLength) =>
+        TextToColumnsFixedWidthBreakPlanner.AddBreakPosition(breakPositions, position, maxLength);
 
     public static IReadOnlyList<int> MoveFixedWidthBreakPosition(
         IReadOnlyList<int> breakPositions,
         int index,
         int position,
-        int maxLength)
-    {
-        if (index < 0 || index >= breakPositions.Count)
-            return breakPositions.Distinct().Order().ToList();
-
-        var updated = breakPositions.ToList();
-        updated.RemoveAt(index);
-        return AddFixedWidthBreakPosition(updated, position, maxLength);
-    }
+        int maxLength) =>
+        TextToColumnsFixedWidthBreakPlanner.MoveBreakPosition(breakPositions, index, position, maxLength);
 
     public static IReadOnlyList<int> RemoveFixedWidthBreakPosition(
         IReadOnlyList<int> breakPositions,
-        int index)
-    {
-        if (index < 0 || index >= breakPositions.Count)
-            return breakPositions.Distinct().Order().ToList();
-
-        var updated = breakPositions.ToList();
-        updated.RemoveAt(index);
-        return updated.Distinct().Order().ToList();
-    }
+        int index) =>
+        TextToColumnsFixedWidthBreakPlanner.RemoveBreakPosition(breakPositions, index);
 
     public static IReadOnlyList<int> ParseFixedWidthBreakPositions(string? text) =>
-        (text ?? string.Empty)
-            .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(part => int.TryParse(part, out var position) ? position : 0)
-            .Where(position => position > 0)
-            .Distinct()
-            .Order()
-            .ToList();
+        TextToColumnsFixedWidthBreakPlanner.ParseBreakPositions(text);
 
     public static bool TryParseFixedWidthBreakPositions(string? text, int maxLength, out IReadOnlyList<int> positions)
-    {
-        positions = [];
-        var parts = (text ?? string.Empty)
-            .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 0 || maxLength <= 1)
-            return false;
-
-        var parsedPositions = new List<int>();
-        foreach (var part in parts)
-        {
-            if (!int.TryParse(part, out var position) || position <= 0 || position >= maxLength)
-                return false;
-
-            parsedPositions.Add(position);
-        }
-
-        positions = parsedPositions
-            .Distinct()
-            .Order()
-            .ToList();
-        return positions.Count > 0;
-    }
+        => TextToColumnsFixedWidthBreakPlanner.TryParseBreakPositions(text, maxLength, out positions);
 }

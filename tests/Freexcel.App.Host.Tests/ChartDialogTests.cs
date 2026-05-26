@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -572,9 +573,9 @@ public sealed class ChartDialogTests
             "Content = \"O_verlay legend on chart\"",
             "Content = \"_Show data labels\"",
             "Content = \"_Category name\"",
-            "Content = \"_Series name\"",
+            "Content = \"S_eries name\"",
             "Content = \"_Percentage\"",
-            "Content = \"Data label _callouts\"",
+            "Content = \"Data label callo_uts\"",
             "Content = \"_Show trendline\"",
             "Content = \"Display _equation\"",
             "Content = \"Display _R-squared value\"",
@@ -597,10 +598,10 @@ public sealed class ChartDialogTests
             "AddCombo(stack, \"Legend _position\"",
             "AddColorText(stack, \"Legend _text color\"",
             "AddNumericText(stack, \"Legend _font size\"",
-            "AddCombo(stack, \"_Position\"",
-            "AddCombo(stack, \"_Separator\"",
-            "AddCombo(stack, \"Number _format\"",
-            "AddNumericText(stack, \"_Border thickness\"",
+            "AddCombo(stack, \"P_osition\"",
+            "AddCombo(stack, \"Separato_r\"",
+            "AddCombo(stack, \"_Number format\"",
+            "AddNumericText(stack, \"Border t_hickness\"",
             "AddNumericText(stack, \"_Minimum (blank for Auto)\"",
             "AddNumericText(stack, \"Ma_ximum (blank for Auto)\"",
             "AddCombo(stack, \"_Major tick marks\"",
@@ -616,6 +617,21 @@ public sealed class ChartDialogTests
         }
     }
 
+    [Fact]
+    public void ChartDataLabelsDialog_UsesUniqueAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDataLabelsDialog.cs"));
+        var labels = Regex.Matches(source, "Content = \"(?<label>[^\"]*_[^\"]*)\"|Add(?:Combo|ColorText|NumericText)\\(stack, \"(?<label>[^\"]*_[^\"]*)\"")
+            .Select(match => match.Groups["label"].Value);
+        var duplicateAccessKeys = labels
+            .Select(label => new { Label = label, AccessKey = GetAccessKey(label) })
+            .GroupBy(item => item.AccessKey)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key}: {string.Join(", ", group.Select(item => item.Label))}");
+
+        duplicateAccessKeys.Should().BeEmpty();
+    }
+
     private static string ReadChartFormatDialogSource()
     {
         return string.Join(
@@ -629,6 +645,12 @@ public sealed class ChartDialogTests
                 "ChartTrendlineOptionsDialog.cs",
                 "ChartSeriesFormatDialog.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static char GetAccessKey(string label)
+    {
+        var index = label.IndexOf('_', StringComparison.Ordinal);
+        return char.ToUpperInvariant(label[index + 1]);
     }
 
     [Fact]

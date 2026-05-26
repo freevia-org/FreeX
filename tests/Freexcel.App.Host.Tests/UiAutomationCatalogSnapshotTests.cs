@@ -62,6 +62,26 @@ public sealed class UiAutomationCatalogSnapshotTests
         AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageOptionsButton", "Options");
     }
 
+    [Fact]
+    [Trait("Category", "UIE2E")]
+    public void VisibleShellControls_ExposeExpectedAutomationPatterns()
+    {
+        if (!OperatingSystem.IsWindows() || !Environment.UserInteractive)
+            return;
+
+        using var run = FreexcelUiRun.Start();
+        var root = AutomationElement.FromHandle(run.WindowHandle)
+            ?? throw new InvalidOperationException("UI Automation could not attach to the Freexcel window.");
+
+        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.NameProperty, "Home", ControlType.TabItem, SelectionItemPattern.Pattern);
+        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.NameProperty, "Insert", ControlType.TabItem, SelectionItemPattern.Pattern);
+        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.AutomationIdProperty, "SaveQatBtn", ControlType.Button, InvokePattern.Pattern);
+        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.AutomationIdProperty, "UndoQatBtn", ControlType.Button, InvokePattern.Pattern);
+        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.AutomationIdProperty, "RedoQatBtn", ControlType.Button, InvokePattern.Pattern);
+        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.AutomationIdProperty, "AddSheetButton", ControlType.Button, InvokePattern.Pattern);
+        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.AutomationIdProperty, "ZoomSlider", ControlType.Slider, RangeValuePattern.Pattern);
+    }
+
     private static IReadOnlyList<string> ReadCatalogTopLevelTabNames()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_INVENTORY.json")));
@@ -121,6 +141,23 @@ public sealed class UiAutomationCatalogSnapshotTests
         element.TryGetCurrentPattern(InvokePattern.Pattern, out _)
             .Should()
             .BeTrue($"{expectedName} should expose UIA InvokePattern");
+    }
+
+    private static void AssertVisibleElementExposesPattern(
+        AutomationElement root,
+        int processId,
+        AutomationProperty property,
+        object value,
+        ControlType controlType,
+        AutomationPattern pattern)
+    {
+        var element = FindVisibleElement(root, processId, property, value);
+
+        element.Should().NotBeNull($"visible UIA element {value} should be present");
+        element!.Current.ControlType.Should().Be(controlType);
+        element.TryGetCurrentPattern(pattern, out _)
+            .Should()
+            .BeTrue($"{value} should expose {pattern.ProgrammaticName}");
     }
 
     private static void SelectTab(AutomationElement root, int processId, string tabName)

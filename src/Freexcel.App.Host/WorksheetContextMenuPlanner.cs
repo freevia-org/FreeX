@@ -41,9 +41,9 @@ public static class WorksheetContextMenuPlanner
         new("Sort Z to A", WorksheetContextMenuAction.SortDescending, AccessHeader: "Sort _Z to A"),
         new("Custom Sort...", WorksheetContextMenuAction.CustomSort, AccessHeader: "C_ustom Sort..."),
         new("Filter...", WorksheetContextMenuAction.Filter, AccessHeader: "_Filter..."),
-        new("Clear Filter", WorksheetContextMenuAction.ClearFilter, AccessHeader: "C_lear Filter"),
-        new("Reapply Filter", WorksheetContextMenuAction.ReapplyFilter, AccessHeader: "_Reapply Filter"),
-        new("Pick From Drop-down List...", WorksheetContextMenuAction.PickFromDropDown, AccessHeader: "Pick From _Drop-down List..."),
+        new("Clear Filter", WorksheetContextMenuAction.ClearFilter, AccessHeader: "C_lear Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
+        new("Reapply Filter", WorksheetContextMenuAction.ReapplyFilter, AccessHeader: "_Reapply Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
+        new("Pick From Drop-down List...", WorksheetContextMenuAction.PickFromDropDown, AccessHeader: "Pick From _Drop-down List...", IsEnabled: state.HasDropdownTarget),
         new("Quick Analysis", WorksheetContextMenuAction.QuickAnalysis, AccessHeader: "_Quick Analysis"),
         new("Define Name...", WorksheetContextMenuAction.DefineName, AccessHeader: "Define _Name..."),
         new("Create Table...", WorksheetContextMenuAction.CreateTable, AccessHeader: "Create Ta_ble..."),
@@ -192,7 +192,9 @@ public sealed record WorksheetContextMenuState(
     bool HasThreadedComment = false,
     bool IsThreadedCommentResolved = false,
     bool HasNote = false,
-    bool HasHyperlink = false)
+    bool HasHyperlink = false,
+    bool HasAutoFilterHeaderTarget = false,
+    bool HasDropdownTarget = false)
 {
     public static WorksheetContextMenuState Default { get; } = new();
 }

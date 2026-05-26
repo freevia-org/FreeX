@@ -24,13 +24,12 @@ public sealed partial class SelectionPaneDialog
             return;
 
         var forward = action == SelectionPaneDialogAction.MoveUp;
-        var currentIndex = _items.IndexOf(selected);
-        var targetIndex = FindMoveTargetIndex(currentIndex, forward);
-        if (targetIndex < 0)
+        var plan = SelectionPaneDialogStatePlanner.PlanMove(CurrentItemStates(), selected.Source.Id, forward);
+        if (plan is null)
             return;
 
-        _moveChanges.Add(new SelectionPaneMoveChange(selected.Source.Kind, selected.Source.Id, forward));
-        (_items[currentIndex], _items[targetIndex]) = (_items[targetIndex], _items[currentIndex]);
+        _moveChanges.AddRange(plan.MoveChanges);
+        ApplyReorderPlan(plan);
         ApplySearchAndFilter(selected.Source.Id);
     }
 
@@ -94,35 +93,23 @@ public sealed partial class SelectionPaneDialog
 
     private void DragReorder(SelectionPaneDialogItem dragged, SelectionPaneDialogItem target)
     {
-        var moves = CreateDragMoveChanges(
-            _items.Select(item => (item.Source.Kind, item.Source.Id)).ToList(),
+        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+            CurrentItemStates(),
             dragged.Source.Id,
             target.Source.Id);
-        if (moves.Count == 0)
+        if (plan is null)
             return;
 
-        _moveChanges.AddRange(moves);
-        var fromIndex = _items.IndexOf(dragged);
-        var toIndex = _items.IndexOf(target);
-        if (fromIndex < 0 || toIndex < 0)
-            return;
-
-        _items.RemoveAt(fromIndex);
-        if (fromIndex < toIndex)
-            toIndex--;
-        _items.Insert(toIndex, dragged);
+        _moveChanges.AddRange(plan.MoveChanges);
+        ApplyReorderPlan(plan);
         ApplySearchAndFilter(dragged.Source.Id);
     }
 
     private IReadOnlyList<SelectionPaneVisibilityChange> CurrentVisibilityChanges() =>
-        CreateVisibilityChanges(
-            _sourceItems,
-            _items.Select(item => (item.Source.Id, item.IsVisible, item.Name)).ToList());
+        SelectionPaneDialogStatePlanner.CreateVisibilityChanges(_sourceItems, CurrentItemStates());
 
     private IReadOnlyList<SelectionPaneRenameChange> CurrentRenameChanges() =>
-        CreateRenameChanges(
-            _sourceItems,
-            _items.Select(item => (item.Source.Id, item.IsVisible, item.Name)).ToList());
+        SelectionPaneDialogStatePlanner.CreateRenameChanges(_sourceItems, CurrentItemStates());
 
     private void SetAllVisibility(bool isVisible)
     {
@@ -138,9 +125,11 @@ public sealed partial class SelectionPaneDialog
     {
         var search = _searchBox.Text.Trim();
         var filter = _filterBox.SelectedItem as string ?? "All";
-        var filtered = _items.Where(item =>
-            MatchesSearch(item, search) &&
-            MatchesFilter(item, filter)).ToList();
+        var filteredIds = SelectionPaneDialogStatePlanner
+            .FilterItems(CurrentItemStates(), search, filter)
+            .Select(item => item.Id)
+            .ToHashSet();
+        var filtered = _items.Where(item => filteredIds.Contains(item.Source.Id)).ToList();
 
         _list.ItemsSource = filtered;
         if (preferredSelection is { } id)
@@ -150,23 +139,6 @@ public sealed partial class SelectionPaneDialog
         UpdateMoveButtons();
         UpdateRenameBox();
     }
-
-    private static bool MatchesSearch(SelectionPaneDialogItem item, string search) =>
-        string.IsNullOrWhiteSpace(search) ||
-        item.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-        item.Kind.Contains(search, StringComparison.OrdinalIgnoreCase);
-
-    private static bool MatchesFilter(SelectionPaneDialogItem item, string filter) =>
-        filter switch
-        {
-            "Visible" => item.IsVisible,
-            "Hidden" => !item.IsVisible,
-            "Charts" => item.Source.Kind == SelectionPaneObjectKind.Chart,
-            "Pictures" => item.Source.Kind == SelectionPaneObjectKind.Picture,
-            "Shapes" => item.Source.Kind == SelectionPaneObjectKind.Shape,
-            "Text Boxes" => item.Source.Kind == SelectionPaneObjectKind.TextBox,
-            _ => true
-        };
 
     private SelectionPaneDialogItem? FindListItem(object originalSource)
     {
@@ -206,21 +178,6 @@ public sealed partial class SelectionPaneDialog
         _list.Items.Refresh();
     }
 
-    private int FindMoveTargetIndex(int currentIndex, bool forward)
-    {
-        if (currentIndex < 0 || currentIndex >= _items.Count)
-            return -1;
-
-        var step = forward ? -1 : 1;
-        for (var index = currentIndex + step; index >= 0 && index < _items.Count; index += step)
-        {
-            if (_items[index].Source.Kind == _items[currentIndex].Source.Kind)
-                return index;
-        }
-
-        return -1;
-    }
-
     private void UpdateRenameBox()
     {
         if (_list.SelectedItem is SelectionPaneDialogItem selected)
@@ -244,7 +201,28 @@ public sealed partial class SelectionPaneDialog
         }
 
         var currentIndex = _items.IndexOf(selected);
-        _moveUpButton.IsEnabled = FindMoveTargetIndex(currentIndex, forward: true) >= 0;
-        _moveDownButton.IsEnabled = FindMoveTargetIndex(currentIndex, forward: false) >= 0;
+        var states = CurrentItemStates();
+        _moveUpButton.IsEnabled = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(states, currentIndex, forward: true) >= 0;
+        _moveDownButton.IsEnabled = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(states, currentIndex, forward: false) >= 0;
+    }
+
+    private IReadOnlyList<SelectionPaneDialogItemState> CurrentItemStates() =>
+        _items
+            .Select(item => new SelectionPaneDialogItemState(
+                item.Source.Kind,
+                item.Source.Id,
+                item.Name,
+                item.IsVisible))
+            .ToList();
+
+    private void ApplyReorderPlan(SelectionPaneDialogReorderPlan plan)
+    {
+        var itemsById = _items.ToDictionary(item => item.Source.Id);
+        _items.Clear();
+        foreach (var id in plan.OrderedIds)
+        {
+            if (itemsById.TryGetValue(id, out var item))
+                _items.Add(item);
+        }
     }
 }

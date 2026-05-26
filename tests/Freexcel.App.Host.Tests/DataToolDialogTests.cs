@@ -408,6 +408,42 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsFixedWidthBreakPlanner_ParsesAndMutatesBreaks()
+    {
+        TextToColumnsFixedWidthBreakPlanner.ParseBreakPositions("12, 4; x 8 4")
+            .Should()
+            .Equal(4, 8, 12);
+        TextToColumnsFixedWidthBreakPlanner.TryParseBreakPositions("8, 4; 4", 12, out var parsed)
+            .Should()
+            .BeTrue();
+        parsed.Should().Equal(4, 8);
+        TextToColumnsFixedWidthBreakPlanner.TryParseBreakPositions("8, 12", 12, out _)
+            .Should()
+            .BeFalse();
+        TextToColumnsFixedWidthBreakPlanner.AddBreakPosition([8, 4], 99, maxLength: 20)
+            .Should()
+            .Equal(4, 8, 19);
+        TextToColumnsFixedWidthBreakPlanner.MoveBreakPosition([4, 8, 12], index: 1, position: 10, maxLength: 20)
+            .Should()
+            .Equal(4, 10, 12);
+        TextToColumnsFixedWidthBreakPlanner.RemoveBreakPosition([4, 8, 12], index: 1)
+            .Should()
+            .Equal(4, 12);
+    }
+
+    [Fact]
+    public void TextToColumnsResultFactory_ForwardsFixedWidthBreakWorkToPlanner()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialogResultFactory.cs"));
+
+        source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.AddBreakPosition");
+        source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.MoveBreakPosition");
+        source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.RemoveBreakPosition");
+        source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.ParseBreakPositions");
+        source.Should().Contain("TextToColumnsFixedWidthBreakPlanner.TryParseBreakPositions");
+    }
+
+    [Fact]
     public void TextToColumnsFixedWidthRulerPlanner_MapsBreaksAndNearestHit()
     {
         TextToColumnsFixedWidthRulerPlanner.PositionFromRulerX(110, rulerWidth: 440, maxLength: 20)
@@ -1204,7 +1240,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_Reference:");
         source.Should().Contain("_All references:");
         source.Should().Contain("_Destination cell:");
-        source.Should().Contain("Use _labels in:");
+        source.Should().Contain("Text = \"Use labels in:\"");
+        source.Should().NotContain("Use _labels in:");
         source.Should().Contain("Content = \"_Add\"");
         source.Should().Contain("Content = \"_Delete\"");
         source.Should().Contain("_deleteReferenceButton");
