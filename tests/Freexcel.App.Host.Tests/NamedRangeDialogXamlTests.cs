@@ -344,6 +344,33 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void NameDefinitionRefersToPicker_ExposesAccessibleCollapseAffordance()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new NameDefinitionDialog(
+                new NameDefinitionDialogResult("Sales", "Workbook", "", "Sheet1!$A$1:$C$5"),
+                ["Workbook"]);
+            try
+            {
+                var picker = GetPrivateField<Button>(dialog, "_rangePickerButton");
+
+                System.Windows.Automation.AutomationProperties.GetName(picker)
+                    .Should()
+                    .Be("Select referenced range");
+                System.Windows.Automation.AutomationProperties.GetHelpText(picker)
+                    .Should()
+                    .Be("Collapse dialog and select the referenced range from the worksheet.");
+                picker.ToolTip.Should().Be("Collapse dialog and select the referenced range from the worksheet");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void NameDefinitionRefersToPicker_RefocusesInputWithKeyboardFocus()
     {
         var source = ReadNamedRangeDialogSource();

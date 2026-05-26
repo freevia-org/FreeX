@@ -81,12 +81,12 @@ public sealed class SparklineDialog : Window
     }
 
     public static SparklineDialogResult CreateResult(string dataRangeText, string locationText, SparklineKindChoice kind) =>
-        new(dataRangeText.Trim(), locationText.Trim(), kind);
+        SparklineDialogPlanner.CreateResult(dataRangeText, locationText, kind);
 
     public static SparklineRangeSelectionRequest CreateRangeSelectionRequest(
         SparklineRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        SparklineDialogPlanner.CreateRangeSelectionRequest(target, currentText);
 
     private void Accept()
     {
@@ -102,19 +102,14 @@ public sealed class SparklineDialog : Window
 
     private bool ValidateInputs()
     {
-        if (!SparklineInputParser.TryParseDataRange(_dataRangeBox.Text, _sheetId, out _))
+        return SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId) switch
         {
-            ShowInvalidInputWarning("Invalid data range.", _dataRangeBox);
-            return false;
-        }
-
-        if (!SparklineInputParser.TryParseLocation(_locationBox.Text, _sheetId, out _))
-        {
-            ShowInvalidInputWarning("Invalid location cell.", _locationBox);
-            return false;
-        }
-
-        return true;
+            SparklineDialogValidationResult.InvalidDataRange =>
+                ShowInvalidInputWarning("Invalid data range.", _dataRangeBox),
+            SparklineDialogValidationResult.InvalidLocation =>
+                ShowInvalidInputWarning("Invalid location cell.", _locationBox),
+            _ => true
+        };
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox textBox)
@@ -125,7 +120,7 @@ public sealed class SparklineDialog : Window
     }
 
     public static string GetKindLabel(SparklineKindChoice kind) =>
-        kind == SparklineKindChoice.WinLoss ? "Win/Loss" : kind.ToString();
+        SparklineDialogPlanner.GetKindLabel(kind);
 
     private void FocusInitialKeyboardTarget()
     {
