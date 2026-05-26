@@ -1418,8 +1418,24 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_createLinksBox");
         source.Should().Contain("_Function:");
         source.Should().Contain("_Top row");
-        source.Should().Contain("_Left column");
+        source.Should().Contain("Left _column");
         source.Should().Contain("Create _links to source data");
+        var accessKeyLabels = new[]
+        {
+            "_Function:",
+            "_Reference:",
+            "_All references:",
+            "_Destination cell:",
+            "_Top row",
+            "Left _column",
+            "Create _links to source data"
+        };
+        accessKeyLabels
+            .GroupBy(GetAccessKey)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key}: {string.Join(", ", group)}")
+            .Should()
+            .BeEmpty();
         source.Should().Contain("Enum.GetValues<ConsolidateFunction>()");
         source.Should().Contain("FunctionLabel(function)");
         source.Should().Contain("ConsolidateFunction.CountNumbers => \"Count Numbers\"");
@@ -1438,6 +1454,12 @@ public sealed class DataToolDialogTests
     private static string ReadConsolidateDialogSources() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs")) +
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.Planning.cs"));
+
+    private static char GetAccessKey(string label)
+    {
+        var index = label.IndexOf('_', StringComparison.Ordinal);
+        return char.ToUpperInvariant(label[index + 1]);
+    }
 
     [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()
