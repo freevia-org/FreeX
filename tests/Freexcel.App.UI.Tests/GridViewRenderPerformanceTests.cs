@@ -37,6 +37,18 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderHeaders_ReusesPixelsPerDipAcrossFormattedTextCalls()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.Headers.cs"));
+        var renderHeaders = source[
+            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("internal static string FormatColumnHeader", StringComparison.Ordinal)];
+
+        renderHeaders.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        renderHeaders.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
+    }
+
+    [Fact]
     public void RenderCells_ReusesCellColorBrushesWithinRenderPass()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));

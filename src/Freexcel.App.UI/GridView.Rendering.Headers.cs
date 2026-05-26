@@ -39,6 +39,7 @@ public partial class GridView
 
         var selectedRanges = SelectedRanges;
         var selRange = SelectedRange;
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
         foreach (var col in Viewport!.ColMetrics)
         {
@@ -57,7 +58,7 @@ public partial class GridView
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 DefaultTypeface, 11, TextBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                pixelsPerDip);
 
             dc.DrawText(text, new Point(
                 rect.Left + (rect.Width - text.Width) / 2,
@@ -81,7 +82,7 @@ public partial class GridView
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 DefaultTypeface, 11, TextBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                pixelsPerDip);
 
             dc.DrawText(text, new Point(
                 rect.Left + (rect.Width - text.Width) / 2,
