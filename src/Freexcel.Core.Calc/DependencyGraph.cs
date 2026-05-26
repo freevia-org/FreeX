@@ -132,10 +132,16 @@ public sealed class DependencyGraph
         return allDeps;
     }
 
-    /// <summary>Get all cells that the given cell directly references.</summary>
+    /// <summary>Get all exact cells that the given cell directly references.</summary>
     public IReadOnlySet<CellAddress> GetDirectPrecedents(CellAddress cell)
     {
         return _precedents.TryGetValue(cell, out var precs) ? precs : EmptySet;
+    }
+
+    /// <summary>Get all compact ranges that the given cell directly references.</summary>
+    public IReadOnlyList<GridRange> GetDirectRangePrecedents(CellAddress cell)
+    {
+        return _rangePrecedents.TryGetValue(cell, out var ranges) ? ranges : [];
     }
 
     /// <summary>
