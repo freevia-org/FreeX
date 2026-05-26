@@ -69,6 +69,8 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-cell-watches-001" => true,
         "generated-worksheet-single-xml-cells-001" => true,
         "generated-worksheet-sheet-views-001" => true,
+        "generated-worksheet-sheet-format-001" => true,
+        "generated-worksheet-page-breaks-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -340,6 +342,23 @@ internal static class XlsxCorpusFixtureFactory
               </sheetViews>
             </worksheet>
             """)),
+        "generated-worksheet-sheet-format-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetFormatPr baseColWidth="12" zeroHeight="1" thickTop="1" outlineLevelRow="3">
+                <nativeSheetFormatChild value="kept"/>
+              </sheetFormatPr>
+            </worksheet>
+            """)),
+        "generated-worksheet-page-breaks-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <rowBreaks count="1" manualBreakCount="1">
+                <brk id="20" max="16383" man="1" pt="1" customAttr="row-native"/>
+              </rowBreaks>
+              <colBreaks count="1" manualBreakCount="1">
+                <brk id="5" max="1048575" man="1" pt="1" customAttr="col-native"/>
+              </colBreaks>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -576,6 +595,10 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-sheet-views-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-sheet-format-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-page-breaks-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-sort-state-001", StringComparison.OrdinalIgnoreCase) &&
@@ -801,6 +824,18 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-sheet-views-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetSheetViewsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-sheet-format-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSheetFormatFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-page-breaks-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetPageBreaksFixup(archive);
             return;
         }
 
@@ -1539,6 +1574,67 @@ internal static class XlsxCorpusFixtureFactory
                 new XElement(
                     worksheetNs + "pivotSelection",
                     new XAttribute("pane", "topRight")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSheetFormatFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetFormatPr").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "sheetFormatPr",
+            new XAttribute("baseColWidth", "12"),
+            new XAttribute("zeroHeight", "1"),
+            new XAttribute("thickTop", "1"),
+            new XAttribute("outlineLevelRow", "3"),
+            new XElement(
+                worksheetNs + "nativeSheetFormatChild",
+                new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetPageBreaksFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "rowBreaks").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "colBreaks").Remove();
+        worksheetXml.Root?.Add(
+            new XElement(
+                worksheetNs + "rowBreaks",
+                new XAttribute("count", "1"),
+                new XAttribute("manualBreakCount", "1"),
+                new XElement(
+                    worksheetNs + "brk",
+                    new XAttribute("id", "20"),
+                    new XAttribute("max", "16383"),
+                    new XAttribute("man", "1"),
+                    new XAttribute("pt", "1"),
+                    new XAttribute("customAttr", "row-native"))),
+            new XElement(
+                worksheetNs + "colBreaks",
+                new XAttribute("count", "1"),
+                new XAttribute("manualBreakCount", "1"),
+                new XElement(
+                    worksheetNs + "brk",
+                    new XAttribute("id", "5"),
+                    new XAttribute("max", "1048575"),
+                    new XAttribute("man", "1"),
+                    new XAttribute("pt", "1"),
+                    new XAttribute("customAttr", "col-native"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
