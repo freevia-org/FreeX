@@ -36,7 +36,7 @@ public partial class MainWindow
                 ListScenarios();
                 break;
             case ScenarioManagerAction.Report:
-                CreateScenarioSummaryReport();
+                CreateScenarioSummaryReport(dialog.ResultCellsText);
                 break;
         }
     }
@@ -151,9 +151,26 @@ public partial class MainWindow
         MessageBox.Show(message, "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void CreateScenarioSummaryReport()
+    private IReadOnlyList<CellAddress> ParseScenarioResultCells(string? resultCellsText)
     {
-        if (!TryExecuteCommand(new ScenarioSummaryReportCommand(), "Scenario Manager"))
+        if (!string.IsNullOrWhiteSpace(resultCellsText) &&
+            WorkbookRangeTextCodec.TryParseMany(_currentSheetId, resultCellsText, ResolveSheetIdByName, out var ranges))
+            return ranges.SelectMany(range => range.AllCells()).Distinct().ToList();
+
+        return [];
+    }
+
+    private void CreateScenarioSummaryReport(string? resultCellsText = null)
+    {
+        if (!TryExecuteCommand(
+            new ScenarioSummaryReportCommand(
+                ParseScenarioResultCells(resultCellsText),
+                (workbook, changedCells) =>
+                {
+                    if (workbook.CalculationMode == WorkbookCalculationMode.Automatic)
+                        _recalcEngine.Recalculate(workbook, changedCells);
+                }),
+            "Scenario Manager"))
             return;
 
         var report = _workbook.Sheets.LastOrDefault();
