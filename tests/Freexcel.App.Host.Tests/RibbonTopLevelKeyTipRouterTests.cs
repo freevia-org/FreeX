@@ -12,6 +12,7 @@ public sealed class RibbonTopLevelKeyTipRouterTests
     [InlineData("P", RibbonTopLevelKeyTipActionKind.RibbonTab, "Page Layout")]
     [InlineData("M", RibbonTopLevelKeyTipActionKind.RibbonTab, "Formulas")]
     [InlineData("A", RibbonTopLevelKeyTipActionKind.RibbonTab, "Data")]
+    [InlineData("D", RibbonTopLevelKeyTipActionKind.RibbonTab, "Data")]
     [InlineData("R", RibbonTopLevelKeyTipActionKind.RibbonTab, "Review")]
     [InlineData("W", RibbonTopLevelKeyTipActionKind.RibbonTab, "View")]
     [InlineData("Y", RibbonTopLevelKeyTipActionKind.RibbonTab, "Help")]

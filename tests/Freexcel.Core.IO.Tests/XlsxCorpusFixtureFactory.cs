@@ -71,6 +71,10 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-sheet-views-001" => true,
         "generated-worksheet-sheet-format-001" => true,
         "generated-worksheet-page-breaks-001" => true,
+        "generated-worksheet-print-options-001" => true,
+        "generated-worksheet-page-setup-native-001" => true,
+        "generated-worksheet-header-footer-native-001" => true,
+        "generated-worksheet-dimension-native-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -359,6 +363,34 @@ internal static class XlsxCorpusFixtureFactory
               </colBreaks>
             </worksheet>
             """)),
+        "generated-worksheet-print-options-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <printOptions gridLinesSet="1" customAttr="print-native">
+                <fx:nativePrintOptionsChild value="kept"/>
+              </printOptions>
+            </worksheet>
+            """)),
+        "generated-worksheet-page-setup-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <pageSetup usePrinterDefaults="1" copies="3" customAttr="page-setup-native">
+                <nativePageSetupChild value="kept"/>
+              </pageSetup>
+            </worksheet>
+            """)),
+        "generated-worksheet-header-footer-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <headerFooter nativeHeaderFooterAttr="kept">
+                <oddHeader>&amp;LLeft&amp;CCenter&amp;RRight</oddHeader>
+                <nativeHeaderFooterChild value="kept"/>
+              </headerFooter>
+            </worksheet>
+            """)),
+        "generated-worksheet-dimension-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <dimension ref="A1" nativeDimensionAttr="kept"/>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -599,6 +631,14 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-page-breaks-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-print-options-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-page-setup-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-dimension-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-sort-state-001", StringComparison.OrdinalIgnoreCase) &&
@@ -836,6 +876,30 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-page-breaks-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetPageBreaksFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-print-options-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetPrintOptionsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-page-setup-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetPageSetupNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetHeaderFooterNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-dimension-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetDimensionNativeFixup(archive);
             return;
         }
 
@@ -1635,6 +1699,89 @@ internal static class XlsxCorpusFixtureFactory
                     new XAttribute("man", "1"),
                     new XAttribute("pt", "1"),
                     new XAttribute("customAttr", "col-native"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetPrintOptionsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "printOptions").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "printOptions",
+            new XAttribute("gridLinesSet", "1"),
+            new XAttribute("customAttr", "print-native"),
+            new XElement(
+                freexcelNs + "nativePrintOptionsChild",
+                new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetPageSetupNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "pageSetup").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "pageSetup",
+            new XAttribute("usePrinterDefaults", "1"),
+            new XAttribute("copies", "3"),
+            new XAttribute("customAttr", "page-setup-native"),
+            new XElement(
+                worksheetNs + "nativePageSetupChild",
+                new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetHeaderFooterNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "headerFooter").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "headerFooter",
+            new XAttribute("nativeHeaderFooterAttr", "kept"),
+            new XElement(worksheetNs + "oddHeader", "&LLeft&CCenter&RRight"),
+            new XElement(
+                worksheetNs + "nativeHeaderFooterChild",
+                new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetDimensionNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "dimension").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "dimension",
+            new XAttribute("ref", "A1"),
+            new XAttribute("nativeDimensionAttr", "kept")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 

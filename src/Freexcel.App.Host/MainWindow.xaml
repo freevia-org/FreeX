@@ -1078,12 +1078,13 @@
                                         Style="{StaticResource RibbonTallButton}" Click="AutoSumPickerBtn_Click"
                                         local:RibbonTooltip.Title="AutoSum"
                                         local:RibbonTooltip.KeyTip="U"
-                                        local:RibbonTooltip.Description="Automatically insert a SUM, AVERAGE, COUNT, MAX, or MIN formula.">
+                                        local:RibbonTooltip.Description="Automatically insert a SUM, AVERAGE, COUNT, COUNTA, MAX, or MIN formula.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Sum"              local:RibbonTooltip.KeyTip="S" Click="AutoSumSumMenuItem_Click"/>
                                             <MenuItem Header="Average"          local:RibbonTooltip.KeyTip="A" Click="AutoSumAvgMenuItem_Click"/>
                                             <MenuItem Header="Count Numbers"    local:RibbonTooltip.KeyTip="C" Click="AutoSumCountMenuItem_Click"/>
+                                            <MenuItem Header="Count All"        local:RibbonTooltip.KeyTip="T" Click="AutoSumCountAllMenuItem_Click"/>
                                             <MenuItem Header="Max"              local:RibbonTooltip.KeyTip="X" Click="AutoSumMaxMenuItem_Click"/>
                                             <MenuItem Header="Min"              local:RibbonTooltip.KeyTip="M" Click="AutoSumMinMenuItem_Click"/>
                                             <Separator/>
@@ -2197,12 +2198,13 @@
                                 <Button Content="AutoSum" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulasAutoSumPickerBtn_Click"
                                         local:RibbonTooltip.Title="AutoSum"
                                         local:RibbonTooltip.KeyTip="U"
-                                        local:RibbonTooltip.Description="Automatically insert a SUM, AVERAGE, COUNT, MAX, or MIN formula.">
+                                        local:RibbonTooltip.Description="Automatically insert a SUM, AVERAGE, COUNT, COUNTA, MAX, or MIN formula.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Sum"           local:RibbonTooltip.KeyTip="S" Click="AutoSumSumMenuItem_Click"/>
                                             <MenuItem Header="Average"       local:RibbonTooltip.KeyTip="A" Click="AutoSumAvgMenuItem_Click"/>
                                             <MenuItem Header="Count Numbers" local:RibbonTooltip.KeyTip="C" Click="AutoSumCountMenuItem_Click"/>
+                                            <MenuItem Header="Count All"     local:RibbonTooltip.KeyTip="T" Click="AutoSumCountAllMenuItem_Click"/>
                                             <MenuItem Header="Max"           local:RibbonTooltip.KeyTip="X" Click="AutoSumMaxMenuItem_Click"/>
                                             <MenuItem Header="Min"           local:RibbonTooltip.KeyTip="M" Click="AutoSumMinMenuItem_Click"/>
                                             <MenuItem Header="More…"         local:RibbonTooltip.KeyTip="F" Click="AutoSumMoreMenuItem_Click"/>
