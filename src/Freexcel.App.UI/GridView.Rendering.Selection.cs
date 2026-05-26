@@ -70,11 +70,18 @@ public partial class GridView
             return;
 
         dc.DrawRectangle(QuickAnalysisPreviewBrush, QuickAnalysisPreviewPen, rect.Value);
-        if (QuickAnalysisPreviewVisual != GridQuickAnalysisPreviewVisualKind.DataBars)
-            return;
-
-        foreach (var bar in CalculateQuickAnalysisDataBarPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
-            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, bar);
+        switch (QuickAnalysisPreviewVisual)
+        {
+            case GridQuickAnalysisPreviewVisualKind.DataBars:
+                foreach (var bar in CalculateQuickAnalysisDataBarPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+                    dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, bar);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.ColorScale:
+                var index = 0;
+                foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+                    dc.DrawRectangle(QuickAnalysisColorScalePreviewBrushes[index++ % QuickAnalysisColorScalePreviewBrushes.Length], null, cell);
+                break;
+        }
     }
 
     private void RenderSelection(DrawingContext dc)
