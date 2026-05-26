@@ -121,7 +121,8 @@ public static partial class PivotTableRefreshService
                         sheet,
                         new CellAddress(sheet.Id, outputRow, start.Col + 1 + (uint)index),
                         calculatedValue,
-                        pivotTable.DataFields[index]);
+                        pivotTable.DataFields[index],
+                        pivotTable);
                     calculatedItemTotals[index] += calculatedValue;
                 }
 
@@ -151,7 +152,8 @@ public static partial class PivotTableRefreshService
                         pivotTable.DataFields[index],
                         pivotTable,
                         headers) + calculatedItemTotals[index],
-                    pivotTable.DataFields[index]);
+                    pivotTable.DataFields[index],
+                    pivotTable);
         }
     }
 
@@ -176,7 +178,8 @@ public static partial class PivotTableRefreshService
                     pivotTable.DataFields[index],
                     pivotTable,
                     headers),
-                pivotTable.DataFields[index]);
+                pivotTable.DataFields[index],
+                pivotTable);
         }
     }
 
@@ -248,7 +251,8 @@ public static partial class PivotTableRefreshService
                     dataField,
                     pivotTable,
                     headers),
-                    dataField);
+                    dataField,
+                    pivotTable);
                 outputColumn++;
             }
         }

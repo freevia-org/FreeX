@@ -233,7 +233,8 @@ public static partial class PivotTableRefreshService
                         dataField,
                         pivotTable,
                         headers),
-                        dataField);
+                        dataField,
+                        pivotTable);
                     outputColumn++;
                 }
             }
@@ -247,7 +248,8 @@ public static partial class PivotTableRefreshService
                         dataField,
                         pivotTable,
                         headers),
-                        dataField);
+                        dataField,
+                        pivotTable);
                     outputColumn++;
                 }
             }
