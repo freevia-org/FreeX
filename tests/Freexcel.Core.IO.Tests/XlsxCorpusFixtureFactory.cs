@@ -89,6 +89,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-smart-tags-001" => true,
         "generated-worksheet-scenarios-001" => true,
         "generated-worksheet-custom-sheet-views-001" => true,
+        "generated-worksheet-extension-list-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -572,6 +573,33 @@ internal static class XlsxCorpusFixtureFactory
               </customSheetViews>
             </worksheet>
             """)),
+        "generated-worksheet-extension-list-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                       xmlns:x15="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                       xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main">
+              <sheetData>
+                <row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>
+              </sheetData>
+              <extLst>
+                <ext uri="{05C60535-1F16-4fd2-B633-F4F36F0B64E0}">
+                  <x14:sparklineGroups>
+                    <x14:sparklineGroup type="column">
+                      <x14:sparklines>
+                        <x14:sparkline>
+                          <xm:f>Sheet1!A1:C1</xm:f>
+                          <xm:sqref>D1</xm:sqref>
+                        </x14:sparkline>
+                      </x14:sparklines>
+                    </x14:sparklineGroup>
+                  </x14:sparklineGroups>
+                </ext>
+                <ext uri="{FFEEDDCC-BBAA-9988-7766-554433221100}">
+                  <x15:futureMetadata name="FreexcelUnknownWorksheetExtension"/>
+                </ext>
+              </extLst>
+            </worksheet>
+            """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -783,6 +811,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-scenarios-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-custom-sheet-views-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-extension-list-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase));
 
     private static void EnsureKnownGapContentTypeOverrides(ZipArchive archive, IReadOnlyCollection<string> partNames)
@@ -1115,6 +1145,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-custom-sheet-views-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetCustomSheetViewsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-extension-list-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetExtensionListFixup(archive);
             return;
         }
 
@@ -2413,6 +2449,58 @@ internal static class XlsxCorpusFixtureFactory
                     new XAttribute("ySplit", "1"),
                     new XAttribute("topLeftCell", "B2"),
                     new XAttribute("activePane", "bottomRight")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetExtensionListFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+        XNamespace xmNs = "http://schemas.microsoft.com/office/excel/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetData").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "extLst").Remove();
+        worksheetXml.Root?.Add(
+            new XElement(
+                worksheetNs + "sheetData",
+                new XElement(
+                    worksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "A1"), new XElement(worksheetNs + "v", "1")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "B1"), new XElement(worksheetNs + "v", "2")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "C1"), new XElement(worksheetNs + "v", "3")))),
+            new XElement(
+                worksheetNs + "extLst",
+                new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}"),
+                    new XElement(
+                        x14Ns + "sparklineGroups",
+                        new XAttribute(XNamespace.Xmlns + "x14", x14Ns),
+                        new XAttribute(XNamespace.Xmlns + "xm", xmNs),
+                        new XElement(
+                            x14Ns + "sparklineGroup",
+                            new XAttribute("type", "column"),
+                            new XElement(
+                                x14Ns + "sparklines",
+                                new XElement(
+                                    x14Ns + "sparkline",
+                                    new XElement(xmNs + "f", "Sheet1!A1:C1"),
+                                    new XElement(xmNs + "sqref", "D1")))))),
+                new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{FFEEDDCC-BBAA-9988-7766-554433221100}"),
+                    new XElement(
+                        x15Ns + "futureMetadata",
+                        new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
+                        new XAttribute("name", "FreexcelUnknownWorksheetExtension")))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
