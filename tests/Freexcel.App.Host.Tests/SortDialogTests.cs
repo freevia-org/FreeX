@@ -113,6 +113,17 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void SortLevelsGrid_DeletesSelectedLevelWithDeleteKey()
+    {
+        var source = ReadSortDialogSource();
+
+        source.Should().Contain("_levelsGrid.KeyDown += LevelsGrid_KeyDown;");
+        source.Should().Contain("private void LevelsGrid_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("e.Key == Key.Delete");
+        source.Should().Contain("_deleteLevelButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));");
+    }
+
+    [Fact]
     public void ToolbarButtons_EnableOnlyValidLevelActions()
     {
         StaTestRunner.Run(() =>
