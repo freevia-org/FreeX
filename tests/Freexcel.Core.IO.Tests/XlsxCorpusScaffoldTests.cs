@@ -71,6 +71,15 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusPlan_DocumentsAllAllowedManifestStatuses()
+    {
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_TEST_CORPUS_PLAN.md"));
+
+        foreach (var status in AllowedStatuses)
+            plan.Should().Contain($"`{status}`");
+    }
+
+    [Fact]
     public void CorpusReport_PublishesWorkbookAndFeatureBucketPassRates()
     {
         var manifestRows = ReadManifestRows();
