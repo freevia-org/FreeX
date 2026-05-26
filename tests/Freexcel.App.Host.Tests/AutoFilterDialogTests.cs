@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
@@ -495,6 +496,41 @@ public sealed class AutoFilterDialogTests
             .Be(expected);
     }
 
+    [Fact]
+    public void TypedCriteriaResult_DrivesFilterConditionCommandRowVisibility()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(10));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+        var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
+            .Single(item => item.Label == "Greater Than");
+        var result = AutoFilterDialog.BuildResult(
+            AutoFilterSortDirection.None,
+            [
+                new AutoFilterDialogItem("5", "5", true),
+                new AutoFilterDialogItem("10", "10", true)
+            ],
+            "",
+            AutoFilterDialog.BuildCriteriaText(option, "7"));
+
+        FilterInputParser.TryParseCriterion(result.CriteriaText, out var criterion, out var error)
+            .Should()
+            .BeTrue(error);
+        new FilterConditionCommand(sheet.Id, range, 1, criterion!).Apply(new SimpleCtx(workbook))
+            .Success
+            .Should()
+            .BeTrue();
+
+        sheet.FilterHiddenRows.Should().Contain(2);
+        sheet.FilterHiddenRows.Should().NotContain(3);
+    }
+
     private static string ReadAutoFilterDialogSources()
     {
         return string.Join(
@@ -504,5 +540,11 @@ public sealed class AutoFilterDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Criteria.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.State.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialogModel.cs")));
-}
+    }
+
+    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
+    }
 }
