@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(5, "the generated metadata-pass manifest currently declares five deterministic package-retention rows");
+        rows.Should().HaveCount(6, "the generated metadata-pass manifest currently declares six deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -370,6 +370,45 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-custom-docprops-001");
         AssertCustomDocumentProperties(saved, "generated-custom-docprops-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedCalcChainRow_RetainsCalcChainAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-calc-chain-001");
+        AssertCalcChainReference(source, "generated-calc-chain-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-calc-chain-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-calc-chain-001");
+        AssertCalcChainReference(saved, "generated-calc-chain-001 saved");
+    }
+
+    private static void AssertCalcChainReference(Stream package, string because)
+    {
+        XNamespace calcNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var calcChain = LoadPackageXml(archive.GetEntry("xl/calcChain.xml")!);
+        calcChain.Root!.Name.Should().Be(calcNs + "calcChain", because);
+        calcChain.Root.Elements(calcNs + "c").Should().ContainSingle(because)
+            .Which.Attribute("r")!.Value.Should().Be("A1", because);
+
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "calcChain.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
     }
 
     private static void AssertCustomDocumentProperties(Stream package, string because)
@@ -2290,6 +2329,7 @@ public class XlsxCorpusRunnerTests
         path.StartsWith("xl/slicer", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/timeline", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/externalLinks/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/calcChain.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/connections.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/query", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/queries/", StringComparison.OrdinalIgnoreCase) ||

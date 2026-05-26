@@ -52,6 +52,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-sensitivity-labels-001" => true,
         "generated-smartart-diagrams-001" => true,
         "generated-printer-settings-001" => true,
+        "generated-calc-chain-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -145,6 +146,11 @@ internal static class XlsxCorpusFixtureFactory
             ("xl/diagrams/layout1.xml", "<dgm:layoutDef/>"),
             ("xl/diagrams/quickStyle1.xml", "<dgm:styleDef/>")),
         "generated-printer-settings-001" => CreatePackage(("xl/printerSettings/printerSettings1.bin", "Freexcel generated printer settings placeholder")),
+        "generated-calc-chain-001" => CreatePackage(("xl/calcChain.xml", """
+            <calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <c r="A1" i="1"/>
+            </calcChain>
+            """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -333,6 +339,7 @@ internal static class XlsxCorpusFixtureFactory
             "xl/diagrams/layout1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
             "xl/diagrams/quickStyle1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
             "xl/printerSettings/printerSettings1.bin" => "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings",
+            "xl/calcChain.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml",
             "xl/chartsheets/sheet1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml",
             "xl/dialogSheets/sheet2.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml",
             "xl/macroSheets/sheet3.xml" => "application/vnd.ms-excel.macrosheet+xml",
@@ -385,6 +392,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-printer-settings-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyPrinterSettingsReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-calc-chain-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCalcChainReferenceFixup(archive);
             return;
         }
 
@@ -610,6 +623,34 @@ internal static class XlsxCorpusFixtureFactory
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings",
             "../printerSettings/printerSettings1.bin");
         ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+    }
+
+    private static void ApplyCalcChainReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/calcChain.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelCalcChain1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
+            "calcChain.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
     }
 
     private static void ApplyCustomXmlReferenceFixup(ZipArchive archive)
