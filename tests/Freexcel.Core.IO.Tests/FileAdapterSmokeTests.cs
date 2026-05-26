@@ -16801,7 +16801,8 @@ public partial class FileAdapterSmokeTests
             {
                 NativeAttributes =
                 {
-                    ["unsupportedAttr"] = "kept"
+                    ["unsupportedAttr"] = "kept",
+                    ["invalid customPr attr"] = "skip"
                 },
                 NativeChildXmls =
                 [
@@ -16810,8 +16811,9 @@ public partial class FileAdapterSmokeTests
             }));
 
         var saved = new MemoryStream();
-        var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, saved);
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16826,6 +16828,7 @@ public partial class FileAdapterSmokeTests
         customProperty.Attribute("id")!.Value.Should().Be("7");
         customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept");
         customProperty.Elements(XName.Get("customPrChild", "urn:freexcel:test")).Should().ContainSingle();
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
