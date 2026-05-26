@@ -126,16 +126,7 @@ public partial class WorkbookThemeDialog : Window
     }
 
     private static CellColor ParsePreviewColor(string text)
-    {
-        try
-        {
-            return WorkbookThemeDialogColorCodec.ParseColor(text);
-        }
-        catch (FormatException)
-        {
-            return new CellColor(0, 0, 0);
-        }
-    }
+        => WorkbookThemeDialogPlanner.PreviewColorOrBlack(text);
 
     private static Color ToMediaColor(CellColor color) => Color.FromRgb(color.R, color.G, color.B);
 
@@ -147,42 +138,34 @@ public partial class WorkbookThemeDialog : Window
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        var colors = new Dictionary<WorkbookThemeColorSlot, CellColor>();
-        foreach (var field in ThemeColorFields())
-        {
-            if (!TryReadThemeColor(field.TextBox, out var color))
-                return;
+        var colorTextBySlot = ThemeColorFields()
+            .ToDictionary(field => field.Slot, field => field.TextBox.Text);
 
-            colors[field.Slot] = color;
-        }
-
-        var theme = WorkbookThemeWorkflow.CreateCustomTheme(
+        if (!WorkbookThemeDialogPlanner.TryCreateTheme(
             _initialTheme,
             ThemeNameBox.Text,
             HeadingFontBox.Text,
             BodyFontBox.Text,
-            EffectsBox.Text);
-        foreach (var field in ThemeColorFields())
-            theme = theme.WithColor(field.Slot, colors[field.Slot]);
+            EffectsBox.Text,
+            colorTextBySlot,
+            out var theme,
+            out var error))
+        {
+            if (error is not null)
+                ShowInvalidThemeColor(error);
+            return;
+        }
 
         ResultTheme = theme;
         DialogResult = true;
     }
 
-    private bool TryReadThemeColor(TextBox colorBox, out CellColor color)
+    private void ShowInvalidThemeColor(WorkbookThemeDialogValidationError error)
     {
-        try
-        {
-            color = WorkbookThemeDialogColorCodec.ParseColor(colorBox.Text);
-            return true;
-        }
-        catch (FormatException ex)
-        {
-            color = default;
-            MessageBox.Show(this, ex.Message, "Customize Theme", MessageBoxButton.OK, MessageBoxImage.Warning);
-            FocusInvalidColorInput(colorBox);
-            return false;
-        }
+        MessageBox.Show(this, error.Message, "Customize Theme", MessageBoxButton.OK, MessageBoxImage.Warning);
+        var field = ThemeColorFields().FirstOrDefault(field => field.Slot == error.Slot);
+        if (field.TextBox is not null)
+            FocusInvalidColorInput(field.TextBox);
     }
 
     private static void FocusInvalidColorInput(TextBox colorBox)
