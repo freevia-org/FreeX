@@ -5316,6 +5316,14 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Countblank_Range_IgnoresErrors()
+    {
+        var sheet = MakeSheet((1, 1, ErrorValue.NA), (2, 1, new TextValue("")));
+
+        _eval.Evaluate("=COUNTBLANK(A1:A2)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Rows_Range_ReturnsRangeHeight()
     {
         var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));

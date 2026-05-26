@@ -595,7 +595,7 @@ public sealed class FormulaEvaluator
     }
 
     private static bool IsSingleDirectRangeFastAggregate(string functionName)
-        => functionName is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT";
+        => functionName is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "COUNTBLANK";
 
     private static ScalarValue EvaluateSingleDirectRangeAggregate(string functionName, RangeRefNode range, IEvalContext context)
     {
@@ -613,6 +613,7 @@ public sealed class FormulaEvaluator
             "AVERAGE" => EvaluateSingleDirectRangeAverage(range.SheetName, r0, c0, r1, c1, context),
             "MIN" => EvaluateSingleDirectRangeMinMax(range.SheetName, r0, c0, r1, c1, context, findMax: false),
             "MAX" => EvaluateSingleDirectRangeMinMax(range.SheetName, r0, c0, r1, c1, context, findMax: true),
+            "COUNTBLANK" => EvaluateSingleDirectRangeCountBlank(range.SheetName, r0, c0, r1, c1, context),
             _ => EvaluateSingleDirectRangeCount(range.SheetName, r0, c0, r1, c1, context)
         };
     }
@@ -735,6 +736,31 @@ public sealed class FormulaEvaluator
                     ? context.GetCellValue(sheetName, row, col)
                     : context.GetCellValue(row, col);
                 if (value is NumberValue or DateTimeValue)
+                    count++;
+            }
+        }
+
+        return new NumberValue(count);
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeCountBlank(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context)
+    {
+        var count = 0;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+
+                if (value is BlankValue || value is TextValue { Value.Length: 0 })
                     count++;
             }
         }

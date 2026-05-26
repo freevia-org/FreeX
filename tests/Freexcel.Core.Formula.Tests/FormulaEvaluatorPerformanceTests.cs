@@ -75,6 +75,32 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
     }
 
+    [Fact]
+    public void CountblankSingleDirectRange_AvoidsRangeAndFlattenAllocations()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeCountBlankSheet();
+        const string formula = "=COUNTBLANK(A1:A100000)";
+        const double expected = 50_000d;
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+    }
+
     [Theory]
     [InlineData("=LARGE(A1:A100000,10)", 99_991d, 2_000_000)]
     [InlineData("=SMALL(A1:A100000,10)", 10d, 2_000_000)]
@@ -123,6 +149,28 @@ public sealed class FormulaEvaluatorPerformanceTests
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
             sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(row % 2 == 0 ? "A" : "B"));
             sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(row));
+        }
+
+        return sheet;
+    }
+
+    private static Sheet MakeCountBlankSheet()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= RowCount; row++)
+        {
+            switch (row % 4)
+            {
+                case 0:
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+                    break;
+                case 2:
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(""));
+                    break;
+                case 3:
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue("x"));
+                    break;
+            }
         }
 
         return sheet;

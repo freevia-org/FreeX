@@ -262,7 +262,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[0] is not RangeValue range) return ErrorValue.Value;
-        int count = range.Flatten().Count(v => v is BlankValue || v is TextValue { Value.Length: 0 });
+        int count = 0;
+        for (int r = 0; r < range.RowCount; r++)
+        {
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                if (value is BlankValue || value is TextValue { Value.Length: 0 }) count++;
+            }
+        }
+
         return new NumberValue(count);
     }
 
