@@ -109,6 +109,8 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Clipboard", RibbonCommandIconKind.Paste)]
     [InlineData("Font", RibbonCommandIconKind.Font)]
     [InlineData("Editing", RibbonCommandIconKind.Search)]
+    [InlineData("Tools", RibbonCommandIconKind.Search)]
+    [InlineData("Pens", RibbonCommandIconKind.Line)]
     [InlineData("Convert", RibbonCommandIconKind.Math)]
     [InlineData("Help", RibbonCommandIconKind.Help)]
     [InlineData("Unknown", RibbonCommandIconKind.Generic)]

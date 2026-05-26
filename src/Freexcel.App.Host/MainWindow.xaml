@@ -1810,28 +1810,49 @@
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Draw ▌ -->
+                        <!-- ▌Tools ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Rectangle" Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawRectBtn_Click"
-                                        local:RibbonTooltip.Title="Rectangle"
-                                        local:RibbonTooltip.KeyTip="RE"
-                                        local:RibbonTooltip.Description="Draw a rectangle shape on the sheet."/>
-                                <Button Content="Ellipse"   Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawEllipseBtn_Click"
-                                        local:RibbonTooltip.Title="Ellipse"
+                                <Button Content="Draw" Width="78" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Draw with Touch"
+                                        local:RibbonTooltip.KeyTip="DT"
+                                        local:RibbonTooltip.Description="Draw ink with touch or a pen. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Eraser" Width="78" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Eraser"
                                         local:RibbonTooltip.KeyTip="E"
-                                        local:RibbonTooltip.Description="Draw an ellipse or circle on the sheet."/>
-                                <Button Content="Line"      Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawLineBtn_Click"
-                                        local:RibbonTooltip.Title="Line"
-                                        local:RibbonTooltip.KeyTip="L"
-                                        local:RibbonTooltip.Description="Draw a straight line on the sheet."/>
-                                <Button Content="Text Box"  Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawTextBtn_Click"
-                                        local:RibbonTooltip.Title="Text Box"
-                                        local:RibbonTooltip.KeyTip="X"
-                                        local:RibbonTooltip.Description="Insert a text box you can position and resize anywhere on the sheet."/>
+                                        local:RibbonTooltip.Description="Erase ink strokes. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Lasso Select" Width="92" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Lasso Select"
+                                        local:RibbonTooltip.KeyTip="LS"
+                                        local:RibbonTooltip.Description="Select ink strokes with a freeform lasso. Ink authoring is deferred in Freexcel."/>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Draw" Style="{StaticResource GroupLbl}"/></Border>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Tools" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Pens ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Pen" Width="62" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Pen"
+                                        local:RibbonTooltip.KeyTip="P"
+                                        local:RibbonTooltip.Description="Draw with a pen. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Pencil" Width="62" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Pencil"
+                                        local:RibbonTooltip.KeyTip="PC"
+                                        local:RibbonTooltip.Description="Draw with a pencil. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Highlighter" Width="82" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Highlighter"
+                                        local:RibbonTooltip.KeyTip="H"
+                                        local:RibbonTooltip.Description="Highlight with translucent ink. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Add Pen" Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Add Pen"
+                                        local:RibbonTooltip.KeyTip="AP"
+                                        local:RibbonTooltip.Description="Add another pen to the gallery. Ink authoring is deferred in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Pens" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 

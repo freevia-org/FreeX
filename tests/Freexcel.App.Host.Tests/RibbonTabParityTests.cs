@@ -65,13 +65,29 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var drawTab = ExtractTabXaml(xaml, "Draw", "Page Layout");
+        var toolsGroup = ExtractGroupXaml(drawTab, "Tools");
+        var pensGroup = ExtractGroupXaml(drawTab, "Pens");
 
         ExtractGroupLabels(drawTab).Should().Equal(
-            "Draw",
+            "Tools",
+            "Pens",
             "Convert",
             "Arrange",
             "Format");
 
+        ExtractTooltipTitles(toolsGroup).Should().ContainInOrder(
+            "Draw with Touch",
+            "Eraser",
+            "Lasso Select");
+        ExtractTooltipTitles(pensGroup).Should().ContainInOrder(
+            "Pen",
+            "Pencil",
+            "Highlighter",
+            "Add Pen");
+        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Rectangle\"");
+        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Ellipse\"");
+        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Line\"");
+        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Text Box\"");
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Shape\"");
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Math\"");
         ExtractGroupXaml(drawTab, "Format").Should().Contain("local:RibbonTooltip.Title=\"Shape Fill\"");
