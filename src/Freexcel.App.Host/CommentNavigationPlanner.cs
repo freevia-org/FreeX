@@ -59,6 +59,20 @@ public static class CommentNavigationPlanner
         return string.Join(" | ", parts);
     }
 
+    public static string? FormatCellCommentPreview(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
+        CellAddress address)
+    {
+        var parts = new List<string>();
+        if (comments.TryGetValue(address, out var note))
+            parts.Add($"Note: {note}");
+        if (threadedComments.TryGetValue(address, out var thread))
+            parts.Add(FormatThreadedComment(thread));
+
+        return parts.Count == 0 ? null : string.Join(Environment.NewLine, parts);
+    }
+
     private static IEnumerable<string> GetCommentListLines(
         IReadOnlyDictionary<CellAddress, string> comments,
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,

@@ -55,6 +55,29 @@ public partial class FileAdapterSmokeTests
         ls2.GetCell(1, 1)!.FormulaText.Should().Be("A1+1");
     }
 
+    [Fact]
+    public void NativeJsonAdapter_SaveThenResolveOpenAdapterAndReload()
+    {
+        var workbook = new Workbook("ResolvableNative");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Saved"));
+
+        using var stream = new MemoryStream();
+        var saveAdapter = new NativeJsonAdapter();
+        saveAdapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var openAdapter = FileDialogFilterBuilder.FindOpenAdapter(
+            [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new NativeJsonAdapter()],
+            ".fxl",
+            out var format);
+
+        openAdapter.Should().BeOfType<NativeJsonAdapter>();
+        format!.Extension.Should().Be(".fxl");
+        var loaded = openAdapter!.Load(stream);
+        loaded.GetSheetAt(0).GetCell(1, 1).Should().NotBeNull();
+    }
+
     // ── XLSX ──────────────────────────────────────────────────────────────────
 
     [Fact]
