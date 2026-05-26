@@ -70,6 +70,22 @@ public sealed class FileDialogFilterBuilderTests
     }
 
     [Fact]
+    public void BuildFilters_NormalizeIndividualFormatExtensions()
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new FakeAdapter([
+                new FileFormatDescriptor("csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true)
+            ])
+        };
+
+        FileDialogFilterBuilder.BuildOpenFilter(adapters)
+            .Should().Contain("CSV (Comma-separated values) (*.csv)|*.csv");
+        FileDialogFilterBuilder.BuildSaveFilter(adapters)
+            .Should().Be("CSV (Comma-separated values) (*.csv)|*.csv");
+    }
+
+    [Fact]
     public void BuildOpenFilter_RealAdaptersExposeExcelOpenAliases()
     {
         var filter = FileDialogFilterBuilder.BuildOpenFilter(

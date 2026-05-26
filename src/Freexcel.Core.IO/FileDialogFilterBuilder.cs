@@ -20,7 +20,11 @@ public static class FileDialogFilterBuilder
             parts.Add($"All supported files ({allSupported})|{allSupported}");
         }
 
-        parts.AddRange(formats.Select(format => $"{format.FormatName} (*{format.Extension})|*{format.Extension}"));
+        parts.AddRange(formats.Select(format =>
+        {
+            var extension = FileFormatResolver.NormalizeExtension(format.Extension);
+            return $"{format.FormatName} (*{extension})|*{extension}";
+        }));
         parts.Add("All files (*.*)|*.*");
         return string.Join('|', parts);
     }
@@ -30,7 +34,11 @@ public static class FileDialogFilterBuilder
         var parts = adapters
             .SelectMany(adapter => adapter.Formats)
             .Where(format => format.CanSave)
-            .Select(format => $"{format.FormatName} (*{format.Extension})|*{format.Extension}");
+            .Select(format =>
+            {
+                var extension = FileFormatResolver.NormalizeExtension(format.Extension);
+                return $"{format.FormatName} (*{extension})|*{extension}";
+            });
 
         return string.Join('|', parts);
     }
