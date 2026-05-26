@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(9, "the generated metadata-pass manifest currently declares nine deterministic package-retention rows");
+        rows.Should().HaveCount(10, "the generated metadata-pass manifest currently declares ten deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -442,6 +442,42 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-workbook-extension-list-001");
         AssertWorkbookExtensionList(saved, "generated-workbook-extension-list-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetIgnoredErrorsRow_RetainsIgnoredErrorsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-ignored-errors-001");
+        AssertWorksheetIgnoredErrors(source, "generated-worksheet-ignored-errors-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-ignored-errors-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-ignored-errors-001");
+        AssertWorksheetIgnoredErrors(saved, "generated-worksheet-ignored-errors-001 saved");
+    }
+
+    private static void AssertWorksheetIgnoredErrors(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var ignoredError = worksheetXml.Root!
+            .Element(worksheetNs + "ignoredErrors")!
+            .Elements(worksheetNs + "ignoredError")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+
+        ignoredError.Attribute("sqref")!.Value.Should().Be("A1", because);
+        ignoredError.Attribute("numberStoredAsText")!.Value.Should().Be("1", because);
+        ignoredError.Attribute("twoDigitTextYear")!.Value.Should().Be("1", because);
     }
 
     private static void AssertWorkbookExtensionList(Stream package, string because)
@@ -2463,6 +2499,7 @@ public class XlsxCorpusRunnerTests
     private static bool IsFidelityCriticalPart(string path) =>
         path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) ||
