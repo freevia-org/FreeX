@@ -252,6 +252,16 @@ public class PhaseA2FunctionTests
         _eval.Evaluate("=CELL(\"bogus\",A1)", sheet, wb).Should().Be(ErrorValue.Value);
     }
 
+    [Theory]
+    [InlineData("=CELL(\"address\",1+1)")]
+    [InlineData("=CELL(\"contents\",\"x\")")]
+    public void Cell_NonReferenceSecondArgument_ReturnsValueError(string formula)
+    {
+        var (wb, sheet) = MakeWb();
+
+        _eval.Evaluate(formula, sheet, wb).Should().Be(ErrorValue.Value);
+    }
+
     [Fact]
     public void Cell_Width_ReturnsColumnWidth()
     {
