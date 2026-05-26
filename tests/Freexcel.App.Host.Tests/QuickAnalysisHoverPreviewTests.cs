@@ -28,5 +28,6 @@ public sealed class QuickAnalysisHoverPreviewTests
         source.Should().Contain("SheetGrid.QuickAnalysisPreviewVisual = MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind)");
         source.Should().Contain("SheetGrid.QuickAnalysisPreviewVisual = GridQuickAnalysisPreviewVisualKind.None");
         source.Should().Contain("private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(");
+        source.Should().Contain("QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale");
     }
 }

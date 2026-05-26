@@ -331,7 +331,10 @@ public partial class MainWindow
     }
 
     private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind kind) =>
-        kind == QuickAnalysisPreviewVisualKind.DataBars
-            ? GridQuickAnalysisPreviewVisualKind.DataBars
-            : GridQuickAnalysisPreviewVisualKind.None;
+        kind switch
+        {
+            QuickAnalysisPreviewVisualKind.DataBars => GridQuickAnalysisPreviewVisualKind.DataBars,
+            QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale,
+            _ => GridQuickAnalysisPreviewVisualKind.None
+        };
 }
