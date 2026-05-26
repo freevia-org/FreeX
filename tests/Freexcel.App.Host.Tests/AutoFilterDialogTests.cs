@@ -8,6 +8,18 @@ namespace Freexcel.App.Host.Tests;
 public sealed class AutoFilterDialogTests
 {
     [Fact]
+    public void DialogLayout_ScrollsWhenTypedFilterControlsAreVisible()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+
+        source.Should().Contain("var scrollViewer = new ScrollViewer");
+        source.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
+        source.Should().Contain("DockPanel.SetDock(buttons, Dock.Bottom)");
+        source.Should().Contain("root.Children.Add(buttons)");
+        source.Should().Contain("scrollViewer.Content = stack");
+    }
+
+    [Fact]
     public void FilterItems_ReturnsSearchMatchesWithoutChangingSelection()
     {
         var items = new[]
