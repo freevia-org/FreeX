@@ -5466,6 +5466,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Row_NoArgument_ReturnsCurrentCellRow()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=ROW()", sheet, currentCell: new CellAddress(sheet.Id, 7, 4))
+            .Should().Be(new NumberValue(7));
+    }
+
+    [Fact]
     public void Column_Range_ReturnsFirstColumn()
     {
         var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));
@@ -5479,6 +5488,15 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((5, 2, new NumberValue(1)));
 
         _eval.Evaluate("=COLUMN(B5)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Column_NoArgument_ReturnsCurrentCellColumn()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=COLUMN()", sheet, currentCell: new CellAddress(sheet.Id, 7, 4))
+            .Should().Be(new NumberValue(4));
     }
 
     [Fact] public void Replace_Middle_ReplacesCorrectly() =>
