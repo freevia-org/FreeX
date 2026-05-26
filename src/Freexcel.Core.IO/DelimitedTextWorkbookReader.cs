@@ -294,7 +294,25 @@ internal static partial class DelimitedTextWorkbookReader
             DateTimeFormats,
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
-            out dateTime);
+            out dateTime) ||
+            TryParseIsoDateTimeOffset(trimmed, out dateTime);
+    }
+
+    private static bool TryParseIsoDateTimeOffset(string field, out DateTime dateTime)
+    {
+        if (DateTimeOffset.TryParseExact(
+            field,
+            DateTimeOffsetFormats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var offset))
+        {
+            dateTime = offset.UtcDateTime;
+            return true;
+        }
+
+        dateTime = default;
+        return false;
     }
 
     private static bool TryParseTime(string field, out TimeSpan time)
