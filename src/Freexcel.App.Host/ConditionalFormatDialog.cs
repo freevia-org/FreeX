@@ -267,7 +267,7 @@ public partial class ConditionalFormatDialog : Window
         _colorBox.SelectedIndex = 0;
         var formatButton = new Button
         {
-            Content = "Format...",
+            Content = "_Format...",
             Width = 84,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 12),
@@ -644,7 +644,7 @@ public partial class ConditionalFormatDialog : Window
         _colorBox.SelectedIndex = 0;
         var formatButton = new Button
         {
-            Content = "Format...",
+            Content = "_Format...",
             Width = 84,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 12),
