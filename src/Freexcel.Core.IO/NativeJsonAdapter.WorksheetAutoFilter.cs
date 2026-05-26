@@ -38,6 +38,18 @@ public sealed partial class NativeJsonAdapter
                     column.CustomFiltersAnd,
                     column.CustomFiltersAndRaw,
                     CleanNativeAttributes(column.NativeCustomFiltersAttributes),
+                    column.Top10 is null
+                        ? null
+                        : new WorksheetAutoFilterTop10Model(
+                            column.Top10.Top,
+                            column.Top10.Percent,
+                            column.Top10.Value,
+                            column.Top10.FilterValue,
+                            column.Top10.TopRaw,
+                            column.Top10.PercentRaw,
+                            column.Top10.ValueRaw,
+                            column.Top10.FilterValueRaw,
+                            CleanNativeAttributes(column.Top10.NativeAttributes)),
                     column.NativeFilterXmls?.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToArray() ?? [],
                     CleanNativeAttributes(column.NativeAttributes)));
             }
@@ -71,6 +83,20 @@ public sealed partial class NativeJsonAdapter
                     CustomFiltersAnd = column.CustomFiltersAnd,
                     CustomFiltersAndRaw = column.CustomFiltersAndRaw,
                     NativeCustomFiltersAttributes = CleanNativeAttributesForSave(column.NativeCustomFiltersAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)),
+                    Top10 = column.Top10 is null
+                        ? null
+                        : new WorksheetAutoFilterTop10Dto
+                        {
+                            Top = column.Top10.Top,
+                            Percent = column.Top10.Percent,
+                            Value = column.Top10.Value,
+                            FilterValue = column.Top10.FilterValue,
+                            TopRaw = column.Top10.TopRaw,
+                            PercentRaw = column.Top10.PercentRaw,
+                            ValueRaw = column.Top10.ValueRaw,
+                            FilterValueRaw = column.Top10.FilterValueRaw,
+                            NativeAttributes = CleanNativeAttributesForSave(column.Top10.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
+                        },
                     NativeFilterXmls = column.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToList(),
                     NativeAttributes = CleanNativeAttributesForSave(column.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
                 }).ToList()
