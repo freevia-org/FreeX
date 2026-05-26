@@ -23,6 +23,37 @@ public sealed class DataBarConditionalFormatCloneTests
     }
 
     [Fact]
+    public void PasteConditionalFormatsCommand_PreservesColorScaleGteThresholds()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinThresholdType = CfThresholdType.Number,
+            MinThresholdValue = "0",
+            MinThresholdGreaterThanOrEqual = false,
+            MidThresholdType = CfThresholdType.Percentile,
+            MidThresholdValue = "50",
+            MidThresholdGreaterThanOrEqual = true,
+            MaxThresholdType = CfThresholdType.Number,
+            MaxThresholdValue = "100",
+            MaxThresholdGreaterThanOrEqual = false
+        });
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1));
+
+        new PasteConditionalFormatsCommand(sheet.Id, sourceRange, new CellAddress(sheet.Id, 10, 3), transpose: false)
+            .Apply(new SimpleContext(workbook));
+
+        var pasted = sheet.ConditionalFormats.Should().HaveCount(2).And.Subject.Last();
+        pasted.MinThresholdGreaterThanOrEqual.Should().BeFalse();
+        pasted.MidThresholdGreaterThanOrEqual.Should().BeTrue();
+        pasted.MaxThresholdGreaterThanOrEqual.Should().BeFalse();
+    }
+
+    [Fact]
     public void PasteConditionalFormatsCommand_DropsExistingX14IdNativeChild()
     {
         var workbook = new Workbook("Book1");

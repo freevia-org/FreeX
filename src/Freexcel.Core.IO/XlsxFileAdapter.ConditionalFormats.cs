@@ -384,6 +384,7 @@ public sealed partial class XlsxFileAdapter
         {
             format.MinThresholdType = value.Type;
             format.MinThresholdValue = value.Value;
+            format.MinThresholdGreaterThanOrEqual = value.GreaterThanOrEqual;
         });
         ApplyThreshold(thresholds.ElementAtOrDefault(1), value =>
         {
@@ -391,11 +392,13 @@ public sealed partial class XlsxFileAdapter
             {
                 format.MidThresholdType = value.Type;
                 format.MidThresholdValue = value.Value;
+                format.MidThresholdGreaterThanOrEqual = value.GreaterThanOrEqual;
             }
             else
             {
                 format.MaxThresholdType = value.Type;
                 format.MaxThresholdValue = value.Value;
+                format.MaxThresholdGreaterThanOrEqual = value.GreaterThanOrEqual;
             }
         });
         if (format.UseThreeColorScale)
@@ -404,6 +407,7 @@ public sealed partial class XlsxFileAdapter
             {
                 format.MaxThresholdType = value.Type;
                 format.MaxThresholdValue = value.Value;
+                format.MaxThresholdGreaterThanOrEqual = value.GreaterThanOrEqual;
             });
         }
 
@@ -462,11 +466,16 @@ public sealed partial class XlsxFileAdapter
         return format;
     }
 
-    private static void ApplyThreshold(XElement? element, Action<(CfThresholdType Type, string? Value)> apply)
+    private static void ApplyThreshold(
+        XElement? element,
+        Action<(CfThresholdType Type, string? Value, bool? GreaterThanOrEqual)> apply)
     {
         if (element is null)
             return;
-        apply((FromCfvoType(element.Attribute("type")?.Value), element.Attribute("val")?.Value));
+        apply((
+            FromCfvoType(element.Attribute("type")?.Value),
+            element.Attribute("val")?.Value,
+            XlsxXmlAttributeReader.ReadNullableBoolAttribute(element, "gte")));
     }
 
     private static IReadOnlyList<CfThresholdModel> ReadCfvoThresholds(XElement parent, XNamespace worksheetNs) =>
@@ -507,10 +516,13 @@ public sealed partial class XlsxFileAdapter
             UseThreeColorScale = source.UseThreeColorScale,
             MinThresholdType = source.MinThresholdType,
             MinThresholdValue = source.MinThresholdValue,
+            MinThresholdGreaterThanOrEqual = source.MinThresholdGreaterThanOrEqual,
             MidThresholdType = source.MidThresholdType,
             MidThresholdValue = source.MidThresholdValue,
+            MidThresholdGreaterThanOrEqual = source.MidThresholdGreaterThanOrEqual,
             MaxThresholdType = source.MaxThresholdType,
             MaxThresholdValue = source.MaxThresholdValue,
+            MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
             DataBarColor = source.DataBarColor,
             DataBarMinThresholdType = source.DataBarMinThresholdType,
             DataBarMinThresholdValue = source.DataBarMinThresholdValue,
