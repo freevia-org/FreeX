@@ -93,10 +93,9 @@ public sealed class RibbonTabParityTests
         ExtractTooltipTitles(pageSetupGroup).Should().ContainInOrder(
             "Margins",
             "Orientation",
-            "Size",
+            "Paper Size",
             "Print Area",
             "Breaks");
-        ExtractTooltipTitles(pageSetupGroup).Should().NotContain("Paper Size");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Bring Forward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Send Backward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Selection Pane\"");
