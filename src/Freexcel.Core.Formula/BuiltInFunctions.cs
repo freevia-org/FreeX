@@ -740,14 +740,17 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue RandArray(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        foreach (var arg in args)
-            if (arg is ErrorValue e) return e;
+        if (!TryGetScalarControlArgument(args.Count > 0 ? args[0] : BlankValue.Instance, out var rowsArg, out var rowsError)) return rowsError;
+        if (!TryGetScalarControlArgument(args.Count > 1 ? args[1] : BlankValue.Instance, out var colsArg, out var colsError)) return colsError;
+        if (!TryGetScalarControlArgument(args.Count > 2 ? args[2] : BlankValue.Instance, out var minArg, out var minError)) return minError;
+        if (!TryGetScalarControlArgument(args.Count > 3 ? args[3] : BlankValue.Instance, out var maxArg, out var maxError)) return maxError;
+        if (!TryGetScalarControlArgument(args.Count > 4 ? args[4] : BlankValue.Instance, out var wholeNumberArg, out var wholeNumberError)) return wholeNumberError;
 
-        double rowsD = args.Count > 0 && args[0] is not BlankValue ? ToNumber(args[0]) : 1;
-        double colsD = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
-        double min = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
-        double max = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
-        bool wholeNumber = args.Count > 4 && args[4] is not BlankValue && ToBool(args[4]);
+        double rowsD = rowsArg is not BlankValue ? ToNumber(rowsArg) : 1;
+        double colsD = colsArg is not BlankValue ? ToNumber(colsArg) : 1;
+        double min = minArg is not BlankValue ? ToNumber(minArg) : 0;
+        double max = maxArg is not BlankValue ? ToNumber(maxArg) : 1;
+        bool wholeNumber = wholeNumberArg is not BlankValue && ToBool(wholeNumberArg);
 
         if (!double.IsFinite(rowsD) || !double.IsFinite(colsD)) return ErrorValue.Value;
         int rows = (int)rowsD;

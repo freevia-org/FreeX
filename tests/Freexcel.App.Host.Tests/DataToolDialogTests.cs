@@ -880,6 +880,50 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void MainWindow_WiresAdvancedFilterReferencePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new AdvancedFilterDialog(");
+        source.Should().Contain("ResolveSheetIdByName,");
+        source.Should().Contain("request => ApplyAdvancedFilterRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyAdvancedFilterRangeSelection(");
+        source.Should().Contain("AdvancedFilterRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
+    public void AdvancedFilterApplyRangeSelection_UpdatesRequestedReferenceBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AdvancedFilterDialog(SheetId.New(), "A1:C12");
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                dialog.ApplyRangeSelection(AdvancedFilterRangeSelectionTarget.ListRange, "Sheet2!A1:D20");
+                dialog.ApplyRangeSelection(AdvancedFilterRangeSelectionTarget.CriteriaRange, "E1:F4");
+                dialog.ApplyRangeSelection(AdvancedFilterRangeSelectionTarget.CopyTo, "H1:J1");
+
+                textBoxes[0].Text.Should().Be("Sheet2!A1:D20");
+                textBoxes[1].Text.Should().Be("E1:F4");
+                textBoxes[2].Text.Should().Be("H1:J1");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")

@@ -16185,10 +16185,15 @@ public partial class FileAdapterSmokeTests
             SortBy = "cellColor",
             NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
         });
+        loadedSortState.NativeAttributes["invalid sortState attr"] = "skip";
+        loadedSortState.Conditions[0].NativeAttributes["invalid sortCondition attr"] = "skip";
+        loadedSortState.NativeXml = null;
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16201,6 +16206,7 @@ public partial class FileAdapterSmokeTests
         sortState.ToString().Should().Contain("descending=\"1\"");
         sortState.ToString().Should().Contain("sortBy=\"cellColor\"");
         sortState.ToString().Should().Contain("customSortConditionFlag=\"keep\"");
+        sortState.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
