@@ -18,6 +18,7 @@ public sealed class ScenarioManagerDialog : Window
     private readonly ListBox _scenarioList = new();
     private readonly TextBox _newNameBox = new();
     private readonly TextBox _changingCellsBox = new();
+    private readonly TextBox _resultCellsBox = new();
     private readonly TextBox _commentBox = new();
     private readonly CheckBox _lockedBox = new() { Content = "_Prevent changes", Margin = new Thickness(0, 0, 0, 6) };
     private readonly CheckBox _hiddenBox = new() { Content = "_Hide", Margin = new Thickness(0, 0, 0, 8) };
@@ -32,6 +33,7 @@ public sealed class ScenarioManagerDialog : Window
     public string? SelectedScenarioName { get; private set; }
     public string? NewScenarioName { get; private set; }
     public string? ChangingCellsText { get; private set; }
+    public string? ResultCellsText { get; private set; }
     public string? CommentText { get; private set; }
     public bool ScenarioHidden { get; private set; }
     public bool ScenarioLocked { get; private set; }
@@ -45,7 +47,7 @@ public sealed class ScenarioManagerDialog : Window
         _resolveSheetIdByName = resolveSheetIdByName;
         Title = "Scenario Manager";
         Width = 360;
-        Height = 390;
+        Height = 420;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -87,6 +89,7 @@ public sealed class ScenarioManagerDialog : Window
         fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
         fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         editor.Content = fields;
@@ -94,9 +97,10 @@ public sealed class ScenarioManagerDialog : Window
         AddField(fields, row: 0, "Scenario _name:", _newNameBox);
         _newNameBox.Text = _defaultScenarioName;
         AddField(fields, row: 1, "Changing _cells:", _changingCellsBox);
-        AddField(fields, row: 2, "_Comment:", _commentBox);
-        AddCheckBox(fields, row: 3, _lockedBox);
-        AddCheckBox(fields, row: 4, _hiddenBox);
+        AddField(fields, row: 2, "_Result cells:", _resultCellsBox);
+        AddField(fields, row: 3, "_Comment:", _commentBox);
+        AddCheckBox(fields, row: 4, _lockedBox);
+        AddCheckBox(fields, row: 5, _hiddenBox);
 
         var sideButtons = new StackPanel { Margin = new Thickness(10, 20, 0, 0) };
         Grid.SetColumn(sideButtons, 1);
@@ -183,6 +187,30 @@ public sealed class ScenarioManagerDialog : Window
         return false;
     }
 
+    public static bool TryValidateResultCells(
+        string? resultCellsText,
+        SheetId? currentSheetId,
+        Func<string, SheetId?>? resolveSheetIdByName,
+        out string? error)
+    {
+        if (string.IsNullOrWhiteSpace(resultCellsText))
+        {
+            error = null;
+            return true;
+        }
+
+        if (currentSheetId is not null &&
+            resolveSheetIdByName is not null &&
+            WorkbookRangeTextCodec.TryParse(currentSheetId.Value, resultCellsText, resolveSheetIdByName, out _))
+        {
+            error = null;
+            return true;
+        }
+
+        error = "Enter a valid result cells reference.";
+        return false;
+    }
+
     public static string FormatScenarioChangingCells(Workbook workbook, WorkbookScenario scenario)
     {
         if (scenario.ChangingCells.Count == 0)
@@ -247,6 +275,7 @@ public sealed class ScenarioManagerDialog : Window
         {
             _newNameBox.Text = selected.Name;
             _changingCellsBox.Text = selected.ChangingCellsText;
+            _resultCellsBox.Text = "";
             _commentBox.Text = selected.Comment ?? "";
             _lockedBox.IsChecked = selected.Locked;
             _hiddenBox.IsChecked = selected.Hidden;
@@ -255,6 +284,7 @@ public sealed class ScenarioManagerDialog : Window
         {
             _newNameBox.Text = _defaultScenarioName;
             _changingCellsBox.Text = "";
+            _resultCellsBox.Text = "";
             _commentBox.Text = "";
             _lockedBox.IsChecked = false;
             _hiddenBox.IsChecked = false;
@@ -281,10 +311,18 @@ public sealed class ScenarioManagerDialog : Window
             return;
         }
 
+        if (action is ScenarioManagerAction.Report &&
+            !TryValidateResultCells(_resultCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error))
+        {
+            ShowInvalidInputWarning(error ?? "Enter scenario result cells.", _resultCellsBox);
+            return;
+        }
+
         SelectedAction = action;
         SelectedScenarioName = (_scenarioList.SelectedItem as ScenarioManagerItem)?.Name;
         NewScenarioName = _newNameBox.Text;
         ChangingCellsText = _changingCellsBox.Text;
+        ResultCellsText = _resultCellsBox.Text;
         CommentText = _commentBox.Text;
         ScenarioLocked = _lockedBox.IsChecked == true;
         ScenarioHidden = _hiddenBox.IsChecked == true;
