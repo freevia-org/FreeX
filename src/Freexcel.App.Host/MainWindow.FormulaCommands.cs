@@ -81,7 +81,12 @@ public partial class MainWindow
     private void DefineNameBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new NamedRangeDialog(_workbook, _commandBus, range)
+        NamedRangeDialog? dialog = null;
+        dialog = new NamedRangeDialog(
+            _workbook,
+            _commandBus,
+            range,
+            request => ApplyNamedRangeSelection(dialog, request))
         {
             Owner = this
         };
@@ -445,4 +450,29 @@ public partial class MainWindow
     private void Formula_ROUND_Click(object sender, RoutedEventArgs e)   => InsertFormulaFunction("ROUND");
     private void Formula_ABS_Click(object sender, RoutedEventArgs e)     => InsertFormulaFunction("ABS");
     private void Formula_SQRT_Click(object sender, RoutedEventArgs e)    => InsertFormulaFunction("SQRT");
+
+    private void ApplyNamedRangeSelection(
+        NamedRangeDialog? dialog,
+        NamedRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
 }
