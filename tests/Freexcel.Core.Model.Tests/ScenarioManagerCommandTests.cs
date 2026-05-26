@@ -32,6 +32,28 @@ public sealed class ScenarioManagerCommandTests
     }
 
     [Fact]
+    public void SaveScenarioCommand_PreservesHiddenAndLockedFlags()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        var command = new SaveScenarioCommand(
+            "Best Case",
+            [new ScenarioCellValue(address, new NumberValue(42))],
+            "Optimistic assumptions",
+            hidden: true,
+            locked: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        workbook.Scenarios.Should().ContainSingle();
+        workbook.Scenarios[0].Hidden.Should().BeTrue();
+        workbook.Scenarios[0].Locked.Should().BeTrue();
+    }
+
+    [Fact]
     public void SaveScenarioCommand_ReplacesExistingScenarioAndUndoRestoresIt()
     {
         var workbook = new Workbook("test");

@@ -11,9 +11,19 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
 
     public string Label => "Save Scenario";
 
-    public SaveScenarioCommand(string name, IReadOnlyList<ScenarioCellValue> changingCells, string? comment = null)
+    public SaveScenarioCommand(
+        string name,
+        IReadOnlyList<ScenarioCellValue> changingCells,
+        string? comment = null,
+        bool hidden = false,
+        bool locked = false)
     {
-        _scenario = new WorkbookScenario(name.Trim(), changingCells.ToList(), string.IsNullOrWhiteSpace(comment) ? null : comment.Trim());
+        _scenario = new WorkbookScenario(
+            name.Trim(),
+            changingCells.ToList(),
+            string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
+            hidden,
+            locked);
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
