@@ -59,7 +59,7 @@ public static partial class NumberFormatter
         return value switch
         {
             NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters, indexedColors),
-            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections, indexedColors),
+            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections, targetWidthCharacters, indexedColors),
             TextValue t     => FormatTextWithColor(t.Value, sections, indexedColors),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
             ErrorValue e    => new FormatResult(e.Code),
