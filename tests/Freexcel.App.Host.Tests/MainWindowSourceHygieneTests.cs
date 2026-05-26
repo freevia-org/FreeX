@@ -1605,7 +1605,8 @@ public sealed class MainWindowSourceHygieneTests
         sheetTabsSource.Should().Contain("Key.Right => FocusAdjacentVisibleSheetTab(1)");
         sheetTabsSource.Should().Contain("Key.Home => FocusEdgeVisibleSheetTab(first: true)");
         sheetTabsSource.Should().Contain("Key.End => FocusEdgeVisibleSheetTab(first: false)");
-        sheetTabsSource.Should().Contain("FocusSheetTab(tab.Id);");
+        sheetTabsSource.Should().Contain("FocusSheetTab(nextSheetId.Value);");
+        sheetTabsSource.Should().Contain("FocusSheetTab(sheetId.Value);");
     }
 
     [Fact]
