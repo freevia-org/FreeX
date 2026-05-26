@@ -11,7 +11,10 @@ public sealed partial class XlsxFileAdapter
         {
             var fingerprint = CreateModelFingerprint(workbook);
             if (stream.TryGetBuffer(out var buffer))
-                return new XlsxSourcePackage(buffer.Array!, buffer.Offset, buffer.Count, fingerprint);
+            {
+                var copiedBytes = buffer.AsSpan(0, buffer.Count).ToArray();
+                return new XlsxSourcePackage(copiedBytes, 0, copiedBytes.Length, fingerprint);
+            }
 
             var bytes = new byte[stream.Length];
             var previousPosition = stream.Position;
