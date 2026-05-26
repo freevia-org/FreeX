@@ -16,6 +16,7 @@ public sealed record WorksheetAutoFilterColumnModel
     public bool CustomFiltersAnd { get; init; }
     public string? CustomFiltersAndRaw { get; init; }
     public IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes { get; init; }
+    public WorksheetAutoFilterTop10Model? Top10 { get; init; }
     public IReadOnlyList<string> NativeFilterXmls { get; init; }
     public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
 
@@ -30,6 +31,7 @@ public sealed record WorksheetAutoFilterColumnModel
             IncludeBlank,
             [],
             false,
+            null,
             null,
             null,
             string.IsNullOrWhiteSpace(NativeFilterXml) ? [] : [NativeFilterXml],
@@ -49,6 +51,7 @@ public sealed record WorksheetAutoFilterColumnModel
             IncludeBlank,
             [],
             false,
+            null,
             null,
             null,
             NativeFilterXmls,
@@ -73,6 +76,7 @@ public sealed record WorksheetAutoFilterColumnModel
             CustomFiltersAnd,
             null,
             NativeCustomFiltersAttributes,
+            null,
             NativeFilterXmls,
             NativeAttributes)
     {
@@ -86,6 +90,7 @@ public sealed record WorksheetAutoFilterColumnModel
         bool CustomFiltersAnd,
         string? CustomFiltersAndRaw,
         IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes,
+        WorksheetAutoFilterTop10Model? Top10,
         IReadOnlyList<string> NativeFilterXmls,
         IReadOnlyDictionary<string, string>? NativeAttributes = null)
     {
@@ -96,6 +101,7 @@ public sealed record WorksheetAutoFilterColumnModel
         this.CustomFiltersAnd = CustomFiltersAnd;
         this.CustomFiltersAndRaw = CustomFiltersAndRaw;
         this.NativeCustomFiltersAttributes = NativeCustomFiltersAttributes;
+        this.Top10 = Top10;
         this.NativeFilterXmls = NativeFilterXmls;
         this.NativeAttributes = NativeAttributes;
     }
@@ -104,6 +110,17 @@ public sealed record WorksheetAutoFilterColumnModel
 public sealed record WorksheetAutoFilterCustomFilterModel(
     string? Operator,
     string? Value,
+    IReadOnlyDictionary<string, string>? NativeAttributes = null);
+
+public sealed record WorksheetAutoFilterTop10Model(
+    bool Top = true,
+    bool Percent = false,
+    double? Value = null,
+    double? FilterValue = null,
+    string? TopRaw = null,
+    string? PercentRaw = null,
+    string? ValueRaw = null,
+    string? FilterValueRaw = null,
     IReadOnlyDictionary<string, string>? NativeAttributes = null);
 
 public sealed class WorksheetProtectionMetadataModel
