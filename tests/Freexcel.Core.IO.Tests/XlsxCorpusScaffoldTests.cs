@@ -114,13 +114,17 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
-    public void CorpusReport_NextStepsNameCurrentManifestBaseline()
+    public void CorpusReport_UsesCurrentManifestBaselineInExpansionGap()
     {
         var manifestRows = ReadManifestRows();
         var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
 
-        report.Should().Contain($"current {manifestRows.Count}-row manifest baseline");
-        report.Should().NotContain("100-row corpus");
+        report.Should().NotContain(
+            "Continue expanding the 100-row corpus beyond the current baseline",
+            "the executable manifest has moved past the original 100-row target");
+        report.Should().Contain(
+            $"Continue expanding the {manifestRows.Count}-row corpus baseline",
+            "the report gap list should track the live manifest size");
     }
 
     [Fact]
