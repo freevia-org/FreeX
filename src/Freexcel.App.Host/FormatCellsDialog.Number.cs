@@ -507,13 +507,11 @@ public partial class FormatCellsDialog
         if (NumberCategoryList?.SelectedItem is not string category)
             return;
 
-        var usesDecimals = category is "Number" or "Currency" or "Accounting" or "Percentage" or "Scientific";
-        var usesSymbol = category is "Currency" or "Accounting";
-        var usesNegativeOptions = category is "Number" or "Currency";
+        var availability = FormatCellsNumberControlPlanner.Plan(category);
 
-        NumberDecimalPlacesBox.IsEnabled = usesDecimals;
-        NumberSymbolCombo.IsEnabled = usesSymbol;
-        NumberNegativeNumbersList.IsEnabled = usesNegativeOptions;
+        NumberDecimalPlacesBox.IsEnabled = availability.UsesDecimals;
+        NumberSymbolCombo.IsEnabled = availability.UsesSymbol;
+        NumberNegativeNumbersList.IsEnabled = availability.UsesNegativeOptions;
     }
 
     private void UpdateNumberPreview()
@@ -570,7 +568,7 @@ public partial class FormatCellsDialog
     }
 
     private static bool IsGeneratedNumberFormatCategory(string? category) =>
-        category is "Number" or "Currency" or "Accounting" or "Percentage" or "Scientific";
+        FormatCellsNumberControlPlanner.Plan(category).GeneratesFormat;
 
     private string SelectedCurrencySymbol()
     {
