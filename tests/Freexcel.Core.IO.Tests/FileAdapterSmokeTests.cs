@@ -16388,7 +16388,11 @@ public partial class FileAdapterSmokeTests
             Reference = "A1:A2",
             CaseSensitive = true,
             NativeXml = "<sortState xmlns=\"urn:freexcel:wrong\" ref=\"Z1:Z2\" wrongNamespace=\"1\" />",
-            NativeAttributes = new Dictionary<string, string> { ["customSortStateFlag"] = "keep" },
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["customSortStateFlag"] = "keep",
+                ["invalid sortState attr"] = "skip"
+            },
             Conditions =
             [
                 new WorksheetSortConditionModel
@@ -16396,14 +16400,19 @@ public partial class FileAdapterSmokeTests
                     Reference = "A2:A2",
                     Descending = true,
                     SortBy = "cellColor",
-                    NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["customSortConditionFlag"] = "keep",
+                        ["invalid sortCondition attr"] = "skip"
+                    }
                 }
             ]
         };
 
         var saved = new MemoryStream();
-        var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, saved);
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16417,6 +16426,7 @@ public partial class FileAdapterSmokeTests
         sortState.Attribute("customSortStateFlag")!.Value.Should().Be("keep");
         sortState.Elements(worksheetNs + "sortCondition").Should().ContainSingle()
             .Which.Attribute("customSortConditionFlag")!.Value.Should().Be("keep");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
