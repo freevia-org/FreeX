@@ -2332,7 +2332,9 @@ public class XlsxCorpusRunnerTests
 
         var normalized = target.StartsWith("/", StringComparison.Ordinal)
             ? target.TrimStart('/')
-            : "xl/" + target.TrimStart('/');
+            : target.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
+                ? target
+                : "xl/" + target.TrimStart('/');
         return partNames.Contains(normalized);
     }
 
@@ -4089,12 +4091,31 @@ public class XlsxCorpusRunnerTests
             .Where(rel => !rel.Attribute("Target")!.Value.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
             .Select(rel =>
             {
-                var target = rel.Attribute("Target")!.Value.Replace('\\', '/');
+                var target = NormalizeRelationshipDetailTarget(
+                    relsEntry.FullName.Replace('\\', '/'),
+                    rel.Attribute("Target")!.Value,
+                    rel.Attribute("TargetMode")?.Value);
                 var type = rel.Attribute("Type")?.Value ?? "";
                 var targetMode = rel.Attribute("TargetMode")?.Value ?? "";
                 return $"{relsEntry.FullName.Replace('\\', '/')}=>{target}|type={type}|mode={targetMode}";
             })
             .ToArray() ?? [];
+    }
+
+    private static string NormalizeRelationshipDetailTarget(string relsPath, string target, string? targetMode)
+    {
+        target = target.Replace('\\', '/');
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+            return target;
+
+        if (target.StartsWith("/", StringComparison.Ordinal))
+            return NormalizePackagePath(target);
+
+        var sourcePart = RelationshipSourcePart(relsPath);
+        var sourceDirectory = Path.GetDirectoryName(sourcePart)?.Replace('\\', '/') ?? string.Empty;
+        return NormalizePackagePath(string.IsNullOrWhiteSpace(sourceDirectory)
+            ? target
+            : $"{sourceDirectory}/{target}");
     }
 
     private static IEnumerable<string> ReadCriticalContentTypeOverrides(ZipArchive archive)
