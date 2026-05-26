@@ -235,8 +235,10 @@ public partial class MainWindow
 
         if (target.DataContext is SheetTabViewModel tab)
         {
-            SelectSheetTabForKeyboardContextMenu(tab);
-            target = FindSheetTabContextMenuTarget(tab) ?? target;
+            var tabId = tab.Id;
+            SelectSheetTabForKeyboardContextMenu(tabId);
+            var refreshedTab = _sheetTabs.FirstOrDefault(item => item.Id == tabId);
+            target = refreshedTab is null ? target : FindSheetTabContextMenuTarget(refreshedTab) ?? target;
             contextMenu = target.ContextMenu;
             if (contextMenu is null)
                 return false;
@@ -343,12 +345,12 @@ public partial class MainWindow
         return null;
     }
 
-    private void SelectSheetTabForKeyboardContextMenu(SheetTabViewModel tab)
+    private void SelectSheetTabForKeyboardContextMenu(SheetId tabId)
     {
-        _currentSheetId = tab.Id;
+        _currentSheetId = tabId;
         if (_groupedSheetIds.Count == 0)
-            _groupedSheetIds.Add(tab.Id);
-        _sheetGroupAnchor ??= tab.Id;
+            _groupedSheetIds.Add(tabId);
+        _sheetGroupAnchor ??= tabId;
         UpdateViewport();
         RefreshSheetTabs();
     }

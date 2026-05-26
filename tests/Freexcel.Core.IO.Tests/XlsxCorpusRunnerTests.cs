@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(25, "the generated metadata-pass manifest currently declares twenty-five deterministic package-retention rows");
+        rows.Should().HaveCount(26, "the generated metadata-pass manifest currently declares twenty-six deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -442,6 +442,24 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-workbook-extension-list-001");
         AssertWorkbookExtensionList(saved, "generated-workbook-extension-list-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookPropertiesRow_RetainsPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-properties-001");
+        AssertWorkbookProperties(source, "generated-workbook-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-workbook-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-properties-001");
+        AssertWorkbookProperties(saved, "generated-workbook-properties-001 saved");
     }
 
     [Fact]
@@ -965,6 +983,23 @@ public class XlsxCorpusRunnerTests
             .Should()
             .Contain("{00112233-4455-6677-8899-AABBCCDDEEFF}", because)
             .And.Contain("FreexcelUnknownWorkbookExtension", because);
+    }
+
+    private static void AssertWorkbookProperties(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookProperties = workbookXml.Root!.Element(workbookNs + "workbookPr");
+        workbookProperties.Should().NotBeNull(because);
+        workbookProperties!.Attribute("date1904")!.Value.Should().Be("1", because);
+        workbookProperties.Attribute("defaultThemeVersion")!.Value.Should().Be("166925", because);
+        workbookProperties.Elements(freexcelNs + "workbookPrNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
     }
 
     private static void AssertWorkbookFileVersion(Stream package, string because)
