@@ -9,6 +9,8 @@ namespace Freexcel.Core.Calc;
 /// </summary>
 public sealed class RecalcEngine
 {
+    private const long CompactRangeCellThreshold = 1024;
+
     private readonly DependencyGraph _graph;
     private readonly FormulaEvaluator _evaluator;
     // Single-threaded only. If multi-threaded recalc is added (Phase 4), protect with a lock.
@@ -158,9 +160,9 @@ public sealed class RecalcEngine
     /// </summary>
     public void RegisterFormulaDependencies(CellAddress formulaCell, FormulaNode ast, SheetId sheetId, Freexcel.Core.Model.Workbook? workbook = null)
     {
-        var refs = new HashSet<CellAddress>();
+        var refs = new FormulaDependencySet();
         CollectReferences(ast, sheetId, formulaCell, workbook, refs);
-        _graph.SetDependenciesFromOwnedSet(formulaCell, refs);
+        _graph.SetDependencies(formulaCell, refs.Cells, refs.Ranges);
 
         if (ContainsVolatileFunction(ast))
             _volatileCells.Add(formulaCell);
@@ -256,7 +258,7 @@ public sealed class RecalcEngine
         SheetId defaultSheetId,
         CellAddress formulaCell,
         Freexcel.Core.Model.Workbook? workbook,
-        HashSet<CellAddress> refs)
+        FormulaDependencySet refs)
     {
         switch (node)
         {
@@ -276,25 +278,13 @@ public sealed class RecalcEngine
                 var targetSheet = workbook?.GetSheet(range.SheetName);
                 if (targetSheet is not null)
                 {
-                    var r0 = Math.Min(range.Start.Row, range.End.Row);
-                    var r1 = Math.Max(range.Start.Row, range.End.Row);
-                    var c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
-                    var c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
-                    for (var r = r0; r <= r1; r++)
-                        for (var c = c0; c <= c1; c++)
-                            refs.Add(new CellAddress(targetSheet.Id, r, c));
+                    refs.AddRange(CreateGridRange(targetSheet.Id, range));
                 }
                 break;
             }
             case RangeRefNode range:
             {
-                var r0 = Math.Min(range.Start.Row, range.End.Row);
-                var r1 = Math.Max(range.Start.Row, range.End.Row);
-                var c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
-                var c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
-                for (var r = r0; r <= r1; r++)
-                    for (var c = c0; c <= c1; c++)
-                        refs.Add(new CellAddress(defaultSheetId, r, c));
+                refs.AddRange(CreateGridRange(defaultSheetId, range));
                 break;
             }
 
@@ -302,14 +292,7 @@ public sealed class RecalcEngine
             {
                 if (workbook is not null && workbook.TryGetNamedRange(named.Name, out var namedRange))
                 {
-                    var nr0 = Math.Min(namedRange.Start.Row, namedRange.End.Row);
-                    var nr1 = Math.Max(namedRange.Start.Row, namedRange.End.Row);
-                    var nc0 = Math.Min(namedRange.Start.Col, namedRange.End.Col);
-                    var nc1 = Math.Max(namedRange.Start.Col, namedRange.End.Col);
-                    var nSheetId = namedRange.Start.Sheet;
-                    for (var r = nr0; r <= nr1; r++)
-                        for (var c = nc0; c <= nc1; c++)
-                            refs.Add(new CellAddress(nSheetId, r, c));
+                    refs.AddRange(namedRange);
                 }
                 break;
             }
@@ -328,8 +311,7 @@ public sealed class RecalcEngine
                 if (structuredRange is null)
                     break;
 
-                foreach (var address in structuredRange.Value.AllCells())
-                    refs.Add(address);
+                refs.AddRange(structuredRange.Value);
                 break;
             }
 
@@ -359,6 +341,33 @@ public sealed class RecalcEngine
                 foreach (var arg in func.Arguments)
                     CollectReferences(arg, defaultSheetId, formulaCell, workbook, refs);
                 break;
+        }
+    }
+
+    private static GridRange CreateGridRange(SheetId sheetId, RangeRefNode range)
+    {
+        var start = new CellAddress(sheetId, range.Start.Row, range.Start.ColumnNumber);
+        var end = new CellAddress(sheetId, range.End.Row, range.End.ColumnNumber);
+        return new GridRange(start, end);
+    }
+
+    private sealed class FormulaDependencySet
+    {
+        public HashSet<CellAddress> Cells { get; } = [];
+        public List<GridRange> Ranges { get; } = [];
+
+        public void Add(CellAddress address) => Cells.Add(address);
+
+        public void AddRange(GridRange range)
+        {
+            if (range.CellCount > CompactRangeCellThreshold)
+            {
+                Ranges.Add(range);
+                return;
+            }
+
+            foreach (var address in range.AllCells())
+                Cells.Add(address);
         }
     }
 

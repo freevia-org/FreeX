@@ -1022,6 +1022,28 @@ public class ShortCircuitEvaluationTests
     }
 
     [Fact]
+    public void IF_ScalarConditionReturnsSelectedRangeBranch()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+
+        var trueResult = _evaluator.Evaluate("=IF(TRUE,A1:A2,B1:B2)", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+        trueResult.RowCount.Should().Be(2);
+        trueResult.Cells[0, 0].Should().Be(new NumberValue(1));
+        trueResult.Cells[1, 0].Should().Be(new NumberValue(2));
+
+        var falseResult = _evaluator.Evaluate("=IF(FALSE,A1:A2,B1:B2)", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+        falseResult.RowCount.Should().Be(2);
+        falseResult.Cells[0, 0].Should().Be(new NumberValue(10));
+        falseResult.Cells[1, 0].Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
     public void IF_ConditionIsError_PropagatesError()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
