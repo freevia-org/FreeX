@@ -5990,6 +5990,14 @@ public class FunctionLibraryTests
         _eval.Evaluate("=INDIRECT(\"R2C3\",FALSE)", sheet).Should().Be(new NumberValue(99));
     }
 
+    [Fact] public void Indirect_RelativeR1C1String_ReturnsValueRelativeToCurrentCell()
+    {
+        var sheet = MakeSheet((4, 6, new NumberValue(123)));
+
+        _eval.Evaluate("=INDIRECT(\"R[-1]C[1]\",FALSE)", sheet, currentCell: new CellAddress(sheet.Id, 5, 5))
+            .Should().Be(new NumberValue(123));
+    }
+
     [Fact] public void Indirect_InvalidR1C1String_ReturnsRefError()
     {
         _eval.Evaluate("=INDIRECT(\"R0C1\",FALSE)", MakeSheet()).Should().Be(ErrorValue.Ref);
