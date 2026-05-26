@@ -14453,10 +14453,13 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.DimensionMetadata.Should().NotBeNull();
         loadedSheet.DimensionMetadata!.NativeAttributes.Should().Contain("nativeDimensionAttr", "kept");
+        loadedSheet.DimensionMetadata.NativeAttributes["invalid dimension attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14467,6 +14470,7 @@ public partial class FileAdapterSmokeTests
         dimension!.Attribute("nativeDimensionAttr").Should().NotBeNull();
         dimension.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept");
         dimension.Attribute("ref")!.Value.Should().Be("A1:A2");
+        dimension.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]

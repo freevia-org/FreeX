@@ -1931,7 +1931,7 @@ public sealed class MainWindowSourceHygieneTests
         {
             "Bottom Double Border",
             "Inside Borders",
-            "Thick Box Border",
+            "Thick Outside Borders",
             "Top and Bottom Border",
             "Top and Thick Bottom Border",
             "Top and Double Bottom Border",

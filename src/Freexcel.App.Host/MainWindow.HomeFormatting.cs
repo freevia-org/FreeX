@@ -366,7 +366,7 @@ public partial class MainWindow
         => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double, _borderPickerColor));
 
     private void BorderThickBoxMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerColor), "Thick Box Border");
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerColor), "Thick Outside Borders");
 
     private void BorderTopAndBottomMenuItem_Click(object sender, RoutedEventArgs e)
         => ApplyRangeBorderPreset(
