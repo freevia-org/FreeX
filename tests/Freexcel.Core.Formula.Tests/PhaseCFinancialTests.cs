@@ -804,6 +804,27 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void CouponFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43845.0),
+            (1, 2, 44197.0), (2, 2, 44562.0),
+            (1, 3, 2.0), (2, 3, 4.0),
+            (1, 4, 0.0), (2, 4, 1.0)
+        };
+
+        AssertApproxColumn(EvalWithData("COUPDAYBS(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("COUPDAYBS(43831,44197,2,0)"), Calc("COUPDAYBS(43845,44562,4,1)"));
+        AssertApproxColumn(EvalWithData("COUPDAYS(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("COUPDAYS(43831,44197,2,0)"), Calc("COUPDAYS(43845,44562,4,1)"));
+        AssertApproxColumn(EvalWithData("COUPDAYSNC(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("COUPDAYSNC(43831,44197,2,0)"), Calc("COUPDAYSNC(43845,44562,4,1)"));
+        AssertApproxColumn(EvalWithData("COUPNCD(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("COUPNCD(43831,44197,2,0)"), Calc("COUPNCD(43845,44562,4,1)"));
+        AssertApproxColumn(EvalWithData("COUPNUM(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("COUPNUM(43831,44197,2,0)"), Calc("COUPNUM(43845,44562,4,1)"));
+        AssertApproxColumn(EvalWithData("COUPPCD(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("COUPPCD(43831,44197,2,0)"), Calc("COUPPCD(43845,44562,4,1)"));
+
+        EvalWithData("COUPDAYBS(A1:A2,B1:C1,2,0)", cells).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void CouponFunctions_InvalidBasis_ReturnNumError()
     {
         CalcError("COUPDAYBS(43831,44197,2,5)").Should().Be("#NUM!");
@@ -935,6 +956,34 @@ public class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("YIELDMAT(43831,44197,43831,0.05,A1:A2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("YIELDMAT(43831,44197,43831,0.05,99)"), Calc("YIELDMAT(43831,44197,43831,0.05,101)"));
         AssertApproxColumn(EvalWithData("DURATION(43831,45656,0.08,A1:A2,2)", cells), Calc("DURATION(43831,45656,0.08,0.05,2)"), Calc("DURATION(43831,45656,0.08,0.06,2)"));
         AssertApproxColumn(EvalWithData("MDURATION(43831,45656,0.08,A1:A2,2)", cells), Calc("MDURATION(43831,45656,0.08,0.05,2)"), Calc("MDURATION(43831,45656,0.08,0.06,2)"));
+    }
+
+    [Fact]
+    public void BondPriceYieldFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43845.0),
+            (1, 2, 45658.0), (2, 2, 45672.0),
+            (1, 3, 0.08), (2, 3, 0.07),
+            (1, 4, 0.05), (2, 4, 0.06),
+            (1, 5, 100.0), (2, 5, 110.0),
+            (1, 6, 2.0), (2, 6, 4.0),
+            (1, 7, 0.0), (2, 7, 1.0),
+            (1, 8, 99.0), (2, 8, 101.0),
+            (1, 9, 44197.0), (2, 9, 44228.0)
+        };
+
+        AssertApproxColumn(EvalWithData("PRICE(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2,F1:F2,G1:G2)", cells), Calc("PRICE(43831,45658,0.08,0.05,100,2,0)"), Calc("PRICE(43845,45672,0.07,0.06,110,4,1)"));
+        AssertApproxColumn(EvalWithData("YIELD(A1:A2,B1:B2,C1:C2,H1:H2,E1:E2,F1:F2,G1:G2)", cells), Calc("YIELD(43831,45658,0.08,99,100,2,0)"), Calc("YIELD(43845,45672,0.07,101,110,4,1)"));
+        AssertApproxColumn(EvalWithData("PRICEDISC(A1:A2,I1:I2,D1:D2,E1:E2,G1:G2)", cells), Calc("PRICEDISC(43831,44197,0.05,100,0)"), Calc("PRICEDISC(43845,44228,0.06,110,1)"));
+        AssertApproxColumn(EvalWithData("YIELDDISC(A1:A2,I1:I2,H1:H2,E1:E2,G1:G2)", cells), Calc("YIELDDISC(43831,44197,99,100,0)"), Calc("YIELDDISC(43845,44228,101,110,1)"));
+        AssertApproxColumn(EvalWithData("PRICEMAT(A1:A2,I1:I2,A1:A2,C1:C2,D1:D2,G1:G2)", cells), Calc("PRICEMAT(43831,44197,43831,0.08,0.05,0)"), Calc("PRICEMAT(43845,44228,43845,0.07,0.06,1)"));
+        AssertApproxColumn(EvalWithData("YIELDMAT(A1:A2,I1:I2,A1:A2,C1:C2,H1:H2,G1:G2)", cells), Calc("YIELDMAT(43831,44197,43831,0.08,99,0)"), Calc("YIELDMAT(43845,44228,43845,0.07,101,1)"));
+        AssertApproxColumn(EvalWithData("DURATION(A1:A2,B1:B2,C1:C2,D1:D2,F1:F2,G1:G2)", cells), Calc("DURATION(43831,45658,0.08,0.05,2,0)"), Calc("DURATION(43845,45672,0.07,0.06,4,1)"));
+        AssertApproxColumn(EvalWithData("MDURATION(A1:A2,B1:B2,C1:C2,D1:D2,F1:F2,G1:G2)", cells), Calc("MDURATION(43831,45658,0.08,0.05,2,0)"), Calc("MDURATION(43845,45672,0.07,0.06,4,1)"));
+
+        EvalWithData("PRICE(A1:A2,B1:C1,0.08,0.05,100,2,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
