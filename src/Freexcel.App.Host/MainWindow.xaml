@@ -1374,6 +1374,9 @@
                                     <Button Content="Bubble Fmt"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBubbleFormatBtn_Click"
                                             local:RibbonTooltip.Title="Format Bubble Chart" local:RibbonTooltip.KeyTip="UB"
                                             local:RibbonTooltip.Description="Set bubble scale, negative bubble visibility, and size representation."/>
+                                    <Button Content="Pie Format"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieFormatBtn_Click"
+                                            local:RibbonTooltip.Title="Format Pie/Doughnut" local:RibbonTooltip.KeyTip="PI"
+                                            local:RibbonTooltip.Description="Set first slice angle, exploded slice, and doughnut hole size."/>
                                 </StackPanel>
                                 <StackPanel>
                                     <Button Content="Explode"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartExplodedSliceBtn_Click"

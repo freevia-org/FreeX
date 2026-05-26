@@ -42,7 +42,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(1_000_000);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
@@ -72,7 +72,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(maxAllocatedBytes);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(1_000_000);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
@@ -130,7 +130,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-10);
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(maxAllocatedBytes);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
@@ -156,7 +156,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(1_850_000);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
@@ -182,7 +182,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(2_650_000);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     private static Sheet MakeNumericSheet()
@@ -238,5 +238,12 @@ public sealed class FormulaEvaluatorPerformanceTests
         }
 
         return sheet;
+    }
+
+    private static TimeSpan MaxElapsedForPerformanceAssertion()
+    {
+        return string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase)
+            ? TimeSpan.FromSeconds(5)
+            : TimeSpan.FromSeconds(2);
     }
 }

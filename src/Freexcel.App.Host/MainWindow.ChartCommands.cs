@@ -346,6 +346,27 @@ public partial class MainWindow
         ApplyChartLayoutDialogResult("Format Bubble Chart", chart, dialog.Result.ToOptions());
     }
 
+    private void ChartPieFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Pie/Doughnut",
+                "Insert or select a pie or doughnut chart before changing pie options.",
+                out var chart))
+            return;
+
+        if (!ChartTypeSupport.SupportsFirstSliceAngle(chart.Type))
+        {
+            MessageBox.Show(this, "Pie format options only apply to pie and doughnut charts.", "Format Pie/Doughnut", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ChartPieFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Pie/Doughnut", chart, dialog.Result.ToOptions());
+    }
+
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
     {
         ShowChartDataLabelsDialog();
