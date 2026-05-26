@@ -15234,10 +15234,14 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.IgnoredErrorsMetadata.Should().NotBeNull();
         loadedSheet.IgnoredErrorsMetadata!.ErrorNativeAttributes["A1"].Should().Contain("twoDigitTextYear", "1");
+        loadedSheet.IgnoredErrorsMetadata.NativeAttributes["invalid ignored attr"] = "skip";
+        loadedSheet.IgnoredErrorsMetadata.ErrorNativeAttributes["A1"]["invalid ignored child attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -15248,6 +15252,7 @@ public partial class FileAdapterSmokeTests
         ignoredErrors!.ToString().Should().Contain("numberStoredAsText=\"1\"");
         ignoredErrors.ToString().Should().Contain("twoDigitTextYear=\"1\"");
         ignoredErrors.ToString().Should().Contain("sqref=\"A1\"");
+        ignoredErrors.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -15368,7 +15373,8 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -15537,10 +15543,16 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.CellWatchesMetadata.Should().NotBeNull();
+        loadedSheet.CellWatchesMetadata!.NativeAttributes["invalid watch attr"] = "skip";
+        loadedSheet.CellWatchesMetadata.WatchNativeAttributes["A1"]["invalid watch child attr"] = "skip";
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -15551,6 +15563,7 @@ public partial class FileAdapterSmokeTests
         cellWatches!.Attribute("nativeContainer")!.Value.Should().Be("kept");
         cellWatches.Element(worksheetNs + "cellWatch")!.Attribute("nativeWatch")!.Value.Should().Be("kept");
         cellWatches!.ToString().Should().Contain("r=\"A1\"");
+        cellWatches.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]

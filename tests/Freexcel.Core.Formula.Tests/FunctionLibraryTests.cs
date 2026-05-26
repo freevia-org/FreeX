@@ -6424,6 +6424,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sort_AcceptsSpilledScalarControlArguments()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("B")), (1,2,new NumberValue(2)),
+            (2,1,new TextValue("A")), (2,2,new NumberValue(1)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(3)));
+
+        var rv = _eval.Evaluate("=SORT(A1:B3,SEQUENCE(1,,2),SEQUENCE(1,,-1))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rv.Cells[0, 0].Should().Be(new TextValue("C"));
+        rv.Cells[1, 0].Should().Be(new TextValue("B"));
+        rv.Cells[2, 0].Should().Be(new TextValue("A"));
+    }
+
+    [Fact]
     public void Sort_ZeroSortIndex_ReturnsValueError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
@@ -6525,6 +6541,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sortby_AcceptsSpilledScalarSortOrder()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(3)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(1)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(2)));
+
+        var rv = _eval.Evaluate("=SORTBY(A1:A3,B1:B3,SEQUENCE(1,,-1))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rv.Cells[0, 0].Should().Be(new TextValue("A"));
+        rv.Cells[1, 0].Should().Be(new TextValue("C"));
+        rv.Cells[2, 0].Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
     public void Sortby_MismatchedKeyShape_ReturnsValueError()
     {
         var sheet = MakeSheet(
@@ -6567,6 +6599,27 @@ public class FunctionLibraryTests
             .Should().BeOfType<RangeValue>().Subject;
         dropped.RowCount.Should().Be(1);
         dropped.ColCount.Should().Be(1);
+        dropped.Cells[0, 0].Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
+    public void TakeAndDrop_AcceptSpilledScalarSliceCounts()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new NumberValue(2)), (1,3,new NumberValue(3)),
+            (2,1,new NumberValue(4)), (2,2,new NumberValue(5)), (2,3,new NumberValue(6)),
+            (3,1,new NumberValue(7)), (3,2,new NumberValue(8)), (3,3,new NumberValue(9)));
+
+        var taken = _eval.Evaluate("=TAKE(A1:C3,SEQUENCE(1,,2),SEQUENCE(1,,2))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        taken.RowCount.Should().Be(2);
+        taken.ColCount.Should().Be(2);
+        taken.Cells[1, 1].Should().Be(new NumberValue(5));
+
+        var dropped = _eval.Evaluate("=DROP(A1:C3,SEQUENCE(1,,1),SEQUENCE(1,,1))", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        dropped.RowCount.Should().Be(2);
+        dropped.ColCount.Should().Be(2);
         dropped.Cells[0, 0].Should().Be(new NumberValue(5));
     }
 

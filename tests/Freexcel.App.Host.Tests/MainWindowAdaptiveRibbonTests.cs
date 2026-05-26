@@ -193,6 +193,20 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void RibbonTabSelection_SchedulesFallbackCompactionBeforeRender()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
+
+        var method = source.Substring(
+            source.IndexOf("private void NormalizeRibbonSurfaceAfterTabSelection", StringComparison.Ordinal),
+            source.IndexOf("private void ConfigureInsertRibbonSurface", StringComparison.Ordinal) -
+            source.IndexOf("private void NormalizeRibbonSurfaceAfterTabSelection", StringComparison.Ordinal));
+
+        method.Should().Contain("DispatcherPriority.Send");
+        method.Should().NotContain("DispatcherPriority.Loaded");
+    }
+
+    [Fact]
     public void CollapsedRibbonMenuItems_MirrorSourceMenuStateAndOpenedUpdates()
     {
         StaTestRunner.Run(() =>
