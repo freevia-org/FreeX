@@ -138,6 +138,28 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedCorpusRows_IncludeWorksheetBackgroundImageCoverage()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("background-image"))
+            .ToArray();
+
+        rows.Should().ContainSingle("worksheet background images should have explicit deterministic corpus coverage");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        var workbook = XlsxCorpusFixtureFactory.Create(rows[0].Id);
+        workbook.Sheets
+            .Where(sheet =>
+                sheet.BackgroundImage is not null &&
+                sheet.BackgroundImage.ContentType == "image/png" &&
+                sheet.BackgroundImage.ImageBytes.Length > 0)
+            .Should()
+            .ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedCorpusRows_IncludeDataValidationMessages()
     {
         var rows = ReadManifestRows()
@@ -2654,6 +2676,9 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("images"))
             summary.Sheets.Sum(sheet => sheet.PictureCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("background-image"))
+            summary.Sheets.Count(sheet => sheet.HasBackgroundImage).Should().BeGreaterThan(0, row.Id);
 
         if (tags.Contains("sparklines"))
             summary.Sheets.Sum(sheet => sheet.SparklineCount).Should().BeGreaterThan(0, row.Id);
