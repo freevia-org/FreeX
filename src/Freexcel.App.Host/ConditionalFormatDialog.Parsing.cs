@@ -40,6 +40,26 @@ public partial class ConditionalFormatDialog
         return true;
     }
 
+    private static RgbColor? ParseOptionalRgbColor(string text) =>
+        string.IsNullOrWhiteSpace(text) ? null
+        : TryParseRgbColor(text, out var color) ? color : null;
+
+    private static string? AxisPositionToXmlValue(string? label) =>
+        label switch
+        {
+            "Middle" => "middle",
+            "None"   => "none",
+            _        => null
+        };
+
+    private static string AxisPositionToLabel(string? xmlValue) =>
+        xmlValue switch
+        {
+            "middle" => "Middle",
+            "none"   => "None",
+            _        => "Automatic"
+        };
+
     private static CfRuleType DuplicateValuesRuleType(string? label) =>
         string.Equals(label, "Unique", StringComparison.OrdinalIgnoreCase)
             ? CfRuleType.UniqueValues
