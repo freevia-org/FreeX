@@ -5984,6 +5984,20 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SUM(INDIRECT(\"MyData\"))", sheet, wb).Should().Be(new NumberValue(6));
     }
 
+    [Fact] public void Indirect_NamedRangeStringWithR1C1Flag_ReturnsRangeValue()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
+        wb.DefineNamedRange("MyData", new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1)));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"MyData\",FALSE))", sheet, wb).Should().Be(new NumberValue(6));
+    }
+
     [Fact] public void Indirect_R1C1String_ReturnsValue()
     {
         var sheet = MakeSheet((2, 3, new NumberValue(99)));

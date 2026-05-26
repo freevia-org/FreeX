@@ -373,7 +373,7 @@ public sealed partial class XlsxFileAdapter
         packageStream.CopyTo(refreshedPackageStream);
         refreshedPackageStream.Position = 0;
         SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(refreshedPackageStream));
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(refreshedPackageStream, workbook));
 
         void SaveSourcePackageIndependentPostProcessingMetadata()
         {

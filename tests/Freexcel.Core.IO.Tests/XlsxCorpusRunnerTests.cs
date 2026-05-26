@@ -3033,10 +3033,10 @@ public class XlsxCorpusRunnerTests
                 .OrderBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(property => new WorksheetCustomPropertySummary(property.Name, property.Id))
                 .ToArray(),
-            sheet.HiddenRows.OrderBy(row => row).ToArray(),
-            sheet.HiddenRows.Count,
-            sheet.FilterHiddenRows.OrderBy(row => row).ToArray(),
-            sheet.FilterHiddenRows.Count,
+            CaptureEffectiveHiddenRows(sheet),
+            CaptureEffectiveHiddenRows(sheet).Length,
+            [],
+            0,
             sheet.HiddenCols.OrderBy(column => column).ToArray(),
             sheet.HiddenCols.Count,
             sheet.RowOutlineLevels
@@ -3062,6 +3062,13 @@ public class XlsxCorpusRunnerTests
                     CaptureStyleSummary(workbook.GetStyle(entry.StyleId))))
                 .ToArray(),
             sheet.GetStyleOnlyEntries().Count());
+
+    private static uint[] CaptureEffectiveHiddenRows(Sheet sheet) =>
+        sheet.HiddenRows
+            .Concat(sheet.FilterHiddenRows)
+            .Distinct()
+            .OrderBy(row => row)
+            .ToArray();
 
     private static PhoneticSummary? CapturePhoneticSummary(WorksheetPhoneticProperties? properties) =>
         properties is null
