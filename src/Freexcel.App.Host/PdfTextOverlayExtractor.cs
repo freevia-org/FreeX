@@ -40,6 +40,10 @@ internal static class PdfTextOverlayExtractor
             y += frameworkElement.Margin.Top;
         }
 
+        var renderTranslation = ReadSimpleTranslation(element.RenderTransform);
+        x += renderTranslation.X;
+        y += renderTranslation.Y;
+
         if (element is VisualHost { TextOverlays.Count: > 0 } visualHost)
         {
             foreach (var overlay in visualHost.TextOverlays)
@@ -217,6 +221,61 @@ internal static class PdfTextOverlayExtractor
         var top = Canvas.GetTop(element);
         return double.IsNaN(top) ? 0 : top;
     }
+
+    private static Vector ReadSimpleTranslation(Transform? transform)
+    {
+        return TryReadSimpleTranslation(transform, out var translation)
+            ? translation
+            : default;
+    }
+
+    private static bool TryReadSimpleTranslation(Transform? transform, out Vector translation)
+    {
+        if (transform is null || transform == Transform.Identity)
+        {
+            translation = default;
+            return true;
+        }
+
+        switch (transform)
+        {
+            case TranslateTransform translate:
+                translation = new Vector(translate.X, translate.Y);
+                return true;
+            case MatrixTransform matrixTransform when IsOffsetOnly(matrixTransform.Matrix):
+                translation = new Vector(matrixTransform.Matrix.OffsetX, matrixTransform.Matrix.OffsetY);
+                return true;
+            case TransformGroup group:
+                return TryReadSimpleTranslation(group, out translation);
+            default:
+                translation = default;
+                return false;
+        }
+    }
+
+    private static bool TryReadSimpleTranslation(TransformGroup group, out Vector translation)
+    {
+        var result = new Vector();
+        foreach (var child in group.Children)
+        {
+            if (!TryReadSimpleTranslation(child, out var childTranslation))
+            {
+                translation = default;
+                return false;
+            }
+
+            result += childTranslation;
+        }
+
+        translation = result;
+        return true;
+    }
+
+    private static bool IsOffsetOnly(Matrix matrix) =>
+        matrix.M11 == 1 &&
+        matrix.M12 == 0 &&
+        matrix.M21 == 0 &&
+        matrix.M22 == 1;
 
     private static Color ResolveColor(Brush brush) =>
         brush is SolidColorBrush solid
