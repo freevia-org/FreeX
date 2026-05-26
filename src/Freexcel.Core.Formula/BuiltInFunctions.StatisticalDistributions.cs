@@ -1236,16 +1236,19 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue BetaDist(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
-        if (args[1] is ErrorValue e1) return e1;
-        if (args[2] is ErrorValue e2) return e2;
-        if (args[3] is ErrorValue e3) return e3;
-        double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
-        bool cum = ToBool(args[3]);
-        double A = args.Count >= 5 && args[4] is not BlankValue ? ToNumber(args[4]) : 0.0;
-        double B = args.Count >= 6 && args[5] is not BlankValue ? ToNumber(args[5]) : 1.0;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => BetaDistScalar(value, alpha, beta, cum, A, B));
-        return BetaDistScalar(args[0], alpha, beta, cum, A, B);
+        if (FirstError(args) is { } e) return e;
+        var lowerArg = args.Count >= 5 ? args[4] : BlankValue.Instance;
+        var upperArg = args.Count >= 6 ? args[5] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], lowerArg, upperArg], values => BetaDistScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue BetaDistScalar(ScalarValue xValue, ScalarValue alphaValue, ScalarValue betaValue, ScalarValue cumulativeValue, ScalarValue lowerValue, ScalarValue upperValue)
+    {
+        double alpha = ToNumber(alphaValue), beta = ToNumber(betaValue);
+        bool cum = ToBool(cumulativeValue);
+        double A = lowerValue is BlankValue ? 0.0 : ToNumber(lowerValue);
+        double B = upperValue is BlankValue ? 1.0 : ToNumber(upperValue);
+        return BetaDistScalar(xValue, alpha, beta, cum, A, B);
     }
 
     private static ScalarValue BetaDistScalar(ScalarValue xValue, double alpha, double beta, bool cum, double A, double B)
@@ -1262,14 +1265,18 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue BetaInvFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
-        if (args[1] is ErrorValue e1) return e1;
-        if (args[2] is ErrorValue e2) return e2;
-        double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
-        double A = args.Count >= 4 && args[3] is not BlankValue ? ToNumber(args[3]) : 0.0;
-        double B = args.Count >= 5 && args[4] is not BlankValue ? ToNumber(args[4]) : 1.0;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => BetaInvScalar(value, alpha, beta, A, B));
-        return BetaInvScalar(args[0], alpha, beta, A, B);
+        if (FirstError(args) is { } e) return e;
+        var lowerArg = args.Count >= 4 ? args[3] : BlankValue.Instance;
+        var upperArg = args.Count >= 5 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], lowerArg, upperArg], values => BetaInvScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue BetaInvScalar(ScalarValue probabilityValue, ScalarValue alphaValue, ScalarValue betaValue, ScalarValue lowerValue, ScalarValue upperValue)
+    {
+        double alpha = ToNumber(alphaValue), beta = ToNumber(betaValue);
+        double A = lowerValue is BlankValue ? 0.0 : ToNumber(lowerValue);
+        double B = upperValue is BlankValue ? 1.0 : ToNumber(upperValue);
+        return BetaInvScalar(probabilityValue, alpha, beta, A, B);
     }
 
     private static ScalarValue BetaInvScalar(ScalarValue probabilityValue, double alpha, double beta, double A, double B)
