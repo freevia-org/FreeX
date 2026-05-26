@@ -414,4 +414,113 @@ public sealed class AccessibilityCheckerServiceTests
         issue.Location.Should().Be("B1");
         issue.Message.Should().Be("Table headers should not be blank.");
     }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WithExplicitFontAndFill()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 3, 2);
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(120, 120, 120),
+            FillColor = new CellColor(130, 130, 130)
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Projected revenue"),
+            StyleId = lowContrastStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.SheetId.Should().Be(sheet.Id);
+        issue.SheetName.Should().Be("Sales");
+        issue.Location.Should().Be("B3");
+        issue.Message.Should().Be("Cell text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WithDefaultWhiteBackground()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(245, 245, 245)
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Low contrast on no fill"),
+            StyleId = lowContrastStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("A1");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresBlankCellsAndSufficientContrast()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(245, 245, 245)
+        });
+        var sufficientContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = CellColor.Black,
+            FillColor = CellColor.White
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = BlankValue.Instance,
+            StyleId = lowContrastStyle
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell
+        {
+            Value = new TextValue("Readable text"),
+            StyleId = sufficientContrastStyle
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
+    [Theory]
+    [MemberData(nameof(VisibleScalarValues))]
+    public void FindIssues_FlagsLowContrastCellText_ForVisibleScalarValues(ScalarValue value, string expectedLocation)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(245, 245, 245)
+        });
+        var address = CellAddress.Parse(expectedLocation, sheet.Id);
+        sheet.SetCell(address, new Cell
+        {
+            Value = value,
+            StyleId = lowContrastStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be(expectedLocation);
+    }
+
+    public static IEnumerable<object[]> VisibleScalarValues()
+    {
+        yield return [new TextValue("Visible text"), "A1"];
+        yield return [new NumberValue(42), "A2"];
+        yield return [new BoolValue(true), "A3"];
+        yield return [DateTimeValue.FromDateTime(new DateTime(2026, 5, 26)), "A4"];
+        yield return [ErrorValue.DivByZero, "A5"];
+    }
 }

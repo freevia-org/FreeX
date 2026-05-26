@@ -14,7 +14,8 @@ public enum AccessibilityIssueKind
     HiddenSheetWithContent,
     HiddenRowWithContent,
     HiddenColumnWithContent,
-    TableMissingHeaderText
+    TableMissingHeaderText,
+    LowContrastCellText
 }
 
 public sealed record AccessibilityIssue(
@@ -43,6 +44,7 @@ public static class AccessibilityCheckerService
 
             AddHiddenContentIssues(issues, sheet);
             AddStructuredTableIssues(issues, sheet);
+            AddLowContrastCellTextIssues(issues, workbook, sheet);
 
             foreach (var range in sheet.MergedRegions)
             {
@@ -121,6 +123,27 @@ public static class AccessibilityCheckerService
         }
 
         return issues;
+    }
+
+    private static void AddLowContrastCellTextIssues(List<AccessibilityIssue> issues, Workbook workbook, Sheet sheet)
+    {
+        foreach (var (address, cell) in sheet.GetUsedCells())
+        {
+            if (!HasVisibleCellText(cell.Value))
+                continue;
+
+            var style = workbook.GetStyle(cell.StyleId);
+            var background = style.FillColor ?? CellColor.White;
+            if (ContrastRatio(style.FontColor, background) >= 4.5)
+                continue;
+
+            issues.Add(new AccessibilityIssue(
+                AccessibilityIssueKind.LowContrastCellText,
+                sheet.Id,
+                sheet.Name,
+                address.ToA1(),
+                "Cell text should have at least 4.5:1 contrast against its fill."));
+        }
     }
 
     private static void AddStructuredTableIssues(List<AccessibilityIssue> issues, Sheet sheet)
@@ -237,6 +260,37 @@ public static class AccessibilityCheckerService
             ErrorValue error => error.Code,
             _ => null
         };
+    }
+
+    private static bool HasVisibleCellText(ScalarValue value) =>
+        value switch
+        {
+            BlankValue => false,
+            TextValue text => !string.IsNullOrWhiteSpace(text.Value),
+            RangeValue => false,
+            _ => true
+        };
+
+    private static double ContrastRatio(CellColor first, CellColor second)
+    {
+        var firstLuminance = RelativeLuminance(first);
+        var secondLuminance = RelativeLuminance(second);
+        var lighter = Math.Max(firstLuminance, secondLuminance);
+        var darker = Math.Min(firstLuminance, secondLuminance);
+        return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    private static double RelativeLuminance(CellColor color) =>
+        0.2126 * LinearRgb(color.R) +
+        0.7152 * LinearRgb(color.G) +
+        0.0722 * LinearRgb(color.B);
+
+    private static double LinearRgb(byte channel)
+    {
+        var value = channel / 255.0;
+        return value <= 0.03928
+            ? value / 12.92
+            : Math.Pow((value + 0.055) / 1.055, 2.4);
     }
 
     private static string FormatRange(GridRange range) =>
