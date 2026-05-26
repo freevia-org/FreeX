@@ -67,56 +67,38 @@ public sealed class SubtotalCommand : IWorkbookCommand
 
         _appliedCommands.Clear();
         _previousRowPageBreaks = sheet.RowPageBreaks.ToList();
-        var groups = GetGroups(sheet);
+        var plan = SubtotalPlanBuilder.Build(
+            sheet,
+            _range,
+            _groupByColumnOffset,
+            _pageBreakBetweenGroups,
+            _summaryBelowData);
         var affected = new List<CellAddress>();
-        var pageBreakRows = new List<uint>();
 
         if (_summaryBelowData)
         {
-            // Process groups bottom-up so each insertion only shifts already-inserted
-            // (lower) rows. Track each prospective break alongside its source group's
-            // *original* endRow — the final row number is then `endRow + 2 + N`, where
-            // N counts how many earlier groups (smaller endRow) get inserted above it.
-            var orderedGroups = groups.OrderByDescending(g => g.EndRow).ToList();
-            var pendingBreaks = new List<uint>();
-            for (int i = 0; i < orderedGroups.Count; i++)
+            foreach (var subtotalRow in plan.GroupRows)
             {
-                var group = orderedGroups[i];
-                var insertRow = group.EndRow + 1;
-                if (!ApplyInsertAndEdit(ctx, insertRow, $"{group.Label} Total", group.StartRow, group.EndRow, affected))
+                if (!ApplyInsertAndEdit(ctx, subtotalRow, affected))
                     return new CommandOutcome(false, "Could not insert subtotal row.");
-
-                if (_pageBreakBetweenGroups && group.EndRow < _range.End.Row)
-                    pendingBreaks.Add(group.EndRow);
             }
 
-            // For each pending break, the final row is endRow + 2 (the row after the inserted subtotal)
-            // PLUS one extra for every group with a smaller endRow (those insertions land above and shift it).
-            foreach (var sourceEndRow in pendingBreaks)
-            {
-                uint subsequentInsertions = (uint)orderedGroups.Count(g => g.EndRow < sourceEndRow);
-                pageBreakRows.Add(sourceEndRow + 2 + subsequentInsertions);
-            }
-
-            foreach (var rowBreak in pageBreakRows)
+            foreach (var rowBreak in plan.PageBreakRows)
                 sheet.RowPageBreaks.Add(rowBreak);
 
-            uint grandTotalRow = _range.End.Row + (uint)groups.Count + 1;
-            if (!ApplyInsertAndEdit(ctx, grandTotalRow, "Grand Total", _range.Start.Row + 1, grandTotalRow - 1, affected))
+            if (!ApplyInsertAndEdit(ctx, plan.GrandTotalRow, affected))
                 return new CommandOutcome(false, "Could not insert subtotal row.");
 
             return new CommandOutcome(true, AffectedCells: affected);
         }
 
-        foreach (var group in groups.OrderByDescending(g => g.StartRow))
+        foreach (var subtotalRow in plan.GroupRows)
         {
-            if (!ApplyInsertAndEdit(ctx, group.StartRow, $"{group.Label} Total", group.StartRow + 1, group.EndRow + 1, affected))
+            if (!ApplyInsertAndEdit(ctx, subtotalRow, affected))
                 return new CommandOutcome(false, "Could not insert subtotal row.");
         }
 
-        uint summaryRow = _range.Start.Row + 1;
-        uint summaryEndRow = _range.End.Row + (uint)groups.Count + 1;
-        if (!ApplyInsertAndEdit(ctx, summaryRow, "Grand Total", summaryRow + 1, summaryEndRow, affected))
+        if (!ApplyInsertAndEdit(ctx, plan.GrandTotalRow, affected))
             return new CommandOutcome(false, "Could not insert subtotal row.");
 
         return new CommandOutcome(true, AffectedCells: affected);
@@ -137,52 +119,30 @@ public sealed class SubtotalCommand : IWorkbookCommand
         }
     }
 
-    private List<GroupSpan> GetGroups(Sheet sheet)
-    {
-        var groupColumn = _range.Start.Col + _groupByColumnOffset;
-        var groups = new List<GroupSpan>();
-        var groupStart = _range.Start.Row + 1;
-        var currentLabel = FormatLabel(sheet.GetValue(groupStart, groupColumn));
-
-        for (uint row = groupStart + 1; row <= _range.End.Row; row++)
-        {
-            var label = FormatLabel(sheet.GetValue(row, groupColumn));
-            if (label == currentLabel)
-                continue;
-
-            groups.Add(new GroupSpan(currentLabel, groupStart, row - 1));
-            groupStart = row;
-            currentLabel = label;
-        }
-
-        groups.Add(new GroupSpan(currentLabel, groupStart, _range.End.Row));
-        return groups;
-    }
-
     private bool ApplyInsertAndEdit(
         ICommandContext ctx,
-        uint insertRow,
-        string label,
-        uint formulaStartRow,
-        uint formulaEndRow,
+        SubtotalInsertionPlan subtotalRow,
         List<CellAddress> affected)
     {
-        var insert = new InsertRowsCommand(_sheetId, insertRow);
+        var insert = new InsertRowsCommand(_sheetId, subtotalRow.InsertRow);
         var insertOutcome = insert.Apply(ctx);
         if (!insertOutcome.Success)
             return false;
         _appliedCommands.Add(insert);
 
-        var labelAddress = new CellAddress(_sheetId, insertRow, _range.Start.Col + _groupByColumnOffset);
+        var labelAddress = new CellAddress(_sheetId, subtotalRow.InsertRow, _range.Start.Col + _groupByColumnOffset);
         var edits = new List<(CellAddress Address, Cell Cell)>
         {
-            (labelAddress, Cell.FromValue(new TextValue(label)))
+            (labelAddress, Cell.FromValue(new TextValue(subtotalRow.Label)))
         };
         foreach (var subtotalColumnOffset in _subtotalColumnOffsets)
         {
-            var formulaAddress = new CellAddress(_sheetId, insertRow, _range.Start.Col + subtotalColumnOffset);
-            var subtotalColumnName = CellAddress.NumberToColumnName(formulaAddress.Col);
-            var formula = $"SUBTOTAL({_functionNumber},{subtotalColumnName}{formulaStartRow}:{subtotalColumnName}{formulaEndRow})";
+            var formulaAddress = new CellAddress(_sheetId, subtotalRow.InsertRow, _range.Start.Col + subtotalColumnOffset);
+            var formula = SubtotalPlanBuilder.BuildSubtotalFormula(
+                _functionNumber,
+                formulaAddress.Col,
+                subtotalRow.FormulaStartRow,
+                subtotalRow.FormulaEndRow);
             edits.Add((formulaAddress, Cell.FromFormula(formula)));
         }
 
@@ -196,17 +156,6 @@ public sealed class SubtotalCommand : IWorkbookCommand
         affected.AddRange(edits.Skip(1).Select(editItem => editItem.Address));
         return true;
     }
-
-    private static string FormatLabel(ScalarValue value) => value switch
-    {
-        TextValue text => text.Value,
-        NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.CurrentCulture),
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        ErrorValue error => error.Code,
-        _ => ""
-    };
-
-    private sealed record GroupSpan(string Label, uint StartRow, uint EndRow);
 }
 
 public sealed class RemoveSubtotalRowsCommand : IWorkbookCommand
@@ -230,7 +179,7 @@ public sealed class RemoveSubtotalRowsCommand : IWorkbookCommand
             return protectedOutcome;
 
         _deletes.Clear();
-        var rows = FindSubtotalRows(sheet);
+        var rows = SubtotalRowFinder.Find(sheet, _sheetId, _range);
         foreach (var row in rows.OrderByDescending(r => r))
         {
             var delete = new DeleteRowsCommand(_sheetId, row);
@@ -251,23 +200,4 @@ public sealed class RemoveSubtotalRowsCommand : IWorkbookCommand
         _deletes.Clear();
     }
 
-    private List<uint> FindSubtotalRows(Sheet sheet)
-    {
-        var rows = new List<uint>();
-        for (uint row = _range.Start.Row; row <= _range.End.Row; row++)
-        {
-            for (uint col = _range.Start.Col; col <= _range.End.Col; col++)
-            {
-                var formula = sheet.GetCell(new CellAddress(_sheetId, row, col))?.FormulaText;
-                if (formula is not null &&
-                    formula.TrimStart().StartsWith("SUBTOTAL(", StringComparison.OrdinalIgnoreCase))
-                {
-                    rows.Add(row);
-                    break;
-                }
-            }
-        }
-
-        return rows;
-    }
 }

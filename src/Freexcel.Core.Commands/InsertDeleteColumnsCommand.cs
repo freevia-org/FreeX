@@ -87,19 +87,10 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftChartColumnsUp(sheet, _sheetId, _beforeCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
-        var shiftedMerges = sheet.MergedRegions.Select(m =>
-        {
-            if (m.Start.Col >= _beforeCol)
-                return new GridRange(
-                    new CellAddress(m.Start.Sheet, m.Start.Row, m.Start.Col + _count),
-                    new CellAddress(m.End.Sheet,   m.End.Row,   m.End.Col   + _count));
-            if (m.End.Col >= _beforeCol)
-                return new GridRange(
-                    m.Start,
-                    new CellAddress(m.End.Sheet, m.End.Row, m.End.Col + _count));
-            return m;
-        }).ToList();
-        sheet.ReplaceMergedRegions(shiftedMerges);
+        sheet.ReplaceMergedRegions(RowColumnShiftHelpers.InsertColumnsIntoMergedRegions(
+            sheet.MergedRegions,
+            _beforeCol,
+            _count));
 
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
@@ -227,36 +218,10 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftChartColumnsDown(sheet, _sheetId, _startCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
-        var adjustedMerges = new List<GridRange>();
-        foreach (var m in sheet.MergedRegions)
-        {
-            if (m.End.Col < _startCol)
-            {
-                adjustedMerges.Add(m); // entirely to the left
-            }
-            else if (m.Start.Col > endCol)
-            {
-                // entirely to the right — shift left
-                adjustedMerges.Add(new GridRange(
-                    new CellAddress(m.Start.Sheet, m.Start.Row, m.Start.Col - _count),
-                    new CellAddress(m.End.Sheet,   m.End.Row,   m.End.Col   - _count)));
-            }
-            else
-            {
-                // overlapping — shrink
-                uint newStart = m.Start.Col < _startCol ? m.Start.Col : _startCol;
-                uint newEnd   = m.End.Col   > endCol    ? m.End.Col - _count
-                              : _startCol > 1           ? _startCol - 1 : 0;
-                if (newEnd > 0 && newEnd >= newStart)
-                {
-                    adjustedMerges.Add(new GridRange(
-                        new CellAddress(m.Start.Sheet, m.Start.Row, newStart),
-                        new CellAddress(m.End.Sheet,   m.End.Row,   newEnd)));
-                }
-                // if newEnd < newStart the merge was entirely deleted — drop it
-            }
-        }
-        sheet.ReplaceMergedRegions(adjustedMerges);
+        sheet.ReplaceMergedRegions(RowColumnShiftHelpers.DeleteColumnsFromMergedRegions(
+            sheet.MergedRegions,
+            _startCol,
+            _count));
 
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
