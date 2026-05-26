@@ -219,7 +219,19 @@ internal static class XlsxCorpusFixtureFactory
                 </Relationships>
                 """)),
         "generated-embedded-objects-001" => CreatePackage(("xl/embeddings/oleObject1.bin", "Freexcel generated OLE placeholder")),
-        "generated-custom-xml-001" => CreatePackage(("customXml/item1.xml", "<freexcelGeneratedCustomXml/>")),
+        "generated-custom-xml-001" => CreatePackage(
+            ("customXml/item1.xml", "<freexcelGeneratedCustomXml/>"),
+            ("customXml/itemProps1.xml", """
+                <ds:datastoreItem ds:itemID="{11111111-2222-3333-4444-555555555555}"
+                                  xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"/>
+                """),
+            ("customXml/_rels/item1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdCustomXmlProps1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps"
+                                Target="itemProps1.xml"/>
+                </Relationships>
+                """)),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated known-gap XLSX package fixture exists for this id.")
     };
 
@@ -331,6 +343,7 @@ internal static class XlsxCorpusFixtureFactory
             "xl/externalLinks/externalLink1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml",
             "xl/embeddings/oleObject1.bin" => "application/vnd.openxmlformats-officedocument.oleObject",
             "customXml/item1.xml" => "application/xml",
+            "customXml/itemProps1.xml" => "application/vnd.openxmlformats-officedocument.customXmlProperties+xml",
             _ => path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ? "application/xml" : ""
         };
     }
@@ -360,6 +373,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-printer-settings-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyPrinterSettingsReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-custom-xml-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCustomXmlReferenceFixup(archive);
             return;
         }
 
@@ -573,6 +592,35 @@ internal static class XlsxCorpusFixtureFactory
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings",
             "../printerSettings/printerSettings1.bin");
         ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+    }
+
+    private static void ApplyCustomXmlReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(contentTypes, "/customXml/item1.xml", "application/xml");
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/customXml/itemProps1.xml",
+                "application/vnd.openxmlformats-officedocument.customXmlProperties+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelCustomXml1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+            "customXml/item1.xml");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
     }
 
     private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target)
