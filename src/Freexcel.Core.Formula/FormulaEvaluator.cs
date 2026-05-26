@@ -1083,7 +1083,7 @@ public sealed class FormulaEvaluator
              or "T.DIST" or "T.DIST.RT" or "T.DIST.2T" or "T.INV" or "T.INV.2T"
              or "F.DIST" or "F.DIST.RT" or "F.INV" or "F.INV.RT"
              or "CHISQ.DIST" or "CHISQ.DIST.RT" or "CHISQ.INV" or "CHISQ.INV.RT"
-             or "BINOM.DIST" or "BINOM.INV" or "NEGBINOM.DIST" or "HYPERGEOM.DIST"
+             or "BINOM.DIST" or "BINOM.DIST.RANGE" or "BINOM.INV" or "NEGBINOM.DIST" or "HYPERGEOM.DIST"
              or "CONFIDENCE" or "CONFIDENCE.NORM" or "CONFIDENCE.T";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
