@@ -1935,6 +1935,8 @@ public sealed class MainWindowSourceHygieneTests
             "Top and Bottom Border",
             "Top and Thick Bottom Border",
             "Top and Double Bottom Border",
+            "Draw Border Grid",
+            "Erase Border",
             "Line Color",
             "Line Style",
             "Black",
@@ -1953,6 +1955,8 @@ public sealed class MainWindowSourceHygieneTests
             "BorderTopAndBottomMenuItem_Click",
             "BorderTopAndThickBottomMenuItem_Click",
             "BorderTopAndDoubleBottomMenuItem_Click",
+            "BorderDrawGridMenuItem_Click",
+            "BorderEraseMenuItem_Click",
             "BorderLineColorBlackMenuItem_Click",
             "BorderLineColorAccent1MenuItem_Click",
             "BorderLineStyleDashedMenuItem_Click",
@@ -1969,6 +1973,10 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
         source.Should().Contain("_borderPickerColor");
         source.Should().Contain("_borderPickerStyle");
+        source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.DrawGrid)");
+        source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Erase)");
+        source.Should().Contain("ApplyBorderDrawMode");
+        source.Should().Contain("BorderDrawPlanner.CreateDiff");
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
         source.Should().Contain("BorderShortcutService.GetInsideBorderDiff");
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");

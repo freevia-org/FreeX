@@ -383,6 +383,31 @@ public partial class MainWindow
             (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Double, _borderPickerColor),
             "Top and Double Bottom Border");
 
+    private void BorderDrawGridMenuItem_Click(object sender, RoutedEventArgs e)
+        => BeginBorderDrawMode(BorderDrawMode.DrawGrid);
+
+    private void BorderEraseMenuItem_Click(object sender, RoutedEventArgs e)
+        => BeginBorderDrawMode(BorderDrawMode.Erase);
+
+    private void BeginBorderDrawMode(BorderDrawMode mode)
+    {
+        _borderDrawMode = mode;
+        CancelFormatPainter();
+        FocusSheetGridIfNeeded();
+    }
+
+    private void ApplyBorderDrawMode(GridRange range)
+    {
+        if (_borderDrawMode == BorderDrawMode.None)
+            return;
+
+        var mode = _borderDrawMode;
+        _borderDrawMode = BorderDrawMode.None;
+        SheetGrid.SelectedRange = range;
+        ApplyStyleDiff(BorderDrawPlanner.CreateDiff(mode, _borderPickerStyle, _borderPickerColor));
+        RefreshStatusBar();
+    }
+
     private void BorderLineColorBlackMenuItem_Click(object sender, RoutedEventArgs e)
         => _borderPickerColor = CellColor.Black;
 
