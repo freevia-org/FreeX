@@ -55,6 +55,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-calc-chain-001" => true,
         "generated-document-properties-001" => true,
         "generated-header-footer-legacy-drawing-001" => true,
+        "generated-workbook-extension-list-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -191,6 +192,16 @@ internal static class XlsxCorpusFixtureFactory
                 </Relationships>
                 """),
             ("xl/media/headerFooterImage1.png", "Freexcel generated header footer image placeholder")),
+        "generated-workbook-extension-list-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <extLst>
+                <ext uri="{00112233-4455-6677-8899-AABBCCDDEEFF}">
+                  <x15:futureMetadata xmlns:x15="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                                      name="FreexcelUnknownWorkbookExtension"/>
+                </ext>
+              </extLst>
+            </workbook>
+            """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -331,9 +342,11 @@ internal static class XlsxCorpusFixtureFactory
     }
 
     private static bool ShouldMergeThroughFixup(string id, string packagePart) =>
-        string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase) &&
-        (string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
-         string.Equals(packagePart, "xl/_rels/workbook.xml.rels", StringComparison.OrdinalIgnoreCase));
+        (string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase) &&
+         (string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
+          string.Equals(packagePart, "xl/_rels/workbook.xml.rels", StringComparison.OrdinalIgnoreCase))) ||
+        (string.Equals(id, "generated-workbook-extension-list-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase));
 
     private static void EnsureKnownGapContentTypeOverrides(ZipArchive archive, IReadOnlyCollection<string> partNames)
     {
@@ -460,6 +473,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-header-footer-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyHeaderFooterLegacyDrawingReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-extension-list-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookExtensionListFixup(archive);
             return;
         }
 
@@ -807,6 +826,30 @@ internal static class XlsxCorpusFixtureFactory
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
             "../drawings/vmlDrawing1.vml");
         ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+    }
+
+    private static void ApplyWorkbookExtensionListFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "extLst").Remove();
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "extLst",
+            new XElement(
+                workbookNs + "ext",
+                new XAttribute("uri", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
+                new XElement(
+                    x15Ns + "futureMetadata",
+                    new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
+                    new XAttribute("name", "FreexcelUnknownWorkbookExtension")))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
     private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target, string? targetMode = null)
