@@ -127,6 +127,9 @@ public partial class GridView
             case GridQuickAnalysisPreviewVisualKind.LineChart:
                 DrawQuickAnalysisLineChartPreview(dc, rect.Value);
                 break;
+            case GridQuickAnalysisPreviewVisualKind.BarChart:
+                DrawQuickAnalysisBarChartPreview(dc, rect.Value);
+                break;
         }
     }
 
@@ -237,6 +240,29 @@ public partial class GridView
 
         foreach (var point in points)
             dc.DrawEllipse(QuickAnalysisColumnChartPreviewBrush, null, point, 2.5, 2.5);
+    }
+
+    private static void DrawQuickAnalysisBarChartPreview(DrawingContext dc, Rect previewRect)
+    {
+        var chartRect = new Rect(
+            previewRect.Left + Math.Min(12, previewRect.Width * 0.12),
+            previewRect.Top + Math.Min(10, previewRect.Height * 0.18),
+            Math.Max(0, previewRect.Width * 0.72),
+            Math.Max(0, previewRect.Height * 0.58));
+        if (chartRect.Width <= 0 || chartRect.Height <= 0)
+            return;
+
+        dc.DrawLine(QuickAnalysisColumnChartAxisPen, new Point(chartRect.Left, chartRect.Top), new Point(chartRect.Left, chartRect.Bottom));
+
+        var gap = Math.Min(4.0, chartRect.Height / 14);
+        var barHeight = Math.Max(2, (chartRect.Height - (3 * gap)) / 4);
+        var widths = new[] { 0.48, 0.86, 0.64, 0.72 };
+        for (var i = 0; i < widths.Length; i++)
+        {
+            var top = chartRect.Top + i * (barHeight + gap);
+            var width = chartRect.Width * widths[i];
+            dc.DrawRectangle(QuickAnalysisColumnChartPreviewBrush, null, new Rect(chartRect.Left, top, width, barHeight));
+        }
     }
 
     private void RenderSelection(DrawingContext dc)
