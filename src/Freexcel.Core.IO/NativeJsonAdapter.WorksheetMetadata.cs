@@ -4,60 +4,6 @@ namespace Freexcel.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
-    private static WorksheetAutoFilterModel? ToWorksheetAutoFilter(WorksheetAutoFilterDto? dto)
-    {
-        if (dto is null ||
-            (string.IsNullOrWhiteSpace(dto.Reference) &&
-             string.IsNullOrWhiteSpace(dto.NativeXml) &&
-             (dto.FilterColumns is null || dto.FilterColumns.Count == 0)))
-        {
-            return null;
-        }
-
-        var autoFilter = new WorksheetAutoFilterModel(dto.Reference, dto.NativeXml)
-        {
-            NativeAttributes = CleanNativeAttributes(dto.NativeAttributes),
-            NativeChildXmls = dto.NativeChildXmls?
-                .Where(xml => !string.IsNullOrWhiteSpace(xml))
-                .ToArray()
-        };
-        foreach (var column in dto.FilterColumns ?? [])
-        {
-            if (column.ColumnId >= 0)
-            {
-                autoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
-                    column.ColumnId,
-                    column.Values?.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray() ?? [],
-                    column.IncludeBlank,
-                    column.NativeFilterXmls?.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToArray() ?? [],
-                    CleanNativeAttributes(column.NativeAttributes)));
-            }
-        }
-
-        return autoFilter;
-    }
-
-    private static WorksheetAutoFilterDto? ToWorksheetAutoFilterDto(WorksheetAutoFilterModel? autoFilter) =>
-        autoFilter is null
-            ? null
-            : new WorksheetAutoFilterDto
-            {
-                Reference = autoFilter.Reference,
-                NativeXml = autoFilter.NativeXml,
-                NativeAttributes = CleanNativeAttributesForSave(autoFilter.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)),
-                NativeChildXmls = autoFilter.NativeChildXmls?
-                    .Where(xml => !string.IsNullOrWhiteSpace(xml))
-                    .ToList(),
-                FilterColumns = autoFilter.FilterColumns.Select(column => new WorksheetAutoFilterColumnDto
-                {
-                    ColumnId = column.ColumnId,
-                    Values = column.Values.Where(value => !string.IsNullOrWhiteSpace(value)).ToList(),
-                    IncludeBlank = column.IncludeBlank,
-                    NativeFilterXmls = column.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToList(),
-                    NativeAttributes = CleanNativeAttributesForSave(column.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
-                }).ToList()
-            };
-
     private static WorksheetCustomPropertyMetadataModel? ToWorksheetCustomPropertyMetadata(WorksheetCustomPropertyMetadataDto? dto)
     {
         if (dto is null)
