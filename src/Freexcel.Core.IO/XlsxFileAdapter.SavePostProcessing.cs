@@ -281,6 +281,9 @@ public sealed partial class XlsxFileAdapter
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
 
+        packageStream.Position = 0;
+        XlsxHeaderFooterPictureReaderWriter.RemoveClearedPictures(packageStream, workbook);
+
         if (workbook.IndexedColors.Colors.Count > 0)
         {
             packageStream.Position = 0;
