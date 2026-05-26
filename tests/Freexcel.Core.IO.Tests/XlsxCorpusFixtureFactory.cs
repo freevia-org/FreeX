@@ -58,11 +58,13 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-extension-list-001" => true,
         "generated-workbook-file-version-001" => true,
         "generated-workbook-file-recovery-001" => true,
+        "generated-workbook-file-sharing-001" => true,
         "generated-workbook-smart-tags-001" => true,
         "generated-workbook-function-groups-001" => true,
         "generated-workbook-views-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
+        "generated-worksheet-single-xml-cells-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -227,6 +229,11 @@ internal static class XlsxCorpusFixtureFactory
               <fileRecoveryPr dataExtractLoad="1" repairLoad="1"/>
             </workbook>
             """)),
+        "generated-workbook-file-sharing-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <fileSharing readOnlyRecommended="1" userName="FreexcelTest" revisionsPassword="1234"/>
+            </workbook>
+            """)),
         "generated-workbook-smart-tags-001" => CreatePackage(("xl/workbook.xml", """
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <smartTagPr embed="1" show="all" customSmartTagFlag="keep"/>
@@ -265,6 +272,13 @@ internal static class XlsxCorpusFixtureFactory
               <cellWatches nativeContainer="kept">
                 <cellWatch r="A1" nativeWatch="kept"/>
               </cellWatches>
+            </worksheet>
+            """)),
+        "generated-worksheet-single-xml-cells-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <singleXmlCells nativeSingleXmlCellsAttr="kept">
+                <singleXmlCell id="1" r="A1" xmlCellPrId="1" nativeSingleXmlCellAttr="cell-kept"/>
+              </singleXmlCells>
             </worksheet>
             """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
@@ -480,6 +494,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-file-sharing-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-function-groups-001", StringComparison.OrdinalIgnoreCase) &&
@@ -489,6 +505,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-single-xml-cells-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
@@ -651,6 +669,12 @@ internal static class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-workbook-file-sharing-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookFileSharingFixup(archive);
+            return;
+        }
+
         if (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookSmartTagsFixup(archive);
@@ -678,6 +702,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetCellWatchesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-single-xml-cells-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSingleXmlCellsFixup(archive);
             return;
         }
 
@@ -1139,6 +1169,25 @@ internal static class XlsxCorpusFixtureFactory
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
+    private static void ApplyWorkbookFileSharingFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "fileSharing").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "fileSharing",
+            new XAttribute("readOnlyRecommended", "1"),
+            new XAttribute("userName", "FreexcelTest"),
+            new XAttribute("revisionsPassword", "1234")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
     private static void ApplyWorkbookSmartTagsFixup(ZipArchive archive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -1275,6 +1324,29 @@ internal static class XlsxCorpusFixtureFactory
                 worksheetNs + "cellWatch",
                 new XAttribute("r", "A1"),
                 new XAttribute("nativeWatch", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSingleXmlCellsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "singleXmlCells").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "singleXmlCells",
+            new XAttribute("nativeSingleXmlCellsAttr", "kept"),
+            new XElement(
+                worksheetNs + "singleXmlCell",
+                new XAttribute("id", "1"),
+                new XAttribute("r", "A1"),
+                new XAttribute("xmlCellPrId", "1"),
+                new XAttribute("nativeSingleXmlCellAttr", "cell-kept"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 

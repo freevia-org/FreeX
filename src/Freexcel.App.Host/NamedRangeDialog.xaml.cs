@@ -90,6 +90,9 @@ public sealed partial class NamedRangeDialog : Window
         UpdateSelectionCommands();
     }
 
+    private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e) =>
+        EditButton_Click(sender, e);
+
     private void FilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
 
     private void ApplyFilter()

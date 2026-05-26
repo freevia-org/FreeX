@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(23, "the generated metadata-pass manifest currently declares twenty-three deterministic package-retention rows");
+        rows.Should().HaveCount(25, "the generated metadata-pass manifest currently declares twenty-five deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -481,6 +481,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorkbookFileSharingRow_RetainsFileSharingAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-file-sharing-001");
+        AssertWorkbookFileSharing(source, "generated-workbook-file-sharing-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 15, 1), new TextValue("freexcel-workbook-file-sharing-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-file-sharing-001");
+        AssertWorkbookFileSharing(saved, "generated-workbook-file-sharing-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorkbookSmartTagsRow_RetainsSmartTagsAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-smart-tags-001");
@@ -568,6 +586,24 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-cell-watches-001");
         AssertWorksheetCellWatches(saved, "generated-worksheet-cell-watches-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSingleXmlCellsRow_RetainsSingleXmlCellsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-single-xml-cells-001");
+        AssertWorksheetSingleXmlCells(source, "generated-worksheet-single-xml-cells-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-single-xml-cells-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-single-xml-cells-001");
+        AssertWorksheetSingleXmlCells(saved, "generated-worksheet-single-xml-cells-001 saved");
     }
 
     [Fact]
@@ -883,6 +919,26 @@ public class XlsxCorpusRunnerTests
         cellWatch.Attribute("nativeWatch")!.Value.Should().Be("kept", because);
     }
 
+    private static void AssertWorksheetSingleXmlCells(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var singleXmlCells = worksheetXml.Root!.Element(worksheetNs + "singleXmlCells");
+        singleXmlCells.Should().NotBeNull(because);
+        singleXmlCells!.Attribute("nativeSingleXmlCellsAttr")!.Value.Should().Be("kept", because);
+
+        var singleXmlCell = singleXmlCells.Elements(worksheetNs + "singleXmlCell")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        singleXmlCell.Attribute("id")!.Value.Should().Be("1", because);
+        singleXmlCell.Attribute("r")!.Value.Should().Be("A1", because);
+        singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1", because);
+        singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept", because);
+    }
+
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -940,6 +996,19 @@ public class XlsxCorpusRunnerTests
         recoveryBlocks[0].Attribute("repairLoad")!.Value.Should().Be("0", because);
         recoveryBlocks[1].Attribute("dataExtractLoad")!.Value.Should().Be("1", because);
         recoveryBlocks[1].Attribute("repairLoad")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorkbookFileSharing(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing");
+        fileSharing.Should().NotBeNull(because);
+        fileSharing!.Attribute("readOnlyRecommended")!.Value.Should().Be("1", because);
+        fileSharing.Attribute("userName")!.Value.Should().Be("FreexcelTest", because);
+        fileSharing.Attribute("revisionsPassword")!.Value.Should().Be("1234", because);
     }
 
     private static void AssertWorkbookSmartTags(Stream package, string because)

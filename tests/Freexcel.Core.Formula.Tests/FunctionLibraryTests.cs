@@ -52,6 +52,41 @@ public class FunctionLibraryTests
             ((NumberValue)range.At(row + 1, 1)).Value.Should().BeApproximately(expected[row], 1e-10);
     }
 
+    [Fact]
+    public void ArrayConstant_CanBeSummedAsInlineRow()
+    {
+        _eval.Evaluate("=SUM({1,2,3})", MakeSheet())
+            .Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
+    public void ArrayConstant_CanBeIndexedAsTwoDimensionalLiteral()
+    {
+        _eval.Evaluate("=INDEX({1,2;3,4},2,1)", MakeSheet())
+            .Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void ArrayConstant_SupportsTextBooleanAndErrorLiterals()
+    {
+        var result = _eval.Evaluate("={\"x\",TRUE,#N/A}", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(3);
+        result.Cells[0, 0].Should().Be(new TextValue("x"));
+        result.Cells[0, 1].Should().Be(new BoolValue(true));
+        result.Cells[0, 2].Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void ArrayConstant_RejectsRaggedRows()
+    {
+        Action act = () => _eval.Evaluate("={1,2;3}", MakeSheet());
+
+        act.Should().Throw<FormulaParseException>();
+    }
+
     private static BoolValue True() => new(true);
 
     private static BoolValue False() => new(false);
@@ -7584,6 +7619,22 @@ public class FunctionLibraryTests
         });
 
         var result = _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet);
+
+        result.Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
+    public void Subtotal_FuncNum9_ExcludesFilterHiddenRowsOnReferencedSheet()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var data = wb.AddSheet("Data");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new NumberValue(10));
+        data.SetCell(new CellAddress(data.Id, 2, 1), new NumberValue(20));
+        data.SetCell(new CellAddress(data.Id, 3, 1), new NumberValue(30));
+        data.FilterHiddenRows.Add(2);
+
+        var result = _eval.Evaluate("=SUBTOTAL(9,Data!A1:A3)", sheet, wb);
 
         result.Should().Be(new NumberValue(40));
     }
