@@ -990,13 +990,17 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue BinomDistRange(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
-        if (args[1] is ErrorValue e1) return e1;
-        if (args[2] is ErrorValue e2) return e2;
-        int n = (int)Math.Truncate(ToNumber(args[0]));
-        double p = ToNumber(args[1]);
-        int k1 = (int)Math.Truncate(ToNumber(args[2]));
-        int k2 = args.Count >= 4 && args[3] is not BlankValue ? (int)Math.Truncate(ToNumber(args[3])) : k1;
+        if (FirstError(args) is { } e) return e;
+        var upperArg = args.Count >= 4 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], upperArg], values => BinomDistRangeScalar(values[0], values[1], values[2], values[3]));
+    }
+
+    private static ScalarValue BinomDistRangeScalar(ScalarValue trialsValue, ScalarValue probabilityValue, ScalarValue successStartValue, ScalarValue successEndValue)
+    {
+        int n = (int)Math.Truncate(ToNumber(trialsValue));
+        double p = ToNumber(probabilityValue);
+        int k1 = (int)Math.Truncate(ToNumber(successStartValue));
+        int k2 = successEndValue is BlankValue ? k1 : (int)Math.Truncate(ToNumber(successEndValue));
         if (n < 0 || p < 0 || p > 1 || k1 < 0 || k2 < k1 || k2 > n) return ErrorValue.Num;
         double sum = 0;
         for (int k = k1; k <= k2; k++) sum += BinomPmf(k, n, p);
@@ -1011,9 +1015,9 @@ public static partial class BuiltInFunctions
         return MapTernaryTextArgs(args[0], args[1], args[2], BinomInvScalar);
     }
 
-    private static ScalarValue BinomInvScalar(ScalarValue trialsValue, ScalarValue probabilityValue, ScalarValue alphaValue)
+    private static ScalarValue BinomInvScalar(ScalarValue nValue, ScalarValue probabilityValue, ScalarValue alphaValue)
     {
-        int n = (int)Math.Truncate(ToNumber(trialsValue));
+        int n = (int)Math.Truncate(ToNumber(nValue));
         double p = ToNumber(probabilityValue);
         return BinomInvScalar(n, p, alphaValue);
     }
@@ -1135,14 +1139,10 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        return MapTernaryTextArgs(args[0], args[1], args[2], ExponDistScalar);
-    }
-
-    private static ScalarValue ExponDistScalar(ScalarValue xValue, ScalarValue lambdaValue, ScalarValue cumulativeValue)
-    {
-        double lambda = ToNumber(lambdaValue);
-        bool cum = ToBool(cumulativeValue);
-        return ExponDistScalar(xValue, lambda, cum);
+        double lambda = ToNumber(args[1]);
+        bool cum = ToBool(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ExponDistScalar(value, lambda, cum));
+        return ExponDistScalar(args[0], lambda, cum);
     }
 
     private static ScalarValue ExponDistScalar(ScalarValue xValue, double lambda, bool cum)

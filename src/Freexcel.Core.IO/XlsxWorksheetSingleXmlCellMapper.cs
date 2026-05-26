@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
-using System.Xml;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -95,7 +94,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
             if (string.IsNullOrWhiteSpace(attribute.Key))
                 continue;
 
-            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
+            element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
         }
 
         foreach (var cell in model.Cells)
@@ -110,7 +109,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSingleXmlCellAttribute(attribute.Key))
                     continue;
 
-                TrySetNativeAttribute(cellElement, attribute.Key, attribute.Value);
+                cellElement.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
             }
 
             if (cellElement.HasAttributes)
@@ -147,22 +146,5 @@ internal static class XlsxWorksheetSingleXmlCellMapper
     {
         if (value is not null)
             element.SetAttributeValue(name, value.Value.ToString(CultureInfo.InvariantCulture));
-    }
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
     }
 }

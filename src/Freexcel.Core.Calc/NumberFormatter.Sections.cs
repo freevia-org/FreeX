@@ -6,11 +6,7 @@ namespace Freexcel.Core.Calc;
 
 public static partial class NumberFormatter
 {
-    private sealed record ParsedSection(
-        string Format,
-        string? ColorHex,
-        WorkbookThemeColorReference? ThemeColor,
-        FormatCondition? Condition);
+    private sealed record ParsedSection(string Format, string? ColorHex, FormatCondition? Condition);
 
     private sealed record FormatCondition(string Operator, double Value)
     {
@@ -71,25 +67,25 @@ public static partial class NumberFormatter
         return [.. sections];
     }
 
-    private static (ParsedSection Section, double DisplayValue, int SectionIndex) SelectPositionalSection(
+    private static (ParsedSection Section, double DisplayValue) SelectPositionalSection(
         double value,
         ParsedSection[] sections)
     {
         if (value > 0 || sections.Length == 1)
-            return (sections[0], value, 0);
+            return (sections[0], value);
 
         if (value < 0)
         {
             if (sections.Length >= 2)
-                return (sections[1], Math.Abs(value), 1);
+                return (sections[1], Math.Abs(value));
 
-            return (sections[0], value, 0);
+            return (sections[0], value);
         }
 
         if (sections.Length >= 3)
-            return (sections[2], value, 2);
+            return (sections[2], value);
 
-        return (sections[0], value, 0);
+        return (sections[0], value);
     }
 
     private static ParsedSection ParseSection(string section)
@@ -98,7 +94,6 @@ public static partial class NumberFormatter
     private static ParsedSection ParseSection(string section, WorkbookIndexedColorPalette? indexedColors)
     {
         string? color = null;
-        WorkbookThemeColorReference? themeColor = null;
         FormatCondition? condition = null;
         int index = 0;
 
@@ -109,10 +104,9 @@ public static partial class NumberFormatter
                 break;
 
             string token = section[(index + 1)..close];
-            if (NumberFormatColorMapper.TryMapColor(token, indexedColors, out var tokenColor, out var tokenThemeColor))
+            if (NumberFormatColorMapper.TryMapColor(token, indexedColors, out var tokenColor))
             {
                 color = tokenColor;
-                themeColor = tokenThemeColor;
                 index = SkipInterDirectiveWhitespace(section, close + 1);
                 continue;
             }
@@ -127,7 +121,7 @@ public static partial class NumberFormatter
             break;
         }
 
-        return new ParsedSection(section[index..], color, themeColor, condition);
+        return new ParsedSection(section[index..], color, condition);
     }
 
     private static int SkipInterDirectiveWhitespace(string section, int index)

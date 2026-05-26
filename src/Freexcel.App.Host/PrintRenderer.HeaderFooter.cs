@@ -49,7 +49,9 @@ public static partial class PrintRenderer
         double printableW,
         double printableH,
         int pageNumber,
-        int totalPages)
+        int totalPages,
+        bool draftQuality,
+        bool blackAndWhite)
     {
         var visual = new DrawingVisual();
         var textOverlays = new List<PdfTextOverlay>();
@@ -57,7 +59,6 @@ public static partial class PrintRenderer
         dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pageW, pageH));
         DrawHeaderFooter(
             dc,
-            textOverlays,
             pageW,
             pageH,
             marginLeft,
@@ -72,7 +73,8 @@ public static partial class PrintRenderer
             sheetName,
             alignHeaderFooterWithMargins,
             pageNumber,
-            totalPages);
+            totalPages,
+            draftQuality);
 
         var rowHeight = measurement.RowHeight;
         var colWidth = measurement.ColumnWidth;
@@ -86,7 +88,7 @@ public static partial class PrintRenderer
         var gridTop = contentTop + measurement.HeaderHeight;
 
         if (printHeadings)
-            DrawPrintHeadings(dc, textOverlays, contentLeft, contentTop, measurement, pageRows, pageColumns);
+            DrawPrintHeadings(dc, contentLeft, contentTop, measurement, pageRows, pageColumns);
 
         dc.DrawRectangle(null, new Pen(Brushes.Black, 0.5),
             new Rect(gridLeft, gridTop, colWidth * pageColumns.Count, rowHeight * pageRows.Count));
@@ -103,7 +105,7 @@ public static partial class PrintRenderer
             gridLeft,
             gridTop);
 
-        if (printComments == WorksheetPrintComments.AsDisplayed)
+        if (!draftQuality && printComments == WorksheetPrintComments.AsDisplayed)
         {
             DrawDisplayedComments(
                 dc,
@@ -116,7 +118,8 @@ public static partial class PrintRenderer
                 colWidth,
                 rowHeight,
                 pageW,
-                pageH);
+                pageH,
+                blackAndWhite);
         }
 
         return (visual, textOverlays);

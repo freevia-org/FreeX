@@ -9,7 +9,9 @@ public sealed record ScenarioManagerItem(
     string Name,
     IReadOnlyList<ScenarioCellValue> ChangingCells,
     string? Comment,
-    string ChangingCellsText);
+    string ChangingCellsText,
+    bool Hidden,
+    bool Locked);
 
 public sealed class ScenarioManagerDialog : Window
 {
@@ -17,6 +19,8 @@ public sealed class ScenarioManagerDialog : Window
     private readonly TextBox _newNameBox = new();
     private readonly TextBox _changingCellsBox = new();
     private readonly TextBox _commentBox = new();
+    private readonly CheckBox _lockedBox = new() { Content = "_Prevent changes", Margin = new Thickness(0, 0, 0, 6) };
+    private readonly CheckBox _hiddenBox = new() { Content = "_Hide", Margin = new Thickness(0, 0, 0, 8) };
     private readonly string _defaultScenarioName;
     private readonly SheetId? _currentSheetId;
     private readonly Func<string, SheetId?>? _resolveSheetIdByName;
@@ -29,6 +33,8 @@ public sealed class ScenarioManagerDialog : Window
     public string? NewScenarioName { get; private set; }
     public string? ChangingCellsText { get; private set; }
     public string? CommentText { get; private set; }
+    public bool ScenarioHidden { get; private set; }
+    public bool ScenarioLocked { get; private set; }
 
     public ScenarioManagerDialog(
         Workbook workbook,
@@ -79,6 +85,8 @@ public sealed class ScenarioManagerDialog : Window
         fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
         fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         editor.Content = fields;
@@ -87,6 +95,8 @@ public sealed class ScenarioManagerDialog : Window
         _newNameBox.Text = _defaultScenarioName;
         AddField(fields, row: 1, "Changing _cells:", _changingCellsBox);
         AddField(fields, row: 2, "_Comment:", _commentBox);
+        AddCheckBox(fields, row: 3, _lockedBox);
+        AddCheckBox(fields, row: 4, _hiddenBox);
 
         var sideButtons = new StackPanel { Margin = new Thickness(10, 20, 0, 0) };
         Grid.SetColumn(sideButtons, 1);
@@ -118,7 +128,9 @@ public sealed class ScenarioManagerDialog : Window
             scenario.Name,
             scenario.ChangingCells,
             scenario.Comment,
-            FormatScenarioChangingCells(workbook, scenario))).ToList();
+            FormatScenarioChangingCells(workbook, scenario),
+            scenario.Hidden,
+            scenario.Locked)).ToList();
 
     public static bool TryParseAction(string text, out ScenarioManagerAction action)
     {
@@ -206,6 +218,13 @@ public sealed class ScenarioManagerDialog : Window
         grid.Children.Add(field);
     }
 
+    private static void AddCheckBox(Grid grid, int row, CheckBox checkBox)
+    {
+        Grid.SetRow(checkBox, row);
+        Grid.SetColumn(checkBox, 1);
+        grid.Children.Add(checkBox);
+    }
+
     private Button AddActionButton(Panel panel, string label, ScenarioManagerAction action, bool isEnabled = true)
     {
         var button = new Button { Content = label, Width = 82, Margin = new Thickness(0, 0, 0, 6), IsEnabled = isEnabled };
@@ -229,12 +248,16 @@ public sealed class ScenarioManagerDialog : Window
             _newNameBox.Text = selected.Name;
             _changingCellsBox.Text = selected.ChangingCellsText;
             _commentBox.Text = selected.Comment ?? "";
+            _lockedBox.IsChecked = selected.Locked;
+            _hiddenBox.IsChecked = selected.Hidden;
         }
         else if (string.IsNullOrWhiteSpace(_newNameBox.Text))
         {
             _newNameBox.Text = _defaultScenarioName;
             _changingCellsBox.Text = "";
             _commentBox.Text = "";
+            _lockedBox.IsChecked = false;
+            _hiddenBox.IsChecked = false;
         }
 
         var hasSelection = selected is not null;
@@ -263,6 +286,8 @@ public sealed class ScenarioManagerDialog : Window
         NewScenarioName = _newNameBox.Text;
         ChangingCellsText = _changingCellsBox.Text;
         CommentText = _commentBox.Text;
+        ScenarioLocked = _lockedBox.IsChecked == true;
+        ScenarioHidden = _hiddenBox.IsChecked == true;
         DialogResult = true;
     }
 

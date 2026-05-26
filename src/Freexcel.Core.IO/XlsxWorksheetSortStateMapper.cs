@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -186,24 +185,7 @@ internal static class XlsxWorksheetSortStateMapper
             if (string.IsNullOrWhiteSpace(attribute.Key) || modeledNames.Contains(attribute.Key, StringComparer.Ordinal))
                 continue;
 
-            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
-        }
-    }
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
+            element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
         }
     }
 

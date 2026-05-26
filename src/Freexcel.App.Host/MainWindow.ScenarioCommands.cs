@@ -19,7 +19,12 @@ public partial class MainWindow
             case ScenarioManagerAction.Add:
             case ScenarioManagerAction.Edit:
             case ScenarioManagerAction.Save:
-                SaveScenarioFromDialog(dialog.NewScenarioName, dialog.ChangingCellsText, dialog.CommentText);
+                SaveScenarioFromDialog(
+                    dialog.NewScenarioName,
+                    dialog.ChangingCellsText,
+                    dialog.CommentText,
+                    dialog.ScenarioHidden,
+                    dialog.ScenarioLocked);
                 break;
             case ScenarioManagerAction.Show:
                 ShowScenarioByName(dialog.SelectedScenarioName);
@@ -36,7 +41,12 @@ public partial class MainWindow
         }
     }
 
-    private void SaveScenarioFromDialog(string? scenarioName, string? changingCellsText, string? comment)
+    private void SaveScenarioFromDialog(
+        string? scenarioName,
+        string? changingCellsText,
+        string? comment,
+        bool hidden,
+        bool locked)
     {
         GridRange range;
         if (TryParseScenarioChangingCells(changingCellsText, out var parsedRange))
@@ -66,7 +76,7 @@ public partial class MainWindow
         var changes = range.AllCells()
             .Select(address => new ScenarioCellValue(address, sheet.GetValue(address.Row, address.Col)))
             .ToList();
-        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment), "Scenario Manager"))
+        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked), "Scenario Manager"))
             return;
 
         MessageBox.Show(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count),

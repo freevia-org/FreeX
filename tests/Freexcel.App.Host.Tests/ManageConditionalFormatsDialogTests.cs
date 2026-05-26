@@ -372,12 +372,14 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
-    public void NewRuleCommand_OpensSingleExcelStyleRuleDialogEntryPoint()
+    public void NewRuleCommand_OpensExcelStyleRuleTypeShellOnFirstCategory()
     {
         var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("Content = \"_New Rule...\"");
-        source.Should().Contain("new NewConditionalFormatRuleDialog(\"Greater Than\", defaultRange)");
+        source.Should().Contain("DefaultNewRuleType = \"Data Bar\"");
+        source.Should().Contain("new NewConditionalFormatRuleDialog(DefaultNewRuleType, defaultRange)");
+        source.Should().NotContain("new NewConditionalFormatRuleDialog(\"Greater Than\", defaultRange)");
         source.Should().NotContain("new ConditionalFormatDialog(\"Greater Than\", defaultRange)");
         source.Should().NotContain("_newRuleTypeBox");
         source.Should().NotContain("toolBar.Children.Add(_newRuleTypeBox)");
@@ -468,6 +470,25 @@ public sealed class ManageConditionalFormatsDialogTests
         clone.NativeChildXmls.Should().Contain(xml => xml.Contains("future", StringComparison.Ordinal));
         clone.NativeChildXmls.Should().NotContain(xml => xml.Contains("11111111-2222-3333-4444-555555555555", StringComparison.Ordinal));
         clone.NativePayloadChildXmls.Should().BeEquivalentTo(source.NativePayloadChildXmls);
+    }
+
+    [Fact]
+    public void RulesListView_DoubleClickOnRowOpensEditRule()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("MouseDoubleClick += EditRule_Click");
+    }
+
+    [Fact]
+    public void RulesListView_EnterKeyOpensEditRuleAndDeleteKeyDeletesSelectedRule()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("_listView.KeyDown += ListView_KeyDown");
+        source.Should().Contain("private void ListView_KeyDown");
+        source.Should().Contain("Key.Enter");
+        source.Should().Contain("Key.Delete");
     }
 
     private static ConditionalFormat CloneWithPriority(ConditionalFormat source, int priority, Guid? id = null)

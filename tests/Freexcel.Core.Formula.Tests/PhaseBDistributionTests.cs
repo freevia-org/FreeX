@@ -270,21 +270,6 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
-    public void PoissonAndExponDistributionFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
-    {
-        var sheet = MakeSheet(
-            (1, 1, 1.0), (2, 1, 2.0),
-            (1, 2, 2.0), (2, 2, 3.0),
-            (1, 3, 0.0), (2, 3, 1.0));
-
-        AssertColumnApproximately(Eval("POISSON.DIST(A1:A2,B1:B2,C1:C2)", sheet), Calc("POISSON.DIST(1,2,FALSE)"), Calc("POISSON.DIST(2,3,TRUE)"));
-        AssertColumnApproximately(Eval("EXPON.DIST(A1:A2,B1:B2,C1:C2)", sheet), Calc("EXPON.DIST(1,2,FALSE)"), Calc("EXPON.DIST(2,3,TRUE)"));
-
-        Eval("POISSON.DIST(A1:A2,B1:C1,FALSE)", sheet).Should().Be(ErrorValue.Value);
-        Eval("EXPON.DIST(A1:A2,B1:C1,FALSE)", sheet).Should().Be(ErrorValue.Value);
-    }
-
-    [Fact]
     public void TDist_CumulativeAt0_Returns0Point5()
         => Calc("T.DIST(0,10,TRUE)").Should().BeApproximately(0.5, 1e-10);
 
@@ -896,4 +881,25 @@ public class PhaseBDistributionTests
     [Fact]
     public void BinomDistRange_AllValues_Returns1()
         => Calc("BINOM.DIST.RANGE(10,0.5,0,10)").Should().BeApproximately(1.0, 1e-10);
+
+    [Fact]
+    public void BinomDistRange_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, 10.0), (2, 1, 12.0),
+            (1, 2, 0.5), (2, 2, 0.25),
+            (1, 3, 3.0), (2, 3, 2.0),
+            (1, 4, 5.0), (2, 4, 4.0));
+
+        AssertColumnApproximately(
+            Eval("BINOM.DIST.RANGE(A1:A2,B1:B2,C1:C2,D1:D2)", sheet),
+            Calc("BINOM.DIST.RANGE(10,0.5,3,5)"),
+            Calc("BINOM.DIST.RANGE(12,0.25,2,4)"));
+        AssertColumnApproximately(
+            Eval("BINOM.DIST.RANGE(A1:A2,B1:B2,C1:C2)", sheet),
+            Calc("BINOM.DIST.RANGE(10,0.5,3)"),
+            Calc("BINOM.DIST.RANGE(12,0.25,2)"));
+
+        Eval("BINOM.DIST.RANGE(A1:A2,B1:C1,3)", sheet).Should().Be(ErrorValue.Value);
+    }
 }

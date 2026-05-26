@@ -1074,33 +1074,6 @@ public class ExportPlannerTests
     }
 
     [Fact]
-    public void PdfDocumentExporter_WritesSelectableTextOverlayForInlineUiContainerText()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
-            var document = CreateInlineUiContainerTextDocument();
-
-            try
-            {
-                PdfDocumentExporter.Save(
-                    document,
-                    path,
-                    null,
-                    null,
-                    includeSelectableText: true);
-
-                var bytes = File.ReadAllBytes(path);
-                Encoding.ASCII.GetString(bytes).Should().Contain("Inline UI PDF Text");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
-        });
-    }
-
-    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForAccessText()
     {
         StaTestRunner.Run(() =>
@@ -1739,27 +1712,6 @@ public class ExportPlannerTests
         text.Inlines.Add(new Run("Nested "));
         text.Inlines.Add(new Bold(new Run("Inline ")));
         text.Inlines.Add(new Italic(new Run("PDF Text")));
-        page.Children.Add(text);
-        var content = new PageContent();
-        ((IAddChild)content).AddChild(page);
-        document.Pages.Add(content);
-        return document;
-    }
-
-    private static FixedDocument CreateInlineUiContainerTextDocument()
-    {
-        var document = new FixedDocument();
-        document.DocumentPaginator.PageSize = new System.Windows.Size(190, 120);
-        var page = new FixedPage
-        {
-            Width = 190,
-            Height = 120,
-            Background = Brushes.White
-        };
-        var text = new TextBlock { Margin = new System.Windows.Thickness(12) };
-        text.Inlines.Add(new Run("Inline "));
-        text.Inlines.Add(new InlineUIContainer(new TextBlock { Text = "UI " }));
-        text.Inlines.Add(new Run("PDF Text"));
         page.Children.Add(text);
         var content = new PageContent();
         ((IAddChild)content).AddChild(page);

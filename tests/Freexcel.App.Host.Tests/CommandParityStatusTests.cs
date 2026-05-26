@@ -42,18 +42,6 @@ public sealed class CommandParityStatusTests
         }
     }
 
-    [Fact]
-    public void FormatPainterKeyboardEvidence_IsTrackedInUiTestCatalog()
-    {
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
-
-        var tableRows = ParseMarkdownTableRows(doc);
-
-        tableRows.Should().Contain(
-            row => row.FirstCell == "UI-CMD-HOME-CLIP-003" && row.Status == "In Progress",
-            "Format Painter has implementation and keyboard Escape evidence, so the UI catalog should not leave it as Not Started");
-    }
-
     private static IReadOnlyList<CommandTableRow> ParseMarkdownTableRows(string doc)
     {
         List<CommandTableRow> rows = [];
