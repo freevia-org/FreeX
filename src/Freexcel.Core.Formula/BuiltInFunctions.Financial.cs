@@ -747,9 +747,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Dollarde(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double f = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue dollarRange) return MapUnaryTextRange(dollarRange, value => DollardeScalar(value, f));
-        return DollardeScalar(args[0], f);
+        return MapBinaryMathArgs(args[0], args[1], DollardeScalar);
+    }
+
+    private static ScalarValue DollardeScalar(ScalarValue dollarValue, ScalarValue fractionValue)
+    {
+        double f = Math.Truncate(ToNumber(fractionValue));
+        return DollardeScalar(dollarValue, f);
     }
 
     private static ScalarValue DollardeScalar(ScalarValue dollarValue, double f)
@@ -768,9 +772,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Dollarfr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double f = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue dollarRange) return MapUnaryTextRange(dollarRange, value => DollarfrScalar(value, f));
-        return DollarfrScalar(args[0], f);
+        return MapBinaryMathArgs(args[0], args[1], DollarfrScalar);
+    }
+
+    private static ScalarValue DollarfrScalar(ScalarValue dollarValue, ScalarValue fractionValue)
+    {
+        double f = Math.Truncate(ToNumber(fractionValue));
+        return DollarfrScalar(dollarValue, f);
     }
 
     private static ScalarValue DollarfrScalar(ScalarValue dollarValue, double f)
