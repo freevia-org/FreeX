@@ -1747,6 +1747,19 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌Comments ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="New Comment" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
+                                        local:RibbonTooltip.Title="New Comment"
+                                        local:RibbonTooltip.KeyTip="CM"
+                                        local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Comments" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Text ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
@@ -1782,19 +1795,6 @@
                                         local:RibbonTooltip.Description="Insert a special character or symbol at the cursor position."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Symbols" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
-                        <!-- ▌Comments ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="New Comment" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
-                                        local:RibbonTooltip.Title="New Comment"
-                                        local:RibbonTooltip.KeyTip="CM"
-                                        local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell."/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Comments" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
 
                     </StackPanel>
@@ -2077,14 +2077,6 @@
                                         local:RibbonTooltip.Title="Print Titles"
                                         local:RibbonTooltip.KeyTip="PT"
                                         local:RibbonTooltip.Description="Repeat selected rows or columns on every printed page."/>
-                                <Button Content="Header/Footer" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HeaderFooterBtn_Click"
-                                        local:RibbonTooltip.Title="Header &amp; Footer"
-                                        local:RibbonTooltip.KeyTip="H"
-                                        local:RibbonTooltip.Description="Edit printed page headers and footers."/>
-                                <Button Content="Page Setup" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageSetupDialogBtn_Click"
-                                        local:RibbonTooltip.Title="Page Setup"
-                                        local:RibbonTooltip.KeyTip="PS"
-                                        local:RibbonTooltip.Description="Open the Page Setup dialog for page, margin, and sheet print options."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Page Setup" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2402,6 +2394,23 @@
                                         local:RibbonTooltip.Description="External workbook queries and connection management are deferred in Freexcel."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Queries &amp; Connections" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Data Types ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Stocks" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Stocks"
+                                        local:RibbonTooltip.KeyTip="ST"
+                                        local:RibbonTooltip.Description="Linked stock data types are deferred in Freexcel."/>
+                                <Button Content="Geography" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Geography"
+                                        local:RibbonTooltip.KeyTip="G"
+                                        local:RibbonTooltip.Description="Linked geography data types are deferred in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data Types" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
@@ -2766,20 +2775,10 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="-"    Width="28" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomOutBtn_Click"
-                                            local:RibbonTooltip.Title="Zoom Out"
-                                            local:RibbonTooltip.KeyTip="ZO"
-                                            local:RibbonTooltip.Description="Decrease the zoom level to see more of the sheet."/>
-                                    <Button Content="100%" Width="44" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Zoom100Btn_Click"
-                                            local:RibbonTooltip.Title="Zoom to 100%"
-                                            local:RibbonTooltip.KeyTip="Z1"
-                                            local:RibbonTooltip.Description="Reset the zoom level to 100%."/>
-                                    <Button Content="+"    Width="28" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomInBtn_Click"
-                                            local:RibbonTooltip.Title="Zoom In"
-                                            local:RibbonTooltip.KeyTip="ZI"
-                                            local:RibbonTooltip.Description="Increase the zoom level for a closer look at cells."/>
-                                </StackPanel>
+                                <Button Content="100%" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Zoom100Btn_Click"
+                                        local:RibbonTooltip.Title="100%"
+                                        local:RibbonTooltip.KeyTip="Z1"
+                                        local:RibbonTooltip.Description="Reset the zoom level to 100%."/>
                                 <Button Content="Zoom to Selection" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomSelectionBtn_Click"
                                         local:RibbonTooltip.Title="Zoom to Selection"
                                         local:RibbonTooltip.KeyTip="ZS"
