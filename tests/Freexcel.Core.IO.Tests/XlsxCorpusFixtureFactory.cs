@@ -63,6 +63,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-external-links-001" => true,
         "generated-embedded-objects-001" => true,
         "generated-custom-xml-001" => true,
+        "generated-custom-docprops-001" => true,
         _ => false
     };
 
@@ -232,6 +233,17 @@ internal static class XlsxCorpusFixtureFactory
                                 Target="itemProps1.xml"/>
                 </Relationships>
                 """)),
+        "generated-custom-docprops-001" => CreatePackage(("docProps/custom.xml", """
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="Department">
+                <vt:lpwstr>Compliance</vt:lpwstr>
+              </property>
+              <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="3" name="MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled">
+                <vt:lpwstr>true</vt:lpwstr>
+              </property>
+            </Properties>
+            """)),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated known-gap XLSX package fixture exists for this id.")
     };
 
@@ -379,6 +391,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-custom-xml-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyCustomXmlReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-custom-docprops-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCustomDocumentPropertiesReferenceFixup(archive);
             return;
         }
 
@@ -626,6 +644,34 @@ internal static class XlsxCorpusFixtureFactory
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
             "https://schemas.freexcel.example/customXml/schema1.xsd",
             "External");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+    }
+
+    private static void ApplyCustomDocumentPropertiesReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/docProps/custom.xml",
+                "application/vnd.openxmlformats-officedocument.custom-properties+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelCustomDocumentProperties1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
+            "docProps/custom.xml");
         ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
     }
 
