@@ -61,7 +61,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
             return new CommandOutcome(false, "Paste Special operation is not supported.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        var cells = BuildDestinationCells(sheet).ToList();
+        var cells = BuildDestinationCells(ctx.Workbook, sheet).ToList();
         if (sheet.IsProtected)
         {
             foreach (var (address, _) in cells)
@@ -102,7 +102,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         }
     }
 
-    private IEnumerable<(CellAddress Address, Cell Cell)> BuildDestinationCells(Sheet sheet)
+    private IEnumerable<(CellAddress Address, Cell Cell)> BuildDestinationCells(Workbook workbook, Sheet sheet)
     {
         foreach (var (sourceAddress, sourceCell) in _sourceCells)
         {
@@ -123,10 +123,19 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                 cell = existing;
                 cell.Value = ApplyOperation(existing.Value, sourceCell.Value, _options.Operation);
                 cell.FormulaText = null;
+                if (_options.ContentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
+                    cell.StyleId = MergeNumberFormat(workbook, existing.StyleId, sourceCell.StyleId);
             }
 
             yield return (destination, cell);
         }
+    }
+
+    private static StyleId MergeNumberFormat(Workbook workbook, StyleId destinationStyleId, StyleId sourceStyleId)
+    {
+        var style = workbook.GetStyle(destinationStyleId).Clone();
+        style.NumberFormat = workbook.GetStyle(sourceStyleId).NumberFormat;
+        return workbook.RegisterStyle(style);
     }
 
     private static bool IsBlank(Cell cell) =>

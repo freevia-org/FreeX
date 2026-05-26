@@ -8,9 +8,12 @@ public sealed class ShellFocusCyclePlannerTests
     [InlineData(ShellFocusTarget.Worksheet, false, ShellFocusTarget.Ribbon)]
     [InlineData(ShellFocusTarget.Ribbon, false, ShellFocusTarget.FormulaBar)]
     [InlineData(ShellFocusTarget.FormulaBar, false, ShellFocusTarget.SheetTabs)]
-    [InlineData(ShellFocusTarget.SheetTabs, false, ShellFocusTarget.StatusBar)]
+    [InlineData(ShellFocusTarget.SheetTabs, false, ShellFocusTarget.TaskPane)]
+    [InlineData(ShellFocusTarget.TaskPane, false, ShellFocusTarget.StatusBar)]
     [InlineData(ShellFocusTarget.StatusBar, false, ShellFocusTarget.Worksheet)]
     [InlineData(ShellFocusTarget.Worksheet, true, ShellFocusTarget.StatusBar)]
+    [InlineData(ShellFocusTarget.StatusBar, true, ShellFocusTarget.TaskPane)]
+    [InlineData(ShellFocusTarget.TaskPane, true, ShellFocusTarget.SheetTabs)]
     [InlineData(ShellFocusTarget.Ribbon, true, ShellFocusTarget.Worksheet)]
     public void GetNext_CyclesThroughExcelShellRegions(
         ShellFocusTarget current,
@@ -18,6 +21,22 @@ public sealed class ShellFocusCyclePlannerTests
         ShellFocusTarget expected)
     {
         var next = ShellFocusCyclePlanner.GetNext(current, reverse);
+
+        next.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(ShellFocusTarget.SheetTabs, false, ShellFocusTarget.StatusBar)]
+    [InlineData(ShellFocusTarget.StatusBar, true, ShellFocusTarget.SheetTabs)]
+    public void GetNextAvailable_SkipsUnavailableTaskPane(
+        ShellFocusTarget current,
+        bool reverse,
+        ShellFocusTarget expected)
+    {
+        var next = ShellFocusCyclePlanner.GetNextAvailable(
+            current,
+            reverse,
+            target => target != ShellFocusTarget.TaskPane);
 
         next.Should().Be(expected);
     }

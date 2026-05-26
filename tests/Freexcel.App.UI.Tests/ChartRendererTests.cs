@@ -12,37 +12,169 @@ namespace Freexcel.App.UI.Tests;
 
 public sealed class ChartRendererTests
 {
-    [Theory]
-    [InlineData(ChartType.Treemap)]
-    [InlineData(ChartType.Sunburst)]
-    [InlineData(ChartType.Histogram)]
-    [InlineData(ChartType.Pareto)]
-    [InlineData(ChartType.BoxAndWhisker)]
-    [InlineData(ChartType.Waterfall)]
-    [InlineData(ChartType.Funnel)]
-    [InlineData(ChartType.Map)]
-    public void ChartRenderer_DoesNotRenderDeferredAdvancedChartFamiliesAsLineCharts(ChartType type)
+    [Fact]
+    public void ChartRenderer_DoesNotRenderMapChart()
     {
         var sheetId = SheetId.New();
         var chart = new ChartModel
         {
-            Type = type,
+            Type = ChartType.Map,
             DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
         };
 
         var model = BuildNullablePlotModel(chart, new ViewportModel(
-            [
-                Cell(1, 1, "Category"),
-                Cell(1, 2, "Sales"),
-                Cell(2, 1, "A"),
-                Cell(2, 2, "10"),
-                Cell(3, 1, "B"),
-                Cell(3, 2, "20")
-            ],
+            [Cell(2, 1, "US"), Cell(2, 2, "10"), Cell(3, 1, "UK"), Cell(3, 2, "20")],
             [],
             []));
 
         model.Should().BeNull();
+    }
+
+    [Fact]
+    public void ParetoRenderer_SortsBarsDescendingWithCumulativeLine()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pareto,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Item"), Cell(1, 2, "Count"),
+                Cell(2, 1, "A"),   Cell(2, 2, "10"),
+                Cell(3, 1, "B"),   Cell(3, 2, "50"),
+                Cell(4, 1, "C"),   Cell(4, 2, "20")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        model.Series[0].Should().BeOfType<RectangleBarSeries>();
+        model.Series[1].Should().BeOfType<LineSeries>();
+        model.Axes.Should().Contain(a => a.Position == AxisPosition.Right);
+        var catAxis = model.Axes.OfType<CategoryAxis>().Should().ContainSingle().Subject;
+        catAxis.Labels[0].Should().Be("B");  // highest value first
+    }
+
+    [Fact]
+    public void BoxAndWhiskerRenderer_ComputesStatsPerColumn()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.BoxAndWhisker,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "S1"), Cell(1, 2, "S2"),
+                Cell(2, 1, "1"), Cell(2, 2, "10"),
+                Cell(3, 1, "2"), Cell(3, 2, "20"),
+                Cell(4, 1, "3"), Cell(4, 2, "30"),
+                Cell(5, 1, "4"), Cell(5, 2, "40")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<BoxPlotSeries>();
+        var bps = (BoxPlotSeries)model.Series[0];
+        bps.Items.Should().HaveCount(2);
+        bps.Items[0].Median.Should().BeApproximately(2.5, 0.001);
+        bps.Items[1].Median.Should().BeApproximately(25.0, 0.001);
+    }
+
+    [Fact]
+    public void TreemapRenderer_ProducesRectangleAnnotationsProportionalToValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Treemap,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Item"), Cell(1, 2, "Value"),
+                Cell(2, 1, "A"),   Cell(2, 2, "75"),
+                Cell(3, 1, "B"),   Cell(3, 2, "25")
+            ],
+            [],
+            []));
+
+        var rects = model.Annotations.OfType<RectangleAnnotation>().ToList();
+        rects.Should().HaveCount(2);
+        var widthA = rects[0].MaximumX - rects[0].MinimumX;
+        var widthB = rects[1].MaximumX - rects[1].MinimumX;
+        widthA.Should().BeApproximately(0.75, 0.001);
+        widthB.Should().BeApproximately(0.25, 0.001);
+    }
+
+    [Fact]
+    public void SunburstRenderer_UsesPieSeriesWithInnerDiameter()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Sunburst,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Region"), Cell(1, 2, "Sales"),
+                Cell(2, 1, "North"),  Cell(2, 2, "60"),
+                Cell(3, 1, "South"),  Cell(3, 2, "40")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>();
+        var ps = (PieSeries)model.Series[0];
+        ps.InnerDiameter.Should().BeGreaterThan(0);
+        ps.Slices.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void FunnelRenderer_ProducesCenteredDecreasingRectangles()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Funnel,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Stage"),  Cell(1, 2, "Count"),
+                Cell(2, 1, "Lead"),   Cell(2, 2, "100"),
+                Cell(3, 1, "Qual"),   Cell(3, 2, "60"),
+                Cell(4, 1, "Close"),  Cell(4, 2, "20")
+            ],
+            [],
+            []));
+
+        var rects = model.Annotations.OfType<RectangleAnnotation>().ToList();
+        rects.Should().HaveCount(3);
+        var width0 = rects[0].MaximumX - rects[0].MinimumX;
+        var width1 = rects[1].MaximumX - rects[1].MinimumX;
+        var width2 = rects[2].MaximumX - rects[2].MinimumX;
+        width0.Should().BeGreaterThan(width1);
+        width1.Should().BeGreaterThan(width2);
     }
 
     [Fact]

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Insert Function">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><text x="24.84" y="34.56" text-anchor="middle" font-size="22.68" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" dominant-baseline="central">fx</text><circle cx="38.88" cy="13.5" r="4.32" fill="#dff6dd"/><path stroke="#fff" stroke-width="1.5" stroke-linecap="round" d="M38.88 10.8v5.4M36.18 13.5h5.4"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Insert Function">
+  <rect width="32" height="32" fill="none"/>
+  <text x="14" y="24" font-size="23" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">fx</text>
+  <circle cx="25" cy="8" r="5" fill="#107c41"/>
+  <path d="M25 5V11M22 8H28" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="square"/>
 </svg>
-

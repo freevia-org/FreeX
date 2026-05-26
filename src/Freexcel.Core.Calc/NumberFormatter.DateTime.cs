@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Calc;
 
@@ -11,18 +12,24 @@ public static partial class NumberFormatter
         LongDate
     }
 
-    private static FormatResult FormatDateTimeWithColor(double oaDate, string[] sections)
+    private static FormatResult FormatDateTimeWithColor(
+        double oaDate,
+        string[] sections,
+        WorkbookIndexedColorPalette? indexedColors)
     {
-        var parsed = SelectDateTimeSection(oaDate, sections);
+        var parsed = SelectDateTimeSection(oaDate, sections, indexedColors);
         if (parsed.Format == "")
-            return new FormatResult("", parsed.ColorHex);
+            return new FormatResult("", parsed.ColorHex, parsed.ThemeColor);
 
-        return new FormatResult(FormatDateTime(oaDate, parsed.Format), parsed.ColorHex);
+        return new FormatResult(FormatDateTime(oaDate, parsed.Format), parsed.ColorHex, parsed.ThemeColor);
     }
 
-    private static ParsedSection SelectDateTimeSection(double value, string[] sections)
+    private static ParsedSection SelectDateTimeSection(
+        double value,
+        string[] sections,
+        WorkbookIndexedColorPalette? indexedColors)
     {
-        var parsedSections = sections.Select(ParseSection).ToArray();
+        var parsedSections = sections.Select(section => ParseSection(section, indexedColors)).ToArray();
         if (!parsedSections.Any(section => section.Condition is not null))
             return parsedSections[0];
 

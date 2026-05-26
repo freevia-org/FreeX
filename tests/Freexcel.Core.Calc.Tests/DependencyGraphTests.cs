@@ -3,6 +3,7 @@ using Freexcel.Core.Commands;
 using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 using FluentAssertions;
+using System.Diagnostics;
 
 namespace Freexcel.Core.Calc.Tests;
 
@@ -32,6 +33,42 @@ public class DependencyGraphTests
 
         graph.GetDirectDependents(a1).Should().Contain(b1);
         graph.GetDirectPrecedents(b1).Should().Contain(a1);
+    }
+
+    [Fact]
+    public void SetDependencies_CopiesCallerOwnedSets()
+    {
+        var graph = new DependencyGraph();
+        var sheet = SheetId.New();
+        var a1 = new CellAddress(sheet, 1, 1);
+        var b1 = new CellAddress(sheet, 1, 2);
+        var c1 = new CellAddress(sheet, 1, 3);
+        var callerOwned = new HashSet<CellAddress> { a1 };
+
+        graph.SetDependencies(b1, callerOwned);
+        callerOwned.Add(c1);
+
+        graph.GetDirectPrecedents(b1).Should().BeEquivalentTo([a1]);
+        graph.GetDirectDependents(c1).Should().NotContain(b1);
+    }
+
+    [Fact]
+    public void SetDependenciesFromOwnedSet_UsesFreshSetWithoutCopying()
+    {
+        var graph = new DependencyGraph();
+        var sheet = SheetId.New();
+        var a1 = new CellAddress(sheet, 1, 1);
+        var b1 = new CellAddress(sheet, 1, 2);
+        var owned = new HashSet<CellAddress> { a1 };
+        var helper = typeof(DependencyGraph).GetMethod(
+            "SetDependenciesFromOwnedSet",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        helper.Should().NotBeNull("RecalcEngine should have an owned HashSet path for formula dependencies");
+        helper!.Invoke(graph, [b1, owned]);
+
+        graph.GetDirectPrecedents(b1).Should().BeSameAs(owned);
+        graph.GetDirectDependents(a1).Should().Contain(b1);
     }
 
     [Fact]
@@ -386,6 +423,78 @@ public class AstCacheTests
         engine.Recalculate(wb, [a1]);
         sheet.GetValue(b1).Should().Be(new NumberValue(11),
             "second recalc with same formula should still produce a correct result via cached AST");
+    }
+
+    [Fact]
+    public void RebuildFormulaDependencies_ReusesCachedAstOnSecondPass()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        const uint formulaCount = 2_000;
+
+        for (uint row = 1; row <= formulaCount; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 2));
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 3), $"A{row}+B{row}");
+        }
+
+        var coldMemory = GC.GetAllocatedBytesForCurrentThread();
+        var cold = Stopwatch.StartNew();
+        engine.RebuildFormulaDependencies(wb);
+        cold.Stop();
+        coldMemory = GC.GetAllocatedBytesForCurrentThread() - coldMemory;
+
+        var sampleFormula = sheet.GetCell(new CellAddress(sheet.Id, 1, 3))!;
+        var cachedAst = sampleFormula.CachedAst;
+        cachedAst.Should().NotBeNull();
+
+        var cachedMemory = GC.GetAllocatedBytesForCurrentThread();
+        var cached = Stopwatch.StartNew();
+        engine.RebuildFormulaDependencies(wb);
+        cached.Stop();
+        cachedMemory = GC.GetAllocatedBytesForCurrentThread() - cachedMemory;
+
+        Console.WriteLine(
+            $"Dependency rebuild cold: {cold.Elapsed.TotalMilliseconds:F2}ms, {coldMemory:N0} bytes; " +
+            $"cached: {cached.Elapsed.TotalMilliseconds:F2}ms, {cachedMemory:N0} bytes");
+
+        sampleFormula.CachedAst.Should().BeSameAs(cachedAst);
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new NumberValue(10));
+        engine.Recalculate(wb, [a1]);
+
+        sheet.GetValue(c1).Should().Be(new NumberValue(12));
+    }
+
+    [Fact]
+    public void RebuildFormulaDependencies_PreservesVolatileTrackingWhenReusingCachedAst()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+
+        sheet.SetFormula(a1, "NOW()");
+        sheet.SetFormula(b1, "A1");
+
+        engine.RebuildFormulaDependencies(wb);
+        var cachedAst = sheet.GetCell(a1)!.CachedAst;
+        cachedAst.Should().NotBeNull();
+
+        engine.RebuildFormulaDependencies(wb);
+        sheet.GetCell(a1)!.CachedAst.Should().BeSameAs(cachedAst);
+
+        var report = engine.Recalculate(wb, []);
+
+        report.RecalculatedCells.Should().Contain(a1);
+        report.RecalculatedCells.Should().Contain(b1);
+        sheet.GetValue(a1).Should().BeOfType<DateTimeValue>();
+        sheet.GetValue(b1).Should().Be(sheet.GetValue(a1));
     }
 }
 

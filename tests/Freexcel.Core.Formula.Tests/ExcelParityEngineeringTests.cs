@@ -97,6 +97,33 @@ public sealed class ExcelParityEngineeringTests
         AssertColumn(_eval.Evaluate("=CONVERT(A1:A2,\"C\",\"F\")", sheet), new NumberValue(33.8), new NumberValue(35.6));
     }
 
+    [Fact]
+    public void Convert_SameShapeUnitArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (1, 2, new TextValue("m")),
+            (2, 2, new TextValue("hr")),
+            (1, 3, new TextValue("cm")),
+            (2, 3, new TextValue("sec")));
+
+        AssertColumn(_eval.Evaluate("=CONVERT(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(100), new NumberValue(7200));
+    }
+
+    [Fact]
+    public void Convert_MismatchedUnitArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (1, 2, new TextValue("m")),
+            (1, 3, new TextValue("hr")));
+
+        _eval.Evaluate("=CONVERT(A1:A2,B1:C1,\"cm\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CONVERT(A1:A2,\"m\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
     [Theory]
     [InlineData("=BIN2DEC(\"102\")")]
     [InlineData("=BIN2DEC(\"10101010101\")")]

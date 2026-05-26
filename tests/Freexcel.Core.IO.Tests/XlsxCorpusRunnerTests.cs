@@ -88,6 +88,29 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void WorkbookSummary_IncludesPopulatedCellStyles()
+    {
+        var workbook = new Workbook("StyledCells");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("styled"),
+            StyleId = workbook.RegisterStyle(new CellStyle
+            {
+                Bold = true,
+                FillColor = new CellColor(1, 2, 3),
+                NumberFormat = "0.00"
+            })
+        });
+        var baseline = new Workbook("StyledCells");
+        var baselineSheet = baseline.AddSheet("Sheet1");
+        baselineSheet.SetCell(new CellAddress(baselineSheet.Id, 1, 1), new TextValue("styled"));
+
+        CaptureSummary(workbook).Should().NotBe(CaptureSummary(baseline));
+    }
+
+    [Fact]
     public void GeneratedCorpusRows_IncludeNamedVisualObjects()
     {
         var rows = ReadManifestRows()
@@ -192,6 +215,8 @@ public class XlsxCorpusRunnerTests
             var before = CapturePackageSummary(source);
             var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
             before.CriticalParts.Should().Contain(fixtureParts, row.Id);
+            var fixtureContentTypeOverrides = ContentTypeOverridesForParts(before, fixtureParts);
+            fixtureContentTypeOverrides.Should().NotBeEmpty(row.Id);
 
             source.Position = 0;
             var workbook = adapter.Load(source);
@@ -205,6 +230,9 @@ public class XlsxCorpusRunnerTests
 
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+            after.CriticalRelationshipDetails.Should().Contain(before.CriticalRelationshipDetails, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(before.CriticalContentTypeOverrides, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(fixtureContentTypeOverrides, row.Id);
         }
     }
 
@@ -227,6 +255,8 @@ public class XlsxCorpusRunnerTests
             var before = CapturePackageSummary(source);
             var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
             before.CriticalParts.Should().Contain(fixtureParts, row.Id);
+            var fixtureContentTypeOverrides = ContentTypeOverridesForParts(before, fixtureParts);
+            fixtureContentTypeOverrides.Should().NotBeEmpty(row.Id);
 
             source.Position = 0;
             XlsxFeatureInspector.Inspect(source).HasUnsupportedFeatures.Should().BeFalse(row.Id);
@@ -245,6 +275,9 @@ public class XlsxCorpusRunnerTests
 
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+            after.CriticalRelationshipDetails.Should().Contain(before.CriticalRelationshipDetails, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(before.CriticalContentTypeOverrides, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(fixtureContentTypeOverrides, row.Id);
 
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
@@ -361,6 +394,80 @@ public class XlsxCorpusRunnerTests
             .ToArray();
     }
 
+    private static IReadOnlyList<string> ContentTypeOverridesForParts(
+        PackagePartSummary package,
+        IReadOnlyList<string> partNames)
+    {
+        var overridePrefixes = partNames
+            .Select(part => "/" + part.TrimStart('/').Replace('\\', '/') + "=>")
+            .ToArray();
+
+        return package.CriticalContentTypeOverrides
+            .Where(entry => overridePrefixes.Any(prefix => entry.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> RelationshipDetailsForParts(
+        PackagePartSummary package,
+        IReadOnlyList<string> partNames)
+    {
+        var partSet = partNames
+            .Select(part => part.TrimStart('/').Replace('\\', '/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var relationshipPrefixes = partNames
+            .Select(GetRelationshipPartPathForPart)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path + "=>")
+            .ToArray();
+
+        return package.CriticalRelationshipDetails
+            .Where(entry =>
+                relationshipPrefixes.Any(prefix => entry.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ||
+                IsWorkbookRelationshipToCriticalPart(entry, partSet))
+            .ToArray();
+    }
+
+    private static string GetRelationshipPartPathForPart(string partName)
+    {
+        var path = partName.TrimStart('/').Replace('\\', '/');
+        if (string.Equals(path, "_rels/.rels", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("xl/_rels/", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        var slashIndex = path.LastIndexOf('/');
+        return slashIndex < 0
+            ? $"_rels/{path}.rels"
+            : $"{path[..slashIndex]}/_rels/{path[(slashIndex + 1)..]}.rels";
+    }
+
+    private static bool IsWorkbookRelationshipToCriticalPart(string relationshipDetail, ISet<string> partNames)
+    {
+        const string workbookRelsPrefix = "xl/_rels/workbook.xml.rels=>";
+        if (!relationshipDetail.StartsWith(workbookRelsPrefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var targetEnd = relationshipDetail.IndexOf("|type=", StringComparison.Ordinal);
+        if (targetEnd < 0)
+            return false;
+
+        var target = relationshipDetail[workbookRelsPrefix.Length..targetEnd];
+        if (string.Equals(target, "worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(target, "/xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var normalized = target.StartsWith("/", StringComparison.Ordinal)
+            ? target.TrimStart('/')
+            : "xl/" + target.TrimStart('/');
+        return partNames.Contains(normalized);
+    }
+
     [Fact]
     public void GeneratedUnsupportedChartFixture_UsesCurrentlyUnsupportedChartFamily()
     {
@@ -434,6 +541,82 @@ public class XlsxCorpusRunnerTests
                 row.Id);
             AssertExpectedFeatureTags(row, roundTripped);
         }
+    }
+
+    [Fact]
+    public void PublicCorpusRows_WithUnsupportedWarningTags_ReportExpectedFeaturesWhenFilesArePresent()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Select(row => new { Row = row, ExpectedKinds = ExpectedFeatureKindsFor(row) })
+            .Where(item => item.ExpectedKinds.Length > 0)
+            .ToArray();
+
+        rows.Should().NotBeEmpty("public corpus warning-tag rows prove real workbook warning detection, not only generated fixtures");
+
+        var inspectedRows = 0;
+        foreach (var item in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", item.Row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            var report = XlsxFeatureInspector.Inspect(source);
+            inspectedRows++;
+
+            report.Features.Select(feature => feature.Kind).Distinct()
+                .Should().Contain(item.ExpectedKinds, item.Row.Id);
+        }
+
+        inspectedRows.Should().BeGreaterThan(0, "at least one public corpus workbook with warning tags must be present to prove real-file warning detection");
+    }
+
+    [Fact]
+    public void PublicCorpusRows_WithUnsupportedWarningTags_RetainCriticalPackagePartsAfterModelEdit()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Select(row => new { Row = row, ExpectedKinds = ExpectedFeatureKindsFor(row) })
+            .Where(item => item.ExpectedKinds.Length > 0)
+            .ToArray();
+
+        rows.Should().NotBeEmpty("public corpus warning-tag rows should also prove real package retention");
+
+        var adapter = new XlsxFileAdapter();
+        var inspectedRows = 0;
+        foreach (var item in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", item.Row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            var before = CapturePackageSummary(source);
+            before.CriticalParts.Should().NotBeEmpty(item.Row.Id);
+            var retainedRelationshipDetails = RelationshipDetailsForParts(before, before.CriticalParts);
+            retainedRelationshipDetails.Should().NotBeEmpty(item.Row.Id);
+            var retainedContentTypeOverrides = ContentTypeOverridesForParts(before, before.CriticalParts);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freexcel-public-warning-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Position = 0;
+            var after = CapturePackageSummary(saved);
+            inspectedRows++;
+
+            after.CriticalParts.Should().Contain(before.CriticalParts, item.Row.Id);
+            after.CriticalRelationshipDetails.Should().Contain(retainedRelationshipDetails, item.Row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(retainedContentTypeOverrides, item.Row.Id);
+        }
+
+        inspectedRows.Should().BeGreaterThan(0, "at least one public warning workbook must be present to prove real-file package retention");
     }
 
     private static IReadOnlyList<ManifestRow> ReadManifestRows()
@@ -544,7 +727,7 @@ public class XlsxCorpusRunnerTests
         if (tags.Contains("smartart") || tags.Contains("diagrams"))
             expected.Add(XlsxUnsupportedFeatureKind.SmartArtDiagrams);
 
-        if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets"))
+        if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets") || tags.Contains("unsupported-sheet-types"))
             expected.Add(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);
 
         if (tags.Contains("embedded-objects"))
@@ -1056,7 +1239,8 @@ public class XlsxCorpusRunnerTests
             address.Col,
             cell.HasFormula ? new ScalarValueSummary("FormulaCachedValue", "") : CaptureScalarValueSummary(cell.Value),
             cell.FormulaText ?? "",
-            cell.IgnoreFormulaError);
+            cell.IgnoreFormulaError,
+            CaptureStyleSummary(workbook.GetStyle(cell.StyleId)));
 
     private static ScalarValueSummary CaptureScalarValueSummary(ScalarValue value) =>
         value switch
@@ -1749,6 +1933,12 @@ public class XlsxCorpusRunnerTests
             format.DataBarShowValue,
             format.DataBarMinLength,
             format.DataBarMaxLength,
+            format.DataBarGradient,
+            format.DataBarBorder,
+            format.DataBarAxisPosition ?? "",
+            format.DataBarAxisColor,
+            format.DataBarNegativeFillColor,
+            format.DataBarNegativeBorderColor,
             format.AboveAverage,
             format.FormulaText ?? "",
             format.IconSetStyle ?? "",
@@ -1840,6 +2030,14 @@ public class XlsxCorpusRunnerTests
                 archive.Entries
                     .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
                     .SelectMany(ReadRelationshipTargets)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                archive.Entries
+                    .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                    .SelectMany(ReadRelationshipDetails)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                ReadCriticalContentTypeOverrides(archive)
                     .Order(StringComparer.OrdinalIgnoreCase)
                     .ToArray());
         }
@@ -1992,6 +2190,56 @@ public class XlsxCorpusRunnerTests
             .Where(target => !string.IsNullOrWhiteSpace(target))
             .Where(target => !target!.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
             .Select(target => $"{relsEntry.FullName.Replace('\\', '/')}=>{target!.Replace('\\', '/')}")
+            .ToArray() ?? [];
+    }
+
+    private static IEnumerable<string> ReadRelationshipDetails(ZipArchiveEntry relsEntry)
+    {
+        XDocument relsXml;
+        using (var stream = relsEntry.Open())
+            relsXml = XDocument.Load(stream);
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        return relsXml.Root?
+            .Elements(relNs + "Relationship")
+            .Where(rel => !string.IsNullOrWhiteSpace(rel.Attribute("Target")?.Value))
+            .Where(rel => !rel.Attribute("Target")!.Value.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
+            .Select(rel =>
+            {
+                var target = rel.Attribute("Target")!.Value.Replace('\\', '/');
+                var type = rel.Attribute("Type")?.Value ?? "";
+                var targetMode = rel.Attribute("TargetMode")?.Value ?? "";
+                return $"{relsEntry.FullName.Replace('\\', '/')}=>{target}|type={type}|mode={targetMode}";
+            })
+            .ToArray() ?? [];
+    }
+
+    private static IEnumerable<string> ReadCriticalContentTypeOverrides(ZipArchive archive)
+    {
+        var entry = archive.GetEntry("[Content_Types].xml");
+        if (entry is null)
+            return [];
+
+        XDocument contentTypesXml;
+        using (var stream = entry.Open())
+            contentTypesXml = XDocument.Load(stream);
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        return contentTypesXml.Root?
+            .Elements(contentTypeNs + "Override")
+            .Select(element => new
+            {
+                PartName = element.Attribute("PartName")?.Value,
+                ContentType = element.Attribute("ContentType")?.Value
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.PartName))
+            .Select(item => new
+            {
+                PartName = item.PartName!.TrimStart('/').Replace('\\', '/'),
+                ContentType = item.ContentType ?? ""
+            })
+            .Where(item => IsFidelityCriticalPart(item.PartName))
+            .Select(item => $"/{item.PartName}=>{item.ContentType}")
             .ToArray() ?? [];
     }
 
@@ -2251,7 +2499,8 @@ public class XlsxCorpusRunnerTests
         uint Column,
         ScalarValueSummary Value,
         string FormulaText,
-        bool IgnoreFormulaError);
+        bool IgnoreFormulaError,
+        CellStyleSummary? Style);
 
     private sealed record ScalarValueSummary(string Kind, string Value);
 
@@ -2820,6 +3069,12 @@ public class XlsxCorpusRunnerTests
         bool DataBarShowValue,
         int? DataBarMinLength,
         int? DataBarMaxLength,
+        bool DataBarGradient,
+        bool DataBarBorder,
+        string DataBarAxisPosition,
+        RgbColor? DataBarAxisColor,
+        RgbColor? DataBarNegativeFillColor,
+        RgbColor? DataBarNegativeBorderColor,
         bool AboveAverage,
         string FormulaText,
         string IconSetStyle,
@@ -2850,5 +3105,7 @@ public class XlsxCorpusRunnerTests
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,
-        IReadOnlyList<string> CriticalRelationshipTargets);
+        IReadOnlyList<string> CriticalRelationshipTargets,
+        IReadOnlyList<string> CriticalRelationshipDetails,
+        IReadOnlyList<string> CriticalContentTypeOverrides);
 }

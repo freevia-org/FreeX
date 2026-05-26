@@ -11,6 +11,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         sheet.UsePrinterDefaults is not null ||
         sheet.PrintCopies is > 0 ||
         sheet.PrintQualityVerticalDpi is > 0 ||
+        sheet.PageSetupMetadata is not null ||
         sheet.FitToPage is not null ||
         sheet.AutoPageBreaks is not null ||
         sheet.OutlineSummaryBelow is not null ||
@@ -58,8 +59,13 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         var pageSetup = root.Element(workbookNs + "pageSetup");
         if (pageSetup is null)
         {
-            if (sheet.UsePrinterDefaults is null && sheet.PrintCopies is not > 0)
+            if (sheet.UsePrinterDefaults is null &&
+                sheet.PrintCopies is not > 0 &&
+                sheet.PrintQualityVerticalDpi is not > 0 &&
+                sheet.PageSetupMetadata is null)
+            {
                 return false;
+            }
 
             pageSetup = new XElement(workbookNs + "pageSetup");
             InsertPageSetupInOrder(root, workbookNs, pageSetup);
@@ -69,8 +75,52 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         changed |= SetOptionalBoolAttribute(pageSetup, "usePrinterDefaults", sheet.UsePrinterDefaults);
         changed |= SetOptionalIntAttribute(pageSetup, "copies", sheet.PrintCopies);
         changed |= SetOptionalIntAttribute(pageSetup, "verticalDpi", sheet.PrintQualityVerticalDpi);
+        changed |= ApplyNativePageSetupMetadata(pageSetup, sheet.PageSetupMetadata);
         return changed;
     }
+
+    private static bool ApplyNativePageSetupMetadata(XElement pageSetup, WorksheetPageSetupMetadataModel? metadata)
+    {
+        if (metadata is null)
+            return false;
+
+        var changed = false;
+        foreach (var attribute in metadata.NativeAttributes)
+        {
+            if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPageSetupAttribute(attribute.Key))
+                continue;
+
+            changed |= SetAttributeIfDifferent(pageSetup, XName.Get(attribute.Key), attribute.Value);
+        }
+
+        if (metadata.NativeChildXmls.Count > 0)
+        {
+            pageSetup.Elements().Remove();
+            changed = true;
+            foreach (var childXml in metadata.NativeChildXmls)
+            {
+                if (string.IsNullOrWhiteSpace(childXml))
+                    continue;
+
+                try
+                {
+                    pageSetup.Add(XElement.Parse(childXml));
+                }
+                catch
+                {
+                    // Skip malformed native payloads in authored native JSON files.
+                }
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool IsModeledPageSetupAttribute(string name) =>
+        name is "paperSize" or "scale" or "firstPageNumber" or "fitToWidth" or "fitToHeight" or
+            "pageOrder" or "orientation" or "usePrinterDefaults" or "blackAndWhite" or "draft" or
+            "cellComments" or "useFirstPageNumber" or "errors" or "horizontalDpi" or "verticalDpi" or
+            "copies";
 
     private static bool ApplyPageSetupProperties(XElement root, XNamespace workbookNs, Sheet sheet)
     {

@@ -132,6 +132,140 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static Func<string, string?>? TryStripThousandSeparators(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (source, expected) in examples)
+        {
+            if (!source.Contains(',', StringComparison.Ordinal))
+                return null;
+            if (source.Replace(",", string.Empty) != expected)
+                return null;
+        }
+
+        return s => s.Replace(",", string.Empty);
+    }
+
+    private static Func<string, string?>? TryExtractDigitsOnly(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (source, expected) in examples)
+        {
+            if (source.All(char.IsDigit))
+                return null;
+            var digits = ExtractDigits(source);
+            if (digits.Length == 0 || digits != expected)
+                return null;
+        }
+
+        return s =>
+        {
+            var digits = ExtractDigits(s);
+            return digits.Length > 0 ? digits : null;
+        };
+    }
+
+    private static Func<string, string?>? TryDelimitedPartReorder(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var sourceDelimiter in Delimiters)
+        {
+            if (!TryDelimitedPartReorder(examples, sourceDelimiter, s => s[1] + ", " + s[0], out var commaFirstPattern))
+                continue;
+
+            return commaFirstPattern;
+        }
+
+        return null;
+    }
+
+    private static Func<string, string?>? TryDigitMask(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        string? mask = null;
+        int? digitCount = null;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (source.Length == 0 || source.Any(c => !char.IsDigit(c)))
+                return null;
+
+            var expectedDigits = ExtractDigits(expected);
+            if (source != expectedDigits)
+                return null;
+
+            var currentMask = CreateDigitMask(expected);
+            if (currentMask == expected || string.IsNullOrWhiteSpace(currentMask))
+                return null;
+
+            if (mask is null)
+            {
+                mask = currentMask;
+                digitCount = source.Length;
+            }
+            else if (mask != currentMask || digitCount != source.Length)
+            {
+                return null;
+            }
+        }
+
+        if (mask is null || digitCount is null)
+            return null;
+
+        return source =>
+        {
+            if (source.Length != digitCount.Value || source.Any(c => !char.IsDigit(c)))
+                return null;
+
+            return ApplyDigitMask(source, mask);
+        };
+    }
+
+    private static bool TryDelimitedPartReorder(
+        IReadOnlyList<(string Source, string Expected)> examples,
+        char sourceDelimiter,
+        Func<string[], string> formatter,
+        out Func<string, string?>? pattern)
+    {
+        pattern = null;
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitTwoParts(source, sourceDelimiter, out var parts) ||
+                formatter(parts) != expected)
+            {
+                return false;
+            }
+        }
+
+        pattern = source =>
+            TrySplitTwoParts(source, sourceDelimiter, out var parts)
+                ? formatter(parts)
+                : null;
+        return true;
+    }
+
+    private static bool TrySplitTwoParts(string source, char delimiter, out string[] parts)
+    {
+        parts = source.Split(delimiter, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 2 && parts.All(part => part.Length > 0);
+    }
+
+    private static string ExtractDigits(string value) =>
+        string.Concat(value.Where(char.IsDigit));
+
+    private static string CreateDigitMask(string value) =>
+        new(value.Select(c => char.IsDigit(c) ? '#' : c).ToArray());
+
+    private static string ApplyDigitMask(string digits, string mask)
+    {
+        var index = 0;
+        var chars = new char[mask.Length];
+        for (var i = 0; i < mask.Length; i++)
+        {
+            chars[i] = mask[i] == '#'
+                ? digits[index++]
+                : mask[i];
+        }
+
+        return new string(chars);
+    }
+
     private static Func<string, string?>? TryInitials(IReadOnlyList<(string Source, string Expected)> examples)
     {
         foreach (var delimiter in Delimiters)

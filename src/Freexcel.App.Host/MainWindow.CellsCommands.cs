@@ -127,7 +127,14 @@ public partial class MainWindow
         var dialog = new RowHeightDialog { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, dialog.Result.Height)))
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Row Height",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);
+                    return new SetRowHeightCommand(sheetId, startRow, endRow, dialog.Result.Height);
+                }))
             return;
         UpdateViewport();
     }
@@ -144,7 +151,14 @@ public partial class MainWindow
         var dialog = new ColumnWidthDialog { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        if (!TryExecuteGroupedSheetCommand("Column Width", sheetId => new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, dialog.Result.Width)))
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Column Width",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);
+                    return new SetColumnWidthCommand(sheetId, startCol, endCol, dialog.Result.Width);
+                }))
             return;
         UpdateViewport();
     }

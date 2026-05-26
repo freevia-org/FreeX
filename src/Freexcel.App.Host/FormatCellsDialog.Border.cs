@@ -133,28 +133,28 @@ public partial class FormatCellsDialog
             return false;
         }
 
-        if (!TryParseRequiredColor(DlgBorderTopColorBox.Text, out _))
+        if (BorderSideNeedsColor(DlgBorderTopStyleBox) && !TryParseRequiredColor(DlgBorderTopColorBox.Text, out _))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
             ShowInvalidInputWarning("Enter a top border color as #RRGGBB or R, G, B.", DlgBorderTopColorBox);
             return false;
         }
 
-        if (!TryParseRequiredColor(DlgBorderRightColorBox.Text, out _))
+        if (BorderSideNeedsColor(DlgBorderRightStyleBox) && !TryParseRequiredColor(DlgBorderRightColorBox.Text, out _))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
             ShowInvalidInputWarning("Enter a right border color as #RRGGBB or R, G, B.", DlgBorderRightColorBox);
             return false;
         }
 
-        if (!TryParseRequiredColor(DlgBorderBottomColorBox.Text, out _))
+        if (BorderSideNeedsColor(DlgBorderBottomStyleBox) && !TryParseRequiredColor(DlgBorderBottomColorBox.Text, out _))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
             ShowInvalidInputWarning("Enter a bottom border color as #RRGGBB or R, G, B.", DlgBorderBottomColorBox);
             return false;
         }
 
-        if (!TryParseRequiredColor(DlgBorderLeftColorBox.Text, out _))
+        if (BorderSideNeedsColor(DlgBorderLeftStyleBox) && !TryParseRequiredColor(DlgBorderLeftColorBox.Text, out _))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
             ShowInvalidInputWarning("Enter a left border color as #RRGGBB or R, G, B.", DlgBorderLeftColorBox);
@@ -163,6 +163,9 @@ public partial class FormatCellsDialog
 
         return true;
     }
+
+    private static bool BorderSideNeedsColor(ComboBox styleBox) =>
+        !string.Equals(styleBox.SelectedItem as string, nameof(BorderStyle.None), StringComparison.Ordinal);
 
     private void UpdateBorderPreview()
     {

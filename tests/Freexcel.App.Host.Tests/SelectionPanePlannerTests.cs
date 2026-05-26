@@ -114,6 +114,44 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_CreateDragMoveChanges_PlansAdjacentMovesToDroppedPosition()
+    {
+        var front = Guid.NewGuid();
+        var middle = Guid.NewGuid();
+        var back = Guid.NewGuid();
+
+        var moves = SelectionPaneDialog.CreateDragMoveChanges(
+            [
+                (SelectionPaneObjectKind.Picture, front),
+                (SelectionPaneObjectKind.Picture, middle),
+                (SelectionPaneObjectKind.Picture, back)
+            ],
+            draggedId: back,
+            targetId: front);
+
+        moves.Should().Equal(
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back, Forward: true),
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back, Forward: true));
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_CreateDragMoveChanges_RejectsCrossKindDrops()
+    {
+        var picture = Guid.NewGuid();
+        var shape = Guid.NewGuid();
+
+        var moves = SelectionPaneDialog.CreateDragMoveChanges(
+            [
+                (SelectionPaneObjectKind.Picture, picture),
+                (SelectionPaneObjectKind.Shape, shape)
+            ],
+            draggedId: picture,
+            targetId: shape);
+
+        moves.Should().BeEmpty();
+    }
+
+    [Fact]
     public void SelectionPaneDialog_ExposesShowAllAndHideAllBulkButtons()
     {
         var source = ReadSelectionPaneDialogSources();
@@ -195,6 +233,20 @@ public sealed class SelectionPanePlannerTests
         acceptMoveBody.Should().NotContain("DialogResult = true");
         hostSource.Should().Contain("result.MoveChanges.Select");
         hostSource.Should().NotContain("SelectionPaneDialogAction.MoveUp when dialog.Result.Target");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_SupportsDragDropReorder()
+    {
+        var source = ReadSelectionPaneDialogSources();
+
+        source.Should().Contain("_list.AllowDrop = true");
+        source.Should().Contain("_list.PreviewMouseLeftButtonDown");
+        source.Should().Contain("_list.MouseMove");
+        source.Should().Contain("_list.DragOver");
+        source.Should().Contain("_list.Drop");
+        source.Should().Contain("DragDrop.DoDragDrop");
+        source.Should().Contain("CreateDragMoveChanges");
     }
 
     private static string ReadSelectionPaneDialogSources() =>

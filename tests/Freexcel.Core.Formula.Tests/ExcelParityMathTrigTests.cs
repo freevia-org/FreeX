@@ -157,6 +157,25 @@ public sealed class ExcelParityMathTrigTests
         series.At(2, 1).Should().Be(new NumberValue(10));
     }
 
+    [Fact]
+    public void SeriesSum_XNAndMRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
+            (1, 2, new NumberValue(0)), (2, 2, new NumberValue(1)), (3, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(1)), (2, 3, new NumberValue(2)),
+            (1, 4, new NumberValue(1)), (2, 4, new NumberValue(3)));
+
+        var result = _eval.Evaluate("=SERIESSUM(A1:A2,B1:B2,C1:C2,D1:D2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.At(1, 1).Should().Be(new NumberValue(7));
+        result.At(2, 1).Should().Be(new NumberValue(84));
+
+        _eval.Evaluate("=SERIESSUM(A1:A2,B1:B3,C1:C2,D1:D2)", sheet)
+            .Should().Be(ErrorValue.Value);
+    }
+
     private double Number(string formula) => Number(formula, MakeSheet());
 
     private double Number(string formula, Sheet sheet)

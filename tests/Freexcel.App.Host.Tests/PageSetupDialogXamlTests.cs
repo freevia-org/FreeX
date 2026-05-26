@@ -310,10 +310,22 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("dialog.AlignHeaderFooterWithMargins");
     }
 
+    [Fact]
+    public void PageSetupHandler_AppliesPrintAreaReturnedByDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("CreatePageSetupPrintAreaCommand(sheetId, dialog.PrintArea)");
+        source.Should().Contain("new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))");
+        source.Should().Contain("new ClearPrintAreaCommand(sheetId)");
+    }
+
     private static string ReadPageSetupDialogSource() =>
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.HeaderFooter.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.Population.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.RangeSelection.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.ValidationFocus.cs")));
 }

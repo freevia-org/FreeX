@@ -1,5 +1,6 @@
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
+using System.Globalization;
 
 namespace Freexcel.App.Host;
 
@@ -22,7 +23,7 @@ public partial class FormatCellsDialog
         new("Currency", "$#,##0.00", "$#,##0.00", "$1,234.56"),
         new("Currency", "$#,##0;[Red]($#,##0)", "$#,##0;[Red]($#,##0)", "$1,235"),
         new("Currency", "$#,##0.00;[Red]($#,##0.00)", "$#,##0.00;[Red]($#,##0.00)", "$1,234.56"),
-        new("Accounting", "Accounting ($#,##0.00)", "$#,##0.00", "$1,234.56"),
+        new("Accounting", "Accounting ($#,##0.00)", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", "$  1,234.56"),
         new("Accounting", "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)", "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)", "$  1,235"),
         new("Accounting", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", "$  1,234.56"),
         new("Date", "Date (m/d/yyyy)", "m/d/yyyy", "5/21/2026"),
@@ -80,7 +81,9 @@ public partial class FormatCellsDialog
         "Custom"
     ];
 
-    private static readonly string[] NumberSymbols = ["$", "EUR", "GBP", "JPY", "€", "£", "¥", "None"];
+    private static readonly IReadOnlyDictionary<string, string> NumberSymbolLabelMap = BuildNumberSymbolLabelMap();
+
+    private static readonly string[] NumberSymbols = NumberSymbolLabelMap.Keys.ToArray();
 
     private static readonly string[] NegativeNumberOptions =
     [
@@ -134,10 +137,16 @@ public partial class FormatCellsDialog
         return Math.Clamp(decimals, 0, 30);
     }
 
-    private static string NormalizeSymbol(string? symbol) =>
-        string.IsNullOrWhiteSpace(symbol) || string.Equals(symbol, "None", StringComparison.OrdinalIgnoreCase)
-            ? string.Empty
-            : symbol.Trim();
+    private static string NormalizeSymbol(string? symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol) || string.Equals(symbol, "None", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        var trimmed = symbol.Trim();
+        return NumberSymbolLabelMap.TryGetValue(trimmed, out var mappedSymbol)
+            ? mappedSymbol
+            : trimmed;
+    }
 
     private static string BuildNumberFormat(int decimals, int negativeIndex)
     {
@@ -185,6 +194,53 @@ public partial class FormatCellsDialog
             || string.Equals(option.Code, trimmedText, StringComparison.OrdinalIgnoreCase));
     }
 
+    private static IReadOnlyDictionary<string, string> BuildNumberSymbolLabelMap()
+    {
+        var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        AddSymbolLabel(labels, "$", "$");
+        AddSymbolLabel(labels, "EUR", "EUR");
+        AddSymbolLabel(labels, "GBP", "GBP");
+        AddSymbolLabel(labels, "JPY", "JPY");
+        AddSymbolLabel(labels, "\u20ac", "\u20ac");
+        AddSymbolLabel(labels, "\u00a3", "\u00a3");
+        AddSymbolLabel(labels, "\u00a5", "\u00a5");
+
+        foreach (var cultureName in new[]
+        {
+            "en-US", "en-GB", "fr-FR", "de-DE", "ja-JP", "zh-CN",
+            "en-CA", "fr-CA", "en-AU", "de-CH", "sv-SE", "pl-PL",
+            "uk-UA", "hi-IN", "ko-KR", "pt-BR", "es-MX"
+        })
+        {
+            try
+            {
+                var region = new RegionInfo(cultureName);
+                var currencyName = string.IsNullOrWhiteSpace(region.CurrencyNativeName)
+                    ? region.CurrencyEnglishName
+                    : region.CurrencyNativeName;
+
+                if (!string.IsNullOrWhiteSpace(region.CurrencySymbol)
+                    && !string.IsNullOrWhiteSpace(currencyName))
+                {
+                    AddSymbolLabel(labels, $"{region.CurrencySymbol} {currencyName}", region.CurrencySymbol);
+                }
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
+
+        AddSymbolLabel(labels, "None", string.Empty);
+        return labels;
+    }
+
+    private static void AddSymbolLabel(Dictionary<string, string> labels, string label, string symbol)
+    {
+        if (!labels.ContainsKey(label))
+            labels.Add(label, symbol);
+    }
+
     private string BuildSignedNumberFormat(string positivePattern)
     {
         var negativePattern = NumberNegativeNumbersList.SelectedIndex switch
@@ -213,11 +269,7 @@ public partial class FormatCellsDialog
     private string AccountingPattern(int decimals)
     {
         var symbol = SelectedCurrencySymbol();
-        var symbolToken = string.IsNullOrEmpty(symbol) ? "" : symbol;
-        var decimalPattern = DecimalPattern(decimals);
-        var zeroPadding = decimals > 0 ? "??" : "";
-
-        return $"_({symbolToken}* #,##0{decimalPattern}_);_({symbolToken}* (#,##0{decimalPattern});_({symbolToken}* \"-\"{zeroPadding}_);_(@_)";
+        return BuildAccountingFormat(decimals, string.IsNullOrEmpty(symbol) ? "" : symbol);
     }
 
     private static string DecimalPattern(int decimals)
@@ -374,6 +426,6 @@ public partial class FormatCellsDialog
     private string SelectedCurrencySymbol()
     {
         var value = NumberSymbolCombo.SelectedItem as string ?? NumberSymbolCombo.Text;
-        return string.Equals(value, "None", StringComparison.OrdinalIgnoreCase) ? "" : value;
+        return NormalizeSymbol(value);
     }
 }

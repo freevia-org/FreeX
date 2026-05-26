@@ -37,6 +37,68 @@ public sealed class ObjectDialogTests
             "BudgetAnchor"));
     }
 
+    [Theory]
+    [InlineData(HyperlinkLinkType.ExistingFileOrWebPage, "Enter an address.")]
+    [InlineData(HyperlinkLinkType.CreateNewDocument, "Enter a new document name.")]
+    [InlineData(HyperlinkLinkType.PlaceInThisDocument, "Enter a valid cell reference or defined name.")]
+    [InlineData(HyperlinkLinkType.EmailAddress, "Enter an email address.")]
+    public void HyperlinkDialog_TryCreateResult_RejectsBlankTarget(HyperlinkLinkType linkType, string expectedError)
+    {
+        HyperlinkDialog.TryCreateResult(" ", "Label", linkType, "", "", out _, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be(expectedError);
+    }
+
+    [Theory]
+    [InlineData("not-an-email")]
+    [InlineData("review@")]
+    [InlineData("@example.test")]
+    [InlineData("review@example test")]
+    public void HyperlinkDialog_TryCreateResult_RejectsInvalidEmailTarget(string target)
+    {
+        HyperlinkDialog.TryCreateResult(target, "Label", HyperlinkLinkType.EmailAddress, "", "", out _, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a valid email address.");
+    }
+
+    [Theory]
+    [InlineData("review@example.test")]
+    [InlineData("mailto:review@example.test")]
+    public void HyperlinkDialog_TryCreateResult_AcceptsEmailTarget(string target)
+    {
+        HyperlinkDialog.TryCreateResult(target, "Label", HyperlinkLinkType.EmailAddress, "", "", out var result, out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Target.Should().Be(target);
+    }
+
+    [Fact]
+    public void HyperlinkDialog_TryCreateResult_AcceptsTrimmedTargetAndMetadata()
+    {
+        HyperlinkDialog.TryCreateResult(
+                " https://example.test ",
+                " Example ",
+                HyperlinkLinkType.ExistingFileOrWebPage,
+                " Tip ",
+                " Bookmark ",
+                out var result,
+                out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Should().Be(new HyperlinkDialogResult(
+            HyperlinkLinkType.ExistingFileOrWebPage,
+            "https://example.test",
+            "Example",
+            "Tip",
+            "Bookmark"));
+    }
+
     [Fact]
     public void HyperlinkDialogPrefill_UsesExistingCellTextAsDisplayText()
     {
@@ -139,7 +201,7 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
-    public void ObjectSizeDialogInvalidSize_ShowsOwnedWarningAndRefocusesHeightInput()
+    public void ObjectSizeDialogInvalidSize_ShowsOwnedWarningAndRefocusesInvalidSizeInput()
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
 
@@ -147,7 +209,11 @@ public sealed class ObjectDialogTests
         source.Should().Contain("this,");
         source.Should().Contain("Enter positive width and height values.");
         source.Should().Contain("MessageBoxImage.Warning");
-        source.Should().Contain("FocusInvalidSizeInput(_heightBox);");
+        source.Should().Contain("FocusInvalidSizeInput(ResolveInvalidSizeInput());");
+        source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
+        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
+        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
+        source.Should().Contain("private static bool TryParsePositiveSize(string text)");
         source.Should().Contain("private static void FocusInvalidSizeInput(TextBox textBox)");
     }
 
@@ -313,7 +379,7 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
-    public void PictureCropDialogInvalidCrop_ShowsOwnedWarningAndRefocusesLeftInput()
+    public void PictureCropDialogInvalidCrop_ShowsOwnedWarningAndRefocusesInvalidCropInput()
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
 
@@ -321,7 +387,12 @@ public sealed class ObjectDialogTests
         source.Should().Contain("this,");
         source.Should().Contain("error ?? \"Enter four crop percentages.\"");
         source.Should().Contain("MessageBoxImage.Warning");
-        source.Should().Contain("FocusInvalidCropInput(_cropLeftBox);");
+        source.Should().Contain("FocusInvalidCropInput(ResolveInvalidCropInput(error));");
+        source.Should().Contain("private TextBox ResolveInvalidCropInput(string? error)");
+        source.Should().Contain("return _cropLeftBox;");
+        source.Should().Contain("return _cropTopBox;");
+        source.Should().Contain("return _cropRightBox;");
+        source.Should().Contain("return _cropBottomBox;");
         source.Should().Contain("private static void FocusInvalidCropInput(TextBox textBox)");
     }
 
@@ -412,7 +483,16 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_tabs.SelectedItem = _sizeTab;");
         source.Should().Contain("_tabs.SelectedItem = _cropTab;");
         source.Should().Contain("FocusAndSelect(_rotationBox);");
-        source.Should().Contain("FocusAndSelect(_cropLeftBox);");
+        source.Should().Contain("FocusAndSelect(ResolveInvalidSizeInput());");
+        source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
+        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
+        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
+        source.Should().Contain("FocusAndSelect(ResolveInvalidCropInput(error));");
+        source.Should().Contain("private TextBox ResolveInvalidCropInput(string? error)");
+        source.Should().Contain("return _cropLeftBox;");
+        source.Should().Contain("return _cropTopBox;");
+        source.Should().Contain("return _cropRightBox;");
+        source.Should().Contain("return _cropBottomBox;");
         source.Should().Contain("Keyboard.Focus(box);");
     }
 
@@ -477,6 +557,20 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void HyperlinkDialog_AcceptWarnsAndRefocusesBlankTarget()
+    {
+        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class HyperlinkDialog", "public sealed class ScreenTipDialog");
+
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
+        source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter hyperlink details.\");");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("_targetBox.Focus();");
+        source.Should().Contain("_targetBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_targetBox);");
+    }
+
+    [Fact]
     public void HyperlinkDialogOpenedFromKeyboard_FocusesAddressBox()
     {
         var source = ReadClassSource("ObjectDialogs.cs", "public sealed class HyperlinkDialog", "public sealed class ScreenTipDialog");
@@ -493,6 +587,74 @@ public sealed class ObjectDialogTests
     {
         TextEntryDialog.CreateResult(null).Text.Should().Be("");
         TextEntryDialog.CreateResult("  keep spacing inside  ").Text.Should().Be("keep spacing inside");
+    }
+
+    [Fact]
+    public void ThreadedCommentDialog_CreateResult_DistinguishesRootEditFromReply()
+    {
+        var existing = new ThreadedComment("Old root", "Quinn")
+        {
+            Replies = [new CommentReply("Existing reply", "Codex")]
+        };
+
+        ThreadedCommentDialog.CreateResult(null, "  New root  ", "", isResolved: false)
+            .Should()
+            .Be(new ThreadedCommentDialogResult(null, "New root", false));
+        ThreadedCommentDialog.CreateResult(existing, "  Edited root  ", "  Reply text  ", isResolved: true)
+            .Should()
+            .Be(new ThreadedCommentDialogResult("Edited root", "Reply text", true));
+        ThreadedCommentDialog.CreateResult(existing, " Old root ", " ", isResolved: false)
+            .Should()
+            .Be(new ThreadedCommentDialogResult(null, null, false));
+    }
+
+    [Fact]
+    public void ThreadedCommentDialog_TryCreateResult_RejectsBlankNewComment()
+    {
+        ThreadedCommentDialog.TryCreateResult(null, " ", "", isResolved: false, out _, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a comment.");
+    }
+
+    [Fact]
+    public void ThreadedCommentDialog_TryCreateResult_AllowsBlankReplyWhenResolvingExistingThread()
+    {
+        var existing = new ThreadedComment("Old root", "Quinn");
+
+        ThreadedCommentDialog.TryCreateResult(existing, " Old root ", " ", isResolved: true, out var result, out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Should().Be(new ThreadedCommentDialogResult(null, null, true));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void ThreadedCommentDialog_TryCreateResult_RejectsBlankExistingRootEdit(string rootText)
+    {
+        var existing = new ThreadedComment("Old root", "Quinn");
+
+        ThreadedCommentDialog.TryCreateResult(existing, rootText, "Reply", isResolved: false, out _, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a comment.");
+    }
+
+    [Fact]
+    public void ThreadedCommentDialog_BlankNewCommentWarnsAndRefocusesCommentBox()
+    {
+        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class ThreadedCommentDialog", "");
+
+        source.Should().Contain("if (!TryCreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))");
+        source.Should().Contain("ShowInvalidThreadedCommentWarning(error ?? \"Enter a comment.\", _rootBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]

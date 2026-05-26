@@ -34,6 +34,12 @@ public static class ConditionalFormatDialogPlanner
             DataBarShowValue = source.DataBarShowValue,
             DataBarMinLength = source.DataBarMinLength,
             DataBarMaxLength = source.DataBarMaxLength,
+            DataBarGradient = source.DataBarGradient,
+            DataBarBorder = source.DataBarBorder,
+            DataBarAxisPosition = source.DataBarAxisPosition,
+            DataBarAxisColor = source.DataBarAxisColor,
+            DataBarNegativeFillColor = source.DataBarNegativeFillColor,
+            DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
             AboveAverage = source.AboveAverage,
             FormulaText = source.FormulaText,
             IconSetStyle = source.IconSetStyle,
@@ -43,7 +49,13 @@ public static class ConditionalFormatDialogPlanner
             TopBottomPercent = source.TopBottomPercent,
             TextRuleText = source.TextRuleText,
             DateOccurringPeriod = source.DateOccurringPeriod,
-            StopIfTrue = source.StopIfTrue
+            StopIfTrue = source.StopIfTrue,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = source.NativeChildXmls,
+            NativePayloadAttributes = source.NativePayloadAttributes,
+            NativePayloadChildXmls = source.NativePayloadChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls
         };
         clone.IconSetThresholds.AddRange(source.IconSetThresholds);
         return clone;

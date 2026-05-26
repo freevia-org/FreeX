@@ -96,7 +96,8 @@ public partial class MainWindow
 
         var dialog = new SelectDataSourceDialog(
             FormatRangeReference(chart.DataRange.Start, chart.DataRange.End),
-            chart.FirstColIsCategories)
+            chart.FirstColIsCategories,
+            sheetId: _currentSheetId)
         {
             Owner = this
         };
@@ -232,6 +233,13 @@ public partial class MainWindow
     private void Chart3DSurfaceMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDSurface);
     private void Chart3DColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDColumn);
     private void Chart3DBarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDBar);
+    private void ChartTreemapMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Treemap);
+    private void ChartSunburstMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Sunburst);
+    private void ChartHistogramMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Histogram);
+    private void ChartParetoMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Pareto);
+    private void ChartBoxAndWhiskerMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.BoxAndWhisker);
+    private void ChartWaterfallMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Waterfall);
+    private void ChartFunnelMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Funnel);
     private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e) => ShowDeferredChartFamilyMessage();
 
     private static void ShowDeferredChartFamilyMessage() =>
@@ -294,6 +302,48 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+    }
+
+    private void ChartBarFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Bar/Column",
+                "Insert or select a bar or column chart before changing gap width.",
+                out var chart))
+            return;
+
+        if (!ChartTypeSupport.SupportsBarGapWidth(chart.Type))
+        {
+            MessageBox.Show(this, "Gap width and overlap only apply to bar and column charts.", "Format Bar/Column", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ChartBarFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Bar/Column", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartBubbleFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Bubble Chart",
+                "Insert or select a bubble chart before changing bubble options.",
+                out var chart))
+            return;
+
+        if (chart.Type != ChartType.Bubble)
+        {
+            MessageBox.Show(this, "Bubble format options only apply to bubble charts.", "Format Bubble Chart", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ChartBubbleFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Bubble Chart", chart, dialog.Result.ToOptions());
     }
 
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)

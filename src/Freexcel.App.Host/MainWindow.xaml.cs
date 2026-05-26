@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
     private string _ribbonKeyTipSequence = "";
     private ContextMenu? _activeRibbonKeyTipMenu;
+    private ItemsControl? _activeRibbonKeyTipItemsControl;
     private readonly WorkbookRef _workbookRef;
     private Workbook _workbook;
     private SheetId _currentSheetId;
@@ -44,6 +45,9 @@ public partial class MainWindow : Window
     private bool _suppressToolbarSync;
     private readonly ToolbarVisualStateCache _toolbarVisualStateCache = new();
     private ToolbarVisualState? _lastToolbarVisualState;
+    private readonly StatusBarStatsCache _statusBarStatsCache = new();
+    private readonly SparklineValueCache _sparklineValueCache = new();
+    private ulong _navigationCacheRevision;
     private bool _suppressViewOptionSync;
     private bool _suppressAppViewOptionSync;
     private bool _isOpeningFile;

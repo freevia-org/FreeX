@@ -1,22 +1,27 @@
+using Freexcel.Core.Model;
+
 namespace Freexcel.Core.Calc;
 
 public static partial class NumberFormatter
 {
-    private static FormatResult FormatTextWithColor(string text, string[] sections)
+    private static FormatResult FormatTextWithColor(
+        string text,
+        string[] sections,
+        WorkbookIndexedColorPalette? indexedColors)
     {
         if (sections.Length <= 3)
         {
-            var firstSection = ParseSection(sections[0]);
+            var firstSection = ParseSection(sections[0], indexedColors);
             return firstSection.Format.Contains('@', StringComparison.Ordinal)
-                ? new FormatResult(ApplyTextSection(firstSection.Format, text), firstSection.ColorHex)
+                ? new FormatResult(ApplyTextSection(firstSection.Format, text), firstSection.ColorHex, firstSection.ThemeColor)
                 : new FormatResult(text);
         }
 
-        var parsed = ParseSection(sections[3]);
+        var parsed = ParseSection(sections[3], indexedColors);
         if (parsed.Format == "")
-            return new FormatResult("", parsed.ColorHex);
+            return new FormatResult("", parsed.ColorHex, parsed.ThemeColor);
 
-        return new FormatResult(ApplyTextSection(parsed.Format, text), parsed.ColorHex);
+        return new FormatResult(ApplyTextSection(parsed.Format, text), parsed.ColorHex, parsed.ThemeColor);
     }
 
     private static string ApplyTextSection(string section, string text)

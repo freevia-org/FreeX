@@ -21,7 +21,7 @@ public partial class MainWindow
             settings,
             showMargins: () => PageMarginsBtn_Click(this, new RoutedEventArgs()),
             showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()),
-            refreshPreview: BuildActiveSheetPrintPreview,
+            refreshPreviewWithSettings: BuildActiveSheetPrintPreview,
             sheetId: _currentSheetId,
             sheet: sheet,
             executeCommand: cmd => TryExecuteCommand(cmd, "Print Settings"))
@@ -31,14 +31,14 @@ public partial class MainWindow
         dialog.ShowDialog();
     }
 
-    private (FixedDocument Document, PrintSettingsPlan Settings) BuildActiveSheetPrintPreview()
+    private (FixedDocument Document, PrintSettingsPlan Settings) BuildActiveSheetPrintPreview(PrintPreviewSettings settings)
     {
-        var document = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+        var document = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ignorePrintArea: settings.IgnorePrintArea);
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var settings = sheet is null
+        var plan = sheet is null
             ? new PrintSettingsPlan(["Print active sheet"])
-            : PrintSettingsPlanner.Build(sheet);
-        return (document, settings);
+            : PrintSettingsPlanner.Build(sheet, settings.IgnorePrintArea);
+        return (document, plan);
     }
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
@@ -60,6 +60,16 @@ public partial class MainWindow
             ? ExportFormat.Xps
             : ExportFormat.Pdf;
         var request = ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result);
+        if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError))
+        {
+            MessageBox.Show(
+                publishOptionsError,
+                "Export Options",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         var exported = request.Format == ExportFormat.Pdf
             ? ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)
             : ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);
@@ -71,6 +81,9 @@ public partial class MainWindow
     {
         try
         {
+            if (!ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out var publishOptionsError))
+                throw new InvalidOperationException(publishOptionsError);
+
             var document = RenderExportDocument(options);
             if (!ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count, out var pageRangeError))
                 throw new InvalidOperationException(pageRangeError);
@@ -132,6 +145,9 @@ public partial class MainWindow
     {
         try
         {
+            if (!ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Xps, out var publishOptionsError))
+                throw new InvalidOperationException(publishOptionsError);
+
             var paginator = RenderExportPaginator(options);
 
             // Open the XPS package for write
@@ -202,12 +218,88 @@ public partial class MainWindow
     private System.Windows.Documents.FixedDocument RenderExportDocument(ExportOptions options) =>
         options.Scope == ExportContentScope.EntireWorkbook
             ? PrintRenderer.RenderWorkbook(_workbook, _viewportService, options.IgnorePrintAreas)
-            : PrintRenderer.RenderWorksheet(
+            : RenderExportSheets(
+                ExportSheetSelectionPlanner.ResolveSheetIds(_workbook, options, _currentSheetId, _groupedSheetIds),
+                options);
+
+    private System.Windows.Documents.FixedDocument RenderExportSheets(
+        IReadOnlyList<SheetId> sheetIds,
+        ExportOptions options)
+    {
+        if (sheetIds.Count == 1)
+        {
+            var sheetId = sheetIds[0];
+            return PrintRenderer.RenderWorksheet(
                 _workbook,
-                _currentSheetId,
+                sheetId,
                 _viewportService,
-                ResolveExportRange(options),
+                options.Scope == ExportContentScope.Selection && sheetId == _currentSheetId
+                    ? ResolveExportRange(options)
+                    : null,
                 options.IgnorePrintAreas);
+        }
+
+        var result = new FixedDocument();
+        foreach (var sheetId in sheetIds)
+        {
+            var document = PrintRenderer.RenderWorksheet(
+                _workbook,
+                sheetId,
+                _viewportService,
+                options.Scope == ExportContentScope.Selection && sheetId == _currentSheetId
+                    ? ResolveExportRange(options)
+                    : null,
+                options.IgnorePrintAreas);
+            if (result.Pages.Count == 0)
+                result.DocumentPaginator.PageSize = document.DocumentPaginator.PageSize;
+
+            foreach (var page in document.Pages)
+                result.Pages.Add(CloneExportPage(document, page));
+        }
+
+        return result;
+    }
+
+    private static PageContent CloneExportPage(FixedDocument document, PageContent pageContent)
+    {
+        pageContent.GetPageRoot(forceReload: false);
+        var sourcePage = pageContent.Child ??
+            throw new InvalidOperationException("FixedDocument page content did not contain a FixedPage.");
+        var width = sourcePage.Width > 0 && !double.IsNaN(sourcePage.Width)
+            ? sourcePage.Width
+            : document.DocumentPaginator.PageSize.Width;
+        var height = sourcePage.Height > 0 && !double.IsNaN(sourcePage.Height)
+            ? sourcePage.Height
+            : document.DocumentPaginator.PageSize.Height;
+        var size = new Size(width, height);
+        sourcePage.Measure(size);
+        sourcePage.Arrange(new Rect(size));
+        sourcePage.UpdateLayout();
+        var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
+
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            Math.Max(1, (int)Math.Ceiling(width)),
+            Math.Max(1, (int)Math.Ceiling(height)),
+            96,
+            96,
+            System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(sourcePage);
+        bitmap.Freeze();
+
+        var fixedPage = new FixedPage { Width = width, Height = height };
+        fixedPage.Children.Add(new System.Windows.Controls.Image
+        {
+            Source = bitmap,
+            Width = width,
+            Height = height
+        });
+        if (textOverlays.Count > 0)
+            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays });
+
+        var clone = new PageContent();
+        ((System.Windows.Markup.IAddChild)clone).AddChild(fixedPage);
+        return clone;
+    }
 
     private IReadOnlyList<PdfBookmark>? CreatePdfBookmarks(ExportOptions options)
     {
@@ -216,11 +308,10 @@ public partial class MainWindow
 
         var result = new List<PdfBookmark>();
         var pageIndex = 0;
-        IEnumerable<Sheet> sheets = options.Scope == ExportContentScope.EntireWorkbook
-            ? _workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden)
-            : _workbook.GetSheet(_currentSheetId) is { } activeSheet
-                ? [activeSheet]
-                : [];
+        var sheets = ExportSheetSelectionPlanner
+            .ResolveSheetIds(_workbook, options, _currentSheetId, _groupedSheetIds)
+            .Select(_workbook.GetSheet)
+            .OfType<Sheet>();
 
         foreach (var sheet in sheets)
         {
@@ -304,4 +395,41 @@ public partial class MainWindow
             // Export has already succeeded; opening the shell association is best effort.
         }
     }
+}
+
+internal static class ExportSheetSelectionPlanner
+{
+    public static IReadOnlyList<SheetId> ResolveSheetIds(
+        Workbook workbook,
+        ExportOptions options,
+        SheetId currentSheetId,
+        IReadOnlyCollection<SheetId> groupedSheetIds)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        if (options.Scope == ExportContentScope.EntireWorkbook)
+            return VisibleSheets(workbook).Select(sheet => sheet.Id).ToList();
+
+        if (options.Scope == ExportContentScope.Selection)
+            return ResolveSingleSheet(workbook, currentSheetId);
+
+        var groupedSet = groupedSheetIds.ToHashSet();
+        groupedSet.Add(currentSheetId);
+        var sheetIds = VisibleSheets(workbook)
+            .Where(sheet => groupedSet.Contains(sheet.Id))
+            .Select(sheet => sheet.Id)
+            .ToList();
+
+        return sheetIds.Count == 0
+            ? ResolveSingleSheet(workbook, currentSheetId)
+            : sheetIds;
+    }
+
+    private static IReadOnlyList<SheetId> ResolveSingleSheet(Workbook workbook, SheetId sheetId) =>
+        workbook.GetSheet(sheetId) is { IsHidden: false, IsVeryHidden: false } sheet
+            ? [sheet.Id]
+            : [];
+
+    private static IEnumerable<Sheet> VisibleSheets(Workbook workbook) =>
+        workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden);
 }

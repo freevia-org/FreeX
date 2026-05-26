@@ -169,6 +169,7 @@ public sealed class ConfirmPasswordDialog : Window
     private void FocusConfirmationInput()
     {
         _confirmationBox.Focus();
+        _confirmationBox.SelectAll();
         Keyboard.Focus(_confirmationBox);
     }
 

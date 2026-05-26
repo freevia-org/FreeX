@@ -78,7 +78,7 @@ public sealed class ObjectSizeDialog : Window
                 Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
-            FocusInvalidSizeInput(_heightBox);
+            FocusInvalidSizeInput(ResolveInvalidSizeInput());
             return;
         }
 
@@ -92,6 +92,21 @@ public sealed class ObjectSizeDialog : Window
         _heightBox.SelectAll();
         Keyboard.Focus(_heightBox);
     }
+
+    private TextBox ResolveInvalidSizeInput()
+    {
+        if (!TryParsePositiveSize(_heightBox.Text))
+            return _heightBox;
+
+        if (!TryParsePositiveSize(_widthBox.Text))
+            return _widthBox;
+
+        return _heightBox;
+    }
+
+    private static bool TryParsePositiveSize(string text) =>
+        DrawingInputParser.TryParseSize($"{text}x{text}", out var value, out _)
+        && value > 0;
 
     private static void FocusInvalidSizeInput(TextBox textBox)
     {
@@ -285,7 +300,7 @@ public sealed class PictureCropDialog : Window
                 Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
-            FocusInvalidCropInput(_cropLeftBox);
+            FocusInvalidCropInput(ResolveInvalidCropInput(error));
             return;
         }
 
@@ -298,6 +313,23 @@ public sealed class PictureCropDialog : Window
         _cropLeftBox.Focus();
         _cropLeftBox.SelectAll();
         Keyboard.Focus(_cropLeftBox);
+    }
+
+    private TextBox ResolveInvalidCropInput(string? error)
+    {
+        if (string.Equals(error, "Enter four crop percentages.", StringComparison.Ordinal))
+        {
+            if (!DrawingInputParser.TryParseCropPercent(_cropLeftBox.Text, out _))
+                return _cropLeftBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropTopBox.Text, out _))
+                return _cropTopBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropRightBox.Text, out _))
+                return _cropRightBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropBottomBox.Text, out _))
+                return _cropBottomBox;
+        }
+
+        return _cropLeftBox;
     }
 
     private static void FocusInvalidCropInput(TextBox textBox)

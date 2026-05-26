@@ -1,3 +1,5 @@
+using System.Windows;
+using System.Windows.Controls;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -29,6 +31,70 @@ public sealed partial class SelectionPaneDialog
         _moveChanges.Add(new SelectionPaneMoveChange(selected.Source.Kind, selected.Source.Id, forward));
         (_items[currentIndex], _items[targetIndex]) = (_items[targetIndex], _items[currentIndex]);
         ApplySearchAndFilter(selected.Source.Id);
+    }
+
+    private void List_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(_list);
+        _dragItem = FindListItem(e.OriginalSource);
+    }
+
+    private void List_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed ||
+            _dragStartPoint is not { } start ||
+            _dragItem is null)
+            return;
+
+        var current = e.GetPosition(_list);
+        if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        DragDrop.DoDragDrop(_list, _dragItem, DragDropEffects.Move);
+        _dragStartPoint = null;
+        _dragItem = null;
+    }
+
+    private void List_DragOver(object sender, DragEventArgs e)
+    {
+        var dragged = e.Data.GetData(typeof(SelectionPaneDialogItem)) as SelectionPaneDialogItem;
+        var target = FindListItem(e.OriginalSource);
+        e.Effects = CanDropDraggedItem(dragged, target) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void List_Drop(object sender, DragEventArgs e)
+    {
+        var dragged = e.Data.GetData(typeof(SelectionPaneDialogItem)) as SelectionPaneDialogItem;
+        var target = FindListItem(e.OriginalSource);
+        if (!CanDropDraggedItem(dragged, target))
+            return;
+
+        DragReorder(dragged!, target!);
+        e.Handled = true;
+    }
+
+    private void DragReorder(SelectionPaneDialogItem dragged, SelectionPaneDialogItem target)
+    {
+        var moves = CreateDragMoveChanges(
+            _items.Select(item => (item.Source.Kind, item.Source.Id)).ToList(),
+            dragged.Source.Id,
+            target.Source.Id);
+        if (moves.Count == 0)
+            return;
+
+        _moveChanges.AddRange(moves);
+        var fromIndex = _items.IndexOf(dragged);
+        var toIndex = _items.IndexOf(target);
+        if (fromIndex < 0 || toIndex < 0)
+            return;
+
+        _items.RemoveAt(fromIndex);
+        if (fromIndex < toIndex)
+            toIndex--;
+        _items.Insert(toIndex, dragged);
+        ApplySearchAndFilter(dragged.Source.Id);
     }
 
     private IReadOnlyList<SelectionPaneVisibilityChange> CurrentVisibilityChanges() =>
@@ -84,6 +150,22 @@ public sealed partial class SelectionPaneDialog
             "Text Boxes" => item.Source.Kind == SelectionPaneObjectKind.TextBox,
             _ => true
         };
+
+    private SelectionPaneDialogItem? FindListItem(object originalSource)
+    {
+        if (originalSource is not DependencyObject dependencyObject)
+            return null;
+
+        return ItemsControl.ContainerFromElement(_list, dependencyObject) is ListBoxItem item
+            ? item.DataContext as SelectionPaneDialogItem
+            : null;
+    }
+
+    private static bool CanDropDraggedItem(SelectionPaneDialogItem? dragged, SelectionPaneDialogItem? target) =>
+        dragged is not null &&
+        target is not null &&
+        !ReferenceEquals(dragged, target) &&
+        dragged.Source.Kind == target.Source.Kind;
 
     private void RenameSelectedItem()
     {

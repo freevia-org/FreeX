@@ -27,7 +27,12 @@ public static class ChartTypeSupport
             or ChartType.ThreeDBar
             or ChartType.ThreeDArea
             or ChartType.Waterfall
-            or ChartType.Histogram;
+            or ChartType.Histogram
+            or ChartType.Pareto
+            or ChartType.BoxAndWhisker
+            or ChartType.Treemap
+            or ChartType.Sunburst
+            or ChartType.Funnel;
 
     public static bool SupportsTrendlines(ChartType type) =>
         type is ChartType.Column or ChartType.Line or ChartType.ThreeDLine or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area or ChartType.ThreeDArea;
@@ -84,6 +89,10 @@ public static class ChartTypeSupport
 
     public static bool SupportsDoughnutHoleSize(ChartType type) =>
         type is ChartType.Doughnut;
+
+    public static bool SupportsBarGapWidth(ChartType type) =>
+        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.ThreeDColumn
+            or ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar;
 
     public static int GetDataSeriesCount(ChartModel chart)
     {

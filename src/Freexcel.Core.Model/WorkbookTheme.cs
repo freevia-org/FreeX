@@ -8,7 +8,8 @@ public sealed record WorkbookTheme(
     string MajorFontName,
     string MinorFontName,
     string EffectsName,
-    IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> Colors)
+    IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> Colors,
+    string? NativeFormatSchemeXml = null)
 {
     private static readonly IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> OfficeColors =
         new Dictionary<WorkbookThemeColorSlot, CellColor>
@@ -58,7 +59,17 @@ public sealed record WorkbookTheme(
         };
 
     public WorkbookTheme WithEffects(string effectsName) =>
-        this with { EffectsName = string.IsNullOrWhiteSpace(effectsName) ? Office.EffectsName : effectsName.Trim() };
+        this with
+        {
+            EffectsName = string.IsNullOrWhiteSpace(effectsName) ? Office.EffectsName : effectsName.Trim(),
+            NativeFormatSchemeXml = null
+        };
+
+    public WorkbookTheme WithNativeFormatSchemeXml(string? formatSchemeXml) =>
+        this with
+        {
+            NativeFormatSchemeXml = string.IsNullOrWhiteSpace(formatSchemeXml) ? null : formatSchemeXml.Trim()
+        };
 
     public WorkbookTheme WithColor(WorkbookThemeColorSlot slot, CellColor color)
     {

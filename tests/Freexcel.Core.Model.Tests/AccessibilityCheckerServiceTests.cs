@@ -299,4 +299,32 @@ public sealed class AccessibilityCheckerServiceTests
             .BeEquivalentTo(["C:C", "F:F"]);
         issues.Should().NotContain(i => i.Location == "H8");
     }
+
+    [Fact]
+    public void FindIssues_FlagsStructuredTablesWithBlankHeaderText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(" "));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            HeaderRowCount = 1,
+            HasAutoFilter = true,
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.TableMissingHeaderText).Subject;
+
+        issue.SheetId.Should().Be(sheet.Id);
+        issue.SheetName.Should().Be("Sales");
+        issue.Location.Should().Be("B1");
+        issue.Message.Should().Be("Table headers should not be blank.");
+    }
 }

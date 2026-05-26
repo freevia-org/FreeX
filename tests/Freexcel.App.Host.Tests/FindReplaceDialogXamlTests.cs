@@ -65,6 +65,41 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_SharesFindWhatTextAcrossFindAndReplaceTabs()
+    {
+        var document = LoadDialogXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        AssertNamedElementHasAttribute(document, presentation, xaml, "TextBox", "FindBox", "TextChanged", "FindBox_TextChanged");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "TextBox", "ReplaceFindBox", "TextChanged", "FindBox_TextChanged");
+
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            workbook.AddSheet("Sheet1");
+            var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+            var dialog = new FindReplaceDialog(() => workbook, commandBus, _ => { });
+            dialog.Show();
+            try
+            {
+                var findBox = GetPrivateControl<TextBox>(dialog, "FindBox");
+                var replaceFindBox = GetPrivateControl<TextBox>(dialog, "ReplaceFindBox");
+
+                findBox.Text = "budget";
+                replaceFindBox.Text.Should().Be("budget");
+
+                replaceFindBox.Text = "forecast";
+                findBox.Text.Should().Be("forecast");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void Dialog_ExposesExcelLikeOptionsAndFindAllSurface()
     {
         var document = LoadDialogXaml();
@@ -324,13 +359,13 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
-    public void DialogBlankSearch_ShowsStatusAndFocusesFindWhatBox()
+    public void DialogBlankSearch_ShowsOwnedWarningAndFocusesFindWhatBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
 
         source.Should().Contain("ShowBlankSearchWarning()");
         source.Should().Contain("private bool ShowBlankSearchWarning()");
-        source.Should().Contain("StatusLabel.Text = \"Enter text in Find what.\";");
+        source.Should().Contain("MessageBox.Show(this, \"Enter text in Find what.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         source.Should().Contain("FocusSearchBox();");
         source.Should().Contain("private void FocusSearchBox()");
         source.Should().Contain("var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");

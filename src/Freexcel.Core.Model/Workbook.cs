@@ -26,6 +26,18 @@ public sealed class WorkbookFileVersionModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorkbookPropertiesModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorkbookProtectionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorkbookFunctionGroupsModel
 {
     public string? BuiltInGroupCount { get; set; }
@@ -53,6 +65,18 @@ public sealed class WorkbookSmartTagTypeModel
     public string? NamespaceUri { get; set; }
     public string? Name { get; set; }
     public string? Url { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorkbookAdditionalViewsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorkbookAdditionalViewModel> Views { get; set; } = [];
+}
+
+public sealed class WorkbookAdditionalViewModel
+{
+    public string? NativeXml { get; set; }
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
@@ -151,6 +175,9 @@ public sealed class Workbook
     /// <summary>Workbook-level theme definition for Excel-style theme colors, fonts, and effects.</summary>
     public WorkbookTheme Theme { get; set; } = WorkbookTheme.Office;
 
+    /// <summary>Workbook-level indexed color overrides loaded from XLSX styles.xml.</summary>
+    public WorkbookIndexedColorPalette IndexedColors { get; } = new();
+
     /// <summary>Excel workbook file-sharing/read-only recommendation metadata.</summary>
     public WorkbookFileSharingModel? FileSharing { get; set; }
 
@@ -160,11 +187,17 @@ public sealed class Workbook
     /// <summary>Excel workbook file-version metadata.</summary>
     public WorkbookFileVersionModel? FileVersion { get; set; }
 
+    /// <summary>Excel workbook property metadata loaded from XLSX workbookPr.</summary>
+    public WorkbookPropertiesModel? Properties { get; set; }
+
     /// <summary>Excel workbook function-group metadata.</summary>
     public WorkbookFunctionGroupsModel? FunctionGroups { get; set; }
 
     /// <summary>Excel workbook smart-tag metadata.</summary>
     public WorkbookSmartTagMetadataModel? SmartTags { get; set; }
+
+    /// <summary>Additional native Excel workbook-window view metadata loaded from XLSX.</summary>
+    public WorkbookAdditionalViewsModel? AdditionalViews { get; set; }
 
     /// <summary>Last requested workbook-window arrangement.</summary>
     public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;
@@ -174,6 +207,9 @@ public sealed class Workbook
 
     /// <summary>Password hash/text for workbook structure protection. Null means no password required.</summary>
     public string? StructureProtectionPassword { get; set; }
+
+    /// <summary>Native Excel workbook protection metadata not yet modeled as editable fields.</summary>
+    public WorkbookProtectionMetadataModel? ProtectionMetadata { get; set; }
 
     /// <summary>Define or replace a named range.</summary>
     public void DefineNamedRange(string name, GridRange range)
@@ -385,7 +421,13 @@ public sealed record WorkbookCustomView(
     bool IncludePrintSettings = true,
     bool IncludeHiddenRowsColumnsAndFilterSettings = true);
 
-public sealed record WorkbookScenario(string Name, IReadOnlyList<ScenarioCellValue> ChangingCells, string? Comment = null);
+public sealed record WorkbookScenario(
+    string Name,
+    IReadOnlyList<ScenarioCellValue> ChangingCells,
+    string? Comment = null,
+    bool Hidden = false,
+    bool Locked = false,
+    string? User = null);
 
 public sealed record ScenarioCellValue(CellAddress Address, ScalarValue Value);
 

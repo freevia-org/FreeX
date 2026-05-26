@@ -302,6 +302,22 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void MoveChartDialogInvalidTargetName_ShowsOwnedWarningAndRefocusesTargetBox()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[
+            source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("catch (ArgumentException ex)");
+        dialogSource.Should().Contain("MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        dialogSource.Should().Contain("FocusInvalidTargetName();");
+        dialogSource.Should().Contain("_targetBox.Focus();");
+        dialogSource.Should().Contain("_targetBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_targetBox);");
+    }
+
+    [Fact]
     public void ChartDataAndMoveDialogs_ExposeKeyboardAccessKeys()
     {
         var source = ReadChartDialogSource();
@@ -423,6 +439,21 @@ public sealed class ChartDialogTests
         dialogSource.Should().Contain("target.Focus();");
         dialogSource.Should().Contain("target.SelectAll();");
         dialogSource.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void SelectDataSourceDialogInvalidRange_ShowsOwnedWarningAndRefocusesRange()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
+        var chartCommandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
+
+        dialogSource.Should().Contain("if (!ValidateInputs())");
+        dialogSource.Should().Contain("ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, out _)");
+        dialogSource.Should().Contain("ShowInvalidInputWarning(\"Enter a valid chart data range.\", _rangeBox);");
+        dialogSource.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        dialogSource.Should().Contain("FocusRangeSelectionInput(target);");
+        chartCommandSource.Should().Contain("sheetId: _currentSheetId");
     }
 
     [Fact]
@@ -987,6 +1018,77 @@ public sealed class ChartDialogTests
             foreach (var descendant in FindLogicalDescendants<T>(child))
                 yield return descendant;
         }
+    }
+
+    [Fact]
+    public void ChartBarFormatDialogResult_ClampsGapWidthTo0To500()
+    {
+        ChartBarFormatDialogResult.CreateResult(-10, 0).BarGapWidth.Should().Be(0);
+        ChartBarFormatDialogResult.CreateResult(600, 0).BarGapWidth.Should().Be(500);
+        ChartBarFormatDialogResult.CreateResult(150, 0).BarGapWidth.Should().Be(150);
+        ChartBarFormatDialogResult.CreateResult(0, 0).BarGapWidth.Should().Be(0);
+    }
+
+    [Fact]
+    public void ChartBarFormatDialogResult_ClampsOverlapToMinus100To100()
+    {
+        ChartBarFormatDialogResult.CreateResult(150, -200).BarOverlap.Should().Be(-100);
+        ChartBarFormatDialogResult.CreateResult(150, 200).BarOverlap.Should().Be(100);
+        ChartBarFormatDialogResult.CreateResult(150, 50).BarOverlap.Should().Be(50);
+        ChartBarFormatDialogResult.CreateResult(150, -50).BarOverlap.Should().Be(-50);
+    }
+
+    [Fact]
+    public void ChartBarFormatDialogResult_LoadsFromChart()
+    {
+        var chart = new ChartModel { Type = ChartType.Column, BarGapWidth = 200, BarOverlap = 30 };
+        var result = ChartBarFormatDialogResult.FromChart(chart);
+        result.BarGapWidth.Should().Be(200);
+        result.BarOverlap.Should().Be(30);
+    }
+
+    [Fact]
+    public void ChartBarFormatDialogResult_UsesDefaultsWhenChartHasNoGapWidth()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+        var result = ChartBarFormatDialogResult.FromChart(chart);
+        result.BarGapWidth.Should().Be(150);
+        result.BarOverlap.Should().Be(0);
+    }
+
+    [Fact]
+    public void ChartBarFormatDialogResult_MapsToLayoutOptions()
+    {
+        var result = ChartBarFormatDialogResult.CreateResult(200, 30);
+        result.ToOptions().BarGapWidth.Should().Be(200);
+        result.ToOptions().BarOverlap.Should().Be(30);
+    }
+
+    [Fact]
+    public void ChartBubbleFormatDialogResult_ClampsBubbleScaleTo1To300()
+    {
+        ChartBubbleFormatDialogResult.CreateResult(0, false, ChartBubbleSizeRepresents.Area).BubbleScale.Should().Be(1);
+        ChartBubbleFormatDialogResult.CreateResult(400, false, ChartBubbleSizeRepresents.Area).BubbleScale.Should().Be(300);
+        ChartBubbleFormatDialogResult.CreateResult(100, false, ChartBubbleSizeRepresents.Area).BubbleScale.Should().Be(100);
+    }
+
+    [Fact]
+    public void ChartBubbleFormatDialogResult_LoadsFromChart()
+    {
+        var chart = new ChartModel { Type = ChartType.Bubble, BubbleScale = 150, ShowNegativeBubbles = true, BubbleSizeRepresents = ChartBubbleSizeRepresents.Width };
+        var result = ChartBubbleFormatDialogResult.FromChart(chart);
+        result.BubbleScale.Should().Be(150);
+        result.ShowNegativeBubbles.Should().BeTrue();
+        result.BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
+    }
+
+    [Fact]
+    public void ChartBubbleFormatDialogResult_MapsToLayoutOptions()
+    {
+        var result = ChartBubbleFormatDialogResult.CreateResult(150, true, ChartBubbleSizeRepresents.Width);
+        result.ToOptions().BubbleScale.Should().Be(150);
+        result.ToOptions().ShowNegativeBubbles.Should().BeTrue();
+        result.ToOptions().BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
     }
 
     private static string ReadChartDialogSource() =>

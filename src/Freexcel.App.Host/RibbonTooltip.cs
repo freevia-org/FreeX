@@ -33,7 +33,10 @@ public static class RibbonTooltip
     public static void SetKeyTip(DependencyObject o, string v) => o.SetValue(KeyTipProperty, v);
     public static string? GetKeyTip(DependencyObject o) => (string?)o.GetValue(KeyTipProperty);
 
-    public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip)
+    public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip) =>
+        TryOpenSubmenuForKeyTip(menu, keyTip, out _);
+
+    public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip, out MenuItem? openedSubmenu)
     {
         foreach (var item in menu.Items.OfType<MenuItem>())
         {
@@ -41,13 +44,15 @@ public static class RibbonTooltip
                 item.Items.Count > 0)
             {
                 item.IsSubmenuOpen = true;
+                openedSubmenu = item;
                 return true;
             }
 
-            if (TryOpenSubmenuForKeyTip(item, keyTip))
+            if (TryOpenSubmenuForKeyTip(item, keyTip, out openedSubmenu))
                 return true;
         }
 
+        openedSubmenu = null;
         return false;
     }
 

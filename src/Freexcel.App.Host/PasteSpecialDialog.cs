@@ -19,6 +19,8 @@ public enum PasteSpecialDialogMode
     FormulasAndNumberFormats,
     ValuesAndNumberFormats,
     ValuesAndSourceFormatting,
+    Text,
+    UnicodeText,
     Picture,
     LinkedPicture
 }
@@ -38,6 +40,8 @@ public sealed partial class PasteSpecialDialog : Window
     private readonly RadioButton _rbFormulasAndNumberFormats;
     private readonly RadioButton _rbValuesAndNumberFormats;
     private readonly RadioButton _rbValuesAndSourceFormatting;
+    private readonly RadioButton _rbText;
+    private readonly RadioButton _rbUnicodeText;
     private readonly RadioButton _rbPicture;
     private readonly RadioButton _rbLinkedPicture;
     private readonly Button _pasteLinkButton;
@@ -65,6 +69,8 @@ public sealed partial class PasteSpecialDialog : Window
         _ when _rbFormulasAndNumberFormats.IsChecked == true => PasteSpecialDialogMode.FormulasAndNumberFormats,
         _ when _rbValuesAndNumberFormats.IsChecked == true => PasteSpecialDialogMode.ValuesAndNumberFormats,
         _ when _rbValuesAndSourceFormatting.IsChecked == true => PasteSpecialDialogMode.ValuesAndSourceFormatting,
+        _ when _rbText.IsChecked == true => PasteSpecialDialogMode.Text,
+        _ when _rbUnicodeText.IsChecked == true => PasteSpecialDialogMode.UnicodeText,
         _ when _rbPicture.IsChecked == true => PasteSpecialDialogMode.Picture,
         _ when _rbLinkedPicture.IsChecked == true => PasteSpecialDialogMode.LinkedPicture,
         _ => PasteSpecialDialogMode.All
@@ -90,7 +96,7 @@ public sealed partial class PasteSpecialDialog : Window
     public PasteSpecialDialog()
     {
         Title = "Paste Special";
-        Width = 470; Height = 520;
+        Width = 470; Height = 550;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
@@ -109,6 +115,8 @@ public sealed partial class PasteSpecialDialog : Window
         _rbFormulasAndNumberFormats = new RadioButton { Content = "Formulas and number fo_rmats", Margin = new Thickness(0, 0, 0, 6) };
         _rbValuesAndNumberFormats = new RadioButton { Content = "Values and number for_mats", Margin = new Thickness(0, 0, 0, 6) };
         _rbValuesAndSourceFormatting = new RadioButton { Content = "Values and source f_ormatting", Margin = new Thickness(0, 0, 0, 6) };
+        _rbText = new RadioButton { Content = "T_ext", Margin = new Thickness(0, 0, 0, 6) };
+        _rbUnicodeText = new RadioButton { Content = "_Unicode Text", Margin = new Thickness(0, 0, 0, 6) };
         _rbPicture  = new RadioButton { Content = "_Picture",        Margin = new Thickness(0, 0, 0, 6) };
         _rbLinkedPicture = new RadioButton { Content = "_Linked picture", Margin = new Thickness(0, 0, 0, 6) };
         _pasteLinkButton = new Button { Content = "Paste _Link", Width = 96, Margin = new Thickness(0, 0, 8, 0) };

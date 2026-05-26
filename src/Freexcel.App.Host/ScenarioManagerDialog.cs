@@ -5,7 +5,11 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public sealed record ScenarioManagerItem(string Name);
+public sealed record ScenarioManagerItem(
+    string Name,
+    IReadOnlyList<ScenarioCellValue> ChangingCells,
+    string? Comment,
+    string ChangingCellsText);
 
 public sealed class ScenarioManagerDialog : Window
 {
@@ -14,6 +18,8 @@ public sealed class ScenarioManagerDialog : Window
     private readonly TextBox _changingCellsBox = new();
     private readonly TextBox _commentBox = new();
     private readonly string _defaultScenarioName;
+    private readonly SheetId? _currentSheetId;
+    private readonly Func<string, SheetId?>? _resolveSheetIdByName;
     private Button? _editButton;
     private Button? _deleteButton;
     private Button? _showButton;
@@ -24,8 +30,13 @@ public sealed class ScenarioManagerDialog : Window
     public string? ChangingCellsText { get; private set; }
     public string? CommentText { get; private set; }
 
-    public ScenarioManagerDialog(Workbook workbook)
+    public ScenarioManagerDialog(
+        Workbook workbook,
+        SheetId? currentSheetId = null,
+        Func<string, SheetId?>? resolveSheetIdByName = null)
     {
+        _currentSheetId = currentSheetId;
+        _resolveSheetIdByName = resolveSheetIdByName;
         Title = "Scenario Manager";
         Width = 360;
         Height = 390;
@@ -103,7 +114,11 @@ public sealed class ScenarioManagerDialog : Window
     }
 
     public static IReadOnlyList<ScenarioManagerItem> BuildScenarioItems(Workbook workbook) =>
-        workbook.Scenarios.Select(scenario => new ScenarioManagerItem(scenario.Name)).ToList();
+        workbook.Scenarios.Select(scenario => new ScenarioManagerItem(
+            scenario.Name,
+            scenario.ChangingCells,
+            scenario.Comment,
+            FormatScenarioChangingCells(workbook, scenario))).ToList();
 
     public static bool TryParseAction(string text, out ScenarioManagerAction action)
     {
@@ -115,6 +130,60 @@ public sealed class ScenarioManagerDialog : Window
 
         action = default;
         return false;
+    }
+
+    public static bool RequiresScenarioName(ScenarioManagerAction action) =>
+        action is ScenarioManagerAction.Add or ScenarioManagerAction.Edit or ScenarioManagerAction.Save;
+
+    public static bool TryValidateScenarioName(string? name, out string? error)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Enter a scenario name.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    public static bool TryValidateChangingCells(
+        string? changingCellsText,
+        SheetId? currentSheetId,
+        Func<string, SheetId?>? resolveSheetIdByName,
+        out string? error)
+    {
+        if (string.IsNullOrWhiteSpace(changingCellsText) ||
+            currentSheetId is null ||
+            resolveSheetIdByName is null)
+        {
+            error = null;
+            return true;
+        }
+
+        if (WorkbookRangeTextCodec.TryParse(currentSheetId.Value, changingCellsText, resolveSheetIdByName, out _))
+        {
+            error = null;
+            return true;
+        }
+
+        error = "Enter a valid changing cells reference.";
+        return false;
+    }
+
+    public static string FormatScenarioChangingCells(Workbook workbook, WorkbookScenario scenario)
+    {
+        if (scenario.ChangingCells.Count == 0)
+            return "";
+
+        var sheetId = scenario.ChangingCells[0].Address.Sheet;
+        if (scenario.ChangingCells.Any(cell => cell.Address.Sheet != sheetId))
+            return "";
+
+        var range = new GridRange(
+            scenario.ChangingCells.Min(cell => cell.Address),
+            scenario.ChangingCells.Max(cell => cell.Address));
+        return WorkbookRangeTextCodec.Format(range, sheetId, id => workbook.GetSheet(id)?.Name);
     }
 
     private static void AddField(Grid grid, int row, string label, Control field)
@@ -158,10 +227,14 @@ public sealed class ScenarioManagerDialog : Window
         if (selected is not null)
         {
             _newNameBox.Text = selected.Name;
+            _changingCellsBox.Text = selected.ChangingCellsText;
+            _commentBox.Text = selected.Comment ?? "";
         }
         else if (string.IsNullOrWhiteSpace(_newNameBox.Text))
         {
             _newNameBox.Text = _defaultScenarioName;
+            _changingCellsBox.Text = "";
+            _commentBox.Text = "";
         }
 
         var hasSelection = selected is not null;
@@ -172,11 +245,32 @@ public sealed class ScenarioManagerDialog : Window
 
     private void Accept(ScenarioManagerAction action)
     {
+        if (RequiresScenarioName(action) && !TryValidateScenarioName(_newNameBox.Text, out var error))
+        {
+            ShowInvalidInputWarning(error ?? "Enter scenario details.", _newNameBox);
+            return;
+        }
+
+        if (RequiresScenarioName(action) &&
+            !TryValidateChangingCells(_changingCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error))
+        {
+            ShowInvalidInputWarning(error ?? "Enter scenario details.", _changingCellsBox);
+            return;
+        }
+
         SelectedAction = action;
         SelectedScenarioName = (_scenarioList.SelectedItem as ScenarioManagerItem)?.Name;
         NewScenarioName = _newNameBox.Text;
         ChangingCellsText = _changingCellsBox.Text;
         CommentText = _commentBox.Text;
         DialogResult = true;
+    }
+
+    private void ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 }

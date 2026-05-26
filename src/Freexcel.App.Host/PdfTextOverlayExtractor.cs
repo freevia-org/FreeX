@@ -28,6 +28,9 @@ internal static class PdfTextOverlayExtractor
 
     private static void Extract(UIElement element, double parentX, double parentY, List<PdfTextOverlay> overlays)
     {
+        if (element.Visibility != Visibility.Visible)
+            return;
+
         var x = parentX + ReadLeft(element);
         var y = parentY + ReadTop(element);
 
@@ -35,6 +38,18 @@ internal static class PdfTextOverlayExtractor
         {
             x += frameworkElement.Margin.Left;
             y += frameworkElement.Margin.Top;
+        }
+
+        if (element is VisualHost { TextOverlays.Count: > 0 } visualHost)
+        {
+            foreach (var overlay in visualHost.TextOverlays)
+            {
+                overlays.Add(overlay with
+                {
+                    X = x + overlay.X,
+                    Y = y + overlay.Y
+                });
+            }
         }
 
         if (element is TextBlock textBlock && ExtractText(textBlock) is { Length: > 0 } text)
@@ -73,6 +88,45 @@ internal static class PdfTextOverlayExtractor
                 textBox.FontStyle == FontStyles.Italic || textBox.FontStyle == FontStyles.Oblique,
                 ResolveColor(textBox.Foreground)));
         }
+        else if (element is RichTextBox richTextBox &&
+                 ExtractFlowDocumentText(richTextBox.Document) is { Length: > 0 } richText)
+        {
+            overlays.Add(new PdfTextOverlay(
+                richText,
+                x + richTextBox.Padding.Left,
+                y + richTextBox.Padding.Top,
+                richTextBox.FontSize,
+                richTextBox.FontFamily.Source,
+                richTextBox.FontWeight >= FontWeights.SemiBold,
+                richTextBox.FontStyle == FontStyles.Italic || richTextBox.FontStyle == FontStyles.Oblique,
+                ResolveColor(richTextBox.Foreground)));
+        }
+        else if (element is FlowDocumentScrollViewer flowDocumentViewer &&
+                 ExtractFlowDocumentText(flowDocumentViewer.Document) is { Length: > 0 } flowText)
+        {
+            overlays.Add(new PdfTextOverlay(
+                flowText,
+                x + flowDocumentViewer.Padding.Left,
+                y + flowDocumentViewer.Padding.Top,
+                flowDocumentViewer.FontSize,
+                flowDocumentViewer.FontFamily.Source,
+                flowDocumentViewer.FontWeight >= FontWeights.SemiBold,
+                flowDocumentViewer.FontStyle == FontStyles.Italic || flowDocumentViewer.FontStyle == FontStyles.Oblique,
+                ResolveColor(flowDocumentViewer.Foreground)));
+        }
+        else if (element is HeaderedContentControl headeredContentControl &&
+                 ExtractHeaderedContentText(headeredContentControl) is { Length: > 0 } headeredText)
+        {
+            overlays.Add(new PdfTextOverlay(
+                headeredText,
+                x + headeredContentControl.Padding.Left,
+                y + headeredContentControl.Padding.Top,
+                headeredContentControl.FontSize,
+                headeredContentControl.FontFamily.Source,
+                headeredContentControl.FontWeight >= FontWeights.SemiBold,
+                headeredContentControl.FontStyle == FontStyles.Italic || headeredContentControl.FontStyle == FontStyles.Oblique,
+                ResolveColor(headeredContentControl.Foreground)));
+        }
         else if (element is ContentControl contentControl &&
                  ExtractContentText(contentControl.Content) is { Length: > 0 } contentText)
         {
@@ -85,19 +139,6 @@ internal static class PdfTextOverlayExtractor
                 contentControl.FontWeight >= FontWeights.SemiBold,
                 contentControl.FontStyle == FontStyles.Italic || contentControl.FontStyle == FontStyles.Oblique,
                 ResolveColor(contentControl.Foreground)));
-        }
-        else if (element is HeaderedContentControl headeredContentControl &&
-                 ExtractContentText(headeredContentControl.Header) is { Length: > 0 } headerText)
-        {
-            overlays.Add(new PdfTextOverlay(
-                headerText,
-                x + headeredContentControl.Padding.Left,
-                y + headeredContentControl.Padding.Top,
-                headeredContentControl.FontSize,
-                headeredContentControl.FontFamily.Source,
-                headeredContentControl.FontWeight >= FontWeights.SemiBold,
-                headeredContentControl.FontStyle == FontStyles.Italic || headeredContentControl.FontStyle == FontStyles.Oblique,
-                ResolveColor(headeredContentControl.Foreground)));
         }
         else if (element is ItemsControl itemsControl && ExtractItemsText(itemsControl) is { Length: > 0 } itemsText)
         {
@@ -140,6 +181,15 @@ internal static class PdfTextOverlayExtractor
 
         if (element is HeaderedContentControl { Header: UIElement headerChild })
             Extract(headerChild, x, y, overlays);
+
+        if (element is ItemsControl itemsControlWithElementItems)
+        {
+            foreach (var item in itemsControlWithElementItems.Items)
+            {
+                if (item is UIElement itemElement)
+                    Extract(itemElement, x, y, overlays);
+            }
+        }
     }
 
     private static string ExtractText(TextBlock textBlock)
@@ -163,6 +213,17 @@ internal static class PdfTextOverlayExtractor
         return string.IsNullOrWhiteSpace(text) ? "" : text;
     }
 
+    private static string ExtractHeaderedContentText(HeaderedContentControl control)
+    {
+        var parts = new List<string>();
+        if (ExtractContentText(control.Header) is { Length: > 0 } headerText)
+            parts.Add(headerText);
+        if (ExtractContentText(control.Content) is { Length: > 0 } contentText)
+            parts.Add(contentText);
+
+        return string.Join("\n", parts);
+    }
+
     private static string ExtractItemsText(ItemsControl itemsControl)
     {
         var parts = new List<string>();
@@ -174,6 +235,15 @@ internal static class PdfTextOverlayExtractor
         }
 
         return string.Join("\n", parts);
+    }
+
+    private static string ExtractFlowDocumentText(FlowDocument? document)
+    {
+        if (document is null)
+            return "";
+
+        var range = new TextRange(document.ContentStart, document.ContentEnd);
+        return range.Text.TrimEnd('\r', '\n');
     }
 
     private static void AppendInlineText(Inline inline, List<string> parts)
@@ -190,7 +260,26 @@ internal static class PdfTextOverlayExtractor
                 foreach (var child in span.Inlines)
                     AppendInlineText(child, parts);
                 break;
+            case InlineUIContainer { Child: UIElement child }:
+                if (ExtractInlineUiText(child) is { Length: > 0 } childText)
+                    parts.Add(childText);
+                break;
         }
+    }
+
+    private static string ExtractInlineUiText(UIElement element)
+    {
+        if (element.Visibility != Visibility.Visible)
+            return "";
+
+        return element switch
+        {
+            TextBlock textBlock => ExtractText(textBlock),
+            AccessText accessText => NormalizeAccessText(accessText.Text),
+            TextBox textBox => textBox.Text,
+            ContentControl contentControl => ExtractContentText(contentControl.Content),
+            _ => ""
+        };
     }
 
     private static string NormalizeAccessText(string text)

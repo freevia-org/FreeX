@@ -1,3 +1,4 @@
+using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Commands;
@@ -44,7 +45,10 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
             if (intersection is null)
                 continue;
 
-            targetSheet.DataValidations.Add(CloneValidation(rule, MapRange(intersection.Value, _sourceRange, _destination, _transpose)));
+            var mappedRange = MapRange(intersection.Value, _sourceRange, _destination, _transpose);
+            var rowDelta = (int)mappedRange.Start.Row - (int)intersection.Value.Start.Row;
+            var colDelta = (int)mappedRange.Start.Col - (int)intersection.Value.Start.Col;
+            targetSheet.DataValidations.Add(CloneValidation(rule, mappedRange, targetSheet.Name, rowDelta, colDelta));
         }
 
         return new CommandOutcome(true);
@@ -103,13 +107,21 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         CloneValidation(source, source.AppliesTo);
 
     private static DataValidation CloneValidation(DataValidation source, GridRange range) =>
+        CloneValidation(source, range, hostSheetName: null, rowDelta: 0, colDelta: 0);
+
+    private static DataValidation CloneValidation(
+        DataValidation source,
+        GridRange range,
+        string? hostSheetName,
+        int rowDelta,
+        int colDelta) =>
         new()
         {
             AppliesTo = range,
             Type = source.Type,
             Operator = source.Operator,
-            Formula1 = source.Formula1,
-            Formula2 = source.Formula2,
+            Formula1 = RewriteValidationFormula(source.Formula1, hostSheetName, rowDelta, colDelta),
+            Formula2 = RewriteValidationFormula(source.Formula2, hostSheetName, rowDelta, colDelta),
             AllowBlank = source.AllowBlank,
             ShowDropdown = source.ShowDropdown,
             AlertStyle = source.AlertStyle,
@@ -120,4 +132,32 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
             PromptTitle = source.PromptTitle,
             PromptMessage = source.PromptMessage
         };
+
+    private static string? RewriteValidationFormula(string? formula, string? hostSheetName, int rowDelta, int colDelta)
+    {
+        if (string.IsNullOrWhiteSpace(formula) || hostSheetName is null || (rowDelta == 0 && colDelta == 0))
+            return formula;
+
+        var trimmed = formula.TrimStart();
+        if (!trimmed.StartsWith('=') || trimmed.Contains(','))
+            return formula;
+
+        var expression = trimmed[1..];
+        if (!LooksLikeCellReferenceFormula(expression))
+            return formula;
+
+        var rewritten = FormulaRewriter.Rewrite(expression, new PasteOffsetOp(rowDelta, colDelta), hostSheetName);
+        return rewritten is null ? formula : "=" + rewritten;
+    }
+
+    private static bool LooksLikeCellReferenceFormula(string expression)
+    {
+        foreach (var ch in expression)
+        {
+            if (char.IsDigit(ch) || ch is '$' or '!' or ':')
+                return true;
+        }
+
+        return false;
+    }
 }

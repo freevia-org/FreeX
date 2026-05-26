@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
+using Freexcel.App.UI;
 
 namespace Freexcel.App.Host;
 
@@ -39,7 +40,7 @@ public partial class MainWindow
         }
 
         menu.Opened += QuickAnalysisMenu_Opened;
-        menu.Closed += (_, _) => SheetGrid.QuickAnalysisPreviewRange = null;
+        menu.Closed += (_, _) => ClearQuickAnalysisPreview();
 
         string? currentGroup = null;
         foreach (var option in options)
@@ -66,6 +67,8 @@ public partial class MainWindow
             };
             item.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
             item.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
+            item.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;
+            item.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;
             item.Click += QuickAnalysisMenuItem_Click;
             menu.Items.Add(item);
         }
@@ -254,18 +257,52 @@ public partial class MainWindow
 
     private void QuickAnalysisMenuItem_MouseEnter(object sender, MouseEventArgs e)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisOption option } ||
-            SheetGrid.SelectedRange is not { } range)
-            return;
-
-        var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
-        SheetGrid.QuickAnalysisPreviewRange = preview.Range;
-        StatusReadyText.Text = preview.StatusText;
+        ShowQuickAnalysisPreview(sender);
     }
 
     private void QuickAnalysisMenuItem_MouseLeave(object sender, MouseEventArgs e)
     {
+        ClearQuickAnalysisPreview();
+    }
+
+    private void QuickAnalysisMenuItem_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        ShowQuickAnalysisPreview(sender);
+    }
+
+    private void QuickAnalysisMenuItem_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        ClearQuickAnalysisPreview();
+    }
+
+    private void ShowQuickAnalysisPreview(object sender)
+    {
+        if (sender is not MenuItem { Tag: QuickAnalysisOption option } ||
+            SheetGrid.SelectedRange is not { } range)
+        {
+            return;
+        }
+
+        var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
+        SheetGrid.QuickAnalysisPreviewRange = preview.Range;
+        SheetGrid.QuickAnalysisPreviewVisual = MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind);
+        StatusReadyText.Text = preview.StatusText;
+    }
+
+    private void ClearQuickAnalysisPreview()
+    {
         SheetGrid.QuickAnalysisPreviewRange = null;
+        SheetGrid.QuickAnalysisPreviewVisual = GridQuickAnalysisPreviewVisualKind.None;
         StatusReadyText.Text = "Ready";
     }
+
+    private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind kind) =>
+        kind switch
+        {
+            QuickAnalysisPreviewVisualKind.DataBars => GridQuickAnalysisPreviewVisualKind.DataBars,
+            QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale,
+            QuickAnalysisPreviewVisualKind.IconSet => GridQuickAnalysisPreviewVisualKind.IconSet,
+            QuickAnalysisPreviewVisualKind.Highlight => GridQuickAnalysisPreviewVisualKind.Highlight,
+            _ => GridQuickAnalysisPreviewVisualKind.None
+        };
 }

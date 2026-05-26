@@ -57,4 +57,19 @@ public static class SlicerTimelinePlanner
 
     public static string? NormalizeTimelineDateInput(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    public static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(Workbook workbook, Sheet activeSheet) =>
+        workbook.Slicers
+            .Where(slicer => slicer.DrawingAnchor is not null && IsConnectedToPivotOnSheet(slicer.SourcePivotTableName, activeSheet))
+            .ToList();
+
+    public static IReadOnlyList<TimelineModel> GetNativeVisualTimelines(Workbook workbook, Sheet activeSheet) =>
+        workbook.Timelines
+            .Where(timeline => timeline.DrawingAnchor is not null && IsConnectedToPivotOnSheet(timeline.SourcePivotTableName, activeSheet))
+            .ToList();
+
+    private static bool IsConnectedToPivotOnSheet(string? pivotTableName, Sheet activeSheet) =>
+        !string.IsNullOrWhiteSpace(pivotTableName) &&
+        activeSheet.PivotTables.Any(pivot =>
+            string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
 }

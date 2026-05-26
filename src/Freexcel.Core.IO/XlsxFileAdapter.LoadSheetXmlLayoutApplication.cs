@@ -15,6 +15,7 @@ public sealed partial class XlsxFileAdapter
         sheet.HiddenCols.UnionWith(layout.HiddenCols);
         sheet.IsProtected = layout.IsProtected;
         sheet.ProtectionPassword = layout.ProtectionPasswordHash;
+        sheet.ProtectionMetadata = layout.ProtectionMetadata;
         foreach (var range in layout.AllowEditRanges)
             sheet.AllowEditRanges.Add(new GridRange(
                 new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
@@ -29,6 +30,9 @@ public sealed partial class XlsxFileAdapter
             sheet.DefaultColumnWidth = defaultColumnWidth;
         if (layout.DefaultRowHeight is { } defaultRowHeight)
             sheet.DefaultRowHeight = defaultRowHeight;
+        sheet.SheetFormatMetadata = layout.SheetFormatMetadata;
+        sheet.DimensionMetadata = layout.DimensionMetadata;
+        sheet.SheetPropertiesMetadata = layout.SheetPropertiesMetadata;
         foreach (var (rowNum, height) in layout.RowHeights)
             sheet.RowHeights[rowNum] = height;
         foreach (var (colNum, width) in layout.ColumnWidths)
@@ -53,6 +57,12 @@ public sealed partial class XlsxFileAdapter
         sheet.PrintQualityVerticalDpi = layout.PrintQualityVerticalDpi == sheet.PrintQualityDpi
             ? null
             : layout.PrintQualityVerticalDpi;
+        sheet.PageMarginsMetadata = layout.PageMarginsMetadata;
+        sheet.PrintOptionsMetadata = layout.PrintOptionsMetadata;
+        sheet.PageSetupMetadata = layout.PageSetupMetadata;
+        sheet.HeaderFooterMetadata = layout.HeaderFooterMetadata;
+        sheet.RowPageBreaksMetadata = layout.RowPageBreaksMetadata;
+        sheet.ColumnPageBreaksMetadata = layout.ColumnPageBreaksMetadata;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;
@@ -181,12 +191,14 @@ public sealed partial class XlsxFileAdapter
                     cell.IgnoreFormulaError = true;
             }
         }
+        sheet.IgnoredErrorsMetadata = layout.IgnoredErrorsMetadata;
         foreach (var watchedCell in layout.CellWatches)
         {
             var address = new CellAddress(sheet.Id, watchedCell.Row, watchedCell.Col);
             if (!workbook.WatchedCells.Contains(address))
                 workbook.WatchedCells.Add(address);
         }
+        sheet.CellWatchesMetadata = layout.CellWatchesMetadata;
         foreach (var scenario in layout.Scenarios)
         {
             var remappedScenario = new WorkbookScenario(
@@ -195,7 +207,11 @@ public sealed partial class XlsxFileAdapter
                     .Select(change => new ScenarioCellValue(
                         new CellAddress(sheet.Id, change.Address.Row, change.Address.Col),
                         change.Value))
-                    .ToList());
+                    .ToList(),
+                scenario.Comment,
+                scenario.Hidden,
+                scenario.Locked,
+                scenario.User);
 
             if (loadedScenarioNames.Add(remappedScenario.Name))
             {
@@ -228,6 +244,12 @@ public sealed partial class XlsxFileAdapter
         }
         foreach (var property in layout.CustomProperties)
             sheet.CustomProperties.Add(property);
+        sheet.SmartTags = layout.SmartTags;
+        sheet.DataConsolidation = layout.DataConsolidation;
+        sheet.SortState = layout.SortState;
+        sheet.SingleXmlCells = layout.SingleXmlCells;
+        sheet.AdditionalViews = layout.AdditionalViews;
+        sheet.PrimaryViewMetadata = layout.PrimaryViewMetadata;
         sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
         sheet.PhoneticProperties = layout.PhoneticProperties;
     }

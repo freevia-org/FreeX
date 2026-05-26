@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
@@ -27,6 +28,7 @@ public sealed record SparklineRangeSelectionRequest(
 
 public sealed class SparklineDialog : Window
 {
+    private readonly SheetId _sheetId;
     private readonly TextBox _dataRangeBox = new();
     private readonly TextBox _locationBox = new();
     private readonly ComboBox _kindBox = new();
@@ -41,8 +43,10 @@ public sealed class SparklineDialog : Window
         string dataRangeText,
         string locationText,
         SparklineKindChoice kind,
-        Action<SparklineRangeSelectionRequest>? requestRangeSelection = null)
+        Action<SparklineRangeSelectionRequest>? requestRangeSelection = null,
+        SheetId sheetId = default)
     {
+        _sheetId = sheetId;
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(dataRangeText, locationText, kind);
         Title = "Insert Sparkline";
@@ -86,11 +90,38 @@ public sealed class SparklineDialog : Window
 
     private void Accept()
     {
+        if (!ValidateInputs())
+            return;
+
         Result = CreateResult(
             _dataRangeBox.Text,
             _locationBox.Text,
             _kindBox.SelectedItem is ComboBoxItem { Tag: SparklineKindChoice kind } ? kind : SparklineKindChoice.Line);
         DialogResult = true;
+    }
+
+    private bool ValidateInputs()
+    {
+        if (!SparklineInputParser.TryParseDataRange(_dataRangeBox.Text, _sheetId, out _))
+        {
+            ShowInvalidInputWarning("Invalid data range.", _dataRangeBox);
+            return false;
+        }
+
+        if (!SparklineInputParser.TryParseLocation(_locationBox.Text, _sheetId, out _))
+        {
+            ShowInvalidInputWarning("Invalid location cell.", _locationBox);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox textBox)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        FocusRangeSelectionInput(textBox);
+        return false;
     }
 
     public static string GetKindLabel(SparklineKindChoice kind) =>

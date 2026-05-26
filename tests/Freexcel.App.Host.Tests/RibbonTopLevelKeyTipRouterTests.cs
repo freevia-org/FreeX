@@ -15,6 +15,8 @@ public sealed class RibbonTopLevelKeyTipRouterTests
     [InlineData("R", RibbonTopLevelKeyTipActionKind.RibbonTab, "Review")]
     [InlineData("W", RibbonTopLevelKeyTipActionKind.RibbonTab, "View")]
     [InlineData("Y", RibbonTopLevelKeyTipActionKind.RibbonTab, "Help")]
+    [InlineData("JA", RibbonTopLevelKeyTipActionKind.RibbonTab, "PivotTable Analyze")]
+    [InlineData("JD", RibbonTopLevelKeyTipActionKind.RibbonTab, "Design")]
     public void Resolve_MapsExcelStyleTopLevelKeyTips(string keyTip, RibbonTopLevelKeyTipActionKind kind, string? header)
     {
         var action = RibbonTopLevelKeyTipRouter.Resolve(keyTip);
@@ -30,5 +32,15 @@ public sealed class RibbonTopLevelKeyTipRouterTests
         RibbonTopLevelKeyTipRouter.Resolve("h")!.Value.RibbonTabHeader.Should().Be("Home");
         RibbonTopLevelKeyTipRouter.Resolve("ZZ").Should().BeNull();
         RibbonTopLevelKeyTipRouter.Resolve("").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("J")]
+    [InlineData("j")]
+    public void HasLongerVisibleKeyTipPrefix_DetectsContextualTabPrefix(string prefix)
+    {
+        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(prefix, ["J", "JA", "JD"])
+            .Should()
+            .BeTrue();
     }
 }

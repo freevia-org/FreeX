@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Orientation">
-<rect width="20" height="20" fill="none"/>
-<g transform="rotate(-35 10 10)">
-<text x="8" y="7" font-size="9.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" text-anchor="middle" dominant-baseline="central">ab</text>
-<path d="M4 15.5h12" fill="none" stroke="#1f6aa5" stroke-width="1" stroke-linecap="square"/>
-<path d="M13 12.5l3 3-3 3" fill="none" stroke="#1f6aa5" stroke-width="1" stroke-linecap="square" stroke-linejoin="miter"/>
-</g>
-</svg>

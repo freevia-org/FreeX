@@ -9,9 +9,18 @@ public partial class GridView
 {
     // Floating drawing objects, pictures, charts, and worksheet background rendering.
 
+    private const double EmusPerPixel = 9525.0;
+
     private static readonly Brush ObjectPlaceholderFill = MakeBrushAlpha(48, 255, 255, 255);
     private static readonly Brush ObjectPlaceholderTextBrush = MakeBrush(89, 89, 89);
     private static readonly Pen ObjectPlaceholderPen = CreateFrozenPen(MakeBrush(120, 120, 120), 1);
+    private static readonly Brush NativeControlHeaderBrush = MakeBrush(91, 155, 213);
+    private static readonly Brush NativeControlBorderBrush = MakeBrush(68, 114, 196);
+    private static readonly Brush NativeControlBodyBrush = MakeBrush(245, 248, 252);
+    private static readonly Brush NativeControlTileBrush = MakeBrush(225, 235, 247);
+    private static readonly Brush NativeControlSelectedTileBrush = MakeBrush(198, 224, 180);
+    private static readonly Brush NativeControlMutedTextBrush = MakeBrush(89, 89, 89);
+    private static readonly Pen NativeControlBorderPen = CreateFrozenPen(NativeControlBorderBrush, 1);
 
     private void RenderCharts(DrawingContext dc)
     {
@@ -110,6 +119,172 @@ public partial class GridView
             }
             if (rotationPushed) dc.Pop();
         }
+    }
+
+    private void RenderNativeSlicerTimelineControls(DrawingContext dc)
+    {
+        if (Viewport == null)
+            return;
+
+        if (NativeSlicers is not null)
+        {
+            foreach (var slicer in NativeSlicers)
+            {
+                if (slicer.DrawingAnchor is not { } anchor ||
+                    !TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    continue;
+
+                DrawNativeSlicerControl(dc, EnsureMinimumControlRect(rect), slicer);
+            }
+        }
+
+        if (NativeTimelines is not null)
+        {
+            foreach (var timeline in NativeTimelines)
+            {
+                if (timeline.DrawingAnchor is not { } anchor ||
+                    !TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    continue;
+
+                DrawNativeTimelineControl(dc, EnsureMinimumControlRect(rect), timeline);
+            }
+        }
+    }
+
+    public static bool TryCreateDrawingAnchorRect(
+        ViewportModel? viewport,
+        DrawingAnchorRange anchor,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        out Rect rect)
+    {
+        rect = default;
+        if (viewport is null ||
+            !TryGetAnchorPoint(viewport, anchor.From, rowHeaderWidth, columnHeaderHeight, out var topLeft) ||
+            !TryGetAnchorPoint(viewport, anchor.To, rowHeaderWidth, columnHeaderHeight, out var bottomRight))
+        {
+            return false;
+        }
+
+        var width = bottomRight.X - topLeft.X;
+        var height = bottomRight.Y - topLeft.Y;
+        if (width <= 0 || height <= 0)
+            return false;
+
+        rect = new Rect(topLeft.X, topLeft.Y, width, height);
+        return true;
+    }
+
+    private static bool TryGetAnchorPoint(
+        ViewportModel viewport,
+        DrawingAnchorPoint anchor,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        out Point point)
+    {
+        point = default;
+        if (anchor.Column == uint.MaxValue || anchor.Row == uint.MaxValue)
+            return false;
+
+        var column = viewport.ColMetrics.FirstOrDefault(metric => metric.Col == anchor.Column + 1);
+        var row = viewport.RowMetrics.FirstOrDefault(metric => metric.Row == anchor.Row + 1);
+        if (column is null || row is null)
+            return false;
+
+        point = new Point(
+            rowHeaderWidth + column.LeftOffset + EmusToPixels(anchor.ColumnOffsetEmu),
+            columnHeaderHeight + row.TopOffset + EmusToPixels(anchor.RowOffsetEmu));
+        return true;
+    }
+
+    private static double EmusToPixels(long emus) => emus / EmusPerPixel;
+
+    private static Rect EnsureMinimumControlRect(Rect rect) =>
+        new(rect.Left, rect.Top, Math.Max(80, rect.Width), Math.Max(44, rect.Height));
+
+    private void DrawNativeSlicerControl(DrawingContext dc, Rect rect, SlicerModel slicer)
+    {
+        DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName));
+
+        var items = slicer.SelectedItems.Count == 0
+            ? new[] { slicer.SourceFieldName ?? slicer.CacheName ?? "All" }
+            : slicer.SelectedItems.Take(4).ToArray();
+        var tileTop = rect.Top + 26;
+        var tileHeight = Math.Max(14, Math.Min(22, (rect.Bottom - tileTop - 6) / Math.Max(1, items.Length)));
+        for (var index = 0; index < items.Length; index++)
+        {
+            var tileRect = new Rect(rect.Left + 6, tileTop + index * (tileHeight + 3), Math.Max(1, rect.Width - 12), tileHeight);
+            dc.DrawRoundedRectangle(
+                slicer.SelectedItems.Count == 0 ? NativeControlSelectedTileBrush : NativeControlTileBrush,
+                null,
+                tileRect,
+                2,
+                2);
+            DrawClippedText(dc, items[index], tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1);
+        }
+    }
+
+    private void DrawNativeTimelineControl(DrawingContext dc, Rect rect, TimelineModel timeline)
+    {
+        DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName));
+
+        var label = FormatTimelineRange(timeline);
+        var barRect = new Rect(rect.Left + 8, rect.Top + 34, Math.Max(1, rect.Width - 16), Math.Max(6, Math.Min(14, rect.Height - 42)));
+        dc.DrawRoundedRectangle(NativeControlTileBrush, null, barRect, 3, 3);
+        var selectedRect = new Rect(
+            barRect.Left + barRect.Width * 0.18,
+            barRect.Top,
+            Math.Max(6, barRect.Width * 0.56),
+            barRect.Height);
+        dc.DrawRoundedRectangle(NativeControlSelectedTileBrush, null, selectedRect, 3, 3);
+        DrawClippedText(dc, label, new Rect(rect.Left + 6, rect.Top + 22, Math.Max(1, rect.Width - 12), 12), NativeControlMutedTextBrush, 9, verticalPadding: 0);
+    }
+
+    private void DrawNativeControlFrame(DrawingContext dc, Rect rect, string caption)
+    {
+        dc.DrawRectangle(NativeControlBodyBrush, NativeControlBorderPen, rect);
+        var headerRect = new Rect(rect.Left, rect.Top, rect.Width, Math.Min(22, rect.Height));
+        dc.DrawRectangle(NativeControlHeaderBrush, null, headerRect);
+        DrawClippedText(dc, caption, new Rect(headerRect.Left + 5, headerRect.Top + 2, Math.Max(1, headerRect.Width - 10), Math.Max(1, headerRect.Height - 4)), Brushes.White, 11, verticalPadding: 0);
+    }
+
+    private void DrawClippedText(DrawingContext dc, string textValue, Rect rect, Brush brush, double fontSize, double verticalPadding)
+    {
+        var text = new FormattedText(
+            string.IsNullOrWhiteSpace(textValue) ? " " : textValue,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            DefaultTypeface,
+            fontSize,
+            brush,
+            VisualTreeHelper.GetDpi(this).PixelsPerDip)
+        {
+            MaxTextWidth = Math.Max(1, rect.Width),
+            MaxTextHeight = Math.Max(1, rect.Height),
+            Trimming = TextTrimming.CharacterEllipsis
+        };
+
+        dc.PushClip(new RectangleGeometry(rect));
+        dc.DrawText(text, new Point(rect.Left, rect.Top + verticalPadding));
+        dc.Pop();
+    }
+
+    private static string GetNativeControlCaption(string? caption, string name, string? shapeName)
+    {
+        if (!string.IsNullOrWhiteSpace(caption))
+            return caption.Trim();
+        if (!string.IsNullOrWhiteSpace(name))
+            return name.Trim();
+        return string.IsNullOrWhiteSpace(shapeName) ? "Filter" : shapeName.Trim();
+    }
+
+    private static string FormatTimelineRange(TimelineModel timeline)
+    {
+        var start = timeline.SelectedStartDate ?? timeline.StartDate;
+        var end = timeline.SelectedEndDate ?? timeline.EndDate;
+        return string.IsNullOrWhiteSpace(start) && string.IsNullOrWhiteSpace(end)
+            ? timeline.SourceFieldName ?? timeline.CacheName
+            : $"{start ?? ""} - {end ?? ""}".Trim();
     }
 
     private static Brush CreateDrawingShapeFill(DrawingShapeModel shape, CellColor startColor)
@@ -262,6 +437,30 @@ public partial class GridView
             {
                 if (textBox.IsVisible && TryCreateAnchoredObjectRect(textBox.Anchor, textBox.Width, textBox.Height, 24, 18, out var rect))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Text Box", textBox.Name, index));
+                index++;
+            }
+        }
+
+        if (NativeSlicers is not null)
+        {
+            var index = 1;
+            foreach (var slicer in NativeSlicers)
+            {
+                if (slicer.DrawingAnchor is { } anchor &&
+                    TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    DrawObjectPlaceholder(dc, EnsureMinimumControlRect(rect), CreateObjectPlaceholderLabel("Slicer", slicer.DrawingShapeName ?? slicer.Caption ?? slicer.Name, index));
+                index++;
+            }
+        }
+
+        if (NativeTimelines is not null)
+        {
+            var index = 1;
+            foreach (var timeline in NativeTimelines)
+            {
+                if (timeline.DrawingAnchor is { } anchor &&
+                    TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    DrawObjectPlaceholder(dc, EnsureMinimumControlRect(rect), CreateObjectPlaceholderLabel("Timeline", timeline.DrawingShapeName ?? timeline.Caption ?? timeline.Name, index));
                 index++;
             }
         }

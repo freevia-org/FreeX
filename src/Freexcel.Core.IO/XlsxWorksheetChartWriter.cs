@@ -13,7 +13,9 @@ internal static class XlsxWorksheetChartWriter
         Stream xlsxStream,
         Workbook workbook,
         Func<ChartModel, bool> isSupportedChart,
-        Func<ChartModel, Sheet, XDocument> createChartXml)
+        Func<ChartModel, Sheet, XDocument> createChartXml,
+        Func<ChartModel, string> getChartContentType,
+        Func<ChartModel, string> getChartRelationshipType)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -56,7 +58,7 @@ internal static class XlsxWorksheetChartWriter
             if (!relTargets.TryGetValue(relId, out var worksheetPath))
                 continue;
 
-            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingIndex++, ref chartIndex, createChartXml);
+            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingIndex++, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType);
         }
     }
 
@@ -67,7 +69,9 @@ internal static class XlsxWorksheetChartWriter
         IReadOnlyList<ChartModel> charts,
         int drawingIndex,
         ref int chartIndex,
-        Func<ChartModel, Sheet, XDocument> createChartXml)
+        Func<ChartModel, Sheet, XDocument> createChartXml,
+        Func<ChartModel, string> getChartContentType,
+        Func<ChartModel, string> getChartRelationshipType)
     {
         var worksheetEntry = archive.GetEntry(worksheetPath);
         if (worksheetEntry is null)
@@ -79,6 +83,7 @@ internal static class XlsxWorksheetChartWriter
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
 
         var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
         var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
@@ -87,9 +92,11 @@ internal static class XlsxWorksheetChartWriter
 
         var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
         var anchors = new List<XElement>();
+        var chartContentTypes = new Dictionary<int, string>();
         foreach (var chart in charts)
         {
             var currentChartIndex = chartIndex++;
+            chartContentTypes[currentChartIndex] = getChartContentType(chart);
             var chartPath = $"xl/charts/chart{currentChartIndex}.xml";
             archive.GetEntry(chartPath)?.Delete();
             var chartEntry = archive.CreateEntry(chartPath);
@@ -98,13 +105,14 @@ internal static class XlsxWorksheetChartWriter
             WriteChartExternalDataRelationships(archive, chartPath, chart, packageRelNs);
 
             var chartRelId = $"rIdFreexcelChart{currentChartIndex}";
+            var chartRelationshipType = getChartRelationshipType(chart);
             drawingRelsXml.Root!.Add(new XElement(
                 packageRelNs + "Relationship",
                 new XAttribute("Id", chartRelId),
-                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
+                new XAttribute("Type", chartRelationshipType),
                 new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, chartPath))));
 
-            anchors.Add(ToChartAnchor(chart, sheet, currentChartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs));
+            anchors.Add(ToChartAnchor(chart, sheet, currentChartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs));
         }
 
         XlsxPackageXmlEditor.ReplaceXml(archive, drawingPath, new XDocument(
@@ -112,13 +120,14 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
                 new XAttribute(XNamespace.Xmlns + "a", drawingNs),
                 new XAttribute(XNamespace.Xmlns + "c", chartNs),
+                new XAttribute(XNamespace.Xmlns + "cx", chartExNs),
                 new XAttribute(XNamespace.Xmlns + "r", relNs),
                 anchors)));
         XlsxPackageXmlEditor.ReplaceXml(archive, drawingRelsPath, drawingRelsXml);
 
         XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
-        for (var i = chartIndex - charts.Count; i < chartIndex; i++)
-            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/xl/charts/chart{i}.xml", "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
+        foreach (var (index, contentType) in chartContentTypes)
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/xl/charts/chart{index}.xml", contentType);
 
         var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var worksheetRelsXml = archive.GetEntry(relsPath) is { } relsEntry
@@ -195,24 +204,28 @@ internal static class XlsxWorksheetChartWriter
         Sheet sheet,
         int chartIndex,
         string chartRelId,
+        string chartRelationshipType,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
+        XNamespace chartExNs,
         XNamespace relNs) =>
         chart.DrawingAnchorKind switch
         {
-            ChartDrawingAnchorKind.OneCell => ToOneCellChartAnchor(chart, sheet, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs),
-            ChartDrawingAnchorKind.TwoCell => ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs),
-            _ => ToAbsoluteChartAnchor(chart, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs)
+            ChartDrawingAnchorKind.OneCell => ToOneCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
+            ChartDrawingAnchorKind.TwoCell => ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
+            _ => ToAbsoluteChartAnchor(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs)
         };
 
     private static XElement ToAbsoluteChartAnchor(
         ChartModel chart,
         int chartIndex,
         string chartRelId,
+        string chartRelationshipType,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
+        XNamespace chartExNs,
         XNamespace relNs) =>
         new(spreadsheetDrawingNs + "absoluteAnchor",
             new XElement(spreadsheetDrawingNs + "pos",
@@ -221,17 +234,7 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "ext",
                 new XAttribute("cx", PixelsToEmus(chart.Width)),
                 new XAttribute("cy", PixelsToEmus(chart.Height))),
-            new XElement(spreadsheetDrawingNs + "graphicFrame",
-                new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
-                    new XElement(spreadsheetDrawingNs + "cNvPr",
-                        new XAttribute("id", chartIndex + 1),
-                        new XAttribute("name", DrawingName(chart.Name, $"Chart {chartIndex}"))),
-                    new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
-                new XElement(spreadsheetDrawingNs + "xfrm"),
-                new XElement(drawingNs + "graphic",
-                    new XElement(drawingNs + "graphicData",
-                        new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
-                        new XElement(chartNs + "chart", new XAttribute(relNs + "id", chartRelId))))),
+            ToChartGraphicFrame(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
 
     private static XElement ToOneCellChartAnchor(
@@ -239,9 +242,11 @@ internal static class XlsxWorksheetChartWriter
         Sheet sheet,
         int chartIndex,
         string chartRelId,
+        string chartRelationshipType,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
+        XNamespace chartExNs,
         XNamespace relNs)
     {
         var from = ToAnchorMarker(sheet, chart.Left, chart.Top);
@@ -250,7 +255,7 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "ext",
                 new XAttribute("cx", PixelsToEmus(chart.Width)),
                 new XAttribute("cy", PixelsToEmus(chart.Height))),
-            ToChartGraphicFrame(chart, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs),
+            ToChartGraphicFrame(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
     }
 
@@ -259,9 +264,11 @@ internal static class XlsxWorksheetChartWriter
         Sheet sheet,
         int chartIndex,
         string chartRelId,
+        string chartRelationshipType,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
+        XNamespace chartExNs,
         XNamespace relNs)
     {
         var from = ToAnchorMarker(sheet, chart.Left, chart.Top);
@@ -269,7 +276,7 @@ internal static class XlsxWorksheetChartWriter
         return new XElement(spreadsheetDrawingNs + "twoCellAnchor",
             ToAnchorMarkerXml("from", from, spreadsheetDrawingNs),
             ToAnchorMarkerXml("to", to, spreadsheetDrawingNs),
-            ToChartGraphicFrame(chart, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs),
+            ToChartGraphicFrame(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
     }
 
@@ -277,9 +284,11 @@ internal static class XlsxWorksheetChartWriter
         ChartModel chart,
         int chartIndex,
         string chartRelId,
+        string chartRelationshipType,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
+        XNamespace chartExNs,
         XNamespace relNs) =>
         new(spreadsheetDrawingNs + "graphicFrame",
             new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
@@ -290,8 +299,18 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "xfrm"),
             new XElement(drawingNs + "graphic",
                 new XElement(drawingNs + "graphicData",
-                    new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
-                    new XElement(chartNs + "chart", new XAttribute(relNs + "id", chartRelId)))));
+                    new XAttribute("uri", ToChartDrawingUri(chartRelationshipType)),
+                    new XElement(ToChartDrawingElementName(chartRelationshipType, chartNs, chartExNs), new XAttribute(relNs + "id", chartRelId)))));
+
+    private static string ToChartDrawingUri(string chartRelationshipType) =>
+        string.Equals(chartRelationshipType, "http://schemas.microsoft.com/office/2014/relationships/chartEx", StringComparison.OrdinalIgnoreCase)
+            ? "http://schemas.microsoft.com/office/drawing/2014/chartex"
+            : "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    private static XName ToChartDrawingElementName(string chartRelationshipType, XNamespace chartNs, XNamespace chartExNs) =>
+        string.Equals(chartRelationshipType, "http://schemas.microsoft.com/office/2014/relationships/chartEx", StringComparison.OrdinalIgnoreCase)
+            ? chartExNs + "chart"
+            : chartNs + "chart";
 
     private static XElement ToAnchorMarkerXml(string name, AnchorMarker marker, XNamespace spreadsheetDrawingNs) =>
         new(spreadsheetDrawingNs + name,

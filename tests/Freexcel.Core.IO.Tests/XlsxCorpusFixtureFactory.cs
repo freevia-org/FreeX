@@ -238,6 +238,7 @@ internal static class XlsxCorpusFixtureFactory
         using (var sourceArchive = new ZipArchive(knownGapPackage, ZipArchiveMode.Read, leaveOpen: true))
         using (var targetArchive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
         {
+            var mergedSourceParts = new List<string>();
             foreach (var sourceEntry in sourceArchive.Entries)
             {
                 if (ShouldMergeThroughFixup(id, sourceEntry.FullName))
@@ -248,8 +249,10 @@ internal static class XlsxCorpusFixtureFactory
                 using var sourceStream = sourceEntry.Open();
                 using var targetStream = targetEntry.Open();
                 sourceStream.CopyTo(targetStream);
+                mergedSourceParts.Add(sourceEntry.FullName.Replace('\\', '/'));
             }
 
+            EnsureKnownGapContentTypeOverrides(targetArchive, mergedSourceParts);
             ApplyPackageFixups(id, targetArchive);
         }
 
@@ -261,6 +264,76 @@ internal static class XlsxCorpusFixtureFactory
         string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase) &&
         (string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
          string.Equals(packagePart, "xl/_rels/workbook.xml.rels", StringComparison.OrdinalIgnoreCase));
+
+    private static void EnsureKnownGapContentTypeOverrides(ZipArchive archive, IReadOnlyCollection<string> partNames)
+    {
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return;
+
+        XDocument contentTypes;
+        using (var stream = contentTypesEntry.Open())
+            contentTypes = XDocument.Load(stream);
+
+        foreach (var partName in partNames.Where(part => !part.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+        {
+            var contentType = ContentTypeForKnownGapPart(partName);
+            if (!string.IsNullOrWhiteSpace(contentType))
+                EnsureContentTypeOverride(contentTypes, "/" + partName.TrimStart('/'), contentType);
+        }
+
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+    }
+
+    private static string ContentTypeForKnownGapPart(string partName)
+    {
+        var path = partName.Replace('\\', '/');
+        return path switch
+        {
+            "xl/drawings/drawing1.xml" => "application/vnd.openxmlformats-officedocument.drawing+xml",
+            "xl/threadedComments/threadedComment1.xml" => "application/vnd.ms-excel.threadedcomments+xml",
+            "xl/persons/person.xml" => "application/vnd.ms-excel.person+xml",
+            "xl/revisionHeaders/revisionHeader1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.revisionHeaders+xml",
+            "xl/revisions/revisionLog1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.revisionLog+xml",
+            "xl/activeX/activeX1.xml" => "application/vnd.ms-office.activeX+xml",
+            "xl/activeX/activeX1.bin" => "application/vnd.ms-office.activeX",
+            "xl/ctrlProps/ctrlProp1.xml" => "application/vnd.ms-excel.controlproperties+xml",
+            "_xmlsignatures/origin.sigs" => "application/vnd.openxmlformats-package.digital-signature-origin",
+            "_xmlsignatures/sig1.xml" => "application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml",
+            "customUI/customUI.xml" => "application/xml",
+            "xl/webextensions/taskpanes.xml" => "application/vnd.ms-office.webextensiontaskpanes+xml",
+            "xl/webextensions/webextension1.xml" => "application/vnd.ms-office.webextension+xml",
+            "xl/webPublishItems.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.webPublishItems+xml",
+            "docProps/custom.xml" => "application/vnd.openxmlformats-officedocument.custom-properties+xml",
+            "xl/diagrams/data1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            "xl/diagrams/layout1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+            "xl/diagrams/quickStyle1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+            "xl/printerSettings/printerSettings1.bin" => "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings",
+            "xl/chartsheets/sheet1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml",
+            "xl/dialogSheets/sheet2.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml",
+            "xl/macroSheets/sheet3.xml" => "application/vnd.ms-excel.macrosheet+xml",
+            "xl/charts/chart1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.chart+xml",
+            "xl/vbaProject.bin" => "application/vnd.ms-office.vbaProject",
+            "xl/pivotTables/pivotTable1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml",
+            "xl/pivotCache/pivotCacheDefinition1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml",
+            "xl/connections.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.connections+xml",
+            "xl/queries/query1.xml" => "application/vnd.ms-excel.queryTable+xml",
+            "xl/queryTables/queryTable1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.queryTable+xml",
+            "xl/model/item.xml" => "application/xml",
+            "xl/model/item.data" => "application/vnd.ms-excel.model",
+            "xl/richData/rdrichvalue.xml" => "application/vnd.ms-excel.rdrichvalue+xml",
+            "xl/richData/rdRichValueTypes.xml" => "application/vnd.ms-excel.rdrichvaluetypes+xml",
+            "xl/richData/richValueRel.xml" => "application/vnd.ms-excel.richvaluerel+xml",
+            "xl/slicers/slicer1.xml" => "application/vnd.ms-excel.slicer+xml",
+            "xl/slicerCaches/slicerCache1.xml" => "application/vnd.ms-excel.slicerCache+xml",
+            "xl/timelines/timeline1.xml" => "application/vnd.ms-excel.timeline+xml",
+            "xl/timelineCaches/timelineCache1.xml" => "application/vnd.ms-excel.timelineCache+xml",
+            "xl/externalLinks/externalLink1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml",
+            "xl/embeddings/oleObject1.bin" => "application/vnd.openxmlformats-officedocument.oleObject",
+            "customXml/item1.xml" => "application/xml",
+            _ => path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ? "application/xml" : ""
+        };
+    }
 
     private static void ApplyPackageFixups(string id, ZipArchive archive)
     {
@@ -700,7 +773,15 @@ internal static class XlsxCorpusFixtureFactory
             DataBarMinThresholdValue = "0",
             DataBarMaxThresholdType = CfThresholdType.Number,
             DataBarMaxThresholdValue = "100",
-            DataBarShowValue = false
+            DataBarShowValue = false,
+            DataBarMinLength = 5,
+            DataBarMaxLength = 95,
+            DataBarGradient = false,
+            DataBarBorder = true,
+            DataBarAxisPosition = "middle",
+            DataBarAxisColor = new RgbColor(90, 90, 90),
+            DataBarNegativeFillColor = new RgbColor(220, 80, 80),
+            DataBarNegativeBorderColor = new RgbColor(160, 40, 40)
         });
         return workbook;
     }
@@ -802,19 +883,23 @@ internal static class XlsxCorpusFixtureFactory
     {
         var workbook = NewWorkbook("generated-comments-hyperlinks-002");
         var sheet = workbook.AddSheet("Links Notes");
+        var hyperlinkStyle = RegisterHyperlinkStyle(workbook);
         Set(sheet, "A1", new TextValue("Documentation"));
         Set(sheet, "A2", new TextValue("Release notes"));
         Set(sheet, "B1", new TextValue("Review"));
         Set(sheet, "B2", new TextValue("Follow-up"));
         sheet.Hyperlinks[Addr(sheet, "A1")] = "https://example.com/freexcel/docs";
+        sheet.GetCell(Addr(sheet, "A1"))!.StyleId = hyperlinkStyle;
         sheet.HyperlinkMetadata[Addr(sheet, "A1")] = new HyperlinkMetadata(
             HyperlinkTargetKind.ExistingFileOrWebPage,
             "Open the Freexcel documentation");
         sheet.Hyperlinks[Addr(sheet, "A2")] = "mailto:review@example.com";
+        sheet.GetCell(Addr(sheet, "A2"))!.StyleId = hyperlinkStyle;
         sheet.HyperlinkMetadata[Addr(sheet, "A2")] = new HyperlinkMetadata(
             HyperlinkTargetKind.EmailAddress,
             "Send a workbook review note");
         sheet.Hyperlinks[Addr(sheet, "B2")] = "Links Notes!A1";
+        sheet.GetCell(Addr(sheet, "B2"))!.StyleId = hyperlinkStyle;
         sheet.HyperlinkMetadata[Addr(sheet, "B2")] = new HyperlinkMetadata(
             HyperlinkTargetKind.PlaceInThisDocument,
             "Jump to the documentation link",
@@ -1121,9 +1206,11 @@ internal static class XlsxCorpusFixtureFactory
     {
         var workbook = NewWorkbook("generated-objects-001");
         var sheet = workbook.AddSheet("Objects");
+        var hyperlinkStyle = RegisterHyperlinkStyle(workbook);
         Set(sheet, "A1", new TextValue("Documentation"));
         Set(sheet, "B1", new TextValue("Review note"));
         sheet.Hyperlinks[Addr(sheet, "A1")] = "https://example.com/freexcel";
+        sheet.GetCell(Addr(sheet, "A1"))!.StyleId = hyperlinkStyle;
         sheet.Comments[Addr(sheet, "B1")] = "Round-trip comment fixture";
         return workbook;
     }
@@ -1593,6 +1680,13 @@ internal static class XlsxCorpusFixtureFactory
         sheet.SetCell(address, value);
         sheet.GetCell(address)!.StyleId = styleId;
     }
+
+    private static StyleId RegisterHyperlinkStyle(Workbook workbook) =>
+        workbook.RegisterStyle(new CellStyle
+        {
+            Underline = true,
+            FontColor = new CellColor(5, 99, 193)
+        });
 
     private static void Formula(Sheet sheet, string a1, string formula) =>
         sheet.SetFormula(Addr(sheet, a1), formula);

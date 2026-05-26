@@ -1,6 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Page Order">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><path stroke="#202124" stroke-width="1.7" d="M8.64 10.8h15.12l5.4 5.4v18.36h-20.52z" fill="#ffffff"/><path stroke="#202124" stroke-width="1.7" d="M25.92 17.28h14.04l5.4 5.4v16.2h-19.44z" fill="#ffffff"/><text x="17.28" y="28.08" text-anchor="middle" font-size="10.8" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" dominant-baseline="central">1</text><text x="34.56" y="34.56" text-anchor="middle" font-size="10.8" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" dominant-baseline="central">2</text>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Page Order" shape-rendering="crispEdges">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M5 5H16L20 9V23H5Z" fill="#ffffff" stroke="#242424" stroke-width="1"/>
+  <path d="M16 5V9H20" fill="none" stroke="#242424" stroke-width="1"/>
+  <path d="M13 9H24L28 13V27H13Z" fill="#ffffff" stroke="#242424" stroke-width="1"/>
+  <path d="M24 9V13H28" fill="none" stroke="#242424" stroke-width="1"/>
+  <text x="11" y="19" text-anchor="middle" font-size="12" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700">1</text>
+  <text x="21" y="24" text-anchor="middle" font-size="12" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700">2</text>
 </svg>
-

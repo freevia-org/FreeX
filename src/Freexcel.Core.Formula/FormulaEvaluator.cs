@@ -1064,7 +1064,7 @@ public sealed class FormulaEvaluator
              or "ISEVEN" or "ISODD" or "ODD" or "EVEN"
              or "DATE" or "TIME"
              or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND"
-             or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH"
+             or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH" or "DATEDIF"
              or "DATEVALUE" or "TIMEVALUE"
              or "DAYS" or "DAYS360" or "YEARFRAC"
              or "SQRTPI" or "SERIESSUM"

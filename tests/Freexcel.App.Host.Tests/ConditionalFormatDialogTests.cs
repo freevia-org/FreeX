@@ -617,6 +617,43 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void RuleDialogInvalidRequiredInputs_ShowOwnedWarningsAndRefocusEditors()
+    {
+        var source = ReadConditionalFormatDialogSource();
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a formula for this conditional formatting rule.\", _formulaBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a value for this conditional formatting rule.\", _value1Box);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a maximum value for this conditional formatting rule.\", _value2Box);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter text for this conditional formatting rule.\", _value1Box);");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox? target)");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void RuleDialogInvalidAdvancedInputs_ShowWarningsAndRefocusEditors()
+    {
+        var source = ReadConditionalFormatDialogSource();
+
+        source.Should().Contain("TryParseOptionalPercent(_dataBarMinLengthBox.Text, out var minLength)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a minimum bar length from 0 to 100 percent, or leave it blank.\", _dataBarMinLengthBox);");
+        source.Should().Contain("TryParseOptionalPercent(_dataBarMaxLengthBox.Text, out var maxLength)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a maximum bar length from 0 to 100 percent, or leave it blank.\", _dataBarMaxLengthBox);");
+        source.Should().Contain("TryParseTopBottomRank(_topBottomRankBox.Text, out var topBottomRank)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a rank or percent from 1 to 1000.\", _topBottomRankBox);");
+        source.Should().Contain("TryParseRgbColor(_colorScaleMinColorBox.Text, out var minColor)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a minimum color as R, G, B.\", _colorScaleMinColorBox);");
+        source.Should().Contain("TryParseRgbColor(_colorScaleMidColorBox.Text, out var midColor)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a midpoint color as R, G, B.\", _colorScaleMidColorBox);");
+        source.Should().Contain("TryParseRgbColor(_colorScaleMaxColorBox.Text, out var maxColor)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a maximum color as R, G, B.\", _colorScaleMaxColorBox);");
+        source.Should().NotContain("Math.Clamp(value, 0, 100)");
+        source.Should().NotContain(": 10;");
+        source.Should().NotContain("ParseRgbOrFallback");
+    }
+
+    [Fact]
     public void ExistingDataBarRule_PrePopulatesDataBarFields()
     {
         StaTestRunner.Run(() =>
@@ -669,6 +706,37 @@ public sealed class ConditionalFormatDialogTests
 
             dialog.ResultRule.Should().NotBeNull();
             dialog.ResultRule!.DataBarColor.Should().Be(new RgbColor(12, 34, 56));
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ExistingRule_WhenRuleTypeChanges_DropsNativeMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.DataBar,
+                NativeChildXmls =
+                [
+                    """<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><ext uri="{B025F937-6E4E-48BE-B07C-B91C50BE2FA4}"><x14:id xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">{11111111-2222-3333-4444-555555555555}</x14:id></ext></extLst>"""
+                ],
+                NativePayloadChildXmls = ["""<axisColor xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" theme="1" />"""],
+                NativeContainerChildXmls = ["""<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />"""]
+            };
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(existing));
+
+            RefreshRuleDescriptionForTest(dialog, "Color Scale");
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.ColorScale);
+            dialog.ResultRule.NativeChildXmls.Should().BeNull();
+            dialog.ResultRule.NativePayloadChildXmls.Should().BeNull();
+            dialog.ResultRule.NativeContainerChildXmls.Should().BeNull();
 
             dialog.Close();
         });
@@ -800,7 +868,9 @@ public sealed class ConditionalFormatDialogTests
         {
             "ConditionalFormatDialog.cs",
             "ConditionalFormatDialog.ColorEditors.cs",
-            "ConditionalFormatDialog.IconSets.cs"
+            "ConditionalFormatDialog.IconSets.cs",
+            "ConditionalFormatDialog.Parsing.cs",
+            "ConditionalFormatDialog.Result.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static T GetControl<T>(ConditionalFormatDialog dialog, string name)
@@ -859,6 +929,13 @@ public sealed class ConditionalFormatDialogTests
             // The handler creates ResultRule before setting DialogResult. Direct modeless invocation in
             // tests reaches WPF's modal-only postcondition after the behavior under test runs.
         }
+    }
+
+    private static void RefreshRuleDescriptionForTest(ConditionalFormatDialog dialog, string ruleType)
+    {
+        var method = typeof(ConditionalFormatDialog).GetMethod("RefreshRuleDescription", BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(dialog, [ruleType]);
     }
 
     private static GridRange RangeFor(SheetId sheetId) =>

@@ -27,7 +27,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Label Content="_Find what:" Target="{Binding ElementName=FindBox}" VerticalAlignment="Center"/>
-                    <TextBox x:Name="FindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown"/>
+                    <TextBox x:Name="FindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
                     <Button x:Name="FindFormatButton" Content="For_mat..." Grid.Column="2" Width="84" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
                     <Button x:Name="FindClearFormatButton" Content="_Clear" Grid.Column="3" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
                     <Button x:Name="FindChooseFormatFromCellButton" Content="Choose From _Cell..." Grid.Column="4" Width="136" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
@@ -50,7 +50,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Label Content="_Find what:" Target="{Binding ElementName=ReplaceFindBox}" VerticalAlignment="Center"/>
-                        <TextBox x:Name="ReplaceFindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown"/>
+                        <TextBox x:Name="ReplaceFindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
                         <Button x:Name="ReplaceFindFormatButton" Content="For_mat..." Grid.Column="2" Width="84" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
                         <Button x:Name="ReplaceFindClearFormatButton" Content="_Clear" Grid.Column="3" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
                         <Button x:Name="ReplaceFindChooseFormatFromCellButton" Content="Choose From _Cell..." Grid.Column="4" Width="136" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>

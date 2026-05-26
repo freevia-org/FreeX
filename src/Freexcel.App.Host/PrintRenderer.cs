@@ -123,7 +123,7 @@ public static partial class PrintRenderer
                 (uint)pageColumns.Count,
                 sheet.PrintHeadings);
             var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
-            var visual = RenderPageVisual(
+            var (visual, textOverlays) = RenderPageVisual(
                 pageW,
                 pageH,
                 marginLeft,
@@ -156,7 +156,7 @@ public static partial class PrintRenderer
                     totalPages);
             pageNumber++;
 
-            var container = new VisualHost { Visual = visual };
+            var container = new VisualHost { Visual = visual, TextOverlays = textOverlays };
             var fixedPage = new FixedPage { Width = pageW, Height = pageH };
             fixedPage.Children.Add(container);
             FixedPage.SetLeft(container, 0);
@@ -238,6 +238,7 @@ public static partial class PrintRenderer
         sourcePage.Measure(size);
         sourcePage.Arrange(new Rect(size));
         sourcePage.UpdateLayout();
+        var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
 
         var bitmap = new RenderTargetBitmap(
             Math.Max(1, (int)Math.Ceiling(width)),
@@ -255,51 +256,12 @@ public static partial class PrintRenderer
             Width = width,
             Height = height
         });
+        if (textOverlays.Count > 0)
+            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays });
 
         var clone = new PageContent();
         ((IAddChild)clone).AddChild(fixedPage);
         return clone;
-    }
-
-    private sealed class WorkbookDocumentPaginator : DocumentPaginator
-    {
-        private readonly IReadOnlyList<DocumentPaginator> _paginators;
-        private Size _pageSize;
-
-        public WorkbookDocumentPaginator(IReadOnlyList<DocumentPaginator> paginators)
-        {
-            _paginators = paginators;
-            _pageSize = paginators.FirstOrDefault()?.PageSize ?? new Size(8.27 * 96.0, 11.69 * 96.0);
-        }
-
-        public override bool IsPageCountValid => _paginators.All(paginator => paginator.IsPageCountValid);
-
-        public override int PageCount => _paginators.Sum(paginator => paginator.PageCount);
-
-        public override Size PageSize
-        {
-            get => _pageSize;
-            set => _pageSize = value;
-        }
-
-        public override IDocumentPaginatorSource? Source => null;
-
-        public override DocumentPage GetPage(int pageNumber)
-        {
-            if (pageNumber < 0)
-                throw new ArgumentOutOfRangeException(nameof(pageNumber));
-
-            var offset = pageNumber;
-            foreach (var paginator in _paginators)
-            {
-                if (offset < paginator.PageCount)
-                    return paginator.GetPage(offset);
-
-                offset -= paginator.PageCount;
-            }
-
-            throw new ArgumentOutOfRangeException(nameof(pageNumber));
-        }
     }
 
     private static (double Width, double Height) GetPaperSizeInches(WorksheetPaperSize paperSize) =>
@@ -309,24 +271,4 @@ public static partial class PrintRenderer
             WorksheetPaperSize.Legal => (8.5, 14.0),
             _ => (8.27, 11.69)
         };
-}
-
-/// <summary>
-/// Minimal UIElement wrapper that hosts an arbitrary <see cref="DrawingVisual"/>
-/// inside a <see cref="FixedPage"/>.
-/// </summary>
-internal sealed class VisualHost : UIElement
-{
-    public Visual? Visual { get; init; }
-
-    protected override int VisualChildrenCount => Visual != null ? 1 : 0;
-
-    protected override Visual GetVisualChild(int index)
-    {
-        if (index != 0 || Visual == null)
-            throw new ArgumentOutOfRangeException(nameof(index));
-        return Visual;
-    }
-
-    protected override void OnRender(DrawingContext drawingContext) { }
 }

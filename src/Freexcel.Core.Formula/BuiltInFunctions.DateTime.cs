@@ -14,24 +14,32 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        if (args[0] is RangeValue yearRange)
-        {
-            double rawMonth = ToNumber(args[1]);
-            double rawDay = ToNumber(args[2]);
-            return MapUnaryTextRange(yearRange, value => DateScalar(value, rawMonth, rawDay));
-        }
-        if (args[1] is RangeValue monthRange)
-        {
-            double rawDay = ToNumber(args[2]);
-            return MapUnaryTextRange(monthRange, value => DateScalar(args[0], ToNumber(value), rawDay));
-        }
-        if (args[2] is RangeValue dayRange)
-        {
-            double rawMonth = ToNumber(args[1]);
-            return MapUnaryTextRange(dayRange, value => DateScalar(args[0], rawMonth, ToNumber(value)));
-        }
-        return DateScalar(args[0], ToNumber(args[1]), ToNumber(args[2]));
+        return MapDateTimeTernaryArgs(args, (year, month, day) => DateScalar(year, ToNumber(month), ToNumber(day)));
     }
+
+    private static ScalarValue MapDateTimeTernaryArgs(
+        IReadOnlyList<ScalarValue> args,
+        Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue> map)
+    {
+        RangeValue? range = args.OfType<RangeValue>().FirstOrDefault();
+        if (range is null) return map(args[0], args[1], args[2]);
+
+        for (int i = 0; i < 3; i++)
+        {
+            if (args[i] is RangeValue argRange &&
+                (argRange.RowCount != range.RowCount || argRange.ColCount != range.ColCount))
+                return ErrorValue.Value;
+        }
+
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                cells[r, c] = map(DateTimeArgAt(args[0], r, c), DateTimeArgAt(args[1], r, c), DateTimeArgAt(args[2], r, c));
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue DateTimeArgAt(ScalarValue value, int row, int col) =>
+        value is RangeValue range ? range.Cells[row, col] : value;
 
     private static ScalarValue DateScalar(ScalarValue yearValue, double rawMonth, double rawDay)
     {
@@ -172,17 +180,17 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
-        if (args.Count > 1 && args[1] is RangeValue returnTypeRange)
-            return MapUnaryTextRange(returnTypeRange, value =>
-            {
-                double rawType = ToNumber(value);
-                return double.IsFinite(rawType) ? WeekdayScalar(args[0], (int)rawType) : ErrorValue.Num;
-            });
-        double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        var returnTypeArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], returnTypeArg, WeekdayScalarWithReturnType);
+    }
+
+    private static ScalarValue WeekdayScalarWithReturnType(ScalarValue value, ScalarValue returnTypeValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (returnTypeValue is ErrorValue returnTypeError) return returnTypeError;
+        double rawReturnType = ToNumber(returnTypeValue);
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
-        int returnType = (int)rawReturnType;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WeekdayScalar(value, returnType));
-        return WeekdayScalar(args[0], returnType);
+        return WeekdayScalar(value, (int)rawReturnType);
     }
 
     private static ScalarValue WeekdayScalar(ScalarValue value, int returnType)
@@ -205,18 +213,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue monthsRange)
-            return MapUnaryTextRange(monthsRange, value =>
-            {
-                double raw = ToNumber(value);
-                if (!double.IsFinite(raw) || raw > int.MaxValue || raw < int.MinValue) return ErrorValue.Num;
-                return EdateScalar(args[0], (int)raw);
-            });
-        double rawMonths = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], EdateScalar);
+    }
+
+    private static ScalarValue EdateScalar(ScalarValue value, ScalarValue monthsValue)
+    {
+        double rawMonths = ToNumber(monthsValue);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue || rawMonths < int.MinValue) return ErrorValue.Num;
-        int months = (int)rawMonths;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => EdateScalar(value, months));
-        return EdateScalar(args[0], months);
+        return EdateScalar(value, (int)rawMonths);
     }
 
     private static ScalarValue EdateScalar(ScalarValue value, int months)
@@ -235,15 +239,23 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(args[1], out var endRaw)) return ErrorValue.Num;
+        return MapTernaryTextArgs(args[0], args[1], args[2], DatedifScalar);
+    }
+
+    private static ScalarValue DatedifScalar(ScalarValue startValue, ScalarValue endValue, ScalarValue unitValue)
+    {
+        if (startValue is ErrorValue startError) return startError;
+        if (endValue is ErrorValue endError) return endError;
+        if (unitValue is ErrorValue unitError) return unitError;
+        if (!TryOADateToDateTime(startValue, out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(endValue, out var endRaw)) return ErrorValue.Num;
         // DATEDIF operates on whole dates — discard any time portion so that
         // e.g. DATEDIF(2024-01-01 23:00, 2024-01-02 01:00, "D") returns 1 (Excel)
         // rather than 0 (TimeSpan.Days would otherwise round toward zero).
         var start = startRaw.Date;
         var end = endRaw.Date;
         if (end < start) return ErrorValue.Num;
-        var unit  = ToText(args[2]).ToUpperInvariant();
+        var unit  = ToText(unitValue).ToUpperInvariant();
 
         return unit switch
         {
@@ -304,22 +316,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        if (args[0] is RangeValue hourRange)
-        {
-            double rawM = ToNumber(args[1]), rawS = ToNumber(args[2]);
-            return MapUnaryTextRange(hourRange, value => TimeScalar(value, rawM, rawS));
-        }
-        if (args[1] is RangeValue minuteRange)
-        {
-            double rawS = ToNumber(args[2]);
-            return MapUnaryTextRange(minuteRange, value => TimeScalar(args[0], ToNumber(value), rawS));
-        }
-        if (args[2] is RangeValue secondRange)
-        {
-            double rawM = ToNumber(args[1]);
-            return MapUnaryTextRange(secondRange, value => TimeScalar(args[0], rawM, ToNumber(value)));
-        }
-        return TimeScalar(args[0], ToNumber(args[1]), ToNumber(args[2]));
+        return MapDateTimeTernaryArgs(args, (hour, minute, second) => TimeScalar(hour, ToNumber(minute), ToNumber(second)));
     }
 
     private static ScalarValue TimeScalar(ScalarValue hourValue, double rawM, double rawS)
@@ -390,18 +387,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue monthsRange)
-            return MapUnaryTextRange(monthsRange, value =>
-            {
-                double raw = ToNumber(value);
-                if (!double.IsFinite(raw) || raw > int.MaxValue - 1 || raw < int.MinValue) return ErrorValue.Num;
-                return EomonthScalar(args[0], (int)raw);
-            });
-        double rawMonths = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], EomonthScalar);
+    }
+
+    private static ScalarValue EomonthScalar(ScalarValue value, ScalarValue monthsValue)
+    {
+        double rawMonths = ToNumber(monthsValue);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue - 1 || rawMonths < int.MinValue) return ErrorValue.Num;
-        int months = (int)rawMonths;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => EomonthScalar(value, months));
-        return EomonthScalar(args[0], months);
+        return EomonthScalar(value, (int)rawMonths);
     }
 
     private static ScalarValue EomonthScalar(ScalarValue value, int months)
@@ -420,11 +413,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        var returnTypeArg = args.Count > 1 ? args[1] : BlankValue.Instance;
+        return MapBinaryMathArgs(args[0], returnTypeArg, WeeknumScalar);
+    }
+
+    private static ScalarValue WeeknumScalar(ScalarValue value, ScalarValue returnTypeValue)
+    {
+        double rawReturnType = returnTypeValue is not BlankValue ? ToNumber(returnTypeValue) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WeeknumScalar(value, returnType));
-        return WeeknumScalar(args[0], returnType);
+        return WeeknumScalar(value, returnType);
     }
 
     private static ScalarValue WeeknumScalar(ScalarValue value, int returnType)
@@ -471,25 +469,17 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (args[1] is RangeValue daysRange)
-        {
-            if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var rangeHolidays, out var rangeHolidayError))
-                return rangeHolidayError!;
-            return MapUnaryTextRange(daysRange, value =>
-            {
-                double raw = ToNumber(value);
-                if (!double.IsFinite(raw) || raw < int.MinValue + 1 || raw > int.MaxValue) return ErrorValue.Num;
-                return WorkdayScalar(args[0], (int)raw, rangeHolidays);
-            });
-        }
-        double rawDays = ToNumber(args[1]);
-        if (!double.IsFinite(rawDays)) return ErrorValue.Num;
-        if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
-        int days = (int)rawDays;
         if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
             return holidayError!;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WorkdayScalar(value, days, holidays));
-        return WorkdayScalar(args[0], days, holidays);
+        return MapBinaryMathArgs(args[0], args[1], (startDate, daysValue) => WorkdayScalar(startDate, daysValue, holidays));
+    }
+
+    private static ScalarValue WorkdayScalar(ScalarValue startDate, ScalarValue daysValue, HashSet<DateTime> holidays)
+    {
+        double rawDays = ToNumber(daysValue);
+        if (!double.IsFinite(rawDays)) return ErrorValue.Num;
+        if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
+        return WorkdayScalar(startDate, (int)rawDays, holidays);
     }
 
     private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<DateTime> holidays)
@@ -521,9 +511,7 @@ public static partial class BuiltInFunctions
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
             return holidayError!;
-        if (args[0] is RangeValue startRange) return MapUnaryTextRange(startRange, value => NetworkdaysScalar(value, args[1], holidays));
-        if (args[1] is RangeValue endRange) return MapUnaryTextRange(endRange, value => NetworkdaysScalar(args[0], value, holidays));
-        return NetworkdaysScalar(args[0], args[1], holidays);
+        return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => NetworkdaysScalar(startDate, endDate, holidays));
     }
 
     private static ScalarValue NetworkdaysScalar(ScalarValue startDate, ScalarValue endDate, HashSet<DateTime> holidays)
@@ -574,9 +562,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[0] is RangeValue endRange) return MapUnaryTextRange(endRange, value => DaysScalar(value, args[1]));
-        if (args[1] is RangeValue startRange) return MapUnaryTextRange(startRange, value => DaysScalar(args[0], value));
-        return DaysScalar(args[0], args[1]);
+        return MapBinaryMathArgs(args[0], args[1], DaysScalar);
     }
 
     private static ScalarValue DaysScalar(ScalarValue endDate, ScalarValue startDate)
@@ -591,14 +577,13 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        bool european = args.Count > 2 && args[2] is not BlankValue && ToNumber(args[2]) != 0;
-        if (args[0] is RangeValue startRange) return MapUnaryTextRange(startRange, value => Days360Scalar(value, args[1], european));
-        if (args[1] is RangeValue endRange) return MapUnaryTextRange(endRange, value => Days360Scalar(args[0], value, european));
-        return Days360Scalar(args[0], args[1], european);
+        var methodArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapTernaryTextArgs(args[0], args[1], methodArg, Days360Scalar);
     }
 
-    private static ScalarValue Days360Scalar(ScalarValue startDate, ScalarValue endDate, bool european)
+    private static ScalarValue Days360Scalar(ScalarValue startDate, ScalarValue endDate, ScalarValue methodValue)
     {
+        bool european = methodValue is not BlankValue && ToNumber(methodValue) != 0;
         if (!TryOADateToDateTime(startDate, out var startRaw)) return ErrorValue.Num;
         if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
@@ -612,13 +597,17 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        double rawBasis = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
+        var basisArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapTernaryTextArgs(args[0], args[1], basisArg, YearfracScalar);
+    }
+
+    private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, ScalarValue basisValue)
+    {
+        double rawBasis = basisValue is not BlankValue ? ToNumber(basisValue) : 0;
         if (!double.IsFinite(rawBasis)) return ErrorValue.Num;
         int basis = (int)rawBasis;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
-        if (args[0] is RangeValue startRange) return MapUnaryTextRange(startRange, value => YearfracScalar(value, args[1], basis));
-        if (args[1] is RangeValue endRange) return MapUnaryTextRange(endRange, value => YearfracScalar(args[0], value, basis));
-        return YearfracScalar(args[0], args[1], basis);
+        return YearfracScalar(startDate, endDate, basis);
     }
 
     private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, int basis)

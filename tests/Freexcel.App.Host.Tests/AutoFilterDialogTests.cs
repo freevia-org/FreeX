@@ -346,6 +346,19 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_ColorSwatchActivationAppliesFilterAndClosesDialog()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("button.Click += (_, _) => ApplyColorChoice(colorFilter);");
+        source.Should().Contain("private void ApplyColorChoice(AutoFilterColorFilter colorFilter)");
+        source.Should().Contain("Result = BuildResult(");
+        source.Should().Contain("colorFilter,");
+        source.Should().Contain("DialogResult = true;");
+        source.Should().NotContain("button.Click += (_, _) => _selectedColorFilter = colorFilter;");
+    }
+
+    [Fact]
     public void DataFilterCommands_RouteColorFiltersAndCompositeCriteriaToRealCommands()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
@@ -397,6 +410,44 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("SelectedDatePresetCriteria");
         source.Should().Contain("!string.IsNullOrWhiteSpace(_criteriaValueBox2.Text)");
         source.Should().NotContain("filterButton.Click += (_, _) => _criteriaBox.Focus()");
+    }
+
+    [Fact]
+    public void DialogControls_RenderFilterFamilyAsNestedMenuCommands()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("ConfigureFilterFamilySubmenu(menuPlan);");
+        source.Should().Contain("private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)");
+        source.Should().Contain("new ContextMenu()");
+        source.Should().Contain("submenu.Opened += AutoFilterFamilySubmenu_Opened;");
+        source.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips(submenu.Items.OfType<MenuItem>());");
+        source.Should().Contain("parentButton.ContextMenu = submenu;");
+        source.Should().Contain("menuItem.Click += (_, _) => ApplyFilterFamilyChild(child);");
+        source.Should().Contain("private static void AutoFilterFamilySubmenu_Opened(object sender, RoutedEventArgs e)");
+        source.Should().Contain("Keyboard.Focus(firstEnabledItem);");
+        source.Should().Contain("private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)");
+        source.Should().Contain("FocusSelectedCriteriaInput(option);");
+        source.Should().Contain("private void FocusSelectedCriteriaInput(AutoFilterCriteriaOption? option)");
+        source.Should().Contain("FocusCriteriaInput(_betweenMinBox);");
+        source.Should().Contain("FocusCriteriaInput(_topBottomCountBox);");
+        source.Should().Contain("FocusCriteriaInput(_criteriaValueBox);");
+        source.Should().Contain("AutoFilterMenuEntryKind.FilterFamilyCommand");
+    }
+
+    [Fact]
+    public void DialogControls_InvalidTypedCriteriaWarnsAndRefocusesRequiredField()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("if (!ValidateTypedCriteriaInputs())");
+        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter a filter value.\", _criteriaValueBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter the first value for the between filter.\", _betweenMinBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter the second value for the between filter.\", _betweenMaxBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter a valid top or bottom count.\", _topBottomCountBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]

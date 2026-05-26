@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Windows;
 using FluentAssertions;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
@@ -54,6 +55,36 @@ public sealed class GridViewDrawingObjectThemeTests
         GridView.CreateObjectPlaceholderLabel("Picture", "  Logo  ", 3).Should().Be("Logo");
         GridView.CreateObjectPlaceholderLabel("Picture", "", 1).Should().Be("Picture");
         GridView.CreateObjectPlaceholderLabel("Picture", null, 3).Should().Be("Picture 3");
+    }
+
+    [Fact]
+    public void TryCreateDrawingAnchorRect_MapsTwoCellAnchorToViewportPixels()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(3, 20, 0),
+                new RowMetric(4, 20, 20),
+                new RowMetric(5, 20, 40)
+            ],
+            [
+                new ColMetric(2, 80, 0),
+                new ColMetric(3, 80, 80),
+                new ColMetric(4, 80, 160)
+            ]);
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 95250, 2, 190500),
+            new DrawingAnchorPoint(3, 47625, 4, 95250));
+
+        var created = GridView.TryCreateDrawingAnchorRect(
+            viewport,
+            anchor,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            out var rect);
+
+        created.Should().BeTrue();
+        rect.Should().Be(new Rect(40, 38, 155, 30));
     }
 
     [Fact]

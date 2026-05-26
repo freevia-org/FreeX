@@ -50,6 +50,8 @@ public sealed partial class SelectionPaneDialog : Window
     private readonly Button _moveDownButton = new() { Content = "Send _Backward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _showAllButton = new() { Content = "Show _All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _hideAllButton = new() { Content = "_Hide All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private Point? _dragStartPoint;
+    private SelectionPaneDialogItem? _dragItem;
 
     public SelectionPaneDialogResult Result { get; private set; }
 
@@ -65,6 +67,11 @@ public sealed partial class SelectionPaneDialog : Window
         ShowInTaskbar = false;
 
         _list.Margin = new Thickness(0, 0, 0, 10);
+        _list.AllowDrop = true;
+        _list.PreviewMouseLeftButtonDown += List_PreviewMouseLeftButtonDown;
+        _list.MouseMove += List_MouseMove;
+        _list.DragOver += List_DragOver;
+        _list.Drop += List_Drop;
         _items = items.Select(item => new SelectionPaneDialogItem(item)).ToList();
         _list.ItemsSource = _items;
         _list.SelectionChanged += (_, _) =>

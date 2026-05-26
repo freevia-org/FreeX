@@ -213,6 +213,8 @@ public enum KeyboardCommandShortcut
     OpenFormatCells,
     Find,
     Replace,
+    NameManager,
+    CreateNamesFromSelection,
     InsertFunction,
     SpellCheck,
     CloseWorkbook,

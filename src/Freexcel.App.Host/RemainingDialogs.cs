@@ -37,12 +37,37 @@ public sealed class ConditionalFormatThresholdDialog : Window
     public static ConditionalFormatThresholdDialogResult CreateResult(string thresholdText) =>
         new(thresholdText.Trim());
 
+    public static bool TryCreateResult(string? thresholdText, out ConditionalFormatThresholdDialogResult result, out string? error)
+    {
+        result = CreateResult(thresholdText ?? "");
+        if (string.IsNullOrWhiteSpace(result.ThresholdText))
+        {
+            error = "Enter a threshold value.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
     private void Accept()
     {
-        Result = CreateResult(_thresholdBox.Text);
-        if (string.IsNullOrWhiteSpace(Result.ThresholdText))
+        if (!TryCreateResult(_thresholdBox.Text, out var result, out var error))
+        {
+            ShowInvalidInputWarning(error ?? "Enter a threshold value.");
             return;
+        }
+
+        Result = result;
         DialogResult = true;
+    }
+
+    private void ShowInvalidInputWarning(string message)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        _thresholdBox.Focus();
+        _thresholdBox.SelectAll();
+        Keyboard.Focus(_thresholdBox);
     }
 }
 

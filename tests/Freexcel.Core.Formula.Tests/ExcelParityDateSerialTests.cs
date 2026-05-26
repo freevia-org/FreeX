@@ -257,6 +257,22 @@ public sealed class ExcelParityDateSerialTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Fact]
+    public void Weeknum_ReturnTypeRangeArgument_SpillsElementwise()
+    {
+        var sheet = Sheet(
+            (1, 1, 6),
+            (2, 1, 6),
+            (1, 2, 1),
+            (2, 2, 2));
+
+        var value = _eval.Evaluate("=WEEKNUM(A1:A2,B1:B2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        value.RowCount.Should().Be(2);
+        value.ColCount.Should().Be(1);
+        value.At(1, 1).Should().Be(new NumberValue(1));
+        value.At(2, 1).Should().Be(new NumberValue(2));
+    }
+
     [Theory]
     [InlineData("=ISOWEEKNUM(DATE(1900,1,1))", 52)]
     [InlineData("=ISOWEEKNUM(DATE(1900,1,7))", 1)]

@@ -13,6 +13,9 @@ internal static partial class XlsxChartXmlWriter
 
     public static XDocument ToChartXml(ChartModel chart, Sheet sheet)
     {
+        if (IsChartExChart(chart.Type))
+            return ToChartExXml(chart, sheet);
+
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -412,7 +415,14 @@ internal static partial class XlsxChartXmlWriter
                 or ChartType.Surface
                 or ChartType.ThreeDSurface
                 or ChartType.ThreeDColumn
-                or ChartType.ThreeDBar);
+                or ChartType.ThreeDBar
+                or ChartType.Treemap
+                or ChartType.Sunburst
+                or ChartType.Histogram
+                or ChartType.Pareto
+                or ChartType.BoxAndWhisker
+                or ChartType.Waterfall
+                or ChartType.Funnel);
 
     private static string ToXlsxBarDirection(ChartType chartType) =>
         chartType is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar

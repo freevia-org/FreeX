@@ -116,6 +116,43 @@ public sealed class AddThreadedCommentReplyCommand : IWorkbookCommand
     }
 }
 
+/// <summary>Edit the root text of an existing threaded comment with undo support.</summary>
+public sealed class UpdateThreadedCommentTextCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly CellAddress _address;
+    private readonly string _text;
+    private ThreadedComment? _previous;
+
+    public string Label => "Edit Comment";
+
+    public UpdateThreadedCommentTextCommand(SheetId sheetId, CellAddress address, string text)
+    {
+        _sheetId = sheetId;
+        _address = address;
+        _text = text;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+        if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
+            return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
+
+        sheet.ThreadedComments[_address] = _previous with { Text = _text };
+        return new CommandOutcome(true, AffectedCells: [_address]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previous is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.ThreadedComments[_address] = _previous;
+    }
+}
+
 /// <summary>Toggle the resolved state of a threaded comment with undo support.</summary>
 public sealed class ResolveThreadedCommentCommand : IWorkbookCommand
 {

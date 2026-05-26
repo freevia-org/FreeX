@@ -48,7 +48,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name == "table") return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
         if (name.Contains("add-ins")) return new(RibbonCommandIconKind.GetData);
         if (name.Contains("3d map")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Data);
-        if (name.Contains("column chart") || name.Contains("bar chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
+        if (name.Contains("column chart") || name.Contains("bar chart") || name.Contains("bar/column") || name.Contains("gap width") || name.Contains("bar overlap")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("line chart") || name.Contains("trendline") || name.Contains("moving average") || name.Contains("polynomial") || name.Contains("r-squared")) return new(RibbonCommandIconKind.ChartLine, RibbonCommandIconAccent.Chart);
         if (name.Contains("pie chart") || name.Contains("doughnut") || name.Contains("slice")) return new(RibbonCommandIconKind.ChartPie, RibbonCommandIconAccent.Chart);
         if (name.Contains("scatter") || name.Contains("bubble")) return new(RibbonCommandIconKind.ChartScatter, RibbonCommandIconAccent.Chart);

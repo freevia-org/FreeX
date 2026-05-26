@@ -56,6 +56,22 @@ public sealed class ExcelParityStatisticalAliasTests
         Number("=RANK.AVG(2,A1:A4,0)", Values(3, 2, 2, 1)).Should().Be(2.5);
     }
 
+    [Fact]
+    public void RankAvg_NumberAndOrderRangeArguments_SpillElementwise()
+    {
+        var sheet = Values(3, 2, 2, 1);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(0));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(1));
+
+        var value = _eval.Evaluate("=RANK.AVG(B1:B2,A1:A4,C1:C2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        value.RowCount.Should().Be(2);
+        value.ColCount.Should().Be(1);
+        value.At(1, 1).Should().Be(new NumberValue(2.5));
+        value.At(2, 1).Should().Be(new NumberValue(2.5));
+    }
+
     private double Number(string formula, Sheet sheet)
     {
         var value = _eval.Evaluate(formula, sheet);

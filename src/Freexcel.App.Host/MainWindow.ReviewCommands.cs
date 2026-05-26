@@ -189,12 +189,24 @@ public partial class MainWindow
                 range,
                 r => new SetThreadedCommentCommand(_currentSheetId, r.Start, result.ReplyText));
         }
-        else if (existing is not null && result.ReplyText is not null)
+        else if (existing is not null)
         {
-            changed = TryExecuteRepeatableCurrentRangeCommand(
-                "Reply to Comment",
-                range,
-                r => new AddThreadedCommentReplyCommand(_currentSheetId, r.Start, result.ReplyText));
+            if (result.RootText is not null)
+            {
+                changed = TryExecuteRepeatableCurrentRangeCommand(
+                    "Edit Comment",
+                    range,
+                    r => new UpdateThreadedCommentTextCommand(_currentSheetId, r.Start, result.RootText));
+            }
+
+            if (result.ReplyText is not null)
+            {
+                TryExecuteRepeatableCurrentRangeCommand(
+                    "Reply to Comment",
+                    range,
+                    r => new AddThreadedCommentReplyCommand(_currentSheetId, r.Start, result.ReplyText));
+                changed = true;
+            }
         }
 
         if (existing is not null && result.IsResolved != existing.IsResolved)

@@ -228,6 +228,8 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args[0] is RangeValue && args[1] is RangeValue)
+            return MapBinaryMathArgs(args[0], args[1], FilterXmlScalar);
         if (args[1] is RangeValue xpathRange) return MapUnaryTextRange(xpathRange, value => FilterXmlScalar(args[0], value));
         if (args[0] is RangeValue xmlRange) return MapUnaryTextRange(xmlRange, value => FilterXmlScalar(value, args[1]));
         return FilterXmlScalar(args[0], args[1]);

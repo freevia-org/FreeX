@@ -34,6 +34,8 @@ public static partial class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.OpenFormatCells, (key, modifiers) => modifiers == ModifierKeys.Control && key is Key.D1 or Key.NumPad1),
         new(KeyboardCommandShortcut.Find, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.F),
         new(KeyboardCommandShortcut.Replace, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.H),
+        new(KeyboardCommandShortcut.NameManager, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.F3),
+        new(KeyboardCommandShortcut.CreateNamesFromSelection, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.F3),
         new(KeyboardCommandShortcut.InsertFunction, (key, modifiers) => modifiers == ModifierKeys.Shift && key == Key.F3),
         new(KeyboardCommandShortcut.SpellCheck, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F7),
         new(KeyboardCommandShortcut.CloseWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key is Key.F4 or Key.W),

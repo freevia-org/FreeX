@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Globalization;
 using Freexcel.App.Host;
 using Freexcel.Core.Model;
 using FluentAssertions;
@@ -44,6 +45,7 @@ public sealed class FormatCellsDialogXamlTests
         {
             "_Wrap text",
             "S_hrink to fit",
+            "_Normal font",
             "_Double underline",
             "_Strikethrough",
             "Super_script",
@@ -90,7 +92,7 @@ public sealed class FormatCellsDialogXamlTests
             "DlgHAlignBox", "DlgVAlignBox", "DlgWrapTextCheck", "DlgShrinkToFitCheck",
             "DlgIndentLevelBox", "DlgTextRotationBox",
             "DlgFontNameBox", "DlgFontSizeBox", "DlgFontStyleList",
-            "DlgUnderlineStyleBox", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
+            "DlgUnderlineStyleBox", "DlgNormalFontCheck", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
             "DlgSuperscriptCheck", "DlgSubscriptCheck",
             "DlgFillColorBox", "DlgClearFillCheck", "DlgFillPalettePanel",
             "DlgBorderTopStyleBox", "DlgBorderTopColorBox",
@@ -218,7 +220,7 @@ public sealed class FormatCellsDialogXamlTests
                 });
 
                 FormatCellsDialog.ResolveNumberFormat("Accounting ($#,##0.00)", 3)
-                    .Should().Be("$#,##0.00");
+                    .Should().Be("_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)");
                 FormatCellsDialog.ResolveNumberFormat("Fraction (# ?/?)", 8)
                     .Should().Be("# ?/?");
                 FormatCellsDialog.ResolveNumberFormat("Long date ([$-F800])", 0)
@@ -346,6 +348,7 @@ public sealed class FormatCellsDialogXamlTests
     [Theory]
     [InlineData("Number", "#,##0.00", "0", "None", 0, "#,##0")]
     [InlineData("Currency", "$#,##0.00", "3", "EUR", 2, "EUR#,##0.000;(EUR#,##0.000)")]
+    [InlineData("Accounting", "$#,##0.00", "1", "GBP", 0, "_(GBP* #,##0.0_);_(GBP* (#,##0.0);_(GBP* \"-\"?_);_(@_)")]
     [InlineData("Accounting", "$#,##0.00", "2", "GBP", 0, "_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)")]
     [InlineData("Percentage", "0.00%", "1", "None", 0, "0.0%")]
     public void FormatCellsDialog_NumberTab_ComposesFormatFromCategoryControls(
@@ -585,6 +588,106 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_ExposesFontColorSwatchesAndPreviewUpdate()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var expected in new[]
+        {
+            "x:Name=\"DlgFontColorPalettePanel\"",
+            "Columns=\"8\" Rows=\"2\"",
+            "ToolTip=\"Automatic font color\"",
+            "ToolTip=\"Red font\"",
+            "ToolTip=\"Blue font\"",
+            "Click=\"DlgFontColorSwatchButton_Click\""
+        })
+            xaml.Should().Contain(expected);
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var colorBox = GetControl<TextBox>(dialog, "DlgFontColorBox");
+                var preview = GetControl<TextBlock>(dialog, "DlgFontSamplePreview");
+                var swatch = new Button { Tag = "192,0,0" };
+
+                InvokeDialogHandler(dialog, "DlgFontColorSwatchButton_Click", swatch);
+
+                colorBox.Text.Should().Be("192,0,0");
+                preview.Foreground.Should().BeOfType<SolidColorBrush>()
+                    .Which.Color.Should().Be(Color.FromRgb(192, 0, 0));
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontColor.Should().Be(new CellColor(192, 0, 0));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_NormalFontResetsModeledFontFields()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+        xaml.Should().Contain("x:Name=\"DlgNormalFontCheck\" Content=\"_Normal font\"");
+        xaml.Should().Contain("Checked=\"DlgNormalFontCheck_Checked\"");
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle
+            {
+                FontName = "Verdana",
+                FontSize = 18,
+                Bold = true,
+                Italic = true,
+                Underline = true,
+                DoubleUnderline = true,
+                Strikethrough = true,
+                Superscript = true,
+                Subscript = true,
+                FontColor = new CellColor(192, 0, 0)
+            });
+            try
+            {
+                InvokeDialogHandler(dialog, "DlgNormalFontCheck_Checked", GetControl<CheckBox>(dialog, "DlgNormalFontCheck"));
+
+                GetControl<ComboBox>(dialog, "DlgFontNameBox").Text.Should().Be(CellStyle.Default.FontName);
+                GetControl<ComboBox>(dialog, "DlgFontSizeBox").Text.Should().Be("11");
+                GetControl<ListBox>(dialog, "DlgFontStyleList").SelectedItem.Should().Be("Regular");
+                GetControl<ComboBox>(dialog, "DlgUnderlineStyleBox").SelectedItem.Should().Be("None");
+                GetControl<CheckBox>(dialog, "DlgDoubleUnderlineCheck").IsChecked.Should().BeFalse();
+                GetControl<CheckBox>(dialog, "DlgStrikeCheck").IsChecked.Should().BeFalse();
+                GetControl<CheckBox>(dialog, "DlgSuperscriptCheck").IsChecked.Should().BeFalse();
+                GetControl<CheckBox>(dialog, "DlgSubscriptCheck").IsChecked.Should().BeFalse();
+                GetControl<TextBox>(dialog, "DlgFontColorBox").Text.Should().Be("0,0,0");
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontName.Should().Be(CellStyle.Default.FontName);
+                dialog.ResultDiff.FontSize.Should().Be(CellStyle.Default.FontSize);
+                dialog.ResultDiff.Bold.Should().BeFalse();
+                dialog.ResultDiff.Italic.Should().BeFalse();
+                dialog.ResultDiff.Underline.Should().BeFalse();
+                dialog.ResultDiff.DoubleUnderline.Should().BeFalse();
+                dialog.ResultDiff.Strikethrough.Should().BeFalse();
+                dialog.ResultDiff.Superscript.Should().BeFalse();
+                dialog.ResultDiff.Subscript.Should().BeFalse();
+                dialog.ResultDiff.FontColor.Should().Be(CellColor.Black);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_DoesNotDuplicateFontStyleAndUnderlineControlsAsEffects()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
@@ -626,6 +729,16 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_UsesEditableFontNameCombo()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        xaml.Should().Contain("x:Name=\"DlgFontNameBox\"");
+        xaml.Should().Contain("IsEditable=\"True\"");
+        xaml.Should().Contain("TextBoxBase.TextChanged=\"FontPreviewInput_Changed\"");
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_PopulatesInstalledFontsAndKeepsCustomCurrentFont()
     {
         StaTestRunner.Run(() =>
@@ -641,6 +754,31 @@ public sealed class FormatCellsDialogXamlTests
                 fontBox.SelectedItem.Should().Be(customFont);
                 availableFonts.Should().Contain(Fonts.SystemFontFamilies.Select(f => f.Source));
                 availableFonts.Should().HaveCountGreaterThan(6);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_AppliesTypedFontName()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const string typedFont = "Freexcel Typed Font";
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var fontBox = GetControl<ComboBox>(dialog, "DlgFontNameBox");
+                fontBox.SelectedItem = null;
+                fontBox.Text = $"  {typedFont}  ";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontName.Should().Be(typedFont);
             }
             finally
             {
@@ -770,6 +908,165 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_AcceptsHexColorTextForFontFillPatternAndBorders()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<TextBox>(dialog, "DlgFontColorBox").Text = "#C00000";
+                GetControl<TextBox>(dialog, "DlgFillColorBox").Text = "#00B050";
+                GetControl<TextBox>(dialog, "DlgFillPatternColorBox").Text = "#5B9BD5";
+                GetControl<ComboBox>(dialog, "DlgFillPatternStyleBox").SelectedItem = "Diagonal Crosshatch";
+                GetControl<TextBox>(dialog, "DlgBorderLineColorBox").Text = "#7030A0";
+                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.Thin);
+                GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "#FFC000";
+                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.Medium);
+                GetControl<TextBox>(dialog, "DlgBorderRightColorBox").Text = "#4472C4";
+                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = nameof(BorderStyle.Dashed);
+                GetControl<TextBox>(dialog, "DlgBorderBottomColorBox").Text = "#70AD47";
+                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.Double);
+                GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "#ED7D31";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontColor.Should().Be(new CellColor(192, 0, 0));
+                dialog.ResultDiff.FillColor.Should().Be(new CellColor(0, 176, 80));
+                dialog.ResultDiff.FillPatternColor.Should().Be(new CellColor(91, 155, 213));
+                dialog.ResultDiff.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
+                dialog.ResultDiff.BorderTop.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(255, 192, 0)));
+                dialog.ResultDiff.BorderRight.Should().Be(new CellBorder(BorderStyle.Medium, new CellColor(68, 114, 196)));
+                dialog.ResultDiff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dashed, new CellColor(112, 173, 71)));
+                dialog.ResultDiff.BorderLeft.Should().Be(new CellBorder(BorderStyle.Double, new CellColor(237, 125, 49)));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_AllowsBlankSideColorsWhenBorderSidesAreNone()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var current = new CellStyle
+            {
+                BorderTop = new CellBorder(BorderStyle.Thin, new CellColor(1, 2, 3)),
+                BorderRight = new CellBorder(BorderStyle.Thin, new CellColor(4, 5, 6)),
+                BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(7, 8, 9)),
+                BorderLeft = new CellBorder(BorderStyle.Thin, new CellColor(10, 11, 12))
+            };
+            var dialog = ShowDialogForTest(current);
+            try
+            {
+                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "";
+                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderRightColorBox").Text = "";
+                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderBottomColorBox").Text = "";
+                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.BorderTop.Should().Be(new CellBorder(BorderStyle.None, new CellColor(1, 2, 3)));
+                dialog.ResultDiff.BorderRight.Should().Be(new CellBorder(BorderStyle.None, new CellColor(4, 5, 6)));
+                dialog.ResultDiff.BorderBottom.Should().Be(new CellBorder(BorderStyle.None, new CellColor(7, 8, 9)));
+                dialog.ResultDiff.BorderLeft.Should().Be(new CellBorder(BorderStyle.None, new CellColor(10, 11, 12)));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_KeepsSuperscriptAndSubscriptMutuallyExclusive()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        xaml.Should().Contain("Checked=\"DlgSuperscriptCheck_Checked\"");
+        xaml.Should().Contain("Checked=\"DlgSubscriptCheck_Checked\"");
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var superscript = GetControl<CheckBox>(dialog, "DlgSuperscriptCheck");
+                var subscript = GetControl<CheckBox>(dialog, "DlgSubscriptCheck");
+
+                superscript.IsChecked = true;
+                InvokeDialogHandler(dialog, "DlgSuperscriptCheck_Checked", superscript);
+                subscript.IsChecked = true;
+                InvokeDialogHandler(dialog, "DlgSubscriptCheck_Checked", subscript);
+
+                superscript.IsChecked.Should().BeFalse();
+                subscript.IsChecked.Should().BeTrue();
+
+                superscript.IsChecked = true;
+                InvokeDialogHandler(dialog, "DlgSuperscriptCheck_Checked", superscript);
+
+                superscript.IsChecked.Should().BeTrue();
+                subscript.IsChecked.Should().BeFalse();
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.Superscript.Should().BeTrue();
+                dialog.ResultDiff.Subscript.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_ListsExcelUnderlineOptions()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("\"None\", \"Single\", \"Double\", \"Single Accounting\", \"Double Accounting\"");
+    }
+
+    [Theory]
+    [InlineData("Single Accounting", true, false)]
+    [InlineData("Double Accounting", false, true)]
+    public void FormatCellsDialog_MapsAccountingUnderlineOptionsIntoCurrentStyleModel(
+        string underlineOption,
+        bool expectedUnderline,
+        bool expectedDoubleUnderline)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<ComboBox>(dialog, "DlgUnderlineStyleBox").SelectedItem = underlineOption;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.Underline.Should().Be(expectedUnderline);
+                dialog.ResultDiff.DoubleUnderline.Should().Be(expectedDoubleUnderline);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsNumberAndAlignmentFieldsIntoStyleDiff()
     {
         StaTestRunner.Run(() =>
@@ -839,6 +1136,11 @@ public sealed class FormatCellsDialogXamlTests
                 ClickOkForTest(dialog);
                 dialog.ResultDiff!.NumberFormat.Should().Be("_(£* #,##0_);_(£* (#,##0);_(£* \"-\"_);_(@_)");
 
+                decimals.Text = "1";
+                symbols.SelectedItem = "GBP";
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("_(GBP* #,##0.0_);_(GBP* (#,##0.0);_(GBP* \"-\"?_);_(@_)");
+
                 categories.SelectedItem = "Percentage";
                 decimals.Text = "4";
                 ClickOkForTest(dialog);
@@ -848,6 +1150,38 @@ public sealed class FormatCellsDialogXamlTests
                 decimals.Text = "1";
                 ClickOkForTest(dialog);
                 dialog.ResultDiff!.NumberFormat.Should().Be("0.0E+00");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_ListsLocalizedAccountingCurrencyLabels()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var usRegion = new RegionInfo("en-US");
+                var usDollarLabel = $"{usRegion.CurrencySymbol} {usRegion.CurrencyNativeName}";
+
+                symbols.Items.Cast<string>().Should().Contain(usDollarLabel);
+
+                categories.SelectedItem = "Accounting";
+                decimals.Text = "2";
+                symbols.SelectedItem = usDollarLabel;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.NumberFormat.Should().Be($"_({usRegion.CurrencySymbol}* #,##0.00_);_({usRegion.CurrencySymbol}* (#,##0.00);_({usRegion.CurrencySymbol}* \"-\"??_);_(@_)");
             }
             finally
             {
@@ -1117,9 +1451,12 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     private static void InvokeDialogHandler(FormatCellsDialog dialog, string methodName)
+        => InvokeDialogHandler(dialog, methodName, dialog);
+
+    private static void InvokeDialogHandler(FormatCellsDialog dialog, string methodName, object sender)
     {
         var method = typeof(FormatCellsDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         method.Should().NotBeNull();
-        method!.Invoke(dialog, [dialog, new System.Windows.RoutedEventArgs()]);
+        method!.Invoke(dialog, [sender, new System.Windows.RoutedEventArgs()]);
     }
 }

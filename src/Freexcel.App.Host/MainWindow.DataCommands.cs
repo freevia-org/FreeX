@@ -175,14 +175,15 @@ public partial class MainWindow
         var dialog = new AdvancedFilterDialog(_currentSheetId, defaultList, ResolveSheetIdByName) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        var outcome = _commandBus.Execute(
+        var result = dialog.Result;
+        var outcome = _commandBus.ExecuteRepeatable(
             _workbook.Id,
-            new AdvancedFilterCommand(
-                dialog.Result.ListRange,
-                dialog.Result.CriteriaRange,
-                dialog.Result.CopyToCell,
-                dialog.Result.UniqueRecordsOnly,
-                dialog.Result.CopyToRange));
+            () => new AdvancedFilterCommand(
+                result.ListRange,
+                result.CriteriaRange,
+                result.CopyToCell,
+                result.UniqueRecordsOnly,
+                result.CopyToRange));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Advanced Filter");
@@ -190,7 +191,7 @@ public partial class MainWindow
         }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        if (dialog.Result.CopyToCell is { } destinationCell)
+        if (result.CopyToCell is { } destinationCell)
             SetActiveCell(destinationCell);
         UpdateViewport();
     }

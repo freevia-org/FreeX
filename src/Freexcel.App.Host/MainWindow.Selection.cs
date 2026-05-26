@@ -245,6 +245,9 @@ public partial class MainWindow
         if (TryHandleShellFocusCyclePreview(e))
             return;
 
+        if (TryHandleShowKeyTipsPreview(e, sender))
+            return;
+
         if (Keyboard.FocusedElement is TextBox or ComboBox)
             return;
 
@@ -275,6 +278,23 @@ public partial class MainWindow
 
         ExecuteCommandShortcut(commandShortcut, sender, e);
         e.Handled = true;
+    }
+
+    private bool TryHandleShowKeyTipsPreview(System.Windows.Input.KeyEventArgs e, object sender)
+    {
+        if (!KeyboardShortcutMatcher.TryGetCommandShortcut(
+                e.Key,
+                e.SystemKey,
+                Keyboard.Modifiers,
+                out var commandShortcut) ||
+            commandShortcut != KeyboardCommandShortcut.ShowKeyTips)
+        {
+            return false;
+        }
+
+        ExecuteCommandShortcut(commandShortcut, sender, e);
+        e.Handled = true;
+        return true;
     }
 
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -387,6 +407,9 @@ public partial class MainWindow
             return;
 
         if (TryHandleFocusedSheetTabKeyboardNavigation(e))
+            return;
+
+        if (TryHandleFocusedTaskPaneKeyboardNavigation(e))
             return;
 
         if (TryHandleFocusedStatusBarKeyboardNavigation(e))

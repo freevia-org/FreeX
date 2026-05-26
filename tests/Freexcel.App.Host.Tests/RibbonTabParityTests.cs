@@ -48,7 +48,7 @@ public sealed class RibbonTabParityTests
             "Comments");
 
         ExtractGroupXaml(insertTab, "Tables").Should().Contain("Recommended PivotTables");
-        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Insert Picture\"");
+        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Pictures\"");
         ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Shapes\"");
         ExtractGroupXaml(insertTab, "Charts").Should().Contain("local:RibbonTooltip.Title=\"Recommended Charts\"");
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
@@ -73,6 +73,7 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Shape\"");
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Math\"");
+        ExtractGroupXaml(drawTab, "Format").Should().Contain("local:RibbonTooltip.Title=\"Shape Fill\"");
     }
 
     [Fact]

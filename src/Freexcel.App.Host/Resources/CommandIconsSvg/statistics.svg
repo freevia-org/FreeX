@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Statistics">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><text x="17.28" y="33.48" font-size="18.36" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">Σ</text><rect x="30.24" y="27" width="3.78" height="11.88" fill="#0078d4"/><rect x="36.72" y="19.44" width="3.78" height="19.44" fill="#dff6dd"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Statistics" shape-rendering="crispEdges">
+  <rect width="32" height="32" fill="none"/>
+  <text x="10" y="24" font-size="24" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">&#x03A3;</text>
+  <rect x="18" y="17" width="4" height="10" fill="#0078d4" stroke="#005a9e" stroke-width="1"/>
+  <rect x="24" y="9" width="4" height="18" fill="#8fd19e" stroke="#107c41" stroke-width="1"/>
 </svg>
-

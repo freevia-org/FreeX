@@ -1,11 +1,13 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
 public sealed partial class SelectDataSourceDialog : Window
 {
+    private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
     private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains _category labels" };
     private readonly CheckBox _switchRowColumnBox = new() { Content = "_Switch Row/Column" };
@@ -19,8 +21,10 @@ public sealed partial class SelectDataSourceDialog : Window
     public SelectDataSourceDialog(
         string sourceRangeText,
         bool firstColumnIsCategories = true,
-        Action<SelectDataSourceRangeSelectionRequest>? requestRangeSelection = null)
+        Action<SelectDataSourceRangeSelectionRequest>? requestRangeSelection = null,
+        SheetId sheetId = default)
     {
+        _sheetId = sheetId;
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(sourceRangeText, firstColumnIsCategories);
         Title = "Select Data Source";
@@ -66,6 +70,9 @@ public sealed partial class SelectDataSourceDialog : Window
         RefreshPreviewLists();
         stack.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
+            if (!ValidateInputs())
+                return;
+
             Result = CreateResult(
                 _rangeBox.Text,
                 _firstColumnCategoriesBox.IsChecked == true,
@@ -99,6 +106,24 @@ public sealed partial class SelectDataSourceDialog : Window
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);
+    }
+
+    private bool ValidateInputs()
+    {
+        if (!ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, out _))
+        {
+            ShowInvalidInputWarning("Enter a valid chart data range.", _rangeBox);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        FocusRangeSelectionInput(target);
+        return false;
     }
 
 }

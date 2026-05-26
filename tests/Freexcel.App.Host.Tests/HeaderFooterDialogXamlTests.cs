@@ -215,9 +215,11 @@ public sealed class HeaderFooterDialogXamlTests
     {
         var source = ReadHeaderFooterDialogSource();
 
-        source.Should().Contain("FocusInvalidSizeInput();");
-        source.Should().Contain("private void FocusInvalidSizeInput()");
-        source.Should().Contain("FocusAndSelect(string.IsNullOrWhiteSpace(_widthBox.Text) ? _widthBox : _heightBox);");
+        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text, out var width))");
+        source.Should().Contain("FocusAndSelect(_widthBox);");
+        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text, out var height))");
+        source.Should().Contain("FocusAndSelect(_heightBox);");
+        source.Should().Contain("private static bool TryParsePositiveSize(string text, out double value)");
         source.Should().Contain("private static void FocusAndSelect(TextBox box)");
         source.Should().Contain("Keyboard.Focus(box);");
     }

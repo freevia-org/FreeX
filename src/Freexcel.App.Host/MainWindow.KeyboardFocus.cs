@@ -113,6 +113,34 @@ public partial class MainWindow
         return true;
     }
 
+    private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is not UIElement focusedElement ||
+            (!IsDescendantOf(focusedElement, PivotFieldListPane) &&
+             !IsDescendantOf(focusedElement, SlicerTimelinePane)) ||
+            Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift)
+        {
+            return false;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            FocusSheetGridIfNeeded();
+            e.Handled = true;
+            return true;
+        }
+
+        if (e.Key != Key.Tab)
+            return false;
+
+        var request = new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift
+            ? FocusNavigationDirection.Previous
+            : FocusNavigationDirection.Next);
+        focusedElement.MoveFocus(request);
+        e.Handled = true;
+        return true;
+    }
+
     private bool IsInsideRibbonSurface(DependencyObject element)
     {
         for (DependencyObject? current = element; current is not null; current = GetTreeParentForKeyboardFocus(current))
@@ -139,13 +167,18 @@ public partial class MainWindow
     private void CycleShellFocus(bool reverse)
     {
         var current = GetCurrentShellFocusTarget();
-        for (var attempt = 0; attempt < 5; attempt++)
+        for (var attempt = 0; attempt < Enum.GetValues<ShellFocusTarget>().Length; attempt++)
         {
-            current = ShellFocusCyclePlanner.GetNext(current, reverse);
+            current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
             if (FocusShellRegion(current))
                 return;
         }
     }
+
+    private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
+        target != ShellFocusTarget.TaskPane ||
+        PivotFieldListPane?.Visibility == Visibility.Visible ||
+        SlicerTimelinePane?.Visibility == Visibility.Visible;
 
     private ShellFocusTarget GetCurrentShellFocusTarget()
     {
@@ -173,6 +206,10 @@ public partial class MainWindow
 
             if (IsDescendantOf(focusedElement, StatusBarGrid))
                 return ShellFocusTarget.StatusBar;
+
+            if (IsDescendantOf(focusedElement, PivotFieldListPane) ||
+                IsDescendantOf(focusedElement, SlicerTimelinePane))
+                return ShellFocusTarget.TaskPane;
         }
 
         return ShellFocusTarget.Worksheet;
@@ -194,6 +231,9 @@ public partial class MainWindow
 
             case ShellFocusTarget.SheetTabs:
                 return TryFocusCurrentSheetTab() || AddSheetButton.Focus();
+
+            case ShellFocusTarget.TaskPane:
+                return FocusVisibleTaskPane();
 
             case ShellFocusTarget.StatusBar:
                 return FocusStatusBar();
@@ -223,6 +263,30 @@ public partial class MainWindow
         return StatusZoomOutButton.Focus() || ZoomSlider.Focus();
     }
 
+    private bool FocusVisibleTaskPane()
+    {
+        return FocusPivotFieldListPane() ||
+               FocusSlicerTimelinePane();
+    }
+
+    private bool FocusPivotFieldListPane()
+    {
+        if (PivotFieldListPane?.Visibility != Visibility.Visible)
+            return false;
+
+        return PivotFieldListSearchBox.Focus() ||
+               PivotAvailableFieldsList.Focus() ||
+               PivotFieldListCloseBtn.Focus();
+    }
+
+    private bool FocusSlicerTimelinePane()
+    {
+        if (SlicerTimelinePane?.Visibility != Visibility.Visible)
+            return false;
+
+        return SlicerTimelinePaneCloseBtn.Focus();
+    }
+
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
     {
         _keyboardCommandDispatcher.TryExecute(shortcut, sender, e);
@@ -232,9 +296,6 @@ public partial class MainWindow
     {
         var keyTipKey = GetEffectiveKey(e);
         if (!_standaloneAltKeyTipTracker.ShouldToggleOnKeyUp(keyTipKey))
-            return;
-
-        if (Keyboard.FocusedElement is TextBox or ComboBox)
             return;
 
         if (_ribbonKeyTipMode.IsActive)

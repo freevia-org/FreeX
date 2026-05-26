@@ -73,21 +73,20 @@ public static partial class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
 
-        double n = ToNumber(args[1]);
-        double m = ToNumber(args[2]);
-        if (!double.IsFinite(n) || !double.IsFinite(m))
-            return ErrorValue.Num;
-
         var coeffs = args[3] is RangeValue coeffRange
             ? coeffRange
             : SingleCellArray(args[3]);
 
-        if (args[0] is RangeValue xRange) return MapUnaryTextRange(xRange, value => SeriesSumScalar(value, n, m, coeffs));
-        return SeriesSumScalar(args[0], n, m, coeffs);
+        return MapTernaryTextArgs(args[0], args[1], args[2], (xValue, nValue, mValue) => SeriesSumScalar(xValue, nValue, mValue, coeffs));
     }
 
-    private static ScalarValue SeriesSumScalar(ScalarValue xValue, double n, double m, RangeValue coeffs)
+    private static ScalarValue SeriesSumScalar(ScalarValue xValue, ScalarValue nValue, ScalarValue mValue, RangeValue coeffs)
     {
+        double n = ToNumber(nValue);
+        double m = ToNumber(mValue);
+        if (!double.IsFinite(n) || !double.IsFinite(m))
+            return ErrorValue.Num;
+
         double x = ToNumber(xValue);
         if (!double.IsFinite(x)) return ErrorValue.Num;
 

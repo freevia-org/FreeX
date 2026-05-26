@@ -154,6 +154,20 @@ public sealed class QuickAnalysisPlannerTests
     }
 
     [Fact]
+    public void BuildHoverPreview_CarriesVisualKindForDataBars()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 4));
+        var dataBars = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.DataBar);
+
+        var preview = QuickAnalysisPlanner.BuildHoverPreview(selection, dataBars);
+
+        preview.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+        preview.Range.Should().Be(selection);
+    }
+
+    [Fact]
     public void BuildHoverPreview_UsesSelectionForFormattingChartsAndTables()
     {
         var sheetId = SheetId.New();
@@ -164,9 +178,21 @@ public sealed class QuickAnalysisPlannerTests
             .Single(option => option.Command == QuickAnalysisCommand.FormatAsTable);
 
         QuickAnalysisPlanner.BuildHoverPreview(selection, chart).Should().Be(
-            new QuickAnalysisHoverPreview(selection, QuickAnalysisPreviewKind.Chart, "Column", "Preview a clustered column chart from the selected range."));
+            new QuickAnalysisHoverPreview(
+                selection,
+                QuickAnalysisPreviewKind.Chart,
+                "Column",
+                "Preview a clustered column chart from the selected range.",
+                QuickAnalysisCommand.ColumnChart,
+                new QuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.ColumnChart)));
         QuickAnalysisPlanner.BuildHoverPreview(selection, table).Should().Be(
-            new QuickAnalysisHoverPreview(selection, QuickAnalysisPreviewKind.Table, "Format as Table", "Preview formatting the selection as a table."));
+            new QuickAnalysisHoverPreview(
+                selection,
+                QuickAnalysisPreviewKind.Table,
+                "Format as Table",
+                "Preview formatting the selection as a table.",
+                QuickAnalysisCommand.FormatAsTable,
+                new QuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.Table)));
     }
 
     [Fact]
@@ -187,5 +213,24 @@ public sealed class QuickAnalysisPlannerTests
             new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
         QuickAnalysisPlanner.BuildHoverPreview(selection, sparkline)!.Range.Should().Be(
             new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
+    }
+
+    [Theory]
+    [InlineData(QuickAnalysisCommand.DataBar, QuickAnalysisPreviewVisualKind.DataBars)]
+    [InlineData(QuickAnalysisCommand.Sum, QuickAnalysisPreviewVisualKind.TotalFormula)]
+    [InlineData(QuickAnalysisCommand.LineSparkline, QuickAnalysisPreviewVisualKind.LineSparkline)]
+    public void BuildHoverPreview_PreservesCommandAndVisualDescriptor(
+        QuickAnalysisCommand command,
+        QuickAnalysisPreviewVisualKind visualKind)
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 6, 5));
+        var option = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == command);
+
+        var preview = QuickAnalysisPlanner.BuildHoverPreview(selection, option);
+
+        preview.Command.Should().Be(command);
+        preview.PreviewVisual.Should().Be(new QuickAnalysisPreviewVisual(visualKind));
     }
 }

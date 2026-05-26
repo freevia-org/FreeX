@@ -117,6 +117,11 @@ public sealed class ConditionalFormat
     public int? DataBarMaxLength { get; set; }
     /// <summary>When false the bar uses a solid fill instead of the default gradient.</summary>
     public bool DataBarGradient { get; set; } = true;
+    public bool DataBarBorder { get; set; }
+    public string? DataBarAxisPosition { get; set; }
+    public RgbColor? DataBarAxisColor { get; set; }
+    public RgbColor? DataBarNegativeFillColor { get; set; }
+    public RgbColor? DataBarNegativeBorderColor { get; set; }
 
     // ── AboveAverage rule ───────────────────────────────────────────────────
 

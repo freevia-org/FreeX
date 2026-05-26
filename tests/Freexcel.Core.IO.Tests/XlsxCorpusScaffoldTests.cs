@@ -71,15 +71,42 @@ public class XlsxCorpusScaffoldTests
     [Fact]
     public void CorpusReport_PublishesWorkbookAndFeatureBucketPassRates()
     {
+        var manifestRows = ReadManifestRows();
         var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var generatedSupportedCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-pass");
+        var generatedMetadataCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-metadata-pass");
+        var generatedKnownGapCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-known-gap");
+        var publicCount = manifestRows.Count(row => row.SourceType == "public");
+        var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
 
         report.Should().Contain("## Pass Rate Summary");
         report.Should().Contain("| Workbook set | Executed | Passing | Pass rate |");
-        report.Should().Contain("| Generated supported-pass workbooks | 27 | 27 | 100% |");
-        report.Should().Contain("| Public redistributed workbooks | 25 | 25 | 100% |");
+        report.Should().Contain($"| Generated supported-pass workbooks | {generatedSupportedCount} | {generatedSupportedCount} | 100% |");
+        report.Should().Contain($"| Generated supported-metadata-pass workbooks | {generatedMetadataCount} | {generatedMetadataCount} | 100% |");
+        report.Should().Contain($"| Generated known-gap warning workbooks | {generatedKnownGapCount} | {generatedKnownGapCount} | 100% |");
+        report.Should().Contain($"| Generated known-gap retention workbooks | {generatedKnownGapCount} | {generatedKnownGapCount} | 100% |");
+        report.Should().Contain($"| Public redistributed workbooks | {publicCount} | {publicCount} | 100% |");
+        report.Should().Contain($"| Regression cached-result workbooks | {regressionCount} | {regressionCount} | 100% |");
         report.Should().Contain("| Feature bucket | Evidence | Pass rate |");
         report.Should().Contain("| PivotTables, pivot caches, and PivotChart binding |");
         report.Should().Contain("| Slicers, timelines, external links, printer settings, custom XML |");
+    }
+
+    private static IReadOnlyList<ManifestRow> ReadManifestRows()
+    {
+        var manifestPath = FindWorkspaceFile("test-corpus", "manifest.csv");
+        return File.ReadAllLines(manifestPath)
+            .Skip(1)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(ParseManifestRow)
+            .ToArray();
+    }
+
+    private static ManifestRow ParseManifestRow(string line)
+    {
+        var columns = line.Split(',');
+        columns.Should().HaveCount(ExpectedManifestHeader.Length);
+        return new ManifestRow(columns[2], columns[8]);
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
@@ -96,4 +123,6 @@ public class XlsxCorpusScaffoldTests
 
         throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
+
+    private sealed record ManifestRow(string SourceType, string ExpectedStatus);
 }

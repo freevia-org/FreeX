@@ -129,6 +129,7 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaBox.ToolTip = "Generated criterion that will be applied.";
             _customFilterGroup.Visibility = Visibility.Visible;
         }
+        ConfigureFilterFamilySubmenu(menuPlan);
 
         if (menuPlan.FilterKind == AutoFilterMenuFilterKind.Date)
             _datePresetBox.Visibility = Visibility.Visible;
@@ -178,6 +179,13 @@ public sealed partial class AutoFilterDialog : Window
             filterButton.Margin = new Thickness(0, 8, 0, 0);
             filterButton.Click += (_, _) =>
             {
+                if (filterButton.ContextMenu is { } submenu)
+                {
+                    submenu.PlacementTarget = filterButton;
+                    submenu.IsOpen = true;
+                    return;
+                }
+
                 _criteriaOperatorBox.Focus();
                 UpdateCriteriaTextFromTypedControls();
             };
@@ -274,6 +282,9 @@ public sealed partial class AutoFilterDialog : Window
         var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
+            if (!ValidateTypedCriteriaInputs())
+                return;
+
             Result = BuildResult(
                 GetSortDirection(),
                 _allItems,

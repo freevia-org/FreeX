@@ -10,7 +10,7 @@ public partial class MainWindow
 {
     private void ScenariosBtn_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new ScenarioManagerDialog(_workbook) { Owner = this };
+        var dialog = new ScenarioManagerDialog(_workbook, _currentSheetId, ResolveSheetIdByName) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
