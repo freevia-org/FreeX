@@ -1228,6 +1228,10 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
+                                <Button Content="Recommended" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RecommendedPivotTablesMenuItem_Click"
+                                        local:RibbonTooltip.Title="Recommended PivotTables"
+                                        local:RibbonTooltip.KeyTip="R"
+                                        local:RibbonTooltip.Description="Preview recommended PivotTable layouts for the selected range."/>
                                 <Button Content="Table" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="Table"
                                         local:RibbonTooltip.KeyTip="TB"
@@ -2439,51 +2443,41 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
                                             local:RibbonTooltip.Title="Sort A to Z"
                                             local:RibbonTooltip.KeyTip="SA"
                                             local:RibbonTooltip.Description="Sort the selected column from smallest to largest (A to Z).">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="SortAscending" IconSize="12" Margin="0,0,3,0"/>
-                                            <TextBlock Text="A-Z" FontSize="10" VerticalAlignment="Center"/>
-                                        </StackPanel>
+                                        <TextBlock Text="A-Z" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                    <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
                                             local:RibbonTooltip.Title="Sort Z to A"
                                             local:RibbonTooltip.KeyTip="SD"
                                             local:RibbonTooltip.Description="Sort the selected column from largest to smallest (Z to A).">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="SortDescending" IconSize="12" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Z-A" FontSize="10" VerticalAlignment="Center"/>
-                                        </StackPanel>
+                                        <TextBlock Text="Z-A" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
                                             local:RibbonTooltip.Title="Filter"
                                             local:RibbonTooltip.KeyTip="T"
                                             local:RibbonTooltip.Description="Enable dropdown filters on each column to show only the rows you want.">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="Filter" IconSize="11"
-                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
-                                            <TextBlock Text="Filter" VerticalAlignment="Center" FontSize="10"/>
-                                        </StackPanel>
+                                        <TextBlock Text="Filter" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                    <Button Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
                                             local:RibbonTooltip.Title="Clear Filter"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Remove all active filters and show all rows in the current range.">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="Filter" IconSize="11"
-                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
-                                            <TextBlock Text="Clear Filter" VerticalAlignment="Center" FontSize="10"/>
-                                        </StackPanel>
+                                        <TextBlock Text="Clear" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                    <Button Content="Advanced" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
                                             local:RibbonTooltip.Title="Advanced Filter"
                                             local:RibbonTooltip.KeyTip="A"
-                                            local:RibbonTooltip.Description="Filter a list using an Excel-style criteria range, optionally copying matching rows elsewhere."/>
+                                            local:RibbonTooltip.Description="Filter a list using an Excel-style criteria range, optionally copying matching rows elsewhere.">
+                                        <TextBlock Text="Advanced" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Sort &amp; Filter" Style="{StaticResource GroupLbl}"/></Border>
@@ -2494,30 +2488,46 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Text to Columns"   Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TextToColumnsBtn_Click"
-                                        local:RibbonTooltip.Title="Text to Columns"
-                                        local:RibbonTooltip.KeyTip="E"
-                                        local:RibbonTooltip.Description="Split text in one column into multiple columns using a delimiter such as a comma or space."/>
-                                <Button Content="Flash Fill"        Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
-                                        local:RibbonTooltip.Title="Flash Fill"
-                                        local:RibbonTooltip.KeyTip="FF"
-                                        local:RibbonTooltip.Description="Automatically fill values from examples in adjacent columns."/>
-                                <Button Content="Remove Duplicates" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
-                                        local:RibbonTooltip.Title="Remove Duplicates"
-                                        local:RibbonTooltip.KeyTip="M"
-                                        local:RibbonTooltip.Description="Delete duplicate rows from the selected range."/>
-                                <Button Content="Data Validation"   Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ValidationButton_Click"
-                                        local:RibbonTooltip.Title="Data Validation"
-                                        local:RibbonTooltip.KeyTip="V"
-                                        local:RibbonTooltip.Description="Control what data can be entered in the selected cells."/>
-                                <Button Content="Consolidate"       Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ConsolidateBtn_Click"
-                                        local:RibbonTooltip.Title="Consolidate"
-                                        local:RibbonTooltip.KeyTip="N"
-                                        local:RibbonTooltip.Description="Combine values from multiple ranges into a single summary range."/>
-                                <Button Content="Subtotal"         Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SubtotalBtn_Click"
-                                        local:RibbonTooltip.Title="Subtotal"
-                                        local:RibbonTooltip.KeyTip="B"
-                                        local:RibbonTooltip.Description="Insert subtotal rows for grouped data in the selected range."/>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TextToColumnsBtn_Click"
+                                            local:RibbonTooltip.Title="Text to Columns"
+                                            local:RibbonTooltip.KeyTip="E"
+                                            local:RibbonTooltip.Description="Split text in one column into multiple columns using a delimiter such as a comma or space.">
+                                        <TextBlock Text="Text to Columns" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
+                                            local:RibbonTooltip.Title="Flash Fill"
+                                            local:RibbonTooltip.KeyTip="FF"
+                                            local:RibbonTooltip.Description="Automatically fill values from examples in adjacent columns.">
+                                        <TextBlock Text="Flash Fill" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
+                                            local:RibbonTooltip.Title="Remove Duplicates"
+                                            local:RibbonTooltip.KeyTip="M"
+                                            local:RibbonTooltip.Description="Delete duplicate rows from the selected range.">
+                                        <TextBlock Text="Remove Duplicates" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ValidationButton_Click"
+                                            local:RibbonTooltip.Title="Data Validation"
+                                            local:RibbonTooltip.KeyTip="V"
+                                            local:RibbonTooltip.Description="Control what data can be entered in the selected cells.">
+                                        <TextBlock Text="Data Validation" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ConsolidateBtn_Click"
+                                            local:RibbonTooltip.Title="Consolidate"
+                                            local:RibbonTooltip.KeyTip="N"
+                                            local:RibbonTooltip.Description="Combine values from multiple ranges into a single summary range.">
+                                        <TextBlock Text="Consolidate" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SubtotalBtn_Click"
+                                            local:RibbonTooltip.Title="Subtotal"
+                                            local:RibbonTooltip.KeyTip="B"
+                                            local:RibbonTooltip.Description="Insert subtotal rows for grouped data in the selected range.">
+                                        <TextBlock Text="Subtotal" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data Tools" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>

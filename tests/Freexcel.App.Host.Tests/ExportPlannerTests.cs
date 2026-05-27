@@ -512,6 +512,16 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptionsDialog_DisabledChoicesExposeAutomationHelpText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetHelpText(_selectionButton, \"Select a cell range before exporting the selection.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_pdfABox, \"Freexcel's current PDF exporter cannot write PDF/A conformance metadata.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_structureTagsBox, \"Freexcel's current PDF exporter cannot write tagged PDF structure trees.\");");
+    }
+
+    [Fact]
     public void ExportOptionsDialogOpenedFromKeyboard_FocusesActiveSheetChoice()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));

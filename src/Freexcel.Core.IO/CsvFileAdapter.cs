@@ -142,7 +142,7 @@ public sealed class CsvFileAdapter : IFileAdapter
 
     private static bool ShouldQuoteCsvField(string value, bool isTextValue)
     {
-        if (isTextValue && IsFormulaLikeText(value))
+        if (isTextValue && IsCoercionLikeText(value))
             return true;
 
         foreach (var ch in value)
@@ -154,8 +154,22 @@ public sealed class CsvFileAdapter : IFileAdapter
         return false;
     }
 
-    private static bool IsFormulaLikeText(string value) =>
-        value[0] is '=' or '+' or '-' or '@';
+    private static bool IsCoercionLikeText(string value) =>
+        value[0] is '=' or '+' or '-' or '@' ||
+        IsErrorLikeText(value);
+
+    private static bool IsErrorLikeText(string value) =>
+        value.Equals("#DIV/0!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#VALUE!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#REF!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#NAME?", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#NULL!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#N/A", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#NUM!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#CIRCULAR!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#SPILL!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#CALC!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#GETTING_DATA", StringComparison.OrdinalIgnoreCase);
 
     private static string FormatCell(Cell cell) =>
         cell.FormulaText is { } formulaText

@@ -97,15 +97,22 @@ public static class RibbonAdaptiveLayoutPlanner
             ApplyPriorityState(
                 states,
                 groupNames,
-                ["Get & Transform Data", "Sort & Filter"],
+                ["Get & Transform Data", "Data Tools", "Forecast"],
                 RibbonAdaptiveGroupState.Full);
+            ApplyPriorityState(
+                states,
+                groupNames,
+                ["Sort & Filter"],
+                availableWidth <= 1120
+                    ? RibbonAdaptiveGroupState.IconOnly
+                    : RibbonAdaptiveGroupState.Full);
             ApplyPriorityCollapse(
                 states,
                 groupNames,
                 availableWidth <= 1120
-                    ? ["Queries & Connections", "Data Types", "Data Tools", "Forecast", "Outline"]
+                    ? ["Queries & Connections", "Data Types", "Outline"]
                     : availableWidth <= 1320
-                        ? ["Data Types", "Forecast", "Outline"]
+                        ? ["Data Types", "Outline"]
                         : []);
             return true;
         }

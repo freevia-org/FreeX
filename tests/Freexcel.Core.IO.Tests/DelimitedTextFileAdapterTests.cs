@@ -64,6 +64,24 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsExcelUnicodeTextExportWithUtf16Bom()
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        var bytes = Encoding.Unicode.GetPreamble()
+            .Concat(Encoding.Unicode.GetBytes("Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n"))
+            .ToArray();
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Caf\u00e9"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(42));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
     public void Load_HonorsExcelSeparatorDirectiveForTextFiles()
     {
         var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');

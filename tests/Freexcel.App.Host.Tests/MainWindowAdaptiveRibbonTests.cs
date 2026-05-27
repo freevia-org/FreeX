@@ -137,7 +137,7 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["PivotTable", "Table"],
+                ["PivotTable", "Recommended", "Table"],
                 "Excel keeps the first Insert groups expanded at normal narrow widths before collapsing gallery-heavy groups");
         });
     }
@@ -173,6 +173,23 @@ public sealed class MainWindowAdaptiveRibbonTests
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
                 "Sort & Filter",
                 "Data should keep the second Excel-style group available at medium widths and collapse later utility groups first");
+        });
+    }
+
+    [Fact]
+    public void DataRibbon_KeepsDataToolsAndForecastVisibleAtMediumWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Data", 1120);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Data Tools", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Forecast", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Data Validation", "What-If Analysis", "Forecast Sheet"],
+                "Excel keeps the medium-priority Data Tools and Forecast affordances visible around 1120px");
         });
     }
 

@@ -161,6 +161,37 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusManifest_NonPublicUnsupportedFeatureTagsDeclareWarningExpectations()
+    {
+        var manifestRows = ReadManifestRows();
+
+        manifestRows
+            .Where(row => row.SourceType != "public")
+            .Select(row => new { Row = row, ExpectedWarnings = ExpectedWarningsFor(row) })
+            .Where(entry => entry.ExpectedWarnings.Count > 0)
+            .Should()
+            .OnlyContain(
+                entry =>
+                    entry.Row.ExpectedStatus == "supported-known-gap" &&
+                    entry.ExpectedWarnings.All(warning =>
+                        entry.Row.ExpectedWarnings.Contains(warning, StringComparison.Ordinal)),
+                "non-public corpus rows with unsupported feature tags should be known-gap rows with explicit warning text");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesNonPublicUnsupportedAndExcludedWarningDeclarations()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var warningDeclarationCount = manifestRows
+            .Where(row => row.SourceType != "public" && ExpectedWarningsFor(row).Count > 0)
+            .Count();
+
+        warningDeclarationCount.Should().BeGreaterThan(0);
+        report.Should().Contain($"| Non-public unsupported/excluded warning declarations | {warningDeclarationCount}/{warningDeclarationCount} present in manifest |");
+    }
+
+    [Fact]
     public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
     {
         var manifestRows = ReadManifestRows();
@@ -242,7 +273,48 @@ public class XlsxCorpusScaffoldTests
     {
         var columns = line.Split(',');
         columns.Should().HaveCount(ExpectedManifestHeader.Length);
-        return new ManifestRow(columns[1], columns[2], columns[7], columns[8], columns[9]);
+        return new ManifestRow(columns[1], columns[2], columns[6], columns[7], columns[8], columns[9]);
+    }
+
+    private static IReadOnlyList<string> ExpectedWarningsFor(ManifestRow row)
+    {
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var warnings = new List<string>();
+
+        if (tags.Contains("unsupported-chart-family"))
+            warnings.Add("unsupported chart package disclosed");
+        if (tags.Contains("embedded-objects"))
+            warnings.Add("unsupported embedded object disclosed");
+        if (tags.Contains("threaded-comments"))
+            warnings.Add("unsupported threaded comment disclosed");
+        if (tags.Contains("track-changes") || tags.Contains("revision-history"))
+            warnings.Add("unsupported track changes disclosed");
+        if (tags.Contains("form-controls") || tags.Contains("activex"))
+            warnings.Add("unsupported form control disclosed");
+        if (tags.Contains("digital-signatures"))
+            warnings.Add("unsupported digital signature disclosed");
+        if (tags.Contains("custom-ribbon-ui"))
+            warnings.Add("unsupported custom ribbon UI disclosed");
+        if (tags.Contains("office-addins") || tags.Contains("webextensions"))
+            warnings.Add("unsupported Office add-in disclosed");
+        if (tags.Contains("live-web-queries") || tags.Contains("web-publish"))
+            warnings.Add("unsupported live web query disclosed");
+        if (tags.Contains("sensitivity-labels") || tags.Contains("irm"))
+            warnings.Add("unsupported sensitivity label disclosed");
+        if (tags.Contains("smartart") || tags.Contains("diagrams"))
+            warnings.Add("unsupported SmartArt diagram disclosed");
+        if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets") || tags.Contains("unsupported-sheet-types"))
+            warnings.Add("unsupported sheet type disclosed");
+        if (tags.Contains("macros"))
+            warnings.Add("excluded VBA macro disclosed");
+        if (tags.Contains("power-query"))
+            warnings.Add("excluded Power Query disclosed");
+        if (tags.Contains("data-model") || tags.Contains("power-pivot"))
+            warnings.Add("excluded Data Model disclosed");
+        if (tags.Contains("linked-data-types") || tags.Contains("rich-data"))
+            warnings.Add("excluded linked data type disclosed");
+
+        return warnings;
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
@@ -278,6 +350,7 @@ public class XlsxCorpusScaffoldTests
     private sealed record ManifestRow(
         string Path,
         string SourceType,
+        string FeatureTags,
         string ExpectedWarnings,
         string ExpectedStatus,
         string Notes);
