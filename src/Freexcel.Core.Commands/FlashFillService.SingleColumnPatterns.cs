@@ -6,6 +6,7 @@ public static partial class FlashFillService
 {
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', '-', '_', '@', '/', '\\'];
+    private static readonly (char Open, char Close)[] PairedDelimiters = [('(', ')'), ('[', ']'), ('{', '}')];
 
     private static Func<string, string?>? TryConstant(IReadOnlyList<(string Source, string Expected)> examples)
     {
@@ -258,6 +259,36 @@ public static partial class FlashFillService
     {
         parts = source.Split(delimiter, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 2 && parts.All(part => part.Length > 0);
+    }
+
+    private static Func<string, string?>? TryPairedDelimiterExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (open, close) in PairedDelimiters)
+        {
+            if (!examples.All(e => TryExtractBetweenPairedDelimiters(e.Source, open, close, out var extracted) && extracted == e.Expected))
+                continue;
+
+            return source => TryExtractBetweenPairedDelimiters(source, open, close, out var extracted)
+                ? extracted
+                : null;
+        }
+
+        return null;
+    }
+
+    private static bool TryExtractBetweenPairedDelimiters(string source, char open, char close, out string extracted)
+    {
+        extracted = string.Empty;
+        var openIndex = source.IndexOf(open);
+        if (openIndex < 0)
+            return false;
+
+        var closeIndex = source.IndexOf(close, openIndex + 1);
+        if (closeIndex <= openIndex + 1)
+            return false;
+
+        extracted = source[(openIndex + 1)..closeIndex].Trim();
+        return extracted.Length > 0;
     }
 
     private static bool TrySplitWhitespaceTokens(string source, out string[] tokens)
