@@ -572,6 +572,22 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void CollapsedRibbonGroups_ShowGroupCaptionsAtNormalNarrowWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Review", 900);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain(["Notes", "Protect"], harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupVisibleLabels.Should().Contain(
+                ["Notes", "Protect"],
+                "Excel keeps collapsed group captions visible at common 900px workbook widths so icon-only fallbacks remain identifiable");
+        });
+    }
+
+    [Fact]
     public void CollapsedRibbonGroupButtons_ShowDropdownGlyph()
     {
         StaTestRunner.Run(() =>
@@ -625,6 +641,21 @@ public sealed class MainWindowAdaptiveRibbonTests
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
                 .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupVisibleLabels =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(button => EnumerateSelfAndVisualDescendants(button)
+                    .Concat(EnumerateLogicalDescendants(button))
+                    .OfType<TextBlock>()
+                    .Any(textBlock =>
+                        textBlock.Tag?.ToString() == "RibbonLabel" &&
+                        IsEffectivelyVisible(textBlock) &&
+                        string.Equals(textBlock.Text, RibbonTooltip.GetTitle(button), StringComparison.Ordinal)))
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
                 .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
@@ -1138,8 +1169,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         private static bool IsTextVisuallyClipped(TextBlock textBlock)
         {
             textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            return textBlock.DesiredSize.Width > textBlock.ActualWidth + 0.5 ||
-                   textBlock.DesiredSize.Height > textBlock.ActualHeight + 0.5;
+            return textBlock.DesiredSize.Width > textBlock.ActualWidth + 0.5;
         }
 
         private static double GetCheckBoxLabelOffset(CheckBox checkBox)

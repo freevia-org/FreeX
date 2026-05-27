@@ -898,7 +898,7 @@ public partial class MainWindow
 
         var label = FindRibbonContentLabel(button.Content) ?? commandName;
         button.Height = 24;
-        button.Width = GetSmallRibbonCommandWidth(label);
+        button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
         SetRibbonCompactWidthTag(button, button.Width, 24);
         button.Padding = new Thickness(4, 2, 4, 2);
         button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
