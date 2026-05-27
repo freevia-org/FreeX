@@ -176,6 +176,15 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void InsertFunctionDialog_FunctionListExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
+
+        source.Should().Contain("using System.Windows.Automation;");
+        source.Should().Contain("AutomationProperties.SetName(_listBox, \"Functions\");");
+    }
+
+    [Fact]
     public void DialogCommands_ExposeOnlyOkAsTheDefaultAction()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
