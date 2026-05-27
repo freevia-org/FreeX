@@ -2648,6 +2648,42 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void RegressionFormulaCachedRows_OpenSaveReloadPreservesFormulaCells()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "regression")
+            .Where(row => row.FeatureTags.Contains("cached-results", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        rows.Should().HaveCount(9, "the regression corpus currently declares nine Excel-authored cached formula workbooks");
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            File.Exists(path).Should().BeTrue(row.Id);
+
+            using var source = File.OpenRead(path);
+            var workbook = adapter.Load(source);
+            var before = CaptureFormulaCellSummaries(workbook);
+            before.Should().NotBeEmpty(row.Id);
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Length.Should().BeGreaterThan(0, row.Id);
+            AssertPackageHealth(saved, row.Id);
+
+            saved.Position = 0;
+            var roundTripped = adapter.Load(saved);
+            CaptureFormulaCellSummaries(roundTripped).Should().BeEquivalentTo(
+                before,
+                options => options.WithStrictOrdering(),
+                row.Id);
+        }
+    }
+
+    [Fact]
     public void PublicCorpusRows_WithUnsupportedWarningTags_ReportExpectedFeaturesWhenFilesArePresent()
     {
         var workspace = FindWorkspaceRoot();
@@ -3369,6 +3405,20 @@ public class XlsxCorpusRunnerTests
             metadata.Comment,
             ToRangeSummary(range));
     }
+
+    private static IReadOnlyList<FormulaCellSummary> CaptureFormulaCellSummaries(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany(sheet => sheet.EnumerateCells()
+                .Where(item => item.Cell.HasFormula)
+                .OrderBy(item => item.Address.Row)
+                .ThenBy(item => item.Address.Col)
+                .Select(item => new FormulaCellSummary(
+                    sheet.Name,
+                    item.Address.Row,
+                    item.Address.Col,
+                    item.Cell.FormulaText ?? "",
+                    CaptureScalarValueSummary(item.Cell.Value))))
+            .ToArray();
 
     private static CellSummary CaptureCellSummary(Workbook workbook, CellAddress address, Cell cell) =>
         new(
@@ -4707,6 +4757,13 @@ public class XlsxCorpusRunnerTests
         string FormulaText,
         bool IgnoreFormulaError,
         CellStyleSummary? Style);
+
+    private sealed record FormulaCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column,
+        string FormulaText,
+        ScalarValueSummary CachedValue);
 
     private sealed record ScalarValueSummary(string Kind, string Value);
 
