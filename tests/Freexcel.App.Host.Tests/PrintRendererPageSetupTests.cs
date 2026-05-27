@@ -378,6 +378,78 @@ public sealed class PrintRendererPageSetupTests
         });
     }
 
+    [Fact]
+    public void RenderWorksheet_AttachesLinkOverlayForVisibleExternalHyperlinkCellOnly()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Hyperlink print");
+            var sheet = workbook.AddSheet("Sheet1");
+            var printedAddress = new CellAddress(sheet.Id, 1, 1);
+            var outsideSelectionAddress = new CellAddress(sheet.Id, 1, 2);
+            sheet.SetCell(printedAddress, new TextValue("Docs"));
+            sheet.SetCell(outsideSelectionAddress, new TextValue("Hidden"));
+            sheet.Hyperlinks[printedAddress] = "https://example.com/freexcel";
+            sheet.Hyperlinks[outsideSelectionAddress] = "https://example.com/outside-selection";
+
+            var document = PrintRenderer.RenderWorksheet(
+                workbook,
+                sheet.Id,
+                new ViewportService(),
+                printRangeOverride: new GridRange(printedAddress, printedAddress));
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+
+            var overlay = PdfLinkOverlayExtractor.Extract(page).Should().ContainSingle().Subject;
+            overlay.Target.Should().Be("https://example.com/freexcel");
+            overlay.X.Should().BeApproximately(sheet.PageMargins.Left * 96.0, 0.01);
+            overlay.Y.Should().BeApproximately(sheet.PageMargins.Top * 96.0, 0.01);
+            overlay.Width.Should().BeGreaterThan(40);
+            overlay.Height.Should().BeApproximately(20.0, 0.01);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_DoesNotAttachLinkOverlayForInternalWorksheetHyperlink()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Internal hyperlink print");
+            var sheet = workbook.AddSheet("Sheet1");
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(address, new TextValue("Jump"));
+            sheet.Hyperlinks[address] = "Sheet1!A10";
+            sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+                HyperlinkTargetKind.PlaceInThisDocument);
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+
+            PdfLinkOverlayExtractor.Extract(page).Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public void RenderWorkbook_PreservesPrintedCellLinkOverlaysWhenCloningBitmapPages()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Workbook hyperlink export");
+            var sheet = workbook.AddSheet("Sheet1");
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(address, new TextValue("Mail"));
+            sheet.Hyperlinks[address] = "mailto:review@example.com";
+
+            var document = PrintRenderer.RenderWorkbook(workbook, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+
+            PdfLinkOverlayExtractor.Extract(page)
+                .Should()
+                .ContainSingle()
+                .Which.Target.Should()
+                .Be("mailto:review@example.com");
+        });
+    }
+
     [Theory]
     [InlineData(WorksheetPrintErrorValue.Blank, "")]
     [InlineData(WorksheetPrintErrorValue.Dash, "--")]

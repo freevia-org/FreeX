@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Freexcel.Core.Model;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 
@@ -102,6 +103,7 @@ internal static class PdfDocumentExporter
             gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
             if (includeSelectableText)
                 DrawTextOverlay(gfx, fixedPage);
+            AddLinkAnnotations(page, fixedPage);
         }
 
         var hasBookmarks = AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
@@ -281,4 +283,95 @@ internal static class PdfDocumentExporter
                 new XPoint(overlay.X * 72.0 / StandardDpi, (overlay.Y + overlay.FontSize) * 72.0 / StandardDpi));
         }
     }
+
+    private static void AddLinkAnnotations(PdfPage pdfPage, FixedPage fixedPage)
+    {
+        foreach (var overlay in PdfLinkOverlayExtractor.Extract(fixedPage))
+        {
+            var uri = NormalizeLinkAnnotationUri(overlay);
+            if (uri is null ||
+                overlay.Width <= 0 ||
+                overlay.Height <= 0)
+            {
+                continue;
+            }
+
+            var left = overlay.X * 72.0 / StandardDpi;
+            var right = (overlay.X + overlay.Width) * 72.0 / StandardDpi;
+            var top = pdfPage.Height.Point - overlay.Y * 72.0 / StandardDpi;
+            var bottom = pdfPage.Height.Point - (overlay.Y + overlay.Height) * 72.0 / StandardDpi;
+            if (right <= left || top <= bottom)
+                continue;
+
+            var annotations = pdfPage.Elements.GetArray("/Annots");
+            if (annotations is null)
+            {
+                annotations = new PdfArray(pdfPage.Owner);
+                pdfPage.Elements["/Annots"] = annotations;
+            }
+
+            var action = new PdfDictionary(pdfPage.Owner);
+            action.Elements.SetName("/S", "/URI");
+            action.Elements.SetString("/URI", uri);
+
+            var annotation = new PdfDictionary(pdfPage.Owner);
+            annotation.Elements.SetName("/Type", "/Annot");
+            annotation.Elements.SetName("/Subtype", "/Link");
+            annotation.Elements.SetRectangle("/Rect", new PdfRectangle(new XRect(left, bottom, right - left, top - bottom)));
+            annotation.Elements["/A"] = action;
+            annotations.Elements.Add(annotation);
+        }
+    }
+
+    private static string? NormalizeLinkAnnotationUri(PdfLinkOverlay overlay)
+    {
+        var target = overlay.Target.Trim();
+        if (target.Length == 0)
+            return null;
+
+        if (overlay.TargetKind == HyperlinkTargetKind.EmailAddress &&
+            !target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+        {
+            return "mailto:" + target;
+        }
+
+        if (overlay.TargetKind is HyperlinkTargetKind.ExistingFileOrWebPage or HyperlinkTargetKind.CreateNewDocument &&
+            (!HasUriScheme(target) || IsWindowsDrivePath(target)))
+        {
+            if (IsUncPath(target))
+                return "file://" + target.TrimStart('\\', '/').Replace('\\', '/');
+
+            return "file:///" + target.Replace('\\', '/').TrimStart('/');
+        }
+
+        return target;
+    }
+
+    private static bool HasUriScheme(string target)
+    {
+        var colonIndex = target.IndexOf(':');
+        if (colonIndex <= 0)
+            return false;
+
+        for (var i = 0; i < colonIndex; i++)
+        {
+            var ch = target[i];
+            if (i == 0 && !char.IsAsciiLetter(ch))
+                return false;
+            if (!char.IsAsciiLetterOrDigit(ch) && ch is not '+' and not '-' and not '.')
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsWindowsDrivePath(string target) =>
+        target.Length >= 3 &&
+        char.IsAsciiLetter(target[0]) &&
+        target[1] == ':' &&
+        (target[2] == '\\' || target[2] == '/');
+
+    private static bool IsUncPath(string target) =>
+        target.StartsWith(@"\\", StringComparison.Ordinal) ||
+        target.StartsWith("//", StringComparison.Ordinal);
 }
