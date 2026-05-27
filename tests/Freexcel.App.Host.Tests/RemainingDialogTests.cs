@@ -870,6 +870,14 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void UnhideSheetDialog_SheetListExposesAutomationName()
+    {
+        var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_sheetBox, \"Unhide sheet\");");
+    }
+
+    [Fact]
     public void UnhideSheetDialog_UsesNonEditableSelectionList()
     {
         var source = ReadRemainingDialogSources();
@@ -955,6 +963,16 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_suggestionsBox.SelectionChanged");
         source.Should().Contain("new Label { Content = \"_Change to:\", Target = _replacementBox");
         source.Should().Contain("Grid.SetColumn(actionButtons");
+    }
+
+    [Fact]
+    public void SpellCheckDialog_FieldControlsExposeAutomationNames()
+    {
+        var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_notInDictionaryBox, \"Not in Dictionary\");");
+        source.Should().Contain("AutomationProperties.SetName(_suggestionsBox, \"Suggestions\");");
+        source.Should().Contain("AutomationProperties.SetName(_replacementBox, \"Change to\");");
     }
 
     [Fact]
