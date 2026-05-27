@@ -41,6 +41,7 @@ public partial class MainWindow
     {
         FormulaBar.Focus();
         FormulaBar.CaretIndex = FormulaBar.Text.Length;
+        SetStatusBarModeText("Edit");
     }
 
     private void ShowInlineEditor(CellAddress addr)
@@ -146,6 +147,7 @@ public partial class MainWindow
         _inlineEditor.Focus();
         _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
         _inlineEditor.SelectionLength = 0;
+        SetStatusBarModeText("Edit");
     }
 
     private void RefreshInlineEditorTextSurface()
@@ -391,18 +393,12 @@ public partial class MainWindow
         _selectionMode = mode;
         if (mode != ExcelSelectionMode.Normal)
             _endMode = false;
-        if (StatusStatsPanel is not null)
-            StatusStatsPanel.Visibility = Visibility.Collapsed;
-        if (StatusReadyText is null)
-            return;
-
-        StatusReadyText.Visibility = Visibility.Visible;
-        StatusReadyText.Text = mode switch
+        SetStatusBarModeText(mode switch
         {
             ExcelSelectionMode.Extend => "Extend Selection",
             ExcelSelectionMode.Add => "Add to Selection",
             _ => "Ready"
-        };
+        });
     }
 
     private void SetEndMode(bool enabled)
@@ -410,13 +406,18 @@ public partial class MainWindow
         _endMode = enabled;
         if (enabled)
             _selectionMode = ExcelSelectionMode.Normal;
+        SetStatusBarModeText(enabled ? "End Mode" : "Ready");
+    }
+
+    private void SetStatusBarModeText(string text)
+    {
         if (StatusStatsPanel is not null)
             StatusStatsPanel.Visibility = Visibility.Collapsed;
         if (StatusReadyText is null)
             return;
 
         StatusReadyText.Visibility = Visibility.Visible;
-        StatusReadyText.Text = enabled ? "End Mode" : "Ready";
+        StatusReadyText.Text = text;
     }
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
