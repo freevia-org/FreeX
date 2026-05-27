@@ -126,6 +126,15 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_LastUpdatedMatchesCorpusPlan()
+    {
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_TEST_CORPUS_PLAN.md"));
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        report.Should().Contain($"**Last updated:** {ReadLastUpdatedDate(plan)}");
+    }
+
+    [Fact]
     public void CorpusReport_StatesTopFailureSummary()
     {
         var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
@@ -306,6 +315,18 @@ public class XlsxCorpusScaffoldTests
         var columns = line.Split(',');
         columns.Should().HaveCount(ExpectedManifestHeader.Length);
         return new ManifestRow(columns[1], columns[2], columns[6], columns[7], columns[8], columns[9]);
+    }
+
+    private static string ReadLastUpdatedDate(string markdown)
+    {
+        var line = markdown
+            .Split(["\r\n", "\n"], StringSplitOptions.None)
+            .First(line => line.StartsWith("**Last updated:**", StringComparison.Ordinal));
+
+        return line
+            .Replace("**Last updated:**", string.Empty, StringComparison.Ordinal)
+            .Trim()
+            .TrimEnd();
     }
 
     private static IReadOnlyList<string> ExpectedWarningsFor(ManifestRow row)
