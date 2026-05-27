@@ -199,6 +199,45 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_FullNames_AbbreviatesFirstInitialLastName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "A. Lovelace"),
+                ("Grace Hopper", "G. Hopper")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo(["A. Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNames_AbbreviatesFirstNameLastInitial()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "Ada L."),
+                ("Grace Hopper", "Grace H.")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo(["Alan T."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ThreePartNames_AbbreviatesMiddleInitial()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "Ada B. Lovelace"),
+                ("Grace Brewster Hopper", "Grace B. Hopper")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeEquivalentTo(["Alan M. Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_ThreePartNames_ReturnsNullForAmbiguousTokenCounts()
     {
         var result = FlashFillService.Fill(
