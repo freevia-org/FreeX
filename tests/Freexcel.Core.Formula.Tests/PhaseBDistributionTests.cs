@@ -6,7 +6,7 @@ namespace Freexcel.Core.Formula.Tests;
 
 /// <summary>
 /// Tests for Phase B statistical distribution functions:
-/// NORM.DIST, NORM.INV, NORM.S.DIST, NORM.S.INV, STANDARDIZE,
+/// NORM.DIST, NORM.INV, NORM.S.DIST, NORM.S.INV, PHI, GAUSS, STANDARDIZE,
 /// T.DIST, T.DIST.RT, T.DIST.2T, T.INV, T.INV.2T, T.TEST,
 /// F.DIST, F.DIST.RT, F.INV, F.INV.RT, F.TEST,
 /// CHISQ.DIST, CHISQ.DIST.RT, CHISQ.INV, CHISQ.INV.RT, CHISQ.TEST,
@@ -132,6 +132,21 @@ public class PhaseBDistributionTests
     public void NormSDist_PdfAtZero_ReturnsCorrectValue()
         => Calc("NORM.S.DIST(0,FALSE)").Should().BeApproximately(0.3989422804014327, 1e-10);
 
+    [Fact]
+    public void Phi_ReturnsStandardNormalDensity()
+        => Calc("PHI(0.75)").Should().BeApproximately(0.30113743215480443, 1e-12);
+
+    [Fact]
+    public void Gauss_ReturnsStandardNormalCumulativeMinusHalf()
+        => Calc("GAUSS(2)").Should().BeApproximately(0.4772498680518208, 1e-12);
+
+    [Fact]
+    public void PhiAndGauss_InvalidNumericText_ReturnNum()
+    {
+        CalcError("""PHI("1E309")""").Should().Be("#NUM!");
+        CalcError("""GAUSS("1E309")""").Should().Be("#NUM!");
+    }
+
     // ── NORM.S.INV ───────────────────────────────────────────────────────────
 
     [Fact]
@@ -160,6 +175,8 @@ public class PhaseBDistributionTests
         var sheet = MakeSheet((1, 1, 0.0), (2, 1, 1.0));
 
         AssertColumnApproximately(Eval("NORM.S.DIST(A1:A2,TRUE)", sheet), 0.5, 0.8413447460685429);
+        AssertColumnApproximately(Eval("PHI(A1:A2)", sheet), 0.3989422804014327, 0.24197072451914337);
+        AssertColumnApproximately(Eval("GAUSS(A1:A2)", sheet), 0.0, 0.3413447460685429);
         AssertColumnApproximately(Eval("NORM.DIST(A1:A2,0,1,TRUE)", sheet), 0.5, 0.8413447460685429);
         AssertColumnApproximately(Eval("STANDARDIZE(A1:A2,0,1)", sheet), 0.0, 1.0);
 
