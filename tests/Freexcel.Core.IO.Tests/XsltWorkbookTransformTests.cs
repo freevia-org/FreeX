@@ -170,6 +170,19 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_EmptySource_ReportsSourceDiagnostic()
+    {
+        using var source = StreamFromString(string.Empty);
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*source XML*")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_DocumentFunction_ReportsDisabledExternalAccess()
     {
         using var source = StreamFromString("<rows />");
