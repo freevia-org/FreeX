@@ -873,6 +873,29 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void ReviewProofingEntryPoints_ExposeStableAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var statisticsButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "WorkbookStatisticsBtn_Click");
+        var accessibilityButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "AccessibilityCheckerBtn_Click");
+
+        statisticsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"ReviewWorkbookStatisticsButton\"");
+        statisticsButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Show workbook counts for sheets, cells, formulas, comments, and objects.");
+        statisticsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("W");
+
+        accessibilityButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"ReviewAccessibilityCheckerButton\"");
+        accessibilityButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Find merged cells, blank table headers, objects missing alternate text, and charts without titles.");
+        accessibilityButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("CA");
+    }
+
+    [Fact]
     public void AllowEditRangesTooltip_DisclosesRangeManagerWorkflow()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

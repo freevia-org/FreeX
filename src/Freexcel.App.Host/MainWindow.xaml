@@ -2621,6 +2621,8 @@
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
                                         Click="WorkbookStatisticsBtn_Click"
+                                        AutomationProperties.AutomationId="ReviewWorkbookStatisticsButton"
+                                        AutomationProperties.HelpText="Show workbook counts for sheets, cells, formulas, comments, and objects."
                                         local:RibbonTooltip.Title="Workbook Statistics"
                                         local:RibbonTooltip.KeyTip="W"
                                         local:RibbonTooltip.Description="Show workbook counts for sheets, cells, formulas, comments, and objects."/>
@@ -2636,6 +2638,8 @@
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
                                         Click="AccessibilityCheckerBtn_Click"
+                                        AutomationProperties.AutomationId="ReviewAccessibilityCheckerButton"
+                                        AutomationProperties.HelpText="Find merged cells, blank table headers, objects missing alternate text, and charts without titles."
                                         local:RibbonTooltip.Title="Check Accessibility"
                                         local:RibbonTooltip.KeyTip="CA"
                                         local:RibbonTooltip.Description="Find merged cells, blank table headers, objects missing alternate text, and charts without titles."/>
