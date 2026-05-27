@@ -1139,10 +1139,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double lambda = ToNumber(args[1]);
-        bool cum = ToBool(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ExponDistScalar(value, lambda, cum));
-        return ExponDistScalar(args[0], lambda, cum);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ExponDistScalar);
+    }
+
+    private static ScalarValue ExponDistScalar(ScalarValue xValue, ScalarValue lambdaValue, ScalarValue cumulativeValue)
+    {
+        double lambda = ToNumber(lambdaValue);
+        bool cum = ToBool(cumulativeValue);
+        return ExponDistScalar(xValue, lambda, cum);
     }
 
     private static ScalarValue ExponDistScalar(ScalarValue xValue, double lambda, bool cum)
