@@ -302,6 +302,7 @@ public static partial class BuiltInFunctions
         ["MMULT"]    = (Mmult, 2, 2),
         ["MINVERSE"] = (Minverse, 1, 1),
         ["MDETERM"]  = (Mdeterm, 1, 1),
+        ["MUNIT"]    = (Munit, 1, 1),
 
         // ── Phase A1: Date (weekend mask) ───────────────────────────────────
         ["NETWORKDAYS.INTL"] = (NetworkdaysIntl, 2, 4),

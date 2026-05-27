@@ -153,6 +153,23 @@ public sealed class ExcelParityMathTrigTests
         ((NumberValue)inverse.At(1, 2)).Value.Should().BeApproximately(1, 1e-10);
         ((NumberValue)inverse.At(2, 1)).Value.Should().BeApproximately(1.5, 1e-10);
         ((NumberValue)inverse.At(2, 2)).Value.Should().BeApproximately(-0.5, 1e-10);
+
+        var unit = _eval.Evaluate("=MUNIT(3)", sheet).Should().BeOfType<RangeValue>().Subject;
+        unit.RowCount.Should().Be(3);
+        unit.ColCount.Should().Be(3);
+        unit.At(1, 1).Should().Be(new NumberValue(1));
+        unit.At(1, 2).Should().Be(new NumberValue(0));
+        unit.At(2, 2).Should().Be(new NumberValue(1));
+        unit.At(3, 3).Should().Be(new NumberValue(1));
+    }
+
+    [Theory]
+    [InlineData("=MUNIT(0)")]
+    [InlineData("=MUNIT(-1)")]
+    [InlineData("=MUNIT(\"x\")")]
+    public void Munit_InvalidDimension_ReturnsValueError(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

@@ -4,7 +4,7 @@ namespace Freexcel.Core.Formula;
 
 public static partial class BuiltInFunctions
 {
-    // Matrix functions: MMULT, MINVERSE, MDETERM.
+    // Matrix functions: MMULT, MINVERSE, MDETERM, MUNIT.
 
     private static bool TryRangeToMatrix(ScalarValue value, out double[,] matrix, out ScalarValue? error)
     {
@@ -64,6 +64,22 @@ public static partial class BuiltInFunctions
                 result[i, j] = new NumberValue(sum);
             }
         }
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue Munit(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var raw = ToNumber(args[0]);
+        if (!double.IsFinite(raw) || raw <= 0 || raw > 1024) return ErrorValue.Value;
+        var dimension = (int)Math.Truncate(raw);
+        if (dimension <= 0) return ErrorValue.Value;
+
+        var result = new ScalarValue[dimension, dimension];
+        for (var row = 0; row < dimension; row++)
+            for (var col = 0; col < dimension; col++)
+                result[row, col] = new NumberValue(row == col ? 1 : 0);
+
         return new RangeValue(result);
     }
 

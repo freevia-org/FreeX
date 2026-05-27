@@ -51,7 +51,7 @@ public sealed class FormulaEvaluator
         "SUMPRODUCT",
         "LARGE", "SMALL", "RANK", "RANK.EQ", "RANK.AVG", "DEVSQ",
         "MULTINOMIAL", "SERIESSUM",
-        "MMULT", "MINVERSE", "MDETERM",
+        "MMULT", "MINVERSE", "MDETERM", "MUNIT",
         "SUMIFS", "COUNTIFS", "AVERAGEIFS",
         "XLOOKUP",
         "WORKDAY", "NETWORKDAYS", "WORKDAY.INTL", "NETWORKDAYS.INTL",
