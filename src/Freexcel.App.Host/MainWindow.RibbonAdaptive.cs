@@ -149,12 +149,13 @@ public partial class MainWindow
 
     private static void SetCollapsedRibbonButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)
     {
-        var normalNarrow = availableWidth <= 920;
+        var compactFootprint = availableWidth <= 920;
+        var hideCaption = availableWidth <= 760;
         foreach (var button in collapsedButtons)
         {
-            button.Width = normalNarrow ? 44 : 64;
-            button.Margin = normalNarrow ? new Thickness(0, 0, 2, 0) : new Thickness(1, 0, 3, 0);
-            button.Padding = normalNarrow ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
+            button.Width = compactFootprint ? 44 : 64;
+            button.Margin = compactFootprint ? new Thickness(0, 0, 2, 0) : new Thickness(1, 0, 3, 0);
+            button.Padding = compactFootprint ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
 
             var textBlockRoot = button.Content as DependencyObject ?? button;
             var textBlocks = EnumerateVisualDescendants(textBlockRoot)
@@ -166,13 +167,13 @@ public partial class MainWindow
             {
                 if (textBlock.Tag?.ToString() == "RibbonLabel")
                 {
-                    textBlock.Visibility = normalNarrow ? Visibility.Collapsed : Visibility.Visible;
-                    textBlock.FontSize = normalNarrow ? 9 : 10;
-                    textBlock.MaxWidth = normalNarrow ? 40 : 60;
+                    textBlock.Visibility = hideCaption ? Visibility.Collapsed : Visibility.Visible;
+                    textBlock.FontSize = compactFootprint ? 9 : 10;
+                    textBlock.MaxWidth = compactFootprint ? 40 : 60;
                 }
                 else if (textBlock.Tag?.ToString() == "RibbonIcon" && textBlock.Text != "\uE70D")
                 {
-                    textBlock.FontSize = normalNarrow ? 18 : 22;
+                    textBlock.FontSize = compactFootprint ? 18 : 22;
                 }
             }
         }
