@@ -22,14 +22,14 @@ public sealed class DelimitedTextFileAdapterTests
     [InlineData(".txt")]
     [InlineData(".tsv")]
     [InlineData(".tab")]
-    public void Formats_AreOpenOnly(string extension)
+    public void Formats_CanOpenAndSave(string extension)
     {
         var adapter = new DelimitedTextFileAdapter(extension, "Text (Tab delimited)", '\t');
 
         adapter.Formats.Should().ContainSingle(format =>
             format.Extension == extension &&
             format.CanOpen &&
-            !format.CanSave);
+            format.CanSave);
     }
 
     [Fact]
@@ -478,13 +478,39 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
-    public void Save_IsNotSupported()
+    public void Save_WritesTabDelimitedRowsAndQuotesTabs()
     {
-        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Alice"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("a\tb"));
 
-        var act = () => adapter.Save(new Workbook("Book1"), new MemoryStream());
+        using var stream = new MemoryStream();
+        new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t').Save(workbook, stream);
 
-        act.Should().Throw<NotSupportedException>();
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("Name\tNote\r\nAlice\t\"a\tb\"\r\n");
+    }
+
+    [Fact]
+    public void Save_RoundTripsFormulaLikeTextFieldsAsLiteralText()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("=A1*2"));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue("=A1*2"));
     }
 
     private static string FindWorkspaceFile(params string[] parts)
