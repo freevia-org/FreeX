@@ -169,6 +169,22 @@ public static partial class BuiltInFunctions
             ? MapPredicateRange(range, value => value is BoolValue)
             : new BoolValue(args[0] is BoolValue);
 
+    private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, NScalar);
+        return NScalar(args[0]);
+    }
+
+    private static ScalarValue NScalar(ScalarValue value) =>
+        value switch
+        {
+            NumberValue nv   => nv,
+            DateTimeValue dt => new NumberValue(dt.Value),
+            BoolValue bv     => new NumberValue(bv.Value ? 1 : 0),
+            ErrorValue ev    => ev,
+            _                => new NumberValue(0)
+        };
+
     private static ScalarValue Iseven(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
