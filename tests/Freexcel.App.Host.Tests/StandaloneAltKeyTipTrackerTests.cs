@@ -26,6 +26,17 @@ public sealed class StandaloneAltKeyTipTrackerTests
         tracker.ShouldToggleOnKeyUp(Key.System).Should().BeFalse();
     }
 
+    [Fact]
+    public void ShouldToggleOnKeyUp_ConsumesPendingCandidateAfterNonAltKeyUp()
+    {
+        var tracker = new StandaloneAltKeyTipTracker();
+
+        tracker.BeginStandaloneAltCandidate();
+
+        tracker.ShouldToggleOnKeyUp(Key.F10).Should().BeFalse();
+        tracker.ShouldToggleOnKeyUp(Key.System).Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(0x2C)]
     [InlineData(0x48)]
