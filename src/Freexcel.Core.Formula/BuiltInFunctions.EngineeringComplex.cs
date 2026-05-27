@@ -365,6 +365,25 @@ public static partial class BuiltInFunctions
         return TextResult(FormatComplex(real, imaginary, parsed.Suffix));
     }
 
+    private static ScalarValue ImTan(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImTanScalar);
+        return ImTanScalar(args[0]);
+    }
+
+    private static ScalarValue ImTanScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        double denominator = Math.Cos(2.0 * parsed.Real) + Math.Cosh(2.0 * parsed.Imaginary);
+        if (denominator == 0) return ErrorValue.Num;
+
+        double real = Math.Sin(2.0 * parsed.Real) / denominator;
+        double imaginary = Math.Sinh(2.0 * parsed.Imaginary) / denominator;
+        return TextResult(FormatComplex(real, imaginary, parsed.Suffix));
+    }
+
     private static IEnumerable<ScalarValue> FlattenComplexArguments(IReadOnlyList<ScalarValue> args)
     {
         foreach (var arg in args)

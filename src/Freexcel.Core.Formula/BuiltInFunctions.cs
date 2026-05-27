@@ -405,6 +405,7 @@ public static partial class BuiltInFunctions
         ["IMSQRT"]      = (ImSqrt, 1, 1),
         ["IMSUB"]       = (ImSub, 2, 2),
         ["IMSUM"]       = (ImSum, 1, 255),
+        ["IMTAN"]       = (ImTan, 1, 1),
         ["BIN2DEC"]     = (Bin2Dec, 1, 1),
         ["BIN2HEX"]     = (Bin2Hex, 1, 2),
         ["BIN2OCT"]     = (Bin2Oct, 1, 2),
