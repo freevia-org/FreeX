@@ -9,6 +9,54 @@ public sealed class ExcelParityEngineeringTests
     private readonly FormulaEvaluator _eval = new();
 
     [Theory]
+    [InlineData("=BASE(7,2)", "111")]
+    [InlineData("=BASE(7,2,8)", "00000111")]
+    [InlineData("=BASE(255,16,4)", "00FF")]
+    [InlineData("=BASE(45745,36)", "ZAP")]
+    [InlineData("=BASE(0,2,4)", "0000")]
+    public void BaseFunction_ReturnsExcelText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=DECIMAL(\"FF\",16)", 255)]
+    [InlineData("=DECIMAL(111,2)", 7)]
+    [InlineData("=DECIMAL(\"zap\",36)", 45745)]
+    [InlineData("=DECIMAL(\"00FF\",16)", 255)]
+    public void DecimalFunction_ReturnsExcelNumber(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void BaseAndDecimalFunctions_SpillOverRanges()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(15)),
+            (1, 2, new TextValue("A")),
+            (2, 2, new TextValue("F")));
+
+        AssertColumn(_eval.Evaluate("=BASE(A1:A2,16)", sheet), new TextValue("A"), new TextValue("F"));
+        AssertColumn(_eval.Evaluate("=DECIMAL(B1:B2,16)", sheet), new NumberValue(10), new NumberValue(15));
+    }
+
+    [Theory]
+    [InlineData("=BASE(-1,2)")]
+    [InlineData("=BASE(7,1)")]
+    [InlineData("=BASE(7,37)")]
+    [InlineData("=BASE(7,2,-1)")]
+    [InlineData("=DECIMAL(\"\",16)")]
+    [InlineData("=DECIMAL(\"2\",2)")]
+    [InlineData("=DECIMAL(\"FF\",1)")]
+    [InlineData("=DECIMAL(\"FF\",37)")]
+    public void BaseAndDecimalFunctions_InvalidArguments_ReturnNum(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Num);
+    }
+
+    [Theory]
     [InlineData("=BIN2DEC(\"1010\")", 10)]
     [InlineData("=BIN2DEC(1010)", 10)]
     [InlineData("=BIN2DEC(\"1111111111\")", -1)]
@@ -336,6 +384,11 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=ERFC(NA())")]
     [InlineData("=ERF.PRECISE(NA())")]
     [InlineData("=ERFC.PRECISE(NA())")]
+    [InlineData("=BASE(NA(),2)")]
+    [InlineData("=BASE(7,NA())")]
+    [InlineData("=BASE(7,2,NA())")]
+    [InlineData("=DECIMAL(NA(),16)")]
+    [InlineData("=DECIMAL(\"FF\",NA())")]
     public void EngineeringFunctions_PropagateExcelErrors(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);
