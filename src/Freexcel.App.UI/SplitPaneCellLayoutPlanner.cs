@@ -41,6 +41,7 @@ public static class SplitPaneCellLayoutPlanner
 
             var isTopPane = topRowLookup.TryGetValue(cell.Row, out var topRow);
             var isLeftPane = leftColumnLookup.TryGetValue(cell.Col, out var leftColumn);
+            var region = ResolveSplitPaneRegion(isTopPane, isLeftPane);
             var row = isTopPane
                 ? topRow!
                 : bottomLeftRowLookup.GetValueOrDefault(cell.Row);
@@ -76,11 +77,20 @@ public static class SplitPaneCellLayoutPlanner
                 textClipRect = new Rect(x, y, renderWidth, height);
             }
 
-            layouts.Add(new SplitPaneCellLayout(cell, rect, textClipRect));
+            layouts.Add(new SplitPaneCellLayout(cell, rect, textClipRect, region));
         }
 
         return layouts;
     }
+
+    private static SplitPaneRegion ResolveSplitPaneRegion(bool isTopPane, bool isLeftPane) =>
+        (isTopPane, isLeftPane) switch
+        {
+            (true, true) => SplitPaneRegion.TopLeft,
+            (true, false) => SplitPaneRegion.TopRight,
+            (false, true) => SplitPaneRegion.BottomLeft,
+            _ => SplitPaneRegion.BottomRight
+        };
 
     private static Dictionary<uint, RowMetric> BuildRowLookup(IReadOnlyList<RowMetric> rows)
     {
@@ -160,7 +170,7 @@ public static class SplitPaneCellLayoutPlanner
             if (mergedRegions is not { Count: > 0 } || cells.Count == 0)
                 return Empty;
 
-            var queryRows = cells.Select(cell => cell.Row).Distinct().ToArray();
+            var queryRows = BuildQueryRows(cells);
             var mergesByRow = new Dictionary<uint, List<GridRange>>();
             foreach (var mergedRegion in mergedRegions)
             {
@@ -180,6 +190,15 @@ public static class SplitPaneCellLayoutPlanner
             }
 
             return new MergeRangeIndex(mergesByRow);
+        }
+
+        private static HashSet<uint> BuildQueryRows(IReadOnlyList<DisplayCell> cells)
+        {
+            var rows = new HashSet<uint>();
+            foreach (var cell in cells)
+                rows.Add(cell.Row);
+
+            return rows;
         }
 
         public GridRange? Find(uint row, uint col)

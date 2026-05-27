@@ -46,11 +46,11 @@ public sealed class GridViewSplitPaneLayoutTests
 
         var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
 
-        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height))
+        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height, layout.Region))
             .Should().Equal(
-                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18),
-                (1u, 10u, GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 64, 18),
-                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18));
+                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18, SplitPaneRegion.TopLeft),
+                (1u, 10u, GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 64, 18, SplitPaneRegion.TopRight),
+                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18, SplitPaneRegion.BottomLeft));
     }
 
     [Fact]
@@ -73,11 +73,11 @@ public sealed class GridViewSplitPaneLayoutTests
 
         var layouts = SplitPaneCellLayoutPlanner.CalculateLayouts(viewport);
 
-        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height))
+        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height, layout.Region))
             .Should().Equal(
-                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18),
-                (1u, 10u, GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 64, 18),
-                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18));
+                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18, SplitPaneRegion.TopLeft),
+                (1u, 10u, GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 64, 18, SplitPaneRegion.TopRight),
+                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18, SplitPaneRegion.BottomLeft));
     }
 
     [Fact]

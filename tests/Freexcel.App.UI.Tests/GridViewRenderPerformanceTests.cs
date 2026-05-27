@@ -265,11 +265,34 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("BuildRowLookup(bottomLeftRows)");
         calculateLayouts.Should().Contain("BuildColumnLookup(leftColumns)");
         calculateLayouts.Should().Contain("BuildColumnLookup(topRightColumns)");
+        calculateLayouts.Should().Contain("ResolveSplitPaneRegion(isTopPane, isLeftPane)");
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
         calculateLayouts.Should().Contain("occupied.Add((cell.Row, cell.Col))");
         calculateLayouts.Should().NotContain(".ToDictionary(");
         calculateLayouts.Should().NotContain(".Where(");
         calculateLayouts.Should().NotContain(".Select(");
+    }
+
+    [Fact]
+    public void RenderSplitPaneCells_UsesPrecomputedLayoutRegionForClipping()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var splitPanes = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.SplitPanes.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private GridRange? FindMerge", StringComparison.Ordinal)];
+        var setup = renderSplitPaneCells[..renderSplitPaneCells.IndexOf("foreach (var layout in CalculateSplitPaneCellLayouts", StringComparison.Ordinal)];
+        var loop = renderSplitPaneCells[
+            renderSplitPaneCells.IndexOf("foreach (var layout in CalculateSplitPaneCellLayouts", StringComparison.Ordinal)..];
+
+        setup.Should().Contain("var topLeftClip = FrozenClipGeometry(clips.TopLeft)");
+        setup.Should().Contain("var bottomRightClip = FrozenClipGeometry(clips.BottomRight)");
+        loop.Should().Contain("GetSplitPaneClipGeometryForRegion(");
+        loop.Should().Contain("layout.Region");
+        loop.Should().NotContain("new RectangleGeometry(clipRect)");
+        loop.Should().NotContain("GetSplitPaneClipRectForCell");
+        rendering.Should().Contain("geometry.Freeze();");
+        splitPanes.Should().Contain("public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)

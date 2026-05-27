@@ -38,6 +38,10 @@ public partial class GridView
         if (Viewport?.SplitPanes?.Cells is not { Count: > 0 }) return;
 
         var clips = CalculateSplitPaneClipRects(Viewport, ActualWidth, ActualHeight);
+        var topLeftClip = FrozenClipGeometry(clips.TopLeft);
+        var topRightClip = FrozenClipGeometry(clips.TopRight);
+        var bottomLeftClip = FrozenClipGeometry(clips.BottomLeft);
+        var bottomRightClip = FrozenClipGeometry(clips.BottomRight);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var brushCache = new Dictionary<CellColor, SolidColorBrush>();
         var borderPenCache = new Dictionary<CellBorder, Pen>();
@@ -47,8 +51,13 @@ public partial class GridView
             var cell = layout.Cell;
             var rect = layout.Rect;
             var style = cell.Style;
-            var clipRect = GetSplitPaneClipRectForCell(Viewport, cell, clips);
-            dc.PushClip(new RectangleGeometry(clipRect));
+            var clipGeometry = GetSplitPaneClipGeometryForRegion(
+                layout.Region,
+                topLeftClip,
+                topRightClip,
+                bottomLeftClip,
+                bottomRightClip);
+            dc.PushClip(clipGeometry);
 
             Brush? fill = WorksheetBackground == null ? Brushes.White : null;
             if (style?.FillColor is { } fillColor)
@@ -144,6 +153,27 @@ public partial class GridView
             dc.Pop();
         }
     }
+
+    private static RectangleGeometry FrozenClipGeometry(Rect rect)
+    {
+        var geometry = new RectangleGeometry(rect);
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static RectangleGeometry GetSplitPaneClipGeometryForRegion(
+        SplitPaneRegion region,
+        RectangleGeometry topLeft,
+        RectangleGeometry topRight,
+        RectangleGeometry bottomLeft,
+        RectangleGeometry bottomRight) =>
+        region switch
+        {
+            SplitPaneRegion.TopLeft => topLeft,
+            SplitPaneRegion.TopRight => topRight,
+            SplitPaneRegion.BottomLeft => bottomLeft,
+            _ => bottomRight
+        };
 
     private GridRange? FindMerge(uint row, uint col)
     {
