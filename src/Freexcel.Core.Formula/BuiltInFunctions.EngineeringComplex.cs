@@ -223,6 +223,23 @@ public static partial class BuiltInFunctions
         return TextResult(FormatComplex(real, imaginary, left.Suffix));
     }
 
+    private static ScalarValue ImCos(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImCosScalar);
+        return ImCosScalar(args[0]);
+    }
+
+    private static ScalarValue ImCosScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return TextResult(FormatComplex(
+            Math.Cos(parsed.Real) * Math.Cosh(parsed.Imaginary),
+            -Math.Sin(parsed.Real) * Math.Sinh(parsed.Imaginary),
+            parsed.Suffix));
+    }
+
     private static ScalarValue ImExp(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImExpScalar);
@@ -278,6 +295,23 @@ public static partial class BuiltInFunctions
 
         double angle = Math.Atan2(parsed.Imaginary, parsed.Real);
         return TextResult(FormatComplex(Math.Log(modulus) / divisor, angle / divisor, parsed.Suffix));
+    }
+
+    private static ScalarValue ImSin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImSinScalar);
+        return ImSinScalar(args[0]);
+    }
+
+    private static ScalarValue ImSinScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return TextResult(FormatComplex(
+            Math.Sin(parsed.Real) * Math.Cosh(parsed.Imaginary),
+            Math.Cos(parsed.Real) * Math.Sinh(parsed.Imaginary),
+            parsed.Suffix));
     }
 
     private static IEnumerable<ScalarValue> FlattenComplexArguments(IReadOnlyList<ScalarValue> args)

@@ -296,6 +296,16 @@ public sealed class ExcelParityEngineeringTests
         AssertNumberApproximately(_eval.Evaluate("=IMAGINARY(IMLOG2(\"1+i\"))", MakeSheet()), (Math.PI / 4.0) / Math.Log(2.0));
     }
 
+    [Theory]
+    [InlineData("=IMCOS(0)", "1")]
+    [InlineData("=IMSIN(0)", "0")]
+    [InlineData("=IMCOS(\"1+i\")", "0.833730025131149-0.988897705762865i")]
+    [InlineData("=IMSIN(\"1+i\")", "1.29845758141598+0.634963914784736i")]
+    public void ComplexTrigFunctions_ReturnExcelComplexText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
     [Fact]
     public void ComplexFunctions_HandleRangesAndErrors()
     {
@@ -307,6 +317,8 @@ public sealed class ExcelParityEngineeringTests
         AssertColumn(_eval.Evaluate("=IMREAL(A1:A2)", sheet), new NumberValue(3), new NumberValue(5));
         AssertColumn(_eval.Evaluate("=IMLOG10(A1:A2)", sheet), _eval.Evaluate("=IMLOG10(A1)", sheet), _eval.Evaluate("=IMLOG10(A2)", sheet));
         AssertColumn(_eval.Evaluate("=IMEXP(A1:A3)", sheet), _eval.Evaluate("=IMEXP(A1)", sheet), _eval.Evaluate("=IMEXP(A2)", sheet), ErrorValue.NA);
+        AssertColumn(_eval.Evaluate("=IMCOS(A1:A2)", sheet), _eval.Evaluate("=IMCOS(A1)", sheet), _eval.Evaluate("=IMCOS(A2)", sheet));
+        AssertColumn(_eval.Evaluate("=IMSIN(A1:A2)", sheet), _eval.Evaluate("=IMSIN(A1)", sheet), _eval.Evaluate("=IMSIN(A2)", sheet));
         _eval.Evaluate("=IMSUM(A1:A2)", sheet).Should().Be(new TextValue("8+2i"));
         _eval.Evaluate("=IMSUM(A1:A3)", sheet).Should().Be(ErrorValue.NA);
     }
@@ -318,6 +330,8 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=IMLN(\"0\")", "#NUM!")]
     [InlineData("=IMLOG10(\"0\")", "#NUM!")]
     [InlineData("=IMLOG2(\"not complex\")", "#NUM!")]
+    [InlineData("=IMCOS(\"not complex\")", "#NUM!")]
+    [InlineData("=IMSIN(\"not complex\")", "#NUM!")]
     public void ComplexFunctions_ReturnExcelErrors(string formula, string error)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new ErrorValue(error));
@@ -419,6 +433,8 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=IMLN(NA())")]
     [InlineData("=IMLOG10(NA())")]
     [InlineData("=IMLOG2(NA())")]
+    [InlineData("=IMCOS(NA())")]
+    [InlineData("=IMSIN(NA())")]
     public void EngineeringFunctions_PropagateExcelErrors(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);
