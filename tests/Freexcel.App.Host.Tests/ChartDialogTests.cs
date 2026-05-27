@@ -992,6 +992,14 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartErrorBarsDialog_ValueEditorExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartErrorBarsDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_valueBox, \"Error bar value\");");
+    }
+
+    [Fact]
     public void ChartErrorBarsDialogInvalidValue_ShowsOwnedWarningAndRefocusesValueBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartErrorBarsDialog.cs"));
