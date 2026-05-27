@@ -27,6 +27,7 @@ public sealed class FormulaEvaluator
         "VAR", "VAR.S", "VAR.P", "VARA", "VARPA",
         "MEDIAN",
         "GEOMEAN", "HARMEAN", "AVEDEV",
+        "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
         "MODE", "MODE.SNGL",
         "NPV",
         "GCD", "LCM"
@@ -39,6 +40,7 @@ public sealed class FormulaEvaluator
         "VAR", "VAR.S", "VAR.P", "VARA", "VARPA",
         "MEDIAN",
         "GEOMEAN", "HARMEAN", "AVEDEV",
+        "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
         "MODE", "MODE.SNGL",
         "NPV",
         "GCD", "LCM"
@@ -55,7 +57,9 @@ public sealed class FormulaEvaluator
         "SUMIFS", "COUNTIFS", "AVERAGEIFS",
         "XLOOKUP",
         "WORKDAY", "NETWORKDAYS", "WORKDAY.INTL", "NETWORKDAYS.INTL",
-        "CORREL", "FORECAST", "FORECAST.LINEAR",
+        "CORREL", "COVAR", "COVARIANCE.P", "COVARIANCE.S",
+        "FORECAST", "FORECAST.LINEAR",
+        "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
         "PERCENTILE", "PERCENTILE.INC", "PERCENTILE.EXC",
         "QUARTILE", "QUARTILE.INC",
         "PERCENTRANK", "PERCENTRANK.INC",
