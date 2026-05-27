@@ -400,6 +400,27 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstagePrintButton_ExposesPreviewAndNativePrintMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var printButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == "SsPrintNavBtn");
+
+        printButton.Attribute("Click")?.Value.Should().Be("PrintButton_Click");
+        printButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("P");
+        printButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("BackstagePrintButton");
+        printButton.Attribute("AutomationProperties.Name")?.Value.Should().Be("Print");
+        printButton.Attribute("AutomationProperties.HelpText")?.Value
+            .Should()
+            .Contain("native print access");
+    }
+
+    [Fact]
     public void BackstageInfoVersion_MatchesAboutDialogVersion()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
