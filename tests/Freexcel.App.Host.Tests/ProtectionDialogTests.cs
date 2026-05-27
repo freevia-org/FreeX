@@ -193,6 +193,14 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
+    public void AllowEditRangeDialog_ExistingRangesListExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AllowEditRangeDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_existingRangesBox, \"Ranges unlocked by password\");");
+    }
+
+    [Fact]
     public void AllowEditRangesWorkflow_ExecutesAddRemoveAndClearCommands()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
