@@ -201,6 +201,14 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
+    public void AllowEditRangeDialog_RangeEditorExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AllowEditRangeDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Editable range\");");
+    }
+
+    [Fact]
     public void AllowEditRangesWorkflow_ExecutesAddRemoveAndClearCommands()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
