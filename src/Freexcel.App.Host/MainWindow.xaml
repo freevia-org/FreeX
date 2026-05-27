@@ -3839,8 +3839,8 @@
                         </ItemsControl>
                 </ScrollViewer>
 
-                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="82" MinHeight="27"
-                        FontSize="13" FontWeight="SemiBold" Margin="-24,0,0,1" Padding="12,1,12,3"
+                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="86" MinHeight="27"
+                        FontSize="13" FontWeight="SemiBold" Margin="-32,0,0,1" Padding="12,1,12,3"
                         Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1,0,1,1"
                         Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
                         VerticalAlignment="Top" Cursor="Hand"
@@ -3863,6 +3863,7 @@
                                       StrokeLineJoin="Round"
                                       Panel.ZIndex="3"
                                       SnapsToDevicePixels="True"
+                                      Visibility="Collapsed"
                                       IsHitTestVisible="False"/>
                                 <Path Data="M 12,0 A 8,8 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"
                                       HorizontalAlignment="Right"
@@ -3885,7 +3886,7 @@
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="0"
                                         CornerRadius="0,0,4,4"
-                                        Margin="8,0,8,0"
+                                        Margin="16,0,8,0"
                                         SnapsToDevicePixels="True">
                                     <Grid>
                                     <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
