@@ -158,6 +158,22 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Overlays.cs"));
+        var renderManualPageBreaks = source[
+            source.IndexOf("private void RenderManualPageBreaks", StringComparison.Ordinal)..
+            source.IndexOf("public enum FormulaTraceArrowLayoutKind", StringComparison.Ordinal)];
+
+        renderManualPageBreaks.Should().Contain("AsPageBreakLookup(rowPageBreaks)");
+        renderManualPageBreaks.Should().Contain("AsPageBreakLookup(columnPageBreaks)");
+        renderManualPageBreaks.Should().Contain("pageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(pageBreaks)");
+        renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.RowMetrics)");
+        renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.ColMetrics)");
+        renderManualPageBreaks.Should().NotContain("FirstOrDefault");
+    }
+
+    [Fact]
     public void SplitPaneCellLayoutPlanner_BoundsTallMergeWorkToVisibleCells()
     {
         var sheetId = SheetId.New();
