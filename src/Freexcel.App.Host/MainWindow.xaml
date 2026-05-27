@@ -3763,7 +3763,7 @@
                                                 Background="{Binding ElementName=TabBorder, Path=BorderBrush}"
                                                 Panel.ZIndex="3"
                                                 IsHitTestVisible="False"/>
-                                        <Border Height="4"
+                                        <Border Height="0"
                                                 VerticalAlignment="Top"
                                                 Margin="14,0,14,0"
                                                 Background="{StaticResource FreexcelRibbonSurfaceBrush}"
@@ -3771,14 +3771,6 @@
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
                                         </Border>
