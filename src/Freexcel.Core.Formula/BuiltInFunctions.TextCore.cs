@@ -10,6 +10,115 @@ public static partial class BuiltInFunctions
 {
     // Core text functions and inline text formatting helpers.
 
+    private static ScalarValue Concat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var arg in args)
+        {
+            if (arg is ErrorValue err) return err;
+            sb.Append(ToText(arg));
+        }
+        return TextResult(sb.ToString());
+    }
+
+    private static ScalarValue Len(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args[0] is RangeValue range)
+        {
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (int r = 0; r < range.RowCount; r++)
+                for (int c = 0; c < range.ColCount; c++)
+                {
+                    var value = range.Cells[r, c];
+                    if (value is ErrorValue e) return e;
+                    cells[r, c] = LenScalar(value);
+                }
+
+            return new RangeValue(cells);
+        }
+
+        return LenScalar(args[0]);
+    }
+
+    private static ScalarValue LenScalar(ScalarValue value)
+    {
+        var text = ToText(value);
+        return new NumberValue(ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length);
+    }
+
+    private static ScalarValue Left(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, LeftScalarWithCount);
+    }
+
+    private static ScalarValue LeftScalarWithCount(ScalarValue value, ScalarValue countValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (countValue is ErrorValue countError) return countError;
+        var rawCount = ToNumber(countValue);
+        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        var count = (int)rawCount;
+        if (count < 0) return ErrorValue.Value;
+        return LeftScalar(value, count);
+    }
+
+    private static ScalarValue LeftScalar(ScalarValue value, int count)
+    {
+        var text = ToText(value);
+        count = Math.Min(count, text.Length);
+        if (ContainsSurrogatePair(text))
+            return TextResult(text[..AdvanceTextElements(text, 0, count)]);
+        return TextResult(text[..count]);
+    }
+
+    private static ScalarValue Right(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, RightScalarWithCount);
+    }
+
+    private static ScalarValue RightScalarWithCount(ScalarValue value, ScalarValue countValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (countValue is ErrorValue countError) return countError;
+        var rawCount = ToNumber(countValue);
+        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        var count = (int)rawCount;
+        if (count < 0) return ErrorValue.Value;
+        return RightScalar(value, count);
+    }
+
+    private static ScalarValue RightScalar(ScalarValue value, int count)
+    {
+        var text = ToText(value);
+        count = Math.Min(count, text.Length);
+        int start = ContainsSurrogatePair(text)
+            ? AdvanceTextElements(text, 0, Math.Max(0, CountTextElements(text) - count))
+            : text.Length - count;
+        return TextResult(text[start..]);
+    }
+
+    private static RangeValue MapTextSliceRange(RangeValue range, int count, bool fromRight)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e
+                    ? e
+                    : fromRight ? RightScalar(value, count) : LeftScalar(value, count);
+            }
+
+        return new RangeValue(cells);
+    }
+
     private static ScalarValue TextFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
