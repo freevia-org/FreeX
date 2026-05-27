@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Freexcel.App.UI;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -43,6 +44,20 @@ public partial class MainWindow
         SheetGrid.ContextMenu = menu;
         PositionWorksheetContextMenu(menu, gridPos);
         menu.IsOpen = true;
+    }
+
+    private void OnGridHeaderContextMenuRequested(GridHeaderContextMenuTarget target, uint index, System.Windows.Point gridPos)
+    {
+        var address = target == GridHeaderContextMenuTarget.Row
+            ? new CellAddress(_currentSheetId, index, 1)
+            : new CellAddress(_currentSheetId, 1, index);
+
+        if (target == GridHeaderContextMenuTarget.Row)
+            SelectRow(index);
+        else
+            SelectColumn(index);
+
+        OnGridContextMenuRequested(address, gridPos);
     }
 
     private static void WorksheetContextMenu_Opened(object sender, RoutedEventArgs e)
