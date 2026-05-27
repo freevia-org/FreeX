@@ -10,6 +10,8 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
+    private const double ScreenshotTourCaptureHeight = 300;
+
     private static readonly (string Header, string FileName)[] TourTabs =
     [
         ("Home", "Home"),
@@ -72,17 +74,18 @@ public partial class MainWindow
             await Task.Delay(350);
             UpdateLayout();
 
-            var source = PresentationSource.FromVisual(RibbonTabs);
+            var source = PresentationSource.FromVisual(this);
             var dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
             var dpiY = source?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
-            int pw = Math.Max(1, (int)(RibbonTabs.ActualWidth * dpiX));
-            int ph = Math.Max(1, (int)(RibbonTabs.ActualHeight * dpiY));
+            int pw = Math.Max(1, (int)(ActualWidth * dpiX));
+            int ph = Math.Max(1, (int)(Math.Min(ActualHeight, ScreenshotTourCaptureHeight) * dpiY));
 
             var rtb = new RenderTargetBitmap(pw, ph, 96 * dpiX, 96 * dpiY, PixelFormats.Pbgra32);
-            rtb.Render(RibbonTabs);
+            rtb.Render(this);
+            var bitmap = new CroppedBitmap(rtb, new Int32Rect(0, 0, pw, ph));
 
             var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(rtb));
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
             var path = Path.Combine(outputDir, $"{label}_{fileName}.png");
             await using var stream = File.OpenWrite(path);
             encoder.Save(stream);

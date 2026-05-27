@@ -383,6 +383,29 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Theory]
+    [InlineData(900)]
+    [InlineData(1100)]
+    public void PageLayoutRibbon_KeepsPageSetupExpandedAtNormalNarrowWidths(double width)
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Page Layout", width);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                "Page Setup",
+                "Excel keeps the primary Page Setup commands directly reachable at normal narrow widths");
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Margins", "Orientation", "Size"],
+                "Page Layout should collapse lower-priority groups before the primary Page Setup group");
+            harness.ActiveRibbonGroupCommandOverflow("Page Setup").Should().BeLessThanOrEqualTo(
+                0.5,
+                "Page Setup should keep all command rows above the group-label strip at normal narrow widths");
+        });
+    }
+
     [Fact]
     public void VerticallyStackedRibbonCommands_AlignIconSlots()
     {
