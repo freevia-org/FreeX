@@ -136,6 +136,16 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void FunctionArgumentsDialog_LabelsFormulaResultPreviewForAccessibility()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
+
+        source.Should().Contain("Text = \"Formula result =\"");
+        source.Should().Contain("AutomationProperties.SetName(_formulaPreview, \"Formula result\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_formulaPreview");
+    }
+
+    [Fact]
     public void InsertFunctionDialogOpenedFromKeyboard_FocusesSearchBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
