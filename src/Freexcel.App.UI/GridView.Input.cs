@@ -100,7 +100,10 @@ public partial class GridView
             double newWidth = Math.Max(MinCellSize, _resizeSizeStart + (pos.X - _resizeDragStart));
             _resizeLinePos = col.LeftOffset + newWidth + ActualRowHeaderWidth;
             ColumnResizing?.Invoke(_resizeIndex, newWidth);
+            Cursor = Cursors.SizeWE;
             InvalidateVisual();
+            e.Handled = true;
+            return;
         }
         else if (_resizeTarget == ResizeTarget.Row)
         {
@@ -109,7 +112,10 @@ public partial class GridView
             double newHeight = Math.Max(MinCellSize, _resizeSizeStart + (pos.Y - _resizeDragStart));
             _resizeLinePos = row.TopOffset + newHeight + EffectiveColHeaderHeight;
             RowResizing?.Invoke(_resizeIndex, newHeight);
+            Cursor = Cursors.SizeNS;
             InvalidateVisual();
+            e.Handled = true;
+            return;
         }
         else
         {
@@ -244,6 +250,11 @@ public partial class GridView
                     : scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal
                         ? pos.X - _splitPaneScrollbarDragSource.Thumb.Left
                         : pos.Y - _splitPaneScrollbarDragSource.Thumb.Top;
+                if (!_splitPaneScrollbarDragging)
+                {
+                    _splitPaneScrollbarDragSource = null;
+                    _splitPaneScrollbarDragPointerOffset = 0;
+                }
                 if (CalculateSplitPaneScrollbarInteractionTarget(Viewport, chrome, pos) is { } scrollTarget)
                     SplitPaneScrollbarScrolled?.Invoke(scrollTarget);
                 Cursor = scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal ? Cursors.SizeWE : Cursors.SizeNS;

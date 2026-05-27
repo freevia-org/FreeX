@@ -100,6 +100,23 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void SplitPaneScrollbarTrackClickClearsDragOnlyState()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseDownBlock = source[
+            source.IndexOf("if (HitTestSplitPaneScrollbar(chrome, pos) is { } scrollbarHit)", StringComparison.Ordinal)..
+            source.IndexOf("if (Viewport is not null && HitTestSplitDividerHandle", StringComparison.Ordinal)];
+
+        mouseDownBlock.Should().Contain("_splitPaneScrollbarDragging = scrollbarHit.Part == SplitPaneScrollbarPart.Thumb");
+        mouseDownBlock.Should().Contain("if (!_splitPaneScrollbarDragging)");
+        mouseDownBlock.Should().Contain("_splitPaneScrollbarDragSource = null;");
+        mouseDownBlock.Should().Contain("_splitPaneScrollbarDragPointerOffset = 0;");
+        mouseDownBlock.IndexOf("if (!_splitPaneScrollbarDragging)", StringComparison.Ordinal)
+            .Should().BeLessThan(mouseDownBlock.IndexOf("CalculateSplitPaneScrollbarInteractionTarget", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void AutofillDragMouseMoveKeepsCrossCursorAndHandlesEvent()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -110,6 +127,21 @@ public sealed class GridViewPointerCursorTests
 
         dragBlock.Should().Contain("Cursor = Cursors.Cross;");
         dragBlock.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
+    public void ResizeDragMouseMoveKeepsResizeCursorAndHandlesEvent()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var resizeBlock = source[
+            source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
+            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)];
+
+        resizeBlock.Should().Contain("Cursor = Cursors.SizeWE;");
+        resizeBlock.Should().Contain("Cursor = Cursors.SizeNS;");
+        resizeBlock.Should().Contain("e.Handled = true;");
+        resizeBlock.Should().Contain("return;");
     }
 
     [Fact]
