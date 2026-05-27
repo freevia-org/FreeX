@@ -116,6 +116,8 @@ public static partial class BuiltInFunctions
         ["RANK.AVG"]    = (RankAvg, 2, 3),
         ["STDEV"]       = (Stdev, 1, 255),
         ["STDEV.S"]     = (Stdev, 1, 255),
+        ["STDEVA"]      = (StdevA, 1, 255),
+        ["STDEVPA"]     = (StdevPA, 1, 255),
         ["MEDIAN"]      = (Median, 1, 255),
         ["DEVSQ"]       = (Devsq, 1, 255),
 
@@ -228,7 +230,9 @@ public static partial class BuiltInFunctions
         // ── Phase 4a: Statistical ────────────────────────────────────────────
         ["VAR"]              = (VarS, 1, 255),
         ["VAR.S"]            = (VarS, 1, 255),
+        ["VARA"]             = (VarA, 1, 255),
         ["VAR.P"]            = (VarP, 1, 255),
+        ["VARPA"]            = (VarPA, 1, 255),
         ["STDEV.P"]          = (StdevP, 1, 255),
         ["PERCENTILE"]       = (PercentileInc, 2, 2),
         ["PERCENTILE.INC"]   = (PercentileInc, 2, 2),
