@@ -52,24 +52,39 @@ public partial class MainWindow
 
         if (!SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange))
         {
-            MessageBox.Show("Invalid data range.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage("Invalid data range.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (!SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location))
         {
-            MessageBox.Show("Invalid location cell.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage("Invalid location cell.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var kind = SparklineInputParser.ToModelKind(dialog.Result.Kind);
 
         var fallbackLocationRange = new GridRange(location, location);
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Insert Sparkline",
-                fallbackLocationRange,
-                currentRange => new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)))
+        var useDialogLocationForInitialInsert = true;
+        IWorkbookCommand CreateCommand()
+        {
+            var currentRange = useDialogLocationForInitialInsert
+                ? fallbackLocationRange
+                : SheetGrid.SelectedRange ?? fallbackLocationRange;
+            return new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        useDialogLocationForInitialInsert = false;
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Insert Sparkline");
             return;
+        }
+
+        MarkWorkbookDirty();
+        _repeatPostAction = null;
+        InvalidateNavigationCaches();
 
         SetActiveCell(location);
         EnsureCellVisible(location);
