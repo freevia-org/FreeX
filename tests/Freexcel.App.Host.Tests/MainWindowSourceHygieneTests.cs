@@ -355,6 +355,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ZoomCustomDialog_ReturnsFocusToWorksheetAfterAcceptOrCancel()
+    {
+        var viewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ViewCommands.cs"));
+        var method = ExtractMethodSource(viewSource, "private void ZoomCustomMenuItem_Click(");
+
+        method.Should().Contain("try");
+        method.Should().Contain("if (dialog.ShowDialog() != true)");
+        method.Should().Contain("ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(dialog.Result.ZoomPercent);");
+        method.Should().Contain("finally");
+        method.Should().Contain("FocusSheetGridIfNeeded();");
+    }
+
+    [Fact]
     public void DrawingAndPictureController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
