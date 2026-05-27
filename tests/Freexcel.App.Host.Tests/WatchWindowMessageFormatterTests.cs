@@ -80,6 +80,14 @@ public sealed class WatchWindowMessageFormatterTests
     }
 
     [Fact]
+    public void AddWatchDialog_SelectedRangePreviewExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AddWatchDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Selected range\");");
+    }
+
+    [Fact]
     public void AddWatchDialogOpenedFromKeyboard_FocusesSelectedRangePreview()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AddWatchDialog.cs"));

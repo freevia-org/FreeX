@@ -355,6 +355,39 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedThreadedCommentsRetentionPackage_LinksWorksheetAndPersonsParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-threaded-comments-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetRelsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        worksheetRelsEntry.Should().NotBeNull();
+        workbookRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument worksheetRelsXml;
+        using (var stream = worksheetRelsEntry!.Open())
+            worksheetRelsXml = XDocument.Load(stream);
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" &&
+                relationship.Attribute("Target")?.Value == "../threadedComments/threadedComment1.xml")
+            .Should().ContainSingle();
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2017/10/relationships/person" &&
+                relationship.Attribute("Target")?.Value == "persons/person.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()

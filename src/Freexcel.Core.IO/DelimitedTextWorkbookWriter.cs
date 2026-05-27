@@ -158,8 +158,18 @@ internal static class DelimitedTextWorkbookWriter
 
     private static bool IsCoercionLikeText(string value) =>
         value[0] is '=' or '+' or '-' or '@' ||
+        IsPercentageText(value) ||
         IsParenthesizedCurrencyText(value) ||
         IsErrorLikeText(value);
+
+    private static bool IsPercentageText(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length < 2 || trimmed[^1] != '%')
+            return false;
+
+        return double.TryParse(trimmed[..^1], NumberStyles.Any, CultureInfo.InvariantCulture, out _);
+    }
 
     private static bool IsParenthesizedCurrencyText(string value) =>
         value[0] == '(' &&
