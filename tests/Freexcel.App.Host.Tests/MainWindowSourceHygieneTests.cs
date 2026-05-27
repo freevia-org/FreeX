@@ -469,6 +469,24 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void InsertPicture_UsesGuardedSingleFileDialogAndOwnedReadFailureMessage()
+    {
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
+
+        drawingSource.Should().Contain("Title = \"Insert Picture\"");
+        drawingSource.Should().Contain("Filter = \"Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)");
+        drawingSource.Should().Contain("CheckFileExists = true");
+        drawingSource.Should().Contain("Multiselect = false");
+        drawingSource.Should().Contain("if (dialog.ShowDialog(this) != true) return;");
+        drawingSource.Should().Contain("System.IO.File.ReadAllBytes(dialog.FileName)");
+        drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
+        drawingSource.Should().Contain("new InsertPictureCommand(");
+        drawingSource.Should().Contain("ShowOwnedMessage($\"Could not read picture file:");
+        drawingSource.Should().Contain("SetActiveCell(range.Start);");
+        drawingSource.Should().Contain("UpdateViewport();");
+    }
+
+    [Fact]
     public void PrintAndExportController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -537,6 +555,32 @@ public sealed class MainWindowSourceHygieneTests
         pageLayoutSource.Should().Contain("private void PageMarginsBtn_Click(");
         pageLayoutSource.Should().Contain("private void PrintAreaBtn_Click(");
         pageLayoutSource.Should().Contain("private void PageSetupDialogBtn_Click(");
+    }
+
+    [Fact]
+    public void SheetBackgroundImport_UsesNativeImageDialogGuardrailsAndOwnedWarnings()
+    {
+        var pageLayoutSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+
+        pageLayoutSource.Should().Contain("private void BackgroundChooseMenuItem_Click(");
+        pageLayoutSource.Should().Contain("Title = \"Sheet Background\"");
+        pageLayoutSource.Should().Contain("Filter = \"Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*\"");
+        pageLayoutSource.Should().Contain("CheckFileExists = true");
+        pageLayoutSource.Should().Contain("Multiselect = false");
+        pageLayoutSource.Should().Contain("if (dialog.ShowDialog(this) != true)");
+        pageLayoutSource.Should().Contain("IsSupportedSheetBackgroundFile(dialog.FileName)");
+        pageLayoutSource.Should().Contain("\"Choose a PNG, JPG, JPEG, BMP, or GIF image file.\"");
+        pageLayoutSource.Should().Contain("File.ReadAllBytes(dialog.FileName)");
+        pageLayoutSource.Should().Contain("ShowOwnedMessage($\"Could not read the selected image:");
+        pageLayoutSource.Should().Contain("new WorksheetBackgroundImage(");
+        pageLayoutSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
+        pageLayoutSource.Should().Contain("TryExecuteGroupedSheetCommand(\"Sheet Background\"");
+        pageLayoutSource.Should().Contain("new SetWorksheetBackgroundCommand(sheetId, background)");
+        pageLayoutSource.Should().Contain("private static bool IsSupportedSheetBackgroundFile(string fileName)");
+        pageLayoutSource.Should().Contain("\".png\" or \".jpg\" or \".jpeg\" or \".bmp\" or \".gif\" => true");
+        pageLayoutSource.Should().Contain("private void BackgroundClearMenuItem_Click(");
+        pageLayoutSource.Should().Contain("TryExecuteGroupedSheetCommand(\"Clear Sheet Background\"");
+        pageLayoutSource.Should().Contain("new ClearWorksheetBackgroundCommand(sheetId)");
     }
 
     [Fact]
