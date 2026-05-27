@@ -1018,58 +1018,5 @@ public static partial class BuiltInFunctions
         return (y2 - y1) * 360 + (m2 - m1) * 30 + (dd2 - dd1);
     }
 
-    private static ScalarValue Npv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e) return e;
-        double rate   = ToNumber(args[0]);
-        if (!double.IsFinite(rate)) return ErrorValue.Num;
-        var (values, err) = CollectNumbers(args, start: 1);
-        if (err is not null) return err;
-
-        double result = 0;
-        for (int i = 0; i < values!.Count; i++)
-            result += values[i] / Math.Pow(1 + rate, i + 1);
-        return NumberResult(result);
-    }
-
-    private static ScalarValue Irr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (FirstError(args) is { } e) return e;
-        var valRange = args[0] is RangeValue valuesRange
-            ? valuesRange
-            : SingleCellArray(args[0]);
-        double guess = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 0.1;
-        if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
-        var (values, err) = CollectRangeNumbers(valRange);
-        if (err is not null) return err;
-        var cashflows = values!;
-        if (cashflows.Count < 2) return ErrorValue.Num;
-        // Excel requires at least one positive and one negative cashflow.
-        bool hasPositive = false, hasNegative = false;
-        for (int i = 0; i < cashflows.Count; i++)
-        {
-            if (cashflows[i] > 0) hasPositive = true;
-            else if (cashflows[i] < 0) hasNegative = true;
-        }
-        if (!hasPositive || !hasNegative) return ErrorValue.Num;
-        double r = guess;
-        for (int iter = 0; iter < 100; iter++)
-        {
-            double f = 0, df = 0;
-            for (int i = 0; i < cashflows.Count; i++)
-            {
-                double denom = Math.Pow(1 + r, i);
-                f  += cashflows[i] / denom;
-                if (i > 0) df -= i * cashflows[i] / (denom * (1 + r));
-            }
-            if (Math.Abs(f) < 1e-10) break;
-            if (Math.Abs(df) < 1e-15) return ErrorValue.Num;
-            double delta = f / df;
-            r -= delta;
-            if (Math.Abs(delta) < 1e-10) break;
-        }
-        return double.IsNaN(r) || double.IsInfinity(r) ? ErrorValue.Num : new NumberValue(r);
-    }
-
 }
 
