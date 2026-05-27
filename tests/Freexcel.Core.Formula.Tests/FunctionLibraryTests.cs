@@ -2788,6 +2788,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Randbetween_SameShapeBottomAndTopRanges_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(5)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(6)));
+
+        var result = _eval.Evaluate("=RANDBETWEEN(A1:A2,B1:B2)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        ((NumberValue)result.At(1, 1)).Value.Should().Be(1);
+        ((NumberValue)result.At(2, 1)).Value.Should().BeGreaterThanOrEqualTo(5).And.BeLessThanOrEqualTo(6);
+    }
+
+    [Fact]
     public void Randbetween_IntegerRangeOverflow_ReturnsNumError()
     {
         _eval.Evaluate("=RANDBETWEEN(-9223372036854775808,9223372036854775807)", MakeSheet()).Should().Be(ErrorValue.Num);
@@ -5267,6 +5285,22 @@ public class FunctionLibraryTests
             ((NumberValue)_eval.Evaluate("=CUMPRINC(A1,60,10000,B2,12,0)", sheet)).Value);
     }
 
+    [Fact]
+    public void Xnpv_RateRange_SpillsElementwiseAgainstValueAndDateArrays()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.05)), (2, 1, new NumberValue(0.10)),
+            (1, 2, new NumberValue(-1000)), (2, 2, new NumberValue(600)), (3, 2, new NumberValue(600)),
+            (1, 3, new NumberValue(new DateTime(2026, 1, 1).ToOADate())),
+            (2, 3, new NumberValue(new DateTime(2026, 7, 1).ToOADate())),
+            (3, 3, new NumberValue(new DateTime(2027, 1, 1).ToOADate())));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=XNPV(A1:A2,B1:B3,C1:C3)", sheet),
+            ((NumberValue)_eval.Evaluate("=XNPV(A1,B1:B3,C1:C3)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=XNPV(A2,B1:B3,C1:C3)", sheet)).Value);
+    }
+
     [Fact] public void Pmt_TypeError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
@@ -5983,6 +6017,17 @@ public class FunctionLibraryTests
 
         AssertTextColumn(_eval.Evaluate("=FIXED(A1:A2,B1:B2,TRUE)", sheet), "1234.6", "-12");
         AssertTextColumn(_eval.Evaluate("=DOLLAR(A1:A2,B1:B2)", sheet), "$1,234.6", "($12)");
+    }
+
+    [Fact]
+    public void Fixed_LeadingOneCellNoCommasRange_BroadcastsAcrossValueArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(9876.54)),
+            (1, 2, new BoolValue(true)));
+
+        AssertTextColumn(_eval.Evaluate("=FIXED(A1:A2,1,B1:B1)", sheet), "1234.6", "9876.5");
     }
 
     [Fact]

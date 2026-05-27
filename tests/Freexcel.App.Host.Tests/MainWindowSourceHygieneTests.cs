@@ -2182,6 +2182,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void GoalSeekAndForecastSheet_DialogWorkflowsAreNotBlindF4Repeatable()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+        var goalSeekMethod = ExtractMethodSource(dataSource, "private void GoalSeekBtn_Click(");
+        var forecastMethod = ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(");
+
+        goalSeekMethod.Should().Contain("new GoalSeekDialog(");
+        goalSeekMethod.Should().Contain("new GoalSeekStatusDialog(");
+        goalSeekMethod.Should().Contain("new GoalSeekCommand(");
+        goalSeekMethod.Should().Contain("TryExecuteCommand(cmd, \"Goal Seek\")");
+        goalSeekMethod.Should().NotContain("ExecuteRepeatable");
+        goalSeekMethod.Should().NotContain("TryExecuteRepeatable");
+
+        forecastMethod.Should().Contain("new ForecastSheetDialog");
+        forecastMethod.Should().Contain("new ForecastSheetCommand(");
+        forecastMethod.Should().Contain("TryExecuteCommand(new ForecastSheetCommand(range, dialog.Result.Periods), \"Forecast Sheet\")");
+        forecastMethod.Should().NotContain("ExecuteRepeatable");
+        forecastMethod.Should().NotContain("TryExecuteRepeatable");
+    }
+
+    [Fact]
     public void RowAndColumnDimensionDialogs_AreRepeatableForF4AgainstCurrentSelection()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
@@ -2401,6 +2422,31 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.PivotDesignCommands.cs",
                 "MainWindow.PivotSlicerTimeline.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static string ExtractMethodSource(string source, string signature)
+    {
+        var signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
+        signatureIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain {signature}");
+
+        var bodyStart = source.IndexOf('{', signatureIndex);
+        bodyStart.Should().BeGreaterThanOrEqualTo(signatureIndex, $"source should contain a body for {signature}");
+
+        var depth = 0;
+        for (var index = bodyStart; index < source.Length; index++)
+        {
+            depth += source[index] switch
+            {
+                '{' => 1,
+                '}' => -1,
+                _ => 0
+            };
+
+            if (depth == 0)
+                return source.Substring(signatureIndex, index - signatureIndex + 1);
+        }
+
+        throw new InvalidOperationException($"Could not find the end of {signature}.");
     }
 
     private static int CountOccurrences(string source, string value)

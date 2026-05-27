@@ -1971,6 +1971,7 @@ public sealed class FormulaEvaluator
              or "DATEVALUE" or "TIMEVALUE"
              or "DAYS" or "DAYS360" or "YEARFRAC"
              or "SQRTPI" or "SERIESSUM"
+             or "RANDBETWEEN"
              or "N" or "ERROR.TYPE"
              or "COMBIN" or "PERMUT"
              or "BITAND" or "BITOR" or "BITXOR" or "BITLSHIFT" or "BITRSHIFT"

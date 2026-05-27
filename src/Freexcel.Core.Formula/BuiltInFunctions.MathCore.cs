@@ -170,8 +170,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double db = ToNumber(args[0]);
-        double dt = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], RandbetweenScalar);
+    }
+
+    private static ScalarValue RandbetweenScalar(ScalarValue bottomValue, ScalarValue topValue)
+    {
+        double db = ToNumber(bottomValue);
+        double dt = ToNumber(topValue);
         if (!double.IsFinite(db) || !double.IsFinite(dt)) return ErrorValue.Num;
         if (!TryTruncateToLong(db, out long bottom) || !TryTruncateToLong(dt, out long top))
             return ErrorValue.Num;
