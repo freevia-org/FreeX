@@ -3860,7 +3860,7 @@
                                                 Panel.ZIndex="4"
                                                 IsHitTestVisible="False">
                                             <Path x:Name="TabOutline"
-                                                  Data="M 8,7 L 8,22 A 4,4 0 0 0 12,26 L 88,26 A 4,4 0 0 0 92,22 L 92,7"
+                                                  Data="M 1,0 C 5,0 8,3 8,8 L 8,22 C 8,24 10,26 12,26 L 88,26 C 90,26 92,24 92,22 L 92,8 C 92,3 95,0 99,0"
                                                   Width="{Binding ActualWidth, ElementName=TabChrome}"
                                                   Height="26"
                                                   Stretch="Fill"
@@ -3987,7 +3987,7 @@
                                         VerticalAlignment="Top"
                                         Panel.ZIndex="3"
                                         IsHitTestVisible="False">
-                                    <Path Data="M 92,12 L 92,22 A 4,4 0 0 1 88,26 L 12,26"
+                                    <Path Data="M 92,8 L 92,22 C 92,24 90,26 88,26 L 12,26"
                                           Width="{Binding ActualWidth, ElementName=GhostTabRoot}"
                                           Height="26"
                                           Stretch="Fill"
