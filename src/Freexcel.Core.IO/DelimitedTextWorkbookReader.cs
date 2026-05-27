@@ -160,6 +160,10 @@ internal static partial class DelimitedTextWorkbookReader
         if (!field.WasQuoted || field.Value.Length == 0)
             return false;
 
+        var trimmed = field.Value.Trim();
+        if (trimmed.Length > 0 && trimmed[0] == '#' && TryReadError(trimmed, out _))
+            return true;
+
         return field.Value[0] switch
         {
             '=' or '@' => true,
