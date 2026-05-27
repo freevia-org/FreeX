@@ -39,6 +39,8 @@ internal static partial class DelimitedTextWorkbookReader
                 var address = new CellAddress(sheet.Id, row, (uint)(i + 1));
                 if (!fields[i].WasQuoted && TryReadFormula(field, out var formulaText))
                     sheet.SetCell(address, Cell.FromFormula(formulaText));
+                else if (TryReadQuotedTextMarker(fields[i], out var markedText))
+                    sheet.SetCell(address, new TextValue(markedText));
                 else if (ShouldPreserveQuotedFormulaLikeText(fields[i]))
                     sheet.SetCell(address, new TextValue(field));
                 else
@@ -176,6 +178,27 @@ internal static partial class DelimitedTextWorkbookReader
             '(' => TryParseCurrency(field.Value, out _),
             _ => false
         };
+    }
+
+    private static bool TryReadQuotedTextMarker(DelimitedTextField field, out string text)
+    {
+        text = "";
+        if (!field.WasQuoted || field.Value.Length < 2 || field.Value[0] != '\'')
+            return false;
+
+        var candidate = field.Value[1..];
+        if (!IsBooleanLikeText(candidate))
+            return false;
+
+        text = candidate;
+        return true;
+    }
+
+    private static bool IsBooleanLikeText(string value)
+    {
+        var trimmed = value.Trim();
+        return string.Equals(trimmed, "TRUE", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmed, "FALSE", StringComparison.OrdinalIgnoreCase);
     }
 
     private static TextReader CreateTextReader(Stream stream)
