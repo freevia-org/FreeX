@@ -15,6 +15,32 @@ namespace Freexcel.App.Host.Tests;
 public sealed class StatusBarLayoutTests
 {
     [Fact]
+    public void NumericSelection_RendersExcelLikeAggregateStatusLabels()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet = harness.ActiveWorkbook.GetSheet(harness.CurrentSheetId)
+                ?? throw new InvalidOperationException("The active sheet should exist.");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(2)));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(4)));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(6)));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromValue(new TextValue("ignored")));
+
+            harness.SelectRange(1, 1, 2, 2);
+            harness.RefreshStatusBar();
+
+            harness.StatusReadyVisibility.Should().Be(Visibility.Collapsed);
+            harness.StatusStatsVisibility.Should().Be(Visibility.Visible);
+            harness.StatusText("StatusAvgText").Should().Be("Average: 4");
+            harness.StatusText("StatusCountText").Should().Be("Count: 3");
+            harness.StatusText("StatusSumText").Should().Be("Sum: 12");
+            harness.StatusText("StatusMinText").Should().Be("Min: 2");
+            harness.StatusText("StatusMaxText").Should().Be("Max: 6");
+        });
+    }
+
+    [Fact]
     public void AggregateViewport_StaysClearOfZoomControlsAtCompactWidth()
     {
         StaTestRunner.Run(() =>
@@ -164,23 +190,42 @@ public sealed class StatusBarLayoutTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
+        private readonly FieldInfo _workbook;
         private readonly MethodInfo _cycleShellFocus;
+        private readonly FieldInfo _currentSheetId;
         private readonly MethodInfo _getCurrentShellFocusTarget;
+        private readonly MethodInfo _refreshStatusBar;
         private readonly MethodInfo _tryHandleFocusedStatusBarKeyboardNavigation;
 
-        private MainWindowHarness(MainWindow window)
+        private MainWindowHarness(MainWindow window, Workbook workbook)
         {
             _window = window;
+            Workbook = workbook;
+            _workbook = typeof(MainWindow)
+                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
+            _currentSheetId = typeof(MainWindow)
+                .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
             _cycleShellFocus = typeof(MainWindow)
                 .GetMethod("CycleShellFocus", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "CycleShellFocus");
             _getCurrentShellFocusTarget = typeof(MainWindow)
                 .GetMethod("GetCurrentShellFocusTarget", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetCurrentShellFocusTarget");
+            _refreshStatusBar = typeof(MainWindow)
+                .GetMethod("RefreshStatusBar", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshStatusBar");
             _tryHandleFocusedStatusBarKeyboardNavigation = typeof(MainWindow)
                 .GetMethod("TryHandleFocusedStatusBarKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedStatusBarKeyboardNavigation");
         }
+
+        public Workbook Workbook { get; }
+
+        public Workbook ActiveWorkbook => (Workbook)_workbook.GetValue(_window)!;
+
+        public SheetId CurrentSheetId => (SheetId)_currentSheetId.GetValue(_window)!;
 
         public ShellFocusTarget CurrentShellFocusTarget =>
             (ShellFocusTarget)_getCurrentShellFocusTarget.Invoke(_window, [])!;
@@ -195,6 +240,31 @@ public sealed class StatusBarLayoutTests
                 : null;
 
         public MainWindow Window => _window;
+
+        public Visibility StatusReadyVisibility =>
+            ((TextBlock)_window.FindName("StatusReadyText")).Visibility;
+
+        public Visibility StatusStatsVisibility =>
+            ((StackPanel)_window.FindName("StatusStatsPanel")).Visibility;
+
+        public string StatusText(string textBlockName) =>
+            ((TextBlock)_window.FindName(textBlockName)).Text;
+
+        public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
+        {
+            var sheet = ActiveWorkbook.GetSheet(CurrentSheetId)
+                ?? throw new InvalidOperationException("The active sheet should exist.");
+            _window.SheetGrid.SelectedRange = new GridRange(
+                new CellAddress(sheet.Id, startRow, startCol),
+                new CellAddress(sheet.Id, endRow, endCol));
+            PumpDispatcher();
+        }
+
+        public void RefreshStatusBar()
+        {
+            _refreshStatusBar.Invoke(_window, []);
+            PumpDispatcher();
+        }
 
         public void CycleShellFocus(bool reverse)
         {
@@ -242,7 +312,7 @@ public sealed class StatusBarLayoutTests
                 formulaBarBorder.Visibility = Visibility.Visible;
             window.UpdateLayout();
             PumpDispatcher();
-            return new MainWindowHarness(window);
+            return new MainWindowHarness(window, workbook);
         }
 
         public void Dispose()
