@@ -123,6 +123,65 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.ShowNotes);
     }
 
+    [Fact]
+    public void BuildCommands_ExposesInsertDeleteGroupInExcelLikeOrder()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands()
+            .Where(command => !command.IsSeparator)
+            .ToList();
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Insert...",
+            "Insert Row Above",
+            "Insert Row Below",
+            "Insert Column Left",
+            "Insert Column Right",
+            "Delete...",
+            "Delete Row(s)",
+            "Delete Column(s)");
+
+        commands.Single(command => command.Header == "Insert...")
+            .Should().BeEquivalentTo(new WorksheetContextMenuCommand(
+                "Insert...",
+                WorksheetContextMenuAction.InsertCells,
+                AccessHeader: "_Insert..."));
+        commands.Single(command => command.Header == "Insert Row Above")
+            .Should().BeEquivalentTo(new WorksheetContextMenuCommand(
+                "Insert Row Above",
+                WorksheetContextMenuAction.InsertRowAbove,
+                AccessHeader: "Insert Row _Above"));
+        commands.Single(command => command.Header == "Insert Row Below")
+            .Should().BeEquivalentTo(new WorksheetContextMenuCommand(
+                "Insert Row Below",
+                WorksheetContextMenuAction.InsertRowBelow,
+                AccessHeader: "Insert Row _Below"));
+        commands.Single(command => command.Header == "Insert Column Left")
+            .Should().BeEquivalentTo(new WorksheetContextMenuCommand(
+                "Insert Column Left",
+                WorksheetContextMenuAction.InsertColumnLeft,
+                AccessHeader: "Insert Column _Left"));
+        commands.Single(command => command.Header == "Insert Column Right")
+            .Should().BeEquivalentTo(new WorksheetContextMenuCommand(
+                "Insert Column Right",
+                WorksheetContextMenuAction.InsertColumnRight,
+                AccessHeader: "Insert Column _Right"));
+        commands.Single(command => command.Header == "Delete...")
+            .Should().BeEquivalentTo(new WorksheetContextMenuCommand(
+                "Delete...",
+                WorksheetContextMenuAction.DeleteCells,
+                AccessHeader: "_Delete..."));
+        commands.Single(command => command.Header == "Delete Row(s)")
+            .Should().BeEquivalentTo(new WorksheetContextMenuCommand(
+                "Delete Row(s)",
+                WorksheetContextMenuAction.DeleteRows,
+                AccessHeader: "Delete _Row(s)"));
+        commands.Single(command => command.Header == "Delete Column(s)")
+            .Should().BeEquivalentTo(new WorksheetContextMenuCommand(
+                "Delete Column(s)",
+                WorksheetContextMenuAction.DeleteColumns,
+                AccessHeader: "Delete _Column(s)"));
+    }
+
     [Theory]
     [InlineData("Cut", "Cu_t")]
     [InlineData("Copy", "_Copy")]
