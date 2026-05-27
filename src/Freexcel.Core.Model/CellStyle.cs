@@ -250,7 +250,35 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && IndentLevel == other.IndentLevel
             && TextRotation == other.TextRotation
             && Locked == other.Locked
-            && Hidden == other.Hidden;
+            && Hidden == other.Hidden
+            && DictionaryEquals(NativeDifferentialAttributes, other.NativeDifferentialAttributes)
+            && ListEquals(NativeDifferentialChildXmls, other.NativeDifferentialChildXmls)
+            && DictionaryEquals(NativeDifferentialElementXmls, other.NativeDifferentialElementXmls);
+    }
+
+    private static bool DictionaryEquals(IReadOnlyDictionary<string, string>? a, IReadOnlyDictionary<string, string>? b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        if (a.Count != b.Count) return false;
+        foreach (var (key, value) in a)
+        {
+            if (!b.TryGetValue(key, out var bValue) || value != bValue)
+                return false;
+        }
+        return true;
+    }
+
+    private static bool ListEquals(IReadOnlyList<string>? a, IReadOnlyList<string>? b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (a[i] != b[i]) return false;
+        }
+        return true;
     }
 
     /// <inheritdoc/>
@@ -283,6 +311,28 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(TextRotation);
         h.Add(Locked);
         h.Add(Hidden);
+        h.Add(GetDictionaryHashCode(NativeDifferentialAttributes));
+        h.Add(GetListHashCode(NativeDifferentialChildXmls));
+        h.Add(GetDictionaryHashCode(NativeDifferentialElementXmls));
+        return h.ToHashCode();
+    }
+
+    private static int GetDictionaryHashCode(IReadOnlyDictionary<string, string>? dict)
+    {
+        if (dict is null) return 0;
+        // XOR each entry's hash so order doesn't matter
+        int code = 0;
+        foreach (var (key, value) in dict)
+            code ^= HashCode.Combine(key, value);
+        return code;
+    }
+
+    private static int GetListHashCode(IReadOnlyList<string>? list)
+    {
+        if (list is null) return 0;
+        var h = new HashCode();
+        foreach (var item in list)
+            h.Add(item);
         return h.ToHashCode();
     }
 }
