@@ -80,6 +80,20 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusPlan_StatesCurrentManifestBaselineCounts()
+    {
+        var manifestRows = ReadManifestRows();
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_TEST_CORPUS_PLAN.md"));
+        var generatedCount = manifestRows.Count(row => row.SourceType == "generated");
+        var publicCount = manifestRows.Count(row => row.SourceType == "public");
+        var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
+        var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
+
+        plan.Should().Contain(
+            $"Current executable manifest baseline: {manifestRows.Count} rows ({generatedCount} generated, {publicCount} public, {localPrivateCount} local-private, {regressionCount} regression).");
+    }
+
+    [Fact]
     public void CorpusReport_PublishesWorkbookAndFeatureBucketPassRates()
     {
         var manifestRows = ReadManifestRows();
