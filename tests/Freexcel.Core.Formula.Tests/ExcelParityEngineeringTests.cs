@@ -150,6 +150,43 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
+    [InlineData("=ERF(0)", 0)]
+    [InlineData("=ERF(0.745)", 0.70792892)]
+    [InlineData("=ERF(1)", 0.84270079)]
+    [InlineData("=ERF(-1)", -0.84270079)]
+    [InlineData("=ERF(0,1)", 0.84270079)]
+    [InlineData("=ERF(1,2)", 0.15262147)]
+    [InlineData("=ERFC(0)", 1)]
+    [InlineData("=ERFC(1)", 0.15729921)]
+    public void ErrorFunctions_ReturnExcelResults(string formula, double expected)
+    {
+        AssertNumberApproximately(_eval.Evaluate(formula, MakeSheet()), expected);
+    }
+
+    [Fact]
+    public void ErrorFunctions_SpillOverRanges()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0)),
+            (2, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertColumnApproximately(_eval.Evaluate("=ERF(A1:A2)", sheet), 0, 0.84270079);
+        AssertColumnApproximately(_eval.Evaluate("=ERFC(A1:A2)", sheet), 1, 0.15729921);
+        AssertColumnApproximately(_eval.Evaluate("=ERF(A1:A2,B1:B2)", sheet), 0.84270079, 0.15262147);
+    }
+
+    [Theory]
+    [InlineData("=ERF(\"x\")")]
+    [InlineData("=ERF(0,\"x\")")]
+    [InlineData("=ERFC(\"x\")")]
+    public void ErrorFunctions_NonnumericArguments_ReturnValueError(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Theory]
     [InlineData("=COMPLEX(3,4)", "3+4i")]
     [InlineData("=COMPLEX(3,-4,\"j\")", "3-4j")]
     [InlineData("=COMPLEX(0,1)", "i")]
@@ -287,9 +324,27 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=BIN2HEX(\"1010\",NA())")]
     [InlineData("=HEX2BIN(\"F\",NA())")]
     [InlineData("=OCT2HEX(\"17\",NA())")]
+    [InlineData("=ERF(NA())")]
+    [InlineData("=ERF(0,NA())")]
+    [InlineData("=ERFC(NA())")]
     public void EngineeringFunctions_PropagateExcelErrors(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    private static void AssertNumberApproximately(ScalarValue value, double expected)
+    {
+        var number = value.Should().BeOfType<NumberValue>().Subject;
+        number.Value.Should().BeApproximately(expected, 0.0000002);
+    }
+
+    private static void AssertColumnApproximately(ScalarValue value, params double[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            AssertNumberApproximately(range.Cells[row, 0], expected[row]);
     }
 
     private static void AssertColumn(ScalarValue value, params ScalarValue[] expected)
