@@ -264,6 +264,17 @@ public partial class GridView
         var (target, index, size) = HitTestResize(pos);
         if (target != ResizeTarget.None)
         {
+            if (e.ClickCount >= 2)
+            {
+                if (target == ResizeTarget.Column)
+                    ColumnAutoFitRequested?.Invoke(index);
+                else
+                    RowAutoFitRequested?.Invoke(index);
+
+                e.Handled = true;
+                return;
+            }
+
             _resizeTarget    = target;
             _resizeIndex     = index;
             _resizeSizeStart = size;

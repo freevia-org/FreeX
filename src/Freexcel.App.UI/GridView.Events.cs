@@ -14,11 +14,15 @@ public partial class GridView
     public event Action<uint, double>? ColumnResizing;
     /// <summary>Fired when the user releases after resizing a column.</summary>
     public event Action<uint, double>? ColumnResized;
+    /// <summary>Fired when the user double-clicks a column border to AutoFit.</summary>
+    public event Action<uint>? ColumnAutoFitRequested;
 
     /// <summary>Fired while the user drags a row border (real-time).</summary>
     public event Action<uint, double>? RowResizing;
     /// <summary>Fired when the user releases after resizing a row.</summary>
     public event Action<uint, double>? RowResized;
+    /// <summary>Fired when the user double-clicks a row border to AutoFit.</summary>
+    public event Action<uint>? RowAutoFitRequested;
 
     /// <summary>Fired when the user drags the autofill handle and releases.</summary>
     public event Action<GridRange, GridRange>? AutofillRequested;

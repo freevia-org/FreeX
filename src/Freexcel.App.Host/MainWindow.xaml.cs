@@ -152,6 +152,8 @@ public partial class MainWindow : Window
         SheetGrid.MouseDown += SheetGrid_MouseDown;
         SheetGrid.ColumnResized  += OnColumnResized;
         SheetGrid.RowResized     += OnRowResized;
+        SheetGrid.ColumnAutoFitRequested += OnColumnAutoFitRequested;
+        SheetGrid.RowAutoFitRequested += OnRowAutoFitRequested;
         SheetGrid.ColumnResizing += OnColumnResizing;
         SheetGrid.RowResizing    += OnRowResizing;
         SheetGrid.AutofillRequested += OnAutofillRequested;
