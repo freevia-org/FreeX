@@ -3850,11 +3850,13 @@
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabBottomOutline" Property="Margin" Value="7,0,7,0"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabBottomOutline" Property="Margin" Value="7,0,7,0"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -3933,6 +3935,13 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
+
+                <Border Grid.Column="3"
+                        BorderBrush="{StaticResource FreexcelGreenBrush}"
+                        BorderThickness="0,1,0,0"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="6"
+                        IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="5" Content="&gt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
