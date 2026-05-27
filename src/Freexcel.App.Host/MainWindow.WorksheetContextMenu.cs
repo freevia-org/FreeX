@@ -35,6 +35,12 @@ public partial class MainWindow
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
         menu.Opened += WorksheetContextMenu_Opened;
+        menu.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(SheetGrid.ContextMenu, menu))
+                SheetGrid.ContextMenu = null;
+        };
+        SheetGrid.ContextMenu = menu;
         PositionWorksheetContextMenu(menu, gridPos);
         menu.IsOpen = true;
     }
@@ -44,6 +50,14 @@ public partial class MainWindow
         if (sender is not ContextMenu menu)
             return;
 
+        FocusFirstWorksheetContextMenuItem(menu);
+        menu.Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Input,
+            new Action(() => FocusFirstWorksheetContextMenuItem(menu)));
+    }
+
+    private static void FocusFirstWorksheetContextMenuItem(ContextMenu menu)
+    {
         var firstEnabledItem = menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
         if (firstEnabledItem is null)
             return;

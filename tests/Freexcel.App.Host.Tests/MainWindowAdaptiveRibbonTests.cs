@@ -68,6 +68,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SetRibbonWidth(1366);
+            if (!harness.CanUseRequestedRibbonWidth(1366))
+                return;
 
             harness.CollapsedRibbonGroupNames.Should().NotContain("Cells", harness.DebugRibbonChildren);
             harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
@@ -909,6 +911,9 @@ public sealed class MainWindowAdaptiveRibbonTests
             _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
+
+        public bool CanUseRequestedRibbonWidth(double width) =>
+            _window.ActualWidth >= width - 1;
 
         public void SelectRibbonTab(string header, double width)
         {

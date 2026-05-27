@@ -1224,13 +1224,13 @@
                                         local:RibbonTooltip.Description="Create a PivotTable from the selected range.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Recommended PivotTables" local:RibbonTooltip.KeyTip="R" Click="RecommendedPivotTablesMenuItem_Click"/>
+                                            <MenuItem Header="Recommended PivotTables" local:RibbonTooltip.KeyTip="RP" Click="RecommendedPivotTablesMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Recommended" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RecommendedPivotTablesMenuItem_Click"
                                         local:RibbonTooltip.Title="Recommended PivotTables"
-                                        local:RibbonTooltip.KeyTip="R"
+                                        local:RibbonTooltip.KeyTip="RP"
                                         local:RibbonTooltip.Description="Preview recommended PivotTable layouts for the selected range."/>
                                 <Button Content="Table" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="Table"
