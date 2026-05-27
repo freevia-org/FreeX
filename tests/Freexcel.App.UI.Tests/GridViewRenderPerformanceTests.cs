@@ -146,6 +146,7 @@ public sealed class GridViewRenderPerformanceTests
         properties.Should().Contain("FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender)");
         onRender.Should().Contain("var isLiveResizing = IsLiveResizing;");
         onRender.Should().Contain("if (!isLiveResizing)");
+        onRender.Should().Contain("RenderLiveResizeContinuation(dc);");
         onRender.Should().Contain("RenderCells(dc);");
         onRender.Should().Contain("RenderSelection(dc);");
 
@@ -155,6 +156,25 @@ public sealed class GridViewRenderPerformanceTests
             .Should().BeLessThan(onRender.IndexOf("RenderFormulaTraceArrows(dc);", StringComparison.Ordinal));
         onRender.IndexOf("if (ObjectDisplayMode == GridObjectDisplayMode.Placeholders)", StringComparison.Ordinal)
             .Should().BeGreaterThan(onRender.LastIndexOf("if (!isLiveResizing)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void LiveResizeContinuation_PaintsExpandedGridWithoutViewportRefresh()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var continuation = rendering[
+            rendering.IndexOf("private void RenderLiveResizeContinuation", StringComparison.Ordinal)..
+            rendering.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)];
+
+        continuation.Should().Contain("ActualWidth > gridRight");
+        continuation.Should().Contain("ActualHeight > gridBottom");
+        continuation.Should().Contain("RenderLiveResizeColumnContinuation");
+        continuation.Should().Contain("RenderLiveResizeRowContinuation");
+        continuation.Should().Contain("DrawLiveResizeHorizontalGridLines");
+        continuation.Should().Contain("DrawLiveResizeVerticalGridLines");
+        continuation.Should().Contain("dc.DrawRectangle(Brushes.White, null");
+        continuation.Should().NotContain("UpdateViewport");
+        continuation.Should().NotContain("Viewport =");
     }
 
     [Fact]
