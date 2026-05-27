@@ -2451,13 +2451,13 @@
                                             local:RibbonTooltip.Title="Sort A to Z"
                                             local:RibbonTooltip.KeyTip="SA"
                                             local:RibbonTooltip.Description="Sort the selected column from smallest to largest (A to Z).">
-                                        <TextBlock Text="A-Z" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <local:RibbonIcon Kind="SortAscending" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                     <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
                                             local:RibbonTooltip.Title="Sort Z to A"
                                             local:RibbonTooltip.KeyTip="SD"
                                             local:RibbonTooltip.Description="Sort the selected column from largest to smallest (Z to A).">
-                                        <TextBlock Text="Z-A" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <local:RibbonIcon Kind="SortDescending" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
@@ -2465,13 +2465,13 @@
                                             local:RibbonTooltip.Title="Filter"
                                             local:RibbonTooltip.KeyTip="T"
                                             local:RibbonTooltip.Description="Enable dropdown filters on each column to show only the rows you want.">
-                                        <TextBlock Text="Filter" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                     <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
                                             local:RibbonTooltip.Title="Clear Filter"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Remove all active filters and show all rows in the current range.">
-                                        <TextBlock Text="Clear" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <local:RibbonIcon Kind="Clear" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
@@ -2479,7 +2479,7 @@
                                             local:RibbonTooltip.Title="Advanced Filter"
                                             local:RibbonTooltip.KeyTip="A"
                                             local:RibbonTooltip.Description="Filter a list using an Excel-style criteria range, optionally copying matching rows elsewhere.">
-                                        <TextBlock Text="Advanced" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
