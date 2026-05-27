@@ -193,7 +193,10 @@ public static partial class BuiltInFunctions
         ["LCM"]      = (Lcm, 1, 255),
         ["MROUND"]   = (Mround, 2, 2),
         ["COMBIN"]   = (Combin, 2, 2),
+        ["COMBINA"]  = (Combina, 2, 2),
         ["PERMUT"]   = (Permut, 2, 2),
+        ["PERMUTATIONA"] = (PermutationA, 2, 2),
+        ["FACTDOUBLE"] = (FactDouble, 1, 1),
         ["ODD"]      = (Odd, 1, 1),
         ["EVEN"]     = (Even, 1, 1),
 
