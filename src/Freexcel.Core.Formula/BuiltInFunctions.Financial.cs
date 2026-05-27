@@ -1620,28 +1620,5 @@ public static partial class BuiltInFunctions
         return double.IsNaN(r) || double.IsInfinity(r) ? ErrorValue.Num : new NumberValue(r);
     }
 
-    private static ScalarValue Sln(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e0) return e0;
-        if (args[1] is ErrorValue e1) return e1;
-        if (args[2] is ErrorValue e2) return e2;
-        return MapScalarArgs([args[0], args[1], args[2]], values => SlnScalar(values[0], values[1], values[2]));
-    }
-
-    private static ScalarValue SlnScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue)
-    {
-        double cost = ToNumber(costValue);
-        double salvage = ToNumber(salvageValue);
-        return SlnScalar(cost, salvage, lifeValue);
-    }
-
-    private static ScalarValue SlnScalar(double cost, double salvage, ScalarValue lifeValue)
-    {
-        double life = ToNumber(lifeValue);
-        if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life))
-            return ErrorValue.Num;
-        if (life == 0) return ErrorValue.DivByZero;
-        return NumberResult((cost - salvage) / life);
-    }
 }
 
