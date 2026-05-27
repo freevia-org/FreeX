@@ -140,7 +140,7 @@ internal static class DelimitedTextWorkbookWriter
             return;
         }
 
-        var fieldValue = isTextValue && IsBooleanLikeText(value)
+        var fieldValue = isTextValue && ShouldWriteTextMarker(value)
             ? $"'{value}"
             : value;
         writer.Write('"');
@@ -155,16 +155,30 @@ internal static class DelimitedTextWorkbookWriter
         writer.Write('"');
     }
 
-    private static bool ShouldQuoteField(string value, char delimiter, bool isTextValue) =>
-        value.Contains(delimiter) || value.Contains('"') || value.Contains('\n') || value.Contains('\r') ||
-        (isTextValue && IsCoercionLikeText(value));
+    private static bool ShouldQuoteField(string value, char delimiter, bool isTextValue)
+    {
+        if (isTextValue && IsCoercionLikeText(value))
+            return true;
+
+        foreach (var ch in value)
+        {
+            if (ch == delimiter || ch is '"' or '\n' or '\r')
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool IsCoercionLikeText(string value) =>
         value[0] is '=' or '+' or '-' or '@' ||
         IsBooleanLikeText(value) ||
+        IsDateTimeLikeText(value) ||
         IsPercentageText(value) ||
         IsParenthesizedCurrencyText(value) ||
         IsErrorLikeText(value);
+
+    private static bool ShouldWriteTextMarker(string value) =>
+        IsBooleanLikeText(value) || IsDateTimeLikeText(value);
 
     private static bool IsBooleanLikeText(string value)
     {
@@ -172,6 +186,13 @@ internal static class DelimitedTextWorkbookWriter
         return string.Equals(trimmed, "TRUE", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(trimmed, "FALSE", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool IsDateTimeLikeText(string value) =>
+        DateTime.TryParse(
+            value.Trim(),
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.NoCurrentDateDefault,
+            out _);
 
     private static bool IsPercentageText(string value)
     {

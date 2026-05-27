@@ -34,24 +34,56 @@ public partial class GridView
 
     private void RebuildMergeLookup()
     {
-        _mergeLookup.Clear();
-        if (MergedRegions == null || Viewport == null) return;
-
-        var visRows = new HashSet<uint>(Viewport.RowMetrics.Select(r => r.Row));
-        var visCols = new HashSet<uint>(Viewport.ColMetrics.Select(c => c.Col));
-
-        foreach (var merge in MergedRegions)
+        if (MergedRegions is not { Count: > 0 } || Viewport == null)
         {
-            for (uint r = merge.Start.Row; r <= merge.End.Row; r++)
+            if (_mergeLookup.Count > 0)
+                _mergeLookup.Clear();
+            return;
+        }
+
+        _mergeLookup.Clear();
+        var mergesByVisibleRow = BuildVisibleRowMergeLookup();
+
+        foreach (var rowMetric in Viewport.RowMetrics)
+        {
+            var row = rowMetric.Row;
+            if (!mergesByVisibleRow.TryGetValue(row, out var rowMerges))
+                continue;
+
+            foreach (var colMetric in Viewport.ColMetrics)
             {
-                if (!visRows.Contains(r)) continue;
-                for (uint c = merge.Start.Col; c <= merge.End.Col; c++)
+                var col = colMetric.Col;
+                foreach (var merge in rowMerges)
                 {
-                    if (visCols.Contains(c))
-                        _mergeLookup[(r, c)] = merge;
+                    if (col >= merge.Start.Col && col <= merge.End.Col)
+                        _mergeLookup[(row, col)] = merge;
                 }
             }
         }
+    }
+
+    private Dictionary<uint, List<GridRange>> BuildVisibleRowMergeLookup()
+    {
+        var result = new Dictionary<uint, List<GridRange>>();
+        foreach (var rowMetric in Viewport!.RowMetrics)
+        {
+            var row = rowMetric.Row;
+            foreach (var merge in MergedRegions!)
+            {
+                if (row < merge.Start.Row || row > merge.End.Row)
+                    continue;
+
+                if (!result.TryGetValue(row, out var rowMerges))
+                {
+                    rowMerges = [];
+                    result[row] = rowMerges;
+                }
+
+                rowMerges.Add(merge);
+            }
+        }
+
+        return result;
     }
 
     private DispatcherTimer? _marchTimer;

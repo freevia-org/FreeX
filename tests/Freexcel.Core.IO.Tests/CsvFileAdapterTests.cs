@@ -514,11 +514,12 @@ public sealed class CsvFileAdapterTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("a,b"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("say \"hi\""));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("line\nbreak"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("carriage\rreturn"));
 
         using var stream = new MemoryStream();
         new CsvFileAdapter().Save(workbook, stream);
 
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"a,b\",\"say \"\"hi\"\"\",\"line\nbreak\"\r\n");
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"a,b\",\"say \"\"hi\"\"\",\"line\nbreak\",\"carriage\rreturn\"\r\n");
     }
 
     [Fact]
@@ -614,6 +615,29 @@ public sealed class CsvFileAdapterTests
     [InlineData("false")]
     [InlineData(" TRUE ")]
     public void Save_RoundTripsBooleanLikeTextFieldsAsLiteralText(string text)
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue(text));
+    }
+
+    [Theory]
+    [InlineData("2026-05-17")]
+    [InlineData("09:30")]
+    [InlineData("May 17, 2026")]
+    public void Save_RoundTripsDateTimeLikeTextFieldsAsLiteralText(string text)
     {
         var workbook = new Workbook("Book1");
         var sheet = workbook.AddSheet("Sheet1");

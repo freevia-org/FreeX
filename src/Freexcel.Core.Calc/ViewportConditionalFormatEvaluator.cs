@@ -1,3 +1,4 @@
+using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Calc;
@@ -12,7 +13,12 @@ internal sealed record CfAggregateCache(
 internal sealed record CfEvaluationContext(
     IReadOnlyList<ConditionalFormat> RulesByPriority,
     IReadOnlyList<ConditionalFormat> IconRulesByPriority,
-    Dictionary<ConditionalFormat, CfAggregateCache> Aggregates);
+    Dictionary<ConditionalFormat, CfAggregateCache> Aggregates,
+    Dictionary<ConditionalFormat, CfFormulaCache> Formulas);
+
+internal sealed record CfFormulaCache(
+    FormulaNode Ast,
+    Dictionary<(int RowDelta, int ColDelta), FormulaNode> ShiftedAsts);
 
 internal static class ViewportConditionalFormatEvaluator
 {
@@ -23,7 +29,8 @@ internal static class ViewportConditionalFormatEvaluator
             return new CfEvaluationContext(
                 [],
                 [],
-                new Dictionary<ConditionalFormat, CfAggregateCache>(ReferenceEqualityComparer.Instance));
+                new Dictionary<ConditionalFormat, CfAggregateCache>(ReferenceEqualityComparer.Instance),
+                new Dictionary<ConditionalFormat, CfFormulaCache>(ReferenceEqualityComparer.Instance));
         }
 
         var rulesByPriority = sheet.ConditionalFormats
@@ -36,7 +43,8 @@ internal static class ViewportConditionalFormatEvaluator
         return new CfEvaluationContext(
             rulesByPriority,
             iconRulesByPriority,
-            PrecomputeAggregates(sheet));
+            PrecomputeAggregates(sheet),
+            PrecomputeFormulaCaches(sheet));
     }
 
     public static CellStyle? Evaluate(
@@ -45,7 +53,7 @@ internal static class ViewportConditionalFormatEvaluator
         ScalarValue value,
         Workbook workbook,
         CfEvaluationContext cfContext,
-        Func<ConditionalFormat, Sheet, CellAddress, Workbook, bool> matchesFormula)
+        Func<ConditionalFormat, Sheet, CellAddress, Workbook, CfEvaluationContext, bool> matchesFormula)
     {
         if (cfContext.RulesByPriority.Count == 0)
             return null;
@@ -64,7 +72,7 @@ internal static class ViewportConditionalFormatEvaluator
             {
                 CfRuleType.CellValue => MatchesCellValue(cf, value),
                 CfRuleType.AboveAverage => MatchesAboveAverage(cf, value, cfContext.Aggregates),
-                CfRuleType.Formula => matchesFormula(cf, sheet, addr, workbook),
+                CfRuleType.Formula => matchesFormula(cf, sheet, addr, workbook, cfContext),
                 CfRuleType.Top10 => MatchesTopBottom(cf, addr, cfContext.Aggregates),
                 CfRuleType.DuplicateValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: true),
                 CfRuleType.UniqueValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: false),
@@ -106,6 +114,28 @@ internal static class ViewportConditionalFormatEvaluator
             result.Underline = true;
         if (cfStyle.FontColor != CellColor.Black)
             result.FontColor = cfStyle.FontColor;
+
+        return result;
+    }
+
+    private static Dictionary<ConditionalFormat, CfFormulaCache> PrecomputeFormulaCaches(Sheet sheet)
+    {
+        var result = new Dictionary<ConditionalFormat, CfFormulaCache>(ReferenceEqualityComparer.Instance);
+        foreach (var cf in sheet.ConditionalFormats)
+        {
+            if (cf.RuleType != CfRuleType.Formula || string.IsNullOrWhiteSpace(cf.FormulaText))
+                continue;
+
+            try
+            {
+                var ast = new Parser(new Lexer("=" + cf.FormulaText).Tokenize()).Parse();
+                result[cf] = new CfFormulaCache(ast, []);
+            }
+            catch
+            {
+                // Preserve formula CF error handling: invalid formulas do not match.
+            }
+        }
 
         return result;
     }

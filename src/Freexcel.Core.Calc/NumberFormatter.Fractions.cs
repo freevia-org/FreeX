@@ -5,21 +5,31 @@ namespace Freexcel.Core.Calc;
 
 public static partial class NumberFormatter
 {
+    private static readonly Regex FractionQuotedTextRegex = new("\"[^\"]*\"");
+    private static readonly Regex FixedDenominatorRegex = new(@"^/(\d+)");
+    private static readonly Regex FractionDenominatorPlaceholderRegex = new(@"/(\?+)");
+    private static readonly Regex VariableFractionPlaceholderRegex = new(@"(?<numerator>\?+)/(?<denominator>\?+)");
+    private static readonly Regex FixedFractionNumeratorPlaceholderRegex = new(@"(?<numerator>\?+)$");
+    private static readonly Regex FixedDenominatorFractionFormatRegex = new(@"\?+/\d+");
+    private static readonly Regex ScientificFormatRegex = new(@"E[+-]0+", RegexOptions.IgnoreCase);
+    private static readonly Regex ScientificExponentSuffixRegex = new(@"E([+-])(\d{2,})$");
+    private static readonly Regex ScientificExponentFormatRegex = new(@"E([+-])(0+)", RegexOptions.IgnoreCase);
+
     private static bool IsSimpleFractionFormat(string format)
     {
-        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
+        var stripped = FractionQuotedTextRegex.Replace(format, "");
         return stripped.Contains("?/?", StringComparison.Ordinal) ||
                stripped.Contains("?/??", StringComparison.Ordinal) ||
                stripped.Contains("??/??", StringComparison.Ordinal) ||
-               Regex.IsMatch(stripped, @"\?+/\d+");
+               FixedDenominatorFractionFormatRegex.IsMatch(stripped);
     }
 
     private static string FormatSimpleFraction(double value, string format)
     {
         var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
-        var stripped = Regex.Replace(numericFormat, "\"[^\"]*\"", "");
+        var stripped = FractionQuotedTextRegex.Replace(numericFormat, "");
         int? fixedDenominator = null;
-        var fixedDenominatorMatch = Regex.Match(suffix, @"^/(\d+)");
+        var fixedDenominatorMatch = FixedDenominatorRegex.Match(suffix);
         if (fixedDenominatorMatch.Success &&
             int.TryParse(fixedDenominatorMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedDenominator) &&
             parsedDenominator > 0)
@@ -28,7 +38,7 @@ public static partial class NumberFormatter
             suffix = suffix[fixedDenominatorMatch.Length..];
         }
 
-        var denominatorPattern = Regex.Match(stripped, @"/(\?+)");
+        var denominatorPattern = FractionDenominatorPlaceholderRegex.Match(stripped);
         int maxDenominator = denominatorPattern.Success && denominatorPattern.Groups[1].Value.Length >= 2 ? 99 : 9;
         var (numeratorWidth, denominatorWidth) = GetFractionPlaceholderWidths(stripped, fixedDenominator);
 
@@ -61,7 +71,7 @@ public static partial class NumberFormatter
         string strippedFormat,
         int? fixedDenominator)
     {
-        var variableMatch = Regex.Match(strippedFormat, @"(?<numerator>\?+)/(?<denominator>\?+)");
+        var variableMatch = VariableFractionPlaceholderRegex.Match(strippedFormat);
         if (variableMatch.Success)
         {
             return (
@@ -69,7 +79,7 @@ public static partial class NumberFormatter
                 variableMatch.Groups["denominator"].Value.Length);
         }
 
-        var fixedMatch = Regex.Match(strippedFormat, @"(?<numerator>\?+)$");
+        var fixedMatch = FixedFractionNumeratorPlaceholderRegex.Match(strippedFormat);
         return (
             fixedMatch.Success ? fixedMatch.Groups["numerator"].Value.Length : 0,
             fixedDenominator?.ToString(CultureInfo.InvariantCulture).Length ?? 0);
@@ -123,25 +133,25 @@ public static partial class NumberFormatter
 
     private static bool IsScientificFormat(string format)
     {
-        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
-        return Regex.IsMatch(stripped, @"E[+-]0+", RegexOptions.IgnoreCase);
+        var stripped = FractionQuotedTextRegex.Replace(format, "");
+        return ScientificFormatRegex.IsMatch(stripped);
     }
 
     private static string FormatScientific(double value, string format, IFormatProvider formatProvider)
     {
         var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
-        var stripped = Regex.Replace(numericFormat, "\"[^\"]*\"", "");
+        var stripped = FractionQuotedTextRegex.Replace(numericFormat, "");
         var mantissa = stripped.Split(['E', 'e'], 2)[0];
         int decimals = mantissa.Contains('.')
             ? mantissa[(mantissa.IndexOf('.') + 1)..].Count(c => c == '0' || c == '#')
             : 0;
 
         string result = value.ToString("E" + decimals.ToString(CultureInfo.InvariantCulture), formatProvider);
-        result = Regex.Replace(result, @"E([+-])(\d{2,})$", match =>
+        result = ScientificExponentSuffixRegex.Replace(result, match =>
         {
             string sign = match.Groups[1].Value;
             string exponent = match.Groups[2].Value;
-            var exponentFormat = Regex.Match(stripped, @"E([+-])(0+)", RegexOptions.IgnoreCase);
+            var exponentFormat = ScientificExponentFormatRegex.Match(stripped);
             int minDigits = exponentFormat.Groups[2].Value.Length;
             exponent = int.Parse(exponent, CultureInfo.InvariantCulture).ToString("D" + minDigits.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
             string displaySign = exponentFormat.Groups[1].Value == "-" && sign == "+" ? "" : sign;

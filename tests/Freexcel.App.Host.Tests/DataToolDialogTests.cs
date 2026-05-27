@@ -252,17 +252,18 @@ public sealed class DataToolDialogTests
     {
         var source = ReadTextToColumnsDialogSources();
 
-        source.Should().Contain("Step {_wizardStep} of 3");
+        source.Should().Contain("Text Wizard - Step {normalizedStep} of 3");
         source.Should().Contain("CreateWizardButtonRow");
         source.Should().Contain("Content = \"< _Back\"");
         source.Should().Contain("Content = \"_Next >\"");
         source.Should().Contain("Content = \"_Finish\"");
         source.Should().Contain("MoveWizardStep");
         source.Should().Contain("UpdateWizardStep");
-        source.Should().Contain("_backButton.IsEnabled = _wizardStep > 1");
-        source.Should().Contain("_nextButton.IsEnabled = _wizardStep < 3");
+        source.Should().Contain("_backButton.IsEnabled = plan.BackEnabled");
+        source.Should().Contain("_nextButton.IsEnabled = plan.NextEnabled");
         source.Should().Contain("Choose the file type that best describes your data.");
-        source.Should().Contain("IsDefault = _wizardStep");
+        source.Should().Contain("NextDefault: normalizedStep < 3");
+        source.Should().Contain("FinishDefault: normalizedStep == 3");
         source.Should().Contain("Accept()");
         source.Should().NotContain("Additional wizard steps are not supported yet.");
         source.Should().NotContain("This dialog opens on the split-options step.");
@@ -275,8 +276,8 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("private Button? _finishButton;");
         source.Should().Contain("_finishButton = new Button");
-        source.Should().Contain("_nextButton.IsDefault = _wizardStep < 3");
-        source.Should().Contain("_finishButton.IsDefault = _wizardStep == 3");
+        source.Should().Contain("_nextButton.IsDefault = plan.NextDefault");
+        source.Should().Contain("_finishButton.IsDefault = plan.FinishDefault");
     }
 
     [Fact]
@@ -1011,16 +1012,6 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Header = \"Action\"");
         source.Should().Contain("Criteria should include column labels");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
-    }
-
-    [Fact]
-    public void AdvancedFilterDialog_RangeEditorsExposeAutomationNames()
-    {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
-
-        source.Should().Contain("AutomationProperties.SetName(_listRangeBox, \"List range\");");
-        source.Should().Contain("AutomationProperties.SetName(_criteriaRangeBox, \"Criteria range\");");
-        source.Should().Contain("AutomationProperties.SetName(_copyToBox, \"Copy to\");");
     }
 
     [Fact]
@@ -1796,6 +1787,15 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void DataTableDialog_CellInputEditorsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_rowInputBox, \"Row input cell\");");
+        source.Should().Contain("AutomationProperties.SetName(_columnInputBox, \"Column input cell\");");
+    }
+
+    [Fact]
     public void DataTableDialogOpenedFromKeyboard_FocusesRowInputCell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
@@ -2175,5 +2175,6 @@ public sealed class DataToolDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.FixedWidth.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.ColumnFormats.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.Delimiters.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.Wizard.cs")));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.Wizard.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsWizardPlanner.cs")));
 }

@@ -19,30 +19,32 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        var numericCells = viewport.Cells
-            .Where(cell => cell.Row >= range.Start.Row
-                && cell.Row <= range.End.Row
-                && cell.Col >= range.Start.Col
-                && cell.Col <= range.End.Col
-                && TryGetPreviewNumber(cell, out _))
-            .ToList();
+        var numericCells = new List<(DisplayCell Cell, double Value)>();
+        var max = 0d;
+        foreach (var cell in viewport.Cells)
+        {
+            if (cell.Row < range.Start.Row ||
+                cell.Row > range.End.Row ||
+                cell.Col < range.Start.Col ||
+                cell.Col > range.End.Col ||
+                !TryGetPreviewNumber(cell, out var value))
+                continue;
+
+            numericCells.Add((cell, value));
+            max = Math.Max(max, Math.Max(0, value));
+        }
+
         if (numericCells.Count == 0)
             return [];
 
-        var max = numericCells
-            .Select(cell => TryGetPreviewNumber(cell, out var value) ? Math.Max(0, value) : 0)
-            .DefaultIfEmpty(0)
-            .Max();
-
-        var rows = viewport.RowMetrics.ToDictionary(row => row.Row);
-        var cols = viewport.ColMetrics.ToDictionary(col => col.Col);
+        var rows = BuildRowMetricLookup(viewport.RowMetrics);
+        var cols = BuildColMetricLookup(viewport.ColMetrics);
         var rects = new List<Rect>();
-        foreach (var cell in numericCells)
+        foreach (var (cell, value) in numericCells)
         {
             if (!rows.TryGetValue(cell.Row, out var row) || !cols.TryGetValue(cell.Col, out var col))
                 continue;
 
-            TryGetPreviewNumber(cell, out var value);
             var fraction = max <= 0 ? 0 : Math.Clamp(Math.Max(0, value) / max, 0, 1);
             var availableWidth = Math.Max(0, col.Width - 6);
             rects.Add(new Rect(
@@ -61,20 +63,17 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        var rows = viewport.RowMetrics
-            .Where(row => row.Row >= range.Start.Row && row.Row <= range.End.Row)
-            .ToList();
-        var cols = viewport.ColMetrics
-            .Where(col => col.Col >= range.Start.Col && col.Col <= range.End.Col)
-            .ToList();
-        if (rows.Count == 0 || cols.Count == 0)
-            return [];
-
-        var rects = new List<Rect>(rows.Count * cols.Count);
-        foreach (var row in rows)
+        var rects = new List<Rect>();
+        foreach (var row in viewport.RowMetrics)
         {
-            foreach (var col in cols)
+            if (row.Row < range.Start.Row || row.Row > range.End.Row)
+                continue;
+
+            foreach (var col in viewport.ColMetrics)
             {
+                if (col.Col < range.Start.Col || col.Col > range.End.Col)
+                    continue;
+
                 rects.Add(new Rect(
                     col.LeftOffset + rowHeaderWidth + 3,
                     row.TopOffset + columnHeaderHeight + 3,
@@ -83,7 +82,7 @@ internal static class QuickAnalysisPreviewLayoutPlanner
             }
         }
 
-        return rects;
+        return rects.Count == 0 ? [] : rects;
     }
 
     public static IReadOnlyList<Rect> CalculateSparklinePreviewRects(
@@ -92,16 +91,16 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        var rows = viewport.RowMetrics
-            .Where(row => row.Row >= range.Start.Row && row.Row <= range.End.Row)
-            .ToList();
-        var col = viewport.ColMetrics.FirstOrDefault(col => col.Col >= range.Start.Col && col.Col <= range.End.Col);
-        if (rows.Count == 0 || col is null)
+        var col = FirstVisibleColumnInRange(viewport.ColMetrics, range);
+        if (col is null)
             return [];
 
-        var rects = new List<Rect>(rows.Count);
-        foreach (var row in rows)
+        var rects = new List<Rect>();
+        foreach (var row in viewport.RowMetrics)
         {
+            if (row.Row < range.Start.Row || row.Row > range.End.Row)
+                continue;
+
             var height = Math.Max(4, Math.Floor(row.Height / 3));
             var width = col.Width - 12;
             if (width < 6)
@@ -115,6 +114,37 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         }
 
         return rects;
+    }
+
+    private static ColMetric? FirstVisibleColumnInRange(
+        IReadOnlyList<ColMetric> columns,
+        GridRange range)
+    {
+        foreach (var col in columns)
+        {
+            if (col.Col >= range.Start.Col && col.Col <= range.End.Col)
+                return col;
+        }
+
+        return null;
+    }
+
+    private static Dictionary<uint, RowMetric> BuildRowMetricLookup(IReadOnlyList<RowMetric> metrics)
+    {
+        var lookup = new Dictionary<uint, RowMetric>(metrics.Count);
+        foreach (var metric in metrics)
+            lookup[metric.Row] = metric;
+
+        return lookup;
+    }
+
+    private static Dictionary<uint, ColMetric> BuildColMetricLookup(IReadOnlyList<ColMetric> metrics)
+    {
+        var lookup = new Dictionary<uint, ColMetric>(metrics.Count);
+        foreach (var metric in metrics)
+            lookup[metric.Col] = metric;
+
+        return lookup;
     }
 
     private static bool TryGetPreviewNumber(DisplayCell cell, out double value)

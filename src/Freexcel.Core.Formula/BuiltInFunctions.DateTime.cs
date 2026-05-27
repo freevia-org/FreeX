@@ -8,6 +8,15 @@ namespace Freexcel.Core.Formula;
 public static partial class BuiltInFunctions
 {
     // Date and time functions plus shared Excel date-system helpers.
+    private static readonly Regex DateTimeTextHasTimeSeparatorRegex = new(@"\d\s*:\s*\d");
+    private static readonly Regex DateTimeTextHasAmPmRegex = new(@"\b(?:AM|PM)\b", RegexOptions.IgnoreCase);
+    private static readonly Regex DateTimeTextHasDateSeparatorRegex = new(@"\d+\s*[-/]\s*\d+");
+    private static readonly Regex DateTimeTextHasMonthNameRegex = new(
+        @"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b",
+        RegexOptions.IgnoreCase);
+    private static readonly Regex DateTimeFakeLeapDayTextRegex = new(
+        @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$",
+        RegexOptions.IgnoreCase);
 
     private static ScalarValue Date(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -368,20 +377,18 @@ public static partial class BuiltInFunctions
     }
 
     private static bool TextHasTimeComponent(string text) =>
-        Regex.IsMatch(text, @"\d\s*:\s*\d") ||
-        Regex.IsMatch(text, @"\b(?:AM|PM)\b", RegexOptions.IgnoreCase);
+        DateTimeTextHasTimeSeparatorRegex.IsMatch(text) ||
+        DateTimeTextHasAmPmRegex.IsMatch(text);
 
     private static bool TextHasDateComponent(string text) =>
-        Regex.IsMatch(text, @"\d+\s*[-/]\s*\d+") ||
-        Regex.IsMatch(text,
-            @"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b",
-            RegexOptions.IgnoreCase);
+        DateTimeTextHasDateSeparatorRegex.IsMatch(text) ||
+        DateTimeTextHasMonthNameRegex.IsMatch(text);
 
     private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
     {
         serial = 0;
         var trimmed = text.Trim();
-        var match = Regex.Match(trimmed, @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$", RegexOptions.IgnoreCase);
+        var match = DateTimeFakeLeapDayTextRegex.Match(trimmed);
         if (!match.Success) return false;
 
         serial = 60;

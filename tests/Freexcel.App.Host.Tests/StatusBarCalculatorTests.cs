@@ -42,34 +42,33 @@ public sealed class StatusBarCalculatorTests
     }
 
     [Fact]
-    public void Calculate_CountsOnlyNumericCellsAndIgnoresBlankTextAndErrors()
+    public void Calculate_SeparatesNonblankCountFromNumericalCount()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(4)));
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new TextValue("not counted")));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new TextValue("counted")));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(BlankValue.Instance));
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), Cell.FromValue(new ErrorValue("#VALUE!")));
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), Cell.FromValue(new NumberValue(3)));
 
         var stats = StatusBarCalculator.Calculate(
             sheet,
             new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
-                new CellAddress(sheet.Id, 1, 5)));
+                new CellAddress(sheet.Id, 1, 4)));
 
-        stats.Count.Should().Be(2);
-        stats.Sum.Should().Be(14);
-        stats.Average.Should().Be(7);
-        stats.Min.Should().Be(4);
-        stats.Max.Should().Be(10);
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(2);
+        stats.Sum.Should().Be(4);
+        stats.Average.Should().Be(2);
+        stats.Min.Should().Be(1);
+        stats.Max.Should().Be(3);
     }
 
     [Fact]
-    public void Calculate_NonnumericSelectionReturnsEmptyNumericStats()
+    public void Calculate_TextOnlySelectionStillReportsCountWithoutNumericStats()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("text")));
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new ErrorValue("#N/A")));
 
         var stats = StatusBarCalculator.Calculate(
             sheet,
@@ -77,7 +76,8 @@ public sealed class StatusBarCalculatorTests
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 2, 2)));
 
-        stats.Count.Should().Be(0);
+        stats.Count.Should().Be(1);
+        stats.NumericalCount.Should().Be(0);
         stats.Sum.Should().Be(0);
         stats.Average.Should().BeNull();
         stats.Min.Should().BeNull();
@@ -110,6 +110,7 @@ public sealed class StatusBarCalculatorTests
         var stats = StatusBarCalculator.Calculate(sheet, range);
 
         stats.Count.Should().Be(2);
+        stats.NumericalCount.Should().Be(2);
         stats.Sum.Should().Be(40);
         stats.Average.Should().Be(20);
         stats.Min.Should().Be(10);
@@ -141,6 +142,7 @@ public sealed class StatusBarCalculatorTests
 
         Console.WriteLine($"Repeated cached whole-column status refreshes: {sw.ElapsedMilliseconds}ms for 25 runs");
         stats.Count.Should().Be(100_000);
+        stats.NumericalCount.Should().Be(100_000);
         stats.Sum.Should().Be(5_000_050_000d);
     }
 }

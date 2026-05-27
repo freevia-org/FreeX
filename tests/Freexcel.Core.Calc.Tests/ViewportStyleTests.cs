@@ -125,6 +125,24 @@ public class ViewportStyleTests
     }
 
     [Fact]
+    public void FrozenViewportMetrics_AvoidLinqListMaterialization()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.Calc", "ViewportService.Metrics.cs"));
+        var frozenMetricHelpers = source[
+            source.IndexOf("private static List<RowMetric> BuildFrozenAwareRowMetrics", StringComparison.Ordinal)..
+            source.IndexOf("private static List<RowMetric> BuildRowMetrics", StringComparison.Ordinal)];
+
+        frozenMetricHelpers.Should().Contain("CombineRows(pinnedRows, bodyRows)");
+        frozenMetricHelpers.Should().Contain("CombineColumns(pinnedColumns, bodyColumns)");
+        frozenMetricHelpers.Should().Contain("new List<RowMetric>(pinnedRows.Count + bodyRows.Count)");
+        frozenMetricHelpers.Should().Contain("new List<ColMetric>(pinnedColumns.Count + bodyColumns.Count)");
+        frozenMetricHelpers.Should().NotContain("Concat(");
+        frozenMetricHelpers.Should().NotContain(".Select(");
+        frozenMetricHelpers.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
     public void GetViewport_AboveAverageCF_HighlightsCellsAboveAverage()
     {
         // Arrange: three cells with values 10, 20, 30 — average = 20
@@ -160,5 +178,19 @@ public class ViewportStyleTests
             .Should().BeFalse("value 10 is below the average of 20");
         vp.Cells.Single(c => c.Row == 2 && c.Col == 1).Style!.Bold
             .Should().BeFalse("value 20 equals the average, not strictly above");
+    }
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 }

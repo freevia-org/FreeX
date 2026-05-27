@@ -8,6 +8,129 @@ namespace Freexcel.Core.Formula;
 /// </summary>
 public sealed class FormulaEvaluator
 {
+    private static readonly HashSet<string> AggregateFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
+        "STDEV", "MEDIAN",
+        "PRODUCT", "XOR",
+        "VAR", "VAR.S", "VAR.P", "STDEV.P",
+        "GEOMEAN", "HARMEAN", "AVEDEV",
+        "MODE", "MODE.SNGL",
+        "CONCATENATE",
+        "NPV"
+    };
+
+    private static readonly HashSet<string> DirectTextCoercingAggregates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "PRODUCT",
+        "STDEV", "STDEV.S", "STDEV.P",
+        "VAR", "VAR.S", "VAR.P",
+        "MEDIAN",
+        "GEOMEAN", "HARMEAN", "AVEDEV",
+        "MODE", "MODE.SNGL",
+        "NPV",
+        "GCD", "LCM"
+    };
+
+    private static readonly HashSet<string> ReferenceProvenanceAggregates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "PRODUCT", "AND", "OR", "XOR",
+        "STDEV", "STDEV.S", "STDEV.P",
+        "VAR", "VAR.S", "VAR.P",
+        "MEDIAN",
+        "GEOMEAN", "HARMEAN", "AVEDEV",
+        "MODE", "MODE.SNGL",
+        "NPV",
+        "GCD", "LCM"
+    };
+
+    private static readonly HashSet<string> StructuredRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "VLOOKUP", "HLOOKUP", "INDEX", "MATCH", "XMATCH",
+        "SUMIF", "COUNTIF", "AVERAGEIF",
+        "SUMPRODUCT",
+        "LARGE", "SMALL", "RANK", "RANK.EQ", "RANK.AVG", "DEVSQ",
+        "MULTINOMIAL", "SERIESSUM",
+        "MMULT", "MINVERSE", "MDETERM",
+        "SUMIFS", "COUNTIFS", "AVERAGEIFS",
+        "XLOOKUP",
+        "WORKDAY", "NETWORKDAYS", "WORKDAY.INTL", "NETWORKDAYS.INTL",
+        "CORREL", "FORECAST", "FORECAST.LINEAR",
+        "PERCENTILE", "PERCENTILE.INC", "PERCENTILE.EXC",
+        "QUARTILE", "QUARTILE.INC",
+        "PERCENTRANK", "PERCENTRANK.INC",
+        "LOOKUP",
+        "IRR",
+        "RANDARRAY",
+        "FILTER", "SORT", "SORTBY", "TAKE", "DROP", "TRANSPOSE",
+        "CHOOSEROWS", "CHOOSECOLS", "VSTACK", "HSTACK",
+        "TOROW", "TOCOL", "WRAPROWS", "WRAPCOLS", "EXPAND", "UNIQUE",
+        "SUBTOTAL",
+        "DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET",
+        "DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP",
+        "DVAR", "DVARP",
+        "ROW", "COLUMN", "ROWS", "COLUMNS", "COUNTBLANK",
+        "AGGREGATE", "CELL", "GETPIVOTDATA",
+        "T.TEST", "F.TEST", "CHISQ.TEST",
+        "FREQUENCY",
+        "MIRR", "XIRR", "XNPV", "FVSCHEDULE",
+        "PMT", "PV", "FV", "NPER", "RATE", "IPMT", "PPMT",
+        "CUMIPMT", "CUMPRINC",
+        "EFFECT", "NOMINAL", "RRI", "PDURATION",
+        "SLN", "SYD", "DB", "DDB", "VDB", "AMORDEGRC", "AMORLINC",
+        "DOLLARDE", "DOLLARFR",
+        "DISC", "INTRATE", "RECEIVED",
+        "ACCRINT", "ODDFPRICE", "ODDFYIELD", "ODDLPRICE", "ODDLYIELD",
+        "TBILLEQ", "TBILLPRICE", "TBILLYIELD",
+        "COUPDAYBS", "COUPDAYS", "COUPDAYSNC", "COUPNCD", "COUPNUM", "COUPPCD",
+        "PRICE", "YIELD", "PRICEDISC", "PRICEMAT", "YIELDDISC", "YIELDMAT", "DURATION", "MDURATION",
+        "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL",
+        "TEXTJOIN", "EXACT", "CODE", "CHAR", "LEN", "LEFT", "RIGHT", "MID", "REPLACE",
+        "FIND", "SEARCH",
+        "TRIM", "UPPER", "LOWER", "PROPER", "CLEAN",
+        "TEXT", "VALUE",
+        "SUBSTITUTE", "REPT", "CONCATENATE",
+        "FIXED", "DOLLAR", "T", "HYPERLINK", "ENCODEURL", "FILTERXML", "BAHTTEXT",
+        "ASC", "DBCS",
+        "UNICHAR", "UNICODE", "NUMBERVALUE",
+        "ABS", "SQRT", "INT", "SIGN",
+        "MOD", "POWER", "LOG", "QUOTIENT", "CEILING", "FLOOR", "MROUND",
+        "SIN", "COS", "TAN", "DEGREES", "RADIANS",
+        "ASIN", "ACOS", "ATAN", "ATAN2", "LN", "EXP", "FACT",
+        "ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC",
+        "ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISNA", "ISLOGICAL",
+        "ISEVEN", "ISODD", "ODD", "EVEN",
+        "DATE", "TIME",
+        "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",
+        "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "EDATE", "EOMONTH", "DATEDIF",
+        "DATEVALUE", "TIMEVALUE",
+        "DAYS", "DAYS360", "YEARFRAC",
+        "SQRTPI", "SERIESSUM",
+        "RANDBETWEEN",
+        "N", "ERROR.TYPE",
+        "COMBIN", "PERMUT",
+        "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT",
+        "BIN2DEC", "HEX2DEC", "OCT2DEC",
+        "DEC2BIN", "DEC2HEX", "DEC2OCT",
+        "BIN2HEX", "BIN2OCT", "HEX2BIN", "HEX2OCT", "OCT2BIN", "OCT2HEX",
+        "CONVERT",
+        "NORM.DIST", "NORM.INV", "NORM.S.DIST", "NORM.S.INV", "STANDARDIZE",
+        "GAMMA", "GAMMALN", "GAMMALN.PRECISE", "GAMMA.DIST", "GAMMA.INV",
+        "LOGNORM.DIST", "LOGNORM.INV",
+        "BETA.DIST", "BETA.INV",
+        "EXPON.DIST", "WEIBULL.DIST", "POISSON.DIST",
+        "T.DIST", "T.DIST.RT", "T.DIST.2T", "T.INV", "T.INV.2T",
+        "F.DIST", "F.DIST.RT", "F.INV", "F.INV.RT",
+        "CHISQ.DIST", "CHISQ.DIST.RT", "CHISQ.INV", "CHISQ.INV.RT",
+        "BINOM.DIST", "BINOM.DIST.RANGE", "BINOM.INV", "NEGBINOM.DIST", "HYPERGEOM.DIST",
+        "CONFIDENCE", "CONFIDENCE.NORM", "CONFIDENCE.T"
+    };
+
+    private static readonly HashSet<string> SingleCellReferenceRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ROW", "COLUMN", "ROWS", "COLUMNS", "COUNTBLANK", "CELL", "GETPIVOTDATA"
+    };
+
     /// <summary>
     /// Parse and evaluate a formula string against a sheet.
     /// </summary>
@@ -402,34 +525,40 @@ public sealed class FormulaEvaluator
 
     private ScalarValue EvaluateFunction(FunctionCallNode node, IEvalContext context)
     {
+        var functionName = node.FunctionName;
+
         // LET-scoped lambda bindings: a name like "double" resolves to a LambdaValue
         // before any built-in lookup, allowing user-defined functions to shadow nothing.
-        var lambdaBinding = context.TryResolveLambdaBinding(node.FunctionName);
+        var lambdaBinding = context.TryResolveLambdaBinding(functionName);
         if (lambdaBinding is LambdaValue lv)
             return InvokeLambdaWithArgs(lv, node.Arguments, context);
 
         // LET and LAMBDA are AST-aware special forms not in the built-in registry.
-        if (node.FunctionName is "LET" or "LAMBDA")
+        if (functionName is "LET" or "LAMBDA")
             return EvaluateAstAware(node, context);
 
-        if (!BuiltInFunctions.Exists(node.FunctionName))
+        if (!BuiltInFunctions.TryGet(functionName, out var entry))
             return ErrorValue.Name;
 
         // Short-circuit functions evaluate arguments lazily to avoid propagating errors from untaken branches.
-        if (node.FunctionName is "IF" or "IFERROR" or "IFNA" or "CHOOSE" or "IFS" or "SWITCH")
+        if (functionName is "IF" or "IFERROR" or "IFNA" or "CHOOSE" or "IFS" or "SWITCH")
             return EvaluateShortCircuit(node, context);
 
         // AST-aware functions: must inspect the raw argument nodes before evaluation.
-        if (node.FunctionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET" or "CELL")
+        if (functionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET" or "CELL")
             return EvaluateAstAware(node, context);
 
-        var (func, minArgs, maxArgs) = BuiltInFunctions.Get(node.FunctionName);
+        var (func, minArgs, maxArgs) = entry;
 
-        bool isStructured = IsStructuredRangeFunction(node.FunctionName);
+        bool isStructured = IsStructuredRangeFunction(functionName);
+        bool isAggregate = IsAggregateFunction(functionName);
+        bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
+        bool preservesReferenceProvenance = IsReferenceProvenanceAggregate(functionName);
+        bool isSingleCellReferenceRangeFunction = IsSingleCellReferenceRangeFunction(functionName);
 
         if (node.Arguments.Count >= minArgs &&
-            (IsAggregateFunction(node.FunctionName) || node.Arguments.Count <= maxArgs) &&
-            TryEvaluateRangeOnlyFastAggregate(node.FunctionName, node.Arguments, context, out var fastAggregate))
+            (isAggregate || node.Arguments.Count <= maxArgs) &&
+            TryEvaluateRangeOnlyFastAggregate(functionName, node.Arguments, context, out var fastAggregate))
         {
             return fastAggregate;
         }
@@ -463,14 +592,14 @@ public sealed class FormulaEvaluator
                         : context.GetRangeValues(
                             range.Start.Row, range.Start.ColumnNumber,
                             range.End.Row, range.End.ColumnNumber);
-                    AddRangeValues(expandedArgs, values, node.FunctionName);
+                    AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
                 }
             }
-            else if (arg is StringNode directText && IsDirectTextCoercingAggregate(node.FunctionName))
+            else if (arg is StringNode directText && isDirectTextCoercingAggregate)
             {
                 expandedArgs.Add(new DirectTextLiteralValue(directText.Value));
             }
-            else if (arg is CellRefNode structuredCell && IsConditionalAggregateRangeArgument(node.FunctionName, argIndex))
+            else if (arg is CellRefNode structuredCell && IsConditionalAggregateRangeArgument(functionName, argIndex))
             {
                 if (structuredCell.SheetName is not null && !context.SheetExists(structuredCell.SheetName))
                 {
@@ -480,7 +609,7 @@ public sealed class FormulaEvaluator
 
                 expandedArgs.Add(BuildRangeValue(new RangeRefNode(structuredCell, structuredCell, structuredCell.SheetName), context));
             }
-            else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(node.FunctionName, argIndex))
+            else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(functionName, argIndex, preservesReferenceProvenance))
             {
                 if (aggregateCell.SheetName is not null && !context.SheetExists(aggregateCell.SheetName))
                 {
@@ -493,7 +622,7 @@ public sealed class FormulaEvaluator
                     : context.GetCellValue(aggregateCell.Row, aggregateCell.ColumnNumber);
                 expandedArgs.Add(new ReferencedScalarValue(value));
             }
-            else if (arg is CellRefNode cell && IsSingleCellReferenceRangeFunction(node.FunctionName))
+            else if (arg is CellRefNode cell && isSingleCellReferenceRangeFunction)
             {
                 if (cell.SheetName is not null && !context.SheetExists(cell.SheetName))
                 {
@@ -512,7 +641,7 @@ public sealed class FormulaEvaluator
                     if (isStructured && lambdaBound is RangeValue)
                         expandedArgs.Add(lambdaBound);
                     else if (!isStructured && lambdaBound is RangeValue flatRv)
-                        AddRangeValues(expandedArgs, flatRv.Flatten(), node.FunctionName);
+                        AddRangeValues(expandedArgs, flatRv.Flatten(), preservesReferenceProvenance);
                     else
                         expandedArgs.Add(lambdaBound);
                 }
@@ -541,7 +670,7 @@ public sealed class FormulaEvaluator
                                 : context.GetRangeValues(
                                     r.Start.Row, r.Start.Col,
                                     r.End.Row, r.End.Col);
-                            AddRangeValues(expandedArgs, values, node.FunctionName);
+                            AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
                         }
                     }
                 }
@@ -549,8 +678,8 @@ public sealed class FormulaEvaluator
             else
             {
                 var value = EvaluateNode(arg, context);
-                if (!isStructured && IsAggregateFunction(node.FunctionName) && value is RangeValue rangeValue)
-                    AddRangeValues(expandedArgs, rangeValue.Flatten(), node.FunctionName);
+                if (!isStructured && isAggregate && value is RangeValue rangeValue)
+                    AddRangeValues(expandedArgs, rangeValue.Flatten(), preservesReferenceProvenance);
                 else
                     expandedArgs.Add(value);
             }
@@ -560,7 +689,7 @@ public sealed class FormulaEvaluator
         if (node.Arguments.Count < minArgs)
             return ErrorValue.Value;
         // Enforce maximum only for non-aggregate functions (aggregates accept unbounded ranges).
-        if (!IsAggregateFunction(node.FunctionName) && node.Arguments.Count > maxArgs)
+        if (!isAggregate && node.Arguments.Count > maxArgs)
             return ErrorValue.Value;
 
         try
@@ -599,13 +728,16 @@ public sealed class FormulaEvaluator
         _ => ErrorValue.Value
     };
 
-    private static void AddRangeValues(List<ScalarValue> expandedArgs, IReadOnlyList<ScalarValue> values, string functionName)
+    private static void AddRangeValues(
+        List<ScalarValue> expandedArgs,
+        IReadOnlyList<ScalarValue> values,
+        bool preservesReferenceProvenance)
     {
         var finalCount = (long)expandedArgs.Count + values.Count;
         if (finalCount <= int.MaxValue)
             expandedArgs.EnsureCapacity((int)finalCount);
 
-        if (IsReferenceProvenanceAggregate(functionName))
+        if (preservesReferenceProvenance)
         {
             foreach (var value in values)
                 expandedArgs.Add(new ReferencedScalarValue(value));
@@ -1878,120 +2010,25 @@ public sealed class FormulaEvaluator
     }
 
     private static bool IsAggregateFunction(string name) =>
-        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "COUNTA" or "AND" or "OR" or "CONCAT"
-             or "STDEV" or "MEDIAN"
-             or "PRODUCT" or "XOR"
-             or "VAR" or "VAR.S" or "VAR.P" or "STDEV.P"
-             or "GEOMEAN" or "HARMEAN" or "AVEDEV"
-             or "MODE" or "MODE.SNGL"
-             or "CONCATENATE"
-             or "NPV";
+        AggregateFunctions.Contains(name);
 
     private static bool IsDirectTextCoercingAggregate(string name) =>
-        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "PRODUCT"
-             or "STDEV" or "STDEV.S" or "STDEV.P"
-             or "VAR" or "VAR.S" or "VAR.P"
-             or "MEDIAN"
-             or "GEOMEAN" or "HARMEAN" or "AVEDEV"
-             or "MODE" or "MODE.SNGL"
-             or "NPV"
-             or "GCD" or "LCM";
+        DirectTextCoercingAggregates.Contains(name);
 
     private static bool IsReferenceProvenanceAggregate(string name) =>
-        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "PRODUCT" or "AND" or "OR" or "XOR"
-             or "STDEV" or "STDEV.S" or "STDEV.P"
-             or "VAR" or "VAR.S" or "VAR.P"
-             or "MEDIAN"
-             or "GEOMEAN" or "HARMEAN" or "AVEDEV"
-             or "MODE" or "MODE.SNGL"
-             or "NPV"
-             or "GCD" or "LCM";
+        ReferenceProvenanceAggregates.Contains(name);
 
-    private static bool IsSingleCellReferenceProvenanceArgument(string name, int argIndex) =>
-        IsReferenceProvenanceAggregate(name) && (name != "NPV" || argIndex > 0);
+    private static bool IsSingleCellReferenceProvenanceArgument(
+        string name,
+        int argIndex,
+        bool preservesReferenceProvenance) =>
+        preservesReferenceProvenance && (name != "NPV" || argIndex > 0);
 
     private static bool IsStructuredRangeFunction(string name) =>
-        name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH" or "XMATCH"
-             or "SUMIF" or "COUNTIF" or "AVERAGEIF"
-             or "SUMPRODUCT"
-             or "LARGE" or "SMALL" or "RANK" or "RANK.EQ" or "RANK.AVG" or "DEVSQ"
-             or "MULTINOMIAL" or "SERIESSUM"
-             or "MMULT" or "MINVERSE" or "MDETERM"
-             or "SUMIFS" or "COUNTIFS" or "AVERAGEIFS"
-             or "XLOOKUP"
-             or "WORKDAY" or "NETWORKDAYS" or "WORKDAY.INTL" or "NETWORKDAYS.INTL"
-             or "CORREL" or "FORECAST" or "FORECAST.LINEAR"
-             or "PERCENTILE" or "PERCENTILE.INC" or "PERCENTILE.EXC"
-             or "QUARTILE" or "QUARTILE.INC"
-             or "PERCENTRANK" or "PERCENTRANK.INC"
-             or "LOOKUP"
-             or "IRR"
-             or "RANDARRAY"
-             or "FILTER" or "SORT" or "SORTBY" or "TAKE" or "DROP" or "TRANSPOSE"
-             or "CHOOSEROWS" or "CHOOSECOLS" or "VSTACK" or "HSTACK"
-             or "TOROW" or "TOCOL" or "WRAPROWS" or "WRAPCOLS" or "EXPAND" or "UNIQUE"
-             or "SUBTOTAL"
-             or "DSUM" or "DAVERAGE" or "DCOUNT" or "DCOUNTA" or "DGET"
-             or "DMAX" or "DMIN" or "DPRODUCT" or "DSTDEV" or "DSTDEVP"
-             or "DVAR" or "DVARP"
-             or "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK"
-             or "AGGREGATE" or "CELL" or "GETPIVOTDATA"
-             or "T.TEST" or "F.TEST" or "CHISQ.TEST"
-             or "FREQUENCY"
-             or "MIRR" or "XIRR" or "XNPV" or "FVSCHEDULE"
-             or "PMT" or "PV" or "FV" or "NPER" or "RATE" or "IPMT" or "PPMT"
-             or "CUMIPMT" or "CUMPRINC"
-             or "EFFECT" or "NOMINAL" or "RRI" or "PDURATION"
-             or "SLN" or "SYD" or "DB" or "DDB" or "VDB" or "AMORDEGRC" or "AMORLINC"
-             or "DOLLARDE" or "DOLLARFR"
-             or "DISC" or "INTRATE" or "RECEIVED"
-             or "ACCRINT" or "ODDFPRICE" or "ODDFYIELD" or "ODDLPRICE" or "ODDLYIELD"
-             or "TBILLEQ" or "TBILLPRICE" or "TBILLYIELD"
-             or "COUPDAYBS" or "COUPDAYS" or "COUPDAYSNC" or "COUPNCD" or "COUPNUM" or "COUPPCD"
-             or "PRICE" or "YIELD" or "PRICEDISC" or "PRICEMAT" or "YIELDDISC" or "YIELDMAT" or "DURATION" or "MDURATION"
-             or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
-             or "TEXTJOIN" or "EXACT" or "CODE" or "CHAR" or "LEN" or "LEFT" or "RIGHT" or "MID" or "REPLACE"
-             or "FIND" or "SEARCH"
-             or "TRIM" or "UPPER" or "LOWER" or "PROPER" or "CLEAN"
-             or "TEXT" or "VALUE"
-             or "SUBSTITUTE" or "REPT" or "CONCATENATE"
-             or "FIXED" or "DOLLAR" or "T" or "HYPERLINK" or "ENCODEURL" or "FILTERXML" or "BAHTTEXT"
-             or "ASC" or "DBCS"
-             or "UNICHAR" or "UNICODE" or "NUMBERVALUE"
-             or "ABS" or "SQRT" or "INT" or "SIGN"
-             or "MOD" or "POWER" or "LOG" or "QUOTIENT" or "CEILING" or "FLOOR" or "MROUND"
-             or "SIN" or "COS" or "TAN" or "DEGREES" or "RADIANS"
-             or "ASIN" or "ACOS" or "ATAN" or "ATAN2" or "LN" or "EXP" or "FACT"
-             or "ROUND" or "ROUNDUP" or "ROUNDDOWN" or "TRUNC"
-             or "ISBLANK" or "ISNUMBER" or "ISTEXT" or "ISERROR" or "ISNA" or "ISLOGICAL"
-             or "ISEVEN" or "ISODD" or "ODD" or "EVEN"
-             or "DATE" or "TIME"
-             or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND"
-             or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH" or "DATEDIF"
-             or "DATEVALUE" or "TIMEVALUE"
-             or "DAYS" or "DAYS360" or "YEARFRAC"
-             or "SQRTPI" or "SERIESSUM"
-             or "RANDBETWEEN"
-             or "N" or "ERROR.TYPE"
-             or "COMBIN" or "PERMUT"
-             or "BITAND" or "BITOR" or "BITXOR" or "BITLSHIFT" or "BITRSHIFT"
-             or "BIN2DEC" or "HEX2DEC" or "OCT2DEC"
-             or "DEC2BIN" or "DEC2HEX" or "DEC2OCT"
-             or "BIN2HEX" or "BIN2OCT" or "HEX2BIN" or "HEX2OCT" or "OCT2BIN" or "OCT2HEX"
-             or "CONVERT"
-             or "NORM.DIST" or "NORM.INV" or "NORM.S.DIST" or "NORM.S.INV" or "STANDARDIZE"
-             or "GAMMA" or "GAMMALN" or "GAMMALN.PRECISE" or "GAMMA.DIST" or "GAMMA.INV"
-             or "LOGNORM.DIST" or "LOGNORM.INV"
-             or "BETA.DIST" or "BETA.INV"
-             or "EXPON.DIST" or "WEIBULL.DIST" or "POISSON.DIST"
-             or "T.DIST" or "T.DIST.RT" or "T.DIST.2T" or "T.INV" or "T.INV.2T"
-             or "F.DIST" or "F.DIST.RT" or "F.INV" or "F.INV.RT"
-             or "CHISQ.DIST" or "CHISQ.DIST.RT" or "CHISQ.INV" or "CHISQ.INV.RT"
-             or "BINOM.DIST" or "BINOM.DIST.RANGE" or "BINOM.INV" or "NEGBINOM.DIST" or "HYPERGEOM.DIST"
-             or "CONFIDENCE" or "CONFIDENCE.NORM" or "CONFIDENCE.T";
+        StructuredRangeFunctions.Contains(name);
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
-        name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
+        SingleCellReferenceRangeFunctions.Contains(name);
 
     private static bool IsConditionalAggregateRangeArgument(string name, int argIndex) =>
         name switch

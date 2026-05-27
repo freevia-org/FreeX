@@ -21,7 +21,7 @@ public sealed partial class ViewportService
             ? OffsetRows(BuildRowMetrics(sheet, bodyStart, CellAddress.MaxRow, remainingHeight), pinnedHeight)
             : [];
 
-        return pinnedRows.Concat(bodyRows).ToList();
+        return CombineRows(pinnedRows, bodyRows);
     }
 
     private static List<ColMetric> BuildFrozenAwareColMetrics(Sheet sheet, uint startCol, double availableWidth)
@@ -38,14 +38,42 @@ public sealed partial class ViewportService
             ? OffsetColumns(BuildColMetrics(sheet, bodyStart, CellAddress.MaxCol, remainingWidth), pinnedWidth)
             : [];
 
-        return pinnedColumns.Concat(bodyColumns).ToList();
+        return CombineColumns(pinnedColumns, bodyColumns);
     }
 
-    private static List<RowMetric> OffsetRows(IReadOnlyList<RowMetric> rows, double topOffset) =>
-        rows.Select(row => row with { TopOffset = row.TopOffset + topOffset }).ToList();
+    private static List<RowMetric> CombineRows(IReadOnlyList<RowMetric> pinnedRows, IReadOnlyList<RowMetric> bodyRows)
+    {
+        var combined = new List<RowMetric>(pinnedRows.Count + bodyRows.Count);
+        combined.AddRange(pinnedRows);
+        combined.AddRange(bodyRows);
+        return combined;
+    }
 
-    private static List<ColMetric> OffsetColumns(IReadOnlyList<ColMetric> columns, double leftOffset) =>
-        columns.Select(column => column with { LeftOffset = column.LeftOffset + leftOffset }).ToList();
+    private static List<ColMetric> CombineColumns(IReadOnlyList<ColMetric> pinnedColumns, IReadOnlyList<ColMetric> bodyColumns)
+    {
+        var combined = new List<ColMetric>(pinnedColumns.Count + bodyColumns.Count);
+        combined.AddRange(pinnedColumns);
+        combined.AddRange(bodyColumns);
+        return combined;
+    }
+
+    private static List<RowMetric> OffsetRows(IReadOnlyList<RowMetric> rows, double topOffset)
+    {
+        var offsetRows = new List<RowMetric>(rows.Count);
+        foreach (var row in rows)
+            offsetRows.Add(row with { TopOffset = row.TopOffset + topOffset });
+
+        return offsetRows;
+    }
+
+    private static List<ColMetric> OffsetColumns(IReadOnlyList<ColMetric> columns, double leftOffset)
+    {
+        var offsetColumns = new List<ColMetric>(columns.Count);
+        foreach (var column in columns)
+            offsetColumns.Add(column with { LeftOffset = column.LeftOffset + leftOffset });
+
+        return offsetColumns;
+    }
 
     private static List<RowMetric> BuildRowMetrics(Sheet sheet, uint startRow, uint endRow, double availableHeight)
     {

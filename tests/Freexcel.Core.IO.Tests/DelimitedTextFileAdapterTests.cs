@@ -19,6 +19,20 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_CoercesValuesWithoutRepeatedTrimOrUppercaseAllocations()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.IO", "DelimitedTextWorkbookReader.cs"));
+        var coercion = source[
+            source.IndexOf("private static ScalarValue CoerceValue", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryReadError", StringComparison.Ordinal)];
+
+        CountOccurrences(coercion, "field.Trim()").Should().Be(1);
+        coercion.Should().Contain("var trimmed = field.Trim();");
+        coercion.Should().NotContain("ToUpperInvariant()");
+    }
+
+    [Fact]
     public void Save_ReusesDelimiterBuffersInsteadOfAllocatingPerChunk()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -163,6 +177,22 @@ public sealed class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(ErrorValue.Ref);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 4)).Should().Be(ErrorValue.Circular);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 5)).Should().Be(new ErrorValue("#GETTING_DATA"));
+    }
+
+    [Fact]
+    public void Load_TrimsOnceForPaddedCoercionValues()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(" #N/A \t 12.5% \t 2026-05-17 \t 09:30 \t $1,234.50 \r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(ErrorValue.NA);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(0.125));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 4)).Should().Be(new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 5)).Should().Be(new NumberValue(1234.50));
     }
 
     [Fact]
@@ -537,5 +567,18 @@ public sealed class DelimitedTextFileAdapterTests
         }
 
         throw new FileNotFoundException($"Could not locate workspace file {Path.Combine(parts)}.");
+    }
+
+    private static int CountOccurrences(string value, string text)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = value.IndexOf(text, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += text.Length;
+        }
+
+        return count;
     }
 }

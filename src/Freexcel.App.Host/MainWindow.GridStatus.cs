@@ -49,7 +49,8 @@ public partial class MainWindow
         StatusStatsPanel.Visibility = Visibility.Visible;
         StatusAvgText.Text   = stats.Average.HasValue ? $"Average: {StatusBarCalculator.FormatNumber(stats.Average.Value)}" : "";
         StatusCountText.Text = $"Count: {stats.Count}";
-        StatusSumText.Text   = $"Sum: {StatusBarCalculator.FormatNumber(stats.Sum)}";
+        StatusNumericalCountText.Text = $"Numerical Count: {stats.NumericalCount}";
+        StatusSumText.Text   = stats.NumericalCount > 0 ? $"Sum: {StatusBarCalculator.FormatNumber(stats.Sum)}" : "";
         StatusMinText.Text   = stats.Min.HasValue ? $"Min: {StatusBarCalculator.FormatNumber(stats.Min.Value)}" : "";
         StatusMaxText.Text   = stats.Max.HasValue ? $"Max: {StatusBarCalculator.FormatNumber(stats.Max.Value)}" : "";
     }

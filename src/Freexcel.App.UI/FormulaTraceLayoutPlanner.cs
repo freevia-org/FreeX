@@ -11,12 +11,16 @@ public static class FormulaTraceLayoutPlanner
         SheetId sheetId)
     {
         var layouts = new List<FormulaTraceArrowLayout>();
+        var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
+        var useMetricLookups = arrows.Count > 1;
+        Dictionary<uint, RowMetric>? rowLookup = null;
+        Dictionary<uint, ColMetric>? colLookup = null;
         foreach (var arrow in arrows)
         {
             var fromOnCurrentSheet = arrow.From.Sheet.Equals(sheetId);
             var toOnCurrentSheet = arrow.To.Sheet.Equals(sheetId);
-            var fromVisible = fromOnCurrentSheet && TryGetCellRect(viewport, arrow.From, out var fromRect);
-            var toVisible = toOnCurrentSheet && TryGetCellRect(viewport, arrow.To, out var toRect);
+            var fromVisible = fromOnCurrentSheet && TryGetCellRect(viewport, arrow.From, rowHeaderWidth, useMetricLookups, ref rowLookup, ref colLookup, out var fromRect);
+            var toVisible = toOnCurrentSheet && TryGetCellRect(viewport, arrow.To, rowHeaderWidth, useMetricLookups, ref rowLookup, ref colLookup, out var toRect);
 
             if (fromVisible && toVisible)
             {
@@ -64,10 +68,45 @@ public static class FormulaTraceLayoutPlanner
     private static Point CenterOf(Rect rect) =>
         new(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
 
-    private static bool TryGetCellRect(ViewportModel viewport, CellAddress address, out Rect rect)
+    private static Dictionary<uint, RowMetric> BuildRowMetricLookup(ViewportModel viewport)
     {
-        var row = viewport.RowMetrics.FirstOrDefault(r => r.Row == address.Row);
-        var col = viewport.ColMetrics.FirstOrDefault(c => c.Col == address.Col);
+        var lookup = new Dictionary<uint, RowMetric>(viewport.RowMetrics.Count);
+        foreach (var row in viewport.RowMetrics)
+        {
+            if (!lookup.ContainsKey(row.Row))
+                lookup.Add(row.Row, row);
+        }
+
+        return lookup;
+    }
+
+    private static Dictionary<uint, ColMetric> BuildColMetricLookup(ViewportModel viewport)
+    {
+        var lookup = new Dictionary<uint, ColMetric>(viewport.ColMetrics.Count);
+        foreach (var col in viewport.ColMetrics)
+        {
+            if (!lookup.ContainsKey(col.Col))
+                lookup.Add(col.Col, col);
+        }
+
+        return lookup;
+    }
+
+    private static bool TryGetCellRect(
+        ViewportModel viewport,
+        CellAddress address,
+        double rowHeaderWidth,
+        bool useMetricLookups,
+        ref Dictionary<uint, RowMetric>? rowLookup,
+        ref Dictionary<uint, ColMetric>? colLookup,
+        out Rect rect)
+    {
+        var row = useMetricLookups
+            ? GetRowMetric(viewport, address.Row, ref rowLookup)
+            : viewport.RowMetrics.FirstOrDefault(r => r.Row == address.Row);
+        var col = useMetricLookups
+            ? GetColMetric(viewport, address.Col, ref colLookup)
+            : viewport.ColMetrics.FirstOrDefault(c => c.Col == address.Col);
         if (row is null || col is null)
         {
             rect = Rect.Empty;
@@ -75,10 +114,28 @@ public static class FormulaTraceLayoutPlanner
         }
 
         rect = new Rect(
-            col.LeftOffset + GridView.CalculateRowHeaderWidth(viewport),
+            col.LeftOffset + rowHeaderWidth,
             row.TopOffset + GridView.ColHeaderHeight,
             col.Width,
             row.Height);
         return true;
+    }
+
+    private static RowMetric? GetRowMetric(
+        ViewportModel viewport,
+        uint row,
+        ref Dictionary<uint, RowMetric>? rowLookup)
+    {
+        rowLookup ??= BuildRowMetricLookup(viewport);
+        return rowLookup.TryGetValue(row, out var metric) ? metric : null;
+    }
+
+    private static ColMetric? GetColMetric(
+        ViewportModel viewport,
+        uint col,
+        ref Dictionary<uint, ColMetric>? colLookup)
+    {
+        colLookup ??= BuildColMetricLookup(viewport);
+        return colLookup.TryGetValue(col, out var metric) ? metric : null;
     }
 }

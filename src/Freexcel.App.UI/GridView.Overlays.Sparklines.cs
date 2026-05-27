@@ -7,15 +7,21 @@ namespace Freexcel.App.UI;
 
 public partial class GridView
 {
+    private static readonly SolidColorBrush SparklinePositiveBrush = FrozenBrush(Color.FromRgb(33, 115, 70));
+    private static readonly SolidColorBrush SparklineNegativeBrush = FrozenBrush(Color.FromRgb(192, 0, 0));
+    private static readonly Pen SparklineLinePen = FrozenPen(SparklinePositiveBrush, 1.25);
+
     private void RenderSparklines(DrawingContext dc)
     {
-        if (Sparklines == null || SparklineValues == null || Viewport == null) return;
+        if (Sparklines is not { Count: > 0 } ||
+            SparklineValues is not { Count: > 0 } ||
+            Viewport == null)
+        {
+            return;
+        }
 
         var rowLookup = Viewport.RowMetrics.ToDictionary(r => r.Row);
         var colLookup = Viewport.ColMetrics.ToDictionary(c => c.Col);
-        var pen = new Pen(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 1.25);
-        var fill = new SolidColorBrush(Color.FromRgb(33, 115, 70));
-        var negativeFill = new SolidColorBrush(Color.FromRgb(192, 0, 0));
 
         foreach (var sparkline in Sparklines)
         {
@@ -35,11 +41,25 @@ public partial class GridView
 
             dc.PushClip(new RectangleGeometry(rect));
             if (sparkline.Kind == SparklineKind.Line)
-                DrawLineSparkline(dc, values, rect, pen);
+                DrawLineSparkline(dc, values, rect, SparklineLinePen);
             else
-                DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, fill, negativeFill);
+                DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, SparklinePositiveBrush, SparklineNegativeBrush);
             dc.Pop();
         }
+    }
+
+    private static SolidColorBrush FrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Pen FrozenPen(Brush brush, double thickness)
+    {
+        var pen = new Pen(brush, thickness);
+        pen.Freeze();
+        return pen;
     }
 
     private static void DrawLineSparkline(DrawingContext dc, IReadOnlyList<double> values, Rect rect, Pen pen)

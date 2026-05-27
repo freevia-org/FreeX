@@ -6,6 +6,15 @@ namespace Freexcel.Core.Calc;
 
 public static partial class NumberFormatter
 {
+    private static readonly Regex DateTimeElapsedTokenRegex = new(@"\[([hH])\]|\[([mM])\]|\[([sS])\]");
+    private static readonly Regex DateTimeBracketDirectiveRegex = new(@"\[[^\]]*\]");
+    private static readonly Regex SpecialDateTimeLocaleTokenRegex = new(
+        @"^\s*\[\$-F(?<kind>400|800)\](?<suffix>.*)$",
+        RegexOptions.IgnoreCase);
+    private static readonly Regex FractionalSecondPrecisionRegex = new(@"(?<=[sS])\.(0+)");
+    private static readonly Regex QuotedNumberFormatTextRegex = new("\"[^\"]*\"");
+    private static readonly Regex ElapsedTimeFractionalSecondRegex = new(@"(?:s|\[[sS]\])\.(0+)");
+
     private enum SpecialDateTimeLocaleToken
     {
         LongTime,
@@ -60,11 +69,11 @@ public static partial class NumberFormatter
         }
         cleanFmt = PreserveLocaleCurrencyTokens(cleanFmt, out _, out var dateTimeFormat);
 
-        var elapsedMatch = Regex.Match(cleanFmt, @"\[([hH])\]|\[([mM])\]|\[([sS])\]");
+        var elapsedMatch = DateTimeElapsedTokenRegex.Match(cleanFmt);
         if (elapsedMatch.Success)
             return FormatElapsedTime(oaDate, RemoveSpacingAndFillDirectives(cleanFmt), elapsedMatch);
 
-        cleanFmt = Regex.Replace(cleanFmt, @"\[[^\]]*\]", "");
+        cleanFmt = DateTimeBracketDirectiveRegex.Replace(cleanFmt, "");
         cleanFmt = RemoveSpacingAndFillDirectives(cleanFmt);
         try
         {
@@ -101,7 +110,7 @@ public static partial class NumberFormatter
 
     private static bool TryResolveSpecialDateTimeLocaleToken(string format, out SpecialDateTimeLocaleToken token)
     {
-        var match = Regex.Match(format, @"^\s*\[\$-F(?<kind>400|800)\](?<suffix>.*)$", RegexOptions.IgnoreCase);
+        var match = SpecialDateTimeLocaleTokenRegex.Match(format);
         if (!match.Success)
         {
             token = SpecialDateTimeLocaleToken.LongDate;
@@ -123,7 +132,7 @@ public static partial class NumberFormatter
 
     private static bool TryGetFractionalSecondPrecision(string format, out int precision)
     {
-        var match = Regex.Match(format, @"(?<=[sS])\.(0+)");
+        var match = FractionalSecondPrecisionRegex.Match(format);
         if (match.Success)
         {
             precision = match.Groups[1].Value.Length;
@@ -148,8 +157,8 @@ public static partial class NumberFormatter
     private static bool IsDateTimeFormat(string format)
     {
         // Strip quoted strings before checking
-        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
-        stripped = Regex.Replace(stripped, @"(?<=[sS])\.0+", "");
+        var stripped = QuotedNumberFormatTextRegex.Replace(format, "");
+        stripped = FractionalSecondPrecisionRegex.Replace(stripped, "");
         bool hasDateToken = stripped.IndexOfAny(['y', 'Y', 'd', 'D', 'h', 'H', 's', 'S', 'm', 'M']) >= 0;
         bool hasNumberToken = stripped.IndexOfAny(['0', '#']) >= 0;
         return hasDateToken && !hasNumberToken;
@@ -160,7 +169,7 @@ public static partial class NumberFormatter
     private static string FormatElapsedTime(double value, string format, Match elapsedMatch)
     {
         // value is an OADate fraction; each unit = 1 day = 86400 seconds.
-        var fractionalMatch = Regex.Match(format, @"(?:s|\[[sS]\])\.(0+)");
+        var fractionalMatch = ElapsedTimeFractionalSecondRegex.Match(format);
         int fractionalDotIndex = fractionalMatch.Success
             ? fractionalMatch.Index + fractionalMatch.Value.IndexOf('.', StringComparison.Ordinal)
             : -1;
