@@ -3673,41 +3673,31 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border x:Name="TabBorder"
-                                            CornerRadius="8,8,5,5" Padding="13,3,13,4"
-                                            Cursor="Hand"
-                                            Focusable="True"
-                                            MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
-                                            MouseMove="SheetTab_MouseMove"
-                                            MouseLeftButtonUp="SheetTab_MouseLeftButtonUp"
-                                            MouseRightButtonDown="SheetTab_MouseRightButtonDown">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background"       Value="{Binding TabBrush}"/>
-                                                <Setter Property="BorderBrush"      Value="{StaticResource FreexcelBorderStrongBrush}"/>
-                                                <Setter Property="BorderThickness"  Value="1,0,1,1"/>
-                                                <Setter Property="Margin"           Value="-8,0,0,1"/>
-                                                <Setter Property="Panel.ZIndex"     Value="0"/>
-                                                <Setter Property="MinHeight"        Value="31"/>
+                                    <Grid x:Name="TabChrome"
+                                          Cursor="Hand"
+                                          Focusable="True"
+                                          MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
+                                          MouseMove="SheetTab_MouseMove"
+                                          MouseLeftButtonUp="SheetTab_MouseLeftButtonUp"
+                                          MouseRightButtonDown="SheetTab_MouseRightButtonDown">
+                                        <Grid.Style>
+                                            <Style TargetType="Grid">
+                                                <Setter Property="Margin"       Value="-8,0,0,1"/>
+                                                <Setter Property="Panel.ZIndex" Value="0"/>
+                                                <Setter Property="MinHeight"    Value="31"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                        <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
-                                                        <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
-                                                        <Setter Property="BorderThickness" Value="2,0,2,2"/>
-                                                        <Setter Property="Margin"          Value="-8,-2,0,0"/>
-                                                        <Setter Property="Panel.ZIndex"    Value="5"/>
+                                                        <Setter Property="Margin"       Value="-8,-2,0,0"/>
+                                                        <Setter Property="Panel.ZIndex" Value="5"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                        <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
-                                                        <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
-                                                        <Setter Property="BorderThickness" Value="2,0,2,2"/>
-                                                        <Setter Property="Margin"          Value="-8,-3,0,0"/>
-                                                        <Setter Property="Panel.ZIndex"    Value="10"/>
+                                                        <Setter Property="Margin"       Value="-8,-3,0,0"/>
+                                                        <Setter Property="Panel.ZIndex" Value="10"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </Border.Style>
-                                        <Border.ContextMenu>
+                                        </Grid.Style>
+                                        <Grid.ContextMenu>
                                             <ContextMenu>
                                                 <MenuItem Header="Rename…"         local:RibbonTooltip.KeyTip="R" Click="SheetCtxRename_Click"/>
                                                 <MenuItem Header="Insert Sheet"    local:RibbonTooltip.KeyTip="I" Click="SheetCtxInsert_Click"/>
@@ -3724,45 +3714,79 @@
                                                 <MenuItem Header="Move Left"       local:RibbonTooltip.KeyTip="L" Click="SheetCtxMoveLeft_Click"/>
                                                 <MenuItem Header="Move Right"      local:RibbonTooltip.KeyTip="M" Click="SheetCtxMoveRight_Click"/>
                                             </ContextMenu>
-                                        </Border.ContextMenu>
-                                        <Grid MouseDown="SheetTab_LabelMouseDown">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="2"/>
-                                            </Grid.RowDefinitions>
-                                            <TextBlock Text="{Binding Name}" FontSize="13">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="FontWeight" Value="Normal"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                            <Border Grid.Row="1" Height="2" Margin="0,1,0,0"
-                                                    Background="{StaticResource FreexcelGreenBrush}">
-                                                <Border.Style>
-                                                    <Style TargetType="Border">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Border.Style>
-                                            </Border>
-                                        </Grid>
-                                    </Border>
+                                        </Grid.ContextMenu>
+                                        <Path Data="M -8,0 A 8,8 0 0 1 0,8"
+                                              Stroke="{Binding ElementName=TabBorder, Path=BorderBrush}"
+                                              StrokeThickness="{Binding ElementName=TabBorder, Path=BorderThickness.Left}"
+                                              SnapsToDevicePixels="True"
+                                              IsHitTestVisible="False"/>
+                                        <Path Data="M 0,8 A 8,8 0 0 1 8,0"
+                                              HorizontalAlignment="Right"
+                                              Margin="0,0,-8,0"
+                                              Stroke="{Binding ElementName=TabBorder, Path=BorderBrush}"
+                                              StrokeThickness="{Binding ElementName=TabBorder, Path=BorderThickness.Right}"
+                                              SnapsToDevicePixels="True"
+                                              IsHitTestVisible="False"/>
+                                        <Border x:Name="TabBorder"
+                                                CornerRadius="0,0,5,5" Padding="13,3,13,4">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background"      Value="{Binding TabBrush}"/>
+                                                    <Setter Property="BorderBrush"     Value="{StaticResource FreexcelBorderStrongBrush}"/>
+                                                    <Setter Property="BorderThickness" Value="1,0,1,1"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                            <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
+                                                            <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
+                                                            <Setter Property="BorderThickness" Value="2,0,2,2"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                            <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
+                                                            <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
+                                                            <Setter Property="BorderThickness" Value="2,0,2,2"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid MouseDown="SheetTab_LabelMouseDown">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="2"/>
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Text="{Binding Name}" FontSize="13">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="FontWeight" Value="Normal"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <Border Grid.Row="1" Height="2" Margin="0,1,0,0"
+                                                        Background="{StaticResource FreexcelGreenBrush}">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -3782,16 +3806,29 @@
                         local:RibbonTooltip.Description="Add a new sheet to the workbook.">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="GhostTabChrome"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8,8,5,5"
-                                    Opacity="{TemplateBinding Opacity}"
-                                    SnapsToDevicePixels="True">
-                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                            </Border>
+                            <Grid Opacity="{TemplateBinding Opacity}">
+                                <Path Data="M -8,0 A 8,8 0 0 1 0,8"
+                                      Stroke="{TemplateBinding BorderBrush}"
+                                      StrokeThickness="1"
+                                      SnapsToDevicePixels="True"
+                                      IsHitTestVisible="False"/>
+                                <Path Data="M 0,8 A 8,8 0 0 1 8,0"
+                                      HorizontalAlignment="Right"
+                                      Margin="0,0,-8,0"
+                                      Stroke="{TemplateBinding BorderBrush}"
+                                      StrokeThickness="1"
+                                      SnapsToDevicePixels="True"
+                                      IsHitTestVisible="False"/>
+                                <Border x:Name="GhostTabChrome"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="0,0,5,5"
+                                        SnapsToDevicePixels="True">
+                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                </Border>
+                            </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
