@@ -95,6 +95,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ScreenshotTourCaptureHeight = 300");
         source.Should().Contain("rtb.Render(this)");
         source.Should().Contain("CroppedBitmap");
+        source.Should().Contain("File.Create(path)");
+        source.Should().NotContain("File.OpenWrite(path)");
         source.Should().NotContain("rtb.Render(RibbonTabs)");
         source.Should().NotContain("RibbonTabs.ActualHeight");
     }

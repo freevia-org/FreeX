@@ -294,7 +294,7 @@ public sealed partial class PrintPreviewDialog : Window
         };
         var pageStatusText = new TextBlock
         {
-            Text = $"Page 1 of {totalPages}",
+            Text = CreateNavigationState(1, totalPages).StatusText,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0)
         };
@@ -363,7 +363,7 @@ public sealed partial class PrintPreviewDialog : Window
             totalPages = Math.Max(1, previewDocument.Pages.Count);
             pageNumberBox.Text = "1";
             toPageBox.Text = totalPages.ToString(CultureInfo.InvariantCulture);
-            pageStatusText.Text = $"Page 1 of {totalPages}";
+            pageStatusText.Text = CreateNavigationState(1, totalPages).StatusText;
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
             if (settingsSummaryText is not null)
                 settingsSummaryText.Text = refreshed.Settings.Summary;
