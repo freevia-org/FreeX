@@ -4345,7 +4345,11 @@ public class XlsxCorpusRunnerTests
             return;
 
         var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (!tags.Contains("styles") && !tags.Contains("formatting"))
+        if (!tags.Contains("styles") &&
+            !tags.Contains("formatting") &&
+            !tags.Contains("hyperlinks") &&
+            !tags.Contains("merged-cells") &&
+            !tags.Contains("unsupported-sheet-types"))
             return;
 
         var originalPosition = package.CanSeek ? package.Position : 0;
@@ -4355,13 +4359,34 @@ public class XlsxCorpusRunnerTests
         try
         {
             using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-            archive.GetEntry("xl/styles.xml").Should().NotBeNull(row.Id);
+            if (tags.Contains("styles") || tags.Contains("formatting"))
+                archive.GetEntry("xl/styles.xml").Should().NotBeNull(row.Id);
+
+            if (tags.Contains("hyperlinks"))
+                PublicWorksheetElements(archive, "hyperlink").Should().NotBeEmpty(row.Id);
+
+            if (tags.Contains("merged-cells"))
+                PublicWorksheetElements(archive, "mergeCell").Should().NotBeEmpty(row.Id);
+
+            if (tags.Contains("unsupported-sheet-types"))
+                archive.Entries.Should().Contain(entry => entry.FullName.StartsWith("xl/chartsheets/", StringComparison.Ordinal), row.Id);
         }
         finally
         {
             if (package.CanSeek)
                 package.Position = originalPosition;
         }
+    }
+
+    private static IReadOnlyList<XElement> PublicWorksheetElements(ZipArchive archive, string localName)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return archive.Entries
+            .Where(entry => entry.FullName.StartsWith("xl/worksheets/", StringComparison.Ordinal) &&
+                            entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Select(LoadPackageXml)
+            .SelectMany(document => document.Descendants(worksheetNs + localName))
+            .ToArray();
     }
 
     private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
