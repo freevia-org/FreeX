@@ -31,6 +31,33 @@ public sealed class XlsxPackageMetadataMergerTests
             .ContainSingle();
     }
 
+    [Fact]
+    public void MergeRelationshipParts_PreservesExternalTargetsWithoutPackageEntriesAndRemapsIds()
+    {
+        using var sourcePackage = CreatePackageWithExternalWorksheetRelationship();
+        using var targetPackage = CreatePackageWithExistingWorksheetRelationships();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        var relsXml = LoadXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var externalRelationships = relsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(element => element.Attribute("TargetMode")?.Value == "External")
+            .ToList();
+
+        externalRelationships.Should().HaveCount(2);
+        externalRelationships.Should().ContainSingle(element =>
+            (string?)element.Attribute("Target") == "https://example.com/docs" &&
+            (string?)element.Attribute("Id") == "rIdHyperlink");
+        externalRelationships.Should().ContainSingle(element =>
+            (string?)element.Attribute("Target") == "https://example.com/from-source" &&
+            (string?)element.Attribute("Id") != "rIdHyperlink");
+    }
+
     private static MemoryStream CreatePackageWithPercentEncodedMediaRelationship()
     {
         var package = new MemoryStream();
@@ -53,6 +80,31 @@ public sealed class XlsxPackageMetadataMergerTests
             var mediaEntry = archive.CreateEntry("xl/media/image 1.png");
             using var mediaStream = mediaEntry.Open();
             mediaStream.Write([0x89, 0x50, 0x4E, 0x47]);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream CreatePackageWithExternalWorksheetRelationship()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                </Types>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdHyperlink"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                Target="https://example.com/from-source"
+                                TargetMode="External"/>
+                </Relationships>
+                """);
         }
 
         package.Position = 0;
