@@ -130,6 +130,21 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void ConditionalIconGlyphRenderer_ReusesFrozenBrushesAndPens()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "ConditionalIconGlyphRenderer.cs"));
+
+        source.Should().Contain("private static readonly SolidColorBrush IconDarkRedBrush");
+        source.Should().Contain("private static readonly Pen OutlinePen");
+        source.Should().Contain("private static readonly Pen WhiteThinPen");
+        source.Should().Contain("brush.Freeze();");
+        source.Should().Contain("pen.Freeze();");
+        source.Should().NotContain("new BrushConverter");
+        source.Should().NotContain("new Pen(Brushes.White");
+        source.Should().NotContain("var outline = new Pen");
+    }
+
+    [Fact]
     public void SplitPaneCellLayoutPlanner_BoundsTallMergeWorkToVisibleCells()
     {
         var sheetId = SheetId.New();
