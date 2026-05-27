@@ -59,12 +59,14 @@ internal static class XlsxPackageMetadataMerger
         var existingDefaults = targetRoot
             .Elements(contentTypeNs + "Default")
             .Select(element => element.Attribute("Extension")?.Value)
+            .OfType<string>()
             .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(NormalizeContentTypeExtension)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceDefault in sourceRoot.Elements(contentTypeNs + "Default"))
         {
             var extension = sourceDefault.Attribute("Extension")?.Value;
-            if (!string.IsNullOrWhiteSpace(extension) && existingDefaults.Add(extension))
+            if (!string.IsNullOrWhiteSpace(extension) && existingDefaults.Add(NormalizeContentTypeExtension(extension)))
                 targetRoot.Add(new XElement(sourceDefault));
         }
 
@@ -160,7 +162,10 @@ internal static class XlsxPackageMetadataMerger
         entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeContentTypePartName(string value) =>
-        XlsxPackagePath.NormalizeZipPath(value.Replace('\\', '/').TrimStart('/'));
+        XlsxPackagePath.NormalizeZipPath(value.Trim().Replace('\\', '/').TrimStart('/'));
+
+    private static string NormalizeContentTypeExtension(string value) =>
+        value.Trim().TrimStart('.');
 
     private static bool ShouldPreserveRelationship(
         string relationshipPartPath,

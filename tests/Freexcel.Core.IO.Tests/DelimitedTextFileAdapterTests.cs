@@ -127,6 +127,22 @@ public sealed class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
     }
 
+    [Theory]
+    [MemberData(nameof(Utf32BomDelimitedTextPayloads))]
+    public void Load_ReadsUtf32TextExportsWithBom(byte[] bytes)
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Caf\u00e9"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(42));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
+    }
+
     [Fact]
     public void Load_FallsBackToWindows1252ForTextExportsWhenUtf8DecodingFails()
     {
@@ -596,6 +612,20 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_PreservesQuotedEmptyFieldBetweenPopulatedFields()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("left\t\"\"\tright\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("left"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue(""));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new TextValue("right"));
+    }
+
+    [Fact]
     public void Save_WritesTabDelimitedRowsAndQuotesTabs()
     {
         var workbook = new Workbook("Book1");
@@ -715,6 +745,18 @@ public sealed class DelimitedTextFileAdapterTests
 
         throw new FileNotFoundException($"Could not locate workspace file {Path.Combine(parts)}.");
     }
+
+    public static TheoryData<byte[]> Utf32BomDelimitedTextPayloads() => new()
+    {
+        Encoding.UTF32.GetPreamble()
+            .Concat(Encoding.UTF32.GetBytes("Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n"))
+            .ToArray(),
+        new UTF32Encoding(bigEndian: true, byteOrderMark: true)
+            .GetPreamble()
+            .Concat(new UTF32Encoding(bigEndian: true, byteOrderMark: true)
+                .GetBytes("Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n"))
+            .ToArray()
+    };
 
     private static int CountOccurrences(string value, string text)
     {
