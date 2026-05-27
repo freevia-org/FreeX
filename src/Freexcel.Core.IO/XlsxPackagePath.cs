@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Freexcel.Core.IO;
 
 public static class XlsxPackagePath
@@ -141,6 +143,10 @@ public static class XlsxPackagePath
     {
         try
         {
+            var separatorEscapeIndex = IndexOfEncodedPathSeparator(segment, 0);
+            if (separatorEscapeIndex >= 0)
+                return UnescapePathSegmentPreservingEncodedSeparators(segment, separatorEscapeIndex);
+
             return Uri.UnescapeDataString(segment);
         }
         catch (UriFormatException)
@@ -148,6 +154,43 @@ public static class XlsxPackagePath
             return segment;
         }
     }
+
+    private static string UnescapePathSegmentPreservingEncodedSeparators(string segment, int firstSeparatorEscapeIndex)
+    {
+        var builder = new StringBuilder(segment.Length);
+        var segmentStart = 0;
+        var separatorEscapeIndex = firstSeparatorEscapeIndex;
+        while (separatorEscapeIndex >= 0)
+        {
+            builder.Append(Uri.UnescapeDataString(segment[segmentStart..separatorEscapeIndex]));
+            builder.Append(segment, separatorEscapeIndex, 3);
+            segmentStart = separatorEscapeIndex + 3;
+            separatorEscapeIndex = IndexOfEncodedPathSeparator(segment, segmentStart);
+        }
+
+        builder.Append(Uri.UnescapeDataString(segment[segmentStart..]));
+        return builder.ToString();
+    }
+
+    private static int IndexOfEncodedPathSeparator(string segment, int startIndex)
+    {
+        for (var i = startIndex; i <= segment.Length - 3; i++)
+        {
+            if (segment[i] != '%')
+                continue;
+
+            if (IsHexDigit(segment[i + 1], '2') && IsHexDigit(segment[i + 2], 'F') ||
+                IsHexDigit(segment[i + 1], '5') && IsHexDigit(segment[i + 2], 'C'))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool IsHexDigit(char value, char expected) =>
+        char.ToUpperInvariant(value) == expected;
 
     private static string EscapePathSegment(string segment) =>
         segment is "." or ".." ? segment : Uri.EscapeDataString(segment);
