@@ -5,18 +5,24 @@ namespace Freexcel.App.Host;
 
 public static partial class KeyboardShortcutMatcher
 {
-    public static bool IsCtrlPlus(Key key, Key systemKey, ModifierKeys modifiers) =>
-        modifiers == ModifierKeys.Control &&
-            (key is Key.Add or Key.OemPlus || systemKey is Key.Add or Key.OemPlus) ||
-        modifiers == (ModifierKeys.Control | ModifierKeys.Shift) &&
-            (key == Key.OemPlus || systemKey == Key.OemPlus);
+    public static bool IsCtrlPlus(Key key, Key systemKey, ModifierKeys modifiers)
+    {
+        var effectiveKey = GetEffectiveKey(key, systemKey);
+        return modifiers == ModifierKeys.Control &&
+                effectiveKey is Key.Add or Key.OemPlus ||
+            modifiers == (ModifierKeys.Control | ModifierKeys.Shift) &&
+                effectiveKey == Key.OemPlus;
+    }
 
-    public static bool IsCtrlMinus(Key key, Key systemKey, ModifierKeys modifiers) =>
-        modifiers == ModifierKeys.Control &&
-        (key is Key.Subtract or Key.OemMinus || systemKey is Key.Subtract or Key.OemMinus);
+    public static bool IsCtrlMinus(Key key, Key systemKey, ModifierKeys modifiers)
+    {
+        var effectiveKey = GetEffectiveKey(key, systemKey);
+        return modifiers == ModifierKeys.Control &&
+            effectiveKey is Key.Subtract or Key.OemMinus;
+    }
 
     public static bool IsPasteSpecialShortcut(Key key, Key systemKey, ModifierKeys modifiers) =>
-        (key == Key.V || systemKey == Key.V) && modifiers == (ModifierKeys.Control | ModifierKeys.Alt);
+        GetEffectiveKey(key, systemKey) == Key.V && modifiers == (ModifierKeys.Control | ModifierKeys.Alt);
 
     public static bool TryGetGridShortcut(Key key, ModifierKeys modifiers, out KeyboardGridShortcut shortcut)
     {
@@ -81,7 +87,7 @@ public static partial class KeyboardShortcutMatcher
     public static bool TryGetCommandShortcut(Key key, Key systemKey, ModifierKeys modifiers, out KeyboardCommandShortcut shortcut)
     {
         shortcut = default;
-        var effectiveKey = key is Key.None or Key.System ? systemKey : key;
+        var effectiveKey = GetEffectiveKey(key, systemKey);
         foreach (var rule in CommandShortcutRules)
         {
             if (!rule.Matches(effectiveKey, modifiers))
@@ -93,6 +99,9 @@ public static partial class KeyboardShortcutMatcher
 
         return false;
     }
+
+    private static Key GetEffectiveKey(Key key, Key systemKey) =>
+        key is Key.None or Key.System ? systemKey : key;
 
     public static bool TryGetNumberFormatShortcut(Key key, ModifierKeys modifiers, out NumberFormatShortcut shortcut)
     {
