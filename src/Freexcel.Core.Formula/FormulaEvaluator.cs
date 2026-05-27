@@ -105,7 +105,7 @@ public sealed class FormulaEvaluator
         "ASC", "DBCS", "JIS",
         "UNICHAR", "UNICODE", "NUMBERVALUE",
         "ABS", "SQRT", "INT", "SIGN",
-        "MOD", "POWER", "LOG", "QUOTIENT", "CEILING", "FLOOR", "MROUND",
+        "MOD", "POWER", "LOG", "LOG10", "QUOTIENT", "CEILING", "FLOOR", "MROUND",
         "SIN", "COS", "TAN", "DEGREES", "RADIANS",
         "ASIN", "ACOS", "ATAN", "ATAN2", "LN", "EXP", "FACT",
         "ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC",
