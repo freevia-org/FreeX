@@ -276,6 +276,17 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
+    [InlineData("=IMPOWER(\"2+3i\",3)", "-46+9.00000000000001i")]
+    [InlineData("=IMPOWER(\"2+3j\",3)", "-46+9.00000000000001j")]
+    [InlineData("=IMPOWER(\"1+i\",2)", "2i")]
+    [InlineData("=IMPOWER(4,0.5)", "2")]
+    [InlineData("=IMPOWER(\"1+i\",-1)", "0.5-0.5i")]
+    public void ComplexPowerFunction_ReturnsExcelComplexText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
     [InlineData("=IMEXP(0)", "1")]
     [InlineData("=IMLN(1)", "0")]
     [InlineData("=IMLOG10(100)", "2")]
@@ -369,6 +380,12 @@ public sealed class ExcelParityEngineeringTests
         AssertColumn(_eval.Evaluate("=IMCOT(A1:A2)", sheet), _eval.Evaluate("=IMCOT(A1)", sheet), _eval.Evaluate("=IMCOT(A2)", sheet));
         AssertColumn(_eval.Evaluate("=IMCSC(A1:A2)", sheet), _eval.Evaluate("=IMCSC(A1)", sheet), _eval.Evaluate("=IMCSC(A2)", sheet));
         AssertColumn(_eval.Evaluate("=IMSEC(A1:A2)", sheet), _eval.Evaluate("=IMSEC(A1)", sheet), _eval.Evaluate("=IMSEC(A2)", sheet));
+        AssertColumn(_eval.Evaluate("=IMPOWER(A1:A2,2)", sheet), _eval.Evaluate("=IMPOWER(A1,2)", sheet), _eval.Evaluate("=IMPOWER(A2,2)", sheet));
+        AssertColumn(_eval.Evaluate("=IMPOWER(A1:A2,B1:B2)", MakeSheet(
+            (1, 1, new TextValue("2+3i")), (2, 1, new TextValue("1+i")),
+            (1, 2, new NumberValue(3)), (2, 2, new NumberValue(-1)))),
+            _eval.Evaluate("=IMPOWER(\"2+3i\",3)", sheet),
+            _eval.Evaluate("=IMPOWER(\"1+i\",-1)", sheet));
         _eval.Evaluate("=IMSUM(A1:A2)", sheet).Should().Be(new TextValue("8+2i"));
         _eval.Evaluate("=IMSUM(A1:A3)", sheet).Should().Be(ErrorValue.NA);
     }
@@ -394,6 +411,8 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=IMCOT(0)", "#NUM!")]
     [InlineData("=IMCSC(0)", "#NUM!")]
     [InlineData("=IMCSCH(0)", "#NUM!")]
+    [InlineData("=IMPOWER(\"not complex\",2)", "#NUM!")]
+    [InlineData("=IMPOWER(0,-1)", "#NUM!")]
     public void ComplexFunctions_ReturnExcelErrors(string formula, string error)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new ErrorValue(error));
@@ -506,6 +525,8 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=IMCSCH(NA())")]
     [InlineData("=IMSEC(NA())")]
     [InlineData("=IMSECH(NA())")]
+    [InlineData("=IMPOWER(NA(),2)")]
+    [InlineData("=IMPOWER(\"1+i\",NA())")]
     public void EngineeringFunctions_PropagateExcelErrors(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);
