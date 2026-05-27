@@ -56,7 +56,11 @@ public partial class GridView
                     SplitPaneScrollbarScrolled?.Invoke(target);
             }
 
-            Cursor = null;
+            Cursor = _splitPaneScrollbarDragSource?.Orientation == SplitPaneScrollbarOrientation.Horizontal
+                ? Cursors.SizeWE
+                : _splitPaneScrollbarDragSource?.Orientation == SplitPaneScrollbarOrientation.Vertical
+                    ? Cursors.SizeNS
+                    : null;
             InvalidateVisual();
             e.Handled = true;
             return;
