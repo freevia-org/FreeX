@@ -91,7 +91,7 @@ public sealed partial class AdvancedFilterDialog : Window
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         AddReferenceRow(rangesGrid, 0, "_List range:", _listRangeBox, "Select list range", AdvancedFilterRangeSelectionTarget.ListRange);
-        AddReferenceRow(rangesGrid, 1, "_Criteria range:", _criteriaRangeBox, "Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange);
+        AddReferenceRow(rangesGrid, 1, "Criteria _range:", _criteriaRangeBox, "Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange);
         _copyToLabel = AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo, _copyToEditor);
         content.Children.Add(rangesGrid);
         content.Children.Add(_copyToHint);
