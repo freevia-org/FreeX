@@ -272,6 +272,7 @@ public static partial class BuiltInFunctions
         ["WRAPCOLS"] = (WrapCols, 2, 3),
         ["EXPAND"]   = (Expand, 2, 4),
         ["UNIQUE"]   = (Unique, 1, 3),
+        ["TRIMRANGE"] = (TrimRange, 1, 3),
 
         // ── Subtotal ─────────────────────────────────────────────────────────
         ["SUBTOTAL"] = (Subtotal, 2, 255),

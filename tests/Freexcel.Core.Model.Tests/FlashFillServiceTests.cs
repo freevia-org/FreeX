@@ -162,6 +162,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDisplayName_IgnoresPlusAddressTags()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.lovelace+analytics@contoso.com", "Ada Lovelace"),
+                ("grace.hopper+navy@contoso.com", "Grace Hopper")
+            ],
+            ["alan.turing+math@contoso.com"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_DelimitedWordsInitials_BuildsInitials()
     {
         var result = FlashFillService.Fill(
