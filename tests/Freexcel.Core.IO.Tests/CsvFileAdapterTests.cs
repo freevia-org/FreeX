@@ -588,9 +588,10 @@ public sealed class CsvFileAdapterTests
     }
 
     [Theory]
+    [InlineData("12.5%")]
     [InlineData("+12%")]
     [InlineData("-3%")]
-    public void Save_RoundTripsSignedPercentageTextFieldsAsLiteralText(string text)
+    public void Save_RoundTripsPercentageTextFieldsAsLiteralText(string text)
     {
         var workbook = new Workbook("Book1");
         var sheet = workbook.AddSheet("Sheet1");

@@ -183,6 +183,7 @@ internal static partial class DelimitedTextWorkbookReader
         {
             '=' or '@' => true,
             '#' => TryReadError(field.Value, out _),
+            >= '0' and <= '9' => TryParsePercentage(field.Value, out _),
             '+' or '-' =>
                 double.TryParse(field.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out _) ||
                 TryParsePercentage(field.Value, out _) ||
