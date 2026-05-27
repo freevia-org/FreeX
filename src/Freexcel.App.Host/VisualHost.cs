@@ -11,6 +11,7 @@ internal sealed class VisualHost : UIElement
 {
     public Visual? Visual { get; init; }
     public IReadOnlyList<PdfTextOverlay> TextOverlays { get; init; } = [];
+    public IReadOnlyList<PdfLinkOverlay> LinkOverlays { get; init; } = [];
 
     protected override int VisualChildrenCount => Visual != null ? 1 : 0;
 
