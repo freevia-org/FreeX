@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FluentAssertions;
@@ -81,6 +82,7 @@ public sealed class ConditionalFormatDialogTests
                 "Format only cells that contain",
                 "Use a formula to determine which cells to format"
             ]);
+            AutomationProperties.GetName(ruleTypeList).Should().Be("Rule type");
             ruleTypeList.SelectedItem.Should().Be("Use a formula to determine which cells to format");
 
             dialog.Close();
