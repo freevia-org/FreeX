@@ -25,7 +25,7 @@ internal static class SubtotalPlanBuilder
         var groups = GetGroups(sheet, range, groupByColumnOffset);
         return summaryBelowData
             ? BuildSummaryBelowPlan(range, groups, pageBreakBetweenGroups)
-            : BuildSummaryAbovePlan(range, groups);
+            : BuildSummaryAbovePlan(range, groups, pageBreakBetweenGroups);
     }
 
     public static string BuildSubtotalFormula(int functionNumber, uint column, uint formulaStartRow, uint formulaEndRow)
@@ -72,7 +72,10 @@ internal static class SubtotalPlanBuilder
         return new SubtotalPlan(groupRows, grandTotal, pageBreakRows);
     }
 
-    private static SubtotalPlan BuildSummaryAbovePlan(GridRange range, IReadOnlyList<GroupSpan> groups)
+    private static SubtotalPlan BuildSummaryAbovePlan(
+        GridRange range,
+        IReadOnlyList<GroupSpan> groups,
+        bool pageBreakBetweenGroups)
     {
         var orderedGroups = groups.OrderByDescending(g => g.StartRow).ToList();
         var groupRows = orderedGroups
@@ -91,7 +94,15 @@ internal static class SubtotalPlanBuilder
             summaryRow + 1,
             summaryEndRow);
 
-        return new SubtotalPlan(groupRows, grandTotal, []);
+        var pageBreakRows = pageBreakBetweenGroups
+            ? groups
+                .OrderBy(g => g.StartRow)
+                .Skip(1)
+                .Select((group, index) => group.StartRow + (uint)index + 2)
+                .ToList()
+            : [];
+
+        return new SubtotalPlan(groupRows, grandTotal, pageBreakRows);
     }
 
     private static List<GroupSpan> GetGroups(Sheet sheet, GridRange range, uint groupByColumnOffset)
