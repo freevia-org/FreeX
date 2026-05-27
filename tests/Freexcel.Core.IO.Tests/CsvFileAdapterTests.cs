@@ -290,6 +290,18 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_PreservesQuotedEmptyFieldBetweenPopulatedFields()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("left,\"\",right\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("left"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue(""));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new TextValue("right"));
+    }
+
+    [Fact]
     public void Load_HonorsExcelSeparatorDirective()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=;\r\nName;Amount\r\nAlice;3.5\r\n"));
