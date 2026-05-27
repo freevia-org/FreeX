@@ -80,6 +80,69 @@ public sealed class ScenarioManagerCommandTests
     }
 
     [Fact]
+    public void SaveScenarioCommand_RenamesExistingScenarioAndUndoRestoresIt()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Best Case",
+            [new ScenarioCellValue(address, new NumberValue(10))],
+            "Original",
+            Hidden: true,
+            Locked: true));
+
+        var command = new SaveScenarioCommand(
+            "Upside Case",
+            [new ScenarioCellValue(address, new NumberValue(99))],
+            "Updated",
+            hidden: false,
+            locked: false,
+            replaceScenarioName: "Best Case");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        workbook.Scenarios.Should().ContainSingle();
+        workbook.Scenarios[0].Name.Should().Be("Upside Case");
+        workbook.Scenarios[0].Comment.Should().Be("Updated");
+        workbook.Scenarios[0].ChangingCells[0].Value.Should().Be(new NumberValue(99));
+        workbook.Scenarios[0].Hidden.Should().BeFalse();
+        workbook.Scenarios[0].Locked.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        workbook.Scenarios.Should().ContainSingle();
+        workbook.Scenarios[0].Name.Should().Be("Best Case");
+        workbook.Scenarios[0].Comment.Should().Be("Original");
+        workbook.Scenarios[0].ChangingCells[0].Value.Should().Be(new NumberValue(10));
+        workbook.Scenarios[0].Hidden.Should().BeTrue();
+        workbook.Scenarios[0].Locked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SaveScenarioCommand_RejectsRenameToAnotherScenarioName()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(address, new NumberValue(10))]));
+        workbook.Scenarios.Add(new WorkbookScenario("Worst Case", [new ScenarioCellValue(address, new NumberValue(1))]));
+
+        var outcome = new SaveScenarioCommand(
+            "Worst Case",
+            [new ScenarioCellValue(address, new NumberValue(99))],
+            replaceScenarioName: "Best Case").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("already exists");
+        workbook.Scenarios.Select(scenario => scenario.Name).Should().Equal("Best Case", "Worst Case");
+        workbook.Scenarios[0].ChangingCells[0].Value.Should().Be(new NumberValue(10));
+        workbook.Scenarios[1].ChangingCells[0].Value.Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void SaveScenarioCommand_RejectsProtectedSheetWithoutEditScenariosPermission()
     {
         var workbook = new Workbook("test");

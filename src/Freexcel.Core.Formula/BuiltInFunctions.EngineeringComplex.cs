@@ -6,6 +6,98 @@ namespace Freexcel.Core.Formula;
 
 public static partial class BuiltInFunctions
 {
+    private static ScalarValue Delta(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var second = args.Count > 1 ? args[1] : new NumberValue(0);
+        if (args[0] is ErrorValue e0) return e0;
+        if (second is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], second, DeltaScalar);
+    }
+
+    private static ScalarValue DeltaScalar(ScalarValue left, ScalarValue right)
+    {
+        if (left is ErrorValue e0) return e0;
+        if (right is ErrorValue e1) return e1;
+        var leftNumber = ToNumber(left);
+        var rightNumber = ToNumber(right);
+        if (!double.IsFinite(leftNumber) || !double.IsFinite(rightNumber)) return ErrorValue.Num;
+        return new NumberValue(leftNumber == rightNumber ? 1 : 0);
+    }
+
+    private static ScalarValue Gestep(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var step = args.Count > 1 ? args[1] : new NumberValue(0);
+        if (args[0] is ErrorValue e0) return e0;
+        if (step is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], step, GestepScalar);
+    }
+
+    private static ScalarValue GestepScalar(ScalarValue value, ScalarValue step)
+    {
+        if (value is ErrorValue e0) return e0;
+        if (step is ErrorValue e1) return e1;
+        var valueNumber = ToNumber(value);
+        var stepNumber = ToNumber(step);
+        if (!double.IsFinite(valueNumber) || !double.IsFinite(stepNumber)) return ErrorValue.Num;
+        return new NumberValue(valueNumber >= stepNumber ? 1 : 0);
+    }
+
+    private static ScalarValue ErfFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count == 1)
+        {
+            if (args[0] is RangeValue range) return MapUnaryTextRange(range, ErfScalar);
+            return ErfScalar(args[0]);
+        }
+
+        return MapBinaryMathArgs(args[0], args[1], ErfBetweenScalar);
+    }
+
+    private static ScalarValue ErfScalar(ScalarValue value)
+    {
+        if (value is ErrorValue e) return e;
+        var number = ToNumber(value);
+        return double.IsFinite(number) ? new NumberValue(ErfApprox(number)) : ErrorValue.Num;
+    }
+
+    private static ScalarValue ErfBetweenScalar(ScalarValue lower, ScalarValue upper)
+    {
+        if (lower is ErrorValue e0) return e0;
+        if (upper is ErrorValue e1) return e1;
+        var lowerNumber = ToNumber(lower);
+        var upperNumber = ToNumber(upper);
+        if (!double.IsFinite(lowerNumber) || !double.IsFinite(upperNumber)) return ErrorValue.Num;
+        return NumberResult(ErfApprox(upperNumber) - ErfApprox(lowerNumber));
+    }
+
+    private static ScalarValue ErfcFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ErfcScalar);
+        return ErfcScalar(args[0]);
+    }
+
+    private static ScalarValue ErfcScalar(ScalarValue value)
+    {
+        if (value is ErrorValue e) return e;
+        var number = ToNumber(value);
+        return double.IsFinite(number) ? new NumberValue(1.0 - ErfApprox(number)) : ErrorValue.Num;
+    }
+
+    private static double ErfApprox(double x)
+    {
+        if (x == 0) return 0;
+
+        var sign = Math.Sign(x);
+        var ax = Math.Abs(x);
+        const double p = 0.3275911;
+        var t = 1.0 / (1.0 + p * ax);
+        var y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.Exp(-ax * ax);
+        return sign * y;
+    }
+
     private static ScalarValue ComplexFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;

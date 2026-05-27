@@ -804,8 +804,7 @@ public partial class MainWindow
 
     private void UpdateTitleBar()
     {
-        var groupSuffix = IsWorkbookGrouped() ? " [Group]" : "";
-        var displayName = $"{_workbook.Name}{groupSuffix} - Freexcel";
+        var displayName = WorkbookTitleFormatter.Format(_workbook.Name, _workbookDirty, IsWorkbookGrouped());
         WorkbookNameText.Text = displayName;
         this.Title = displayName;
     }

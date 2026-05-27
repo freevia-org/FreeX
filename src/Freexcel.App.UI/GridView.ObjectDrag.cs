@@ -128,24 +128,24 @@ public partial class GridView
         _ => Cursors.Arrow
     };
 
-    private (Guid Id, ObjectKind Kind, Rect Rect) HitTestDrawingObject(Point pos)
+    private (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) HitTestDrawingObject(Point pos)
     {
         if (Viewport is null) return default;
 
         if (TextBoxes is not null)
-            foreach (var t in TextBoxes)
+            foreach (var t in TextBoxes.Reverse())
                 if (t.IsVisible && TryCreateAnchoredObjectRect(t.Anchor, t.Width, t.Height, 8, 8, out var r) && r.Contains(pos))
-                    return (t.Id, ObjectKind.TextBox, r);
-
-        if (DrawingShapes is not null)
-            foreach (var s in DrawingShapes)
-                if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && r.Contains(pos))
-                    return (s.Id, ObjectKind.Shape, r);
+                    return (t.Id, ObjectKind.TextBox, r, t.Anchor);
 
         if (Pictures is not null)
-            foreach (var p in Pictures)
+            foreach (var p in Pictures.Reverse())
                 if (p.IsVisible && TryCreateAnchoredObjectRect(p.Anchor, p.Width, p.Height, 24, 18, out var r) && r.Contains(pos))
-                    return (p.Id, ObjectKind.Picture, r);
+                    return (p.Id, ObjectKind.Picture, r, p.Anchor);
+
+        if (DrawingShapes is not null)
+            foreach (var s in DrawingShapes.Reverse())
+                if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && r.Contains(pos))
+                    return (s.Id, ObjectKind.Shape, r, s.Anchor);
 
         return default;
     }

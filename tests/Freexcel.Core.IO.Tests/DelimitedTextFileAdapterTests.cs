@@ -92,6 +92,37 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsBigEndianUtf16TextExportWithBom()
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        var bytes = Encoding.BigEndianUnicode.GetPreamble()
+            .Concat(Encoding.BigEndianUnicode.GetBytes("Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n"))
+            .ToArray();
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Caf\u00e9"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(42));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void Load_FallsBackToWindows1252ForTextExportsWhenUtf8DecodingFails()
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        using var stream = new MemoryStream([0x43, 0x61, 0x66, 0xE9, 0x09, 0x34, 0x32, 0x0D, 0x0A]);
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Caf\u00e9"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
     public void Load_HonorsExcelSeparatorDirectiveForTextFiles()
     {
         var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');

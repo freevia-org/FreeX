@@ -5,8 +5,8 @@ namespace Freexcel.Core.Commands;
 public static partial class FlashFillService
 {
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
-    private static readonly char[] Delimiters = [' ', ',', '-', '_', '@', '/', '\\'];
-    private static readonly string[] LabelValueSeparators = [":", "=", " - "];
+    private static readonly char[] Delimiters = [' ', ',', '-', '_', '@', '.', '/', '\\'];
+    private static readonly string[] LabelValueSeparators = [":", "=", " - ", " | ", " -> "];
     private static readonly (char Open, char Close)[] PairedDelimiters =
         [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ('\'', '\''), ('<', '>')];
 
@@ -93,7 +93,10 @@ public static partial class FlashFillService
                 return s =>
                 {
                     var parts = s.Split(d);
-                    return idx < parts.Length ? parts[idx] : s;
+                    if (idx < parts.Length)
+                        return parts[idx];
+
+                    return idx == 0 ? s : null;
                 };
             }
         }

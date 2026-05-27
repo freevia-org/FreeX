@@ -308,7 +308,7 @@ public partial class MainWindow
                 ["format"] = format?.FormatName,
                 ["reason"] = ex.GetType().Name
             });
-            MessageBox.Show($"Failed to open file:\n{ex.Message}", "Open Error",
+            ShowOwnedMessage($"Failed to open file:\n{ex.Message}", "Open Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -404,7 +404,7 @@ public partial class MainWindow
     private void SsMoreTemplatesBtn_Click(object sender, RoutedEventArgs e)
     {
         var message = DeferredCommandMessages.OnlineTemplatesExcluded();
-        MessageBox.Show(
+        ShowOwnedMessage(
             message.Body,
             message.Title,
             MessageBoxButton.OK,
@@ -601,6 +601,7 @@ public partial class MainWindow
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
             await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
             _currentFilePath = target.Path;
+            _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
             _recentFiles.AddOrUpdate(target.Path);
             MarkWorkbookSaved();
             UpdateTitleBar();
@@ -656,7 +657,7 @@ public partial class MainWindow
 
         var message = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport);
 
-        var result = MessageBox.Show(
+        var result = ShowOwnedMessage(
             message.Body,
             message.Title,
             MessageBoxButton.YesNo,
@@ -671,7 +672,7 @@ public partial class MainWindow
             return;
 
         var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport);
-        MessageBox.Show(
+        ShowOwnedMessage(
             message.Body,
             message.Title,
             MessageBoxButton.OK,

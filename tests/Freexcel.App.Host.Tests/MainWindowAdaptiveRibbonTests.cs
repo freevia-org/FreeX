@@ -229,6 +229,20 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void DataRibbon_DataToolsCommandsUseIconLabelRows()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Data", 1465);
+
+            harness.ActiveRibbonGroupCommandLabelsWithoutIconSlots("Data Tools").Should().BeEmpty(
+                "Excel presents Data Tools as compact icon-and-label commands, not plain text-only buttons");
+        });
+    }
+
+    [Fact]
     public void ViewRibbon_KeepsShowWithZoomAndWindowAtMediumWidths()
     {
         StaTestRunner.Run(() =>
@@ -857,8 +871,20 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Where(textBlock => textBlock.Tag?.ToString() == "RibbonLabel")
                     .Where(IsEffectivelyVisible)
                     .Where(IsTextVisuallyClipped)
-                    .Select(textBlock => textBlock.Text)
+                    .Select(FormatClippedTextBlock)
                     .Where(text => !string.IsNullOrWhiteSpace(text))
+                    .ToList()
+                : [];
+
+        public IReadOnlyList<string> ActiveRibbonGroupCommandLabelsWithoutIconSlots(string groupName) =>
+            FindActiveRibbonGroup(groupName) is { } group
+                ? EnumerateSelfAndVisualDescendants(group)
+                    .OfType<Button>()
+                    .Where(IsEffectivelyVisible)
+                    .Where(button => button.Tag is not string tag || tag != "RibbonCollapsedGroupButton")
+                    .Select(button => new { Label = GetButtonLabel(button), HasIconSlot = TryGetCommandIconSlot(button, out _) })
+                    .Where(item => !string.IsNullOrWhiteSpace(item.Label) && !item.HasIconSlot)
+                    .Select(item => item.Label)
                     .ToList()
                 : [];
 
@@ -1195,6 +1221,12 @@ public sealed class MainWindowAdaptiveRibbonTests
         {
             textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             return textBlock.DesiredSize.Width > textBlock.ActualWidth + 0.5;
+        }
+
+        private static string FormatClippedTextBlock(TextBlock textBlock)
+        {
+            textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return $"{textBlock.Text} ({textBlock.ActualWidth:0.#}/{textBlock.DesiredSize.Width:0.#})";
         }
 
         private static double GetCheckBoxLabelOffset(CheckBox checkBox)
