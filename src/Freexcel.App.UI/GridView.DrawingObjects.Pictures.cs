@@ -21,15 +21,8 @@ public partial class GridView
         foreach (var picture in Pictures)
         {
             if (!picture.IsVisible) continue;
-            var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == picture.Anchor.Row);
-            var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == picture.Anchor.Col);
-            if (row is null || col is null) continue;
-
-            var rect = new Rect(
-                col.LeftOffset + ActualRowHeaderWidth,
-                row.TopOffset + EffectiveColHeaderHeight,
-                Math.Max(24, picture.Width),
-                Math.Max(18, picture.Height));
+            if (!TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect))
+                continue;
 
             if (Math.Abs(picture.RotationDegrees) > 0.0001)
                 dc.PushTransform(new RotateTransform(

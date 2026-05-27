@@ -498,6 +498,7 @@ public partial class GridView
 
             _autofillSourceRange = null;
             _autofillTarget      = null;
+            InvalidateVisual();
             e.Handled = true;
             return;
         }
