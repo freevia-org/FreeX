@@ -100,6 +100,9 @@ public static partial class BuiltInFunctions
         return true;
     }
 
+    private static DateTime OADateToDateTime(ScalarValue v) =>
+        DateTime.FromOADate(ToNumber(v));
+
     private static bool TryNonNegativeOADateToDateTime(ScalarValue v, out DateTime dt)
     {
         dt = default;
@@ -707,8 +710,10 @@ public static partial class BuiltInFunctions
     private static int ExcelDowToMonIndex(DateTime date)
     {
         int serial = (int)Math.Floor(DateToSerial(date));
-        return ((serial + 5) % 7 + 7) % 7;
+        return ExcelDowToMonIndex(serial);
     }
+
+    private static int ExcelDowToMonIndex(int serial) => ((serial + 5) % 7 + 7) % 7;
 
     private static int ExcelIsoWeeknum(DateTime date)
     {
