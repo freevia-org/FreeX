@@ -260,11 +260,34 @@ public partial class MainWindow
     {
         var current = (int)Math.Round(_zoomLevel * 100);
         var dialog = new ZoomDialog(current) { Owner = this };
-        if (dialog.ShowDialog() != true)
+        try
+        {
+            if (dialog.ShowDialog() != true)
+                return;
+
+            ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(dialog.Result.ZoomPercent);
+        }
+        finally
+        {
+            FocusSheetGridIfNeeded();
+        }
+    }
+
+    private void StatusZoomText_OpenZoomDialog(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        ZoomCustomMenuItem_Click(sender, e);
+    }
+
+    private void StatusZoomText_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not Key.Enter and not Key.Space)
             return;
 
-        ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(dialog.Result.ZoomPercent);
+        e.Handled = true;
+        ZoomCustomMenuItem_Click(sender, e);
     }
+
     private void Zoom100Btn_Click(object sender, RoutedEventArgs e)
     {
         ZoomSlider.Value = 100;
