@@ -33,6 +33,7 @@ public static partial class FlashFillService
             ?? TryThreeTokenNameDropMiddle(examples)
             ?? TryPairedDelimiterExtraction(examples)
             ?? TryPairedDelimiterRemoval(examples)
+            ?? TryLabelValueExtraction(examples)
             ?? TryDelimitedPartReorder(examples)
             ?? TryExtractByDelimiter(examples)
             ?? TryPrefixTrim(examples)
