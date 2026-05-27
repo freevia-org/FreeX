@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -9,9 +10,18 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
-    private static readonly string[] TourTabNames =
-        ["Home", "Insert", "Draw", "Page_Layout", "Formulas", "Data", "Review", "View"];
-    private static readonly int[] TourTabIndices = [1, 2, 3, 4, 5, 6, 7, 8];
+    private static readonly (string Header, string FileName)[] TourTabs =
+    [
+        ("Home", "Home"),
+        ("Insert", "Insert"),
+        ("Draw", "Draw"),
+        ("Page Layout", "Page_Layout"),
+        ("Formulas", "Formulas"),
+        ("Data", "Data"),
+        ("Review", "Review"),
+        ("View", "View"),
+        ("Help", "Help"),
+    ];
 
     // Activated by FREEXCEL_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
     private void TryStartScreenshotTour()
@@ -48,9 +58,16 @@ public partial class MainWindow
 
     private async Task CaptureAllTabsAsync(string outputDir, string label)
     {
-        for (int i = 0; i < TourTabIndices.Length; i++)
+        foreach (var (header, fileName) in TourTabs)
         {
-            RibbonTabs.SelectedIndex = TourTabIndices[i];
+            var tab = RibbonTabs.Items
+                .OfType<System.Windows.Controls.TabItem>()
+                .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+
+            if (tab is null)
+                continue;
+
+            RibbonTabs.SelectedItem = tab;
             UpdateLayout();
             await Task.Delay(350);
             UpdateLayout();
@@ -66,7 +83,7 @@ public partial class MainWindow
 
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(rtb));
-            var path = Path.Combine(outputDir, $"{label}_{TourTabNames[i]}.png");
+            var path = Path.Combine(outputDir, $"{label}_{fileName}.png");
             await using var stream = File.OpenWrite(path);
             encoder.Save(stream);
         }
