@@ -5,6 +5,12 @@ namespace Freexcel.App.Host;
 
 public static class ExcelEditKeyPlanner
 {
+    public static bool ShouldCycleFormulaReference(Key key, ModifierKeys modifiers, Key systemKey = Key.None)
+    {
+        var effectiveKey = key == Key.None || key == Key.System ? systemKey : key;
+        return effectiveKey == Key.F4 && modifiers == ModifierKeys.None;
+    }
+
     public static ExcelEditKeyIntent GetIntent(
         Key key,
         ModifierKeys modifiers,
@@ -14,12 +20,15 @@ public static class ExcelEditKeyPlanner
         bool formulaRangeEntryActive = false,
         bool inlineEditorCommitsOnArrow = false,
         bool moveSelectionAfterEnter = true,
-        FreexcelEnterDirection enterDirection = FreexcelEnterDirection.Down)
+        FreexcelEnterDirection enterDirection = FreexcelEnterDirection.Down,
+        Key systemKey = Key.None)
     {
-        if (key == Key.Enter && modifiers == ModifierKeys.Alt)
+        var effectiveKey = key == Key.None || key == Key.System ? systemKey : key;
+
+        if (effectiveKey == Key.Enter && modifiers == ModifierKeys.Alt)
             return new ExcelEditKeyIntent(ExcelEditKeyAction.InsertLineBreak, null);
 
-        if (key == Key.Enter && modifiers == ModifierKeys.Control)
+        if (effectiveKey == Key.Enter && modifiers == ModifierKeys.Control)
             return new ExcelEditKeyIntent(ExcelEditKeyAction.CommitSelection, null);
 
         if (modifiers is not ModifierKeys.None and not ModifierKeys.Shift)
@@ -27,9 +36,9 @@ public static class ExcelEditKeyPlanner
 
         var shiftHeld = (modifiers & ModifierKeys.Shift) != 0;
 
-        if (formulaRangeEntryActive && key is Key.Up or Key.Down or Key.Left or Key.Right or Key.PageUp or Key.PageDown)
+        if (formulaRangeEntryActive && effectiveKey is Key.Up or Key.Down or Key.Left or Key.Right or Key.PageUp or Key.PageDown)
         {
-            var referenceTarget = key switch
+            var referenceTarget = effectiveKey switch
             {
                 Key.Up => new CellAddress(current.Sheet, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
                 Key.Down => new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col),
@@ -45,9 +54,9 @@ public static class ExcelEditKeyPlanner
                 : ExcelEditKeyIntent.None;
         }
 
-        if (inlineEditorCommitsOnArrow && modifiers == ModifierKeys.None && key is Key.Up or Key.Down or Key.Left or Key.Right)
+        if (inlineEditorCommitsOnArrow && modifiers == ModifierKeys.None && effectiveKey is Key.Up or Key.Down or Key.Left or Key.Right)
         {
-            var emptyEditorTarget = key switch
+            var emptyEditorTarget = effectiveKey switch
             {
                 Key.Up => new CellAddress(current.Sheet, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
                 Key.Down => new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col),
@@ -61,7 +70,7 @@ public static class ExcelEditKeyPlanner
                 : ExcelEditKeyIntent.None;
         }
 
-        var target = key switch
+        var target = effectiveKey switch
         {
             Key.Enter => moveSelectionAfterEnter
                 ? GetEnterTarget(current, shiftHeld, enterDirection)
