@@ -180,6 +180,7 @@ public static partial class BuiltInFunctions
         ["CHAR"]        = (Char, 1, 1),
         ["ASC"]         = (Asc, 1, 1),
         ["DBCS"]        = (Dbcs, 1, 1),
+        ["JIS"]         = (Dbcs, 1, 1),
         ["PHONETIC"]    = (Phonetic, 1, 1),
         ["VALUETOTEXT"] = (ValueToText, 1, 2),
         ["ARRAYTOTEXT"] = (ArrayToText, 1, 2),

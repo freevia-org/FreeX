@@ -102,7 +102,7 @@ public sealed class FormulaEvaluator
         "SUBSTITUTE", "REPT", "CONCATENATE",
         "FIXED", "DOLLAR", "T", "HYPERLINK", "ENCODEURL", "FILTERXML", "BAHTTEXT",
         "VALUETOTEXT", "ARRAYTOTEXT",
-        "ASC", "DBCS",
+        "ASC", "DBCS", "JIS",
         "UNICHAR", "UNICODE", "NUMBERVALUE",
         "ABS", "SQRT", "INT", "SIGN",
         "MOD", "POWER", "LOG", "QUOTIENT", "CEILING", "FLOOR", "MROUND",
