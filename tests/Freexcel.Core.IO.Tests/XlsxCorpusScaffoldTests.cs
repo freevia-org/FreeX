@@ -299,6 +299,20 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesUnsupportedSheetTypeWorkbookReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/unsupported-sheet-types-001.xlsx" &&
+            row.FeatureTags.Contains("chart-sheets", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("dialog-sheets", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("macro-sheets", StringComparison.Ordinal));
+        report.Should().Contain("| Unsupported sheet type package references | Chartsheet, dialog sheet, and macro sheet workbook references and relationships are exercised by generated known-gap retention coverage |");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
