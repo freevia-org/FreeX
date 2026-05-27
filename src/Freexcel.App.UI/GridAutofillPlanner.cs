@@ -99,24 +99,36 @@ public static class GridAutofillPlanner
         var boundLeft = Math.Min(srcLeft, pointer.X);
         var boundRight = Math.Max(srcRight, pointer.X);
 
-        CellAddress? target = null;
+        uint? targetRow = null;
+        uint? targetColumn = null;
+        var preferTopRow = pointer.Y < srcTop;
+        var preferLeftColumn = pointer.X < srcLeft;
+
         foreach (var row in viewport.RowMetrics)
         {
             var midY = row.TopOffset + columnHeaderHeight + row.Height / 2;
             if (midY < boundTop || midY > boundBottom)
                 continue;
 
-            foreach (var column in viewport.ColMetrics)
-            {
-                var midX = column.LeftOffset + rowHeaderWidth + column.Width / 2;
-                if (midX < boundLeft || midX > boundRight)
-                    continue;
-
-                target = new CellAddress(default, row.Row, column.Col);
-            }
+            targetRow ??= row.Row;
+            if (!preferTopRow)
+                targetRow = row.Row;
         }
 
-        return target;
+        foreach (var column in viewport.ColMetrics)
+        {
+            var midX = column.LeftOffset + rowHeaderWidth + column.Width / 2;
+            if (midX < boundLeft || midX > boundRight)
+                continue;
+
+            targetColumn ??= column.Col;
+            if (!preferLeftColumn)
+                targetColumn = column.Col;
+        }
+
+        return targetRow.HasValue && targetColumn.HasValue
+            ? new CellAddress(default, targetRow.Value, targetColumn.Value)
+            : null;
     }
 
     private static bool TryFindRowEndpoints(

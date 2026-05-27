@@ -199,6 +199,34 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void CalculateDragTarget_ReturnsFarthestVisibleCellWhenDraggingAboveOrLeft()
+    {
+        var sheet = SheetId.New();
+        var viewport = CreateViewport();
+        var source = new GridRange(
+            new CellAddress(sheet, 3, 3),
+            new CellAddress(sheet, 4, 4));
+
+        GridAutofillPlanner.CalculateDragTarget(
+                viewport,
+                source,
+                new System.Windows.Point(120, 25),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new CellAddress(default, 1, 4));
+
+        GridAutofillPlanner.CalculateDragTarget(
+                viewport,
+                source,
+                new System.Windows.Point(40, 90),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new CellAddress(default, 4, 1));
+    }
+
+    [Fact]
     public void CalculateDragTarget_ReturnsNullWhenSourceMetricsAreNotVisible()
     {
         var sheet = SheetId.New();

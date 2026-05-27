@@ -494,6 +494,15 @@ public partial class MainWindow
         bool useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(e.Key, Keyboard.Modifiers, _endMode);
         bool ctrlHeld  = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
 
+        if (!ExcelWorksheetNavigationPlanner.ShouldHandleWorksheetNavigationKey(
+                e.Key,
+                e.SystemKey,
+                Keyboard.Modifiers,
+                _endMode))
+        {
+            return;
+        }
+
         // When Shift or F8 extend mode is active the moving end is _selectionCursor; otherwise it's the active cell.
         var current = extendSelection && _selectionCursor.HasValue
             ? _selectionCursor.Value
