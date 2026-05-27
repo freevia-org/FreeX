@@ -493,6 +493,18 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_FilterFamilyContinuationKeyDoesNotHijackTextEntry()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("if (IsTextInputElement(e.OriginalSource))");
+        source.Should().Contain("private static bool IsTextInputElement(object? originalSource)");
+        source.Should().Contain("originalSource is TextBox");
+        source.Should().Contain("originalSource is ComboBox { IsEditable: true }");
+        source.Should().Contain("return;");
+    }
+
+    [Fact]
     public void DialogControls_InvalidTypedCriteriaWarnsAndRefocusesRequiredField()
     {
         var source = ReadAutoFilterDialogSources();
