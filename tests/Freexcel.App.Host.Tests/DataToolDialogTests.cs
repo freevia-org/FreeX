@@ -901,7 +901,7 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void AdvancedFilterDialog_AcceptsSingleCellRangesOnCurrentSheet()
+    public void AdvancedFilterDialog_RejectsListRangeWithoutDataRows()
     {
         var sheetId = SheetId.New();
 
@@ -911,14 +911,29 @@ public sealed class DataToolDialogTests
             criteriaRangeText: "C3",
             copyToCellText: "",
             uniqueRecordsOnly: false,
-            out var result,
+            out _,
             out var error);
 
-        parsed.Should().BeTrue(error);
-        result.ListRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 1, 1)));
-        result.CriteriaRange.Should().Be(new GridRange(new CellAddress(sheetId, 3, 3), new CellAddress(sheetId, 3, 3)));
-        result.CopyToCell.Should().BeNull();
-        result.UniqueRecordsOnly.Should().BeFalse();
+        parsed.Should().BeFalse();
+        error.Should().Be("List range must include headers and at least one data row.");
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_RejectsCriteriaRangeWithoutCriteriaRows()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: "A1:C5",
+            criteriaRangeText: "F1:G1",
+            copyToCellText: "",
+            uniqueRecordsOnly: false,
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Criteria range must include headers and at least one criteria row.");
     }
 
     [Fact]
@@ -1032,6 +1047,7 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("FocusInvalidRangeInput(error);");
         source.Should().Contain("private void FocusInvalidRangeInput(string? error)");
+        source.Should().Contain("Criteria range must include headers and at least one criteria row.");
         source.Should().Contain("_copyToAnotherLocationButton.IsChecked = true;");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
@@ -1140,6 +1156,10 @@ public sealed class DataToolDialogTests
         source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
         source.Should().Contain("dialog.Show();");
         source.Should().Contain("dialog.Activate();");
+        source.Should().Contain("ExecuteRepeatable(");
+        source.Should().Contain("new AdvancedFilterCommand(");
+        source.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
+        source.Should().Contain("SetActiveCell(destinationCell);");
     }
 
     [Fact]
