@@ -344,7 +344,10 @@ public sealed class MainWindowSourceHygieneTests
         var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
 
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
-        dataCommandsSource.Should().Contain("new Microsoft.Win32.OpenFileDialog { Filter = filter }");
+        dataCommandsSource.Should().Contain("new Microsoft.Win32.OpenFileDialog");
+        dataCommandsSource.Should().Contain("Filter = filter");
+        dataCommandsSource.Should().Contain("CheckFileExists = true");
+        dataCommandsSource.Should().Contain("Multiselect = false");
         dataCommandsSource.Should().Contain("if (dialog.ShowDialog() != true) return;");
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");
@@ -354,6 +357,8 @@ public sealed class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");
         dataCommandsSource.Should().Contain("RefreshStatusBar();");
+        dataCommandsSource.Should().Contain("ShowOwnedMessage(\"No import adapters are available.\"");
+        dataCommandsSource.Should().Contain("ShowOwnedMessage($\"Failed to import data:");
     }
 
     [Fact]

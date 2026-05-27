@@ -24,12 +24,17 @@ public partial class MainWindow
             {
                 ["reason"] = "no_adapter"
             });
-            MessageBox.Show("No import adapters are available.", "Get Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage("No import adapters are available.", "Get Data", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = filter,
+            CheckFileExists = true,
+            Multiselect = false
+        };
         if (dialog.ShowDialog() != true) return;
 
         var ext = System.IO.Path.GetExtension(dialog.FileName).ToLowerInvariant();
@@ -67,7 +72,7 @@ public partial class MainWindow
         catch (Exception ex)
         {
             RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, ex.GetType().Name));
-            MessageBox.Show($"Failed to import data:\n{ex.Message}", "Get Data", MessageBoxButton.OK, MessageBoxImage.Error);
+            ShowOwnedMessage($"Failed to import data:\n{ex.Message}", "Get Data", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
