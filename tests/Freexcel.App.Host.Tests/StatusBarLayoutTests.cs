@@ -174,6 +174,23 @@ public sealed class StatusBarLayoutTests
     }
 
     [Fact]
+    public void EscapeFromStatusBarFocus_ReturnsFocusToWorksheet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.CycleShellFocus(reverse: true);
+            harness.FocusedElementName.Should().Be("StatusZoomOutButton");
+
+            harness.HandleFocusedStatusBarKey(Key.Escape).Should().BeTrue();
+
+            harness.FocusedElementIsWorksheet.Should().BeTrue();
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Worksheet);
+        });
+    }
+
+    [Fact]
     public void ZoomSliderAndButtons_ShareACommonVisualCenter()
     {
         StaTestRunner.Run(() =>
@@ -296,6 +313,9 @@ public sealed class StatusBarLayoutTests
         public string? FocusedElementName =>
             Keyboard.FocusedElement is FrameworkElement element ? element.Name : null;
 
+        public bool FocusedElementIsWorksheet =>
+            ReferenceEquals(Keyboard.FocusedElement, _window.SheetGrid);
+
         public string? FocusedSheetTabName =>
             Keyboard.FocusedElement is FrameworkElement element &&
             element.DataContext is SheetTabViewModel sheetTab
@@ -343,9 +363,14 @@ public sealed class StatusBarLayoutTests
 
         public bool HandleFocusedStatusBarTab()
         {
+            return HandleFocusedStatusBarKey(Key.Tab);
+        }
+
+        public bool HandleFocusedStatusBarKey(Key key)
+        {
             var source = PresentationSource.FromVisual(_window);
             source.Should().NotBeNull("the test window must be visible before routing keyboard input");
-            var args = new KeyEventArgs(Keyboard.PrimaryDevice, source!, Environment.TickCount, Key.Tab)
+            var args = new KeyEventArgs(Keyboard.PrimaryDevice, source!, Environment.TickCount, key)
             {
                 RoutedEvent = Keyboard.PreviewKeyDownEvent
             };
