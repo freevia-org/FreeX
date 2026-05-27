@@ -274,6 +274,14 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_ObjectListExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_list, \"Objects\");");
+    }
+
+    [Fact]
     public void SelectionPaneDialogOpenedFromKeyboard_FocusesSearchBox()
     {
         var source = ReadSelectionPaneDialogSources();
