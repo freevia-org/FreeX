@@ -5285,6 +5285,22 @@ public class FunctionLibraryTests
             ((NumberValue)_eval.Evaluate("=CUMPRINC(A1,60,10000,B2,12,0)", sheet)).Value);
     }
 
+    [Fact]
+    public void Xnpv_RateRange_SpillsElementwiseAgainstValueAndDateArrays()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.05)), (2, 1, new NumberValue(0.10)),
+            (1, 2, new NumberValue(-1000)), (2, 2, new NumberValue(600)), (3, 2, new NumberValue(600)),
+            (1, 3, new NumberValue(new DateTime(2026, 1, 1).ToOADate())),
+            (2, 3, new NumberValue(new DateTime(2026, 7, 1).ToOADate())),
+            (3, 3, new NumberValue(new DateTime(2027, 1, 1).ToOADate())));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=XNPV(A1:A2,B1:B3,C1:C3)", sheet),
+            ((NumberValue)_eval.Evaluate("=XNPV(A1,B1:B3,C1:C3)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=XNPV(A2,B1:B3,C1:C3)", sheet)).Value);
+    }
+
     [Fact] public void Pmt_TypeError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
