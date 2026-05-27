@@ -32,6 +32,8 @@ public sealed partial class Sheet
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
     private readonly Dictionary<(uint Row, uint Col), StyleId> _styleOnly = [];
     private Dictionary<(uint Row, uint Col), GridRange>? _mergeIndex;
+    private GridRange? _usedRangeCache;
+    private bool _usedRangeCacheDirty = true;
 
     /// <summary>Unique identifier for this sheet.</summary>
     public SheetId Id { get; }
@@ -425,6 +427,7 @@ public sealed partial class Sheet
     public void SetCell(CellAddress address, ScalarValue value)
     {
         ClearSpillRange(address);
+        MarkUsedRangeDirty();
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
             existing.Value = value;
@@ -445,6 +448,7 @@ public sealed partial class Sheet
     public void SetFormula(CellAddress address, string formulaText)
     {
         ClearSpillRange(address);
+        MarkUsedRangeDirty();
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
             existing.FormulaText = formulaText;
@@ -461,6 +465,7 @@ public sealed partial class Sheet
     public void SetCell(CellAddress address, Cell cell)
     {
         ClearSpillRange(address);
+        MarkUsedRangeDirty();
         _cells[(address.Row, address.Col)] = cell;
         _styleOnly.Remove((address.Row, address.Col));
     }
@@ -469,14 +474,16 @@ public sealed partial class Sheet
     public void ClearCell(uint row, uint col)
     {
         ClearSpillRange(new CellAddress(Id, row, col));
-        _cells.Remove((row, col));
+        if (_cells.Remove((row, col)))
+            MarkUsedRangeDirty();
     }
 
     /// <summary>Remove a cell at the given address.</summary>
     public void ClearCell(CellAddress address)
     {
         ClearSpillRange(address);
-        _cells.Remove((address.Row, address.Col));
+        if (_cells.Remove((address.Row, address.Col)))
+            MarkUsedRangeDirty();
     }
 
     /// <summary>
@@ -592,8 +599,15 @@ public sealed partial class Sheet
     /// </summary>
     public GridRange? GetUsedRange()
     {
+        if (!_usedRangeCacheDirty)
+            return _usedRangeCache;
+
         if (_cells.Count == 0)
+        {
+            _usedRangeCache = null;
+            _usedRangeCacheDirty = false;
             return null;
+        }
 
         uint minRow = uint.MaxValue, maxRow = 0, minCol = uint.MaxValue, maxCol = 0;
         foreach (var (row, col) in _cells.Keys)
@@ -604,10 +618,14 @@ public sealed partial class Sheet
             if (col > maxCol) maxCol = col;
         }
 
-        return new GridRange(
+        _usedRangeCache = new GridRange(
             new CellAddress(Id, minRow, minCol),
             new CellAddress(Id, maxRow, maxCol));
+        _usedRangeCacheDirty = false;
+        return _usedRangeCache;
     }
+
+    private void MarkUsedRangeDirty() => _usedRangeCacheDirty = true;
 
 }
 
