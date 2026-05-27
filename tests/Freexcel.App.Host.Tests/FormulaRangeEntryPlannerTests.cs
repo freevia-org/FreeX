@@ -187,6 +187,28 @@ public sealed class FormulaRangeEntryPlannerTests
     }
 
     [Theory]
+    [InlineData(Key.None, Key.Home, "A2")]
+    [InlineData(Key.System, Key.Home, "A2")]
+    [InlineData(Key.None, Key.PageDown, "B22")]
+    [InlineData(Key.System, Key.PageDown, "B22")]
+    public void GetKeyboardSelectionTarget_NormalizesSyntheticSystemNavigationKeys(
+        Key key,
+        Key systemKey,
+        string expected)
+    {
+        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                key,
+                systemKey,
+                ModifierKeys.None,
+                CellAddress.Parse("B2", SheetId),
+                sheet: null,
+                rowPageSize: 20,
+                colPageSize: 10)
+            .Should()
+            .Be(CellAddress.Parse(expected, SheetId));
+    }
+
+    [Theory]
     [InlineData(Key.Right, Key.None, ModifierKeys.Alt)]
     [InlineData(Key.System, Key.Right, ModifierKeys.Alt)]
     [InlineData(Key.Right, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
