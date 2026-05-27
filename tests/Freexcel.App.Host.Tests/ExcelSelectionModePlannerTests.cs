@@ -37,6 +37,25 @@ public sealed class ExcelSelectionModePlannerTests
     }
 
     [Theory]
+    [InlineData(ModifierKeys.Control)]
+    [InlineData(ModifierKeys.Alt)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(ModifierKeys.Alt | ModifierKeys.Shift)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift)]
+    public void TryToggle_IgnoresF8WithNonExcelSelectionModeModifiers(ModifierKeys modifiers)
+    {
+        var handled = ExcelSelectionModePlanner.TryToggle(
+            Key.F8,
+            modifiers,
+            ExcelSelectionMode.Normal,
+            out var next);
+
+        handled.Should().BeFalse();
+        next.Should().Be(ExcelSelectionMode.Normal);
+    }
+
+    [Theory]
     [InlineData(ExcelSelectionMode.Normal, ModifierKeys.None, false)]
     [InlineData(ExcelSelectionMode.Normal, ModifierKeys.Shift, true)]
     [InlineData(ExcelSelectionMode.Extend, ModifierKeys.None, true)]
