@@ -46,9 +46,8 @@ internal static class GridDrawingObjectPlanner
         if (viewport is null)
             return false;
 
-        var row = viewport.RowMetrics.FirstOrDefault(r => r.Row == anchor.Row);
-        var col = viewport.ColMetrics.FirstOrDefault(c => c.Col == anchor.Col);
-        if (row is null || col is null)
+        if (!TryFindAnchorRow(viewport.RowMetrics, anchor.Row, out var row) ||
+            !TryFindAnchorColumn(viewport.ColMetrics, anchor.Col, out var col))
             return false;
 
         rect = new Rect(
@@ -181,6 +180,36 @@ internal static class GridDrawingObjectPlanner
 
         fromMetric = null!;
         toMetric = null!;
+        return false;
+    }
+
+    private static bool TryFindAnchorRow(IReadOnlyList<RowMetric> metrics, uint row, out RowMetric rowMetric)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Row == row)
+            {
+                rowMetric = metric;
+                return true;
+            }
+        }
+
+        rowMetric = null!;
+        return false;
+    }
+
+    private static bool TryFindAnchorColumn(IReadOnlyList<ColMetric> metrics, uint column, out ColMetric columnMetric)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Col == column)
+            {
+                columnMetric = metric;
+                return true;
+            }
+        }
+
+        columnMetric = null!;
         return false;
     }
 

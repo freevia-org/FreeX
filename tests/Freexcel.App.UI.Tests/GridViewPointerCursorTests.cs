@@ -78,6 +78,22 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void AutofillMouseUpInvalidatesAfterClearingPreview()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var releaseStart = source.LastIndexOf("if (_autofillDragging)", StringComparison.Ordinal);
+        var resizeStart = source.IndexOf("if (_resizeTarget != ResizeTarget.None)", releaseStart, StringComparison.Ordinal);
+        var releaseBlock = source[releaseStart..resizeStart];
+
+        releaseBlock.Should().Contain("_autofillSourceRange = null;");
+        releaseBlock.Should().Contain("_autofillTarget      = null;");
+        releaseBlock.Should().Contain("InvalidateVisual();");
+        releaseBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal)
+            .Should().BeGreaterThan(releaseBlock.IndexOf("_autofillTarget      = null;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MouseLeavePreservesCursorDuringCapturedDrags()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

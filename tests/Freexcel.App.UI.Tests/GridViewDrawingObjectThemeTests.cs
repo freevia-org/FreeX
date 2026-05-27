@@ -165,6 +165,39 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void AnchoredObjectRendering_UsesSharedSinglePassMetricPlanner()
+    {
+        var planner = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridDrawingObjectPlanner.cs"));
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var plannerMethod = planner[
+            planner.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)..
+            planner.IndexOf("public static string GetNativeControlCaption", StringComparison.Ordinal)];
+        var renderTextBoxes = drawingObjects[
+            drawingObjects.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
+        var renderDrawingShapes = drawingObjects[
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
+        var renderPictures = pictures[
+            pictures.IndexOf("private void RenderPictures", StringComparison.Ordinal)..
+            pictures.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)];
+
+        plannerMethod.Should().Contain("TryFindAnchorRow(viewport.RowMetrics, anchor.Row");
+        plannerMethod.Should().Contain("TryFindAnchorColumn(viewport.ColMetrics, anchor.Col");
+        plannerMethod.Should().NotContain("FirstOrDefault");
+        renderTextBoxes.Should().Contain("TryCreateAnchoredObjectRect(textBox.Anchor");
+        renderTextBoxes.Should().NotContain("FirstOrDefault");
+        renderDrawingShapes.Should().Contain("TryCreateAnchoredObjectRect(shape.Anchor");
+        renderDrawingShapes.Should().NotContain("FirstOrDefault");
+        renderPictures.Should().Contain("TryCreateAnchoredObjectRect(picture.Anchor");
+        renderPictures.Should().NotContain("FirstOrDefault");
+    }
+
+    [Fact]
     public void GridView_ExposesObjectDisplayModeForExcelPlaceholderRendering()
     {
         var source =
