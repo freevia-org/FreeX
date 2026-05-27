@@ -69,6 +69,7 @@ public static partial class BuiltInFunctions
         ["UPPER"]       = (Upper, 1, 1),
         ["LOWER"]       = (Lower, 1, 1),
         ["PROPER"]      = (Proper, 1, 1),
+        ["ARABIC"]      = (Arabic, 1, 1),
         ["SUBSTITUTE"]  = (Substitute, 3, 4),
         ["FIND"]        = (Find, 2, 3),
         ["SEARCH"]      = (Search, 2, 3),

@@ -6,7 +6,63 @@ namespace Freexcel.Core.Formula;
 
 public static partial class BuiltInFunctions
 {
-    // Phase A1 text functions: ROMAN, UNICHAR, UNICODE, NUMBERVALUE.
+    // Phase A1 text functions: ARABIC, ROMAN, UNICHAR, UNICODE, NUMBERVALUE.
+
+    private static readonly IReadOnlyDictionary<string, int> ArabicRomanRemainders = BuildArabicRemainderMap();
+
+    private static ScalarValue Arabic(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ArabicScalar);
+        return ArabicScalar(args[0]);
+    }
+
+    private static ScalarValue ArabicScalar(ScalarValue value)
+    {
+        if (value is ErrorValue e) return e;
+        if (value is NumberValue or DateTimeValue or BoolValue) return ErrorValue.Value;
+
+        var text = ToText(value).Trim();
+        if (text.Length == 0) return new NumberValue(0);
+        if (text.Length > 255) return ErrorValue.Value;
+
+        var negative = text[0] == '-';
+        if (negative)
+        {
+            text = text[1..].TrimStart();
+            if (text.Length == 0 || text.Length > 255) return ErrorValue.Value;
+        }
+
+        if (!TryParseArabicRoman(text, out int result)) return ErrorValue.Value;
+        return new NumberValue(negative ? -result : result);
+    }
+
+    private static bool TryParseArabicRoman(string text, out int result)
+    {
+        result = 0;
+        var normalized = text.ToUpperInvariant();
+        if (normalized.Any(static c => c is not ('I' or 'V' or 'X' or 'L' or 'C' or 'D' or 'M')))
+            return false;
+
+        int thousands = 0;
+        while (thousands < normalized.Length && normalized[thousands] == 'M')
+            thousands++;
+
+        var remainder = normalized[thousands..];
+        if (!ArabicRomanRemainders.TryGetValue(remainder, out int remainderValue)) return false;
+
+        result = thousands * 1000 + remainderValue;
+        return result <= 255000;
+    }
+
+    private static IReadOnlyDictionary<string, int> BuildArabicRemainderMap()
+    {
+        var map = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int n = 0; n < 1000; n++)
+            for (int form = 0; form <= 4; form++)
+                map.TryAdd(ToRoman(n, form), n);
+        return map;
+    }
 
     private static ScalarValue Roman(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
