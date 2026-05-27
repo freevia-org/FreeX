@@ -100,6 +100,38 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void SplitPaneScrollbarTrackClickClearsDragOnlyState()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseDownBlock = source[
+            source.IndexOf("if (HitTestSplitPaneScrollbar(chrome, pos) is { } scrollbarHit)", StringComparison.Ordinal)..
+            source.IndexOf("if (Viewport is not null && HitTestSplitDividerHandle", StringComparison.Ordinal)];
+
+        mouseDownBlock.Should().Contain("_splitPaneScrollbarDragging = scrollbarHit.Part == SplitPaneScrollbarPart.Thumb");
+        mouseDownBlock.Should().Contain("if (!_splitPaneScrollbarDragging)");
+        mouseDownBlock.Should().Contain("_splitPaneScrollbarDragSource = null;");
+        mouseDownBlock.Should().Contain("_splitPaneScrollbarDragPointerOffset = 0;");
+        mouseDownBlock.IndexOf("if (!_splitPaneScrollbarDragging)", StringComparison.Ordinal)
+            .Should().BeLessThan(mouseDownBlock.IndexOf("CalculateSplitPaneScrollbarInteractionTarget", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SplitPaneScrollbarMouseUpPreservesThumbDragOffset()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseUpBlock = source[
+            source.IndexOf("if (_splitPaneScrollbarDragging)", source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal), StringComparison.Ordinal)..
+            source.IndexOf("if (_autofillDragging)", StringComparison.Ordinal)];
+
+        mouseUpBlock.Should().Contain("_splitPaneScrollbarDragSource is not null");
+        mouseUpBlock.Should().Contain("CalculateSplitPaneScrollbarThumbDragTarget(");
+        mouseUpBlock.Should().Contain("_splitPaneScrollbarDragPointerOffset");
+        mouseUpBlock.Should().NotContain("CalculateSplitPaneScrollbarScrollTarget(chrome, pos)");
+    }
+
+    [Fact]
     public void AutofillDragMouseMoveKeepsCrossCursorAndHandlesEvent()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

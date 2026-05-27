@@ -25,8 +25,11 @@ public static partial class BuiltInFunctions
         // ── Existing Phase-1 functions ──────────────────────────────────────
         ["SUM"]         = (Sum, 1, 255),
         ["AVERAGE"]     = (Average, 1, 255),
+        ["AVERAGEA"]    = (AverageA, 1, 255),
         ["MIN"]         = (Min, 1, 255),
+        ["MINA"]        = (MinA, 1, 255),
         ["MAX"]         = (Max, 1, 255),
+        ["MAXA"]        = (MaxA, 1, 255),
         ["COUNT"]       = (Count, 1, 255),
         ["COUNTA"]      = (CountA, 1, 255),
         ["IF"]          = (If, 2, 3),

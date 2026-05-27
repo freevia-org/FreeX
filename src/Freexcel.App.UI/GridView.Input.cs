@@ -250,6 +250,11 @@ public partial class GridView
                     : scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal
                         ? pos.X - _splitPaneScrollbarDragSource.Thumb.Left
                         : pos.Y - _splitPaneScrollbarDragSource.Thumb.Top;
+                if (!_splitPaneScrollbarDragging)
+                {
+                    _splitPaneScrollbarDragSource = null;
+                    _splitPaneScrollbarDragPointerOffset = 0;
+                }
                 if (CalculateSplitPaneScrollbarInteractionTarget(Viewport, chrome, pos) is { } scrollTarget)
                     SplitPaneScrollbarScrolled?.Invoke(scrollTarget);
                 Cursor = scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal ? Cursors.SizeWE : Cursors.SizeNS;
@@ -473,11 +478,13 @@ public partial class GridView
         if (_splitPaneScrollbarDragging)
         {
             var pos = e.GetPosition(this);
-            if (Viewport is not null)
+            if (Viewport is not null && _splitPaneScrollbarDragSource is not null)
             {
-                var chrome = CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight);
-                if (CalculateSplitPaneScrollbarScrollTarget(chrome, pos) is { } target)
-                    SplitPaneScrollbarScrolled?.Invoke(target);
+                var target = CalculateSplitPaneScrollbarThumbDragTarget(
+                    _splitPaneScrollbarDragSource,
+                    pos,
+                    _splitPaneScrollbarDragPointerOffset);
+                SplitPaneScrollbarScrolled?.Invoke(target);
             }
 
             _splitPaneScrollbarDragging = false;
