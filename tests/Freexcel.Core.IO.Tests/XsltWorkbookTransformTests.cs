@@ -91,6 +91,32 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_Success_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = IdentityStylesheet();
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        transformed.Length.Should().BeGreaterThan(0);
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_Failure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_SourceDtd_ReportsSourceDiagnostic()
     {
         using var source = StreamFromString("""

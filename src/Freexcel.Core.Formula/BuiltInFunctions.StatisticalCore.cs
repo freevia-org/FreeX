@@ -375,6 +375,18 @@ public static partial class BuiltInFunctions
         return NumberResult(Math.Sqrt(variance));
     }
 
+    private static ScalarValue StdevA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var r = VarA(args, ctx);
+        return r is NumberValue nv ? NumberResult(Math.Sqrt(nv.Value)) : r;
+    }
+
+    private static ScalarValue StdevPA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var r = VarPA(args, ctx);
+        return r is NumberValue nv ? NumberResult(Math.Sqrt(nv.Value)) : r;
+    }
+
     private static ScalarValue Median(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var (numsOrNull, err) = CollectNumbers(args);
@@ -414,9 +426,27 @@ public static partial class BuiltInFunctions
         return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
     }
 
+    private static ScalarValue VarA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var (list, err) = CollectAValues(args);
+        if (err is not null) return err;
+        if (list!.Count < 2) return ErrorValue.DivByZero;
+        double mean = list.Average();
+        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
+    }
+
     private static ScalarValue VarP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var (list, err) = CollectNumbers(args);
+        if (err is not null) return err;
+        if (list!.Count == 0) return ErrorValue.DivByZero;
+        double mean = list.Average();
+        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / list.Count);
+    }
+
+    private static ScalarValue VarPA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var (list, err) = CollectAValues(args);
         if (err is not null) return err;
         if (list!.Count == 0) return ErrorValue.DivByZero;
         double mean = list.Average();
@@ -427,6 +457,19 @@ public static partial class BuiltInFunctions
     {
         var r = VarP(args, ctx);
         return r is NumberValue nv ? NumberResult(Math.Sqrt(nv.Value)) : r;
+    }
+
+    private static (List<double>? Nums, ErrorValue? Error) CollectAValues(IReadOnlyList<ScalarValue> args, int start = 0)
+    {
+        var list = new List<double>();
+        for (var i = start; i < args.Count; i++)
+        {
+            var (values, error) = CollectAValues(args[i]);
+            if (error is not null) return (null, error);
+            list.AddRange(values);
+        }
+
+        return (list, null);
     }
 
     private static (List<double>? Nums, ErrorValue? Error) CollectNumbers(IReadOnlyList<ScalarValue> args, int start = 0)
