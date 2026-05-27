@@ -89,12 +89,13 @@ public sealed class FileDialogFilterBuilderTests
     public void BuildOpenFilter_RealAdaptersExposeExcelOpenAliases()
     {
         var filter = FileDialogFilterBuilder.BuildOpenFilter(
-            [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new NativeJsonAdapter()]);
+            [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter()]);
 
-        filter.Should().Contain("*.xlsx;*.xlsm;*.xltx;*.xltm;*.xls;*.xlsb;*.xlt;*.csv;*.fxl");
+        filter.Should().Contain("*.xlsx;*.xlsm;*.xltx;*.xltm;*.xls;*.xlsb;*.xlt;*.csv;*.xml;*.fxl");
         filter.Should().Contain("Excel Binary Workbook (*.xlsb)|*.xlsb");
         filter.Should().Contain("Excel 97-2003 Template (*.xlt)|*.xlt");
         filter.Should().Contain("Excel Macro-Enabled Template (*.xltm)|*.xltm");
+        filter.Should().Contain("XML Spreadsheet 2003 (*.xml)|*.xml");
         filter.Should().Contain("Freexcel Workbook (*.fxl)|*.fxl");
     }
 
@@ -102,9 +103,9 @@ public sealed class FileDialogFilterBuilderTests
     public void BuildSaveFilter_RealAdaptersExcludeOpenOnlyExcelFormats()
     {
         var filter = FileDialogFilterBuilder.BuildSaveFilter(
-            [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new NativeJsonAdapter()]);
+            [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter()]);
 
-        filter.Should().Be("Excel Workbook (*.xlsx)|*.xlsx|CSV (Comma-separated values) (*.csv)|*.csv|Freexcel Workbook (*.fxl)|*.fxl");
+        filter.Should().Be("Excel Workbook (*.xlsx)|*.xlsx|CSV (Comma-separated values) (*.csv)|*.csv|XML Spreadsheet 2003 (*.xml)|*.xml|Freexcel Workbook (*.fxl)|*.fxl");
         filter.Should().NotContain("Excel Macro-Enabled Workbook (*.xlsm)|*.xlsm");
         filter.Should().NotContain("Excel Template (*.xltx)|*.xltx");
         filter.Should().NotContain("Excel Macro-Enabled Template (*.xltm)|*.xltm");
@@ -156,6 +157,7 @@ public sealed class FileDialogFilterBuilderTests
     [InlineData(".xlsb", typeof(LegacyXlsFileAdapter), ".xlsb", false)]
     [InlineData("XLT", typeof(LegacyXlsFileAdapter), ".xlt", true)]
     [InlineData(".csv", typeof(CsvFileAdapter), ".csv", false)]
+    [InlineData(".xml", typeof(SpreadsheetXmlFileAdapter), ".xml", false)]
     [InlineData(".fxl", typeof(NativeJsonAdapter), ".fxl", false)]
     public void FindOpenAdapter_RealAdaptersResolveSupportedFormats(
         string extension,
@@ -163,7 +165,7 @@ public sealed class FileDialogFilterBuilderTests
         string expectedExtension,
         bool opensAsTemplate)
     {
-        var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new NativeJsonAdapter() };
+        var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter() };
 
         var result = FileDialogFilterBuilder.FindOpenAdapter(adapters, extension, out var format);
 
@@ -177,13 +179,14 @@ public sealed class FileDialogFilterBuilderTests
     [Theory]
     [InlineData("xlsx", typeof(XlsxFileAdapter), ".xlsx")]
     [InlineData(".CSV", typeof(CsvFileAdapter), ".csv")]
+    [InlineData(".xml", typeof(SpreadsheetXmlFileAdapter), ".xml")]
     [InlineData(".fxl", typeof(NativeJsonAdapter), ".fxl")]
     public void FindSaveAdapter_RealAdaptersResolveOnlySaveCapableFormats(
         string extension,
         Type expectedAdapterType,
         string expectedExtension)
     {
-        var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new NativeJsonAdapter() };
+        var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter() };
 
         var result = FileDialogFilterBuilder.FindSaveAdapter(adapters, extension, out var format);
 
