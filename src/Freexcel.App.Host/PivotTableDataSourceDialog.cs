@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Model;
@@ -37,6 +38,7 @@ public sealed class PivotTableDataSourceDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _sourceBox.Text = Result.SourceRangeText;
+        AutomationProperties.SetName(_sourceBox, "PivotTable source range");
         Content = CreateContent();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }

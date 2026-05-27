@@ -522,6 +522,25 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ShareWorkbookWorkflow_RoutesUnsavedAndSavedFilesThroughPlannerAndShareService()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var reviewSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.ReviewCommands.cs"));
+        var backstageSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Backstage.cs"));
+        var shareMethod = ExtractMethodSource(reviewSource, "private async Task ShareWorkbookAsync(");
+
+        shareMethod.Should().Contain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
+        shareMethod.Should().Contain("ShareWorkbookPlanKind.SaveAsBeforeShare");
+        shareMethod.Should().Contain("SaveWorkbookWithDialogAsync()");
+        shareMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(plan.Path, _fileAdapters, out var target)");
+        shareMethod.Should().Contain("SaveWorkbookToTargetAsync(target!)");
+        shareMethod.Should().Contain("_shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name)");
+
+        reviewSource.Should().Contain("private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();");
+        backstageSource.Should().Contain("await ShareWorkbookAsync();");
+    }
+
+    [Fact]
     public void FormulaCommands_LiveOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;

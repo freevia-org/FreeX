@@ -388,6 +388,55 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedFormControlsRetentionPackage_LinksWorksheetControlAndActiveXParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-form-controls-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        var worksheetRelsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        var activeXRelsEntry = archive.GetEntry("xl/activeX/_rels/activeX1.xml.rels");
+        worksheetEntry.Should().NotBeNull();
+        worksheetRelsEntry.Should().NotBeNull();
+        activeXRelsEntry.Should().NotBeNull();
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+        XDocument worksheetRelsXml;
+        using (var stream = worksheetRelsEntry!.Open())
+            worksheetRelsXml = XDocument.Load(stream);
+        XDocument activeXRelsXml;
+        using (var stream = activeXRelsEntry!.Open())
+            activeXRelsXml = XDocument.Load(stream);
+
+        var control = worksheetXml.Root!
+            .Element(sheetNs + "controls")!
+            .Elements(sheetNs + "control")
+            .Should().ContainSingle().Subject;
+        var controlRelationshipId = control.Attribute(relNs + "id")!.Value;
+        control.Attribute("name")!.Value.Should().Be("Freexcel Button");
+
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == controlRelationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp" &&
+                relationship.Attribute("Target")?.Value == "../ctrlProps/ctrlProp1.xml")
+            .Should().ContainSingle();
+        activeXRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary" &&
+                relationship.Attribute("Target")?.Value == "activeX1.bin")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()
@@ -2599,6 +2648,42 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void RegressionFormulaCachedRows_OpenSaveReloadPreservesFormulaCells()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "regression")
+            .Where(row => row.FeatureTags.Contains("cached-results", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        rows.Should().HaveCount(9, "the regression corpus currently declares nine Excel-authored cached formula workbooks");
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            File.Exists(path).Should().BeTrue(row.Id);
+
+            using var source = File.OpenRead(path);
+            var workbook = adapter.Load(source);
+            var before = CaptureFormulaCellSummaries(workbook);
+            before.Should().NotBeEmpty(row.Id);
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Length.Should().BeGreaterThan(0, row.Id);
+            AssertPackageHealth(saved, row.Id);
+
+            saved.Position = 0;
+            var roundTripped = adapter.Load(saved);
+            CaptureFormulaCellSummaries(roundTripped).Should().BeEquivalentTo(
+                before,
+                options => options.WithStrictOrdering(),
+                row.Id);
+        }
+    }
+
+    [Fact]
     public void PublicCorpusRows_WithUnsupportedWarningTags_ReportExpectedFeaturesWhenFilesArePresent()
     {
         var workspace = FindWorkspaceRoot();
@@ -3320,6 +3405,20 @@ public class XlsxCorpusRunnerTests
             metadata.Comment,
             ToRangeSummary(range));
     }
+
+    private static IReadOnlyList<FormulaCellSummary> CaptureFormulaCellSummaries(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany(sheet => sheet.EnumerateCells()
+                .Where(item => item.Cell.HasFormula)
+                .OrderBy(item => item.Address.Row)
+                .ThenBy(item => item.Address.Col)
+                .Select(item => new FormulaCellSummary(
+                    sheet.Name,
+                    item.Address.Row,
+                    item.Address.Col,
+                    item.Cell.FormulaText ?? "",
+                    CaptureScalarValueSummary(item.Cell.Value))))
+            .ToArray();
 
     private static CellSummary CaptureCellSummary(Workbook workbook, CellAddress address, Cell cell) =>
         new(
@@ -4658,6 +4757,13 @@ public class XlsxCorpusRunnerTests
         string FormulaText,
         bool IgnoreFormulaError,
         CellStyleSummary? Style);
+
+    private sealed record FormulaCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column,
+        string FormulaText,
+        ScalarValueSummary CachedValue);
 
     private sealed record ScalarValueSummary(string Kind, string Value);
 

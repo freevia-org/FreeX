@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -27,6 +28,7 @@ public sealed class ZoomDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _zoomBox.Text = currentZoomPercent.ToString(CultureInfo.InvariantCulture);
+        AutomationProperties.SetName(_zoomBox, "Custom zoom percent");
         Content = CreateZoomContent(currentZoomPercent);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
