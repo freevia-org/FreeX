@@ -3288,10 +3288,22 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <ui:GridView x:Name="SheetGrid" Grid.Column="0"/>
-            <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
-            <Canvas x:Name="EditOverlay" Grid.Column="0"
-                    IsHitTestVisible="False" Panel.ZIndex="20"/>
+            <Grid Grid.Column="0">
+                <ui:GridView x:Name="SheetGrid"/>
+                <DockPanel VerticalAlignment="Bottom"
+                           LastChildFill="True"
+                           IsHitTestVisible="False"
+                           Panel.ZIndex="15">
+                    <Border x:Name="GridBottomRuleSpacer"
+                            DockPanel.Dock="Left"
+                            Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"/>
+                    <Border BorderBrush="{StaticResource FreexcelBorderStrongBrush}"
+                            BorderThickness="0,0,0,1"/>
+                </DockPanel>
+                <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
+                <Canvas x:Name="EditOverlay"
+                        IsHitTestVisible="False" Panel.ZIndex="20"/>
+            </Grid>
 
             <ScrollBar x:Name="VerticalScroll" Grid.Column="1"
                        Orientation="Vertical" Minimum="1" Maximum="1000000" Value="1" SmallChange="1"
@@ -3613,20 +3625,28 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="20" Height="20" Padding="0"
+                <Border x:Name="SheetTabsLeadingSpacer" Grid.Column="0"
+                        Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"
+                        BorderBrush="{StaticResource FreexcelBorderStrongBrush}"
+                        BorderThickness="0,0,0,1"
+                        IsHitTestVisible="False"/>
+
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="1" Content="&lt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
-                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="2,0,0,0"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="2,2,0,0"
                         local:RibbonTooltip.Title="Scroll Tabs Left"
                         local:RibbonTooltip.KeyTip="SL"
                         local:RibbonTooltip.Description="Scroll the sheet tab list to the left."/>
 
                 <!-- Sheet tabs in a clipped, scrollbar-free viewport -->
-                <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="1"
+                <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="2"
+                              Margin="0,0,0,0"
                               HorizontalScrollBarVisibility="Hidden"
                               VerticalScrollBarVisibility="Disabled"
                               ScrollChanged="SheetTabsScroller_ScrollChanged"
@@ -3641,7 +3661,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="TabBorder"
-                                            CornerRadius="3,3,0,0" Padding="10,3,10,1"
+                                            CornerRadius="0,0,7,7" Padding="12,4,12,3"
                                             Cursor="Hand"
                                             Focusable="True"
                                             MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
@@ -3651,21 +3671,23 @@
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="Background"       Value="{Binding TabBrush}"/>
-                                                <Setter Property="BorderBrush"      Value="{StaticResource FreexcelBorderBrush}"/>
-                                                <Setter Property="BorderThickness"  Value="1"/>
-                                                <Setter Property="Margin"           Value="2,0,0,0"/>
+                                                <Setter Property="BorderBrush"      Value="{StaticResource FreexcelBorderStrongBrush}"/>
+                                                <Setter Property="BorderThickness"  Value="1,0,1,1"/>
+                                                <Setter Property="Margin"           Value="-1,0,0,1"/>
+                                                <Setter Property="Panel.ZIndex"     Value="0"/>
+                                                <Setter Property="MinHeight"        Value="25"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                                         <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
-                                                        <Setter Property="BorderBrush"     Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
-                                                        <Setter Property="BorderThickness" Value="0"/>
-                                                        <Setter Property="Margin"          Value="2,-1,0,0"/>
+                                                        <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
+                                                        <Setter Property="Margin"          Value="-1,-1,0,0"/>
+                                                        <Setter Property="Panel.ZIndex"    Value="5"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                         <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
-                                                        <Setter Property="BorderBrush"     Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
-                                                        <Setter Property="BorderThickness" Value="0"/>
-                                                        <Setter Property="Margin"          Value="2,-1,0,0"/>
+                                                        <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
+                                                        <Setter Property="Margin"          Value="-1,-2,0,0"/>
+                                                        <Setter Property="Panel.ZIndex"    Value="10"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -3731,11 +3753,11 @@
                         </ItemsControl>
                 </ScrollViewer>
 
-                <Button x:Name="AddSheetButton" Grid.Column="2" Content="+" MinWidth="36" MinHeight="22"
-                        FontSize="13" FontWeight="SemiBold" Margin="2,0,0,0" Padding="10,3,10,1"
-                        Background="#FAFCFA" BorderBrush="{StaticResource FreexcelBorderBrush}" BorderThickness="1,1,1,0"
-                        Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.82"
-                        VerticalAlignment="Center" Cursor="Hand"
+                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="38" MinHeight="25"
+                        FontSize="13" FontWeight="SemiBold" Margin="-1,0,0,1" Padding="12,4,12,3"
+                        Background="#FBFDFB" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1,0,1,1"
+                        Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.72"
+                        VerticalAlignment="Top" Cursor="Hand"
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         AutomationProperties.Name="Insert Sheet"
                         AutomationProperties.HelpText="Add a new sheet to the workbook."
@@ -3749,7 +3771,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="3,3,0,0"
+                                    CornerRadius="0,0,7,7"
                                     Opacity="{TemplateBinding Opacity}"
                                     SnapsToDevicePixels="True">
                                 <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -3771,16 +3793,16 @@
                     </Button.Template>
                 </Button>
 
-                <Button x:Name="SheetNavRightBtn" Grid.Column="4" Content="&gt;" Width="20" Height="20" Padding="0"
+                <Button x:Name="SheetNavRightBtn" Grid.Column="5" Content="&gt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
-                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="2,0,0,0"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="2,2,0,0"
                         HorizontalAlignment="Right"
                         local:RibbonTooltip.Title="Scroll Tabs Right"
                         local:RibbonTooltip.KeyTip="SR"
                         local:RibbonTooltip.Description="Scroll the sheet tab list to the right."/>
 
                 <!-- Horizontal scrollbar (Excel-style, right of sheet tabs) -->
-                <ScrollBar x:Name="HorizontalScroll" Grid.Column="5"
+                <ScrollBar x:Name="HorizontalScroll" Grid.Column="6"
                            Orientation="Horizontal" Minimum="1" Maximum="16384" Value="1"
                            SmallChange="1" VerticalAlignment="Center" Margin="2,0"
                            AutomationProperties.Name="Horizontal Worksheet Scroll Bar"
