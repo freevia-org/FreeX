@@ -16,20 +16,22 @@ public static class SplitPaneCellLayoutPlanner
         var leftColumns = splitPanes.LeftColumns ?? [];
         var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
         var bottomLeftRows = splitPanes.BottomLeftRows ?? viewport.RowMetrics;
-        var topRowLookup = topRows.ToDictionary(row => row.Row);
-        var bottomLeftRowLookup = bottomLeftRows.ToDictionary(row => row.Row);
-        var leftColumnLookup = leftColumns.ToDictionary(column => column.Col);
-        var topRightColumnLookup = topRightColumns.ToDictionary(column => column.Col);
+        var topRowLookup = BuildRowLookup(topRows);
+        var bottomLeftRowLookup = BuildRowLookup(bottomLeftRows);
+        var leftColumnLookup = BuildColumnLookup(leftColumns);
+        var topRightColumnLookup = BuildColumnLookup(topRightColumns);
         var cells = splitPanes.Cells ?? [];
         var mergeLookup = MergeRangeIndex.Create(mergedRegions, cells);
         var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
         var horizontalY = dividerLayout.HorizontalY ?? GridView.ColHeaderHeight;
         var verticalX = dividerLayout.VerticalX ?? GridView.CalculateRowHeaderWidth(viewport);
         var layouts = new List<SplitPaneCellLayout>();
-        var occupied = new HashSet<(uint Row, uint Col)>(
-            cells
-            .Where(cell => !string.IsNullOrEmpty(cell.DisplayText))
-            .Select(cell => (cell.Row, cell.Col)));
+        var occupied = new HashSet<(uint Row, uint Col)>();
+        foreach (var cell in cells)
+        {
+            if (!string.IsNullOrEmpty(cell.DisplayText))
+                occupied.Add((cell.Row, cell.Col));
+        }
 
         foreach (var cell in cells)
         {
@@ -78,6 +80,24 @@ public static class SplitPaneCellLayoutPlanner
         }
 
         return layouts;
+    }
+
+    private static Dictionary<uint, RowMetric> BuildRowLookup(IReadOnlyList<RowMetric> rows)
+    {
+        var lookup = new Dictionary<uint, RowMetric>(rows.Count);
+        foreach (var row in rows)
+            lookup.Add(row.Row, row);
+
+        return lookup;
+    }
+
+    private static Dictionary<uint, ColMetric> BuildColumnLookup(IReadOnlyList<ColMetric> columns)
+    {
+        var lookup = new Dictionary<uint, ColMetric>(columns.Count);
+        foreach (var column in columns)
+            lookup.Add(column.Col, column);
+
+        return lookup;
     }
 
     private static bool CanOverflowSplitPaneText(DisplayCell cell, GridRange? merge) =>
