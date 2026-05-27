@@ -15,11 +15,11 @@ public static class SplitPaneScrollbarLayoutPlanner
         int visibleCount,
         uint maxIndex)
     {
-        var trackLength = Math.Max(0, TrackLength(orientation, track) - 2);
+        var trackLength = InnerTrackLength(orientation, track);
         var thumbLength = Math.Min(
             trackLength,
             Math.Max(MinThumbLength, trackLength * Math.Max(1, visibleCount) / maxIndex));
-        var available = Math.Max(0, TrackLength(orientation, track) - thumbLength - 2);
+        var available = Math.Max(0, InnerTrackLength(orientation, track) - thumbLength);
         var maxStartIndex = Math.Max(1, maxIndex - (uint)Math.Max(1, visibleCount) + 1);
         var ratio = maxStartIndex <= 1
             ? 0
@@ -70,7 +70,7 @@ public static class SplitPaneScrollbarLayoutPlanner
         uint step = 3)
     {
         var next = (long)Math.Max(1, currentIndex) - (long)notches * step;
-        var clamped = (uint)Math.Max(1, Math.Min(scrollbar.MaxStartIndex, next));
+        var clamped = ClampStartIndex(scrollbar.MaxStartIndex, next);
         return new SplitPaneScrollbarScrollTarget(scrollbar.Region, scrollbar.Orientation, clamped);
     }
 
@@ -89,10 +89,16 @@ public static class SplitPaneScrollbarLayoutPlanner
 
     private static uint IndexFromTrackPosition(SplitPaneScrollbar scrollbar, double position)
     {
-        var available = Math.Max(1, TrackLength(scrollbar.Orientation, scrollbar.Track) - TrackLength(scrollbar.Orientation, scrollbar.Thumb) - 2);
+        var available = Math.Max(1, InnerTrackLength(scrollbar.Orientation, scrollbar.Track) - TrackLength(scrollbar.Orientation, scrollbar.Thumb));
         var ratio = Math.Max(0, Math.Min(1, (position - TrackStart(scrollbar.Orientation, scrollbar.Track) - 1) / available));
-        return (uint)Math.Max(1, Math.Min(scrollbar.MaxStartIndex, 1 + Math.Round(ratio * (scrollbar.MaxStartIndex - 1))));
+        return ClampStartIndex(scrollbar.MaxStartIndex, (long)(1 + Math.Round(ratio * (scrollbar.MaxStartIndex - 1))));
     }
+
+    private static double InnerTrackLength(SplitPaneScrollbarOrientation orientation, Rect rect) =>
+        Math.Max(0, TrackLength(orientation, rect) - 2);
+
+    private static uint ClampStartIndex(uint maxStartIndex, long index) =>
+        (uint)Math.Max(1, Math.Min(maxStartIndex, index));
 
     private static double TrackStart(SplitPaneScrollbarOrientation orientation, Rect rect) =>
         orientation == SplitPaneScrollbarOrientation.Horizontal ? rect.Left : rect.Top;

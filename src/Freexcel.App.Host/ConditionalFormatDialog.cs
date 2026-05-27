@@ -125,13 +125,8 @@ public partial class ConditionalFormatDialog : Window
         _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
         _colorScaleMaxColorButton = CreateColorScaleColorButton(_colorScaleMaxColorBox, "Choose maximum color");
-        _dateOccurringPeriodBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
-        foreach (var (label, _) in DateOccurringPeriods) _dateOccurringPeriodBox.Items.Add(label);
-        _dateOccurringPeriodBox.SelectedItem = "Today";
-        _duplicateValuesKindBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
-        _duplicateValuesKindBox.Items.Add("Duplicate");
-        _duplicateValuesKindBox.Items.Add("Unique");
-        _duplicateValuesKindBox.SelectedItem = "Duplicate";
+        _dateOccurringPeriodBox = CreateDateOccurringPeriodBox();
+        _duplicateValuesKindBox = CreateDuplicateValuesKindBox();
 
         if (isFormula)
         {
@@ -140,9 +135,7 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(CreateAccessLabel("_Formula:", _formulaBox));
             inner.Children.Add(_formulaBox);
             // placeholders needed by Ok_Click — never shown
-            _value1Box  = new TextBox();
-            _value2Box  = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else if (isDataBar)
         {
@@ -171,9 +164,7 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(CreateAccessLabel("Negative _border color:", _dataBarNegativeBorderColorBox));
             inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeBorderColorBox, _dataBarNegativeBorderColorButton));
 
-            _value1Box  = new TextBox();
-            _value2Box  = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else if (isColorScale)
         {
@@ -198,9 +189,7 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(CreateAccessLabel("Ma_ximum color:", _colorScaleMaxColorBox));
             inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMaxColorBox, _colorScaleMaxColorButton));
 
-            _value1Box  = new TextBox();
-            _value2Box  = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else if (isIconSet)
         {
@@ -215,9 +204,7 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(new TextBlock { Text = "Thresholds:", Margin = new Thickness(0, 4, 0, 2) });
             inner.Children.Add(_iconSetThresholdPanel);
 
-            _value1Box  = new TextBox();
-            _value2Box  = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else if (isDateOccurring && !IsContainsShellRuleType(ruleType))
         {
@@ -225,9 +212,7 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(CreateAccessLabel("_Date period:", _dateOccurringPeriodBox));
             inner.Children.Add(_dateOccurringPeriodBox);
 
-            _value1Box  = new TextBox();
-            _value2Box  = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else if (isDuplicateValues)
         {
@@ -235,9 +220,7 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(CreateAccessLabel("Format cells that _contain:", _duplicateValuesKindBox));
             inner.Children.Add(_duplicateValuesKindBox);
 
-            _value1Box  = new TextBox();
-            _value2Box  = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else
         {
@@ -255,9 +238,7 @@ public partial class ConditionalFormatDialog : Window
             else
             {
                 Height = 180;
-                _value1Box = new TextBox();
-                _value2Box = new TextBox();
-                _value2Label = new Label();
+                ResetValueInputs();
             }
         }
 
@@ -441,6 +422,31 @@ public partial class ConditionalFormatDialog : Window
     private static Label CreateAccessLabel(string content, Control target) =>
         new() { Content = content, Target = target, Padding = new Thickness(0) };
 
+    private static ComboBox CreateDuplicateValuesKindBox()
+    {
+        var comboBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
+        comboBox.Items.Add("Duplicate");
+        comboBox.Items.Add("Unique");
+        comboBox.SelectedItem = "Duplicate";
+        return comboBox;
+    }
+
+    private static ComboBox CreateDateOccurringPeriodBox()
+    {
+        var comboBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
+        foreach (var (label, _) in DateOccurringPeriods)
+            comboBox.Items.Add(label);
+        comboBox.SelectedItem = "Today";
+        return comboBox;
+    }
+
+    private void ResetValueInputs()
+    {
+        _value1Box = new TextBox();
+        _value2Box = new TextBox();
+        _value2Label = new Label();
+    }
+
     private void RefreshRuleDescription(string ruleType)
     {
         _ruleType = ruleType;
@@ -477,9 +483,7 @@ public partial class ConditionalFormatDialog : Window
             _formulaBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "=" };
             inner.Children.Add(CreateAccessLabel("_Formula:", _formulaBox));
             inner.Children.Add(_formulaBox);
-            _value1Box = new TextBox();
-            _value2Box = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else if (isDataBar)
         {
@@ -526,9 +530,7 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeFillColorBox, _dataBarNegativeFillColorButton));
             inner.Children.Add(CreateAccessLabel("Negative _border color:", _dataBarNegativeBorderColorBox));
             inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeBorderColorBox, _dataBarNegativeBorderColorButton));
-            _value1Box = new TextBox();
-            _value2Box = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else if (isColorScale)
         {
@@ -567,9 +569,7 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(_colorScaleMaxValueBox);
             inner.Children.Add(CreateAccessLabel("Ma_ximum color:", _colorScaleMaxColorBox));
             inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMaxColorBox, _colorScaleMaxColorButton));
-            _value1Box = new TextBox();
-            _value2Box = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
             UpdateColorScaleMidpointState();
         }
         else if (isIconSet)
@@ -588,34 +588,23 @@ public partial class ConditionalFormatDialog : Window
             inner.Children.Add(_iconSetReverseBox);
             inner.Children.Add(new TextBlock { Text = "Thresholds:", Margin = new Thickness(0, 4, 0, 2) });
             inner.Children.Add(_iconSetThresholdPanel);
-            _value1Box = new TextBox();
-            _value2Box = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else if (isDuplicateValues)
         {
             Height = 220;
-            _duplicateValuesKindBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
-            _duplicateValuesKindBox.Items.Add("Duplicate");
-            _duplicateValuesKindBox.Items.Add("Unique");
-            _duplicateValuesKindBox.SelectedItem = "Duplicate";
+            _duplicateValuesKindBox = CreateDuplicateValuesKindBox();
             inner.Children.Add(CreateAccessLabel("Format cells that _contain:", _duplicateValuesKindBox));
             inner.Children.Add(_duplicateValuesKindBox);
-            _value1Box = new TextBox();
-            _value2Box = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else if (isDateOccurring && !IsContainsShellRuleType(ruleType))
         {
             Height = 220;
-            _dateOccurringPeriodBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
-            foreach (var (label, _) in DateOccurringPeriods) _dateOccurringPeriodBox.Items.Add(label);
-            _dateOccurringPeriodBox.SelectedItem = "Today";
+            _dateOccurringPeriodBox = CreateDateOccurringPeriodBox();
             inner.Children.Add(CreateAccessLabel("_Date period:", _dateOccurringPeriodBox));
             inner.Children.Add(_dateOccurringPeriodBox);
-            _value1Box = new TextBox();
-            _value2Box = new TextBox();
-            _value2Label = new Label();
+            ResetValueInputs();
         }
         else
         {
@@ -633,9 +622,7 @@ public partial class ConditionalFormatDialog : Window
             else
             {
                 Height = 180;
-                _value1Box = new TextBox();
-                _value2Box = new TextBox();
-                _value2Label = new Label();
+                ResetValueInputs();
             }
         }
 
@@ -716,9 +703,7 @@ public partial class ConditionalFormatDialog : Window
         }
         else if (kind == "Dates Occurring")
         {
-            _dateOccurringPeriodBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
-            foreach (var (label, _) in DateOccurringPeriods) _dateOccurringPeriodBox.Items.Add(label);
-            _dateOccurringPeriodBox.SelectedItem = "Today";
+            _dateOccurringPeriodBox = CreateDateOccurringPeriodBox();
             inner.Children.Add(CreateAccessLabel("_Date period:", _dateOccurringPeriodBox));
             inner.Children.Add(_dateOccurringPeriodBox);
         }
