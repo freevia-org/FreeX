@@ -373,12 +373,19 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private IReadOnlyList<RibbonAdaptiveGroup>? _ribbonAdaptiveGroupCache;");
         fields.Should().Contain("private IReadOnlyList<double> _ribbonResizeThresholds = [];");
         fields.Should().Contain("private bool _ribbonResizeNormalizationRequired = true;");
+        fields.Should().Contain("private string? _lastRibbonAdaptiveAppliedStateKey;");
         source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
         source.Should().Contain("_ribbonAdaptiveGroupCache");
         source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])");
         source.Should().Contain("UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);");
         source.Should().Contain("RibbonAdaptiveLayoutPlanner.Plan(width, adaptiveGroups, fixedChromeWidth)");
         source.Should().Contain("ApplyBreakpointOverrides(width, groupNames, states)");
+        source.Should().Contain("EnsureRibbonCollapsedGroupButtons(activePanel, groups)");
+        source.Should().Contain("FitRibbonAdaptiveStatesToWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth)");
+        source.Should().Contain("ExpandRibbonAdaptiveStatesIntoAvailableWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth)");
+        source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth)");
+        source.Should().Contain("CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates)");
+        source.Should().NotContain("RemoveRibbonCollapsedGroupButtons(activePanel)");
     }
 
     [Fact]
