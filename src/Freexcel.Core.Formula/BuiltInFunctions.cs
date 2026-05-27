@@ -432,6 +432,8 @@ public static partial class BuiltInFunctions
         ["T.INV.2T"]     = (TInv2TFunc, 2, 2),
         ["TTEST"]        = (TTest, 4, 4),
         ["T.TEST"]       = (TTest, 4, 4),
+        ["ZTEST"]        = (ZTest, 2, 3),
+        ["Z.TEST"]       = (ZTest, 2, 3),
         ["FDIST"]        = (FDistRt, 3, 3),
         ["F.DIST"]       = (FDist, 4, 4),
         ["F.DIST.RT"]    = (FDistRt, 3, 3),
