@@ -8,6 +8,38 @@ namespace Freexcel.Core.IO.Tests;
 public sealed class XlsxPackageMetadataMergerTests
 {
     [Fact]
+    public void MergeContentTypes_PreservesDefaultsAndSkipsExcludedOverrides()
+    {
+        using var sourcePackage = CreatePackageWithAdditionalContentTypes();
+        using var targetPackage = CreatePackageWithExistingContentTypes();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        XlsxPackageMetadataMerger.MergeContentTypes(
+            sourceArchive,
+            targetArchive,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "xl/media/image1.png" });
+
+        var contentTypesXml = LoadXml(targetArchive.GetEntry("[Content_Types].xml")!);
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Default")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("Extension") == "png" &&
+                (string?)element.Attribute("ContentType") == "image/png");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Should()
+            .ContainSingle(element => (string?)element.Attribute("PartName") == "/xl/worksheets/sheet2.xml");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Should()
+            .NotContain(element => (string?)element.Attribute("PartName") == "/xl/media/image1.png");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesPercentEncodedInternalTargetsForCopiedParts()
     {
         using var sourcePackage = CreatePackageWithPercentEncodedMediaRelationship();
@@ -56,6 +88,47 @@ public sealed class XlsxPackageMetadataMergerTests
         externalRelationships.Should().ContainSingle(element =>
             (string?)element.Attribute("Target") == "https://example.com/from-source" &&
             (string?)element.Attribute("Id") != "rIdHyperlink");
+    }
+
+    private static MemoryStream CreatePackageWithAdditionalContentTypes()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="png" ContentType="image/png"/>
+                  <Override PartName="/xl/media/image1.png"
+                            ContentType="image/png"/>
+                  <Override PartName="/xl/worksheets/sheet2.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                </Types>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream CreatePackageWithExistingContentTypes()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                </Types>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
     }
 
     private static MemoryStream CreatePackageWithPercentEncodedMediaRelationship()
