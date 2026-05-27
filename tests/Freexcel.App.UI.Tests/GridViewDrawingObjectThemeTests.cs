@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Windows;
+using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
@@ -110,7 +111,31 @@ public sealed class GridViewDrawingObjectThemeTests
 
         source.Should().Contain("DrawPictureSelectionAdorner");
         source.Should().Contain("SelectedRange?.Start != picture.Anchor");
-        source.Should().Contain("dc.DrawRectangle(null, selectedPen, rect);");
+        source.Should().Contain("dc.DrawRectangle(null, PictureSelectionPen, rect);");
+    }
+
+    [Fact]
+    public void PictureRenderer_ReusesFrozenStaticResources()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var renderStart = source.IndexOf("private void RenderPictures", StringComparison.Ordinal);
+        var renderEnd = source.IndexOf("private static bool HasPictureCrop", StringComparison.Ordinal);
+        renderStart.Should().BeGreaterThanOrEqualTo(0);
+        renderEnd.Should().BeGreaterThan(renderStart);
+        var renderPictures = source[
+            renderStart..
+            renderEnd];
+
+        GetStaticResource<Pen>("PictureBorderPen").IsFrozen.Should().BeTrue();
+        GetStaticResource<Pen>("PictureGridPen").IsFrozen.Should().BeTrue();
+        GetStaticResource<Brush>("PictureSelectionBrush").IsFrozen.Should().BeTrue();
+        GetStaticResource<Pen>("PictureSelectionPen").IsFrozen.Should().BeTrue();
+        source.Should().Contain("private static readonly Pen PictureBorderPen = CreateFrozenPen");
+        source.Should().Contain("private static readonly Pen PictureGridPen = CreateFrozenPen");
+        source.Should().Contain("private static readonly Brush PictureSelectionBrush = MakeBrush");
+        source.Should().Contain("private static readonly Pen PictureSelectionPen = CreateFrozenPen");
+        renderPictures.Should().NotContain("new Pen(new SolidColorBrush");
+        renderPictures.Should().NotContain("new SolidColorBrush");
     }
 
     [Fact]
@@ -300,6 +325,13 @@ public sealed class GridViewDrawingObjectThemeTests
         thread.Join();
         if (exception is not null)
             throw exception;
+    }
+
+    private static T GetStaticResource<T>(string fieldName)
+    {
+        var field = typeof(GridView).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static);
+        field.Should().NotBeNull();
+        return field!.GetValue(null).Should().BeAssignableTo<T>().Subject;
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
