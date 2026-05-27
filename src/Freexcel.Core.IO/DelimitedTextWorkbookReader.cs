@@ -172,6 +172,7 @@ internal static partial class DelimitedTextWorkbookReader
                 double.TryParse(field.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out _) ||
                 TryParsePercentage(field.Value, out _) ||
                 TryParseCurrency(field.Value, out _),
+            '(' => TryParseCurrency(field.Value, out _),
             _ => false
         };
     }
