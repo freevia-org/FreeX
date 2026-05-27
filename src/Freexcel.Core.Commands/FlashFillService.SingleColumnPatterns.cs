@@ -6,7 +6,8 @@ public static partial class FlashFillService
 {
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', '-', '_', '@', '/', '\\'];
-    private static readonly (char Open, char Close)[] PairedDelimiters = [('(', ')'), ('[', ']'), ('{', '}')];
+    private static readonly (char Open, char Close)[] PairedDelimiters =
+        [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ('\'', '\''), ('<', '>')];
 
     private static Func<string, string?>? TryConstant(IReadOnlyList<(string Source, string Expected)> examples)
     {
