@@ -61,7 +61,22 @@ public partial class MainWindow
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         NormalizeRibbonSurfaceAfterLayoutChange();
-        UpdateViewport();
+        ScheduleViewportResizeRefresh();
+    }
+
+    private void ScheduleViewportResizeRefresh()
+    {
+        if (_resizeViewportRefreshPending)
+            return;
+
+        _resizeViewportRefreshPending = true;
+        Dispatcher.BeginInvoke(
+            () =>
+            {
+                _resizeViewportRefreshPending = false;
+                UpdateViewport();
+            },
+            System.Windows.Threading.DispatcherPriority.Render);
     }
 
     private string FormatCellReference(CellAddress address) =>

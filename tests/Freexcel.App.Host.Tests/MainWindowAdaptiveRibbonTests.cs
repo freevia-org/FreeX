@@ -283,7 +283,32 @@ public sealed class MainWindowAdaptiveRibbonTests
             source.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal));
 
         method.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange");
+        method.Should().Contain("ScheduleViewportResizeRefresh();");
         method.Should().NotContain("UpdateRibbonCompactMode();");
+    }
+
+    [Fact]
+    public void WindowResize_CoalescesViewportRefreshBeforeRender()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+
+        var sizeChanged = source.Substring(
+            source.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal),
+            source.IndexOf("private void ScheduleViewportResizeRefresh", StringComparison.Ordinal) -
+            source.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal));
+        var scheduler = source.Substring(
+            source.IndexOf("private void ScheduleViewportResizeRefresh", StringComparison.Ordinal),
+            source.IndexOf("private string FormatCellReference", StringComparison.Ordinal) -
+            source.IndexOf("private void ScheduleViewportResizeRefresh", StringComparison.Ordinal));
+        var fields = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        fields.Should().Contain("private bool _resizeViewportRefreshPending;");
+        sizeChanged.Should().Contain("ScheduleViewportResizeRefresh();");
+        sizeChanged.Should().NotContain("UpdateViewport();");
+        scheduler.Should().Contain("_resizeViewportRefreshPending");
+        scheduler.Should().Contain("Dispatcher.BeginInvoke");
+        scheduler.Should().Contain("DispatcherPriority.Render");
+        scheduler.Should().Contain("UpdateViewport();");
     }
 
     [Fact]
