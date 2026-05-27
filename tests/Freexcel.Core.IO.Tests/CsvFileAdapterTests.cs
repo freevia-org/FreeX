@@ -335,6 +335,18 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForPercentages()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("12.5%,-3%,4%\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(0.125));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(-0.03));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(0.04));
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForCurrencyValues()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"$1,234.50\",($42.25)\r\n"));
@@ -395,6 +407,20 @@ public sealed class CsvFileAdapterTests
             .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
             .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 21, 30, 0)));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForIsoDateTimesWithOffsets()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T12:30+03:00,2026-05-17T09:30Z\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        var expectedUtc = new DateTime(2026, 5, 17, 9, 30, 0);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
     }
 
     [Fact]
@@ -542,6 +568,28 @@ public sealed class CsvFileAdapterTests
     [InlineData("+$42.00")]
     [InlineData("-$42.00")]
     public void Save_RoundTripsSignedCurrencyTextFieldsAsLiteralText(string text)
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue(text));
+    }
+
+    [Theory]
+    [InlineData("+12%")]
+    [InlineData("-3%")]
+    public void Save_RoundTripsSignedPercentageTextFieldsAsLiteralText(string text)
     {
         var workbook = new Workbook("Book1");
         var sheet = workbook.AddSheet("Sheet1");

@@ -222,7 +222,7 @@ public sealed partial class PrintPreviewDialog : Window
         };
         var currentPageButton = new RadioButton
         {
-            Content = "Current pa_ge",
+            Content = "Current pag_e",
             GroupName = "PrintPageRange",
             Margin = new Thickness(0, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center,

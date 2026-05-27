@@ -125,14 +125,14 @@ public sealed class DelimitedTextFileAdapterTests
     public void Load_UsesExcelLikeTextCoercionForPercentages()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("12.5%\t-3%\t\"-4%\"\r\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("12.5%\t-3%\t4%\r\n"));
 
         var workbook = adapter.Load(stream);
         var sheet = workbook.Sheets.Single();
 
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(0.125));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(-0.03));
-        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(-0.04));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(0.04));
     }
 
     [Fact]
@@ -413,6 +413,19 @@ public sealed class DelimitedTextFileAdapterTests
 
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new DateTimeValue(new TimeSpan(21, 45, 15).TotalDays));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForStandaloneAmPmHours()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("9 AM\t9 PM\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new DateTimeValue(new TimeSpan(9, 0, 0).TotalDays));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new DateTimeValue(new TimeSpan(21, 0, 0).TotalDays));
     }
 
     [Fact]
