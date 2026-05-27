@@ -126,6 +126,15 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesTopFailureSummary()
+    {
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        report.Should().Contain("## Top Failures");
+        report.Should().Contain("No active automated XLSX corpus failures are currently recorded.");
+    }
+
+    [Fact]
     public void CorpusReport_DoesNotListCompletedLocalPrivateManifestRowsAsOpenGap()
     {
         var manifestRows = ReadManifestRows();
