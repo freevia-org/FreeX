@@ -38,6 +38,16 @@ public sealed class StandaloneAltKeyTipTrackerTests
     }
 
     [Theory]
+    [InlineData(Key.LeftAlt, true)]
+    [InlineData(Key.RightAlt, true)]
+    [InlineData(Key.System, true)]
+    [InlineData(Key.F10, false)]
+    public void IsStandaloneAltKey_AcceptsOnlyStandaloneAltKeys(Key key, bool expected)
+    {
+        StandaloneAltKeyTipTracker.IsStandaloneAltKey(key).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(0x2C)]
     [InlineData(0x48)]
     [InlineData(0x70)]
