@@ -13,6 +13,9 @@ public sealed partial class SelectDataSourceDialog
         var preview = InferPreviewEntries(_rangeBox.Text, _firstColumnCategoriesBox.IsChecked == true);
         _seriesList.ItemsSource = preview.Series.Select(series => $"{series.Name}    {series.ValuesRangeText}").ToList();
         _axisLabelsList.ItemsSource = preview.Categories.Select(category => category.Label).ToList();
+        SelectFirstItemWhenAvailable(_seriesList);
+        SelectFirstItemWhenAvailable(_axisLabelsList);
+        UpdateActionButtonState();
     }
 
     private void AddSeriesButton_Click(object sender, RoutedEventArgs e)
@@ -21,6 +24,7 @@ public sealed partial class SelectDataSourceDialog
         _seriesList.ItemsSource = null;
         _seriesList.Items.Add($"Series {index}    <select range>");
         _seriesList.SelectedIndex = _seriesList.Items.Count - 1;
+        UpdateActionButtonState();
     }
 
     private void EditSeriesButton_Click(object sender, RoutedEventArgs e)
@@ -35,14 +39,32 @@ public sealed partial class SelectDataSourceDialog
             return;
 
         var items = _seriesList.Items.Cast<object>().Select(item => item.ToString() ?? "").ToList();
+        var removedIndex = _seriesList.SelectedIndex;
         items.RemoveAt(_seriesList.SelectedIndex);
         _seriesList.ItemsSource = items;
+        _seriesList.SelectedIndex = items.Count == 0 ? -1 : Math.Min(removedIndex, items.Count - 1);
+        UpdateActionButtonState();
     }
 
     private void EditAxisLabelsButton_Click(object sender, RoutedEventArgs e)
     {
         if (_axisLabelsList.Items.Count > 0)
             _axisLabelsList.SelectedIndex = 0;
+    }
+
+    private static void SelectFirstItemWhenAvailable(ListBox list)
+    {
+        list.SelectedIndex = list.Items.Count == 0 ? -1 : 0;
+    }
+
+    private void UpdateActionButtonState()
+    {
+        if (_editSeriesButton is not null)
+            _editSeriesButton.IsEnabled = _seriesList.SelectedIndex >= 0;
+        if (_removeSeriesButton is not null)
+            _removeSeriesButton.IsEnabled = _seriesList.SelectedIndex >= 0;
+        if (_editAxisLabelsButton is not null)
+            _editAxisLabelsButton.IsEnabled = _axisLabelsList.SelectedIndex >= 0;
     }
 
     private static void HiddenEmptyCellsButton_Click(object sender, RoutedEventArgs e)

@@ -9,6 +9,54 @@ public sealed class ExcelParityEngineeringTests
     private readonly FormulaEvaluator _eval = new();
 
     [Theory]
+    [InlineData("=BASE(7,2)", "111")]
+    [InlineData("=BASE(7,2,8)", "00000111")]
+    [InlineData("=BASE(255,16,4)", "00FF")]
+    [InlineData("=BASE(45745,36)", "ZAP")]
+    [InlineData("=BASE(0,2,4)", "0000")]
+    public void BaseFunction_ReturnsExcelText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=DECIMAL(\"FF\",16)", 255)]
+    [InlineData("=DECIMAL(111,2)", 7)]
+    [InlineData("=DECIMAL(\"zap\",36)", 45745)]
+    [InlineData("=DECIMAL(\"00FF\",16)", 255)]
+    public void DecimalFunction_ReturnsExcelNumber(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void BaseAndDecimalFunctions_SpillOverRanges()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(15)),
+            (1, 2, new TextValue("A")),
+            (2, 2, new TextValue("F")));
+
+        AssertColumn(_eval.Evaluate("=BASE(A1:A2,16)", sheet), new TextValue("A"), new TextValue("F"));
+        AssertColumn(_eval.Evaluate("=DECIMAL(B1:B2,16)", sheet), new NumberValue(10), new NumberValue(15));
+    }
+
+    [Theory]
+    [InlineData("=BASE(-1,2)")]
+    [InlineData("=BASE(7,1)")]
+    [InlineData("=BASE(7,37)")]
+    [InlineData("=BASE(7,2,-1)")]
+    [InlineData("=DECIMAL(\"\",16)")]
+    [InlineData("=DECIMAL(\"2\",2)")]
+    [InlineData("=DECIMAL(\"FF\",1)")]
+    [InlineData("=DECIMAL(\"FF\",37)")]
+    public void BaseAndDecimalFunctions_InvalidArguments_ReturnNum(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Num);
+    }
+
+    [Theory]
     [InlineData("=BIN2DEC(\"1010\")", 10)]
     [InlineData("=BIN2DEC(1010)", 10)]
     [InlineData("=BIN2DEC(\"1111111111\")", -1)]
@@ -125,6 +173,184 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
+    [InlineData("=DELTA(5,4)", 0)]
+    [InlineData("=DELTA(5,5)", 1)]
+    [InlineData("=DELTA(0)", 1)]
+    [InlineData("=GESTEP(5,4)", 1)]
+    [InlineData("=GESTEP(5,5)", 1)]
+    [InlineData("=GESTEP(-1)", 0)]
+    public void EngineeringComparisonFunctions_ReturnExcelResults(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void EngineeringComparisonFunctions_SpillOverRanges()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=DELTA(A1:A2,B1:B2)", sheet), new NumberValue(1), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=GESTEP(A1:A2,2)", sheet), new NumberValue(0), new NumberValue(1));
+    }
+
+    [Theory]
+    [InlineData("=ERF(0)", 0)]
+    [InlineData("=ERF(0.745)", 0.70792892)]
+    [InlineData("=ERF(1)", 0.84270079)]
+    [InlineData("=ERF(-1)", -0.84270079)]
+    [InlineData("=ERF(0,1)", 0.84270079)]
+    [InlineData("=ERF(1,2)", 0.15262147)]
+    [InlineData("=ERFC(0)", 1)]
+    [InlineData("=ERFC(1)", 0.15729921)]
+    [InlineData("=ERF.PRECISE(0.745)", 0.70792892)]
+    [InlineData("=ERF.PRECISE(1)", 0.84270079)]
+    [InlineData("=ERFC.PRECISE(1)", 0.15729921)]
+    public void ErrorFunctions_ReturnExcelResults(string formula, double expected)
+    {
+        AssertNumberApproximately(_eval.Evaluate(formula, MakeSheet()), expected);
+    }
+
+    [Fact]
+    public void ErrorFunctions_SpillOverRanges()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0)),
+            (2, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertColumnApproximately(_eval.Evaluate("=ERF(A1:A2)", sheet), 0, 0.84270079);
+        AssertColumnApproximately(_eval.Evaluate("=ERFC(A1:A2)", sheet), 1, 0.15729921);
+        AssertColumnApproximately(_eval.Evaluate("=ERF(A1:A2,B1:B2)", sheet), 0.84270079, 0.15262147);
+        AssertColumnApproximately(_eval.Evaluate("=ERF.PRECISE(A1:A2)", sheet), 0, 0.84270079);
+        AssertColumnApproximately(_eval.Evaluate("=ERFC.PRECISE(A1:A2)", sheet), 1, 0.15729921);
+    }
+
+    [Theory]
+    [InlineData("=ERF(\"x\")")]
+    [InlineData("=ERF(0,\"x\")")]
+    [InlineData("=ERFC(\"x\")")]
+    [InlineData("=ERF.PRECISE(\"x\")")]
+    [InlineData("=ERFC.PRECISE(\"x\")")]
+    public void ErrorFunctions_NonnumericArguments_ReturnValueError(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Theory]
+    [InlineData("=COMPLEX(3,4)", "3+4i")]
+    [InlineData("=COMPLEX(3,-4,\"j\")", "3-4j")]
+    [InlineData("=COMPLEX(0,1)", "i")]
+    [InlineData("=COMPLEX(0,-1)", "-i")]
+    [InlineData("=COMPLEX(3,0)", "3")]
+    public void Complex_ReturnsExcelComplexText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=IMREAL(\"6-9i\")", 6)]
+    [InlineData("=IMAGINARY(\"3+4i\")", 4)]
+    [InlineData("=IMAGINARY(\"0-j\")", -1)]
+    [InlineData("=IMAGINARY(4)", 0)]
+    [InlineData("=IMABS(\"5+12i\")", 13)]
+    public void ComplexInspectionFunctions_ReturnExcelResults(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=IMCONJUGATE(\"3+4i\")", "3-4i")]
+    [InlineData("=IMSUM(\"3+6i\",\"5-2i\")", "8+4i")]
+    [InlineData("=IMSUB(\"13+4i\",\"5+3i\")", "8+i")]
+    [InlineData("=IMPRODUCT(\"3+4i\",\"5-3i\")", "27+11i")]
+    [InlineData("=IMPRODUCT(\"1+2i\",30)", "30+60i")]
+    [InlineData("=IMDIV(\"2+4i\",\"1+i\")", "3+i")]
+    public void ComplexArithmeticFunctions_ReturnExcelComplexText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=IMEXP(0)", "1")]
+    [InlineData("=IMLN(1)", "0")]
+    [InlineData("=IMLOG10(100)", "2")]
+    [InlineData("=IMLOG2(8)", "3")]
+    public void ComplexExponentialAndLogFunctions_ReturnRealIdentities(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void ComplexExponentialAndLogFunctions_ReturnExcelComplexParts()
+    {
+        AssertNumberApproximately(_eval.Evaluate("=IMREAL(IMEXP(\"i\"))", MakeSheet()), Math.Cos(1.0));
+        AssertNumberApproximately(_eval.Evaluate("=IMAGINARY(IMEXP(\"i\"))", MakeSheet()), Math.Sin(1.0));
+        AssertNumberApproximately(_eval.Evaluate("=IMREAL(IMLN(\"1+i\"))", MakeSheet()), Math.Log(Math.Sqrt(2.0)));
+        AssertNumberApproximately(_eval.Evaluate("=IMAGINARY(IMLN(\"1+i\"))", MakeSheet()), Math.PI / 4.0);
+        AssertNumberApproximately(_eval.Evaluate("=IMREAL(IMLOG10(\"1+i\"))", MakeSheet()), Math.Log(Math.Sqrt(2.0)) / Math.Log(10.0));
+        AssertNumberApproximately(_eval.Evaluate("=IMAGINARY(IMLOG2(\"1+i\"))", MakeSheet()), (Math.PI / 4.0) / Math.Log(2.0));
+    }
+
+    [Theory]
+    [InlineData("=IMCOS(0)", "1")]
+    [InlineData("=IMSIN(0)", "0")]
+    [InlineData("=IMCOS(\"1+i\")", "0.833730025131149-0.988897705762865i")]
+    [InlineData("=IMSIN(\"1+i\")", "1.29845758141598+0.634963914784736i")]
+    public void ComplexTrigFunctions_ReturnExcelComplexText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=IMSQRT(0)", "0")]
+    [InlineData("=IMSQRT(4)", "2")]
+    [InlineData("=IMSQRT(-4)", "2i")]
+    [InlineData("=IMSQRT(\"1+i\")", "1.09868411346781+0.455089860562227i")]
+    [InlineData("=IMSQRT(\"1+j\")", "1.09868411346781+0.455089860562227j")]
+    public void ComplexSquareRootFunction_ReturnsExcelComplexText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void ComplexFunctions_HandleRangesAndErrors()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("3+4i")),
+            (2, 1, new TextValue("5-2i")),
+            (3, 1, ErrorValue.NA));
+
+        AssertColumn(_eval.Evaluate("=IMREAL(A1:A2)", sheet), new NumberValue(3), new NumberValue(5));
+        AssertColumn(_eval.Evaluate("=IMLOG10(A1:A2)", sheet), _eval.Evaluate("=IMLOG10(A1)", sheet), _eval.Evaluate("=IMLOG10(A2)", sheet));
+        AssertColumn(_eval.Evaluate("=IMEXP(A1:A3)", sheet), _eval.Evaluate("=IMEXP(A1)", sheet), _eval.Evaluate("=IMEXP(A2)", sheet), ErrorValue.NA);
+        AssertColumn(_eval.Evaluate("=IMCOS(A1:A2)", sheet), _eval.Evaluate("=IMCOS(A1)", sheet), _eval.Evaluate("=IMCOS(A2)", sheet));
+        AssertColumn(_eval.Evaluate("=IMSIN(A1:A2)", sheet), _eval.Evaluate("=IMSIN(A1)", sheet), _eval.Evaluate("=IMSIN(A2)", sheet));
+        AssertColumn(_eval.Evaluate("=IMSQRT(A1:A2)", sheet), _eval.Evaluate("=IMSQRT(A1)", sheet), _eval.Evaluate("=IMSQRT(A2)", sheet));
+        _eval.Evaluate("=IMSUM(A1:A2)", sheet).Should().Be(new TextValue("8+2i"));
+        _eval.Evaluate("=IMSUM(A1:A3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Theory]
+    [InlineData("=COMPLEX(1,2,\"x\")", "#VALUE!")]
+    [InlineData("=IMREAL(\"not complex\")", "#NUM!")]
+    [InlineData("=IMDIV(\"1+i\",\"0\")", "#NUM!")]
+    [InlineData("=IMLN(\"0\")", "#NUM!")]
+    [InlineData("=IMLOG10(\"0\")", "#NUM!")]
+    [InlineData("=IMLOG2(\"not complex\")", "#NUM!")]
+    [InlineData("=IMCOS(\"not complex\")", "#NUM!")]
+    [InlineData("=IMSIN(\"not complex\")", "#NUM!")]
+    [InlineData("=IMSQRT(\"not complex\")", "#NUM!")]
+    public void ComplexFunctions_ReturnExcelErrors(string formula, string error)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new ErrorValue(error));
+    }
+
+    [Theory]
     [InlineData("=BIN2DEC(\"102\")")]
     [InlineData("=BIN2DEC(\"10101010101\")")]
     [InlineData("=DEC2BIN(512)")]
@@ -206,9 +432,41 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=BIN2HEX(\"1010\",NA())")]
     [InlineData("=HEX2BIN(\"F\",NA())")]
     [InlineData("=OCT2HEX(\"17\",NA())")]
+    [InlineData("=ERF(NA())")]
+    [InlineData("=ERF(0,NA())")]
+    [InlineData("=ERFC(NA())")]
+    [InlineData("=ERF.PRECISE(NA())")]
+    [InlineData("=ERFC.PRECISE(NA())")]
+    [InlineData("=BASE(NA(),2)")]
+    [InlineData("=BASE(7,NA())")]
+    [InlineData("=BASE(7,2,NA())")]
+    [InlineData("=DECIMAL(NA(),16)")]
+    [InlineData("=DECIMAL(\"FF\",NA())")]
+    [InlineData("=IMEXP(NA())")]
+    [InlineData("=IMLN(NA())")]
+    [InlineData("=IMLOG10(NA())")]
+    [InlineData("=IMLOG2(NA())")]
+    [InlineData("=IMCOS(NA())")]
+    [InlineData("=IMSIN(NA())")]
+    [InlineData("=IMSQRT(NA())")]
     public void EngineeringFunctions_PropagateExcelErrors(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    private static void AssertNumberApproximately(ScalarValue value, double expected)
+    {
+        var number = value.Should().BeOfType<NumberValue>().Subject;
+        number.Value.Should().BeApproximately(expected, 0.0000002);
+    }
+
+    private static void AssertColumnApproximately(ScalarValue value, params double[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            AssertNumberApproximately(range.Cells[row, 0], expected[row]);
     }
 
     private static void AssertColumn(ScalarValue value, params ScalarValue[] expected)

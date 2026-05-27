@@ -36,6 +36,21 @@ public partial class PageSetupDialog
         string currentText) =>
         new(target, currentText.Trim(), CollapseDialog: true);
 
+    public void ApplyRangeSelection(PageSetupRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target switch
+        {
+            PageSetupRangeSelectionTarget.RepeatRows => RowsRepeatBox,
+            PageSetupRangeSelectionTarget.RepeatColumns => ColumnsRepeatBox,
+            _ => PrintAreaBox
+        };
+
+        textBox.Text = rangeText;
+        textBox.Focus();
+        textBox.SelectAll();
+        Keyboard.Focus(textBox);
+    }
+
     private static PageSetupRangeSelectionTarget GetRangeSelectionTarget(string targetName) =>
         targetName switch
         {

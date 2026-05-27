@@ -53,7 +53,7 @@ public static class QuickAnalysisPlanner
             Table("Format as Table", QuickAnalysisCommand.FormatAsTable, "Preview formatting the selection as a table."),
             Table("PivotTable", QuickAnalysisCommand.PivotTable, "Preview creating a PivotTable from the selected range."),
             Sparkline("Line", QuickAnalysisCommand.LineSparkline, "Preview line sparklines beside the selected range.", QuickAnalysisPreviewVisualKind.LineSparkline),
-            Sparkline("Column", QuickAnalysisCommand.ColumnSparkline, "Preview column sparklines beside the selected range.", QuickAnalysisPreviewVisualKind.ColumnChart),
+            Sparkline("Column", QuickAnalysisCommand.ColumnSparkline, "Preview column sparklines beside the selected range.", QuickAnalysisPreviewVisualKind.ColumnSparkline),
             Sparkline("Win/Loss", QuickAnalysisCommand.WinLossSparkline, "Preview win/loss sparklines beside the selected range.", QuickAnalysisPreviewVisualKind.WinLossSparkline)
         ];
     }
@@ -131,6 +131,7 @@ public enum QuickAnalysisPreviewVisualKind
     TotalFormula,
     Table,
     LineSparkline,
+    ColumnSparkline,
     WinLossSparkline
 }
 

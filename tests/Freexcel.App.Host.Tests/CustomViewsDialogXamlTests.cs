@@ -1,6 +1,11 @@
 using System.IO;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 using System.Xml.Linq;
 using FluentAssertions;
+using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -26,6 +31,42 @@ public sealed class CustomViewsDialogXamlTests
             .Single(element => element.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value == "ShowButton");
 
         showButton.Attribute("IsDefault")?.Value.Should().Be("True");
+    }
+
+    [Fact]
+    public void DialogList_DoubleClickShowsSelectedView()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Custom views");
+            workbook.AddSheet("Sheet1");
+            workbook.CustomViews.Add(new WorkbookCustomView(
+                "Quarter Close",
+                [new WorksheetCustomViewState("Sheet1", WorksheetViewMode.Normal, 0, 0, null, null)]));
+            var commandBus = new CapturingCommandBus();
+            var dialog = new CustomViewsDialog(workbook, commandBus);
+            var viewsList = (ListView)dialog.FindName("ViewsList");
+
+            dialog.Dispatcher.BeginInvoke(() =>
+            {
+                viewsList.SelectedIndex = 0;
+                viewsList.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                {
+                    RoutedEvent = Control.MouseDoubleClickEvent
+                });
+
+                dialog.Dispatcher.BeginInvoke(() =>
+                {
+                    if (!dialog.ViewApplied)
+                        dialog.Close();
+                }, DispatcherPriority.ContextIdle);
+            }, DispatcherPriority.ApplicationIdle);
+
+            dialog.ShowDialog();
+
+            dialog.ViewApplied.Should().BeTrue();
+            commandBus.LastCommand.Should().BeOfType<ApplyCustomViewCommand>();
+        });
     }
 
     [Fact]
@@ -59,10 +100,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesViewsList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
-        var dialogSource = source[
-            source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal)..
-            source.IndexOf("internal sealed class CustomViewViewModel", StringComparison.Ordinal)];
+        var dialogSource = ReadCustomViewsDialogSource();
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -73,10 +111,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogCommandFailure_FocusesViewsList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
-        var dialogSource = source[
-            source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal)..
-            source.IndexOf("internal sealed class CustomViewViewModel", StringComparison.Ordinal)];
+        var dialogSource = ReadCustomViewsDialogSource();
 
         dialogSource.Should().Contain("FocusViewsList();");
         dialogSource.Should().Contain("private void FocusViewsList()");
@@ -88,10 +123,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogCommandFailure_UsesOwnedMessageBoxes()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
-        var dialogSource = source[
-            source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal)..
-            source.IndexOf("internal sealed class CustomViewViewModel", StringComparison.Ordinal)];
+        var dialogSource = ReadCustomViewsDialogSource();
 
         dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not apply custom view.\",");
         dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not save custom view.\",");
@@ -109,7 +141,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialog_ExposesKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewNameDialog.cs"));
 
         source.Should().Contain("new Label { Content = \"_Name:\"");
         source.Should().Contain("Target = _nameBox");
@@ -130,7 +162,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialogOpenedFromKeyboard_FocusesNameBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewNameDialog.cs"));
         var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
@@ -143,7 +175,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialogBlankName_WarnsAndFocusesNameBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewNameDialog.cs"));
         var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("MessageBox.Show(this, \"Enter a view name.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
@@ -157,12 +189,60 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewsDialog_ThreadsAddViewIncludeOptionsIntoCommandAndIndicators()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var source = string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.Planning.cs")));
 
         source.Should().Contain("dialog.Result.IncludePrintSettings");
         source.Should().Contain("dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings");
         source.Should().Contain("new SaveCustomViewCommand(");
-        source.Should().Contain("view.IncludePrintSettings ? \"Included\" : \"Not included\"");
-        source.Should().Contain("view.IncludeHiddenRowsColumnsAndFilterSettings ? \"Included\" : \"Not included\"");
+        source.Should().Contain("GetIncludedIndicator(view.IncludePrintSettings)");
+        source.Should().Contain("GetIncludedIndicator(view.IncludeHiddenRowsColumnsAndFilterSettings)");
     }
+
+    [Fact]
+    public void MainWindow_CustomViewsApplyRefreshesViewportStatusAndWorksheetFocus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ViewCommands.cs"));
+        var methodStart = source.IndexOf("private void CustomViewsBtn_Click(", StringComparison.Ordinal);
+        methodStart.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodStart = source.IndexOf("private void ArrangeAllPickerBtn_Click(", methodStart, StringComparison.Ordinal);
+        nextMethodStart.Should().BeGreaterThan(methodStart);
+        var method = source[methodStart..nextMethodStart];
+
+        method.Should().Contain("new CustomViewsDialog(_workbook, _commandBus) { Owner = this }");
+        method.Should().Contain("dialog.ShowDialog();");
+        method.Should().Contain("if (dialog.ViewApplied)");
+        method.Should().Contain("UpdateViewport();");
+        method.Should().Contain("RefreshStatusBar();");
+        method.Should().Contain("FocusSheetGridIfNeeded();");
+    }
+
+    private static string ReadCustomViewsDialogSource()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var start = source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        return source[start..];
+    }
+}
+
+file sealed class CapturingCommandBus : ICommandBus
+{
+    public IWorkbookCommand? LastCommand { get; private set; }
+
+    public CommandOutcome Execute(WorkbookId workbookId, IWorkbookCommand command)
+    {
+        LastCommand = command;
+        return new CommandOutcome(true);
+    }
+
+    public CommandOutcome ExecuteRepeatable(WorkbookId workbookId, Func<IWorkbookCommand> commandFactory) => Execute(workbookId, commandFactory());
+    public CommandOutcome Undo(WorkbookId workbookId) => new(false, "Undo is not available.");
+    public CommandOutcome Redo(WorkbookId workbookId) => new(false, "Redo is not available.");
+    public bool CanUndo(WorkbookId workbookId) => false;
+    public bool CanRedo(WorkbookId workbookId) => false;
+    public CommandOutcome RepeatLast(WorkbookId workbookId) => new(false, "Repeat is not available.");
+    public bool CanRepeat(WorkbookId workbookId) => false;
 }

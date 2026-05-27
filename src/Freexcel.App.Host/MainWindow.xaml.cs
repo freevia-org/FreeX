@@ -6,6 +6,7 @@ using Freexcel.Core.Commands;
 using Freexcel.Core.Calc;
 using Freexcel.Core.IO;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace Freexcel.App.Host;
 
@@ -18,6 +19,7 @@ public partial class MainWindow : Window
     private const double MaximizedSafeInsetDip = 8.0;
     private const double SheetTabNavScrollAmount = 140.0;
     private const double SheetTabScrollEpsilon = 0.5;
+    private const int ResizeViewportRefreshDelayMilliseconds = 140;
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
@@ -32,6 +34,7 @@ public partial class MainWindow : Window
     private readonly StandaloneAltKeyTipTracker _standaloneAltKeyTipTracker = new();
     private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
     private string _ribbonKeyTipSequence = "";
+    private bool _legacyDataKeyTipSequence;
     private ContextMenu? _activeRibbonKeyTipMenu;
     private ItemsControl? _activeRibbonKeyTipItemsControl;
     private readonly WorkbookRef _workbookRef;
@@ -52,6 +55,9 @@ public partial class MainWindow : Window
     private bool _suppressAppViewOptionSync;
     private bool _isOpeningFile;
     private bool _isSavingFile;
+    private bool _workbookDirty;
+    private bool _suppressClosePrompt;
+    private bool _closeAfterSaveInProgress;
     private CellAddress? _selectionAnchor;
     private CellAddress? _selectionCursor;
     private ExcelSelectionMode _selectionMode = ExcelSelectionMode.Normal;
@@ -72,8 +78,12 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
+    private bool _resizeViewportRefreshPending;
+    private bool _isInWindowResizeMoveLoop;
+    private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;
     private CellColor _borderPickerColor = CellColor.Black;
     private BorderStyle _borderPickerStyle = BorderStyle.Thin;
+    private BorderDrawMode _borderDrawMode;
     private readonly IReadOnlyList<System.Windows.Media.Brush> _formulaReferenceBrushes =
     [
         new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(32, 112, 214)),
@@ -87,6 +97,7 @@ public partial class MainWindow : Window
     private System.Windows.Controls.Border? _inlineEditorChrome;
     private System.Windows.Rect? _inlineEditorChromeBaseRect;
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
+    private bool _syncingFormulaEditorText;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private CellAddress? _formulaEditCell;
     private CellAddress? _formulaRangeSelectionAnchor;
@@ -145,10 +156,14 @@ public partial class MainWindow : Window
         SheetGrid.MouseDown += SheetGrid_MouseDown;
         SheetGrid.ColumnResized  += OnColumnResized;
         SheetGrid.RowResized     += OnRowResized;
+        SheetGrid.ColumnAutoFitRequested += OnColumnAutoFitRequested;
+        SheetGrid.RowAutoFitRequested += OnRowAutoFitRequested;
         SheetGrid.ColumnResizing += OnColumnResizing;
         SheetGrid.RowResizing    += OnRowResizing;
         SheetGrid.AutofillRequested += OnAutofillRequested;
+        SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
+        SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;
         SheetGrid.SplitDividerMoved += OnSplitDividerMoved;
@@ -163,9 +178,11 @@ public partial class MainWindow : Window
         this.KeyUp += MainWindow_KeyUp;
         this.Deactivated += MainWindow_Deactivated;
         this.TextInput += MainWindow_TextInput;
+        Closing += MainWindow_Closing;
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
         FormulaBar.TextChanged += (_, _) =>
         {
+            SyncInlineEditorTextFromFormulaBar();
             var formulaBarHasFocus = ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar);
             if (!formulaBarHasFocus && _inlineEditor?.IsVisible != true)
             {

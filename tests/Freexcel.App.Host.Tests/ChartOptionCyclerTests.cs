@@ -26,6 +26,16 @@ public sealed class ChartOptionCyclerTests
     }
 
     [Theory]
+    [InlineData(ChartDataLabelSeparator.Comma, ChartDataLabelSeparator.Semicolon)]
+    [InlineData(ChartDataLabelSeparator.Semicolon, ChartDataLabelSeparator.NewLine)]
+    [InlineData(ChartDataLabelSeparator.NewLine, ChartDataLabelSeparator.Space)]
+    [InlineData(ChartDataLabelSeparator.Space, ChartDataLabelSeparator.Comma)]
+    public void NextDataLabelSeparator_CyclesCommonExcelSeparators(ChartDataLabelSeparator current, ChartDataLabelSeparator expected)
+    {
+        ChartOptionCycler.NextDataLabelSeparator(current).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(ChartTrendlineType.Linear, ChartTrendlineType.Exponential)]
     [InlineData(ChartTrendlineType.Exponential, ChartTrendlineType.Logarithmic)]
     [InlineData(ChartTrendlineType.Logarithmic, ChartTrendlineType.Power)]

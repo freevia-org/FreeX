@@ -109,6 +109,27 @@ public sealed class GoToSpecialServiceTests
     }
 
     [Fact]
+    public void FindDataValidation_ReturnsCellsInAdditionalRanges()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var primaryCell = new CellAddress(sheet.Id, 1, 1);
+        var additionalCell = new CellAddress(sheet.Id, 3, 3);
+        var rule = new DataValidation
+        {
+            AppliesTo = new GridRange(primaryCell, primaryCell),
+            Type = DvType.List,
+            Formula1 = "A,B"
+        };
+        rule.AdditionalRanges.Add(new GridRange(additionalCell, additionalCell));
+        sheet.DataValidations.Add(rule);
+        var searchRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
+
+        GoToSpecialService.Find(sheet, searchRange, GoToSpecialKind.DataValidation)
+            .Should().Equal(primaryCell, additionalCell);
+    }
+
+    [Fact]
     public void FindVisibleCells_SkipsHiddenRowsAndColumns()
     {
         var wb = new Workbook("test");

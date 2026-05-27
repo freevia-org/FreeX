@@ -87,6 +87,7 @@ public static partial class PrintRenderer
         var columnPlans = PrintLayoutPlanner.BuildColumnPlans(usedRange.Value, sheet.PrintTitleColumns, columnsPerPage);
         var totalPages = rowPlans.Count * columnPlans.Count;
         var pageNumber = sheet.FirstPageNumber ?? 1;
+        var printableHyperlinks = BuildPrintableHyperlinkLookup(sheet);
 
         if (sheet.PageOrder == WorksheetPageOrder.OverThenDown)
         {
@@ -132,7 +133,7 @@ public static partial class PrintRenderer
                 (uint)pageColumns.Count,
                 sheet.PrintHeadings);
             var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
-            var (visual, textOverlays) = RenderPageVisual(
+            var (visual, textOverlays, linkOverlays) = RenderPageVisual(
                 pageW,
                 pageH,
                 marginLeft,
@@ -144,6 +145,7 @@ public static partial class PrintRenderer
                 pageRows,
                 pageColumns,
                 cellLookup,
+                printableHyperlinks,
                 sheet.PrintGridlines,
                 sheet.PrintHeadings,
                 pageHeader,
@@ -152,22 +154,24 @@ public static partial class PrintRenderer
                 pageFooterPictures,
                 workbook.Name,
                 sheet.Name,
+                workbook.Theme,
+                sheet.TextBoxes,
                 sheet.HeaderFooterAlignWithMargins,
                 sheet.CenterHorizontallyOnPage,
-                    sheet.CenterVerticallyOnPage,
-                    sheet.PrintErrorValue,
-                    sheet.PrintComments,
-                    sheet.Comments,
-                    sheet.ThreadedComments,
-                    printableW,
-                    printableH,
-                    pageNumber,
-                    totalPages,
-                    sheet.PrintDraftQuality,
-                    sheet.PrintBlackAndWhite);
+                sheet.CenterVerticallyOnPage,
+                sheet.PrintErrorValue,
+                sheet.PrintComments,
+                sheet.Comments,
+                sheet.ThreadedComments,
+                printableW,
+                printableH,
+                pageNumber,
+                totalPages,
+                sheet.PrintDraftQuality,
+                sheet.PrintBlackAndWhite);
             pageNumber++;
 
-            var container = new VisualHost { Visual = visual, TextOverlays = textOverlays };
+            var container = new VisualHost { Visual = visual, TextOverlays = textOverlays, LinkOverlays = linkOverlays };
             var fixedPage = new FixedPage { Width = pageW, Height = pageH };
             fixedPage.Children.Add(container);
             FixedPage.SetLeft(container, 0);
@@ -180,14 +184,14 @@ public static partial class PrintRenderer
 
         void AddCommentSummaryPage(IReadOnlyList<KeyValuePair<CellAddress, string>> commentsForPage)
         {
-            var visual = RenderCommentSummaryPageVisual(
+            var (visual, textOverlays) = RenderCommentSummaryPageVisual(
                 pageW,
                 pageH,
                 marginLeft,
                 marginTop,
                 commentsForPage);
 
-            var container = new VisualHost { Visual = visual };
+            var container = new VisualHost { Visual = visual, TextOverlays = textOverlays };
             var fixedPage = new FixedPage { Width = pageW, Height = pageH };
             fixedPage.Children.Add(container);
             FixedPage.SetLeft(container, 0);
@@ -249,6 +253,7 @@ public static partial class PrintRenderer
         sourcePage.Arrange(new Rect(size));
         sourcePage.UpdateLayout();
         var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
+        var linkOverlays = PdfLinkOverlayExtractor.Extract(sourcePage);
 
         var bitmap = new RenderTargetBitmap(
             Math.Max(1, (int)Math.Ceiling(width)),
@@ -266,8 +271,8 @@ public static partial class PrintRenderer
             Width = width,
             Height = height
         });
-        if (textOverlays.Count > 0)
-            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays });
+        if (textOverlays.Count > 0 || linkOverlays.Count > 0)
+            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays, LinkOverlays = linkOverlays });
 
         var clone = new PageContent();
         ((IAddChild)clone).AddChild(fixedPage);
@@ -281,4 +286,29 @@ public static partial class PrintRenderer
             WorksheetPaperSize.Legal => (8.5, 14.0),
             _ => (8.27, 11.69)
         };
+
+    private sealed record PdfLinkTarget(string Target, HyperlinkTargetKind TargetKind);
+
+    private static IReadOnlyDictionary<(uint Row, uint Col), PdfLinkTarget> BuildPrintableHyperlinkLookup(Sheet sheet)
+    {
+        if (sheet.Hyperlinks.Count == 0)
+            return new Dictionary<(uint Row, uint Col), PdfLinkTarget>();
+
+        var result = new Dictionary<(uint Row, uint Col), PdfLinkTarget>();
+        foreach (var (address, target) in sheet.Hyperlinks)
+        {
+            if (address.Sheet != sheet.Id || string.IsNullOrWhiteSpace(target))
+                continue;
+            sheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
+            var targetKind = metadata?.LinkType ?? HyperlinkTargetKind.ExistingFileOrWebPage;
+            if (targetKind == HyperlinkTargetKind.PlaceInThisDocument)
+            {
+                continue;
+            }
+
+            result[(address.Row, address.Col)] = new PdfLinkTarget(target, targetKind);
+        }
+
+        return result;
+    }
 }

@@ -35,7 +35,7 @@ public sealed partial class ConsolidateDialog : Window
     private readonly Button _deleteReferenceButton = new() { Content = "_Delete", Width = 76, IsEnabled = false };
     private readonly TextBox _destinationBox = new();
     private readonly CheckBox _topRowBox = new() { Content = "_Top row" };
-    private readonly CheckBox _leftColumnBox = new() { Content = "_Left column" };
+    private readonly CheckBox _leftColumnBox = new() { Content = "Left _column" };
     private readonly CheckBox _createLinksBox = new() { Content = "Create _links to source data" };
     private readonly Action<ConsolidateRangeSelectionRequest>? _requestRangeSelection;
 
@@ -58,11 +58,15 @@ public sealed partial class ConsolidateDialog : Window
         ShowInTaskbar = false;
 
         _referenceBox.Text = defaultSource;
+        AutomationProperties.SetName(_referenceBox, "Reference");
         foreach (var sourceRange in SplitSourceRangeText(defaultSource))
             _referencesList.Items.Add(sourceRange);
+        AutomationProperties.SetName(_referencesList, "All references");
         _referencesList.SelectionChanged += (_, _) => UpdateReferenceButtons();
+        _referencesList.KeyDown += ReferencesList_KeyDown;
 
         _destinationBox.Text = defaultDestination;
+        AutomationProperties.SetName(_destinationBox, "Destination cell");
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new Label { Content = "_Function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
         foreach (var function in Enum.GetValues<ConsolidateFunction>())
@@ -88,7 +92,7 @@ public sealed partial class ConsolidateDialog : Window
         root.Children.Add(_referencesList);
         root.Children.Add(new Label { Content = "_Destination cell:", Target = _destinationBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         root.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell", ConsolidateRangeSelectionTarget.DestinationCell));
-        root.Children.Add(new Label { Content = "Use _labels in:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+        root.Children.Add(new TextBlock { Text = "Use labels in:", Margin = new Thickness(0, 8, 0, 2) });
         var labelOptions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         _topRowBox.Margin = new Thickness(0, 0, 16, 0);
         labelOptions.Children.Add(_topRowBox);
@@ -117,6 +121,15 @@ public sealed partial class ConsolidateDialog : Window
         RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         FocusRangeSelectionInput(request.Target);
+    }
+
+    public void ApplyRangeSelection(ConsolidateRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target == ConsolidateRangeSelectionTarget.DestinationCell
+            ? _destinationBox
+            : _referenceBox;
+        textBox.Text = rangeText;
+        FocusRangeSelectionInput(textBox);
     }
 
     private static void FocusRangeSelectionInput(TextBox target)
@@ -157,6 +170,15 @@ public sealed partial class ConsolidateDialog : Window
         if (_referencesList.SelectedItem is { } selected)
             _referencesList.Items.Remove(selected);
         UpdateReferenceButtons();
+    }
+
+    private void ReferencesList_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete)
+        {
+            DeleteReferenceButton_Click(sender, e);
+            e.Handled = true;
+        }
     }
 
     private void UpdateReferenceButtons() =>

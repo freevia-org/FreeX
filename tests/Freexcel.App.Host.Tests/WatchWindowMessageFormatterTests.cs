@@ -34,6 +34,22 @@ public sealed class WatchWindowMessageFormatterTests
         source.Should().Contain("Content = \"_Refresh\"");
         source.Should().Contain("Content = \"_Delete Watch\"");
         source.Should().Contain("Content = \"_Close\"");
+        source.Should().Contain("Content = \"_Close\", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
+    }
+
+    [Fact]
+    public void WatchWindowDialog_DeleteKeyAndSelectionStateMirrorDeleteWatchButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+
+        source.Should().Contain("private readonly Button _deleteButton");
+        source.Should().Contain("_listView.SelectionChanged += (_, _) => UpdateDeleteButtonState();");
+        source.Should().Contain("_listView.KeyDown += ListView_KeyDown;");
+        source.Should().Contain("private void ListView_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("if (e.Key == Key.Delete)");
+        source.Should().Contain("DeleteSelectedWatch();");
+        source.Should().Contain("private void UpdateDeleteButtonState()");
+        source.Should().Contain("_deleteButton.IsEnabled = _listView.SelectedItems.Count > 0;");
     }
 
     [Fact]
@@ -52,8 +68,10 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void AddWatchDialog_ExposesSelectedRangePreview()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+        var watchWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AddWatchDialog.cs"));
 
+        watchWindowSource.Should().NotContain("public sealed class AddWatchDialog");
         source.Should().Contain("public sealed class AddWatchDialog");
         source.Should().Contain("Title = \"Add Watch\"");
         source.Should().Contain("Content = \"Selected _range:\"");
@@ -62,9 +80,17 @@ public sealed class WatchWindowMessageFormatterTests
     }
 
     [Fact]
+    public void AddWatchDialog_SelectedRangePreviewExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AddWatchDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Selected range\");");
+    }
+
+    [Fact]
     public void AddWatchDialogOpenedFromKeyboard_FocusesSelectedRangePreview()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AddWatchDialog.cs"));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -96,5 +122,14 @@ public sealed class WatchWindowMessageFormatterTests
         source.Should().Contain("_listView.SelectedIndex = 0;");
         source.Should().Contain("_listView.Focus();");
         source.Should().Contain("Keyboard.Focus(_listView);");
+    }
+
+    [Fact]
+    public void WatchWindowDialog_LabelsWatchListWithAccessKeyAndAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Watches:\", Target = _listView");
+        source.Should().Contain("AutomationProperties.SetName(_listView, \"Watches\");");
     }
 }

@@ -14,7 +14,7 @@ public partial class MainWindow
     private void AutoSumPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void FormulasAutoSumPickerBtn_Click(object sender, RoutedEventArgs e) { AutoSumPickerBtn_Click(sender, e); }
 
@@ -45,6 +45,7 @@ public partial class MainWindow
     private void AutoSumSumMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("SUM");
     private void AutoSumAvgMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("AVERAGE");
     private void AutoSumCountMenuItem_Click(object sender, RoutedEventArgs e) => InsertAutoSumFormula("COUNT");
+    private void AutoSumCountAllMenuItem_Click(object sender, RoutedEventArgs e) => InsertAutoSumFormula("COUNTA");
     private void AutoSumMaxMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("MAX");
     private void AutoSumMinMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("MIN");
     private void AutoSumMoreMenuItem_Click(object sender, RoutedEventArgs e)  => InsertFunctionBtn_Click(sender, e);
@@ -178,7 +179,7 @@ public partial class MainWindow
     private void SortCustomMenuItem_Click(object sender, RoutedEventArgs e) => SortCustomButton_Click(sender, e);
     private void FilterToggleMenuItem_Click(object sender, RoutedEventArgs e) => FilterButton_Click(sender, e);
     private void FilterClearMenuItem_Click(object sender, RoutedEventArgs e)  => ClearFilterButton_Click(sender, e);
-    private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => FilterButton_Click(sender, e);
+    private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => ReapplyAutoFilter();
 
     private void FindSelectPickerBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -286,7 +287,9 @@ public partial class MainWindow
                         "Clear All",
                         [
                             new ClearContentsCommand(sheetId, currentRange),
-                            new ApplyStyleCommand(sheetId, currentRange, CellStyleDiffPlanner.ClearFormatsDiff())
+                            new ApplyStyleCommand(sheetId, currentRange, CellStyleDiffPlanner.ClearFormatsDiff()),
+                            new ClearCommentsCommand(sheetId, currentRange),
+                            new ClearHyperlinksCommand(sheetId, currentRange)
                         ]);
                 },
                 out var outcome))

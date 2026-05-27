@@ -242,8 +242,19 @@ public partial class MainWindow
         CellAddressBox.Text = "A1";
         FormulaBar.Text = "";
         RefreshSheetTabs();
+        RefreshToolbar();
         UpdateViewport();
+        MarkWorkbookSaved();
         RecordDiagnosticEvent("workbook_new");
+    }
+
+    private async Task RequestNewWorkbookAsync()
+    {
+        if (!await ConfirmSaveBeforeDestructiveActionAsync("Save changes before creating a new workbook?"))
+            return;
+
+        CreateNewWorkbook();
+        HideStartScreen();
     }
 
     private async Task OpenFileAsync(string path)
@@ -271,6 +282,7 @@ public partial class MainWindow
             InvalidateNavigationCaches();
             _currentFilePath = result.OpenedAsTemplate ? null : path;
             UpdateTitleBar();
+            MarkWorkbookSaved();
 
             _recentFiles.AddOrUpdate(path);
             ShowOpenProgress("Opening workbook", "Loading file (preparing view)", 98);
@@ -282,6 +294,7 @@ public partial class MainWindow
             RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
+                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
                 ["format"] = format?.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
@@ -291,10 +304,11 @@ public partial class MainWindow
             RecordDiagnosticEvent("workbook_open_failed", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
+                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
                 ["format"] = format?.FormatName,
                 ["reason"] = ex.GetType().Name
             });
-            MessageBox.Show($"Failed to open file:\n{ex.Message}", "Open Error",
+            ShowOwnedMessage($"Failed to open file:\n{ex.Message}", "Open Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -332,34 +346,28 @@ public partial class MainWindow
 
     private void ShowOpenProgress(string title, string detail, double? percent = null)
     {
-        if (OpenProgressOverlay is null)
-            return;
-
-        OpenProgressTitle.Text = title;
-        OpenProgressDetail.Text = detail;
-        if (OpenProgressBar is not null)
-        {
-            OpenProgressBar.IsIndeterminate = !percent.HasValue;
-            if (percent.HasValue)
-                OpenProgressBar.Value = Math.Clamp(percent.Value, OpenProgressBar.Minimum, OpenProgressBar.Maximum);
-        }
-        OpenProgressOverlay.Visibility = Visibility.Visible;
-        OpenProgressOverlay.UpdateLayout();
+        BackstageProgressOverlayBinder.ShowOverlay(
+            OpenProgressOverlay,
+            OpenProgressTitle,
+            OpenProgressDetail,
+            OpenProgressBar,
+            title,
+            detail,
+            percent);
         Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
     }
 
     private void HideOpenProgress()
     {
-        if (OpenProgressOverlay is not null)
-            OpenProgressOverlay.Visibility = Visibility.Collapsed;
+        BackstageProgressOverlayBinder.Hide(OpenProgressOverlay);
     }
 
     // Start screen button handlers
     private void SsBackBtn_Click(object sender, RoutedEventArgs e)       => HideStartScreen();
-    private void SsNewBtn_Click(object sender, RoutedEventArgs e)        { CreateNewWorkbook(); HideStartScreen(); }
-    private void SsBlankWorkbook_Click(object sender, RoutedEventArgs e) { CreateNewWorkbook(); HideStartScreen(); }
+    private async void SsNewBtn_Click(object sender, RoutedEventArgs e)        => await RequestNewWorkbookAsync();
+    private async void SsBlankWorkbook_Click(object sender, RoutedEventArgs e) => await RequestNewWorkbookAsync();
     private void SsOpenBtn_Click(object sender, RoutedEventArgs e)       => OpenButton_Click(sender, e);
-    private void SsCloseBtn_Click(object sender, RoutedEventArgs e)      => Application.Current.Shutdown();
+    private void SsCloseBtn_Click(object sender, RoutedEventArgs e)      => Close();
     private void SsHomeRibbonBtn_Click(object sender, RoutedEventArgs e) => ShowStartScreen();
 
     private void RibbonTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -396,7 +404,7 @@ public partial class MainWindow
     private void SsMoreTemplatesBtn_Click(object sender, RoutedEventArgs e)
     {
         var message = DeferredCommandMessages.OnlineTemplatesExcluded();
-        MessageBox.Show(
+        ShowOwnedMessage(
             message.Body,
             message.Title,
             MessageBoxButton.OK,
@@ -523,7 +531,12 @@ public partial class MainWindow
     private async void OpenButton_Click(object sender, RoutedEventArgs e)
     {
         var filter = FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters);
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = filter,
+            CheckFileExists = true,
+            Multiselect = false
+        };
 
         if (dialog.ShowDialog() == true)
             await OpenFileAsync(dialog.FileName);
@@ -540,8 +553,11 @@ public partial class MainWindow
         await SaveWorkbookWithDialogAsync();
     }
 
-    private async void SaveAsButton_Click(object sender, RoutedEventArgs e) =>
-        await SaveWorkbookWithDialogAsync();
+    private async void SaveAsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (await SaveWorkbookWithDialogAsync())
+            HideStartScreen();
+    }
 
     private async Task<bool> SaveWorkbookWithDialogAsync()
     {
@@ -550,7 +566,9 @@ public partial class MainWindow
         {
             Filter = filter,
             FileName = _workbook.Name,
-            DefaultExt = ".xlsx"
+            DefaultExt = ".xlsx",
+            AddExtension = true,
+            OverwritePrompt = true
         };
 
         if (dialog.ShowDialog() == true)
@@ -583,11 +601,14 @@ public partial class MainWindow
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
             await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
             _currentFilePath = target.Path;
+            _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
             _recentFiles.AddOrUpdate(target.Path);
+            MarkWorkbookSaved();
             UpdateTitleBar();
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
+                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Adapter.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
@@ -598,10 +619,11 @@ public partial class MainWindow
             RecordDiagnosticEvent("workbook_save_failed", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
+                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Adapter.FormatName,
                 ["reason"] = ex.GetType().Name
             });
-            MessageBox.Show($"Failed to save file:\n{ex.Message}", "Save Error",
+            ShowOwnedMessage($"Failed to save file:\n{ex.Message}", "Save Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
@@ -614,23 +636,18 @@ public partial class MainWindow
 
     private void ShowSaveProgress(string title, string detail, double? percent = null)
     {
-        if (StatusSaveProgressPanel is null)
-            return;
-
-        StatusSaveProgressText.Text = $"{title}: {detail}";
-        if (StatusSaveProgressBar is not null)
-        {
-            StatusSaveProgressBar.IsIndeterminate = !percent.HasValue;
-            if (percent.HasValue)
-                StatusSaveProgressBar.Value = Math.Clamp(percent.Value, StatusSaveProgressBar.Minimum, StatusSaveProgressBar.Maximum);
-        }
-        StatusSaveProgressPanel.Visibility = Visibility.Visible;
+        BackstageProgressOverlayBinder.ShowStatusPanel(
+            StatusSaveProgressPanel,
+            StatusSaveProgressText,
+            StatusSaveProgressBar,
+            title,
+            detail,
+            percent);
     }
 
     private void HideSaveProgress()
     {
-        if (StatusSaveProgressPanel is not null)
-            StatusSaveProgressPanel.Visibility = Visibility.Collapsed;
+        BackstageProgressOverlayBinder.Hide(StatusSaveProgressPanel);
     }
 
     private bool ConfirmUnsupportedXlsxFeatureSave()
@@ -640,7 +657,7 @@ public partial class MainWindow
 
         var message = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport);
 
-        var result = MessageBox.Show(
+        var result = ShowOwnedMessage(
             message.Body,
             message.Title,
             MessageBoxButton.YesNo,
@@ -655,7 +672,7 @@ public partial class MainWindow
             return;
 
         var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport);
-        MessageBox.Show(
+        ShowOwnedMessage(
             message.Body,
             message.Title,
             MessageBoxButton.OK,

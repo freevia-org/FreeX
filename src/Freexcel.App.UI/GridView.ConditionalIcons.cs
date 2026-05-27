@@ -36,10 +36,12 @@ public partial class GridView
 
     public static HashSet<(uint Row, uint Col)> BuildOccupiedCellSet(IEnumerable<DisplayCell> cells, CellAddress? editingCell)
     {
-        var occupied = new HashSet<(uint Row, uint Col)>(
-            cells
-                .Where(c => !string.IsNullOrEmpty(c.DisplayText) || c.ConditionalIcon is not null)
-                .Select(c => (c.Row, c.Col)));
+        var occupied = new HashSet<(uint Row, uint Col)>();
+        foreach (var cell in cells)
+        {
+            if (!string.IsNullOrEmpty(cell.DisplayText) || cell.ConditionalIcon is not null)
+                occupied.Add((cell.Row, cell.Col));
+        }
 
         if (editingCell is { } address)
             occupied.Add((address.Row, address.Col));

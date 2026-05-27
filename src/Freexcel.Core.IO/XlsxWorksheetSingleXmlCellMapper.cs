@@ -28,16 +28,10 @@ internal static class XlsxWorksheetSingleXmlCellMapper
             var cell = new WorksheetSingleXmlCellModel
             {
                 Id = ReadOptionalInt(cellElement.Attribute("id")?.Value),
-                Reference = NullIfWhiteSpace(cellElement.Attribute("r")?.Value),
+                Reference = XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(cellElement.Attribute("r")?.Value),
                 XmlCellPropertyId = ReadOptionalInt(cellElement.Attribute("xmlCellPrId")?.Value)
             };
-            foreach (var attribute in cellElement.Attributes())
-            {
-                if (attribute.IsNamespaceDeclaration || IsModeledSingleXmlCellAttribute(attribute.Name.LocalName))
-                    continue;
-
-                cell.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-            }
+            XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(cellElement, cell.NativeAttributes, ["id", "r", "xmlCellPrId"]);
 
             if (cell.Id is not null ||
                 cell.Reference is not null ||
@@ -94,7 +88,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
             if (string.IsNullOrWhiteSpace(attribute.Key))
                 continue;
 
-            element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(element, attribute.Key, attribute.Value);
         }
 
         foreach (var cell in model.Cells)
@@ -109,7 +103,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSingleXmlCellAttribute(attribute.Key))
                     continue;
 
-                cellElement.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(cellElement, attribute.Key, attribute.Value);
             }
 
             if (cellElement.HasAttributes)
@@ -138,9 +132,6 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)
             ? result
             : null;
-
-    private static string? NullIfWhiteSpace(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static void SetOptionalIntAttribute(XElement element, string name, int? value)
     {

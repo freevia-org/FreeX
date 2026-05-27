@@ -20,6 +20,10 @@ public sealed partial class SortDialog : Window
     private readonly CheckBox _headerCheck;
     private readonly DataGridComboBoxColumn _sortByColumn;
     private readonly DataGrid _levelsGrid;
+    private readonly Button _deleteLevelButton;
+    private readonly Button _copyLevelButton;
+    private readonly Button _moveUpButton;
+    private readonly Button _moveDownButton;
     private SortDialogOptions _options;
 
     public IReadOnlyList<SortDialogLevel> Levels => _levels.ToList();
@@ -84,6 +88,7 @@ public sealed partial class SortDialog : Window
             if (e.NewItems is null) return;
             foreach (SortDialogLevel level in e.NewItems)
                 AttachLevel(level);
+            UpdateToolbarButtonStates();
         };
 
         _levelsGrid = new DataGrid
@@ -97,6 +102,8 @@ public sealed partial class SortDialog : Window
             Height = 220,
             Margin = new Thickness(0, 0, 0, 12)
         };
+        _levelsGrid.SelectionChanged += (_, _) => UpdateToolbarButtonStates();
+        _levelsGrid.KeyDown += LevelsGrid_KeyDown;
         _sortByColumn = new DataGridComboBoxColumn
         {
             Header = "Sort by",
@@ -136,51 +143,49 @@ public sealed partial class SortDialog : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
         };
         var add = new Button { Content = "_Add Level", Width = 98, Margin = new Thickness(0, 0, 8, 0) };
-        add.Click += (_, _) => _levels.Add(new SortDialogLevel(0, true));
-        var remove = new Button { Content = "_Delete Level", Width = 104, Margin = new Thickness(0, 0, 8, 0) };
-        remove.Click += (_, _) =>
+        add.Click += (_, _) =>
         {
-            var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
-            var updated = RemoveLevel(_levels, selectedIndex);
-            _levels.Clear();
-            foreach (var level in updated)
-                _levels.Add(level);
+            ReplaceLevels(AddLevel(_levels));
+            _levelsGrid.SelectedIndex = _levels.Count - 1;
+            UpdateToolbarButtonStates();
         };
-        var copy = new Button { Content = "_Copy Level", Width = 98 };
-        copy.Click += (_, _) =>
+        _deleteLevelButton = new Button { Content = "_Delete Level", Width = 104, Margin = new Thickness(0, 0, 8, 0) };
+        _deleteLevelButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
-            var updated = CopyLevel(_levels, selectedIndex);
-            _levels.Clear();
-            foreach (var level in updated)
-                _levels.Add(level);
+            ReplaceLevels(RemoveLevel(_levels, selectedIndex));
+            _levelsGrid.SelectedIndex = Math.Min(selectedIndex, _levels.Count - 1);
+            UpdateToolbarButtonStates();
+        };
+        _copyLevelButton = new Button { Content = "_Copy Level", Width = 98 };
+        _copyLevelButton.Click += (_, _) =>
+        {
+            var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
+            ReplaceLevels(CopyLevel(_levels, selectedIndex));
             _levelsGrid.SelectedIndex = Math.Min(selectedIndex + 1, _levels.Count - 1);
+            UpdateToolbarButtonStates();
         };
-        var moveUp = new Button { Content = "Move _Up", Width = 86, Margin = new Thickness(8, 0, 8, 0) };
-        moveUp.Click += (_, _) =>
+        _moveUpButton = new Button { Content = "Move _Up", Width = 86, Margin = new Thickness(8, 0, 8, 0) };
+        _moveUpButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? 0 : _levelsGrid.SelectedIndex;
-            var updated = MoveLevel(_levels, selectedIndex, -1);
-            _levels.Clear();
-            foreach (var level in updated)
-                _levels.Add(level);
+            ReplaceLevels(MoveLevel(_levels, selectedIndex, -1));
             _levelsGrid.SelectedIndex = Math.Max(0, selectedIndex - 1);
+            UpdateToolbarButtonStates();
         };
-        var moveDown = new Button { Content = "Move Do_wn", Width = 92 };
-        moveDown.Click += (_, _) =>
+        _moveDownButton = new Button { Content = "Move Do_wn", Width = 92 };
+        _moveDownButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
-            var updated = MoveLevel(_levels, selectedIndex, 1);
-            _levels.Clear();
-            foreach (var level in updated)
-                _levels.Add(level);
+            ReplaceLevels(MoveLevel(_levels, selectedIndex, 1));
             _levelsGrid.SelectedIndex = Math.Min(_levels.Count - 1, selectedIndex + 1);
+            UpdateToolbarButtonStates();
         };
         helperRow.Children.Add(add);
-        helperRow.Children.Add(remove);
-        helperRow.Children.Add(copy);
-        helperRow.Children.Add(moveUp);
-        helperRow.Children.Add(moveDown);
+        helperRow.Children.Add(_deleteLevelButton);
+        helperRow.Children.Add(_copyLevelButton);
+        helperRow.Children.Add(_moveUpButton);
+        helperRow.Children.Add(_moveDownButton);
         commandDock.Children.Add(helperRow);
         var options = new Button
         {
@@ -223,6 +228,7 @@ public sealed partial class SortDialog : Window
 
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+        UpdateToolbarButtonStates();
     }
 
     private void FocusInitialKeyboardTarget()
@@ -230,17 +236,38 @@ public sealed partial class SortDialog : Window
         _levelsGrid.SelectedIndex = 0;
         _levelsGrid.Focus();
         Keyboard.Focus(_levelsGrid);
+        UpdateToolbarButtonStates();
+    }
+
+    private void LevelsGrid_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete && _deleteLevelButton.IsEnabled)
+        {
+            _deleteLevelButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            e.Handled = true;
+        }
+    }
+
+    private void UpdateToolbarButtonStates()
+    {
+        var selectedIndex = _levelsGrid.SelectedIndex;
+        var hasSelection = selectedIndex >= 0 && selectedIndex < _levels.Count;
+        _deleteLevelButton.IsEnabled = hasSelection && _levels.Count > 1;
+        _copyLevelButton.IsEnabled = hasSelection;
+        _moveUpButton.IsEnabled = hasSelection && selectedIndex > 0;
+        _moveDownButton.IsEnabled = hasSelection && selectedIndex < _levels.Count - 1;
     }
 
     private void UpdateColumnChoices()
     {
         _sortByColumn.Header = _options.LeftToRight ? "Sort by row" : "Sort by";
         _headerCheck.IsEnabled = !_options.LeftToRight;
-        _sortByColumn.ItemsSource = _options.LeftToRight
-            ? _rowChoices
-            : _headerCheck.IsChecked == true
-            ? _columnChoices
-            : _genericColumnChoices;
+        _sortByColumn.ItemsSource = SortDialogPlanner.BuildActiveColumnChoices(
+            _options,
+            _headerCheck.IsChecked == true,
+            _columnChoices,
+            _genericColumnChoices,
+            _rowChoices);
     }
 
     private void AttachLevel(SortDialogLevel level)
@@ -255,12 +282,14 @@ public sealed partial class SortDialog : Window
 
     private void ApplyColorChoices(SortDialogLevel level)
     {
-        level.SetColorChoices(SortOnFromLabel(level.SortOn) switch
-        {
-            Freexcel.Core.Commands.SortOn.CellColor => _cellColorChoices,
-            Freexcel.Core.Commands.SortOn.FontColor => _fontColorChoices,
-            _ => [new SortColorChoice("")]
-        });
+        level.SetColorChoices(SortDialogPlanner.BuildColorChoicesForSortOn(level.SortOn, _cellColorChoices, _fontColorChoices));
+    }
+
+    private void ReplaceLevels(IEnumerable<SortDialogLevel> levels)
+    {
+        _levels.Clear();
+        foreach (var level in levels)
+            _levels.Add(level);
     }
 
     private static DataGridTemplateColumn CreateOrderColumn()

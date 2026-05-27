@@ -18,6 +18,7 @@ public sealed partial class NamedRangeDialog : Window
     private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
     private readonly ObservableCollection<NamedRangeViewModel> _items = [];
     private readonly string _initialRefersTo;
+    private NameDefinitionDialog? _activeDefinitionDialog;
 
     public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
@@ -89,6 +90,9 @@ public sealed partial class NamedRangeDialog : Window
         UpdateSelectionCommands();
     }
 
+    private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e) =>
+        EditButton_Click(sender, e);
+
     private void FilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
 
     private void ApplyFilter()
@@ -139,8 +143,7 @@ public sealed partial class NamedRangeDialog : Window
             GetScopeOptions(),
             RequestRangeSelection,
             isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _)) { Owner = this };
-        if (dialog.ShowDialog() == true)
-            DefineOrUpdateName(dialog.Result);
+        ShowNameDefinitionDialog(dialog);
     }
 
     private void EditButton_Click(object sender, RoutedEventArgs e)
@@ -161,8 +164,21 @@ public sealed partial class NamedRangeDialog : Window
             Owner = this
         };
 
-        if (dialog.ShowDialog() == true)
-            DefineOrUpdateName(dialog.Result);
+        ShowNameDefinitionDialog(dialog);
+    }
+
+    private void ShowNameDefinitionDialog(NameDefinitionDialog dialog)
+    {
+        _activeDefinitionDialog = dialog;
+        try
+        {
+            if (dialog.ShowDialog() == true)
+                DefineOrUpdateName(dialog.Result);
+        }
+        finally
+        {
+            _activeDefinitionDialog = null;
+        }
     }
 
     private void DefineOrUpdateName(NameDefinitionDialogResult definition)
@@ -281,6 +297,18 @@ public sealed partial class NamedRangeDialog : Window
     {
         RangeSelectionRequest = request;
         _requestRangeSelection?.Invoke(request);
+    }
+
+    public void ApplyRangeSelection(NamedRangeSelectionTarget target, string rangeText)
+    {
+        if (target == NamedRangeSelectionTarget.DefinitionRefersTo && _activeDefinitionDialog is { } definitionDialog)
+        {
+            definitionDialog.ApplyRangeSelection(rangeText);
+            return;
+        }
+
+        RefersToBox.Text = rangeText;
+        FocusRefersToSummary();
     }
 }
 

@@ -39,30 +39,31 @@ public static class SelectionRangeService
         var bottom = activeCell.Row;
         var left = activeCell.Col;
         var right = activeCell.Col;
+        var contentIndex = ContentIndex.CreateIfWorthwhile(sheet, usedRange.Value);
 
         var changed = true;
         while (changed)
         {
             changed = false;
-            if (top > usedRange.Value.Start.Row && RowHasContent(sheet, top - 1, left, right))
+            if (top > usedRange.Value.Start.Row && RowHasContent(sheet, contentIndex, top - 1, left, right))
             {
                 top--;
                 changed = true;
             }
 
-            if (bottom < usedRange.Value.End.Row && RowHasContent(sheet, bottom + 1, left, right))
+            if (bottom < usedRange.Value.End.Row && RowHasContent(sheet, contentIndex, bottom + 1, left, right))
             {
                 bottom++;
                 changed = true;
             }
 
-            if (left > usedRange.Value.Start.Col && ColumnHasContent(sheet, left - 1, top, bottom))
+            if (left > usedRange.Value.Start.Col && ColumnHasContent(sheet, contentIndex, left - 1, top, bottom))
             {
                 left--;
                 changed = true;
             }
 
-            if (right < usedRange.Value.End.Col && ColumnHasContent(sheet, right + 1, top, bottom))
+            if (right < usedRange.Value.End.Col && ColumnHasContent(sheet, contentIndex, right + 1, top, bottom))
             {
                 right++;
                 changed = true;
@@ -118,8 +119,11 @@ public static class SelectionRangeService
             new CellAddress(sheet, list.Max(a => a.Row), list.Max(a => a.Col)));
     }
 
-    private static bool RowHasContent(Sheet sheet, uint row, uint startCol, uint endCol)
+    private static bool RowHasContent(Sheet sheet, ContentIndex? contentIndex, uint row, uint startCol, uint endCol)
     {
+        if (contentIndex is not null)
+            return contentIndex.RowHasContent(row, startCol, endCol);
+
         for (var col = startCol; col <= endCol; col++)
         {
             if (HasCellContent(sheet.GetCell(row, col)))
@@ -129,8 +133,11 @@ public static class SelectionRangeService
         return false;
     }
 
-    private static bool ColumnHasContent(Sheet sheet, uint col, uint startRow, uint endRow)
+    private static bool ColumnHasContent(Sheet sheet, ContentIndex? contentIndex, uint col, uint startRow, uint endRow)
     {
+        if (contentIndex is not null)
+            return contentIndex.ColumnHasContent(col, startRow, endRow);
+
         for (var row = startRow; row <= endRow; row++)
         {
             if (HasCellContent(sheet.GetCell(row, col)))
@@ -142,4 +149,77 @@ public static class SelectionRangeService
 
     private static bool HasCellContent(Cell? cell) =>
         cell is not null && (cell.HasFormula || cell.Value is not BlankValue);
+
+    private sealed class ContentIndex
+    {
+        private const long MinimumUsedCells = 4_096;
+        private const int SparseAreaPerStoredCell = 4;
+        private readonly Dictionary<uint, List<uint>> _colsByRow;
+        private readonly Dictionary<uint, List<uint>> _rowsByCol;
+
+        private ContentIndex(Dictionary<uint, List<uint>> colsByRow, Dictionary<uint, List<uint>> rowsByCol)
+        {
+            _colsByRow = colsByRow;
+            _rowsByCol = rowsByCol;
+        }
+
+        public static ContentIndex? CreateIfWorthwhile(Sheet sheet, GridRange usedRange)
+        {
+            if (usedRange.CellCount < MinimumUsedCells ||
+                (long)sheet.CellCount * SparseAreaPerStoredCell > usedRange.CellCount)
+            {
+                return null;
+            }
+
+            var colsByRow = new Dictionary<uint, List<uint>>();
+            var rowsByCol = new Dictionary<uint, List<uint>>();
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (!HasCellContent(cell))
+                    continue;
+
+                Add(colsByRow, address.Row, address.Col);
+                Add(rowsByCol, address.Col, address.Row);
+            }
+
+            if (colsByRow.Count == 0)
+                return null;
+
+            SortValues(colsByRow);
+            SortValues(rowsByCol);
+            return new ContentIndex(colsByRow, rowsByCol);
+        }
+
+        public bool RowHasContent(uint row, uint startCol, uint endCol) =>
+            _colsByRow.TryGetValue(row, out var cols) && HasAnyInRange(cols, startCol, endCol);
+
+        public bool ColumnHasContent(uint col, uint startRow, uint endRow) =>
+            _rowsByCol.TryGetValue(col, out var rows) && HasAnyInRange(rows, startRow, endRow);
+
+        private static void Add(Dictionary<uint, List<uint>> valuesByKey, uint key, uint value)
+        {
+            if (!valuesByKey.TryGetValue(key, out var values))
+            {
+                values = [];
+                valuesByKey[key] = values;
+            }
+
+            values.Add(value);
+        }
+
+        private static void SortValues(Dictionary<uint, List<uint>> valuesByKey)
+        {
+            foreach (var values in valuesByKey.Values)
+                values.Sort();
+        }
+
+        private static bool HasAnyInRange(List<uint> sortedValues, uint start, uint end)
+        {
+            var index = sortedValues.BinarySearch(start);
+            if (index < 0)
+                index = ~index;
+
+            return index < sortedValues.Count && sortedValues[index] <= end;
+        }
+    }
 }

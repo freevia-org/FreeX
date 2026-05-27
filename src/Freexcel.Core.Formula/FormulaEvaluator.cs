@@ -8,6 +8,143 @@ namespace Freexcel.Core.Formula;
 /// </summary>
 public sealed class FormulaEvaluator
 {
+    private static readonly HashSet<string> AggregateFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
+        "STDEV", "MEDIAN",
+        "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "XOR",
+        "VAR", "VAR.S", "VARA", "VARP", "VAR.P", "VARPA", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
+        "GEOMEAN", "HARMEAN", "AVEDEV",
+        "MODE", "MODE.SNGL",
+        "CONCATENATE",
+        "NPV"
+    };
+
+    private static readonly HashSet<string> DirectTextCoercingAggregates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2",
+        "STDEV", "STDEV.S", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
+        "VAR", "VAR.S", "VAR.P", "VARP", "VARA", "VARPA",
+        "MEDIAN",
+        "GEOMEAN", "HARMEAN", "AVEDEV",
+        "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
+        "MODE", "MODE.SNGL",
+        "NPV",
+        "GCD", "LCM"
+    };
+
+    private static readonly HashSet<string> ReferenceProvenanceAggregates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "AND", "OR", "XOR",
+        "STDEV", "STDEV.S", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
+        "VAR", "VAR.S", "VAR.P", "VARP", "VARA", "VARPA",
+        "MEDIAN",
+        "GEOMEAN", "HARMEAN", "AVEDEV",
+        "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
+        "MODE", "MODE.SNGL",
+        "NPV",
+        "GCD", "LCM"
+    };
+
+    private static readonly HashSet<string> StructuredRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "VLOOKUP", "HLOOKUP", "INDEX", "MATCH", "XMATCH",
+        "SUMIF", "COUNTIF", "AVERAGEIF",
+        "SUMPRODUCT",
+        "LARGE", "SMALL", "RANK", "RANK.EQ", "RANK.AVG", "DEVSQ",
+        "MULTINOMIAL", "SERIESSUM", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2",
+        "MMULT", "MINVERSE", "MDETERM", "MUNIT",
+        "SUMIFS", "COUNTIFS", "AVERAGEIFS",
+        "XLOOKUP",
+        "WORKDAY", "NETWORKDAYS", "WORKDAY.INTL", "NETWORKDAYS.INTL",
+        "CORREL", "COVAR", "COVARIANCE.P", "COVARIANCE.S",
+        "FORECAST", "FORECAST.LINEAR",
+        "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
+        "PERCENTILE", "PERCENTILE.INC", "PERCENTILE.EXC",
+        "QUARTILE", "QUARTILE.INC", "QUARTILE.EXC",
+        "PERCENTRANK", "PERCENTRANK.INC", "PERCENTRANK.EXC",
+        "PROB",
+        "PERCENTOF",
+        "LOOKUP",
+        "IRR",
+        "RANDARRAY",
+        "FILTER", "SORT", "SORTBY", "TAKE", "DROP", "TRANSPOSE",
+        "CHOOSEROWS", "CHOOSECOLS", "VSTACK", "HSTACK",
+        "TOROW", "TOCOL", "WRAPROWS", "WRAPCOLS", "EXPAND", "UNIQUE",
+        "TRIMRANGE",
+        "SUBTOTAL",
+        "DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET",
+        "DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP",
+        "DVAR", "DVARP",
+        "ROW", "COLUMN", "ROWS", "COLUMNS", "COUNTBLANK",
+        "AGGREGATE", "CELL", "GETPIVOTDATA",
+        "TTEST", "T.TEST", "ZTEST", "Z.TEST", "FTEST", "F.TEST", "CHITEST", "CHISQ.TEST",
+        "FREQUENCY",
+        "MIRR", "XIRR", "XNPV", "FVSCHEDULE",
+        "PMT", "PV", "FV", "NPER", "RATE", "ISPMT", "IPMT", "PPMT",
+        "CUMIPMT", "CUMPRINC",
+        "EFFECT", "NOMINAL", "RRI", "PDURATION",
+        "SLN", "SYD", "DB", "DDB", "VDB", "AMORDEGRC", "AMORLINC",
+        "DOLLARDE", "DOLLARFR",
+        "DISC", "INTRATE", "RECEIVED",
+        "ACCRINT", "ACCRINTM", "ODDFPRICE", "ODDFYIELD", "ODDLPRICE", "ODDLYIELD",
+        "TBILLEQ", "TBILLPRICE", "TBILLYIELD",
+        "COUPDAYBS", "COUPDAYS", "COUPDAYSNC", "COUPNCD", "COUPNUM", "COUPPCD",
+        "PRICE", "YIELD", "PRICEDISC", "PRICEMAT", "YIELDDISC", "YIELDMAT", "DURATION", "MDURATION",
+        "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL",
+        "TEXTJOIN", "TEXTBEFORE", "TEXTAFTER", "TEXTSPLIT",
+        "REGEXTEST", "REGEXEXTRACT", "REGEXREPLACE",
+        "EXACT", "CODE", "CHAR", "LEN", "LEFT", "RIGHT", "MID", "REPLACE",
+        "FIND", "SEARCH",
+        "TRIM", "UPPER", "LOWER", "PROPER", "CLEAN",
+        "ARABIC", "ROMAN",
+        "TEXT", "VALUE",
+        "SUBSTITUTE", "REPT", "CONCATENATE",
+        "FIXED", "DOLLAR", "T", "HYPERLINK", "ENCODEURL", "FILTERXML", "BAHTTEXT",
+        "VALUETOTEXT", "ARRAYTOTEXT",
+        "ASC", "DBCS", "JIS",
+        "UNICHAR", "UNICODE", "NUMBERVALUE",
+        "ABS", "SQRT", "INT", "SIGN",
+        "MOD", "POWER", "LOG", "LOG10", "QUOTIENT", "CEILING", "FLOOR", "MROUND",
+        "SIN", "SINH", "COS", "COSH", "TAN", "TANH", "DEGREES", "RADIANS",
+        "ASIN", "ASINH", "ACOS", "ACOSH", "ATAN", "ATAN2", "ATANH", "LN", "EXP", "FACT",
+        "ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC",
+        "ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISERR", "ISNA", "ISNONTEXT", "ISLOGICAL",
+        "ISEVEN", "ISODD", "ODD", "EVEN",
+        "DATE", "TIME",
+        "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",
+        "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "EDATE", "EOMONTH", "DATEDIF",
+        "DATEVALUE", "TIMEVALUE",
+        "DAYS", "DAYS360", "YEARFRAC",
+        "CEILING.MATH", "CEILING.PRECISE", "FLOOR.MATH", "FLOOR.PRECISE", "ISO.CEILING", "SQRTPI", "SERIESSUM",
+        "RANDBETWEEN",
+        "N", "ERROR.TYPE",
+        "COMBIN", "COMBINA", "FACTDOUBLE", "PERMUT", "PERMUTATIONA",
+        "ACOT", "ACOTH", "COT", "COTH", "CSC", "CSCH", "SEC", "SECH",
+        "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT",
+        "BASE", "DECIMAL",
+        "BIN2DEC", "HEX2DEC", "OCT2DEC",
+        "DEC2BIN", "DEC2HEX", "DEC2OCT",
+        "BIN2HEX", "BIN2OCT", "HEX2BIN", "HEX2OCT", "OCT2BIN", "OCT2HEX",
+        "COMPLEX", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE", "GESTEP", "IMABS", "IMAGINARY", "IMCONJUGATE", "IMCOS", "IMDIV", "IMEXP", "IMLN", "IMLOG10", "IMLOG2", "IMPRODUCT", "IMREAL", "IMSIN", "IMSQRT", "IMSUB", "IMSUM",
+        "CONVERT",
+        "NORMDIST", "NORM.DIST", "NORMINV", "NORM.INV", "NORMSDIST", "NORM.S.DIST", "NORMSINV", "NORM.S.INV", "PHI", "GAUSS", "FISHER", "FISHERINV", "STANDARDIZE",
+        "GAMMA", "GAMMALN", "GAMMALN.PRECISE", "GAMMADIST", "GAMMA.DIST", "GAMMAINV", "GAMMA.INV",
+        "LOGNORM.DIST", "LOGNORMDIST", "LOGNORM.INV", "LOGINV",
+        "BETA.DIST", "BETADIST", "BETA.INV", "BETAINV",
+        "EXPONDIST", "EXPON.DIST", "WEIBULL", "WEIBULL.DIST", "POISSON", "POISSON.DIST",
+        "TDIST", "T.DIST", "T.DIST.RT", "T.DIST.2T", "TINV", "T.INV", "T.INV.2T",
+        "FDIST", "F.DIST", "F.DIST.RT", "FINV", "F.INV", "F.INV.RT",
+        "CHIDIST", "CHISQ.DIST", "CHISQ.DIST.RT", "CHIINV", "CHISQ.INV", "CHISQ.INV.RT",
+        "BINOMDIST", "BINOM.DIST", "BINOM.DIST.RANGE", "CRITBINOM", "BINOM.INV", "NEGBINOMDIST", "NEGBINOM.DIST", "HYPGEOMDIST", "HYPERGEOM.DIST",
+        "CONFIDENCE", "CONFIDENCE.NORM", "CONFIDENCE.T"
+    };
+
+    private static readonly HashSet<string> SingleCellReferenceRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ROW", "COLUMN", "ROWS", "COLUMNS", "COUNTBLANK", "CELL", "GETPIVOTDATA"
+    };
+
     /// <summary>
     /// Parse and evaluate a formula string against a sheet.
     /// </summary>
@@ -22,7 +159,7 @@ public sealed class FormulaEvaluator
         var parser = new Parser(tokens);
         var ast = parser.Parse();
         var context = new SheetEvalContext(sheet, workbook, this, currentCell);
-        return EvaluateNode(ast, context);
+        return NormalizeTopLevelResult(EvaluateNode(ast, context));
     }
 
     /// <summary>
@@ -35,8 +172,11 @@ public sealed class FormulaEvaluator
         Freexcel.Core.Model.CellAddress? currentCell = null)
     {
         var context = new SheetEvalContext(sheet, workbook, this, currentCell);
-        return EvaluateNode(ast, context);
+        return NormalizeTopLevelResult(EvaluateNode(ast, context));
     }
+
+    private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
+        value is LambdaValue ? ErrorValue.Calc : value;
 
     /// <summary>
     /// Evaluate an AST node recursively.
@@ -49,6 +189,7 @@ public sealed class FormulaEvaluator
             StringNode s => new TextValue(s.Value),
             BooleanNode b => new BoolValue(b.Value),
             OmittedArgumentNode => BlankValue.Instance,
+            ArrayConstantNode array => EvaluateArrayConstant(array, context),
             ErrorNode err => err.Error,
             CellRefNode cell when cell.SheetName is not null
                 => context.GetCellValue(cell.SheetName, cell.Row, cell.ColumnNumber),
@@ -66,6 +207,19 @@ public sealed class FormulaEvaluator
         };
     }
 
+    private ScalarValue EvaluateArrayConstant(ArrayConstantNode node, IEvalContext context)
+    {
+        int rowCount = node.Rows.Count;
+        int colCount = node.Rows[0].Count;
+        var cells = new ScalarValue[rowCount, colCount];
+
+        for (int r = 0; r < rowCount; r++)
+            for (int c = 0; c < colCount; c++)
+                cells[r, c] = EvaluateNode(node.Rows[r][c], context);
+
+        return new RangeValue(cells);
+    }
+
     private static ScalarValue EvaluateNamedRange(NamedRangeNode node, IEvalContext context)
     {
         // Local LET/LAMBDA bindings shadow workbook named ranges.
@@ -79,11 +233,7 @@ public sealed class FormulaEvaluator
         // Bare named range reference outside a function: return top-left cell value.
         // For 2D named ranges this is intentionally lossy — full implicit-intersection
         // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
-        var r = range.Value;
-        var sheetName = context.TryGetSheetName(r.Start.Sheet);
-        return sheetName is not null
-            ? context.GetCellValue(sheetName, r.Start.Row, r.Start.Col)
-            : context.GetCellValue(r.Start.Row, r.Start.Col);
+        return BuildRangeValue(range.Value, context);
     }
 
     private static ScalarValue EvaluateRange(RangeRefNode range, IEvalContext context)
@@ -389,41 +539,47 @@ public sealed class FormulaEvaluator
 
     private ScalarValue EvaluateFunction(FunctionCallNode node, IEvalContext context)
     {
+        var functionName = node.FunctionName;
+
         // LET-scoped lambda bindings: a name like "double" resolves to a LambdaValue
         // before any built-in lookup, allowing user-defined functions to shadow nothing.
-        var lambdaBinding = context.TryResolveLambdaBinding(node.FunctionName);
+        var lambdaBinding = context.TryResolveLambdaBinding(functionName);
         if (lambdaBinding is LambdaValue lv)
             return InvokeLambdaWithArgs(lv, node.Arguments, context);
 
         // LET and LAMBDA are AST-aware special forms not in the built-in registry.
-        if (node.FunctionName is "LET" or "LAMBDA")
+        if (functionName is "LET" or "LAMBDA")
             return EvaluateAstAware(node, context);
 
-        if (!BuiltInFunctions.Exists(node.FunctionName))
+        if (!BuiltInFunctions.TryGet(functionName, out var entry))
             return ErrorValue.Name;
 
         // Short-circuit functions evaluate arguments lazily to avoid propagating errors from untaken branches.
-        if (node.FunctionName is "IF" or "IFERROR" or "IFNA" or "CHOOSE" or "IFS" or "SWITCH")
+        if (functionName is "IF" or "IFERROR" or "IFNA" or "CHOOSE" or "IFS" or "SWITCH")
             return EvaluateShortCircuit(node, context);
 
         // AST-aware functions: must inspect the raw argument nodes before evaluation.
-        if (node.FunctionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET")
+        if (functionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET" or "CELL")
             return EvaluateAstAware(node, context);
 
-        var (func, minArgs, maxArgs) = BuiltInFunctions.Get(node.FunctionName);
+        var (func, minArgs, maxArgs) = entry;
 
-        bool isStructured = IsStructuredRangeFunction(node.FunctionName);
+        bool isStructured = IsStructuredRangeFunction(functionName);
+        bool isAggregate = IsAggregateFunction(functionName);
+        bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
+        bool preservesReferenceProvenance = IsReferenceProvenanceAggregate(functionName);
+        bool isSingleCellReferenceRangeFunction = IsSingleCellReferenceRangeFunction(functionName);
 
-        if (node.Arguments.Count == 1 &&
-            IsSingleDirectRangeFastAggregate(node.FunctionName) &&
-            TryAsRangeRef(node.Arguments[0], out var directAggregateRange))
+        if (node.Arguments.Count >= minArgs &&
+            (isAggregate || node.Arguments.Count <= maxArgs) &&
+            TryEvaluateRangeOnlyFastAggregate(functionName, node.Arguments, context, out var fastAggregate))
         {
-            return EvaluateSingleDirectRangeAggregate(node.FunctionName, directAggregateRange, context);
+            return fastAggregate;
         }
 
         // Expand range arguments into individual values for aggregate functions,
         // or wrap as RangeValue for structured functions that need 2-D access.
-        var expandedArgs = new List<ScalarValue>();
+        var expandedArgs = new List<ScalarValue>(node.Arguments.Count);
         for (var argIndex = 0; argIndex < node.Arguments.Count; argIndex++)
         {
             var arg = node.Arguments[argIndex];
@@ -450,14 +606,14 @@ public sealed class FormulaEvaluator
                         : context.GetRangeValues(
                             range.Start.Row, range.Start.ColumnNumber,
                             range.End.Row, range.End.ColumnNumber);
-                    AddRangeValues(expandedArgs, values, node.FunctionName);
+                    AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
                 }
             }
-            else if (arg is StringNode directText && IsDirectTextCoercingAggregate(node.FunctionName))
+            else if (arg is StringNode directText && isDirectTextCoercingAggregate)
             {
                 expandedArgs.Add(new DirectTextLiteralValue(directText.Value));
             }
-            else if (arg is CellRefNode structuredCell && IsConditionalAggregateRangeArgument(node.FunctionName, argIndex))
+            else if (arg is CellRefNode structuredCell && IsConditionalAggregateRangeArgument(functionName, argIndex))
             {
                 if (structuredCell.SheetName is not null && !context.SheetExists(structuredCell.SheetName))
                 {
@@ -467,7 +623,7 @@ public sealed class FormulaEvaluator
 
                 expandedArgs.Add(BuildRangeValue(new RangeRefNode(structuredCell, structuredCell, structuredCell.SheetName), context));
             }
-            else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(node.FunctionName, argIndex))
+            else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(functionName, argIndex, preservesReferenceProvenance))
             {
                 if (aggregateCell.SheetName is not null && !context.SheetExists(aggregateCell.SheetName))
                 {
@@ -480,7 +636,7 @@ public sealed class FormulaEvaluator
                     : context.GetCellValue(aggregateCell.Row, aggregateCell.ColumnNumber);
                 expandedArgs.Add(new ReferencedScalarValue(value));
             }
-            else if (arg is CellRefNode cell && IsSingleCellReferenceRangeFunction(node.FunctionName))
+            else if (arg is CellRefNode cell && isSingleCellReferenceRangeFunction)
             {
                 if (cell.SheetName is not null && !context.SheetExists(cell.SheetName))
                 {
@@ -499,7 +655,7 @@ public sealed class FormulaEvaluator
                     if (isStructured && lambdaBound is RangeValue)
                         expandedArgs.Add(lambdaBound);
                     else if (!isStructured && lambdaBound is RangeValue flatRv)
-                        AddRangeValues(expandedArgs, flatRv.Flatten(), node.FunctionName);
+                        AddRangeValues(expandedArgs, flatRv.Flatten(), preservesReferenceProvenance);
                     else
                         expandedArgs.Add(lambdaBound);
                 }
@@ -528,7 +684,7 @@ public sealed class FormulaEvaluator
                                 : context.GetRangeValues(
                                     r.Start.Row, r.Start.Col,
                                     r.End.Row, r.End.Col);
-                            AddRangeValues(expandedArgs, values, node.FunctionName);
+                            AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
                         }
                     }
                 }
@@ -536,8 +692,8 @@ public sealed class FormulaEvaluator
             else
             {
                 var value = EvaluateNode(arg, context);
-                if (!isStructured && IsAggregateFunction(node.FunctionName) && value is RangeValue rangeValue)
-                    AddRangeValues(expandedArgs, rangeValue.Flatten(), node.FunctionName);
+                if (!isStructured && isAggregate && value is RangeValue rangeValue)
+                    AddRangeValues(expandedArgs, rangeValue.Flatten(), preservesReferenceProvenance);
                 else
                     expandedArgs.Add(value);
             }
@@ -547,7 +703,7 @@ public sealed class FormulaEvaluator
         if (node.Arguments.Count < minArgs)
             return ErrorValue.Value;
         // Enforce maximum only for non-aggregate functions (aggregates accept unbounded ranges).
-        if (!IsAggregateFunction(node.FunctionName) && node.Arguments.Count > maxArgs)
+        if (!isAggregate && node.Arguments.Count > maxArgs)
             return ErrorValue.Value;
 
         try
@@ -586,61 +742,179 @@ public sealed class FormulaEvaluator
         _ => ErrorValue.Value
     };
 
-    private static void AddRangeValues(List<ScalarValue> expandedArgs, IReadOnlyList<ScalarValue> values, string functionName)
+    private static void AddRangeValues(
+        List<ScalarValue> expandedArgs,
+        IReadOnlyList<ScalarValue> values,
+        bool preservesReferenceProvenance)
     {
-        if (IsReferenceProvenanceAggregate(functionName))
-            expandedArgs.AddRange(values.Select(v => new ReferencedScalarValue(v)));
+        var finalCount = (long)expandedArgs.Count + values.Count;
+        if (finalCount <= int.MaxValue)
+            expandedArgs.EnsureCapacity((int)finalCount);
+
+        if (preservesReferenceProvenance)
+        {
+            foreach (var value in values)
+                expandedArgs.Add(new ReferencedScalarValue(value));
+        }
         else
-            expandedArgs.AddRange(values);
+        {
+            foreach (var value in values)
+                expandedArgs.Add(value);
+        }
     }
 
-    private static bool IsSingleDirectRangeFastAggregate(string functionName)
-        => functionName is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "COUNTBLANK";
-
-    private static ScalarValue EvaluateSingleDirectRangeAggregate(string functionName, RangeRefNode range, IEvalContext context)
+    private static bool TryEvaluateRangeOnlyFastAggregate(
+        string functionName,
+        IReadOnlyList<FormulaNode> arguments,
+        IEvalContext context,
+        out ScalarValue result)
     {
-        if (range.SheetName is not null && !context.SheetExists(range.SheetName))
-            return ErrorValue.Ref;
+        result = BlankValue.Instance;
+        if (!TryGetFastAggregateKind(functionName, out var kind))
+            return false;
 
-        uint r0 = Math.Min(range.Start.Row, range.End.Row);
-        uint r1 = Math.Max(range.Start.Row, range.End.Row);
-        uint c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
-        uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
-
-        return functionName switch
+        var ranges = new List<FastAggregateRange>(arguments.Count);
+        for (var index = 0; index < arguments.Count; index++)
         {
-            "SUM" => EvaluateSingleDirectRangeSum(range.SheetName, r0, c0, r1, c1, context),
-            "AVERAGE" => EvaluateSingleDirectRangeAverage(range.SheetName, r0, c0, r1, c1, context),
-            "MIN" => EvaluateSingleDirectRangeMinMax(range.SheetName, r0, c0, r1, c1, context, findMax: false),
-            "MAX" => EvaluateSingleDirectRangeMinMax(range.SheetName, r0, c0, r1, c1, context, findMax: true),
-            "COUNTBLANK" => EvaluateSingleDirectRangeCountBlank(range.SheetName, r0, c0, r1, c1, context),
-            _ => EvaluateSingleDirectRangeCount(range.SheetName, r0, c0, r1, c1, context)
+            var resolution = TryResolveFastAggregateRange(arguments[index], context, out var range, out var error);
+            if (resolution == FastAggregateRangeResolution.Unsupported)
+                return false;
+
+            if (error is not null)
+            {
+                if (ranges.Count > 0 &&
+                    TryFindFastRangeOnlyImmediateError(kind, ranges, context, out var priorError))
+                    result = priorError;
+                else
+                    result = error;
+
+                return true;
+            }
+
+            ranges.Add(range);
+        }
+
+        result = EvaluateFastRangeOnlyAggregate(kind, ranges, context);
+        return true;
+    }
+
+    private static ScalarValue EvaluateFastRangeOnlyAggregate(
+        FastAggregateKind kind,
+        IReadOnlyList<FastAggregateRange> ranges,
+        IEvalContext context)
+    {
+        return kind switch
+        {
+            FastAggregateKind.Sum => EvaluateFastRangeOnlySum(ranges, context),
+            FastAggregateKind.Average => EvaluateFastRangeOnlyAverage(ranges, context),
+            FastAggregateKind.Min => EvaluateFastRangeOnlyMinMax(ranges, context, findMax: false),
+            FastAggregateKind.Max => EvaluateFastRangeOnlyMinMax(ranges, context, findMax: true),
+            FastAggregateKind.CountBlank => EvaluateFastRangeOnlyCountBlank(ranges, context),
+            _ => EvaluateFastRangeOnlyCount(ranges, context)
         };
     }
 
-    private static ScalarValue EvaluateSingleDirectRangeSum(
-        string? sheetName,
-        uint r0,
-        uint c0,
-        uint r1,
-        uint c1,
-        IEvalContext context)
+    private static bool TryFindFastRangeOnlyImmediateError(
+        FastAggregateKind kind,
+        IReadOnlyList<FastAggregateRange> ranges,
+        IEvalContext context,
+        out ErrorValue error)
+    {
+        error = null!;
+        if (kind is FastAggregateKind.Count or FastAggregateKind.CountBlank)
+            return false;
+
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null)
+                {
+                    error = ErrorValue.Ref;
+                    return true;
+                }
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        _ = TryDirectRangeNumber(sheet.GetValue(row, col), out _, out var cellError);
+                        if (cellError is not null)
+                        {
+                            error = cellError;
+                            return true;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        _ = TryDirectRangeNumber(value, out _, out var cellError);
+                        if (cellError is not null)
+                        {
+                            error = cellError;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static ScalarValue EvaluateFastRangeOnlySum(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
     {
         double total = 0;
-        for (var row = r0; row <= r1; row++)
+        foreach (var range in ranges)
         {
-            for (var col = c0; col <= c1; col++)
+            if (context is SheetEvalContext sheetContext)
             {
-                var value = sheetName is not null
-                    ? context.GetCellValue(sheetName, row, col)
-                    : context.GetCellValue(row, col);
-                if (TryDirectRangeNumber(value, out var number, out var error))
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
-                    total += number;
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = sheet.GetValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            total += number;
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
                 }
-                else if (error is not null)
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
-                    return error;
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            total += number;
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
                 }
             }
         }
@@ -648,31 +922,53 @@ public sealed class FormulaEvaluator
         return double.IsFinite(total) ? new NumberValue(total) : ErrorValue.Num;
     }
 
-    private static ScalarValue EvaluateSingleDirectRangeAverage(
-        string? sheetName,
-        uint r0,
-        uint c0,
-        uint r1,
-        uint c1,
-        IEvalContext context)
+    private static ScalarValue EvaluateFastRangeOnlyAverage(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
     {
         double total = 0;
-        var count = 0;
-        for (var row = r0; row <= r1; row++)
+        long count = 0;
+        foreach (var range in ranges)
         {
-            for (var col = c0; col <= c1; col++)
+            if (context is SheetEvalContext sheetContext)
             {
-                var value = sheetName is not null
-                    ? context.GetCellValue(sheetName, row, col)
-                    : context.GetCellValue(row, col);
-                if (TryDirectRangeNumber(value, out var number, out var error))
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
-                    total += number;
-                    count++;
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = sheet.GetValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            total += number;
+                            count++;
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
                 }
-                else if (error is not null)
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
-                    return error;
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            total += number;
+                            count++;
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
                 }
             }
         }
@@ -682,34 +978,61 @@ public sealed class FormulaEvaluator
             : double.IsFinite(total / count) ? new NumberValue(total / count) : ErrorValue.Num;
     }
 
-    private static ScalarValue EvaluateSingleDirectRangeMinMax(
-        string? sheetName,
-        uint r0,
-        uint c0,
-        uint r1,
-        uint c1,
+    private static ScalarValue EvaluateFastRangeOnlyMinMax(
+        IReadOnlyList<FastAggregateRange> ranges,
         IEvalContext context,
         bool findMax)
     {
         double? result = null;
-        for (var row = r0; row <= r1; row++)
+        foreach (var range in ranges)
         {
-            for (var col = c0; col <= c1; col++)
+            if (context is SheetEvalContext sheetContext)
             {
-                var value = sheetName is not null
-                    ? context.GetCellValue(sheetName, row, col)
-                    : context.GetCellValue(row, col);
-                if (TryDirectRangeNumber(value, out var number, out var error))
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
-                    if (result is null ||
-                        (findMax ? number > result.Value : number < result.Value))
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
                     {
-                        result = number;
+                        var value = sheet.GetValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            if (result is null ||
+                                (findMax ? number > result.Value : number < result.Value))
+                            {
+                                result = number;
+                            }
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
                     }
                 }
-                else if (error is not null)
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
-                    return error;
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            if (result is null ||
+                                (findMax ? number > result.Value : number < result.Value))
+                            {
+                                result = number;
+                            }
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
                 }
             }
         }
@@ -719,53 +1042,187 @@ public sealed class FormulaEvaluator
             : double.IsFinite(result.Value) ? new NumberValue(result.Value) : ErrorValue.Num;
     }
 
-    private static ScalarValue EvaluateSingleDirectRangeCount(
-        string? sheetName,
-        uint r0,
-        uint c0,
-        uint r1,
-        uint c1,
-        IEvalContext context)
+    private static ScalarValue EvaluateFastRangeOnlyCount(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
     {
-        var count = 0;
-        for (var row = r0; row <= r1; row++)
+        long count = 0;
+        foreach (var range in ranges)
         {
-            for (var col = c0; col <= c1; col++)
+            if (context is SheetEvalContext sheetContext)
             {
-                var value = sheetName is not null
-                    ? context.GetCellValue(sheetName, row, col)
-                    : context.GetCellValue(row, col);
-                if (value is NumberValue or DateTimeValue)
-                    count++;
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = sheet.GetValue(row, col);
+                        if (value is NumberValue or DateTimeValue)
+                            count++;
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (value is NumberValue or DateTimeValue)
+                            count++;
+                    }
+                }
             }
         }
 
         return new NumberValue(count);
     }
 
-    private static ScalarValue EvaluateSingleDirectRangeCountBlank(
-        string? sheetName,
-        uint r0,
-        uint c0,
-        uint r1,
-        uint c1,
-        IEvalContext context)
+    private static ScalarValue EvaluateFastRangeOnlyCountBlank(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
     {
-        var count = 0;
-        for (var row = r0; row <= r1; row++)
+        long count = 0;
+        foreach (var range in ranges)
         {
-            for (var col = c0; col <= c1; col++)
+            if (context is SheetEvalContext sheetContext)
             {
-                var value = sheetName is not null
-                    ? context.GetCellValue(sheetName, row, col)
-                    : context.GetCellValue(row, col);
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
 
-                if (value is BlankValue || value is TextValue { Value.Length: 0 })
-                    count++;
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = sheet.GetValue(row, col);
+
+                        if (value is BlankValue || value is TextValue { Value.Length: 0 })
+                            count++;
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+
+                        if (value is BlankValue || value is TextValue { Value.Length: 0 })
+                            count++;
+                    }
+                }
             }
         }
 
         return new NumberValue(count);
+    }
+
+    private static Sheet? ResolveFastAggregateSheet(FastAggregateRange range, SheetEvalContext context)
+        => context.ResolveSheetForFastRange(range.SheetName);
+
+    private static FastAggregateRangeResolution TryResolveFastAggregateRange(
+        FormulaNode argument,
+        IEvalContext context,
+        out FastAggregateRange range,
+        out ErrorValue? error)
+    {
+        range = default;
+        error = null;
+
+        if (TryAsRangeRef(argument, out var rangeRef))
+        {
+            if (rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName))
+            {
+                error = ErrorValue.Ref;
+                return FastAggregateRangeResolution.Error;
+            }
+
+            range = new FastAggregateRange(
+                rangeRef.SheetName,
+                Math.Min(rangeRef.Start.Row, rangeRef.End.Row),
+                Math.Min(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber),
+                Math.Max(rangeRef.Start.Row, rangeRef.End.Row),
+                Math.Max(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber));
+            return FastAggregateRangeResolution.Range;
+        }
+
+        if (argument is NamedRangeNode named)
+        {
+            if (context.TryResolveLambdaBinding(named.Name) is not null)
+                return FastAggregateRangeResolution.Unsupported;
+
+            var resolvedRange = context.TryResolveNamedRange(named.Name);
+            if (resolvedRange is null)
+                return FastAggregateRangeResolution.Unsupported;
+
+            var gridRange = resolvedRange.Value;
+            range = new FastAggregateRange(
+                context.TryGetSheetName(gridRange.Start.Sheet),
+                gridRange.Start.Row,
+                gridRange.Start.Col,
+                gridRange.End.Row,
+                gridRange.End.Col);
+            return FastAggregateRangeResolution.Range;
+        }
+
+        return FastAggregateRangeResolution.Unsupported;
+    }
+
+    private static bool TryGetFastAggregateKind(string functionName, out FastAggregateKind kind)
+    {
+        switch (functionName)
+        {
+            case "SUM":
+                kind = FastAggregateKind.Sum;
+                return true;
+            case "AVERAGE":
+                kind = FastAggregateKind.Average;
+                return true;
+            case "MIN":
+                kind = FastAggregateKind.Min;
+                return true;
+            case "MAX":
+                kind = FastAggregateKind.Max;
+                return true;
+            case "COUNT":
+                kind = FastAggregateKind.Count;
+                return true;
+            case "COUNTBLANK":
+                kind = FastAggregateKind.CountBlank;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
+    }
+
+    private readonly record struct FastAggregateRange(
+        string? SheetName,
+        uint StartRow,
+        uint StartCol,
+        uint EndRow,
+        uint EndCol);
+
+    private enum FastAggregateKind
+    {
+        Sum,
+        Average,
+        Min,
+        Max,
+        Count,
+        CountBlank
+    }
+
+    private enum FastAggregateRangeResolution
+    {
+        Unsupported,
+        Range,
+        Error
     }
 
     private static bool TryDirectRangeNumber(ScalarValue value, out double number, out ErrorValue? error)
@@ -878,8 +1335,9 @@ public sealed class FormulaEvaluator
     private ScalarValue EvaluateIf(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count is < 2 or > 3) return ErrorValue.Value;
-        var cond = EvaluateNode(node.Arguments[0], context);
+        var cond = EvaluateArrayOperand(node.Arguments[0], context);
         if (cond is ErrorValue e) return e;
+        if (cond is RangeValue conditionRange) return EvaluateIfConditionRange(node, context, conditionRange);
         bool? taken = cond switch
         {
             BoolValue b     => b.Value,
@@ -889,37 +1347,178 @@ public sealed class FormulaEvaluator
             _               => null   // text condition is #VALUE! in Excel
         };
         if (taken is null) return ErrorValue.Value;
-        if (taken.Value)  return EvaluateNode(node.Arguments[1], context);
-        if (node.Arguments.Count == 3) return EvaluateNode(node.Arguments[2], context);
+        if (taken.Value)  return EvaluateArrayOperand(node.Arguments[1], context);
+        if (node.Arguments.Count == 3) return EvaluateArrayOperand(node.Arguments[2], context);
         return new BoolValue(false);
+    }
+
+    private ScalarValue EvaluateIfConditionRange(FunctionCallNode node, IEvalContext context, RangeValue conditionRange)
+    {
+        ScalarValue? trueBranch = null;
+        ScalarValue? falseBranch = null;
+        var cells = new ScalarValue[conditionRange.RowCount, conditionRange.ColCount];
+
+        for (int r = 0; r < conditionRange.RowCount; r++)
+            for (int c = 0; c < conditionRange.ColCount; c++)
+            {
+                var condition = conditionRange.Cells[r, c];
+                if (condition is ErrorValue error)
+                {
+                    cells[r, c] = error;
+                    continue;
+                }
+
+                bool? taken = condition switch
+                {
+                    BoolValue b     => b.Value,
+                    NumberValue n   => n.Value != 0,
+                    DateTimeValue d => d.Value != 0,
+                    BlankValue      => false,
+                    _               => null
+                };
+                if (taken is null)
+                {
+                    cells[r, c] = ErrorValue.Value;
+                    continue;
+                }
+
+                var selected = taken.Value
+                    ? trueBranch ??= EvaluateArrayOperand(node.Arguments[1], context)
+                    : falseBranch ??= node.Arguments.Count == 3
+                        ? EvaluateArrayOperand(node.Arguments[2], context)
+                        : new BoolValue(false);
+
+                cells[r, c] = selected is RangeValue selectedRange
+                    ? PickRangeElementForArrayResult(selectedRange, r, c, conditionRange.RowCount, conditionRange.ColCount)
+                    : selected;
+            }
+
+        return new RangeValue(cells, conditionRange.StartRow, conditionRange.StartCol) { SheetName = conditionRange.SheetName };
     }
 
     private ScalarValue EvaluateIfError(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 2) return ErrorValue.Value;
-        var value = EvaluateNode(node.Arguments[0], context);
-        return value is ErrorValue ? EvaluateNode(node.Arguments[1], context) : value;
+        var value = EvaluateArrayOperand(node.Arguments[0], context);
+        if (value is RangeValue range)
+        {
+            if (!RangeHasMatchingError(range, _ => true)) return value;
+            var fallback = EvaluateArrayOperand(node.Arguments[1], context);
+            return ReplaceRangeErrors(range, fallback, _ => true);
+        }
+
+        return value is ErrorValue ? EvaluateArrayOperand(node.Arguments[1], context) : value;
     }
 
     private ScalarValue EvaluateIfNa(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 2) return ErrorValue.Value;
-        var value = EvaluateNode(node.Arguments[0], context);
-        return value == ErrorValue.NA ? EvaluateNode(node.Arguments[1], context) : value;
+        var value = EvaluateArrayOperand(node.Arguments[0], context);
+        if (value is RangeValue range)
+        {
+            if (!RangeHasMatchingError(range, IsNAError)) return value;
+            var fallback = EvaluateArrayOperand(node.Arguments[1], context);
+            return ReplaceRangeErrors(range, fallback, IsNAError);
+        }
+
+        return value is ErrorValue e && IsNAError(e) ? EvaluateArrayOperand(node.Arguments[1], context) : value;
     }
+
+    private static bool RangeHasMatchingError(RangeValue range, Func<ErrorValue, bool> catches)
+    {
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                if (range.Cells[r, c] is ErrorValue error && catches(error))
+                    return true;
+
+        return false;
+    }
+
+    private static ScalarValue ReplaceRangeErrors(RangeValue range, ScalarValue fallback, Func<ErrorValue, bool> catches)
+    {
+        RangeValue? fallbackRange = fallback as RangeValue;
+        if (fallbackRange is not null && (fallbackRange.RowCount != range.RowCount || fallbackRange.ColCount != range.ColCount))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue error && catches(error)
+                    ? fallbackRange?.Cells[r, c] ?? fallback
+                    : value;
+            }
+
+        return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
+    }
+
+    private static bool IsNAError(ErrorValue error) => error.Code == ErrorValue.NA.Code;
 
     private ScalarValue EvaluateChoose(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count < 2) return ErrorValue.Value;
-        var indexVal = EvaluateNode(node.Arguments[0], context);
+        var indexVal = EvaluateArrayOperand(node.Arguments[0], context);
         if (indexVal is ErrorValue e) return e;
+        if (indexVal is RangeValue indexRange) return EvaluateChooseIndexRange(node, context, indexRange);
         var coerced = CoerceToNumber(indexVal);
         if (coerced is ErrorValue ec) return ec;
         double rawIdx = ((NumberValue)coerced).Value;
         if (!double.IsFinite(rawIdx)) return ErrorValue.Value;
         int idx = (int)rawIdx;
         if (idx < 1 || idx >= node.Arguments.Count) return ErrorValue.Value;
-        return EvaluateNode(node.Arguments[idx], context);
+        return EvaluateArrayOperand(node.Arguments[idx], context);
+    }
+
+    private ScalarValue EvaluateChooseIndexRange(FunctionCallNode node, IEvalContext context, RangeValue indexRange)
+    {
+        var branchCache = new Dictionary<int, ScalarValue>();
+        var cells = new ScalarValue[indexRange.RowCount, indexRange.ColCount];
+
+        for (int r = 0; r < indexRange.RowCount; r++)
+            for (int c = 0; c < indexRange.ColCount; c++)
+            {
+                var index = CoerceChooseIndex(indexRange.Cells[r, c], node.Arguments.Count);
+                if (index is null)
+                {
+                    cells[r, c] = ErrorValue.Value;
+                    continue;
+                }
+
+                if (!branchCache.TryGetValue(index.Value, out var selected))
+                {
+                    selected = EvaluateArrayOperand(node.Arguments[index.Value], context);
+                    branchCache[index.Value] = selected;
+                }
+
+                cells[r, c] = selected is RangeValue selectedRange
+                    ? PickRangeElementForArrayResult(selectedRange, r, c, indexRange.RowCount, indexRange.ColCount)
+                    : selected;
+            }
+
+        return new RangeValue(cells, indexRange.StartRow, indexRange.StartCol) { SheetName = indexRange.SheetName };
+    }
+
+    private static ScalarValue PickRangeElementForArrayResult(RangeValue range, int row, int col, int targetRows, int targetCols)
+    {
+        if (range.RowCount == targetRows && range.ColCount == targetCols)
+            return range.Cells[row, col];
+
+        if (range.RowCount == 1 && range.ColCount == 1)
+            return range.Cells[0, 0];
+
+        return ErrorValue.Value;
+    }
+
+    private int? CoerceChooseIndex(ScalarValue value, int argumentCount)
+    {
+        if (value is ErrorValue) return null;
+        var coerced = CoerceToNumber(value);
+        if (coerced is not NumberValue number) return null;
+        double rawIdx = number.Value;
+        if (!double.IsFinite(rawIdx)) return null;
+        int idx = (int)rawIdx;
+        return idx >= 1 && idx < argumentCount ? idx : null;
     }
 
     private ScalarValue EvaluateIfs(FunctionCallNode node, IEvalContext context)
@@ -927,8 +1526,9 @@ public sealed class FormulaEvaluator
         if (node.Arguments.Count < 2 || node.Arguments.Count % 2 != 0) return ErrorValue.Value;
         for (int i = 0; i < node.Arguments.Count - 1; i += 2)
         {
-            var cond = EvaluateNode(node.Arguments[i], context);
+            var cond = EvaluateArrayOperand(node.Arguments[i], context);
             if (cond is ErrorValue e) return e;
+            if (cond is RangeValue conditionRange) return EvaluateIfsConditionRange(node, context, conditionRange);
             bool? taken = cond switch
             {
                 BoolValue b     => b.Value,
@@ -938,8 +1538,69 @@ public sealed class FormulaEvaluator
                 _               => null
             };
             if (taken is null) return ErrorValue.Value;
-            if (taken.Value) return EvaluateNode(node.Arguments[i + 1], context);
+            if (taken.Value) return EvaluateArrayOperand(node.Arguments[i + 1], context);
         }
+        return ErrorValue.NA;
+    }
+
+    private ScalarValue EvaluateIfsConditionRange(FunctionCallNode node, IEvalContext context, RangeValue firstConditionRange)
+    {
+        var conditionCache = new Dictionary<int, ScalarValue> { [0] = firstConditionRange };
+        var resultCache = new Dictionary<int, ScalarValue>();
+        var cells = new ScalarValue[firstConditionRange.RowCount, firstConditionRange.ColCount];
+
+        for (int r = 0; r < firstConditionRange.RowCount; r++)
+            for (int c = 0; c < firstConditionRange.ColCount; c++)
+                cells[r, c] = EvaluateIfsElement(node, context, conditionCache, resultCache, firstConditionRange, r, c);
+
+        return new RangeValue(cells, firstConditionRange.StartRow, firstConditionRange.StartCol) { SheetName = firstConditionRange.SheetName };
+    }
+
+    private ScalarValue EvaluateIfsElement(
+        FunctionCallNode node,
+        IEvalContext context,
+        Dictionary<int, ScalarValue> conditionCache,
+        Dictionary<int, ScalarValue> resultCache,
+        RangeValue shape,
+        int row,
+        int col)
+    {
+        for (int i = 0; i < node.Arguments.Count - 1; i += 2)
+        {
+            if (!conditionCache.TryGetValue(i, out var condition))
+            {
+                condition = EvaluateArrayOperand(node.Arguments[i], context);
+                conditionCache[i] = condition;
+            }
+
+            var conditionElement = condition is RangeValue conditionRange
+                ? PickRangeElementForArrayResult(conditionRange, row, col, shape.RowCount, shape.ColCount)
+                : condition;
+
+            if (conditionElement is ErrorValue error) return error;
+            bool? taken = conditionElement switch
+            {
+                BoolValue b     => b.Value,
+                NumberValue n   => n.Value != 0,
+                DateTimeValue d => d.Value != 0,
+                BlankValue      => false,
+                _               => null
+            };
+            if (taken is null) return ErrorValue.Value;
+            if (!taken.Value) continue;
+
+            int resultIndex = i + 1;
+            if (!resultCache.TryGetValue(resultIndex, out var result))
+            {
+                result = EvaluateArrayOperand(node.Arguments[resultIndex], context);
+                resultCache[resultIndex] = result;
+            }
+
+            return result is RangeValue resultRange
+                ? PickRangeElementForArrayResult(resultRange, row, col, shape.RowCount, shape.ColCount)
+                : result;
+        }
+
         return ErrorValue.NA;
     }
 
@@ -950,6 +1611,7 @@ public sealed class FormulaEvaluator
             "ISREF"        => EvaluateIsRef(node, context),
             "ISFORMULA"    => EvaluateIsFormula(node, context),
             "FORMULATEXT"  => EvaluateFormulaText(node, context),
+            "CELL"         => EvaluateCellInfo(node, context),
             "OFFSET"       => EvaluateOffset(node, context),
             "LET"          => EvaluateLet(node, context),
             "LAMBDA"       => EvaluateLambda(node, context),
@@ -957,7 +1619,7 @@ public sealed class FormulaEvaluator
         };
     }
 
-    private static ScalarValue EvaluateIsRef(FunctionCallNode node, IEvalContext context)
+    private ScalarValue EvaluateIsRef(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 1) return ErrorValue.Value;
         var arg = node.Arguments[0];
@@ -966,8 +1628,19 @@ public sealed class FormulaEvaluator
             CellRefNode cell  => new BoolValue(cell.SheetName is null || context.SheetExists(cell.SheetName)),
             RangeRefNode rng  => new BoolValue(rng.SheetName is null || context.SheetExists(rng.SheetName)),
             NamedRangeNode nm => new BoolValue(context.TryResolveNamedRange(nm.Name) is not null),
+            FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT"
+                => EvaluateReferenceReturningIsRef(fn, context),
             _                 => new BoolValue(false)
         };
+    }
+
+    private ScalarValue EvaluateReferenceReturningIsRef(FunctionCallNode node, IEvalContext context)
+    {
+        var value = EvaluateNode(node, context);
+
+        return value is ErrorValue error
+            ? error == ErrorValue.Ref ? new BoolValue(false) : error
+            : new BoolValue(true);
     }
 
     private ScalarValue EvaluateIsFormula(FunctionCallNode node, IEvalContext context)
@@ -1001,6 +1674,16 @@ public sealed class FormulaEvaluator
             var cell = rangeRef.SheetName is not null
                 ? context.TryGetCell(rangeRef.SheetName, rangeRef.Start.Row, rangeRef.Start.ColumnNumber)
                 : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
+            return new BoolValue(cell?.HasFormula == true);
+        }
+        if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
+        {
+            var reference = EvaluateReferenceReturningFunction(fn, context);
+            if (reference is ErrorValue error) return error;
+            var range = (RangeValue)reference;
+            var cell = range.SheetName is not null
+                ? context.TryGetCell(range.SheetName, range.StartRow, range.StartCol)
+                : context.TryGetCell(range.StartRow, range.StartCol);
             return new BoolValue(cell?.HasFormula == true);
         }
         return ErrorValue.Value;
@@ -1037,15 +1720,106 @@ public sealed class FormulaEvaluator
                 ? context.TryGetCell(sheetName, r.Start.Row, r.Start.Col)
                 : context.TryGetCell(r.Start.Row, r.Start.Col);
         }
+        else if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
+        {
+            var reference = EvaluateReferenceReturningFunction(fn, context);
+            if (reference is ErrorValue error) return error == ErrorValue.Value ? ErrorValue.NA : error;
+            var range = (RangeValue)reference;
+            cell = range.SheetName is not null
+                ? context.TryGetCell(range.SheetName, range.StartRow, range.StartCol)
+                : context.TryGetCell(range.StartRow, range.StartCol);
+        }
         else
         {
             return ErrorValue.NA;
         }
         if (cell is null || !cell.HasFormula) return ErrorValue.NA;
-        return new TextValue(cell.FormulaText!);
+        var formulaText = cell.FormulaText!;
+        return new TextValue(formulaText.StartsWith('=') ? formulaText : "=" + formulaText);
+    }
+
+    private ScalarValue EvaluateCellInfo(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count is < 1 or > 2) return ErrorValue.Value;
+
+        var infoType = EvaluateNode(node.Arguments[0], context);
+        if (infoType is ErrorValue error) return error;
+        if (node.Arguments.Count == 1)
+            return BuiltInFunctions.CellInfo([infoType], context);
+
+        var reference = EvaluateCellReferenceArgument(node.Arguments[1], context);
+        return reference is ErrorValue refError
+            ? refError
+            : BuiltInFunctions.CellInfo([infoType, reference], context);
+    }
+
+    private ScalarValue EvaluateCellReferenceArgument(FormulaNode node, IEvalContext context)
+    {
+        if (TryAsRangeRef(node, out var range))
+        {
+            if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+                return ErrorValue.Ref;
+            return BuildRangeValue(range, context);
+        }
+
+        if (node is CellRefNode cellRef)
+        {
+            if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
+                return ErrorValue.Ref;
+            return BuildRangeValue(new RangeRefNode(cellRef, cellRef, cellRef.SheetName), context);
+        }
+
+        if (node is NamedRangeNode named)
+        {
+            var rangeRef = context.TryResolveNamedRange(named.Name);
+            return rangeRef is null ? ErrorValue.Name : BuildRangeValue(rangeRef.Value, context);
+        }
+
+        if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
+        {
+            var value = EvaluateReferenceReturningFunction(fn, context);
+            return value is ErrorValue or RangeValue ? value : ErrorValue.Value;
+        }
+
+        return ErrorValue.Value;
+    }
+
+    private ScalarValue EvaluateReferenceReturningFunction(FunctionCallNode node, IEvalContext context)
+    {
+        return node.FunctionName switch
+        {
+            "OFFSET"   => EvaluateOffsetReference(node, context),
+            "INDIRECT" => EvaluateIndirectReference(node, context),
+            _          => ErrorValue.Value
+        };
+    }
+
+    private ScalarValue EvaluateIndirectReference(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count is < 1 or > 2) return ErrorValue.Value;
+
+        var args = new List<ScalarValue>(node.Arguments.Count);
+        foreach (var argument in node.Arguments)
+        {
+            var value = EvaluateNode(argument, context);
+            if (value is ErrorValue error) return error;
+            args.Add(value);
+        }
+
+        return BuiltInFunctions.IndirectReference(args, context);
     }
 
     private ScalarValue EvaluateOffset(FunctionCallNode node, IEvalContext context)
+    {
+        var reference = EvaluateOffsetReference(node, context);
+        if (reference is ErrorValue error) return error;
+        var range = (RangeValue)reference;
+        if (range.RowCount == 1 && range.ColCount == 1)
+            return range.Cells[0, 0];
+        return range;
+    }
+
+    private ScalarValue EvaluateOffsetReference(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count is < 3 or > 5) return ErrorValue.Value;
         var baseArg = node.Arguments[0];
@@ -1151,12 +1925,6 @@ public sealed class FormulaEvaluator
         int colSpan = (int)(c1Final - c0Final + 1);
         if ((long)rowSpan * colSpan > 1_000_000L) return ErrorValue.Ref;
 
-        if (rowSpan == 1 && colSpan == 1)
-        {
-            return baseSheet is not null
-                ? context.GetCellValue(baseSheet, (uint)r0Final, (uint)c0Final)
-                : context.GetCellValue((uint)r0Final, (uint)c0Final);
-        }
         var cells = new ScalarValue[rowSpan, colSpan];
         for (int ri = 0; ri < rowSpan; ri++)
             for (int ci = 0; ci < colSpan; ci++)
@@ -1165,14 +1933,15 @@ public sealed class FormulaEvaluator
                     ? context.GetCellValue(baseSheet, (uint)(r0Final + ri), (uint)(c0Final + ci))
                     : context.GetCellValue((uint)(r0Final + ri), (uint)(c0Final + ci));
             }
-        return new RangeValue(cells, (uint)r0Final, (uint)c0Final);
+        return new RangeValue(cells, (uint)r0Final, (uint)c0Final) { SheetName = baseSheet };
     }
 
     private ScalarValue EvaluateSwitch(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count < 3) return ErrorValue.Value;
-        var expr = EvaluateNode(node.Arguments[0], context);
+        var expr = EvaluateArrayOperand(node.Arguments[0], context);
         if (expr is ErrorValue e) return e;
+        if (expr is RangeValue exprRange) return EvaluateSwitchExpressionRange(node, context, exprRange);
         bool hasDefault = (node.Arguments.Count - 1) % 2 == 1;
         int pairCount = (node.Arguments.Count - 1) / 2;
         for (int i = 0; i < pairCount; i++)
@@ -1180,125 +1949,100 @@ public sealed class FormulaEvaluator
             var val = EvaluateNode(node.Arguments[1 + i * 2], context);
             if (val is ErrorValue ve) return ve;
             if (BuiltInFunctions.ScalarEquals(expr, val))
-                return EvaluateNode(node.Arguments[1 + i * 2 + 1], context);
+                return EvaluateArrayOperand(node.Arguments[1 + i * 2 + 1], context);
         }
-        return hasDefault ? EvaluateNode(node.Arguments[^1], context) : ErrorValue.NA;
+        return hasDefault ? EvaluateArrayOperand(node.Arguments[^1], context) : ErrorValue.NA;
+    }
+
+    private ScalarValue EvaluateSwitchExpressionRange(FunctionCallNode node, IEvalContext context, RangeValue exprRange)
+    {
+        var valueCache = new Dictionary<int, ScalarValue>();
+        var resultCache = new Dictionary<int, ScalarValue>();
+        var cells = new ScalarValue[exprRange.RowCount, exprRange.ColCount];
+
+        for (int r = 0; r < exprRange.RowCount; r++)
+            for (int c = 0; c < exprRange.ColCount; c++)
+                cells[r, c] = EvaluateSwitchElement(node, context, valueCache, resultCache, exprRange, r, c);
+
+        return new RangeValue(cells, exprRange.StartRow, exprRange.StartCol) { SheetName = exprRange.SheetName };
+    }
+
+    private ScalarValue EvaluateSwitchElement(
+        FunctionCallNode node,
+        IEvalContext context,
+        Dictionary<int, ScalarValue> valueCache,
+        Dictionary<int, ScalarValue> resultCache,
+        RangeValue exprRange,
+        int row,
+        int col)
+    {
+        var expr = exprRange.Cells[row, col];
+        if (expr is ErrorValue error) return error;
+
+        bool hasDefault = (node.Arguments.Count - 1) % 2 == 1;
+        int pairCount = (node.Arguments.Count - 1) / 2;
+        for (int i = 0; i < pairCount; i++)
+        {
+            int valueIndex = 1 + i * 2;
+            if (!valueCache.TryGetValue(valueIndex, out var value))
+            {
+                value = EvaluateArrayOperand(node.Arguments[valueIndex], context);
+                valueCache[valueIndex] = value;
+            }
+
+            var valueElement = value is RangeValue valueRange
+                ? PickRangeElementForArrayResult(valueRange, row, col, exprRange.RowCount, exprRange.ColCount)
+                : value;
+
+            if (valueElement is ErrorValue valueError) return valueError;
+            if (!BuiltInFunctions.ScalarEquals(expr, valueElement)) continue;
+
+            int resultIndex = valueIndex + 1;
+            if (!resultCache.TryGetValue(resultIndex, out var result))
+            {
+                result = EvaluateArrayOperand(node.Arguments[resultIndex], context);
+                resultCache[resultIndex] = result;
+            }
+
+            return result is RangeValue resultRange
+                ? PickRangeElementForArrayResult(resultRange, row, col, exprRange.RowCount, exprRange.ColCount)
+                : result;
+        }
+
+        if (!hasDefault) return ErrorValue.NA;
+
+        int defaultIndex = node.Arguments.Count - 1;
+        if (!resultCache.TryGetValue(defaultIndex, out var defaultResult))
+        {
+            defaultResult = EvaluateArrayOperand(node.Arguments[defaultIndex], context);
+            resultCache[defaultIndex] = defaultResult;
+        }
+
+        return defaultResult is RangeValue defaultRange
+            ? PickRangeElementForArrayResult(defaultRange, row, col, exprRange.RowCount, exprRange.ColCount)
+            : defaultResult;
     }
 
     private static bool IsAggregateFunction(string name) =>
-        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "COUNTA" or "AND" or "OR" or "CONCAT"
-             or "STDEV" or "MEDIAN"
-             or "PRODUCT" or "XOR"
-             or "VAR" or "VAR.S" or "VAR.P" or "STDEV.P"
-             or "GEOMEAN" or "HARMEAN" or "AVEDEV"
-             or "MODE" or "MODE.SNGL"
-             or "CONCATENATE"
-             or "NPV";
+        AggregateFunctions.Contains(name);
 
     private static bool IsDirectTextCoercingAggregate(string name) =>
-        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "PRODUCT"
-             or "STDEV" or "STDEV.S" or "STDEV.P"
-             or "VAR" or "VAR.S" or "VAR.P"
-             or "MEDIAN"
-             or "GEOMEAN" or "HARMEAN" or "AVEDEV"
-             or "MODE" or "MODE.SNGL"
-             or "NPV"
-             or "GCD" or "LCM";
+        DirectTextCoercingAggregates.Contains(name);
 
     private static bool IsReferenceProvenanceAggregate(string name) =>
-        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "PRODUCT" or "AND" or "OR" or "XOR"
-             or "STDEV" or "STDEV.S" or "STDEV.P"
-             or "VAR" or "VAR.S" or "VAR.P"
-             or "MEDIAN"
-             or "GEOMEAN" or "HARMEAN" or "AVEDEV"
-             or "MODE" or "MODE.SNGL"
-             or "NPV"
-             or "GCD" or "LCM";
+        ReferenceProvenanceAggregates.Contains(name);
 
-    private static bool IsSingleCellReferenceProvenanceArgument(string name, int argIndex) =>
-        IsReferenceProvenanceAggregate(name) && (name != "NPV" || argIndex > 0);
+    private static bool IsSingleCellReferenceProvenanceArgument(
+        string name,
+        int argIndex,
+        bool preservesReferenceProvenance) =>
+        preservesReferenceProvenance && (name != "NPV" || argIndex > 0);
 
     private static bool IsStructuredRangeFunction(string name) =>
-        name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH" or "XMATCH"
-             or "SUMIF" or "COUNTIF" or "AVERAGEIF"
-             or "SUMPRODUCT"
-             or "LARGE" or "SMALL" or "RANK" or "RANK.EQ" or "RANK.AVG" or "DEVSQ"
-             or "MULTINOMIAL" or "SERIESSUM"
-             or "MMULT" or "MINVERSE" or "MDETERM"
-             or "SUMIFS" or "COUNTIFS" or "AVERAGEIFS"
-             or "XLOOKUP"
-             or "WORKDAY" or "NETWORKDAYS" or "WORKDAY.INTL" or "NETWORKDAYS.INTL"
-             or "CORREL" or "FORECAST" or "FORECAST.LINEAR"
-             or "PERCENTILE" or "PERCENTILE.INC" or "PERCENTILE.EXC"
-             or "QUARTILE" or "QUARTILE.INC"
-             or "PERCENTRANK" or "PERCENTRANK.INC"
-             or "LOOKUP"
-             or "IRR"
-             or "RANDARRAY"
-             or "FILTER" or "SORT" or "SORTBY" or "TAKE" or "DROP" or "TRANSPOSE"
-             or "CHOOSEROWS" or "CHOOSECOLS" or "VSTACK" or "HSTACK"
-             or "TOROW" or "TOCOL" or "WRAPROWS" or "WRAPCOLS" or "EXPAND" or "UNIQUE"
-             or "SUBTOTAL"
-             or "DSUM" or "DAVERAGE" or "DCOUNT" or "DCOUNTA" or "DGET"
-             or "DMAX" or "DMIN" or "DPRODUCT" or "DSTDEV" or "DSTDEVP"
-             or "DVAR" or "DVARP"
-             or "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK"
-             or "AGGREGATE" or "CELL" or "GETPIVOTDATA"
-             or "T.TEST" or "F.TEST" or "CHISQ.TEST"
-             or "FREQUENCY"
-             or "MIRR" or "XIRR" or "XNPV" or "FVSCHEDULE"
-             or "PMT" or "PV" or "FV" or "NPER" or "RATE" or "IPMT" or "PPMT"
-             or "CUMIPMT" or "CUMPRINC"
-             or "EFFECT" or "NOMINAL" or "RRI" or "PDURATION"
-             or "SLN" or "SYD" or "DB" or "DDB" or "VDB" or "AMORDEGRC" or "AMORLINC"
-             or "DOLLARDE" or "DOLLARFR"
-             or "DISC" or "INTRATE" or "RECEIVED"
-             or "ACCRINT" or "ODDFPRICE" or "ODDFYIELD" or "ODDLPRICE" or "ODDLYIELD"
-             or "TBILLEQ" or "TBILLPRICE" or "TBILLYIELD"
-             or "COUPDAYBS" or "COUPDAYS" or "COUPDAYSNC" or "COUPNCD" or "COUPNUM" or "COUPPCD"
-             or "PRICE" or "YIELD" or "PRICEDISC" or "PRICEMAT" or "YIELDDISC" or "YIELDMAT" or "DURATION" or "MDURATION"
-             or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
-             or "TEXTJOIN" or "EXACT" or "CODE" or "CHAR" or "LEN" or "LEFT" or "RIGHT" or "MID" or "REPLACE"
-             or "FIND" or "SEARCH"
-             or "TRIM" or "UPPER" or "LOWER" or "PROPER" or "CLEAN"
-             or "TEXT" or "VALUE"
-             or "SUBSTITUTE" or "REPT" or "CONCATENATE"
-             or "FIXED" or "DOLLAR" or "T" or "HYPERLINK" or "ENCODEURL" or "FILTERXML" or "BAHTTEXT"
-             or "ASC" or "DBCS"
-             or "UNICHAR" or "UNICODE" or "NUMBERVALUE"
-             or "ABS" or "SQRT" or "INT" or "SIGN"
-             or "MOD" or "POWER" or "LOG" or "QUOTIENT" or "CEILING" or "FLOOR" or "MROUND"
-             or "SIN" or "COS" or "TAN" or "DEGREES" or "RADIANS"
-             or "ASIN" or "ACOS" or "ATAN" or "ATAN2" or "LN" or "EXP" or "FACT"
-             or "ROUND" or "ROUNDUP" or "ROUNDDOWN" or "TRUNC"
-             or "ISBLANK" or "ISNUMBER" or "ISTEXT" or "ISERROR" or "ISNA" or "ISLOGICAL"
-             or "ISEVEN" or "ISODD" or "ODD" or "EVEN"
-             or "DATE" or "TIME"
-             or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND"
-             or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH" or "DATEDIF"
-             or "DATEVALUE" or "TIMEVALUE"
-             or "DAYS" or "DAYS360" or "YEARFRAC"
-             or "SQRTPI" or "SERIESSUM"
-             or "N" or "ERROR.TYPE"
-             or "COMBIN" or "PERMUT"
-             or "BITAND" or "BITOR" or "BITXOR" or "BITLSHIFT" or "BITRSHIFT"
-             or "BIN2DEC" or "HEX2DEC" or "OCT2DEC"
-             or "DEC2BIN" or "DEC2HEX" or "DEC2OCT"
-             or "BIN2HEX" or "BIN2OCT" or "HEX2BIN" or "HEX2OCT" or "OCT2BIN" or "OCT2HEX"
-             or "CONVERT"
-             or "NORM.DIST" or "NORM.INV" or "NORM.S.DIST" or "NORM.S.INV" or "STANDARDIZE"
-             or "GAMMA" or "GAMMALN" or "GAMMALN.PRECISE" or "GAMMA.DIST" or "GAMMA.INV"
-             or "LOGNORM.DIST" or "LOGNORM.INV"
-             or "BETA.DIST" or "BETA.INV"
-             or "EXPON.DIST" or "WEIBULL.DIST" or "POISSON.DIST"
-             or "T.DIST" or "T.DIST.RT" or "T.DIST.2T" or "T.INV" or "T.INV.2T"
-             or "F.DIST" or "F.DIST.RT" or "F.INV" or "F.INV.RT"
-             or "CHISQ.DIST" or "CHISQ.DIST.RT" or "CHISQ.INV" or "CHISQ.INV.RT"
-             or "BINOM.DIST" or "BINOM.DIST.RANGE" or "BINOM.INV" or "NEGBINOM.DIST" or "HYPERGEOM.DIST"
-             or "CONFIDENCE" or "CONFIDENCE.NORM" or "CONFIDENCE.T";
+        StructuredRangeFunctions.Contains(name);
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
-        name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
+        SingleCellReferenceRangeFunctions.Contains(name);
 
     private static bool IsConditionalAggregateRangeArgument(string name, int argIndex) =>
         name switch
@@ -1316,7 +2060,7 @@ public sealed class FormulaEvaluator
         NumberValue => v,
         BlankValue => new NumberValue(0),
         BoolValue b => new NumberValue(b.Value ? 1 : 0),
-        TextValue t when double.TryParse(t.Value, System.Globalization.CultureInfo.InvariantCulture, out var d) =>
+        TextValue t when ExcelTextNumberParser.TryParse(t.Value, out var d) =>
             new NumberValue(d),
         TextValue => ErrorValue.Value,
         DateTimeValue dt => new NumberValue(dt.Value),
@@ -1384,7 +2128,9 @@ public sealed class FormulaEvaluator
         if (argNodes.Count != lambda.Parameters.Count) return ErrorValue.Value;
         var args = new ScalarValue[argNodes.Count];
         for (int i = 0; i < argNodes.Count; i++)
-            args[i] = EvaluateArrayOperand(argNodes[i], context);
+            args[i] = argNodes[i] is OmittedArgumentNode
+                ? OmittedLambdaArgumentValue.Instance
+                : EvaluateArrayOperand(argNodes[i], context);
         return context.InvokeLambda(lambda, args);
     }
 
@@ -1396,6 +2142,7 @@ public sealed class FormulaEvaluator
         private readonly Freexcel.Core.Model.Workbook? _workbook;
         private readonly FormulaEvaluator _evaluator;
         private readonly Freexcel.Core.Model.CellAddress? _currentCellAddress;
+        private Dictionary<string, Freexcel.Core.Model.Sheet?>? _sheetNameCache;
 
         public SheetEvalContext(
             Sheet sheet,
@@ -1413,16 +2160,16 @@ public sealed class FormulaEvaluator
 
         public ScalarValue GetCellValue(string sheetName, uint row, uint col)
         {
-            var target = _workbook?.GetSheet(sheetName);
+            var target = ResolveSheet(sheetName);
             if (target is null) return ErrorValue.Ref;
             return target.GetValue(row, col);
         }
 
         public IReadOnlyList<ScalarValue> GetRangeValues(uint startRow, uint startCol, uint endRow, uint endCol)
         {
-            var values = new List<ScalarValue>();
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
+            var values = CreateRangeValueList(r0, c0, r1, c1);
             for (var r = r0; r <= r1; r++)
                 for (var c = c0; c <= c1; c++)
                     values.Add(_sheet.GetValue(r, c));
@@ -1431,15 +2178,23 @@ public sealed class FormulaEvaluator
 
         public IReadOnlyList<ScalarValue> GetRangeValues(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol)
         {
-            var target = _workbook?.GetSheet(sheetName);
+            var target = ResolveSheet(sheetName);
             if (target is null) return [ErrorValue.Ref];
-            var values = new List<ScalarValue>();
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
+            var values = CreateRangeValueList(r0, c0, r1, c1);
             for (var r = r0; r <= r1; r++)
                 for (var c = c0; c <= c1; c++)
                     values.Add(target.GetValue(r, c));
             return values;
+        }
+
+        private static List<ScalarValue> CreateRangeValueList(uint startRow, uint startCol, uint endRow, uint endCol)
+        {
+            var count = ((long)endRow - startRow + 1) * ((long)endCol - startCol + 1);
+            return count <= int.MaxValue
+                ? new List<ScalarValue>((int)count)
+                : [];
         }
 
         public Freexcel.Core.Model.GridRange? TryResolveNamedRange(string name)
@@ -1453,9 +2208,17 @@ public sealed class FormulaEvaluator
         public string? TryGetSheetName(Freexcel.Core.Model.SheetId sheetId)
             => _workbook?.GetSheet(sheetId)?.Name;
 
-        public bool SheetExists(string sheetName) => _workbook?.GetSheet(sheetName) is not null;
+        public bool SheetExists(string sheetName) => ResolveSheet(sheetName) is not null;
 
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
+
+        public bool IsRowHidden(string sheetName, uint row)
+            => _workbook?.GetSheet(sheetName)?.IsRowEffectivelyHidden(row) ?? false;
+
+        public bool IsRowFilterHidden(uint row) => _sheet.FilterHiddenRows.Contains(row);
+
+        public bool IsRowFilterHidden(string sheetName, uint row)
+            => _workbook?.GetSheet(sheetName)?.FilterHiddenRows.Contains(row) ?? false;
 
         public Freexcel.Core.Model.Sheet? CurrentSheet => _sheet;
 
@@ -1466,9 +2229,12 @@ public sealed class FormulaEvaluator
         public Freexcel.Core.Model.Cell? TryGetCell(uint row, uint col) => _sheet.GetCell(row, col);
 
         public Freexcel.Core.Model.Cell? TryGetCell(string sheetName, uint row, uint col)
-            => _workbook?.GetSheet(sheetName)?.GetCell(row, col);
+            => ResolveSheet(sheetName)?.GetCell(row, col);
 
         public ScalarValue? TryResolveLambdaBinding(string name) => null;
+
+        public Freexcel.Core.Model.Sheet? ResolveSheetForFastRange(string? sheetName)
+            => sheetName is null ? _sheet : ResolveSheet(sheetName);
 
         public ScalarValue InvokeLambda(LambdaValue lambda, IReadOnlyList<ScalarValue> args)
         {
@@ -1477,6 +2243,19 @@ public sealed class FormulaEvaluator
             for (int i = 0; i < lambda.Parameters.Count; i++)
                 bindings[lambda.Parameters[i]] = args[i];
             return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(this, bindings, _evaluator));
+        }
+
+        private Freexcel.Core.Model.Sheet? ResolveSheet(string sheetName)
+        {
+            if (_workbook is null) return null;
+
+            _sheetNameCache ??= new Dictionary<string, Freexcel.Core.Model.Sheet?>(StringComparer.OrdinalIgnoreCase);
+            if (_sheetNameCache.TryGetValue(sheetName, out var cachedSheet))
+                return cachedSheet;
+
+            var resolvedSheet = _workbook.GetSheet(sheetName);
+            _sheetNameCache[sheetName] = resolvedSheet;
+            return resolvedSheet;
         }
     }
 
@@ -1504,6 +2283,9 @@ public sealed class FormulaEvaluator
         public string? TryGetSheetName(Freexcel.Core.Model.SheetId id) => _inner.TryGetSheetName(id);
         public bool SheetExists(string sn) => _inner.SheetExists(sn);
         public bool IsRowHidden(uint row) => _inner.IsRowHidden(row);
+        public bool IsRowHidden(string sn, uint row) => _inner.IsRowHidden(sn, row);
+        public bool IsRowFilterHidden(uint row) => _inner.IsRowFilterHidden(row);
+        public bool IsRowFilterHidden(string sn, uint row) => _inner.IsRowFilterHidden(sn, row);
         public Freexcel.Core.Model.Sheet? CurrentSheet => _inner.CurrentSheet;
         public Freexcel.Core.Model.Workbook? CurrentWorkbook => _inner.CurrentWorkbook;
         public Freexcel.Core.Model.CellAddress? CurrentCellAddress => _inner.CurrentCellAddress;
@@ -1528,3 +2310,7 @@ public sealed record LambdaValue(IReadOnlyList<string> Parameters, FormulaNode B
 
 internal sealed record DirectTextLiteralValue(string Value) : ScalarValue;
 internal sealed record ReferencedScalarValue(ScalarValue Value) : ScalarValue;
+internal sealed record OmittedLambdaArgumentValue : ScalarValue
+{
+    public static readonly OmittedLambdaArgumentValue Instance = new();
+}

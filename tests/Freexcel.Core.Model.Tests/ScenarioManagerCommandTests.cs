@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Freexcel.Core.Commands;
+using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Model.Tests;
@@ -76,6 +77,69 @@ public sealed class ScenarioManagerCommandTests
 
         workbook.Scenarios.Should().ContainSingle();
         workbook.Scenarios[0].ChangingCells[0].Value.Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
+    public void SaveScenarioCommand_RenamesExistingScenarioAndUndoRestoresIt()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Best Case",
+            [new ScenarioCellValue(address, new NumberValue(10))],
+            "Original",
+            Hidden: true,
+            Locked: true));
+
+        var command = new SaveScenarioCommand(
+            "Upside Case",
+            [new ScenarioCellValue(address, new NumberValue(99))],
+            "Updated",
+            hidden: false,
+            locked: false,
+            replaceScenarioName: "Best Case");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        workbook.Scenarios.Should().ContainSingle();
+        workbook.Scenarios[0].Name.Should().Be("Upside Case");
+        workbook.Scenarios[0].Comment.Should().Be("Updated");
+        workbook.Scenarios[0].ChangingCells[0].Value.Should().Be(new NumberValue(99));
+        workbook.Scenarios[0].Hidden.Should().BeFalse();
+        workbook.Scenarios[0].Locked.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        workbook.Scenarios.Should().ContainSingle();
+        workbook.Scenarios[0].Name.Should().Be("Best Case");
+        workbook.Scenarios[0].Comment.Should().Be("Original");
+        workbook.Scenarios[0].ChangingCells[0].Value.Should().Be(new NumberValue(10));
+        workbook.Scenarios[0].Hidden.Should().BeTrue();
+        workbook.Scenarios[0].Locked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SaveScenarioCommand_RejectsRenameToAnotherScenarioName()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(address, new NumberValue(10))]));
+        workbook.Scenarios.Add(new WorkbookScenario("Worst Case", [new ScenarioCellValue(address, new NumberValue(1))]));
+
+        var outcome = new SaveScenarioCommand(
+            "Worst Case",
+            [new ScenarioCellValue(address, new NumberValue(99))],
+            replaceScenarioName: "Best Case").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("already exists");
+        workbook.Scenarios.Select(scenario => scenario.Name).Should().Equal("Best Case", "Worst Case");
+        workbook.Scenarios[0].ChangingCells[0].Value.Should().Be(new NumberValue(10));
+        workbook.Scenarios[1].ChangingCells[0].Value.Should().Be(new NumberValue(1));
     }
 
     [Fact]
@@ -276,6 +340,121 @@ public sealed class ScenarioManagerCommandTests
         command.Revert(ctx);
 
         workbook.Sheets.Should().NotContain(s => s.Name == "Scenario Summary");
+    }
+
+    [Fact]
+    public void ScenarioSummaryReportCommand_WithResultCells_ReportsValuesAfterEachScenarioAndRestoresWorkbook()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var price = new CellAddress(sheet.Id, 1, 1);
+        var profit = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(price, new NumberValue(10));
+        sheet.SetCell(profit, new NumberValue(200));
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Best Case",
+            [
+                new ScenarioCellValue(price, new NumberValue(12)),
+                new ScenarioCellValue(profit, new NumberValue(300))
+            ]));
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Worst Case",
+            [
+                new ScenarioCellValue(price, new NumberValue(8)),
+                new ScenarioCellValue(profit, new NumberValue(120))
+            ]));
+
+        var command = new ScenarioSummaryReportCommand([profit]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var report = workbook.Sheets.Should().Contain(s => s.Name == "Scenario Summary").Which;
+        report.GetValue(8, 1).Should().Be(new TextValue("Result Cells"));
+        report.GetValue(8, 2).Should().Be(new TextValue("Best Case"));
+        report.GetValue(8, 3).Should().Be(new TextValue("Worst Case"));
+        report.GetValue(9, 1).Should().Be(new TextValue("Sheet1!A2"));
+        report.GetValue(9, 2).Should().Be(new NumberValue(300));
+        report.GetValue(9, 3).Should().Be(new NumberValue(120));
+        sheet.GetValue(price).Should().Be(new NumberValue(10));
+        sheet.GetValue(profit).Should().Be(new NumberValue(200));
+    }
+
+    [Fact]
+    public void ScenarioSummaryReportCommand_WithFormulaResultCells_RecalculatesAfterEachScenarioAndRestore()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var price = new CellAddress(sheet.Id, 1, 1);
+        var profit = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(price, new NumberValue(10));
+        sheet.SetFormula(profit, "A1*2");
+        sheet.GetCell(profit)!.Value = new NumberValue(20);
+        workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(price, new NumberValue(12))]));
+        workbook.Scenarios.Add(new WorkbookScenario("Worst Case", [new ScenarioCellValue(price, new NumberValue(8))]));
+
+        var evaluator = new FormulaEvaluator();
+        var command = new ScenarioSummaryReportCommand(
+            [profit],
+            (book, _) =>
+            {
+                var targetSheet = book.GetSheet(sheet.Id)!;
+                targetSheet.GetCell(profit)!.Value = evaluator.Evaluate("=A1*2", targetSheet, book, profit);
+            });
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var report = workbook.Sheets.Should().Contain(s => s.Name == "Scenario Summary").Which;
+        report.GetValue(7, 1).Should().Be(new TextValue("Result Cells"));
+        report.GetValue(8, 1).Should().Be(new TextValue("Sheet1!B1"));
+        report.GetValue(8, 2).Should().Be(new NumberValue(24));
+        report.GetValue(8, 3).Should().Be(new NumberValue(16));
+        sheet.GetValue(price).Should().Be(new NumberValue(10));
+        sheet.GetValue(profit).Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
+    public void ScenarioSummaryReportCommand_WithResultCells_RestoresChangingCellsWhenRecalculateFails()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var price = new CellAddress(sheet.Id, 1, 1);
+        var profit = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(price, new NumberValue(10));
+        sheet.SetCell(profit, new NumberValue(20));
+        workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(price, new NumberValue(12))]));
+        var command = new ScenarioSummaryReportCommand(
+            [profit],
+            (_, _) => throw new InvalidOperationException("boom"));
+
+        var act = () => command.Apply(ctx);
+
+        act.Should().Throw<InvalidOperationException>();
+        sheet.GetValue(price).Should().Be(new NumberValue(10));
+        sheet.GetValue(profit).Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
+    public void ScenarioSummaryReportCommand_WithResultCells_RejectsProtectedChangingCellsWithoutPermission()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var price = new CellAddress(sheet.Id, 1, 1);
+        var profit = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(price, new NumberValue(10));
+        sheet.SetCell(profit, new NumberValue(20));
+        sheet.IsProtected = true;
+        workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(price, new NumberValue(12))]));
+
+        var outcome = new ScenarioSummaryReportCommand([profit]).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        workbook.Sheets.Should().NotContain(s => s.Name == "Scenario Summary");
+        sheet.GetValue(price).Should().Be(new NumberValue(10));
     }
 
     private sealed class SimpleCtx(Workbook workbook) : ICommandContext

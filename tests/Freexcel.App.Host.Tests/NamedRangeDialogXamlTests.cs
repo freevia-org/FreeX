@@ -59,6 +59,21 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void DefinedNamesList_DoubleClickOpensEditNameDialog()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var source = ReadNamedRangeDialogSource();
+
+        document.Descendants(presentation + "ListView")
+            .Single(element => element.Attribute(x + "Name")?.Value == "NamesList")
+            .Attribute("MouseDoubleClick")?.Value.Should().Be("NamesList_MouseDoubleClick");
+        source.Should().Contain("private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+        source.Should().Contain("EditButton_Click(sender, e);");
+    }
+
+    [Fact]
     public void Dialog_ProvidesFilterAndRefersToRangePickerAffordance()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
@@ -150,6 +165,17 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("_nameBox.Focus();");
         source.Should().Contain("_nameBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_nameBox);");
+    }
+
+    [Fact]
+    public void NameDefinitionDialog_EditorsExposeAutomationNames()
+    {
+        var source = ReadNamedRangeDialogSource();
+
+        source.Should().Contain("AutomationProperties.SetName(_nameBox, \"Name\");");
+        source.Should().Contain("AutomationProperties.SetName(_scopeBox, \"Scope\");");
+        source.Should().Contain("AutomationProperties.SetName(_commentBox, \"Comment\");");
+        source.Should().Contain("AutomationProperties.SetName(_refersToBox, \"Refers to\");");
     }
 
     [Fact]
@@ -329,6 +355,33 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void NameDefinitionRefersToPicker_ExposesAccessibleCollapseAffordance()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new NameDefinitionDialog(
+                new NameDefinitionDialogResult("Sales", "Workbook", "", "Sheet1!$A$1:$C$5"),
+                ["Workbook"]);
+            try
+            {
+                var picker = GetPrivateField<Button>(dialog, "_rangePickerButton");
+
+                System.Windows.Automation.AutomationProperties.GetName(picker)
+                    .Should()
+                    .Be("Select referenced range");
+                System.Windows.Automation.AutomationProperties.GetHelpText(picker)
+                    .Should()
+                    .Be("Collapse dialog and select the referenced range from the worksheet.");
+                picker.ToolTip.Should().Be("Collapse dialog and select the referenced range from the worksheet");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void NameDefinitionRefersToPicker_RefocusesInputWithKeyboardFocus()
     {
         var source = ReadNamedRangeDialogSource();
@@ -339,6 +392,52 @@ public sealed class NamedRangeDialogXamlTests
         handlerSource.Should().Contain("_refersToBox.Focus();");
         handlerSource.Should().Contain("_refersToBox.SelectAll();");
         handlerSource.Should().Contain("Keyboard.Focus(_refersToBox);");
+    }
+
+    [Fact]
+    public void NamedRangeDialogsApplyRangeSelection_UpdateRequestedRefersToField()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            var manager = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
+            var definition = new NameDefinitionDialog(
+                new NameDefinitionDialogResult("Sales", "Workbook", "", "Sheet1!A1:C3"),
+                ["Workbook"]);
+            try
+            {
+                manager.ApplyRangeSelection(NamedRangeSelectionTarget.SelectedNameRefersTo, "Sheet2!B2:D8");
+                definition.ApplyRangeSelection("Sheet3!C4:E9");
+
+                GetControl<TextBox>(manager, "RefersToBox").Text.Should().Be("Sheet2!B2:D8");
+                GetControl<TextBox>(manager, "RefersToBox").SelectionLength.Should().Be("Sheet2!B2:D8".Length);
+                GetPrivateField<TextBox>(definition, "_refersToBox").Text.Should().Be("Sheet3!C4:E9");
+                GetPrivateField<TextBox>(definition, "_refersToBox").SelectionLength.Should().Be("Sheet3!C4:E9".Length);
+            }
+            finally
+            {
+                manager.Close();
+                definition.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresNamedRangePickersToCurrentSelection()
+    {
+        var formulaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormulaCommands.cs"));
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var source = formulaSource + Environment.NewLine + dataSource;
+
+        formulaSource.Should().Contain("request => ApplyNamedRangeSelection(dialog, request)");
+        dataSource.Should().Contain("request => ApplyNamedRangeSelection(dlg, request)");
+        source.Should().Contain("private void ApplyNamedRangeSelection(");
+        source.Should().Contain("NamedRangeSelectionRequest request");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
     }
 
     private static T GetControl<T>(NamedRangeDialog dialog, string name)

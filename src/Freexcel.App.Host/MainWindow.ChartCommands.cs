@@ -94,9 +94,11 @@ public partial class MainWindow
         if (!TryGetActiveNormalChart("Select Data Source", out var chart))
             return;
 
-        var dialog = new SelectDataSourceDialog(
+        SelectDataSourceDialog? dialog = null;
+        dialog = new SelectDataSourceDialog(
             FormatRangeReference(chart.DataRange.Start, chart.DataRange.End),
             chart.FirstColIsCategories,
+            request => ApplySelectDataSourceRangeSelection(dialog, request),
             sheetId: _currentSheetId)
         {
             Owner = this
@@ -121,6 +123,31 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+    }
+
+    private void ApplySelectDataSourceRangeSelection(
+        SelectDataSourceDialog? dialog,
+        SelectDataSourceRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void MoveChartBtn_Click(object sender, RoutedEventArgs e)
@@ -443,13 +470,7 @@ public partial class MainWindow
             "Label Separator",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelSeparator: chart.DataLabelSeparator switch
-                {
-                    ChartDataLabelSeparator.Comma => ChartDataLabelSeparator.Semicolon,
-                    ChartDataLabelSeparator.Semicolon => ChartDataLabelSeparator.NewLine,
-                    ChartDataLabelSeparator.NewLine => ChartDataLabelSeparator.Space,
-                    _ => ChartDataLabelSeparator.Comma
-                }));
+                DataLabelSeparator: ChartOptionCycler.NextDataLabelSeparator(chart.DataLabelSeparator)));
     }
 
     private void ChartDataLabelNumberFormatBtn_Click(object sender, RoutedEventArgs e)

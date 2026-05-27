@@ -67,6 +67,21 @@ public sealed class ColorPickerDialogTests
     }
 
     [Fact]
+    public void PalettePlanner_ScalesColorAndChoosesReadableForeground()
+    {
+        ColorPickerPalettePlanner.ScaleColor(new CellColor(0x40, 0x80, 0xC0), 0.5)
+            .Should()
+            .Be(new CellColor(0x20, 0x40, 0x60));
+
+        ColorPickerPalettePlanner.ScaleColor(new CellColor(0xF0, 0x80, 0x40), 2)
+            .Should()
+            .Be(new CellColor(0xFF, 0xFF, 0x80));
+
+        ColorPickerPalettePlanner.NeedsDarkForeground(CellColor.White).Should().BeTrue();
+        ColorPickerPalettePlanner.NeedsDarkForeground(CellColor.Black).Should().BeFalse();
+    }
+
+    [Fact]
     public void DialogXaml_ExposesExcelLikePaletteSectionsAndPreview()
     {
         var xamlPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml");
@@ -116,6 +131,7 @@ public sealed class ColorPickerDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml.cs"));
 
+        source.Should().Contain("ColorPickerPalettePlanner.BuildThemePalette");
         source.Should().Contain("private Button? _initialFocusButton;");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -224,6 +240,66 @@ public sealed class ColorPickerDialogTests
                 GetBackgroundPreviewColor(currentBackgroundPreview).Should().Be(initialColor);
                 GetForegroundPreviewColor(newForegroundPreview).Should().Be(newColor);
                 GetBackgroundPreviewColor(newBackgroundPreview).Should().Be(newColor);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void SelectingSwatch_MarksOnlyTheChosenSwatch()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var initialColor = new CellColor(0x44, 0x72, 0xC4);
+            var newColor = new CellColor(0xED, 0x7D, 0x31);
+            var dialog = new ColorPickerDialog(initialColor);
+            try
+            {
+                var themePanel = (Panel)dialog.FindName("ThemeColorsPanel");
+                var initialButton = FindSwatchButton(themePanel, initialColor);
+                var newButton = FindSwatchButton(themePanel, newColor);
+
+                initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(2));
+
+                newButton.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
+
+                initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
+                newButton.BorderThickness.Should().Be(new System.Windows.Thickness(2));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void EditingCustomColor_UpdatesSwatchSelectionWhenColorMatchesPalette()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var initialColor = new CellColor(0x44, 0x72, 0xC4);
+            var paletteColor = new CellColor(0xED, 0x7D, 0x31);
+            var dialog = new ColorPickerDialog(initialColor);
+            try
+            {
+                var themePanel = (Panel)dialog.FindName("ThemeColorsPanel");
+                var initialButton = FindSwatchButton(themePanel, initialColor);
+                var paletteButton = FindSwatchButton(themePanel, paletteColor);
+                var hex = (TextBox)dialog.FindName("CustomColorTextBox");
+
+                hex.Text = "#217346";
+
+                initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
+                paletteButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
+
+                hex.Text = "#ED7D31";
+
+                initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
+                paletteButton.BorderThickness.Should().Be(new System.Windows.Thickness(2));
             }
             finally
             {

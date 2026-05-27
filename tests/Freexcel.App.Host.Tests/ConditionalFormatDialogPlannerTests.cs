@@ -16,8 +16,19 @@ public sealed class ConditionalFormatDialogPlannerTests
     [InlineData(CfRuleType.Top10, null, false, false, "Bottom 10 Items")]
     [InlineData(CfRuleType.Top10, null, true, true, "Top 10%")]
     [InlineData(CfRuleType.CellValue, CfOperator.Between, true, false, "Between")]
+    [InlineData(CfRuleType.CellValue, CfOperator.NotEqual, true, false, "Not Equal To")]
+    [InlineData(CfRuleType.CellValue, CfOperator.GreaterThanOrEqual, true, false, "Greater Than Or Equal To")]
+    [InlineData(CfRuleType.CellValue, CfOperator.LessThanOrEqual, true, false, "Less Than Or Equal To")]
+    [InlineData(CfRuleType.CellValue, CfOperator.NotBetween, true, false, "Not Between")]
     [InlineData(CfRuleType.ContainsText, null, true, false, "Text Contains")]
+    [InlineData(CfRuleType.NotContainsText, null, true, false, "Text Does Not Contain")]
+    [InlineData(CfRuleType.BeginsWith, null, true, false, "Text Begins With")]
+    [InlineData(CfRuleType.EndsWith, null, true, false, "Text Ends With")]
     [InlineData(CfRuleType.DateOccurring, null, true, false, "Date Occurring")]
+    [InlineData(CfRuleType.Blanks, null, true, false, "Blanks")]
+    [InlineData(CfRuleType.NoBlanks, null, true, false, "No Blanks")]
+    [InlineData(CfRuleType.Errors, null, true, false, "Errors")]
+    [InlineData(CfRuleType.NoErrors, null, true, false, "No Errors")]
     [InlineData(CfRuleType.DuplicateValues, null, true, false, "Duplicate Values")]
     [InlineData(CfRuleType.UniqueValues, null, true, false, "Duplicate Values")]
     public void RuleTypeLabel_MapsConditionalFormatToDialogLabel(
@@ -48,6 +59,9 @@ public sealed class ConditionalFormatDialogPlannerTests
             AppliesTo = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
             Priority = 2,
             RuleType = CfRuleType.IconSet,
+            MinThresholdGreaterThanOrEqual = false,
+            MidThresholdGreaterThanOrEqual = true,
+            MaxThresholdGreaterThanOrEqual = false,
             IconSetStyle = "3ArrowsGray",
             IconSetShowValue = false,
             IconSetReverse = true,

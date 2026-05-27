@@ -9,25 +9,26 @@ using Xunit;
 
 namespace Freexcel.App.Host.Tests;
 
-public sealed class FormulaEditingUiE2eTests
+public sealed class FreexcelUiE2eTests
 {
     [Fact]
     [Trait("Category", "UIE2E")]
-    public void FormulaEditing_CoversExcelReferenceEditingScenarios()
-    {
-        FormulaEditingUiE2eHarness.Run();
-    }
-}
-
-internal static class FormulaEditingUiE2eHarness
-{
-    public static void Run()
+    public void SharedAppInstance_CoversLiveUiScenarios()
     {
         if (!OperatingSystem.IsWindows())
             return;
 
         using var run = FreexcelUiRun.Start();
 
+        CellOverflowEditingUiE2eHarness.Run(run);
+        FormulaEditingUiE2eHarness.Run(run);
+    }
+}
+
+internal static class FormulaEditingUiE2eHarness
+{
+    public static void Run(FreexcelUiRun run)
+    {
         run.Capture("00-start");
         EnterNumber(run, col: 1, row: 1, "10");
         EnterNumber(run, col: 1, row: 2, "20");
@@ -160,15 +161,22 @@ internal sealed class FreexcelUiRun : IDisposable
 
     public DirectoryInfo Artifacts { get; }
 
+    public int ProcessId => _process.Id;
+
+    public IntPtr WindowHandle => _window;
+
     public static FreexcelUiRun Start()
     {
         var appExe = ResolveAppExecutable();
         var artifacts = CreateArtifactDirectory();
-        var process = Process.Start(new ProcessStartInfo(appExe)
+        var startInfo = new ProcessStartInfo(appExe)
         {
             WorkingDirectory = Path.GetDirectoryName(appExe)!,
             UseShellExecute = false
-        }) ?? throw new InvalidOperationException("Failed to launch Freexcel.");
+        };
+        startInfo.Environment["APPDATA"] = artifacts.FullName;
+
+        var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to launch Freexcel.");
 
         var window = WaitForWindow(process, TimeSpan.FromSeconds(20));
         Native.ShowWindow(window, Native.SW_RESTORE);
@@ -316,7 +324,7 @@ internal sealed class FreexcelUiRun : IDisposable
     {
         var root = Path.Combine(
             AppContext.BaseDirectory,
-            "FormulaEditingUiE2E",
+            "FreexcelUiE2E",
             DateTime.Now.ToString("yyyyMMdd-HHmmss"));
         return Directory.CreateDirectory(root);
     }

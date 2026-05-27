@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Windows;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -70,6 +71,27 @@ public sealed class PivotFilterDialogXamlTests
         source.Should().Contain("Keyboard.Focus(FilterSearchBox);");
     }
 
+    [Fact]
+    public void PivotFieldFilterDialog_SelectAllCheckboxShowsMixedStateForPartialSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotFieldFilterDialog(["East", "West"], selectedItems: ["East"]);
+            dialog.Show();
+            try
+            {
+                var selectAll = GetControl<CheckBox>(dialog, "SelectAllCheckBox");
+
+                selectAll.IsThreeState.Should().BeTrue();
+                selectAll.IsChecked.Should().BeNull();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     [Theory]
     [InlineData("PivotLabelFilterDialog.xaml.cs", "LabelFilterKindBox")]
     [InlineData("PivotValueFilterDialog.xaml.cs", "ValueFilterKindBox")]
@@ -94,6 +116,88 @@ public sealed class PivotFilterDialogXamlTests
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotLabelFilterDialog_ShowsSecondValueOnlyForBetween()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotLabelFilterDialog(sourceFieldIndex: 0);
+            var operatorBox = GetControl<ComboBox>(dialog, "LabelFilterKindBox");
+            var secondLabel = GetControl<Label>(dialog, "LabelFilterValue2Label");
+            var secondValue = GetControl<TextBox>(dialog, "LabelFilterValue2Box");
+
+            secondLabel.Visibility.Should().Be(Visibility.Collapsed);
+            secondValue.Visibility.Should().Be(Visibility.Collapsed);
+            secondValue.IsEnabled.Should().BeFalse();
+
+            operatorBox.SelectedItem = "Between";
+
+            secondLabel.Visibility.Should().Be(Visibility.Visible);
+            secondValue.Visibility.Should().Be(Visibility.Visible);
+            secondValue.IsEnabled.Should().BeTrue();
+
+            operatorBox.SelectedItem = "Equals";
+
+            secondLabel.Visibility.Should().Be(Visibility.Collapsed);
+            secondValue.Visibility.Should().Be(Visibility.Collapsed);
+            secondValue.IsEnabled.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void PivotLabelFilterDialog_IgnoresStaleSecondValueForSingleValueOperators()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotLabelFilterDialog(sourceFieldIndex: 0);
+            GetControl<ComboBox>(dialog, "LabelFilterKindBox").SelectedItem = "Contains";
+            GetControl<TextBox>(dialog, "LabelFilterValueBox").Text = "East";
+            GetControl<TextBox>(dialog, "LabelFilterValue2Box").Text = "West";
+
+            InvokeDialogHandler(dialog, "OkButton_Click");
+
+            dialog.ResultFilter.Should().Be(new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "East", null));
+        });
+    }
+
+    [Fact]
+    public void PivotValueFilterDialog_HidesUnusedValueInputsForSelectedOperator()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotValueFilterDialog(sourceFieldIndex: 0);
+            var operatorBox = GetControl<ComboBox>(dialog, "ValueFilterKindBox");
+            var valueLabel = GetControl<Label>(dialog, "ValueFilterValueLabel");
+            var valueBox = GetControl<TextBox>(dialog, "ValueFilterValueBox");
+            var secondLabel = GetControl<Label>(dialog, "ValueFilterValue2Label");
+            var secondValue = GetControl<TextBox>(dialog, "ValueFilterValue2Box");
+
+            valueLabel.Visibility.Should().Be(Visibility.Visible);
+            valueBox.Visibility.Should().Be(Visibility.Visible);
+            valueBox.IsEnabled.Should().BeTrue();
+            secondLabel.Visibility.Should().Be(Visibility.Collapsed);
+            secondValue.Visibility.Should().Be(Visibility.Collapsed);
+            secondValue.IsEnabled.Should().BeFalse();
+
+            operatorBox.SelectedItem = "Between";
+
+            valueLabel.Visibility.Should().Be(Visibility.Visible);
+            valueBox.Visibility.Should().Be(Visibility.Visible);
+            secondLabel.Visibility.Should().Be(Visibility.Visible);
+            secondValue.Visibility.Should().Be(Visibility.Visible);
+            secondValue.IsEnabled.Should().BeTrue();
+
+            operatorBox.SelectedItem = "Above Average";
+
+            valueLabel.Visibility.Should().Be(Visibility.Collapsed);
+            valueBox.Visibility.Should().Be(Visibility.Collapsed);
+            valueBox.IsEnabled.Should().BeFalse();
+            secondLabel.Visibility.Should().Be(Visibility.Collapsed);
+            secondValue.Visibility.Should().Be(Visibility.Collapsed);
+            secondValue.IsEnabled.Should().BeFalse();
+        });
     }
 
     [Fact]
@@ -174,6 +278,7 @@ public sealed class PivotFilterDialogXamlTests
             .Should()
             .Be("ShowValuesAsBox_SelectionChanged");
         source.Should().Contain("UpdateBaseFieldState()");
+        source.Should().Contain("PivotValueFieldSettingsDialogPlanner.ShowValuesAsFromIndex");
         source.Should().Contain("ShowValuesAsRequiresBaseField");
     }
 
@@ -310,11 +415,36 @@ public sealed class PivotFilterDialogXamlTests
 
     private static T GetControl<T>(PivotValueFieldSettingsDialog dialog, string name)
     {
-        var field = typeof(PivotValueFieldSettingsDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        return GetControl<T>((object)dialog, name);
+    }
+
+    private static T GetControl<T>(PivotFieldFilterDialog dialog, string name)
+    {
+        return GetControl<T>((object)dialog, name);
+    }
+
+    private static T GetControl<T>(object dialog, string name)
+    {
+        var field = dialog.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
         field.Should().NotBeNull($"control {name} should exist");
         var value = field!.GetValue(dialog);
         value.Should().BeOfType<T>();
         return (T)value!;
+    }
+
+    private static void InvokeDialogHandler(object dialog, string methodName)
+    {
+        var method = dialog.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull($"handler {methodName} should exist");
+        try
+        {
+            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation
+            && invalidOperation.Message.Contains("DialogResult"))
+        {
+            // Modeless direct invocation still runs the handler through the behavior under test.
+        }
     }
 
 }

@@ -21,6 +21,7 @@ public partial class MainWindow
         _ribbonKeyTipMode.Enter();
         _ribbonKeyTipScope = scope;
         _ribbonKeyTipSequence = "";
+        _legacyDataKeyTipSequence = false;
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
         ShowKeyTipOverlay(scope);
@@ -34,6 +35,7 @@ public partial class MainWindow
         _ribbonKeyTipMode.Cancel();
         _ribbonKeyTipScope = RibbonKeyTipScope.None;
         _ribbonKeyTipSequence = "";
+        _legacyDataKeyTipSequence = false;
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
         ClearKeyTipOverlay();
@@ -61,8 +63,12 @@ public partial class MainWindow
             if (HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence))
                 return;
 
-            if (TryHandleTopLevelRibbonKeyTip(_ribbonKeyTipSequence))
+            var topLevelSequence = _ribbonKeyTipSequence;
+            if (TryHandleTopLevelRibbonKeyTip(topLevelSequence))
+            {
                 EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+                _legacyDataKeyTipSequence = string.Equals(topLevelSequence, "D", StringComparison.OrdinalIgnoreCase);
+            }
             else if (TryInvokeTopLevelQatKeyTip(_ribbonKeyTipSequence))
                 ExitRibbonKeyTipMode();
             else
@@ -79,6 +85,14 @@ public partial class MainWindow
             else if (!HasActiveMenuItemKeyTipPrefix(_ribbonKeyTipSequence))
                 ExitRibbonKeyTipMode();
 
+            return;
+        }
+
+        if (_legacyDataKeyTipSequence &&
+            string.Equals(_ribbonKeyTipSequence, "FF", StringComparison.OrdinalIgnoreCase))
+        {
+            FilterButton_Click(this, new RoutedEventArgs());
+            ExitRibbonKeyTipMode();
             return;
         }
 
@@ -101,6 +115,7 @@ public partial class MainWindow
         if (TryHandleTopLevelRibbonKeyTip(token))
         {
             EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+            _legacyDataKeyTipSequence = string.Equals(token, "D", StringComparison.OrdinalIgnoreCase);
             return true;
         }
 
@@ -127,7 +142,8 @@ public partial class MainWindow
                 continue;
             }
 
-            if (!ShouldShowKeyTipElement(element, scope))
+            if (!ShouldShowKeyTipElement(element, scope) ||
+                !IsEnabledKeyTipTarget(element))
                 continue;
 
             var keyTip = RibbonTooltip.GetKeyTip(element);
@@ -162,7 +178,7 @@ public partial class MainWindow
             : Visibility.Visible;
     }
 
-    private static bool ShouldShowKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope)
+    private bool ShouldShowKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope)
     {
         var isQuickAccessButton =
             element is Button button &&
@@ -170,8 +186,19 @@ public partial class MainWindow
         if (scope == RibbonKeyTipScope.TopLevel)
             return element is TabItem || isQuickAccessButton;
 
-        return element is not TabItem && !isQuickAccessButton;
+        return element is not TabItem &&
+               !isQuickAccessButton &&
+               !IsDescendantOf(element, StatusBarGrid);
     }
+
+    private static bool IsEnabledKeyTipTarget(FrameworkElement element) =>
+        element switch
+        {
+            ButtonBase button => button.IsEnabled,
+            MenuItem menuItem => menuItem.IsEnabled,
+            ComboBox comboBox => comboBox.IsEnabled,
+            _ => element.IsEnabled
+        };
 
     private void ClearKeyTipOverlay()
     {
@@ -235,6 +262,9 @@ public partial class MainWindow
 
         if (match is ButtonBase button)
         {
+            if (!button.IsEnabled)
+                return false;
+
             if (TryEnterMenuKeyTipScope(button))
                 return false;
 
@@ -253,6 +283,9 @@ public partial class MainWindow
 
         if (match is ComboBox comboBox)
         {
+            if (!comboBox.IsEnabled)
+                return false;
+
             comboBox.Focus();
             Keyboard.Focus(comboBox);
             comboBox.IsDropDownOpen = true;
@@ -313,8 +346,11 @@ public partial class MainWindow
         if (_activeRibbonKeyTipItemsControl is null)
             return false;
 
-        var match = RibbonKeyTipRouting.ResolveMenuItem(GetMenuItems(_activeRibbonKeyTipItemsControl), keyTip);
+        var match = RibbonKeyTipRouting.ResolveMenuItem(GetEnabledMenuItems(_activeRibbonKeyTipItemsControl), keyTip);
         if (match is null)
+            return false;
+
+        if (!match.IsEnabled)
             return false;
 
         match.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, match));
@@ -323,7 +359,10 @@ public partial class MainWindow
 
     private bool HasActiveMenuItemKeyTipPrefix(string keyTipPrefix) =>
         _activeRibbonKeyTipItemsControl is not null &&
-        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetMenuItems(_activeRibbonKeyTipItemsControl), keyTipPrefix);
+        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetEnabledMenuItems(_activeRibbonKeyTipItemsControl), keyTipPrefix);
+
+    private static IEnumerable<MenuItem> GetEnabledMenuItems(ItemsControl itemsControl) =>
+        GetMenuItems(itemsControl).Where(item => item.IsEnabled);
 
     private static IEnumerable<MenuItem> GetMenuItems(ItemsControl itemsControl)
     {
@@ -347,6 +386,9 @@ public partial class MainWindow
                 string.Equals(RibbonTooltip.GetKeyTip(element), keyTip, StringComparison.OrdinalIgnoreCase));
 
         if (match is null)
+            return false;
+
+        if (!match.IsEnabled)
             return false;
 
         match.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, match));
@@ -402,7 +444,8 @@ public partial class MainWindow
         element.ActualHeight > 0 &&
         (scope != RibbonKeyTipScope.Commands || !IsInsideUnselectedTabItem(element)) &&
         ShouldShowKeyTipElement(element, scope) &&
-        !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element));
+            !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element)) &&
+            IsEnabledKeyTipTarget(element);
 
     private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(RibbonKeyTipScope scope)
     {
@@ -418,6 +461,7 @@ public partial class MainWindow
                 (scope == RibbonKeyTipScope.Commands && IsStartScreenVisible() && !IsInsideStartScreenOverlay(element)) ||
                 (scope == RibbonKeyTipScope.Commands && IsInsideUnselectedTabItem(element)) ||
                 !ShouldShowKeyTipElement(element, scope) ||
+                !IsEnabledKeyTipTarget(element) ||
                 string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element)))
             {
                 continue;

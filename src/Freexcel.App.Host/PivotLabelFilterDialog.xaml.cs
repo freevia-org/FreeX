@@ -30,6 +30,7 @@ public partial class PivotLabelFilterDialog : Window
         InitializeComponent();
         LabelFilterKindBox.ItemsSource = Options.Select(option => option.Label);
         LabelFilterKindBox.SelectedIndex = 4;
+        UpdateSecondValueState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -45,8 +46,8 @@ public partial class PivotLabelFilterDialog : Window
             return;
         }
 
-        var kind = Options[Math.Max(0, LabelFilterKindBox.SelectedIndex)].Kind;
-        var value2 = LabelFilterValue2Box.Text.Trim();
+        var kind = GetSelectedKind();
+        var value2 = kind == PivotLabelFilterKind.Between ? LabelFilterValue2Box.Text.Trim() : "";
         if (kind == PivotLabelFilterKind.Between && value2.Length == 0)
         {
             MessageBox.Show(this, "Enter an ending label filter value.", "Label Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -56,6 +57,21 @@ public partial class PivotLabelFilterDialog : Window
 
         ResultFilter = new PivotLabelFilterModel(_sourceFieldIndex, kind, value, string.IsNullOrWhiteSpace(value2) ? null : value2);
         DialogResult = true;
+    }
+
+    private PivotLabelFilterKind GetSelectedKind() =>
+        Options[Math.Max(0, LabelFilterKindBox.SelectedIndex)].Kind;
+
+    private void LabelFilterKindBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateSecondValueState();
+
+    private void UpdateSecondValueState()
+    {
+        var usesSecondValue = GetSelectedKind() == PivotLabelFilterKind.Between;
+        var visibility = usesSecondValue ? Visibility.Visible : Visibility.Collapsed;
+        LabelFilterValue2Label.Visibility = visibility;
+        LabelFilterValue2Box.Visibility = visibility;
+        LabelFilterValue2Box.IsEnabled = usesSecondValue;
     }
 
     private void FocusInitialKeyboardTarget()

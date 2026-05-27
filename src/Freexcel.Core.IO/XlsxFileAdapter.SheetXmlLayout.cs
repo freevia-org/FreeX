@@ -159,11 +159,7 @@ public sealed partial class XlsxFileAdapter
         XlsxXmlAttributeReader.ReadDoubleAttribute(element, attributeName);
 
     private static WorksheetAutoFilterModel? ReadWorksheetAutoFilter(XElement? autoFilter) =>
-        autoFilter is null
-            ? null
-            : new WorksheetAutoFilterModel(
-                autoFilter.Attribute("ref")?.Value,
-                autoFilter.ToString(SaveOptions.DisableFormatting));
+        XlsxWorksheetAutoFilterMapper.Read(autoFilter);
 
     private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false) =>
         XlsxXmlAttributeReader.ReadBoolAttribute(element, attributeName, defaultValue);
@@ -191,83 +187,16 @@ public sealed partial class XlsxFileAdapter
         ZipArchiveEntry worksheetEntry,
         IReadOnlyList<CellStyle> differentialStyles)
     {
-        var hiddenRows = new HashSet<uint>();
-        var hiddenCols = new HashSet<uint>();
-        var rowOutlineLevels = new Dictionary<uint, int>();
-        var colOutlineLevels = new Dictionary<uint, int>();
-        var groupHiddenRows = new HashSet<uint>();
-        var groupHiddenCols = new HashSet<uint>();
-        var rowHeights = new Dictionary<uint, double>();
-        var columnWidths = new Dictionary<uint, double>();
         var worksheetXml = LoadXml(worksheetEntry);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-        foreach (var row in worksheetXml.Descendants(worksheetNs + "row"))
-        {
-            if (!uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
-                continue;
-
-            if (IsTruthy(row.Attribute("hidden")?.Value))
-                hiddenRows.Add(rowNumber);
-
-            if (ParseOptionalDouble(row.Attribute("ht")?.Value) is { } heightPoints && heightPoints > 0)
-                rowHeights[rowNumber] = heightPoints * (96.0 / 72.0);
-
-            var outlineStr = row.Attribute("outlineLevel")?.Value;
-            if (int.TryParse(outlineStr, out var outlineLevel) && outlineLevel > 0)
-            {
-                rowOutlineLevels[rowNumber] = outlineLevel;
-                if (IsTruthy(row.Attribute("collapsed")?.Value))
-                    groupHiddenRows.Add(rowNumber);
-            }
-        }
-
-        foreach (var col in worksheetXml.Descendants(worksheetNs + "col"))
-        {
-            if (!uint.TryParse(col.Attribute("min")?.Value, out var min))
-                continue;
-            if (!uint.TryParse(col.Attribute("max")?.Value, out var max))
-                continue;
-            if (min > max)
-                continue;
-
-            if (IsTruthy(col.Attribute("hidden")?.Value))
-            {
-                for (var colNumber = min; colNumber <= max; colNumber++)
-                    hiddenCols.Add(colNumber);
-            }
-
-            var colOutlineStr = col.Attribute("outlineLevel")?.Value;
-            if (int.TryParse(colOutlineStr, out var colOutlineLevel) && colOutlineLevel > 0)
-            {
-                var collapsed = IsTruthy(col.Attribute("collapsed")?.Value);
-                for (var colNumber = min; colNumber <= max; colNumber++)
-                {
-                    colOutlineLevels[colNumber] = colOutlineLevel;
-                    if (collapsed)
-                        groupHiddenCols.Add(colNumber);
-                }
-            }
-
-            if (IsTruthy(col.Attribute("customWidth")?.Value) &&
-                ParseOptionalDouble(col.Attribute("width")?.Value) is { } width &&
-                width > 0)
-            {
-                if (col.Attribute("style") is not null && width <= 9.2)
-                    continue;
-
-                width = Math.Floor(width);
-                for (var colNumber = min; colNumber <= max; colNumber++)
-                    columnWidths[colNumber] = width;
-            }
-        }
+        var rowColumnLayout = XlsxWorksheetRowColumnLayoutReader.Read(worksheetXml, worksheetNs);
 
         var protection = worksheetXml.Root?.Element(worksheetNs + "sheetProtection");
         var isProtected = IsTruthy(protection?.Attribute("sheet")?.Value);
         var passwordHash =
             protection?.Attribute("password")?.Value ??
             protection?.Attribute("hashValue")?.Value;
-        var protectionMetadata = ReadWorksheetProtectionMetadata(protection);
+        var protectionMetadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetProtectionMetadata(protection);
         var allowEditRanges = XlsxAllowEditRangeMapper.Read(worksheetXml, worksheetNs);
 
         var sheetView = worksheetXml.Root?
@@ -312,14 +241,14 @@ public sealed partial class XlsxFileAdapter
         var sortState = XlsxWorksheetSortStateMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sortState"));
         var singleXmlCells = XlsxWorksheetSingleXmlCellMapper.Read(worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
         var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
-        var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
-        var explicitStyleOnlyCells = ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
+        var cachedFormulaErrors = XlsxWorksheetCellLayoutReader.ReadCachedFormulaErrors(worksheetXml, worksheetNs);
+        var explicitStyleOnlyCells = XlsxWorksheetCellLayoutReader.ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
         var codeName = sheetPr?.Attribute("codeName")?.Value;
 
         return new SheetXmlLayout(
-            hiddenRows,
-            hiddenCols,
+            rowColumnLayout.HiddenRows,
+            rowColumnLayout.HiddenCols,
             isProtected,
             passwordHash,
             protectionMetadata,
@@ -334,9 +263,9 @@ public sealed partial class XlsxFileAdapter
             ParseOptionalDouble(sheetFormatPr?.Attribute("defaultRowHeight")?.Value) is { } defaultRowHeightPoints
                 ? defaultRowHeightPoints * (96.0 / 72.0)
                 : null,
-            ReadWorksheetSheetFormatMetadata(sheetFormatPr),
-            ReadWorksheetDimensionMetadata(dimension),
-            ReadWorksheetSheetPropertiesMetadata(sheetPr),
+            XlsxWorksheetLayoutMetadataReader.ReadWorksheetSheetFormatMetadata(sheetFormatPr),
+            XlsxWorksheetLayoutMetadataReader.ReadWorksheetDimensionMetadata(dimension),
+            XlsxWorksheetLayoutMetadataReader.ReadWorksheetSheetPropertiesMetadata(sheetPr),
             XlsxWorksheetCalculationPropertyMapper.ReadFullCalculationOnLoad(sheetCalcPr),
             XlsxWorksheetPhoneticPropertyMapper.Read(phoneticPr),
             pane?.Attribute("state")?.Value,
@@ -346,29 +275,29 @@ public sealed partial class XlsxFileAdapter
             viewTopLeft?.Col,
             activeCell?.Row,
             activeCell?.Col,
-            ReadWorksheetPrintOptionsMetadata(printOptions),
+            XlsxWorksheetLayoutMetadataReader.ReadWorksheetPrintOptionsMetadata(printOptions),
             ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter")),
             ParseOptionalBool(pageSetup?.Attribute("usePrinterDefaults")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("copies")?.Value),
-            ReadWorksheetPageMarginsMetadata(pageMargins),
+            XlsxWorksheetLayoutMetadataReader.ReadWorksheetPageMarginsMetadata(pageMargins),
             ParseOptionalBool(pageSetUpPr?.Attribute("fitToPage")?.Value),
             ParseOptionalBool(pageSetUpPr?.Attribute("autoPageBreaks")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("horizontalDpi")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("verticalDpi")?.Value),
-            ReadWorksheetPageSetupMetadata(pageSetup),
-            ReadWorksheetHeaderFooterMetadata(headerFooter),
+            XlsxWorksheetLayoutMetadataReader.ReadWorksheetPageSetupMetadata(pageSetup),
+            XlsxWorksheetLayoutMetadataReader.ReadWorksheetHeaderFooterMetadata(headerFooter),
             background,
             headerFooterPictures,
-            rowOutlineLevels,
-            colOutlineLevels,
+            rowColumnLayout.RowOutlineLevels,
+            rowColumnLayout.ColOutlineLevels,
             ParseOptionalBool(outlinePr?.Attribute("summaryBelow")?.Value),
             ParseOptionalBool(outlinePr?.Attribute("summaryRight")?.Value),
             ParseOptionalBool(outlinePr?.Attribute("showOutlineSymbols")?.Value),
             ParseOptionalBool(outlinePr?.Attribute("applyStyles")?.Value),
-            groupHiddenRows,
-            groupHiddenCols,
-            rowHeights,
-            columnWidths,
+            rowColumnLayout.GroupHiddenRows,
+            rowColumnLayout.GroupHiddenCols,
+            rowColumnLayout.RowHeights,
+            rowColumnLayout.ColumnWidths,
             comments,
             drawingParts.ChartParts,
             drawingParts.PictureParts,
@@ -389,376 +318,13 @@ public sealed partial class XlsxFileAdapter
             sortState,
             singleXmlCells,
             additionalViews,
-            ReadWorksheetPrimaryViewMetadata(sheetView),
-            ReadWorksheetPageBreaksMetadata(rowBreaks, CellAddress.MaxRow),
-            ReadWorksheetPageBreaksMetadata(colBreaks, CellAddress.MaxCol),
+            XlsxWorksheetLayoutMetadataReader.ReadWorksheetPrimaryViewMetadata(sheetView),
+            XlsxWorksheetPageBreaksMetadataReader.Read(rowBreaks, CellAddress.MaxRow),
+            XlsxWorksheetPageBreaksMetadataReader.Read(colBreaks, CellAddress.MaxCol),
             cachedFormulaErrors,
             explicitStyleOnlyCells,
             codeName);
     }
-
-    private static WorksheetDimensionMetadataModel? ReadWorksheetDimensionMetadata(XElement? dimension)
-    {
-        if (dimension is null)
-            return null;
-
-        var model = new WorksheetDimensionMetadataModel();
-        foreach (var attribute in dimension.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "ref", StringComparison.Ordinal))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        return model.NativeAttributes.Count == 0 ? null : model;
-    }
-
-    private static WorksheetSheetPropertiesMetadataModel? ReadWorksheetSheetPropertiesMetadata(XElement? sheetProperties)
-    {
-        if (sheetProperties is null)
-            return null;
-
-        var model = new WorksheetSheetPropertiesMetadataModel
-        {
-            NativeChildXmls = sheetProperties.Elements()
-                .Where(element => !IsModeledSheetPropertiesElement(element.Name.LocalName))
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList()
-        };
-
-        foreach (var attribute in sheetProperties.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledSheetPropertiesAttribute(attribute.Name.LocalName))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-            ? null
-            : model;
-    }
-
-    private static bool IsModeledSheetPropertiesAttribute(string name) =>
-        name is "codeName";
-
-    private static bool IsModeledSheetPropertiesElement(string name) =>
-        name is "tabColor" or "outlinePr" or "pageSetUpPr";
-
-    private static WorksheetPrimaryViewMetadataModel? ReadWorksheetPrimaryViewMetadata(XElement? sheetView)
-    {
-        if (sheetView is null)
-            return null;
-
-        var model = new WorksheetPrimaryViewMetadataModel
-        {
-            NativeChildXmls = sheetView.Elements()
-                .Where(element => !IsModeledPrimaryViewElement(element.Name.LocalName))
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList()
-        };
-
-        foreach (var attribute in sheetView.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledPrimaryViewAttribute(attribute.Name.LocalName))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-            ? null
-            : model;
-    }
-
-    private static bool IsModeledPrimaryViewAttribute(string name) =>
-        name is "workbookViewId" or "view" or "showGridLines" or "showRowColHeaders" or "showRuler" or
-            "zoomScale" or "showFormulas" or "topLeftCell";
-
-    private static bool IsModeledPrimaryViewElement(string name) =>
-        name is "pane";
-
-    private static WorksheetPageBreaksMetadataModel? ReadWorksheetPageBreaksMetadata(XElement? pageBreaks, uint maxBreakId)
-    {
-        if (pageBreaks is null)
-            return null;
-
-        var model = new WorksheetPageBreaksMetadataModel();
-        foreach (var attribute in pageBreaks.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "count", StringComparison.Ordinal))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        foreach (var breakElement in pageBreaks.Elements().Where(element => string.Equals(element.Name.LocalName, "brk", StringComparison.Ordinal)))
-        {
-            if (!TryReadPageBreakId(breakElement, maxBreakId, out var id))
-                continue;
-
-            var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var attribute in breakElement.Attributes())
-            {
-                if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "id", StringComparison.Ordinal))
-                    continue;
-
-                attributes[attribute.Name.ToString()] = attribute.Value;
-            }
-
-            if (attributes.Count > 0)
-                model.BreakNativeAttributes[id] = attributes;
-        }
-
-        return model.NativeAttributes.Count == 0 && model.BreakNativeAttributes.Count == 0
-            ? null
-            : model;
-    }
-
-    private static bool TryReadPageBreakId(XElement breakElement, uint maxBreakId, out uint id)
-    {
-        id = 0;
-        return uint.TryParse(breakElement.Attribute("id")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out id) &&
-            id >= 2 &&
-            id <= maxBreakId;
-    }
-
-    private static WorksheetHeaderFooterMetadataModel? ReadWorksheetHeaderFooterMetadata(XElement? headerFooter)
-    {
-        if (headerFooter is null)
-            return null;
-
-        var model = new WorksheetHeaderFooterMetadataModel();
-        foreach (var attribute in headerFooter.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledHeaderFooterAttribute(attribute.Name.LocalName))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        model.NativeChildXmls = headerFooter.Elements()
-            .Where(element => !IsModeledHeaderFooterElement(element.Name.LocalName))
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-            ? null
-            : model;
-    }
-
-    private static bool IsModeledHeaderFooterAttribute(string name) =>
-        name is "differentOddEven" or "differentFirst" or "scaleWithDoc" or "alignWithMargins";
-
-    private static bool IsModeledHeaderFooterElement(string name) =>
-        name is "oddHeader" or "oddFooter" or "evenHeader" or "evenFooter" or "firstHeader" or "firstFooter";
-
-    private static WorksheetPageMarginsMetadataModel? ReadWorksheetPageMarginsMetadata(XElement? pageMargins)
-    {
-        if (pageMargins is null)
-            return null;
-
-        var model = new WorksheetPageMarginsMetadataModel
-        {
-            NativeChildXmls = pageMargins.Elements()
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList()
-        };
-
-        foreach (var attribute in pageMargins.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledPageMarginsAttribute(attribute.Name.LocalName))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-            ? null
-            : model;
-    }
-
-    private static bool IsModeledPageMarginsAttribute(string name) =>
-        name is "left" or "right" or "top" or "bottom" or "header" or "footer";
-
-    private static WorksheetSheetFormatMetadataModel? ReadWorksheetSheetFormatMetadata(XElement? sheetFormatProperties)
-    {
-        if (sheetFormatProperties is null)
-            return null;
-
-        var model = new WorksheetSheetFormatMetadataModel
-        {
-            NativeChildXmls = sheetFormatProperties.Elements()
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList()
-        };
-
-        foreach (var attribute in sheetFormatProperties.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledSheetFormatAttribute(attribute.Name.LocalName))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-            ? null
-            : model;
-    }
-
-    private static bool IsModeledSheetFormatAttribute(string name) =>
-        name is "defaultColWidth" or "defaultRowHeight";
-
-    private static WorksheetPrintOptionsMetadataModel? ReadWorksheetPrintOptionsMetadata(XElement? printOptions)
-    {
-        if (printOptions is null)
-            return null;
-
-        var model = new WorksheetPrintOptionsMetadataModel
-        {
-            NativeChildXmls = printOptions.Elements()
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList()
-        };
-
-        foreach (var attribute in printOptions.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledPrintOptionsAttribute(attribute.Name.LocalName))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-            ? null
-            : model;
-    }
-
-    private static bool IsModeledPrintOptionsAttribute(string name) =>
-        name is "gridLines" or "headings" or "horizontalCentered" or "verticalCentered";
-
-    private static WorksheetPageSetupMetadataModel? ReadWorksheetPageSetupMetadata(XElement? pageSetup)
-    {
-        if (pageSetup is null)
-            return null;
-
-        var model = new WorksheetPageSetupMetadataModel
-        {
-            NativeChildXmls = pageSetup.Elements()
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList()
-        };
-
-        foreach (var attribute in pageSetup.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledPageSetupAttribute(attribute.Name.LocalName))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-            ? null
-            : model;
-    }
-
-    private static bool IsModeledPageSetupAttribute(string name) =>
-        name is "paperSize" or "scale" or "firstPageNumber" or "fitToWidth" or "fitToHeight" or
-            "pageOrder" or "orientation" or "usePrinterDefaults" or "blackAndWhite" or "draft" or
-            "cellComments" or "useFirstPageNumber" or "errors" or "horizontalDpi" or "verticalDpi" or
-            "copies";
-
-    private static WorksheetProtectionMetadataModel? ReadWorksheetProtectionMetadata(XElement? protection)
-    {
-        if (protection is null)
-            return null;
-
-        var model = new WorksheetProtectionMetadataModel
-        {
-            NativeChildXmls = protection.Elements()
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList()
-        };
-
-        foreach (var attribute in protection.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                string.Equals(attribute.Name.LocalName, "sheet", StringComparison.Ordinal) ||
-                string.Equals(attribute.Name.LocalName, "password", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-            ? null
-            : model;
-    }
-
-    private static IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ReadExplicitStyleOnlyCells(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        var result = new List<(uint Row, uint Col, int StyleIndex)>();
-
-        foreach (var cell in worksheetXml.Descendants(worksheetNs + "c"))
-        {
-            if (!int.TryParse(cell.Attribute("s")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var styleIndex) ||
-                cell.Element(worksheetNs + "f") is not null ||
-                cell.Element(worksheetNs + "v") is not null ||
-                cell.Element(worksheetNs + "is") is not null)
-            {
-                continue;
-            }
-
-            var reference = cell.Attribute("r")?.Value;
-            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, SheetId.New(), out var address))
-                continue;
-
-            result.Add((address.Row, address.Col, styleIndex));
-        }
-
-        return result;
-    }
-
-    private static Dictionary<(uint Row, uint Col), ErrorValue> ReadCachedFormulaErrors(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        var result = new Dictionary<(uint Row, uint Col), ErrorValue>();
-
-        foreach (var cell in worksheetXml.Descendants(worksheetNs + "c"))
-        {
-            if (!string.Equals(cell.Attribute("t")?.Value, "e", StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (cell.Element(worksheetNs + "f") is null)
-                continue;
-            var rawValue = cell.Element(worksheetNs + "v")?.Value;
-            if (string.IsNullOrWhiteSpace(rawValue))
-                continue;
-            var reference = cell.Attribute("r")?.Value;
-            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, SheetId.New(), out var address))
-                continue;
-
-            result[(address.Row, address.Col)] = MapCachedFormulaError(rawValue);
-        }
-
-        return result;
-    }
-
-    private static ErrorValue MapCachedFormulaError(string rawValue) =>
-        rawValue.ToUpperInvariant() switch
-        {
-            "#NULL!" => ErrorValue.Null,
-            "#DIV/0!" => ErrorValue.DivByZero,
-            "#VALUE!" => ErrorValue.Value,
-            "#REF!" => ErrorValue.Ref,
-            "#NAME?" => ErrorValue.Name,
-            "#NUM!" => ErrorValue.Num,
-            "#N/A" => ErrorValue.NA,
-            "#SPILL!" => ErrorValue.Spill,
-            "#CALC!" => ErrorValue.Calc,
-            _ => new ErrorValue(rawValue)
-        };
 
     private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
     {
@@ -785,20 +351,7 @@ public sealed partial class XlsxFileAdapter
     }
 
     private static uint? ParsePaneSplit(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        if (uint.TryParse(value, out var integer))
-            return integer;
-
-        if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var floating) &&
-            floating > 0 &&
-            floating <= uint.MaxValue)
-            return (uint)Math.Round(floating);
-
-        return null;
-    }
+        => XlsxWorksheetXmlValueParser.ParsePaneSplit(value);
 
     private static CellAddress? ParseOptionalCellReference(string? reference)
     {
@@ -811,10 +364,10 @@ public sealed partial class XlsxFileAdapter
     }
 
     private static bool IsTruthy(string? value) =>
-        value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+        XlsxWorksheetXmlValueParser.IsTruthy(value);
 
     private static bool IsFalse(string? value) =>
-        value is "0" || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+        XlsxWorksheetXmlValueParser.IsFalse(value);
 
     private static bool? ParseOptionalBool(string? value)
     {
@@ -841,12 +394,7 @@ public sealed partial class XlsxFileAdapter
             : null;
 
     private static WorksheetViewMode ParseWorksheetViewMode(string? value) =>
-        value switch
-        {
-            "pageBreakPreview" => WorksheetViewMode.PageBreakPreview,
-            "pageLayout" => WorksheetViewMode.PageLayout,
-            _ => WorksheetViewMode.Normal
-        };
+        XlsxWorksheetXmlValueParser.ParseWorksheetViewMode(value);
 
     private static bool IsValidWorksheetRow(uint row) =>
         row is >= 1 and <= CellAddress.MaxRow;
@@ -861,12 +409,13 @@ public sealed partial class XlsxFileAdapter
         rotation == 255 || rotation is >= -90 and <= 90;
 
     private static uint ValidFrozenRowsOrZero(uint row) =>
-        row <= CellAddress.MaxRow ? row : 0;
+        XlsxWorksheetXmlValueParser.ValidFrozenRowsOrZero(row);
 
     private static uint ValidFrozenColumnsOrZero(uint column) =>
-        column <= CellAddress.MaxCol ? column : 0;
+        XlsxWorksheetXmlValueParser.ValidFrozenColumnsOrZero(column);
 
     private static bool IsSupportedFontSize(double fontSize) =>
         double.IsFinite(fontSize) && fontSize is >= 1 and <= 409;
 
 }
+

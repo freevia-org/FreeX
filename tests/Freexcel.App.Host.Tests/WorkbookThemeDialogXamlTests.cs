@@ -83,9 +83,10 @@ public sealed class WorkbookThemeDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml.cs"));
 
-        source.Should().Contain("TryReadThemeColor(Dark1ColorBox, out var dark1)");
-        source.Should().Contain("private bool TryReadThemeColor(TextBox colorBox, out CellColor color)");
-        source.Should().Contain("FocusInvalidColorInput(colorBox);");
+        source.Should().Contain("WorkbookThemeDialogPlanner.TryCreateTheme");
+        source.Should().Contain("private void ShowInvalidThemeColor(WorkbookThemeDialogValidationError error)");
+        source.Should().Contain("ThemeColorFields().FirstOrDefault(field => field.Slot == error.Slot)");
+        source.Should().Contain("FocusInvalidColorInput(field.TextBox);");
         source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
         source.Should().Contain("colorBox.Focus();");
         source.Should().Contain("colorBox.SelectAll();");
@@ -186,6 +187,26 @@ public sealed class WorkbookThemeDialogXamlTests
     }
 
     [Fact]
+    public void ColorPickerButtons_ExposeSwatchAffordance()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
+
+        xaml.Should().Contain("ToolTip=\"Pick color\"");
+        xaml.Should().NotContain("Content=\"...\"");
+    }
+
+    [Fact]
+    public void ColorPickerSwatches_UpdateWithThemeColors()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml.cs"));
+
+        source.Should().Contain("UpdateColorPickerSwatches();");
+        source.Should().Contain("private void UpdateColorPickerSwatches()");
+        source.Should().Contain("ThemeColorFields()");
+        source.Should().Contain("field.Button.Background = new SolidColorBrush(ToMediaColor(ParsePreviewColor(field.TextBox.Text)));");
+    }
+
+    [Fact]
     public void Dialog_ExposesExcelLikeThemePreviewPane()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
@@ -200,10 +221,31 @@ public sealed class WorkbookThemeDialogXamlTests
         source.Should().Contain("WirePreviewRefresh");
         source.Should().Contain("HeadingFontBox.SelectionChanged += (_, _) => UpdatePreview()");
         source.Should().Contain("HeadingFontBox.AddHandler(TextBox.TextChangedEvent");
-        source.Should().Contain("colorBox.TextChanged += (_, _) => UpdatePreview()");
+        source.Should().Contain("colorBox.TextChanged += (_, _) =>");
+        source.Should().Contain("UpdateColorPickerSwatches();");
         source.Should().Contain("ThemeColorTextBoxes");
         source.Should().Contain("PreviewHeadingText.FontFamily");
         source.Should().Contain("PreviewAccentStrip");
+    }
+
+    [Fact]
+    public void DialogThemeFieldMap_CoversEveryThemeColorSlot()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.ThemeFields.cs"));
+
+        source.Should().Contain("WorkbookThemeColorSlot.Dark1");
+        source.Should().Contain("WorkbookThemeColorSlot.Light1");
+        source.Should().Contain("WorkbookThemeColorSlot.Dark2");
+        source.Should().Contain("WorkbookThemeColorSlot.Light2");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent1");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent2");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent3");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent4");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent5");
+        source.Should().Contain("WorkbookThemeColorSlot.Accent6");
+        source.Should().Contain("WorkbookThemeColorSlot.Hyperlink");
+        source.Should().Contain("WorkbookThemeColorSlot.FollowedHyperlink");
+        source.Should().Contain("IsAccent: true");
     }
 
 }

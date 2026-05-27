@@ -66,6 +66,13 @@ internal static class XlsxStructuredTableModelMapper
             var tableColumnIndex = filterColumn.ColumnId;
             if (tableColumnIndex < 0 || tableColumnIndex >= table.Columns.Count)
                 continue;
+            if (filterColumn.CustomFilters.Count > 0 ||
+                filterColumn.CustomFiltersAndRaw is not null ||
+                filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
+                filterColumn.NativeFilterXmls.Count > 0)
+            {
+                continue;
+            }
 
             yield return new StructuredTableFilterState(
                 table.Range.Start.Col + (uint)tableColumnIndex,

@@ -5,19 +5,26 @@ namespace Freexcel.Core.Calc;
 
 public sealed partial class ViewportService
 {
-    private static bool MatchesFormula(ConditionalFormat cf, Sheet sheet, CellAddress addr, Workbook workbook)
+    private static readonly FormulaEvaluator _cfEvaluator = new();
+
+    private static bool MatchesFormula(
+        ConditionalFormat cf,
+        Sheet sheet,
+        CellAddress addr,
+        Workbook workbook,
+        CfEvaluationContext cfContext)
     {
         if (string.IsNullOrWhiteSpace(cf.FormulaText)) return false;
+        if (!cfContext.Formulas.TryGetValue(cf, out var formulaCache)) return false;
+
         try
         {
             // Shift relative references from the CF range's top-left to the current cell.
             int dr = (int)addr.Row - (int)cf.AppliesTo.Start.Row;
             int dc = (int)addr.Col - (int)cf.AppliesTo.Start.Col;
-            var formulaText = dr == 0 && dc == 0
-                ? cf.FormulaText
-                : ShiftCfFormula(cf.FormulaText, dr, dc);
+            var ast = GetShiftedCfFormula(formulaCache, dr, dc);
 
-            var result = _cfEvaluator.Evaluate("=" + formulaText, sheet, workbook);
+            var result = _cfEvaluator.Evaluate(ast, sheet, workbook);
             return result switch
             {
                 BoolValue bv => bv.Value,
@@ -31,18 +38,19 @@ public sealed partial class ViewportService
         }
     }
 
-    private static string ShiftCfFormula(string formulaText, int dr, int dc)
+    private static FormulaNode GetShiftedCfFormula(CfFormulaCache formulaCache, int dr, int dc)
     {
-        try
+        if (dr == 0 && dc == 0)
+            return formulaCache.Ast;
+
+        var key = (dr, dc);
+        if (!formulaCache.ShiftedAsts.TryGetValue(key, out var shifted))
         {
-            var ast = new Parser(new Lexer("=" + formulaText).Tokenize()).Parse();
-            var shifted = ShiftAst(ast, dr, dc);
-            return FormulaSerializer.Serialize(shifted);
+            shifted = ShiftAst(formulaCache.Ast, dr, dc);
+            formulaCache.ShiftedAsts[key] = shifted;
         }
-        catch
-        {
-            return formulaText;
-        }
+
+        return shifted;
     }
 
     private static FormulaNode ShiftAst(FormulaNode node, int dr, int dc)
@@ -50,11 +58,9 @@ public sealed partial class ViewportService
         return node switch
         {
             CellRefNode cr => ShiftCellRef(cr, dr, dc),
-            RangeRefNode rr => rr with
-            {
-                Start = ShiftCellRef(rr.Start, dr, dc),
-                End = ShiftCellRef(rr.End, dr, dc)
-            },
+            RangeRefNode rr => ShiftRangeRef(rr, dr, dc),
+            FullColumnRangeRefNode fcr => ShiftFullColumnRangeRef(fcr, dc),
+            FullRowRangeRefNode frr => ShiftFullRowRangeRef(frr, dr),
             BinaryOpNode bin => bin with
             {
                 Left = ShiftAst(bin.Left, dr, dc),
@@ -69,14 +75,81 @@ public sealed partial class ViewportService
         };
     }
 
-    private static CellRefNode ShiftCellRef(CellRefNode cr, int dr, int dc)
+    private static FormulaNode ShiftRangeRef(RangeRefNode rr, int dr, int dc)
     {
-        uint newRow = cr.IsRowAbsolute ? cr.Row
-            : (uint)Math.Max(1, (int)cr.Row + dr);
-        uint newColNum = cr.IsColAbsolute ? cr.ColumnNumber
-            : (uint)Math.Max(1, (int)cr.ColumnNumber + dc);
-        var newColName = cr.IsColAbsolute ? cr.ColumnName
-            : CellAddress.NumberToColumnName(newColNum);
-        return cr with { Row = newRow, ColumnName = newColName };
+        var start = ShiftCellRefOrError(rr.Start, dr, dc);
+        if (start is ErrorNode) return start;
+
+        var end = ShiftCellRefOrError(rr.End, dr, dc);
+        if (end is ErrorNode) return end;
+
+        return rr with
+        {
+            Start = (CellRefNode)start,
+            End = (CellRefNode)end
+        };
+    }
+
+    private static FormulaNode ShiftFullColumnRangeRef(FullColumnRangeRefNode range, int dc)
+    {
+        var start = ShiftColumn(range.StartColumnNumber, range.IsStartAbsolute, dc);
+        if (!start.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        var end = ShiftColumn(range.EndColumnNumber, range.IsEndAbsolute, dc);
+        if (!end.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        return range with
+        {
+            StartColumnName = range.IsStartAbsolute ? range.StartColumnName : CellAddress.NumberToColumnName(start.Value),
+            EndColumnName = range.IsEndAbsolute ? range.EndColumnName : CellAddress.NumberToColumnName(end.Value)
+        };
+    }
+
+    private static FormulaNode ShiftFullRowRangeRef(FullRowRangeRefNode range, int dr)
+    {
+        var start = ShiftRow(range.StartRow, range.IsStartAbsolute, dr);
+        if (!start.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        var end = ShiftRow(range.EndRow, range.IsEndAbsolute, dr);
+        if (!end.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        return range with
+        {
+            StartRow = start.Value,
+            EndRow = end.Value
+        };
+    }
+
+    private static FormulaNode ShiftCellRef(CellRefNode cr, int dr, int dc) =>
+        ShiftCellRefOrError(cr, dr, dc);
+
+    private static FormulaNode ShiftCellRefOrError(CellRefNode cr, int dr, int dc)
+    {
+        var newRow = ShiftRow(cr.Row, cr.IsRowAbsolute, dr);
+        if (!newRow.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        var newColNum = ShiftColumn(cr.ColumnNumber, cr.IsColAbsolute, dc);
+        if (!newColNum.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        var newColName = cr.IsColAbsolute ? cr.ColumnName : CellAddress.NumberToColumnName(newColNum.Value);
+        return cr with { Row = newRow.Value, ColumnName = newColName };
+    }
+
+    private static uint? ShiftRow(uint row, bool isAbsolute, int dr)
+    {
+        if (isAbsolute)
+            return row;
+
+        var shifted = (long)row + dr;
+        return shifted is < 1 or > CellAddress.MaxRow ? null : (uint)shifted;
+    }
+
+    private static uint? ShiftColumn(uint col, bool isAbsolute, int dc)
+    {
+        if (isAbsolute)
+            return col;
+
+        var shifted = (long)col + dc;
+        return shifted is < 1 or > CellAddress.MaxCol ? null : (uint)shifted;
     }
 }

@@ -9,6 +9,7 @@ public static partial class PrintRenderer
 {
     private static void DrawHeaderFooter(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         double pageW,
         double pageH,
         double marginLeft,
@@ -33,12 +34,13 @@ public static partial class PrintRenderer
         var footerY = Math.Max(4, pageH - footerMargin - footerHeight);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, typeface, pageNumber, totalPages, workbookName, sheetName, draftQuality);
-        DrawHeaderFooterLine(dc, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, typeface, pageNumber, totalPages, workbookName, sheetName, draftQuality);
+        DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, typeface, pageNumber, totalPages, workbookName, sheetName, draftQuality);
+        DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, typeface, pageNumber, totalPages, workbookName, sheetName, draftQuality);
     }
 
     private static void DrawHeaderFooterLine(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         WorksheetHeaderFooter value,
         WorksheetHeaderFooterPictureSet pictures,
         double pageW,
@@ -70,13 +72,14 @@ public static partial class PrintRenderer
         DrawHeaderFooterPicture(dc, leftPicture, leftRect, TextAlignment.Left);
         DrawHeaderFooterPicture(dc, centerPicture, centerRect, TextAlignment.Center);
         DrawHeaderFooterPicture(dc, rightPicture, rightRect, TextAlignment.Right);
-        DrawHeaderFooterText(dc, left, CalculateHeaderFooterTextRect(leftRect, leftPicture, TextAlignment.Left), typeface, TextAlignment.Left);
-        DrawHeaderFooterText(dc, center, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), typeface, TextAlignment.Center);
-        DrawHeaderFooterText(dc, right, CalculateHeaderFooterTextRect(rightRect, rightPicture, TextAlignment.Right), typeface, TextAlignment.Right);
+        DrawHeaderFooterText(dc, textOverlays, left, CalculateHeaderFooterTextRect(leftRect, leftPicture, TextAlignment.Left), typeface, TextAlignment.Left);
+        DrawHeaderFooterText(dc, textOverlays, center, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), typeface, TextAlignment.Center);
+        DrawHeaderFooterText(dc, textOverlays, right, CalculateHeaderFooterTextRect(rightRect, rightPicture, TextAlignment.Right), typeface, TextAlignment.Right);
     }
 
     private static void DrawHeaderFooterText(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         string text,
         Rect rect,
         Typeface typeface,
@@ -100,7 +103,39 @@ public static partial class PrintRenderer
             TextAlignment = alignment
         };
 
-        dc.DrawText(ft, new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2));
+        var textPoint = new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2);
+        dc.DrawText(ft, textPoint);
+        AddHeaderFooterTextOverlay(textOverlays, text, textPoint, ft.MaxTextWidth, typeface, alignment);
+    }
+
+    private static void AddHeaderFooterTextOverlay(
+        ICollection<PdfTextOverlay> textOverlays,
+        string text,
+        Point textPoint,
+        double maxTextWidth,
+        Typeface typeface,
+        TextAlignment alignment)
+    {
+        var overlayText = BoundPrintedSingleLineOverlayText(text, maxTextWidth, typeface);
+        if (string.IsNullOrEmpty(overlayText))
+            return;
+
+        var overlayX = textPoint.X;
+        var overlayWidth = MeasurePrintedSingleLineText(overlayText, typeface).WidthIncludingTrailingWhitespace;
+        if (alignment == TextAlignment.Center)
+            overlayX += Math.Max(0, (maxTextWidth - overlayWidth) / 2);
+        else if (alignment == TextAlignment.Right)
+            overlayX += Math.Max(0, maxTextWidth - overlayWidth);
+
+        textOverlays.Add(new PdfTextOverlay(
+            overlayText,
+            overlayX,
+            textPoint.Y,
+            PrintFontSize,
+            typeface.FontFamily.Source,
+            typeface.Weight >= FontWeights.SemiBold,
+            typeface.Style == FontStyles.Italic || typeface.Style == FontStyles.Oblique,
+            Colors.Black));
     }
 
 }

@@ -53,8 +53,16 @@ public partial class MainWindow
         ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
         SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
 
+        var protectedGroupIndexes = GetRibbonFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth.Value);
         while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
-               CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: availableWidth.Value > 760))
+               CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: availableWidth.Value > 760, protectedGroupIndexes))
+        {
+            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+            SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
+        }
+
+        while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
+               CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: false))
         {
             ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
@@ -62,6 +70,25 @@ public partial class MainWindow
 
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
         _ribbonCompact = compacted;
+    }
+
+    private static HashSet<int> GetRibbonFallbackProtectedGroupIndexes(
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        double availableWidth)
+    {
+        var protectedIndexes = new HashSet<int>();
+        if (availableWidth <= 760)
+            return protectedIndexes;
+
+        var groupNames = groups.Select(group => group.Name).ToList();
+        var pageSetupIndex = groupNames.IndexOf("Page Setup");
+        if (groupNames.Contains("Themes", StringComparer.Ordinal) &&
+            pageSetupIndex >= 0)
+        {
+            protectedIndexes.Add(pageSetupIndex);
+        }
+
+        return protectedIndexes;
     }
 
     private static void ApplyRibbonAdaptiveStates(
@@ -99,12 +126,18 @@ public partial class MainWindow
         return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
     }
 
-    private static bool CollapseOneMoreRibbonGroup(RibbonAdaptiveGroupState[] states, bool preserveFirstGroup)
+    private static bool CollapseOneMoreRibbonGroup(
+        RibbonAdaptiveGroupState[] states,
+        bool preserveFirstGroup,
+        IReadOnlySet<int>? protectedGroupIndexes = null)
     {
         var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
         for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
         {
             if (states[i] == RibbonAdaptiveGroupState.Collapsed)
+                continue;
+
+            if (protectedGroupIndexes?.Contains(i) == true)
                 continue;
 
             states[i] = RibbonAdaptiveGroupState.Collapsed;
@@ -116,12 +149,13 @@ public partial class MainWindow
 
     private static void SetCollapsedRibbonButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)
     {
-        var normalNarrow = availableWidth <= 920;
+        var compactFootprint = availableWidth <= 920;
+        var hideCaption = availableWidth <= 760;
         foreach (var button in collapsedButtons)
         {
-            button.Width = normalNarrow ? 44 : 64;
-            button.Margin = normalNarrow ? new Thickness(0, 0, 2, 0) : new Thickness(1, 0, 3, 0);
-            button.Padding = normalNarrow ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
+            button.Width = compactFootprint ? 44 : 64;
+            button.Margin = compactFootprint ? new Thickness(0, 0, 2, 0) : new Thickness(1, 0, 3, 0);
+            button.Padding = compactFootprint ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
 
             var textBlockRoot = button.Content as DependencyObject ?? button;
             var textBlocks = EnumerateVisualDescendants(textBlockRoot)
@@ -133,13 +167,13 @@ public partial class MainWindow
             {
                 if (textBlock.Tag?.ToString() == "RibbonLabel")
                 {
-                    textBlock.Visibility = normalNarrow ? Visibility.Collapsed : Visibility.Visible;
-                    textBlock.FontSize = normalNarrow ? 9 : 10;
-                    textBlock.MaxWidth = normalNarrow ? 40 : 60;
+                    textBlock.Visibility = hideCaption ? Visibility.Collapsed : Visibility.Visible;
+                    textBlock.FontSize = compactFootprint ? 9 : 10;
+                    textBlock.MaxWidth = compactFootprint ? 40 : 60;
                 }
                 else if (textBlock.Tag?.ToString() == "RibbonIcon" && textBlock.Text != "\uE70D")
                 {
-                    textBlock.FontSize = normalNarrow ? 18 : 22;
+                    textBlock.FontSize = compactFootprint ? 18 : 22;
                 }
             }
         }
@@ -408,155 +442,10 @@ public partial class MainWindow
     }
 
     private static object? CloneRibbonMenuItem(object source)
-    {
-        if (source is Separator)
-            return new Separator();
-
-        if (source is not MenuItem sourceItem)
-            return null;
-
-        var item = new MenuItem
-        {
-            Header = CloneRibbonMenuContent(sourceItem.Header),
-            Icon = CloneRibbonMenuContent(sourceItem.Icon),
-            IsEnabled = sourceItem.IsEnabled,
-            IsCheckable = sourceItem.IsCheckable,
-            IsChecked = sourceItem.IsChecked,
-            InputGestureText = sourceItem.InputGestureText
-        };
-
-        var keyTip = RibbonTooltip.GetKeyTip(sourceItem);
-        if (!string.IsNullOrWhiteSpace(keyTip))
-            RibbonTooltip.SetKeyTip(item, keyTip);
-
-        foreach (var child in sourceItem.Items)
-        {
-            if (CloneRibbonMenuItem(child) is { } childItem)
-                item.Items.Add(childItem);
-        }
-
-        item.SubmenuOpened += (_, _) =>
-        {
-            sourceItem.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent, sourceItem));
-            SynchronizeMenuItemState(sourceItem, item);
-        };
-
-        item.Click += (_, args) =>
-        {
-            if (!ReferenceEquals(args.OriginalSource, item))
-                return;
-
-            if (sourceItem.Items.Count > 0)
-                return;
-
-            sourceItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, sourceItem));
-        };
-
-        return item;
-    }
-
-    private static object? CloneRibbonMenuContent(object? content)
-    {
-        if (content is null or string)
-            return content;
-
-        if (content is Image image)
-        {
-            return new Image
-            {
-                Source = image.Source,
-                Width = image.Width,
-                Height = image.Height,
-                MaxWidth = image.MaxWidth,
-                MaxHeight = image.MaxHeight,
-                Stretch = image.Stretch,
-                SnapsToDevicePixels = image.SnapsToDevicePixels,
-                UseLayoutRounding = image.UseLayoutRounding,
-                Margin = image.Margin,
-                Opacity = image.Opacity
-            };
-        }
-
-        if (content is TextBlock textBlock)
-        {
-            return new TextBlock
-            {
-                Text = textBlock.Text,
-                FontSize = textBlock.FontSize,
-                FontWeight = textBlock.FontWeight,
-                FontStyle = textBlock.FontStyle,
-                Foreground = textBlock.Foreground,
-                Margin = textBlock.Margin,
-                VerticalAlignment = textBlock.VerticalAlignment,
-                HorizontalAlignment = textBlock.HorizontalAlignment
-            };
-        }
-
-        if (content is FrameworkElement element)
-        {
-            try
-            {
-                return System.Windows.Markup.XamlReader.Parse(System.Windows.Markup.XamlWriter.Save(element));
-            }
-            catch (InvalidOperationException)
-            {
-                return ExtractRibbonMenuText(element) ?? element.ToString();
-            }
-        }
-
-        return content;
-    }
-
-    private static string? ExtractRibbonMenuText(DependencyObject element)
-    {
-        if (element is TextBlock textBlock && !string.IsNullOrWhiteSpace(textBlock.Text))
-            return textBlock.Text;
-
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
-        {
-            if (ExtractRibbonMenuText(VisualTreeHelper.GetChild(element, i)) is { } text)
-                return text;
-        }
-
-        return null;
-    }
+        => RibbonMenuItemCloner.CloneRibbonMenuItem(source);
 
     private static void SynchronizeClonedMenuItems(ItemCollection sourceItems, ItemCollection clonedItems)
-    {
-        var clonedIndex = 0;
-        foreach (var source in sourceItems)
-        {
-            if (source is Separator)
-            {
-                clonedIndex++;
-                continue;
-            }
-
-            if (source is not MenuItem sourceItem)
-                continue;
-
-            while (clonedIndex < clonedItems.Count && clonedItems[clonedIndex] is not MenuItem)
-                clonedIndex++;
-
-            if (clonedIndex >= clonedItems.Count)
-                break;
-
-            if (clonedItems[clonedIndex] is MenuItem clonedItem)
-                SynchronizeMenuItemState(sourceItem, clonedItem);
-
-            clonedIndex++;
-        }
-    }
-
-    private static void SynchronizeMenuItemState(MenuItem sourceItem, MenuItem clonedItem)
-    {
-        clonedItem.IsEnabled = sourceItem.IsEnabled;
-        clonedItem.IsCheckable = sourceItem.IsCheckable;
-        clonedItem.IsChecked = sourceItem.IsChecked;
-        clonedItem.InputGestureText = sourceItem.InputGestureText;
-
-        SynchronizeClonedMenuItems(sourceItem.Items, clonedItem.Items);
-    }
+        => RibbonMenuItemCloner.SynchronizeClonedMenuItems(sourceItems, clonedItems);
 
     private static void InvokeRibbonButton(ButtonBase button)
     {

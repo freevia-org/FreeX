@@ -5,6 +5,80 @@ namespace Freexcel.App.Host;
 
 public sealed partial class SortDialog
 {
+    public static IReadOnlyList<SortKey> BuildSortKeys(IEnumerable<SortDialogLevel> levels) =>
+        SortDialogPlanner.BuildSortKeys(levels);
+
+    public static IReadOnlyList<SortDirectionChoice> BuildOrderChoices(string? sortOn) =>
+        SortDialogPlanner.BuildOrderChoices(sortOn);
+
+    public static IReadOnlyList<SortDialogLevel> AddLevel(
+        IEnumerable<SortDialogLevel> levels,
+        uint columnOffset = 0,
+        bool ascending = true) =>
+        SortDialogPlanner.AddLevel(levels, columnOffset, ascending);
+
+    public static IReadOnlyList<SortDialogLevel> RemoveLevel(IEnumerable<SortDialogLevel> levels, int index) =>
+        SortDialogPlanner.RemoveLevel(levels, index);
+
+    public static IReadOnlyList<SortDialogLevel> CopyLevel(IEnumerable<SortDialogLevel> levels, int index) =>
+        SortDialogPlanner.CopyLevel(levels, index);
+
+    public static IReadOnlyList<SortDialogLevel> MoveLevel(IEnumerable<SortDialogLevel> levels, int index, int direction) =>
+        SortDialogPlanner.MoveLevel(levels, index, direction);
+
+    public static IReadOnlyList<SortDialogLevel> UpdateLevel(
+        IEnumerable<SortDialogLevel> levels,
+        int index,
+        uint columnOffset,
+        bool ascending) =>
+        SortDialogPlanner.UpdateLevel(levels, index, columnOffset, ascending);
+
+    public static IReadOnlyList<SortColumnChoice> BuildColumnChoices(GridRange range) =>
+        SortDialogPlanner.BuildColumnChoices(range);
+
+    public static IReadOnlyList<SortColumnChoice> BuildColumnChoices(Sheet? sheet, GridRange range, bool hasHeaders) =>
+        SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders);
+
+    public static IReadOnlyList<SortColumnChoice> BuildRowChoices(GridRange range) =>
+        SortDialogPlanner.BuildRowChoices(range);
+
+    public static IReadOnlyList<SortColorChoice> BuildColorChoices(Workbook workbook, Sheet? sheet, GridRange range) =>
+        SortDialogPlanner.BuildColorChoices(workbook, sheet, range);
+
+    public static IReadOnlyList<SortColorChoice> BuildColorChoices(
+        Workbook workbook,
+        Sheet? sheet,
+        GridRange range,
+        Freexcel.Core.Commands.SortOn sortOn) =>
+        SortDialogPlanner.BuildColorChoices(workbook, sheet, range, sortOn);
+
+    public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders) =>
+        SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders);
+
+    private static IReadOnlyList<SortDialogLevel> NormalizeLevels(IEnumerable<SortDialogLevel>? levels) =>
+        SortDialogPlanner.NormalizeLevels(levels);
+
+    private static IReadOnlyList<SortColumnChoice> NormalizeColumnChoices(IEnumerable<SortColumnChoice>? choices) =>
+        SortDialogPlanner.NormalizeColumnChoices(choices);
+
+    private static IReadOnlyList<SortColorChoice> NormalizeColorChoices(IEnumerable<SortColorChoice>? choices) =>
+        SortDialogPlanner.NormalizeColorChoices(choices);
+}
+
+internal static class SortDialogPlanner
+{
+    private static readonly IReadOnlyList<SortDirectionChoice> DirectionChoices =
+    [
+        new("A to Z", true),
+        new("Z to A", false)
+    ];
+
+    private static readonly IReadOnlyList<SortDirectionChoice> ColorDirectionChoices =
+    [
+        new("On Top", true),
+        new("On Bottom", false)
+    ];
+
     public static IReadOnlyList<SortKey> BuildSortKeys(IEnumerable<SortDialogLevel> levels)
     {
         return NormalizeLevels(levels)
@@ -44,14 +118,7 @@ public sealed partial class SortDialog
     {
         var updated = NormalizeLevels(levels).ToList();
         if (index >= 0 && index < updated.Count)
-        {
-            var level = updated[index];
-            updated.Insert(index + 1, new SortDialogLevel(level.ColumnOffset, level.Ascending)
-            {
-                SortOn = level.SortOn,
-                TargetColor = level.TargetColor
-            });
-        }
+            updated.Insert(index + 1, CloneLevel(updated[index]));
 
         return updated;
     }
@@ -75,11 +142,14 @@ public sealed partial class SortDialog
     {
         var updated = NormalizeLevels(levels).ToList();
         if (index >= 0 && index < updated.Count)
+        {
+            var existing = updated[index];
             updated[index] = new SortDialogLevel(columnOffset, ascending)
             {
-                SortOn = updated[index].SortOn,
-                TargetColor = updated[index].TargetColor
+                SortOn = existing.SortOn,
+                TargetColor = existing.TargetColor
             };
+        }
 
         return updated;
     }
@@ -113,6 +183,20 @@ public sealed partial class SortDialog
         return choices.Count == 0 ? [new SortColumnChoice("Row 1", 0)] : choices;
     }
 
+    public static IReadOnlyList<SortColumnChoice> BuildActiveColumnChoices(
+        SortDialogOptions options,
+        bool hasHeaders,
+        IReadOnlyList<SortColumnChoice> columnChoices,
+        IReadOnlyList<SortColumnChoice> genericColumnChoices,
+        IReadOnlyList<SortColumnChoice> rowChoices)
+    {
+        return options.LeftToRight
+            ? rowChoices
+            : hasHeaders
+            ? columnChoices
+            : genericColumnChoices;
+    }
+
     public static IReadOnlyList<SortColorChoice> BuildColorChoices(Workbook workbook, Sheet? sheet, GridRange range)
     {
         if (sheet is null)
@@ -121,15 +205,14 @@ public sealed partial class SortDialog
         var colors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var address in range.AllCells())
         {
-            var cell = sheet.GetCell(address);
-            var style = workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
+            var style = GetCellStyle(workbook, sheet, address);
             if (style.FillColor is { } fillColor)
                 colors.Add(ColorInputParser.FormatHexColor(fillColor));
             if (style.FontColor is { } fontColor)
                 colors.Add(ColorInputParser.FormatHexColor(fontColor));
         }
 
-        return [new SortColorChoice(""), .. colors.Select(color => new SortColorChoice(color))];
+        return BuildColorChoices(colors);
     }
 
     public static IReadOnlyList<SortColorChoice> BuildColorChoices(
@@ -144,8 +227,7 @@ public sealed partial class SortDialog
         var colors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var address in range.AllCells())
         {
-            var cell = sheet.GetCell(address);
-            var style = workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
+            var style = GetCellStyle(workbook, sheet, address);
             var color = sortOn == Freexcel.Core.Commands.SortOn.FontColor
                 ? style.FontColor
                 : style.FillColor;
@@ -153,7 +235,20 @@ public sealed partial class SortDialog
                 colors.Add(ColorInputParser.FormatHexColor(resolvedColor));
         }
 
-        return [new SortColorChoice(""), .. colors.Select(color => new SortColorChoice(color))];
+        return BuildColorChoices(colors);
+    }
+
+    public static IReadOnlyList<SortColorChoice> BuildColorChoicesForSortOn(
+        string? sortOn,
+        IReadOnlyList<SortColorChoice> cellColorChoices,
+        IReadOnlyList<SortColorChoice> fontColorChoices)
+    {
+        return SortOnFromLabel(sortOn) switch
+        {
+            Freexcel.Core.Commands.SortOn.CellColor => cellColorChoices,
+            Freexcel.Core.Commands.SortOn.FontColor => fontColorChoices,
+            _ => [new SortColorChoice("")]
+        };
     }
 
     public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)
@@ -166,23 +261,47 @@ public sealed partial class SortDialog
             range.End);
     }
 
-    private static IReadOnlyList<SortDialogLevel> NormalizeLevels(IEnumerable<SortDialogLevel>? levels)
+    public static Freexcel.Core.Commands.SortOn SortOnFromLabel(string? label) =>
+        label switch
+        {
+            "Cell Color" => Freexcel.Core.Commands.SortOn.CellColor,
+            "Font Color" => Freexcel.Core.Commands.SortOn.FontColor,
+            _ => Freexcel.Core.Commands.SortOn.CellValues
+        };
+
+    public static IReadOnlyList<SortDialogLevel> NormalizeLevels(IEnumerable<SortDialogLevel>? levels)
     {
         var normalized = levels?.ToList() ?? [];
         return normalized.Count == 0 ? [new SortDialogLevel(0, true)] : normalized;
     }
 
-    private static IReadOnlyList<SortColumnChoice> NormalizeColumnChoices(IEnumerable<SortColumnChoice>? choices)
+    public static IReadOnlyList<SortColumnChoice> NormalizeColumnChoices(IEnumerable<SortColumnChoice>? choices)
     {
         var normalized = choices?.ToList() ?? [];
         return normalized.Count == 0 ? [new SortColumnChoice("Column A", 0)] : normalized;
     }
 
-    private static IReadOnlyList<SortColorChoice> NormalizeColorChoices(IEnumerable<SortColorChoice>? choices)
+    public static IReadOnlyList<SortColorChoice> NormalizeColorChoices(IEnumerable<SortColorChoice>? choices)
     {
         var normalized = choices?.ToList() ?? [];
         return normalized.Count == 0 ? [new SortColorChoice("")] : normalized;
     }
+
+    private static SortDialogLevel CloneLevel(SortDialogLevel level) =>
+        new(level.ColumnOffset, level.Ascending)
+        {
+            SortOn = level.SortOn,
+            TargetColor = level.TargetColor
+        };
+
+    private static CellStyle GetCellStyle(Workbook workbook, Sheet sheet, CellAddress address)
+    {
+        var cell = sheet.GetCell(address);
+        return workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
+    }
+
+    private static IReadOnlyList<SortColorChoice> BuildColorChoices(SortedSet<string> colors) =>
+        [new SortColorChoice(""), .. colors.Select(color => new SortColorChoice(color))];
 
     private static string GetHeaderLabel(Sheet sheet, GridRange range, uint offset, string fallbackColumnName)
     {
@@ -198,14 +317,6 @@ public sealed partial class SortDialog
 
         return string.IsNullOrWhiteSpace(text) ? $"Column {fallbackColumnName}" : text;
     }
-
-    private static Freexcel.Core.Commands.SortOn SortOnFromLabel(string? label) =>
-        label switch
-        {
-            "Cell Color" => Freexcel.Core.Commands.SortOn.CellColor,
-            "Font Color" => Freexcel.Core.Commands.SortOn.FontColor,
-            _ => Freexcel.Core.Commands.SortOn.CellValues
-        };
 
     private static CellColor? TargetColorFromText(string? text, Freexcel.Core.Commands.SortOn sortOn)
     {

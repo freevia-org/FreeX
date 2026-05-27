@@ -31,14 +31,16 @@ public sealed partial class InsertChartDialog : Window
         _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
         _recommendedGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
         _recommendedGallery.SelectedIndex = 0;
+        _recommendedGallery.MouseDoubleClick += (_, _) => Accept();
+        _subtypeGallery.MouseDoubleClick += (_, _) => Accept();
         tabs.Items.Add(new TabItem
         {
-            Header = "Recommended Charts",
+            Header = "_Recommended Charts",
             Content = CreateRecommendedChartsPanel(_recommendedGallery)
         });
         tabs.Items.Add(new TabItem
         {
-            Header = "All Charts",
+            Header = "_All Charts",
             Content = CreateAllChartsPanel(_categoryList, _subtypeGallery)
         });
         DockPanel.SetDock(tabs, Dock.Top);

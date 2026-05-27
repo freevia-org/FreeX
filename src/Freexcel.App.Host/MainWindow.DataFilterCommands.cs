@@ -7,6 +7,10 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
+    private GridRange? _lastAutoFilterRange;
+    private Func<GridRange, IWorkbookCommand>? _lastAutoFilterCommandFactory;
+    private string _lastAutoFilterCommandTitle = "Reapply Filter";
+
     private void SortAscButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -84,6 +88,44 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private bool TryExecuteRememberedAutoFilterCommand(
+        string title,
+        GridRange range,
+        Func<GridRange, IWorkbookCommand> createCommand)
+    {
+        if (!TryExecuteRepeatableCurrentRangeCommand(title, range, createCommand))
+            return false;
+
+        _lastAutoFilterRange = range;
+        _lastAutoFilterCommandTitle = title;
+        _lastAutoFilterCommandFactory = createCommand;
+        return true;
+    }
+
+    private void ReapplyAutoFilter()
+    {
+        if (_lastAutoFilterRange is not { } range || _lastAutoFilterCommandFactory is null)
+        {
+            MessageBox.Show("Apply a filter before using Reapply.", "Reapply Filter", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                _lastAutoFilterCommandTitle,
+                range,
+                _lastAutoFilterCommandFactory))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ClearRememberedAutoFilterCommand()
+    {
+        _lastAutoFilterRange = null;
+        _lastAutoFilterCommandFactory = null;
+        _lastAutoFilterCommandTitle = "Reapply Filter";
+    }
+
     private bool ApplyAutoFilterDialogResult(GridRange range, uint filterColOffset, AutoFilterDialogResult result, string title)
     {
         if (result.Action == AutoFilterDialogAction.ClearFilter)
@@ -93,12 +135,13 @@ public partial class MainWindow
                     range,
                     currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: [])))
                 return false;
+            ClearRememberedAutoFilterCommand();
             return true;
         }
 
         if (result.SortDirection != AutoFilterSortDirection.None)
         {
-            if (!TryExecuteRepeatableCurrentRangeCommand(
+            if (!TryExecuteRememberedAutoFilterCommand(
                     "Sort",
                     range,
                     currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, result.SortDirection == AutoFilterSortDirection.Ascending)))
@@ -116,7 +159,7 @@ public partial class MainWindow
                 AutoFilterColorFilterKind.NoFill => "Filter by No Fill",
                 _ => "Filter by Cell Color"
             };
-            if (!TryExecuteRepeatableCurrentRangeCommand(
+            if (!TryExecuteRememberedAutoFilterCommand(
                     label,
                     range,
                     currentRange => colorFilter.Kind switch
@@ -146,7 +189,7 @@ public partial class MainWindow
                 return false;
             }
 
-            if (!TryExecuteRepeatableCurrentRangeCommand(
+            if (!TryExecuteRememberedAutoFilterCommand(
                     "Filter",
                     range,
                     currentRange => percent
@@ -159,7 +202,7 @@ public partial class MainWindow
         if (!string.IsNullOrWhiteSpace(filterText) &&
             FilterInputParser.TryParseAverage(value, out var aboveAverage))
         {
-            if (!TryExecuteRepeatableCurrentRangeCommand(
+            if (!TryExecuteRememberedAutoFilterCommand(
                     "Filter",
                     range,
                     currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset, aboveAverage)))
@@ -195,7 +238,7 @@ public partial class MainWindow
                 return false;
             }
 
-            if (!TryExecuteRepeatableCurrentRangeCommand(
+            if (!TryExecuteRememberedAutoFilterCommand(
                     "Filter",
                     range,
                     currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset, criterion)))
@@ -213,7 +256,7 @@ public partial class MainWindow
         if (allowedValues.Count == 0)
             allowedValues = result.SelectedValues;
 
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!TryExecuteRememberedAutoFilterCommand(
                 "Filter",
                 range,
                 currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)))
@@ -255,7 +298,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            MessageBox.Show("Select a range first.", "Data Validation");
+            ShowOwnedMessage("Select a range first.", "Data Validation", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -263,7 +306,8 @@ public partial class MainWindow
         var existingRule = sheet is null
             ? null
             : DataValidationService.GetApplicable(sheet, range.Start).FirstOrDefault();
-        var dlg = new DataValidationDialog(existingRule)
+        DataValidationDialog? dlg = null;
+        dlg = new DataValidationDialog(existingRule, request => ApplyDataValidationRangeSelection(dlg, request))
         {
             Owner = this,
             SelectionSource = DataValidationService.FormatListSourceRange(range, sheet?.Name, sheet?.Name)
@@ -300,6 +344,36 @@ public partial class MainWindow
                 }))
             return;
         UpdateViewport();
+    }
+
+    private void ApplyDataValidationRangeSelection(
+        DataValidationDialog? dialog,
+        DataValidationRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var formulaText = DataValidationService.FormatListSourceRange(
+            selectedRange,
+            sheet?.Name,
+            sheet?.Name);
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, formulaText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private IWorkbookCommand CreateDataValidationCommand(
@@ -372,13 +446,19 @@ public partial class MainWindow
                 range,
                 currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset: 0, allowedValues: [])))
             return;
+        ClearRememberedAutoFilterCommand();
         UpdateViewport();
     }
 
     private void NamedRangesButton_Click(object sender, RoutedEventArgs e)
     {
         var initialRange = SheetGrid.SelectedRange;
-        var dlg = new NamedRangeDialog(_workbook, _commandBus, initialRange)
+        NamedRangeDialog? dlg = null;
+        dlg = new NamedRangeDialog(
+            _workbook,
+            _commandBus,
+            initialRange,
+            request => ApplyNamedRangeSelection(dlg, request))
         {
             Owner = this
         };

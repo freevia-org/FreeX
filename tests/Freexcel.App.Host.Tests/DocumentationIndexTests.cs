@@ -1,4 +1,6 @@
 using System.IO;
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 
@@ -24,6 +26,7 @@ public sealed partial class DocumentationIndexTests
         readme.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
         readme.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
         readme.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
+        readme.Should().Contain("[XLSX_TEST_CORPUS_PLAN.md](XLSX_TEST_CORPUS_PLAN.md)");
         File.Exists(Path.Combine(docsDirectory, "COMMAND_INVENTORY.json")).Should().BeTrue();
         ProjectStatusReportLink().Matches(readme).Should().NotBeEmpty();
     }
@@ -40,9 +43,70 @@ public sealed partial class DocumentationIndexTests
         report.Should().Contain("[OUTSTANDING_BUILD.md](OUTSTANDING_BUILD.md)");
         report.Should().Contain("[NEXT_PHASES_PLAN.md](NEXT_PHASES_PLAN.md)");
         report.Should().Contain("[COMMAND_SURFACE_PARITY.md](COMMAND_SURFACE_PARITY.md)");
+        report.Should().Contain("[MENU_TOOLBAR_PARITY.md](MENU_TOOLBAR_PARITY.md)");
         report.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
         report.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
         report.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
+    }
+
+    [Fact]
+    public void NewestStatusReport_RepositoryMetricsMatchTrackedSources()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var repositoryRoot = Directory.GetParent(docsDirectory)!.FullName;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var report = File.ReadAllText(newestStatusReport);
+        var metrics = ReadMetricTable(report);
+        var trackedFiles = RunGitLines(repositoryRoot, "ls-files");
+        var sourceFiles = trackedFiles.Where(path => path.StartsWith("src/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
+        var testFiles = trackedFiles.Where(path => path.StartsWith("tests/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
+        var docsFiles = trackedFiles.Where(path => path.StartsWith("docs/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal)).ToArray();
+
+        metrics["Tracked files"].Should().Be(trackedFiles.Count);
+        metrics["C# source files under `src/`"].Should().Be(sourceFiles.Length);
+        metrics["C# test files under `tests/`"].Should().Be(testFiles.Length);
+        metrics["Markdown docs under `docs/`"].Should().Be(docsFiles.Length);
+        metrics["Source lines under `src/`"].Should().Be(CountLines(repositoryRoot, sourceFiles));
+        metrics["Test lines under `tests/`"].Should().Be(CountLines(repositoryRoot, testFiles));
+        metrics["Documentation lines under `docs/`"].Should().Be(CountLines(repositoryRoot, docsFiles));
+        metrics["Test methods marked `[Fact]` / `[Theory]`"].Should().Be(
+            testFiles.Sum(file => FactOrTheoryAttribute().Matches(File.ReadAllText(Path.Combine(repositoryRoot, ToPlatformPath(file)))).Count));
+    }
+
+    [Fact]
+    public void NewestStatusReport_KeyOpenItemsMatchOutstandingBuildHighestPriorityItems()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var outstandingBuild = File.ReadAllLines(Path.Combine(docsDirectory, "OUTSTANDING_BUILD.md"));
+        var report = File.ReadAllLines(newestStatusReport);
+
+        ReadNumberedBoldItems(outstandingBuild, "## Highest Priority Outstanding Work")
+            .Take(5)
+            .Should()
+            .Equal(ReadNumberedBoldItems(report, "## Remaining Outstanding Work"));
+    }
+
+    [Fact]
+    public void CurrentPlanningDocs_ConditionalFormattingRemainingScopeStaysAligned()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var outstandingBuild = File.ReadAllText(Path.Combine(docsDirectory, "OUTSTANDING_BUILD.md"));
+        var nextPhasesPlan = File.ReadAllText(Path.Combine(docsDirectory, "NEXT_PHASES_PLAN.md"));
+        var report = File.ReadAllText(newestStatusReport);
+
+        outstandingBuild.Should().Contain("Remaining: any deeper color-scale XLSX edge semantics.");
+        nextPhasesPlan.Should().Contain("Remaining polish is any deeper color-scale XLSX edge semantics as new gaps are found.");
+        report.Should().Contain("Phase 7D: Deeper color-scale XLSX edge semantics as new gaps are found");
+        nextPhasesPlan.Should().NotContain("rule-manager dialog matching Excel's full priority/manage-rules UX");
+        report.Should().NotContain("Remaining CF hardening beyond data bar/color scale advanced options");
     }
 
     [Fact]
@@ -69,6 +133,30 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void UiTestCatalog_XamlClickWiredControlCountMatchesMainWindow()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+        var mainWindow = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var clickWiredCount = XamlClickHandler().Matches(mainWindow).Count;
+        var declaredCount = int.Parse(UiCatalogXamlClickWiredCount().Match(catalog).Groups["count"].Value);
+
+        declaredCount.Should().Be(clickWiredCount);
+    }
+
+    [Fact]
+    public void UiTestCatalog_UsesCanonicalBranchNeutralMetadata()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+
+        catalog.Should().Contain("Canonical path: `docs/UI_TEST_CATALOG.md`");
+        catalog.Should().NotContain("Last updated:");
+        catalog.Should().NotContain("Branch:");
+        catalog.Should().NotContain("Current catalog branch:");
+    }
+
+    [Fact]
     public void CurrentPlanningDocs_LocalMarkdownLinksResolve()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
@@ -87,7 +175,8 @@ public sealed partial class DocumentationIndexTests
             "COMMAND_SURFACE_PARITY.md",
             "MENU_TOOLBAR_PARITY.md",
             "FIDELITY_CONTRACT.md",
-            "XLSX_CORPUS_REPORT.md"
+            "XLSX_CORPUS_REPORT.md",
+            "XLSX_TEST_CORPUS_PLAN.md"
         };
 
         foreach (var doc in currentDocs)
@@ -118,12 +207,77 @@ public sealed partial class DocumentationIndexTests
         }
     }
 
+    private static IReadOnlyDictionary<string, int> ReadMetricTable(string report) =>
+        report
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => MetricTableRow().Match(line))
+            .Where(match => match.Success)
+            .ToDictionary(
+                match => match.Groups["metric"].Value,
+                match => int.Parse(match.Groups["count"].Value.Replace(",", string.Empty), CultureInfo.InvariantCulture),
+                StringComparer.Ordinal);
+
+    private static IReadOnlyList<string> RunGitLines(string workingDirectory, string arguments)
+    {
+        using var process = Process.Start(new ProcessStartInfo("git", arguments)
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        }) ?? throw new InvalidOperationException("Could not start git.");
+
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        process.ExitCode.Should().Be(0, error);
+        return output
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .ToArray();
+    }
+
+    private static int CountLines(string repositoryRoot, IEnumerable<string> relativePaths) =>
+        relativePaths.Sum(file => File.ReadLines(Path.Combine(repositoryRoot, ToPlatformPath(file))).Count());
+
+    private static string ToPlatformPath(string path) =>
+        path.Replace('/', Path.DirectorySeparatorChar);
+
+    private static IReadOnlyList<string> ReadNumberedBoldItems(IReadOnlyList<string> lines, string sectionHeading)
+    {
+        var sectionStart = Array.IndexOf(lines.ToArray(), sectionHeading);
+        sectionStart.Should().BeGreaterThanOrEqualTo(0);
+
+        return lines
+            .Skip(sectionStart + 1)
+            .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal))
+            .Select(line => NumberedBoldItem().Match(line))
+            .Where(match => match.Success)
+            .Select(match => match.Groups["title"].Value)
+            .ToArray();
+    }
+
     [GeneratedRegex(@"\[PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\]\(PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\)")]
     private static partial Regex ProjectStatusReportLink();
 
     [GeneratedRegex(@"(?<!!)\[[^\]]+\]\((?<target>[^)]+)\)")]
     private static partial Regex MarkdownLink();
 
+    [GeneratedRegex(@"^\d+\. \*\*(?<title>[^*]+)\*\*")]
+    private static partial Regex NumberedBoldItem();
+
+    [GeneratedRegex(@"^\| (?<metric>[^|]+) \| (?<count>[\d,]+) \|$")]
+    private static partial Regex MetricTableRow();
+
+    [GeneratedRegex(@"\[(?:Fact|Theory)\]")]
+    private static partial Regex FactOrTheoryAttribute();
+
     [GeneratedRegex(@"\| Existing UI evidence screenshots \| (?<count>\d+) \|")]
     private static partial Regex UiEvidenceScreenshotCount();
+
+    [GeneratedRegex(@"\| XAML click-wired controls \| (?<count>\d+) \|")]
+    private static partial Regex UiCatalogXamlClickWiredCount();
+
+    [GeneratedRegex(@"Click=""[^""]+""")]
+    private static partial Regex XamlClickHandler();
 }

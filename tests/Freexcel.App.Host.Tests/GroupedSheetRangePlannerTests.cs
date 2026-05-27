@@ -60,10 +60,13 @@ public sealed class GroupedSheetRangePlannerTests
             RuleType = CfRuleType.IconSet,
             MinThresholdType = CfThresholdType.Number,
             MinThresholdValue = "5",
+            MinThresholdGreaterThanOrEqual = false,
             MidThresholdType = CfThresholdType.Percent,
             MidThresholdValue = "50",
+            MidThresholdGreaterThanOrEqual = true,
             MaxThresholdType = CfThresholdType.Formula,
             MaxThresholdValue = "A1",
+            MaxThresholdGreaterThanOrEqual = false,
             DataBarMinThresholdType = CfThresholdType.Percentile,
             DataBarMinThresholdValue = "10",
             DataBarMaxThresholdType = CfThresholdType.Number,
@@ -119,9 +122,10 @@ public sealed class GroupedSheetRangePlannerTests
     public void CloneDataValidationForSheet_RemapsRangeAndCopiesPromptAndErrorFields()
     {
         var targetSheet = SheetId.New();
+        var sourceSheet = SheetId.New();
         var source = new DataValidation
         {
-            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 2, 2), new CellAddress(SheetId.New(), 6, 2)),
+            AppliesTo = new GridRange(new CellAddress(sourceSheet, 2, 2), new CellAddress(sourceSheet, 6, 2)),
             Type = DvType.WholeNumber,
             Operator = DvOperator.Between,
             Formula1 = "1",
@@ -136,12 +140,14 @@ public sealed class GroupedSheetRangePlannerTests
             PromptTitle = "Value",
             PromptMessage = "Enter a whole number"
         };
+        source.AdditionalRanges.Add(new GridRange(new CellAddress(sourceSheet, 8, 4), new CellAddress(sourceSheet, 10, 4)));
 
         var clone = GroupedSheetRangePlanner.CloneDataValidationForSheet(source, targetSheet);
 
         clone.Should().NotBeSameAs(source);
         clone.AppliesTo.Start.Sheet.Should().Be(targetSheet);
         clone.AppliesTo.End.Sheet.Should().Be(targetSheet);
+        clone.AdditionalRanges.Should().ContainSingle().Which.Start.Sheet.Should().Be(targetSheet);
         clone.Type.Should().Be(DvType.WholeNumber);
         clone.Operator.Should().Be(DvOperator.Between);
         clone.Formula1.Should().Be("1");

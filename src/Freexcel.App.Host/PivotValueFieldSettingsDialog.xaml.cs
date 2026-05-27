@@ -7,40 +7,6 @@ namespace Freexcel.App.Host;
 
 public partial class PivotValueFieldSettingsDialog : Window
 {
-    private const string AutomaticBaseFieldLabel = "(Automatic)";
-
-    private static readonly (string Label, string Value)[] SummaryFunctions =
-    [
-        ("Sum", "sum"),
-        ("Count", "count"),
-        ("Average", "average"),
-        ("Max", "max"),
-        ("Min", "min"),
-        ("Product", "product"),
-        ("Count Numbers", "countNums"),
-        ("StdDev", "stdDev"),
-        ("StdDevp", "stdDevP"),
-        ("Var", "var"),
-        ("Varp", "varP")
-    ];
-
-    private static readonly (string Label, PivotShowValuesAs Value)[] ShowValuesAsOptions =
-    [
-        ("No Calculation", PivotShowValuesAs.None),
-        ("% of Grand Total", PivotShowValuesAs.PercentOfGrandTotal),
-        ("% of Row Total", PivotShowValuesAs.PercentOfRowTotal),
-        ("% of Column Total", PivotShowValuesAs.PercentOfColumnTotal),
-        ("Running Total In", PivotShowValuesAs.RunningTotalIn),
-        ("Difference From", PivotShowValuesAs.DifferenceFrom),
-        ("% Difference From", PivotShowValuesAs.PercentDifferenceFrom),
-        ("Rank Smallest to Largest", PivotShowValuesAs.RankSmallest),
-        ("Rank Largest to Smallest", PivotShowValuesAs.RankLargest),
-        ("Index", PivotShowValuesAs.Index),
-        ("% of Parent Row Total", PivotShowValuesAs.PercentOfParentRowTotal),
-        ("% of Parent Column Total", PivotShowValuesAs.PercentOfParentColumnTotal),
-        ("% of Parent Total", PivotShowValuesAs.PercentOfParentTotal)
-    ];
-
     private readonly PivotDataFieldModel _initialField;
     private readonly IReadOnlyList<string> _sourceHeaders;
 
@@ -60,26 +26,18 @@ public partial class PivotValueFieldSettingsDialog : Window
     private void LoadOptions(PivotDataFieldModel field)
     {
         CustomNameBox.Text = field.Name;
-        SummaryFunctionBox.ItemsSource = SummaryFunctions.Select(item => item.Label);
-        SummaryFunctionBox.SelectedIndex = Math.Max(0, Array.FindIndex(
-            SummaryFunctions,
-            item => string.Equals(item.Value, field.SummaryFunction, StringComparison.OrdinalIgnoreCase)));
+        SummaryFunctionBox.ItemsSource = PivotValueFieldSettingsDialogPlanner.SummaryFunctions.Select(item => item.Label);
+        SummaryFunctionBox.SelectedIndex = PivotValueFieldSettingsDialogPlanner.FindSummaryFunctionIndex(field.SummaryFunction);
 
-        ShowValuesAsBox.ItemsSource = ShowValuesAsOptions.Select(item => item.Label);
-        ShowValuesAsBox.SelectedIndex = Math.Max(0, Array.FindIndex(
-            ShowValuesAsOptions,
-            item => item.Value == field.ShowValuesAs));
+        ShowValuesAsBox.ItemsSource = PivotValueFieldSettingsDialogPlanner.ShowValuesAsOptions.Select(item => item.Label);
+        ShowValuesAsBox.SelectedIndex = PivotValueFieldSettingsDialogPlanner.FindShowValuesAsIndex(field.ShowValuesAs);
 
-        BaseFieldBox.ItemsSource = new[] { AutomaticBaseFieldLabel }.Concat(_sourceHeaders).ToList();
-        BaseFieldBox.SelectedIndex = field.BaseFieldIndex is { } baseFieldIndex
-            && baseFieldIndex >= 0
-            && baseFieldIndex < _sourceHeaders.Count
-                ? baseFieldIndex + 1
-                : 0;
+        BaseFieldBox.ItemsSource = new[] { PivotValueFieldSettingsDialogPlanner.AutomaticBaseFieldLabel }.Concat(_sourceHeaders).ToList();
+        BaseFieldBox.SelectedIndex = PivotValueFieldSettingsDialogPlanner.FindBaseFieldIndex(field.BaseFieldIndex, _sourceHeaders.Count);
         BaseItemBox.Text = field.BaseItem ?? "";
 
         NumberFormatPresetBox.ItemsSource = PivotValueFieldSettingsInputParser.NumberFormatPresets.Select(preset => preset.Label);
-        NumberFormatPresetBox.SelectedIndex = FindNumberFormatPresetIndex(field.NumberFormatId);
+        NumberFormatPresetBox.SelectedIndex = PivotValueFieldSettingsDialogPlanner.FindNumberFormatPresetIndex(field.NumberFormatId);
         NumberFormatBox.Text = field.NumberFormatId?.ToString(CultureInfo.InvariantCulture) ?? "";
         NumberFormatCodeBox.Text = field.NumberFormatCode ?? "";
         UpdateBaseFieldState();
@@ -98,13 +56,9 @@ public partial class PivotValueFieldSettingsDialog : Window
         var numberFormatCode = PivotValueFieldSettingsInputParser.ResolveOptionalNumberFormatCode(NumberFormatCodeBox.Text);
         numberFormatId = PivotValueFieldSettingsInputParser.ResolveNumberFormatIdForCode(numberFormatId, numberFormatCode);
 
-        var summaryFunction = SummaryFunctions[Math.Max(0, SummaryFunctionBox.SelectedIndex)].Value;
-        var showValuesAs = ShowValuesAsOptions[Math.Max(0, ShowValuesAsBox.SelectedIndex)].Value;
-        var usesBaseField = ShowValuesAsRequiresBaseField(showValuesAs);
-        int? baseFieldIndex = usesBaseField && BaseFieldBox.SelectedIndex > 0 ? BaseFieldBox.SelectedIndex - 1 : null;
-        var baseItem = !usesBaseField || string.IsNullOrWhiteSpace(BaseItemBox.Text)
-            ? null
-            : BaseItemBox.Text.Trim();
+        var showValuesAs = PivotValueFieldSettingsDialogPlanner.ShowValuesAsFromIndex(ShowValuesAsBox.SelectedIndex);
+        var baseFieldIndex = PivotValueFieldSettingsDialogPlanner.ResolveBaseFieldIndex(showValuesAs, BaseFieldBox.SelectedIndex);
+        var baseItem = PivotValueFieldSettingsDialogPlanner.ResolveBaseItem(showValuesAs, BaseItemBox.Text);
         if (!TryValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem, out var showValuesAsError))
         {
             MessageBox.Show(this, showValuesAsError, "Value Field Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -112,20 +66,15 @@ public partial class PivotValueFieldSettingsDialog : Window
             return;
         }
 
-        var name = string.IsNullOrWhiteSpace(CustomNameBox.Text)
-            ? _initialField.Name
-            : CustomNameBox.Text.Trim();
-
-        ResultDataField = _initialField with
-        {
-            Name = name,
-            SummaryFunction = summaryFunction,
-            NumberFormatId = numberFormatId,
-            NumberFormatCode = numberFormatCode,
-            ShowValuesAs = showValuesAs,
-            BaseFieldIndex = baseFieldIndex,
-            BaseItem = baseItem
-        };
+        ResultDataField = PivotValueFieldSettingsDialogPlanner.CreateResult(
+            _initialField,
+            CustomNameBox.Text,
+            SummaryFunctionBox.SelectedIndex,
+            ShowValuesAsBox.SelectedIndex,
+            BaseFieldBox.SelectedIndex,
+            BaseItemBox.Text,
+            numberFormatId,
+            numberFormatCode);
         DialogResult = true;
     }
 
@@ -220,7 +169,7 @@ public partial class PivotValueFieldSettingsDialog : Window
         if (BaseFieldPanel is null || BaseItemPanel is null || ShowValuesAsBox is null)
             return;
 
-        var showValuesAs = ShowValuesAsOptions[Math.Max(0, ShowValuesAsBox.SelectedIndex)].Value;
+        var showValuesAs = PivotValueFieldSettingsDialogPlanner.ShowValuesAsFromIndex(ShowValuesAsBox.SelectedIndex);
         var visible = ShowValuesAsRequiresBaseField(showValuesAs);
         var visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         BaseFieldPanel.Visibility = visibility;
@@ -234,42 +183,8 @@ public partial class PivotValueFieldSettingsDialog : Window
         int? baseFieldIndex,
         string? baseItem,
         out string? error)
-    {
-        error = null;
-        if (!ShowValuesAsRequiresBaseField(showValuesAs))
-            return true;
-
-        if (baseFieldIndex is null)
-        {
-            error = "Select a base field for this Show Values As calculation.";
-            return false;
-        }
-
-        if (showValuesAs is PivotShowValuesAs.DifferenceFrom or PivotShowValuesAs.PercentDifferenceFrom &&
-            string.IsNullOrWhiteSpace(baseItem))
-        {
-            error = "Enter a base item for this Show Values As calculation.";
-            return false;
-        }
-
-        return true;
-    }
+        => PivotValueFieldSettingsDialogPlanner.TryValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem, out error);
 
     public static bool ShowValuesAsRequiresBaseField(PivotShowValuesAs showValuesAs) =>
-        showValuesAs is PivotShowValuesAs.RunningTotalIn
-            or PivotShowValuesAs.DifferenceFrom
-            or PivotShowValuesAs.PercentDifferenceFrom
-            or PivotShowValuesAs.RankSmallest
-            or PivotShowValuesAs.RankLargest
-            or PivotShowValuesAs.PercentOfParentTotal;
-
-    private static int FindNumberFormatPresetIndex(int? numberFormatId)
-    {
-        var presets = PivotValueFieldSettingsInputParser.NumberFormatPresets;
-        var index = presets
-            .Select((preset, i) => (preset, i))
-            .FirstOrDefault(item => item.preset.NumberFormatId == numberFormatId)
-            .i;
-        return index < 0 ? 0 : index;
-    }
+        PivotValueFieldSettingsDialogPlanner.ShowValuesAsRequiresBaseField(showValuesAs);
 }

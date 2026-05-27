@@ -23,6 +23,14 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_PreservesPersistedExportOptionsWhenSavingGeneralOptions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml.cs"));
+
+        source.Should().Contain("PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage)");
+    }
+
+    [Fact]
     public void OptionsDialog_ExposesKeyboardAccessKeysForTabsFieldsAndButtons()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml"));
@@ -92,6 +100,22 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_ExposesStableAutomationMetadataForCategoriesAndActions()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml"));
+
+        xaml.Should().Contain("AutomationProperties.Name=\"Options categories\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"OptionsCategoryList\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Select a Freexcel Options category.\"");
+        xaml.Should().Contain("x:Name=\"OkBtn\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"OptionsOkButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Apply Freexcel Options changes.\"");
+        xaml.Should().Contain("x:Name=\"CancelBtn\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"OptionsCancelButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Close Freexcel Options without applying changes.\"");
+    }
+
+    [Fact]
     public void OptionsDialogInvalidGeneralInputs_ShowOwnedWarningsAndRefocusEditors()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml.cs"));
@@ -152,6 +176,41 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("DeferredCommandMessages.QuickAccessToolbarReset()");
         source.Should().Contain("DeferredCommandMessages.OfficeAddIns()");
         source.Should().Contain("DeferredCommandMessages.TrustCenterSettings()");
+    }
+
+    [Fact]
+    public void OptionsDialog_ExposesQuickAccessToolbarCustomizationAsDeferredAffordance()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml.cs"));
+        var deferredMessages = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DeferredCommandMessages.cs"));
+
+        xaml.Should().Contain("<ListBoxItem Content=\"_Quick Access Toolbar\"/>");
+        xaml.Should().Contain("x:Name=\"PanelQuickAccessToolbar\"");
+        xaml.Should().Contain("Customize the Quick Access Toolbar");
+        xaml.Should().Contain("Show Quick Access Toolbar _below the Ribbon");
+        xaml.Should().Contain("x:Name=\"QuickAccessResetButton\"");
+        xaml.Should().Contain("Click=\"QuickAccessResetButton_Click\"");
+
+        source.Should().Contain("PanelQuickAccessToolbar.Visibility = selected == \"_Quick Access Toolbar\" ? Visibility.Visible : Visibility.Collapsed;");
+        source.Should().Contain("DeferredCommandMessages.QuickAccessToolbarReset()");
+
+        deferredMessages.Should().Contain("Quick Access Toolbar customization is not persisted in Freexcel yet");
+        deferredMessages.Should().Contain("so there is no custom toolbar state to reset.");
+    }
+
+    [Fact]
+    public void OptionsDialog_MoveAfterEnterToggleControlsDirectionEnabledState()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml.cs"));
+
+        xaml.Should().Contain("Checked=\"MoveAfterEnter_Changed\"");
+        xaml.Should().Contain("Unchecked=\"MoveAfterEnter_Changed\"");
+        source.Should().Contain("UpdateAfterEnterDirectionState();");
+        source.Should().Contain("private void MoveAfterEnter_Changed(object sender, RoutedEventArgs e)");
+        source.Should().Contain("private void UpdateAfterEnterDirectionState()");
+        source.Should().Contain("OptAfterEnterDirection.IsEnabled = OptMoveAfterEnter.IsChecked == true;");
     }
 
     [Fact]

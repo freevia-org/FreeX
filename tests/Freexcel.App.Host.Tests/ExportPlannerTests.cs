@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Printing;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
@@ -9,6 +10,7 @@ using FluentAssertions;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
 using PdfSharp.Pdf;
+using PdfSharp.Pdf.Advanced;
 using PdfSharp.Pdf.IO;
 
 namespace Freexcel.App.Host.Tests;
@@ -391,6 +393,62 @@ public class ExportPlannerTests
     }
 
     [Theory]
+    [InlineData(0, 1)]
+    [InlineData(1, 2)]
+    [InlineData(2, 3)]
+    [InlineData(99, 1)]
+    public void ExportOptionsDialogPlanner_MapsBookmarkModeIndexes(int index, int expected)
+    {
+        ((int)ExportOptionsDialogPlanner.BookmarkModeFromIndex(index)).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(3, 3)]
+    [InlineData(99, 0)]
+    public void ExportOptionsDialogPlanner_MapsInitialViewIndexes(int index, int expected)
+    {
+        ((int)ExportOptionsDialogPlanner.InitialViewFromIndex(index)).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(99, 0)]
+    public void ExportOptionsDialogPlanner_MapsOpenModeIndexes(int index, int expected)
+    {
+        ((int)ExportOptionsDialogPlanner.OpenModeFromIndex(index)).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("From page must be less than or equal to To page.", "4", 1)]
+    [InlineData("Enter a valid page range.", "2", 1)]
+    [InlineData("Enter a valid page range.", "0", 0)]
+    [InlineData("Enter a valid page range.", "x", 0)]
+    public void ExportOptionsDialogPlanner_SelectsInvalidPageRangeFocusTarget(
+        string error,
+        string fromPageText,
+        int expected)
+    {
+        ((int)ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, fromPageText)).Should().Be(expected);
+    }
+
+    [Fact]
+    public void ExportOptionsDialogPlanningFacade_ForwardsPureWorkToPlanner()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("ExportOptionsDialogPlanner.CreateResult(");
+        source.Should().Contain("ExportOptionsDialogPlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex)");
+        source.Should().Contain("ExportOptionsDialogPlanner.InitialViewFromIndex(_initialViewBox.SelectedIndex)");
+        source.Should().Contain("ExportOptionsDialogPlanner.OpenModeFromIndex(_openModeBox.SelectedIndex)");
+        source.Should().Contain("ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text)");
+    }
+
+    [Theory]
     [InlineData(" uk_ua ", "uk-UA")]
     [InlineData("EN-us", "en-US")]
     [InlineData("not a culture", "en-US")]
@@ -430,7 +488,7 @@ public class ExportPlannerTests
             "Content = \"_Include document properties\"",
             "Content = \"_Open after publishing\"",
             "Content = \"_Ignore print areas\"",
-            "Content = \"Create _PDF bookmarks using sheet names\"",
+            "Content = \"Create _PDF bookmarks\"",
             "Content = \"_Bitmap text when fonts may not be embedded\"",
             "Content = \"PDF/_A compliant (not supported)\"",
             "Content = \"Document structure _tags (not supported)\"",
@@ -449,7 +507,39 @@ public class ExportPlannerTests
         })
             source.Should().Contain(expected);
 
+        source.Should().NotContain("Create _PDF bookmarks using sheet names");
         source.Should().NotContain("CSV _delimiter:");
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_ExposesPublishScopePageRangeQualityAndOpenAfterPublishControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("Content = \"Active _sheet(s)\", IsChecked = true");
+        source.Should().Contain("Content = \"Selected _range\"");
+        source.Should().Contain("Content = \"_Workbook\"");
+        source.Should().Contain("_selectionButton.IsEnabled = hasSelection;");
+        source.Should().Contain("Content = \"_All\", GroupName = \"PageRange\", IsChecked = true");
+        source.Should().Contain("Content = \"_Pages\", GroupName = \"PageRange\"");
+        source.Should().Contain("_allPagesButton.Checked += (_, _) => SetPageRangeFieldsEnabled(false);");
+        source.Should().Contain("_pagesRangeButton.Checked += (_, _) => SetPageRangeFieldsEnabled(true);");
+        source.Should().Contain("Content = \"_Standard\", IsChecked = true");
+        source.Should().Contain("Content = \"_Minimum size\"");
+        source.Should().Contain("Content = \"_Open after publishing\"");
+        source.Should().Contain("ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error)");
+        source.Should().Contain("_minimumSizeButton.IsChecked == true");
+        source.Should().Contain("_openAfterPublishBox.IsChecked == true");
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_DisabledChoicesExposeAutomationHelpText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetHelpText(_selectionButton, \"Select a cell range before exporting the selection.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_pdfABox, \"Freexcel's current PDF exporter cannot write PDF/A conformance metadata.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_structureTagsBox, \"Freexcel's current PDF exporter cannot write tagged PDF structure trees.\");");
     }
 
     [Fact]
@@ -475,8 +565,9 @@ public class ExportPlannerTests
         source.Should().Contain("_pagesRangeButton.IsChecked = true;");
         source.Should().Contain("var target = ResolveInvalidPageRangeInput(error);");
         source.Should().Contain("private TextBox ResolveInvalidPageRangeInput(string? error)");
-        source.Should().Contain("return _toPageBox;");
-        source.Should().Contain("return _fromPageBox;");
+        source.Should().Contain("ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text)");
+        source.Should().Contain("? _toPageBox");
+        source.Should().Contain(": _fromPageBox");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
@@ -494,6 +585,15 @@ public class ExportPlannerTests
         source.Should().Contain("_pdfLanguageBox.Focus();");
         source.Should().Contain("_pdfLanguageBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_pdfLanguageBox);");
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_SeedsPdfLanguageFromPersistedOption()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null)");
+        source.Should().Contain("_pdfLanguageBox.Text = ExportPlanner.NormalizePdfLanguage(initialPdfLanguage);");
     }
 
     [Theory]
@@ -532,18 +632,20 @@ public class ExportPlannerTests
     }
 
     [Theory]
-    [InlineData(null, 3, true, null)]
-    [InlineData(1, 3, true, null)]
-    [InlineData(3, 3, true, null)]
-    [InlineData(4, 3, false, "Page range starts after the last exportable page (3).")]
-    [InlineData(1, 0, false, "There are no exportable pages.")]
+    [InlineData(null, null, 3, true, null)]
+    [InlineData(1, 2, 3, true, null)]
+    [InlineData(3, 3, 3, true, null)]
+    [InlineData(4, 4, 3, false, "Page range starts after the last exportable page (3).")]
+    [InlineData(1, 4, 3, false, "Page range ends after the last exportable page (3).")]
+    [InlineData(1, 1, 0, false, "There are no exportable pages.")]
     public void TryValidatePageRange_ChecksRenderedPageCount(
         int? fromPage,
+        int? toPage,
         int pageCount,
         bool expectedSuccess,
         string? expectedError)
     {
-        var pageRange = fromPage is null ? null : new ExportPageRange(fromPage.Value, fromPage.Value);
+        var pageRange = fromPage is null || toPage is null ? null : new ExportPageRange(fromPage.Value, toPage.Value);
 
         var success = ExportPlanner.TryValidatePageRange(pageRange, pageCount, out var error);
 
@@ -933,6 +1035,217 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesLinkAnnotationsForPrintedWorksheetHyperlinks()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Hyperlink annotation export");
+            var sheet = workbook.AddSheet("Sheet1");
+            var webAddress = new CellAddress(sheet.Id, 1, 1);
+            var mailAddress = new CellAddress(sheet.Id, 2, 1);
+            var bareMailAddress = new CellAddress(sheet.Id, 3, 1);
+            var fileAddress = new CellAddress(sheet.Id, 4, 1);
+            var uncAddress = new CellAddress(sheet.Id, 5, 1);
+            sheet.SetCell(webAddress, new TextValue("Docs"));
+            sheet.SetCell(mailAddress, new TextValue("Mail"));
+            sheet.SetCell(bareMailAddress, new TextValue("Bare mail"));
+            sheet.SetCell(fileAddress, new TextValue("File"));
+            sheet.SetCell(uncAddress, new TextValue("Share"));
+            sheet.Hyperlinks[webAddress] = "https://example.com/freexcel";
+            sheet.Hyperlinks[mailAddress] = "mailto:review@example.com";
+            sheet.Hyperlinks[bareMailAddress] = "bare@example.com";
+            sheet.HyperlinkMetadata[bareMailAddress] = new HyperlinkMetadata(
+                HyperlinkTargetKind.EmailAddress);
+            sheet.Hyperlinks[fileAddress] = @"C:\Reports\Book 1.xlsx";
+            sheet.Hyperlinks[uncAddress] = @"\\server\share\book.xlsx";
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: false);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                ReadLinkAnnotationUris(pdf.Pages[0])
+                    .Should()
+                    .BeEquivalentTo(
+                        "https://example.com/freexcel",
+                        "mailto:review@example.com",
+                        "mailto:bare@example.com",
+                        "file:///C:/Reports/Book 1.xlsx",
+                        "file://server/share/book.xlsx");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_FiltersLinkAnnotationsToRequestedPageRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Hyperlink page range export");
+            var sheet = workbook.AddSheet("Sheet1");
+            var firstPageAddress = new CellAddress(sheet.Id, 1, 1);
+            var secondPageAddress = new CellAddress(sheet.Id, 1, 25);
+            sheet.SetCell(firstPageAddress, new TextValue("First"));
+            sheet.SetCell(secondPageAddress, new TextValue("Second"));
+            sheet.Hyperlinks[firstPageAddress] = "https://example.com/first";
+            sheet.Hyperlinks[secondPageAddress] = "https://example.com/second";
+            sheet.PrintArea = new GridRange(firstPageAddress, secondPageAddress);
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2));
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.PageCount.Should().Be(1);
+                ReadLinkAnnotationUris(pdf.Pages[0])
+                    .Should()
+                    .Equal("https://example.com/second");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesLinkAnnotationRectInPdfCoordinates()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = new FixedDocument();
+            var page = new FixedPage { Width = 200, Height = 100 };
+            page.Children.Add(new VisualHost
+            {
+                LinkOverlays =
+                [
+                    new PdfLinkOverlay(
+                        "https://example.com/rect",
+                        HyperlinkTargetKind.ExistingFileOrWebPage,
+                        X: 96,
+                        Y: 24,
+                        Width: 48,
+                        Height: 12)
+                ]
+            });
+            var content = new PageContent();
+            ((System.Windows.Markup.IAddChild)content).AddChild(page);
+            document.Pages.Add(content);
+            document.DocumentPaginator.PageSize = new Size(200, 100);
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                var rect = ReadLinkAnnotationRects(pdf.Pages[0]).Should().ContainSingle().Subject;
+                rect.Should().Equal(72, 48, 108, 57);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfLinkOverlayExtractor_IncludesRenderTranslationTransformsButNotLayoutTranslation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var page = new FixedPage { Width = 180, Height = 120 };
+            var container = new Canvas
+            {
+                LayoutTransform = new TranslateTransform(100, 200),
+                RenderTransform = new TranslateTransform(3, 4)
+            };
+            Canvas.SetLeft(container, 10);
+            Canvas.SetTop(container, 20);
+
+            var linkTransform = new TransformGroup();
+            linkTransform.Children.Add(new TranslateTransform(7, 8));
+            linkTransform.Children.Add(new MatrixTransform(new Matrix(1, 0, 0, 1, 11, 13)));
+            var panel = new Canvas
+            {
+                Margin = new System.Windows.Thickness(5, 6, 0, 0),
+                RenderTransform = linkTransform
+            };
+            var host = new VisualHost
+            {
+                LinkOverlays =
+                [
+                    new PdfLinkOverlay(
+                        "https://example.com/translated",
+                        HyperlinkTargetKind.ExistingFileOrWebPage,
+                        X: 2,
+                        Y: 3,
+                        Width: 20,
+                        Height: 10)
+                ]
+            };
+
+            panel.Children.Add(host);
+            container.Children.Add(panel);
+            page.Children.Add(container);
+
+            var overlay = PdfLinkOverlayExtractor.Extract(page).Should().ContainSingle().Subject;
+            overlay.Target.Should().Be("https://example.com/translated");
+            overlay.X.Should().Be(38);
+            overlay.Y.Should().Be(54);
+            overlay.Width.Should().Be(20);
+            overlay.Height.Should().Be(10);
+        });
+    }
+
+    [Fact]
+    public void PdfTextOverlayExtractor_IncludesRenderTranslationTransformsButNotLayoutTranslation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var page = new FixedPage { Width = 180, Height = 120 };
+            var container = new Canvas
+            {
+                LayoutTransform = new TranslateTransform(100, 200),
+                RenderTransform = new TranslateTransform(3, 4)
+            };
+            Canvas.SetLeft(container, 10);
+            Canvas.SetTop(container, 20);
+
+            var textTransform = new TransformGroup();
+            textTransform.Children.Add(new TranslateTransform(7, 8));
+            textTransform.Children.Add(new MatrixTransform(new Matrix(1, 0, 0, 1, 11, 13)));
+            var text = new TextBlock
+            {
+                Text = "Translated PDF Text",
+                Margin = new System.Windows.Thickness(5, 6, 0, 0),
+                RenderTransform = textTransform
+            };
+
+            container.Children.Add(text);
+            page.Children.Add(container);
+
+            var overlay = PdfTextOverlayExtractor.Extract(page).Should().ContainSingle().Subject;
+            overlay.Text.Should().Be("Translated PDF Text");
+            overlay.X.Should().Be(36);
+            overlay.Y.Should().Be(51);
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorksheetCells()
     {
         StaTestRunner.Run(() =>
@@ -963,6 +1276,87 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedHeaderFooter()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("HeaderFooterExport.xlsx");
+            var sheet = workbook.AddSheet("Summary");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Worksheet cell"));
+            sheet.PageHeader = new WorksheetHeaderFooter(
+                "Header left &[Page]",
+                "Header center &[Pages]",
+                "Header right &[File] &[Picture]");
+            sheet.PageFooter = new WorksheetHeaderFooter(
+                "Footer left &[Tab]",
+                "Footer center",
+                $"{new string('x', 300)} hidden-tail-token");
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Header left 1");
+                pdfText.Should().Contain("Header center 1");
+                pdfText.Should().Contain("Header right HeaderFooterExport.xlsx");
+                pdfText.Should().Contain("Footer left Summary");
+                pdfText.Should().Contain("Footer center");
+                pdfText.Should().Contain(new string('x', 10));
+                pdfText.Should().NotContain("hidden-tail-token");
+                pdfText.Should().NotContain("&[Picture]");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_DoesNotWriteHiddenClippedWorksheetCellText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Clipped worksheet export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(
+                new CellAddress(sheet.Id, 1, 1),
+                new TextValue("visible prefix worksheet text hidden-tail-token"));
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 12));
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("visible");
+                pdfText.Should().NotContain("hidden-tail-token");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorkbookCells()
     {
         StaTestRunner.Run(() =>
@@ -984,6 +1378,39 @@ public class ExportPlannerTests
 
                 var bytes = File.ReadAllBytes(path);
                 Encoding.ASCII.GetString(bytes).Should().Contain("Workbook Cell PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForDisplayedComments()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable displayed comments export");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Anchor"));
+            sheet.Comments[a1] = "Displayed Comment PDF Text";
+            sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+            var document = PrintRenderer.RenderWorkbook(workbook, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Displayed Comment PDF Text");
             }
             finally
             {
@@ -1065,6 +1492,63 @@ public class ExportPlannerTests
 
                 var bytes = File.ReadAllBytes(path);
                 Encoding.ASCII.GetString(bytes).Should().Contain("Nested Inline PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForInlineUiContainerText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateInlineUiContainerTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Inline UI PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForNestedInlineUiContainerText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateNestedInlineUiContainerTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Nested Inline UI PDF Text");
+                pdfText.Should().Contain(@"Inline Header\nInline Body");
+                pdfText.Should().Contain(@"First Item\nSecond Item");
+                pdfText.Should().NotContain("Hidden Inline UI Text");
             }
             finally
             {
@@ -1317,6 +1801,62 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForComboBoxSelectedItem()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateComboBoxDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                var pdfText = Encoding.ASCII.GetString(bytes);
+                pdfText.Should().Contain("Selected PDF Text");
+                pdfText.Should().NotContain("Unselected PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_DoesNotWriteSelectableTextOverlayForClosedComboBoxUnselectedItems()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateUnselectedComboBoxDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().NotContain("Hidden Dropdown PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForGlyphs()
     {
         StaTestRunner.Run(() =>
@@ -1505,6 +2045,29 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_RejectsPageRangeEndingAfterDocumentWithoutCreatingFile()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateDocument(pageCount: 2);
+
+            try
+            {
+                var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 3));
+
+                action.Should().Throw<InvalidOperationException>()
+                    .WithMessage("Page range ends after the last exportable page (2).");
+                File.Exists(path).Should().BeFalse();
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WithoutRequestedPropertiesOnlyWritesProducerMetadata()
     {
         StaTestRunner.Run(() =>
@@ -1657,6 +2220,64 @@ public class ExportPlannerTests
     private static FixedDocument CreateOnePageDocument()
         => CreateDocument(pageCount: 1);
 
+    private static IReadOnlyList<string> ReadLinkAnnotationUris(PdfPage page)
+    {
+        var annotations = page.Elements.GetArray("/Annots");
+        if (annotations is null)
+            return [];
+
+        var uris = new List<string>();
+        foreach (var item in annotations.Elements)
+        {
+            var annotation = ResolveDictionary(item);
+            if (annotation is null || annotation.Elements.GetName("/Subtype") != "/Link")
+                continue;
+
+            var action = annotation.Elements.GetDictionary("/A");
+            action.Should().NotBeNull();
+            action!.Elements.GetName("/S").Should().Be("/URI");
+            uris.Add(action.Elements.GetString("/URI"));
+        }
+
+        return uris;
+    }
+
+    private static IReadOnlyList<double[]> ReadLinkAnnotationRects(PdfPage page)
+    {
+        var annotations = page.Elements.GetArray("/Annots");
+        if (annotations is null)
+            return [];
+
+        var rects = new List<double[]>();
+        foreach (var item in annotations.Elements)
+        {
+            var annotation = ResolveDictionary(item);
+            if (annotation is null || annotation.Elements.GetName("/Subtype") != "/Link")
+                continue;
+
+            var rect = annotation.Elements.GetArray("/Rect");
+            rect.Should().NotBeNull();
+            rects.Add([
+                rect!.Elements.GetReal(0),
+                rect.Elements.GetReal(1),
+                rect.Elements.GetReal(2),
+                rect.Elements.GetReal(3)
+            ]);
+        }
+
+        return rects;
+    }
+
+    private static PdfDictionary? ResolveDictionary(PdfItem item)
+    {
+        return item switch
+        {
+            PdfDictionary dictionary => dictionary,
+            PdfReference reference => reference.Value as PdfDictionary,
+            _ => null
+        };
+    }
+
     private static FixedDocument CreateNestedTextDocument()
     {
         var document = new FixedDocument();
@@ -1712,6 +2333,67 @@ public class ExportPlannerTests
         text.Inlines.Add(new Run("Nested "));
         text.Inlines.Add(new Bold(new Run("Inline ")));
         text.Inlines.Add(new Italic(new Run("PDF Text")));
+        page.Children.Add(text);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateInlineUiContainerTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(190, 120);
+        var page = new FixedPage
+        {
+            Width = 190,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var text = new TextBlock { Margin = new System.Windows.Thickness(12) };
+        text.Inlines.Add(new Run("Inline "));
+        text.Inlines.Add(new InlineUIContainer(new TextBlock { Text = "UI " }));
+        text.Inlines.Add(new Run("PDF Text"));
+        page.Children.Add(text);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateNestedInlineUiContainerTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(230, 120);
+        var page = new FixedPage
+        {
+            Width = 230,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = "Nested " });
+        panel.Children.Add(new Border { Child = new TextBlock { Text = "Inline UI PDF Text" } });
+        panel.Children.Add(new HeaderedContentControl
+        {
+            Header = "Inline Header",
+            Content = new TextBlock { Text = "Inline Body" }
+        });
+        panel.Children.Add(new ListBox
+        {
+            Items =
+            {
+                new TextBlock { Text = "First Item" },
+                new TextBlock { Text = "Second Item" }
+            }
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Hidden Inline UI Text",
+            Visibility = System.Windows.Visibility.Collapsed
+        });
+        var text = new TextBlock { Margin = new System.Windows.Thickness(12) };
+        text.Inlines.Add(new InlineUIContainer(new Border { Child = panel }));
         page.Children.Add(text);
         var content = new PageContent();
         ((IAddChild)content).AddChild(page);
@@ -1911,6 +2593,55 @@ public class ExportPlannerTests
         };
         items.Items.Add(24680);
         page.Children.Add(items);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateComboBoxDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var comboBox = new ComboBox
+        {
+            Margin = new System.Windows.Thickness(12),
+            BorderThickness = new System.Windows.Thickness(0),
+            SelectedIndex = 1
+        };
+        comboBox.Items.Add("Unselected PDF Text");
+        comboBox.Items.Add("Selected PDF Text");
+        page.Children.Add(comboBox);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateUnselectedComboBoxDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var comboBox = new ComboBox
+        {
+            Margin = new System.Windows.Thickness(12),
+            BorderThickness = new System.Windows.Thickness(0),
+            SelectedIndex = -1
+        };
+        comboBox.Items.Add("Hidden Dropdown PDF Text");
+        page.Children.Add(comboBox);
         var content = new PageContent();
         ((IAddChild)content).AddChild(page);
         document.Pages.Add(content);
@@ -2136,6 +2867,34 @@ public class ExportPlannerTests
     }
 
     [Theory]
+    [InlineData(1, 3, 1, 3, false, false, true, true, "Page 1 of 3")]
+    [InlineData(2, 3, 2, 3, true, true, true, true, "Page 2 of 3")]
+    [InlineData(3, 3, 3, 3, true, true, false, false, "Page 3 of 3")]
+    [InlineData(0, 0, 1, 1, false, false, false, false, "Page 1 of 1")]
+    [InlineData(5, 3, 3, 3, true, true, false, false, "Page 3 of 3")]
+    public void PrintPreviewDialog_CreateNavigationState_NormalizesPageStatusAndButtonStates(
+        int currentPage,
+        int totalPages,
+        int expectedCurrentPage,
+        int expectedTotalPages,
+        bool canGoFirst,
+        bool canGoPrevious,
+        bool canGoNext,
+        bool canGoLast,
+        string statusText)
+    {
+        var state = PrintPreviewDialog.CreateNavigationState(currentPage, totalPages);
+
+        state.CurrentPage.Should().Be(expectedCurrentPage);
+        state.TotalPages.Should().Be(expectedTotalPages);
+        state.CanGoFirst.Should().Be(canGoFirst);
+        state.CanGoPrevious.Should().Be(canGoPrevious);
+        state.CanGoNext.Should().Be(canGoNext);
+        state.CanGoLast.Should().Be(canGoLast);
+        state.StatusText.Should().Be(statusText);
+    }
+
+    [Theory]
     [InlineData(PrintPreviewSidesMode.OneSided, Duplexing.OneSided)]
     [InlineData(PrintPreviewSidesMode.TwoSidedLongEdge, Duplexing.TwoSidedLongEdge)]
     [InlineData(PrintPreviewSidesMode.TwoSidedShortEdge, Duplexing.TwoSidedShortEdge)]
@@ -2285,6 +3044,26 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PrintPreviewDialog_ToolbarControlsExposeStableAutomation()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("SetToolbarAutomation(firstButton, \"PrintPreviewFirstPageButton\", \"First page\"");
+        source.Should().Contain("SetToolbarAutomation(previousButton, \"PrintPreviewPreviousPageButton\", \"Previous page\"");
+        source.Should().Contain("SetToolbarAutomation(nextButton, \"PrintPreviewNextPageButton\", \"Next page\"");
+        source.Should().Contain("SetToolbarAutomation(lastButton, \"PrintPreviewLastPageButton\", \"Last page\"");
+        source.Should().Contain("AutomationProperties.SetAutomationId(printButton, \"PrintPreviewPrintButton\")");
+        source.Should().Contain("SetToolbarAutomation(closeButton, \"PrintPreviewCloseButton\", \"Close preview\"");
+        source.Should().Contain("AutomationProperties.SetAutomationId(pageNumberBox, \"PrintPreviewPageNumberBox\")");
+        source.Should().Contain("AutomationProperties.SetAutomationId(pageStatusText, \"PrintPreviewPageStatusText\")");
+        source.Should().Contain("AutomationProperties.SetAutomationId(zoomBox, \"PrintPreviewZoomBox\")");
+        source.Should().Contain("SetToolbarAutomation(marginsButton, \"PrintPreviewMarginsButton\", \"Margins\"");
+        source.Should().Contain("SetToolbarAutomation(pageSetupButton, \"PrintPreviewPageSetupButton\", \"Page Setup\"");
+        source.Should().Contain("AutomationProperties.SetAutomationId(settingsSummaryText, \"PrintPreviewSettingsSummaryText\")");
+        source.Should().Contain("private static void SetToolbarAutomation(Control control, string automationId, string name, string helpText)");
+    }
+
+    [Fact]
     public void PrintPreviewDialog_WiresMarginsAndPageSetupToolbarCallbacks()
     {
         var source = ReadPrintPreviewDialogSources();
@@ -2304,7 +3083,8 @@ public class ExportPlannerTests
         source.Should().Contain("Content = \"_Page:\"");
         source.Should().Contain("pageNumberBox");
         source.Should().Contain("pageStatusText");
-        source.Should().Contain("Page 1 of");
+        source.Should().Contain("CreateNavigationState(1, totalPages).StatusText");
+        source.Should().Contain("CreateNavigationState(pageNumber, totalPages).StatusText");
         source.Should().Contain("NavigationCommands.GoToPage");
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
@@ -2350,7 +3130,7 @@ public class ExportPlannerTests
         var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = \"_All pages\"");
-        source.Should().Contain("Content = \"Current pa_ge\"");
+        source.Should().Contain("Content = \"Current pag_e\"");
         source.Should().Contain("Content = \"Pa_ges\"");
         source.Should().Contain("fromPageBox");
         source.Should().Contain("toPageBox");
@@ -2365,11 +3145,27 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PrintPreviewDialog_PrintRangeAccessKeysAreUnique()
+    {
+        var source = ReadPrintPreviewDialogSources();
+        var rangeLabels = new[] { "_All pages", "Current pag_e", "Pa_ges" };
+
+        var accessKeys = rangeLabels.Select(ExtractAccessKey).ToList();
+
+        source.Should().ContainAll(rangeLabels.Select(label => $"Content = \"{label}\""));
+        accessKeys.Should().OnlyHaveUniqueItems("Print Preview range choices share one access-key scope");
+    }
+
+    [Fact]
     public void ExportWorkflow_UsesOptionsDialogSelectionRangeAndOpenAfterPublish()
     {
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
+        var optionsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FreexcelOptions.cs"));
 
-        printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null)");
+        optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;");
+        printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage)");
+        printExport.Should().Contain("_options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;");
+        printExport.Should().Contain("_options.Save();");
         printExport.Should().Contain("saveDlg.FilterIndex == 2");
         printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
         printExport.Should().Contain("RenderExportDocument(options)");
@@ -2401,7 +3197,20 @@ public class ExportPlannerTests
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Layout.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewSettingsPanelFactory.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewToolbarPlanner.cs")));
+
+    private static char ExtractAccessKey(string label)
+    {
+        var underscoreIndex = label.IndexOf('_', StringComparison.Ordinal);
+
+        underscoreIndex.Should().BeGreaterThanOrEqualTo(0, $"label '{label}' should declare an access key");
+        underscoreIndex.Should().BeLessThan(label.Length - 1, $"label '{label}' should include a character after '_'");
+
+        return char.ToUpperInvariant(label[underscoreIndex + 1]);
+    }
 
     private static string? ReadPrintScaling(PdfDocument pdf) =>
         pdf.Internals.Catalog.Elements

@@ -1,21 +1,13 @@
 using FluentAssertions;
 using System.IO;
 using System.Text;
-using Xunit;
 
 namespace Freexcel.App.Host.Tests;
 
-public sealed class CellOverflowEditingUiE2eTests
+internal static class CellOverflowEditingUiE2eHarness
 {
-    [Fact]
-    [Trait("Category", "UIE2E")]
-    public void OverflowingCellText_ClipsAsSoonAsNeighborEditingStarts()
+    public static void Run(FreexcelUiRun run)
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
-        using var run = FreexcelUiRun.Start();
-
         run.ClickCell(col: 1, row: 1);
         run.TypeText("this is a long overflow value from A1");
         run.Press(VirtualKey.Enter);
@@ -49,5 +41,7 @@ public sealed class CellOverflowEditingUiE2eTests
             - `02-overflow-clipped-during-neighbor-edit.png`
             """,
             Encoding.UTF8);
+
+        run.Press(VirtualKey.Escape);
     }
 }

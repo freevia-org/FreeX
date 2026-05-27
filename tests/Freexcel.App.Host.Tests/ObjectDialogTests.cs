@@ -169,8 +169,9 @@ public sealed class ObjectDialogTests
 
         objectSizeSource.Should().Contain("_widthBox");
         objectSizeSource.Should().Contain("_heightBox");
-        objectSizeSource.Should().Contain("Height:");
-        objectSizeSource.Should().Contain("Width:");
+        objectSizeSource.Should().Contain("_Height:");
+        objectSizeSource.Should().Contain("_Width:");
+        objectSizeSource.Should().Contain("new Label { Content = label, Target = box");
         objectSizeSource.Should().Contain("_lockAspectRatioBox");
         objectSizeSource.Should().Contain("Content = \"_Lock aspect ratio\"");
         objectSizeSource.Should().Contain("CalculateLockedAspectHeight");
@@ -317,6 +318,7 @@ public sealed class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
 
+        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(\"_Degrees:\", _rotationBox, Accept)");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_rotationBox.Focus();");
@@ -362,8 +364,11 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_cropTopBox");
         source.Should().Contain("_cropRightBox");
         source.Should().Contain("_cropBottomBox");
-        source.Should().Contain("Left:");
-        source.Should().Contain("Right:");
+        source.Should().Contain("_Left:");
+        source.Should().Contain("_Top:");
+        source.Should().Contain("_Right:");
+        source.Should().Contain("_Bottom:");
+        source.Should().Contain("new Label { Content = label, Target = box");
     }
 
     [Fact]
@@ -540,7 +545,10 @@ public sealed class ObjectDialogTests
     [Fact]
     public void HyperlinkDialog_ExposesExcelLikeLinkTypeAndScreenTipAffordances()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextEntryDialogs.cs")));
 
         source.Should().Contain("Existing File or Web Page");
         source.Should().Contain("Create New Document");
@@ -557,9 +565,27 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void HyperlinkDialog_LabelsLinkTypeListWithAccessKeyTarget()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs"));
+
+        source.Should().Contain("new Label { Content = \"Link _to:\", Target = _linkTypes");
+        source.Should().Contain("AutomationProperties.SetName(_linkTypes, \"Link to\");");
+    }
+
+    [Fact]
+    public void HyperlinkDialog_TextEditorsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_displayBox, \"Text to display\");");
+        source.Should().Contain("AutomationProperties.SetName(_targetBox, \"Address\");");
+    }
+
+    [Fact]
     public void HyperlinkDialog_AcceptWarnsAndRefocusesBlankTarget()
     {
-        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class HyperlinkDialog", "public sealed class ScreenTipDialog");
+        var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
 
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
         source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
@@ -573,7 +599,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void HyperlinkDialogOpenedFromKeyboard_FocusesAddressBox()
     {
-        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class HyperlinkDialog", "public sealed class ScreenTipDialog");
+        var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -647,7 +673,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void ThreadedCommentDialog_BlankNewCommentWarnsAndRefocusesCommentBox()
     {
-        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class ThreadedCommentDialog", "");
+        var source = ReadClassSource("ThreadedCommentDialog.cs", "public sealed class ThreadedCommentDialog", "");
 
         source.Should().Contain("if (!TryCreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))");
         source.Should().Contain("ShowInvalidThreadedCommentWarning(error ?? \"Enter a comment.\", _rootBox);");
@@ -660,7 +686,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void TextEntryDialogOpenedFromKeyboard_FocusesTextBox()
     {
-        var source = ReadClassSource("ObjectDialogs.cs", "public class TextEntryDialog", "");
+        var source = ReadClassSource("TextEntryDialogs.cs", "public class TextEntryDialog", "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -672,7 +698,9 @@ public sealed class ObjectDialogTests
     private static string ReadObjectDialogSources() =>
         string.Join(
             Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextEntryDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ThreadedCommentDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
 
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)

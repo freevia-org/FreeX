@@ -14,13 +14,17 @@ public static class FileDialogFilterBuilder
         if (formats.Count > 0)
         {
             var allSupported = string.Join(';', formats
-                .Select(format => NormalizeExtension(format.Extension))
+                .Select(format => FileFormatResolver.NormalizeExtension(format.Extension))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(extension => $"*{extension}"));
             parts.Add($"All supported files ({allSupported})|{allSupported}");
         }
 
-        parts.AddRange(formats.Select(format => $"{format.FormatName} (*{format.Extension})|*{format.Extension}"));
+        parts.AddRange(formats.Select(format =>
+        {
+            var extension = FileFormatResolver.NormalizeExtension(format.Extension);
+            return $"{format.FormatName} (*{extension})|*{extension}";
+        }));
         parts.Add("All files (*.*)|*.*");
         return string.Join('|', parts);
     }
@@ -30,7 +34,11 @@ public static class FileDialogFilterBuilder
         var parts = adapters
             .SelectMany(adapter => adapter.Formats)
             .Where(format => format.CanSave)
-            .Select(format => $"{format.FormatName} (*{format.Extension})|*{format.Extension}");
+            .Select(format =>
+            {
+                var extension = FileFormatResolver.NormalizeExtension(format.Extension);
+                return $"{format.FormatName} (*{extension})|*{extension}";
+            });
 
         return string.Join('|', parts);
     }
@@ -40,7 +48,7 @@ public static class FileDialogFilterBuilder
         string extension,
         out FileFormatDescriptor? format)
     {
-        return FindAdapter(adapters, extension, candidate => candidate.CanOpen, out format);
+        return FileFormatResolver.FindOpenAdapter(adapters, extension, out format);
     }
 
     public static IFileAdapter? FindSaveAdapter(
@@ -48,34 +56,9 @@ public static class FileDialogFilterBuilder
         string extension,
         out FileFormatDescriptor? format)
     {
-        return FindAdapter(adapters, extension, candidate => candidate.CanSave, out format);
+        return FileFormatResolver.FindSaveAdapter(adapters, extension, out format);
     }
 
-    private static IFileAdapter? FindAdapter(
-        IEnumerable<IFileAdapter> adapters,
-        string extension,
-        Func<FileFormatDescriptor, bool> predicate,
-        out FileFormatDescriptor? format)
-    {
-        var normalizedExtension = NormalizeExtension(extension);
-        foreach (var adapter in adapters)
-        {
-            format = adapter.Formats.FirstOrDefault(candidate =>
-                predicate(candidate) &&
-                string.Equals(NormalizeExtension(candidate.Extension), normalizedExtension, StringComparison.OrdinalIgnoreCase));
-            if (format is not null)
-                return adapter;
-        }
-
-        format = null;
-        return null;
-    }
-
-    private static string NormalizeExtension(string extension)
-    {
-        extension = extension.Trim();
-        return extension.StartsWith(".", StringComparison.Ordinal)
-            ? extension
-            : $".{extension}";
-    }
+    public static string SafeFileTypeFromExtension(string extension) =>
+        FileFormatResolver.SafeFileTypeFromExtension(extension);
 }

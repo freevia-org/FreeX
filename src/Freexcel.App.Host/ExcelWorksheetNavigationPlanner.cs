@@ -17,7 +17,37 @@ public static class ExcelWorksheetNavigationPlanner
 
     public static bool ShouldUseDataBoundary(Key key, ModifierKeys modifiers, bool endMode) =>
         key is Key.Up or Key.Down or Key.Left or Key.Right &&
-        (endMode || (modifiers & ModifierKeys.Control) != 0);
+        (endMode
+            ? modifiers is ModifierKeys.None or ModifierKeys.Shift
+            : modifiers is ModifierKeys.Control or (ModifierKeys.Control | ModifierKeys.Shift));
+
+    public static bool ShouldHandleWorksheetNavigationKey(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        bool endMode)
+    {
+        var effectiveKey = key == Key.None || key == Key.System ? systemKey : key;
+        return effectiveKey switch
+        {
+            Key.Up or Key.Down or Key.Left or Key.Right =>
+                endMode
+                    ? modifiers is ModifierKeys.None or ModifierKeys.Shift
+                    : modifiers is ModifierKeys.None or ModifierKeys.Shift or ModifierKeys.Control or
+                        (ModifierKeys.Control | ModifierKeys.Shift),
+            Key.Home =>
+                modifiers is ModifierKeys.None or ModifierKeys.Shift or ModifierKeys.Control or
+                    (ModifierKeys.Control | ModifierKeys.Shift),
+            Key.End =>
+                modifiers is ModifierKeys.Control or (ModifierKeys.Control | ModifierKeys.Shift),
+            Key.PageUp or Key.PageDown =>
+                modifiers is ModifierKeys.None or ModifierKeys.Shift or ModifierKeys.Alt or
+                    (ModifierKeys.Alt | ModifierKeys.Shift),
+            Key.Enter or Key.Tab =>
+                modifiers is ModifierKeys.None or ModifierKeys.Shift,
+            _ => false
+        };
+    }
 
     public static CellAddress? GetHorizontalPageTarget(
         Key key,
@@ -29,7 +59,7 @@ public static class ExcelWorksheetNavigationPlanner
         if (modifiers is not ModifierKeys.Alt and not (ModifierKeys.Alt | ModifierKeys.Shift))
             return null;
 
-        var effectiveKey = key == Key.None ? systemKey : key;
+        var effectiveKey = key is Key.None or Key.System ? systemKey : key;
         return effectiveKey switch
         {
             Key.PageDown => new CellAddress(
@@ -98,20 +128,8 @@ public static class ExcelWorksheetNavigationPlanner
 
     public static CellAddress GetCtrlEndCell(Sheet? sheet, SheetId sheetId)
     {
-        var maxRow = 1u;
-        var maxCol = 1u;
-        if (sheet is not null)
-        {
-            foreach (var (address, _) in sheet.GetUsedCells())
-            {
-                if (address.Row > maxRow)
-                    maxRow = address.Row;
-                if (address.Col > maxCol)
-                    maxCol = address.Col;
-            }
-        }
-
-        return new CellAddress(sheetId, maxRow, maxCol);
+        var usedRangeEnd = sheet?.GetUsedRange()?.End;
+        return usedRangeEnd ?? new CellAddress(sheetId, 1, 1);
     }
 
     private static bool CellHasData(Sheet? sheet, uint row, uint col)

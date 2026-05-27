@@ -4255,10 +4255,13 @@ public partial class FileAdapterSmokeTests
         loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("objects", "1"));
         loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("scenarios", "1"));
         loadedSheet.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
+        loadedSheet.ProtectionMetadata.NativeAttributes["invalid protection attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -4272,6 +4275,7 @@ public partial class FileAdapterSmokeTests
         (protection.Attribute("spinCount")?.Value).Should().Be("100000");
         (protection.Attribute("objects")?.Value).Should().Be("1");
         (protection.Attribute("scenarios")?.Value).Should().Be("1");
+        protection.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         protection.Elements(XName.Get("sheetProtectionNativeChild", "urn:freexcel:test"))
             .Select(element => element.Attribute("id")?.Value)
             .Should()
@@ -4890,8 +4894,8 @@ public partial class FileAdapterSmokeTests
         });
         sheet.ConditionalFormats.Single().IconSetThresholds.AddRange(
         [
-            new CfThresholdModel(CfThresholdType.Number, "0"),
-            new CfThresholdModel(CfThresholdType.Percentile, "50"),
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true),
             new CfThresholdModel(CfThresholdType.Formula, "AVERAGE($A$1:$A$5)")
         ]);
 
@@ -4903,8 +4907,8 @@ public partial class FileAdapterSmokeTests
         {
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             var xml = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
-            xml.Should().Contain("type=\"num\" val=\"0\"");
-            xml.Should().Contain("type=\"percentile\" val=\"50\"");
+            xml.Should().Contain("type=\"num\" val=\"0\" gte=\"0\"");
+            xml.Should().Contain("type=\"percentile\" val=\"50\" gte=\"1\"");
             xml.Should().Contain("type=\"formula\" val=\"AVERAGE($A$1:$A$5)\"");
         }
 
@@ -4917,8 +4921,8 @@ public partial class FileAdapterSmokeTests
         iconSet.IconSetShowValue.Should().BeFalse();
         iconSet.IconSetReverse.Should().BeTrue();
         iconSet.IconSetThresholds.Should().Equal(
-            new CfThresholdModel(CfThresholdType.Number, "0"),
-            new CfThresholdModel(CfThresholdType.Percentile, "50"),
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true),
             new CfThresholdModel(CfThresholdType.Formula, "AVERAGE($A$1:$A$5)"));
     }
 
@@ -4996,15 +5000,26 @@ public partial class FileAdapterSmokeTests
         loadedRule.NativeAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("cf-native");
         loadedRule.NativeChildXmls.Should().ContainSingle()
             .Which.Should().Contain("{FREEXCEL-CF-EXT}");
+        loadedRule.NativeContainerAttributes = new Dictionary<string, string>(loadedRule.NativeContainerAttributes)
+        {
+            ["invalid conditionalFormatting attr"] = "skip"
+        };
+        loadedRule.NativeAttributes = new Dictionary<string, string>(loadedRule.NativeAttributes)
+        {
+            ["invalid cfRule attr"] = "skip"
+        };
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         worksheetXml.Should().Contain("customBlockAttr=\"cf-container\"");
         worksheetXml.Should().Contain("customAttr=\"cf-native\"");
+        worksheetXml.Should().NotContain("invalid conditionalFormatting attr");
+        worksheetXml.Should().NotContain("invalid cfRule attr");
         worksheetXml.Should().Contain("extLst");
         worksheetXml.Should().Contain("{FREEXCEL-CF-CONTAINER-EXT}");
         worksheetXml.Should().Contain("{FREEXCEL-CF-EXT}");
@@ -5284,9 +5299,18 @@ public partial class FileAdapterSmokeTests
         loadedRule.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("{FREEXCEL-DV-NATIVE}", StringComparison.Ordinal));
         loadedRule.NativeContainerAttributes.Should().Contain("disablePrompts", "1");
         loadedRule.NativeContainerAttributes.Should().Contain("xWindow", "25");
+        loadedRule.NativeAttributes = new Dictionary<string, string>(loadedRule.NativeAttributes)
+        {
+            ["invalid validation attr"] = "skip"
+        };
+        loadedRule.NativeContainerAttributes = new Dictionary<string, string>(loadedRule.NativeContainerAttributes)
+        {
+            ["invalid validations attr"] = "skip"
+        };
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -5297,9 +5321,69 @@ public partial class FileAdapterSmokeTests
         savedDataValidations.Attribute("xWindow")!.Value.Should().Be("25");
         var savedValidation = savedDataValidations.Element(savedWorksheetNs + "dataValidation")!;
         savedValidation.Attribute("imeMode")!.Value.Should().Be("noControl");
+        savedDataValidations.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid validations attr");
+        savedValidation.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid validation attr");
         savedValidation.Element(savedWorksheetNs + "extLst")!
             .Element(savedWorksheetNs + "ext")!
             .Attribute("uri")!.Value.Should().Be("{FREEXCEL-DV-NATIVE}");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_MultiAreaDataValidationSqref_Survives()
+    {
+        var workbook = new Workbook("DvMultiAreaTest");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 5; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue("Apple"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue("Banana"));
+        }
+
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            Type = DvType.List,
+            Formula1 = "Apple,Banana,Cherry"
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var validation = worksheetXml.Root!
+                .Element(worksheetNs + "dataValidations")!
+                .Element(worksheetNs + "dataValidation")!;
+            validation.SetAttributeValue("sqref", "A1:A5 C1:C5");
+            validation.SetAttributeValue("imeMode", "noControl");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+        var loadedRule = loaded.GetSheetAt(0).DataValidations.Should().ContainSingle().Subject;
+        loadedRule.AppliesTo.ToString().Should().Be("A1:A5");
+        loadedRule.AdditionalRanges.Select(range => range.ToString()).Should().Equal("C1:C5");
+        loadedRule.NativeAttributes.Should().Contain("imeMode", "noControl");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedWorksheetXml = LoadPackageXml(savedArchive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace savedWorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var savedValidation = savedWorksheetXml.Root!
+            .Element(savedWorksheetNs + "dataValidations")!
+            .Element(savedWorksheetNs + "dataValidation")!;
+        savedValidation.Attribute("sqref")!.Value.Should().Be("A1:A5 C1:C5");
+        savedValidation.Attribute("imeMode")!.Value.Should().Be("noControl");
     }
 
     [Fact]
@@ -5587,6 +5671,44 @@ public partial class FileAdapterSmokeTests
         rule.FormatIfTrue.NativeDifferentialAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("dxf-native");
         rule.FormatIfTrue.NativeDifferentialChildXmls.Should().ContainSingle().Which.Should().Contain("{FREEXCEL-DXF-NATIVE}");
         rule.FormatIfTrue.NativeDifferentialElementXmls.Should().ContainKey("font").WhoseValue.Should().Contain("customFontAttr");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_ConditionalFormat_IconSetThresholdGte_Survives()
+    {
+        var workbook = new Workbook("CfIconSetNativeJson");
+        var sheet = workbook.AddSheet("S1");
+        var cf = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3TrafficLights1",
+            IconSetShowValue = false,
+            IconSetReverse = true
+        };
+        cf.IconSetThresholds.AddRange(
+        [
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true)
+        ]);
+        sheet.ConditionalFormats.Add(cf);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.IconSetStyle.Should().Be("3TrafficLights1");
+        rule.IconSetShowValue.Should().BeFalse();
+        rule.IconSetReverse.Should().BeTrue();
+        rule.IconSetThresholds.Should().Equal(
+            new CfThresholdModel(CfThresholdType.Number, "0", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50", GreaterThanOrEqual: true));
     }
 
     [Fact]
@@ -6321,6 +6443,55 @@ public partial class FileAdapterSmokeTests
             .Value.Should().Be("19050");
         formatScheme.Element(drawingNs + "bgFillStyleLst")!.Elements(drawingNs + "solidFill")
             .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_PreservesWorkbookThemeColorAndFontSchemeDetails()
+    {
+        var workbook = new Workbook("ThemeColorFontSchemeTest");
+        workbook.AddSheet("S1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnknownPackagePart(source, "xl/theme/theme1.xml", TestThemeWithNativeColorAndFontSchemeXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.Theme.Name.Should().Be("Freexcel Native Scheme Theme");
+        loaded.Theme.MajorFontName.Should().Be("Major Native");
+        loaded.Theme.MinorFontName.Should().Be("Minor Native");
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
+        loaded.Theme.NativeColorSchemeXml.Should().Contain("lumMod");
+        loaded.Theme.NativeFontSchemeXml.Should().Contain("typeface=\"Major East Asia\"");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var themeXml = LoadPackageXml(archive.GetEntry("xl/theme/theme1.xml")!);
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var colorScheme = themeXml.Root!
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "clrScheme")!;
+        colorScheme.Element(drawingNs + "accent1")!
+            .Element(drawingNs + "srgbClr")!
+            .Element(drawingNs + "lumMod")!
+            .Attribute("val")!
+            .Value.Should().Be("75000");
+        var majorFont = themeXml.Root!
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "fontScheme")!
+            .Element(drawingNs + "majorFont")!;
+        majorFont.Element(drawingNs + "ea")!
+            .Attribute("typeface")!
+            .Value.Should().Be("Major East Asia");
+        majorFont.Element(drawingNs + "font")!
+            .Attribute("script")!
+            .Value.Should().Be("Jpan");
     }
 
     [Fact]
@@ -11738,16 +11909,26 @@ public partial class FileAdapterSmokeTests
             cell.Id == 1 &&
             cell.Reference == "A1" &&
             cell.XmlCellPropertyId == 1);
+        loadedSheet.SingleXmlCells.NativeAttributes["nativeSingleXmlCellsAttr"] = "kept";
+        loadedSheet.SingleXmlCells.NativeAttributes["invalid singleXmlCells attr"] = "skip";
+        loadedSheet.SingleXmlCells.Cells[0].NativeAttributes["nativeSingleXmlCellAttr"] = "cell-kept";
+        loadedSheet.SingleXmlCells.Cells[0].NativeAttributes["invalid singleXmlCell attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("singleXmlCells");
-        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("xmlCellPrId=\"1\"");
+        var worksheetText = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        worksheetText.Should().Contain("singleXmlCells");
+        worksheetText.Should().Contain("xmlCellPrId=\"1\"");
+        worksheetText.Should().Contain("nativeSingleXmlCellsAttr=\"kept\"");
+        worksheetText.Should().Contain("nativeSingleXmlCellAttr=\"cell-kept\"");
+        worksheetText.Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -12904,6 +13085,7 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
         var colors = stylesXml.Root!.Element(workbookNs + "colors");
         colors.Should().NotBeNull();
         colors!.ToString().Should().Contain("rgb=\"FF010203\"");
@@ -12929,8 +13111,15 @@ public partial class FileAdapterSmokeTests
                 element.DifferentialFormatId == 0));
         tableStyles.Elements(workbookNs + "tableStyle")
             .Any(element => element.Attribute("name")?.Value == "FreexcelNativePivotStyle" &&
-                            element.Attribute("pivot")?.Value == "1")
+                            element.Attribute("pivot")?.Value == "1" &&
+                            element.Element(workbookNs + "tableStyleElement")?.Attribute("dxfId")?.Value == "0")
             .Should().BeTrue();
+        var differentialStyles = stylesXml.Root!.Element(workbookNs + "dxfs");
+        differentialStyles.Should().NotBeNull();
+        differentialStyles!.Elements(workbookNs + "dxf").Should().ContainSingle()
+            .Which.Should().Match<XElement>(element =>
+                element.Attribute("nativePivotDxf")!.Value == "kept" &&
+                element.Element(freexcelNs + "pivotStyleDxfNativeChild")!.Attribute("value")!.Value == "kept");
 
         var extensionList = stylesXml.Root!.Element(workbookNs + "extLst");
         extensionList.Should().NotBeNull();
@@ -13073,6 +13262,53 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesCustomDocumentProperties()
+    {
+        var workbook = new Workbook("CustomDocumentPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom document properties"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddCustomDocumentProperties(source);
+
+        source.Position = 0;
+        XlsxFeatureInspector.Inspect(source).Features.Should().Contain(feature => feature.Kind == XlsxUnsupportedFeatureKind.SensitivityLabels);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var customProperties = LoadPackageXml(archive.GetEntry("docProps/custom.xml")!);
+        XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+        XNamespace docPropsVtNs = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+        customProperties.Root!
+            .Elements(customPropertiesNs + "property")
+            .Where(property =>
+                property.Attribute("name")?.Value == "FreexcelCustomProperty" &&
+                property.Element(docPropsVtNs + "lpwstr")?.Value == "kept")
+            .Should()
+            .ContainSingle();
+        customProperties.Root
+            .Elements(customPropertiesNs + "property")
+            .Where(property =>
+                property.Attribute("name")?.Value == "MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled" &&
+                property.Element(docPropsVtNs + "lpwstr")?.Value == "true")
+            .Should()
+            .ContainSingle();
+
+        saved.Position = 0;
+        XlsxFeatureInspector.Inspect(saved).Features.Should().Contain(feature => feature.Kind == XlsxUnsupportedFeatureKind.SensitivityLabels);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesRetentionTest");
@@ -13106,6 +13342,42 @@ public partial class FileAdapterSmokeTests
         workbookPr.Should().NotBeNull();
         workbookPr!.Attribute("date1904").Should().NotBeNull();
         workbookPr.Attribute("date1904")!.Value.Should().Be("1");
+        workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
+        workbookPr.Elements(XName.Get("workbookPrNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotRestoreNativeDate1904AfterModeledChange()
+    {
+        var workbook = new Workbook("WorkbookPropertiesDateSystemEditTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("properties"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnsupportedWorkbookProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.Uses1904DateSystem.Should().BeTrue();
+        loaded.Uses1904DateSystem = false;
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr");
+        workbookPr.Should().NotBeNull();
+        workbookPr!.Attribute("date1904").Should().BeNull();
         workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
         workbookPr.Elements(XName.Get("workbookPrNativeChild", "urn:freexcel:test"))
             .Select(element => element.Attribute("id")?.Value)
@@ -13677,10 +13949,13 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrimaryViewMetadata!.NativeAttributes.Should().Contain("showZeros", "0");
         loadedSheet.PrimaryViewMetadata.NativeAttributes.Should().Contain("rightToLeft", "1");
         loadedSheet.PrimaryViewMetadata.NativeChildXmls.Should().Contain(xml => xml.Contains("pivotSelection", StringComparison.Ordinal));
+        loadedSheet.PrimaryViewMetadata.NativeAttributes["invalid primaryView attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -13694,6 +13969,7 @@ public partial class FileAdapterSmokeTests
         sheetView.Attribute("showZeros")!.Value.Should().Be("0");
         sheetView.Attribute("rightToLeft").Should().NotBeNull();
         sheetView.Attribute("rightToLeft")!.Value.Should().Be("1");
+        sheetView.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         sheetView.Element(worksheetNs + "pivotSelection").Should().NotBeNull();
         sheetView.Element(worksheetNs + "pivotSelection")!.Attribute("pane")!.Value.Should().Be("topRight");
     }
@@ -13931,10 +14207,16 @@ public partial class FileAdapterSmokeTests
         loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("max", "1048575");
         loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("man", "1");
         loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("pt", "1");
+        loadedSheet.RowPageBreaksMetadata.NativeAttributes["invalid rowBreaks attr"] = "skip";
+        loadedSheet.RowPageBreaksMetadata.BreakNativeAttributes[20]["invalid rowBreak attr"] = "skip";
+        loadedSheet.ColumnPageBreaksMetadata.NativeAttributes["invalid colBreaks attr"] = "skip";
+        loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5]["invalid colBreak attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -13947,6 +14229,7 @@ public partial class FileAdapterSmokeTests
         rowBreak.Attribute("man")!.Value.Should().Be("1");
         rowBreak.Attribute("pt")!.Value.Should().Be("1");
         rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native");
+        rowBreak.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
 
         var columnBreak = worksheetXml.Root!.Element(worksheetNs + "colBreaks")!
             .Elements(worksheetNs + "brk")
@@ -13955,6 +14238,15 @@ public partial class FileAdapterSmokeTests
         columnBreak.Attribute("man")!.Value.Should().Be("1");
         columnBreak.Attribute("pt")!.Value.Should().Be("1");
         columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native");
+        columnBreak.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
+        worksheetXml.Root.Element(worksheetNs + "rowBreaks")!
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
+            .Should()
+            .NotContain("invalid ");
+        worksheetXml.Root.Element(worksheetNs + "colBreaks")!
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
+            .Should()
+            .NotContain("invalid ");
     }
 
     [Fact]
@@ -14126,10 +14418,12 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintOptionsMetadata.Should().NotBeNull();
         loadedSheet.PrintOptionsMetadata!.NativeAttributes.Should().Contain("gridLinesSet", "1");
         loadedSheet.PrintOptionsMetadata.NativeAttributes.Should().Contain("customAttr", "print-native");
+        loadedSheet.PrintOptionsMetadata.NativeAttributes["invalid printOptions attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14139,6 +14433,7 @@ public partial class FileAdapterSmokeTests
         printOptions.Should().NotBeNull();
         printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1");
         printOptions.Attribute("customAttr")!.Value.Should().Be("print-native");
+        printOptions.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid printOptions attr");
     }
 
     [Fact]
@@ -14162,10 +14457,13 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PageSetupMetadata.Should().NotBeNull();
         loadedSheet.PageSetupMetadata!.NativeAttributes.Should().Contain("customAttr", "page-setup-native");
         loadedSheet.PageSetupMetadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativePageSetupChild", StringComparison.Ordinal));
+        loadedSheet.PageSetupMetadata.NativeAttributes["invalid pageSetup attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14176,6 +14474,7 @@ public partial class FileAdapterSmokeTests
         pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
         pageSetup.Attribute("copies")!.Value.Should().Be("3");
         pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         pageSetup.Element(worksheetNs + "nativePageSetupChild").Should().NotBeNull();
         pageSetup.Element(worksheetNs + "nativePageSetupChild")!
             .Attribute("value")!
@@ -14307,10 +14606,12 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.PageMarginsMetadata.Should().NotBeNull();
         loadedSheet.PageMarginsMetadata!.NativeAttributes.Should().Contain("customAttr", "page-margins-native");
+        loadedSheet.PageMarginsMetadata.NativeAttributes["invalid pageMargins attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14324,6 +14625,7 @@ public partial class FileAdapterSmokeTests
         pageMargins.Attribute("footer")!.Value.Should().Be("0.45");
         pageMargins.Attribute("customAttr").Should().NotBeNull();
         pageMargins.Attribute("customAttr")!.Value.Should().Be("page-margins-native");
+        pageMargins.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid pageMargins attr");
     }
 
     [Fact]
@@ -14345,10 +14647,13 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.HeaderFooterMetadata.Should().NotBeNull();
         loadedSheet.HeaderFooterMetadata!.NativeAttributes.Should().Contain("nativeHeaderFooterAttr", "kept");
+        loadedSheet.HeaderFooterMetadata.NativeAttributes["invalid headerFooter attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14359,6 +14664,7 @@ public partial class FileAdapterSmokeTests
         headerFooter.Should().NotBeNull();
         headerFooter!.Attribute("nativeHeaderFooterAttr").Should().NotBeNull();
         headerFooter.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept");
+        headerFooter.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center");
     }
 
@@ -14380,10 +14686,13 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.DimensionMetadata.Should().NotBeNull();
         loadedSheet.DimensionMetadata!.NativeAttributes.Should().Contain("nativeDimensionAttr", "kept");
+        loadedSheet.DimensionMetadata.NativeAttributes["invalid dimension attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14394,6 +14703,7 @@ public partial class FileAdapterSmokeTests
         dimension!.Attribute("nativeDimensionAttr").Should().NotBeNull();
         dimension.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept");
         dimension.Attribute("ref")!.Value.Should().Be("A1:A2");
+        dimension.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -14930,7 +15240,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesModeledScenarioNativeMetadataWithoutDuplicates()
+    public void XlsxAdapter_LoadedWorkbookSaveWithoutEdits_PreservesScenarioPackageBytes()
     {
         var workbook = new Workbook("ScenarioMetadataMergeTest");
         var sheet = workbook.AddSheet("Data");
@@ -14941,25 +15251,15 @@ public partial class FileAdapterSmokeTests
         adapter.Save(workbook, source);
         source.Position = 0;
         AddMinimalWorksheetScenarios(source);
+        var sourceBytes = source.ToArray();
 
         source.Position = 0;
         var loaded = adapter.Load(source);
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
-        saved.Position = 0;
 
-        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios")!;
-        scenarios.Attribute("current").Should().BeNull();
-        scenarios.Attribute("show").Should().BeNull();
-        var scenario = scenarios.Elements(worksheetNs + "scenario")
-            .Single(element => element.Attribute("name")?.Value == "BestCase");
-        scenario.Attribute("locked")!.Value.Should().Be("1");
-        scenario.Attribute("user")!.Value.Should().Be("FreexcelTest");
-        scenario.Elements(worksheetNs + "inputCells").Should().ContainSingle();
+        saved.ToArray().Should().Equal(sourceBytes);
     }
 
     [Fact]
@@ -15144,10 +15444,13 @@ public partial class FileAdapterSmokeTests
         loadedSheet.SheetPropertiesMetadata.Should().NotBeNull();
         loadedSheet.SheetPropertiesMetadata!.NativeAttributes.Should().Contain("filterMode", "1");
         loadedSheet.SheetPropertiesMetadata.NativeChildXmls.Should().HaveCount(2);
+        loadedSheet.SheetPropertiesMetadata.NativeAttributes["invalid sheetPr attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -15157,6 +15460,7 @@ public partial class FileAdapterSmokeTests
         sheetPr.Should().NotBeNull();
         sheetPr!.Attribute("filterMode").Should().NotBeNull();
         sheetPr.Attribute("filterMode")!.Value.Should().Be("1");
+        sheetPr.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         sheetPr.Element(worksheetNs + "pageSetUpPr").Should().NotBeNull();
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("autoPageBreaks")!.Value.Should().Be("0");
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("fitToPage")!.Value.Should().Be("1");
@@ -15222,10 +15526,14 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.IgnoredErrorsMetadata.Should().NotBeNull();
         loadedSheet.IgnoredErrorsMetadata!.ErrorNativeAttributes["A1"].Should().Contain("twoDigitTextYear", "1");
+        loadedSheet.IgnoredErrorsMetadata.NativeAttributes["invalid ignored attr"] = "skip";
+        loadedSheet.IgnoredErrorsMetadata.ErrorNativeAttributes["A1"]["invalid ignored child attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -15236,6 +15544,7 @@ public partial class FileAdapterSmokeTests
         ignoredErrors!.ToString().Should().Contain("numberStoredAsText=\"1\"");
         ignoredErrors.ToString().Should().Contain("twoDigitTextYear=\"1\"");
         ignoredErrors.ToString().Should().Contain("sqref=\"A1\"");
+        ignoredErrors.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -15356,7 +15665,8 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -15525,10 +15835,16 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.CellWatchesMetadata.Should().NotBeNull();
+        loadedSheet.CellWatchesMetadata!.NativeAttributes["invalid watch attr"] = "skip";
+        loadedSheet.CellWatchesMetadata.WatchNativeAttributes["A1"]["invalid watch child attr"] = "skip";
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -15539,6 +15855,7 @@ public partial class FileAdapterSmokeTests
         cellWatches!.Attribute("nativeContainer")!.Value.Should().Be("kept");
         cellWatches.Element(worksheetNs + "cellWatch")!.Attribute("nativeWatch")!.Value.Should().Be("kept");
         cellWatches!.ToString().Should().Contain("r=\"A1\"");
+        cellWatches.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -16160,10 +16477,15 @@ public partial class FileAdapterSmokeTests
             SortBy = "cellColor",
             NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
         });
+        loadedSortState.NativeAttributes["invalid sortState attr"] = "skip";
+        loadedSortState.Conditions[0].NativeAttributes["invalid sortCondition attr"] = "skip";
+        loadedSortState.NativeXml = null;
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16176,6 +16498,7 @@ public partial class FileAdapterSmokeTests
         sortState.ToString().Should().Contain("descending=\"1\"");
         sortState.ToString().Should().Contain("sortBy=\"cellColor\"");
         sortState.ToString().Should().Contain("customSortConditionFlag=\"keep\"");
+        sortState.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -16284,10 +16607,15 @@ public partial class FileAdapterSmokeTests
             Sheet = "Data",
             NativeAttributes = new Dictionary<string, string> { ["customDataRefFlag"] = "keep" }
         });
+        loadedData.NativeAttributes["invalid dataConsolidate attr"] = "skip";
+        loadedData.References[0].NativeAttributes["invalid dataRef attr"] = "skip";
+        loadedData.NativeXml = null;
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16301,6 +16629,7 @@ public partial class FileAdapterSmokeTests
         dataConsolidate.ToString().Should().Contain("ref=\"A1:B2\"");
         dataConsolidate.ToString().Should().Contain("sheet=\"Data\"");
         dataConsolidate.ToString().Should().Contain("customDataRefFlag=\"keep\"");
+        dataConsolidate.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -16706,19 +17035,33 @@ public partial class FileAdapterSmokeTests
                 new WorksheetCellSmartTagsModel
                 {
                     Reference = "A1",
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["validCellSmartTagsAttr"] = "cell-kept",
+                        ["invalid cellSmartTags attr"] = "skip"
+                    },
                     Tags =
                     [
                         new WorksheetCellSmartTagModel
                         {
                             Type = "0",
                             Deleted = false,
+                            NativeAttributes = new Dictionary<string, string>
+                            {
+                                ["validCellSmartTagAttr"] = "tag-kept",
+                                ["invalid cellSmartTag attr"] = "skip"
+                            },
                             Properties =
                             [
                                 new WorksheetCellSmartTagPropertyModel
                                 {
                                     Key = "place",
                                     Value = "Seattle",
-                                    NativeAttributes = new Dictionary<string, string> { ["customSmartTagPropertyFlag"] = "keep" }
+                                    NativeAttributes = new Dictionary<string, string>
+                                    {
+                                        ["customSmartTagPropertyFlag"] = "keep",
+                                        ["invalid cellSmartTagPr attr"] = "skip"
+                                    }
                                 }
                             ]
                         }
@@ -16729,7 +17072,9 @@ public partial class FileAdapterSmokeTests
 
         var saved = new MemoryStream();
         var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, saved);
+        var save = () => adapter.Save(workbook, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -16741,7 +17086,10 @@ public partial class FileAdapterSmokeTests
             .Which.Attribute("r")!.Value.Should().Be("A1");
         smartTags.Descendants(worksheetNs + "cellSmartTag").Should().ContainSingle()
             .Which.Attribute("deleted")!.Value.Should().Be("0");
+        smartTags.ToString().Should().Contain("validCellSmartTagsAttr=\"cell-kept\"");
+        smartTags.ToString().Should().Contain("validCellSmartTagAttr=\"tag-kept\"");
         smartTags.ToString().Should().Contain("customSmartTagPropertyFlag=\"keep\"");
+        smartTags.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         smartTags.ToString().Should().NotContain("wrongNamespace");
     }
 
@@ -16765,6 +17113,14 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        var loadedAutoFilter = loaded.GetSheetAt(0).AutoFilter;
+        loadedAutoFilter.Should().NotBeNull();
+        loadedAutoFilter!.Reference.Should().Be("A1:B3");
+        var loadedFilterColumn = loadedAutoFilter.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.ColumnId.Should().Be(0);
+        loadedFilterColumn.Values.Should().Equal("A");
+        loadedFilterColumn.IncludeBlank.Should().BeTrue();
+        loaded.GetSheetAt(0).FilterHiddenRows.Should().Contain(3u);
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -16780,6 +17136,512 @@ public partial class FileAdapterSmokeTests
         autoFilter.ToString().Should().Contain("colId=\"0\"");
         autoFilter.ToString().Should().Contain("blank=\"1\"");
         autoFilter.ToString().Should().Contain("val=\"A\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterCustomFilters()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterCustomFilterRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterCustomFilterMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedAutoFilter = loaded.GetSheetAt(0).AutoFilter;
+        loadedAutoFilter.Should().NotBeNull();
+        loadedAutoFilter!.Reference.Should().Be("A1:B3");
+        var loadedFilterColumn = loadedAutoFilter.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.ColumnId.Should().Be(1);
+        loadedFilterColumn.CustomFiltersAnd.Should().BeTrue();
+        loadedFilterColumn.CustomFiltersAndRaw.Should().Be("1");
+        loadedFilterColumn.NativeCustomFiltersAttributes.Should().Contain("customFiltersFlag", "keep");
+        loadedFilterColumn.NativeCustomFiltersAttributes.Should().Contain("{urn:freexcel:test}customFiltersNsFlag", "keep");
+        loadedFilterColumn.CustomFilters.Should().HaveCount(2);
+        loadedFilterColumn.CustomFilters[0].Operator.Should().Be("greaterThan");
+        loadedFilterColumn.CustomFilters[0].Value.Should().Be("10");
+        loadedFilterColumn.CustomFilters[0].NativeAttributes.Should().Contain("customFilterFlag", "first");
+        loadedFilterColumn.CustomFilters[0].NativeAttributes.Should().Contain("{urn:freexcel:test}customFilterNsFlag", "first");
+        loadedFilterColumn.CustomFilters[1].Operator.Should().Be("lessThan");
+        loadedFilterColumn.CustomFilters[1].Value.Should().Be("20");
+        loaded.GetSheetAt(0).FilterHiddenRows.Should().BeEmpty();
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customFilters = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "customFilters");
+        customFilters.Should().NotBeNull();
+        customFilters!.Attribute("and")!.Value.Should().Be("1");
+        customFilters.Attribute("customFiltersFlag")!.Value.Should().Be("keep");
+        customFilters.Attribute(XName.Get("customFiltersNsFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+        customFilters.Elements(worksheetNs + "customFilter").Should().HaveCount(2);
+        customFilters.Elements(worksheetNs + "customFilter").First().Attribute("customFilterFlag")!.Value.Should().Be("first");
+        customFilters.Elements(worksheetNs + "customFilter").First().Attribute(XName.Get("customFilterNsFlag", "urn:freexcel:test"))!.Value.Should().Be("first");
+        customFilters.ToString().Should().Contain("operator=\"greaterThan\"");
+        customFilters.ToString().Should().Contain("operator=\"lessThan\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterCustomFiltersFalseAndEmptyValue()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterCustomFilterEdgeRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue(""));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterCustomFilterEdgeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedFilterColumn = loaded.GetSheetAt(0).AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.CustomFiltersAnd.Should().BeFalse();
+        loadedFilterColumn.CustomFiltersAndRaw.Should().Be("0");
+        loadedFilterColumn.CustomFilters.Should().ContainSingle();
+        loadedFilterColumn.CustomFilters[0].Operator.Should().Be("equal");
+        loadedFilterColumn.CustomFilters[0].Value.Should().Be("");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customFilters = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "customFilters");
+        customFilters.Should().NotBeNull();
+        customFilters!.Attribute("and")!.Value.Should().Be("0");
+        var customFilter = customFilters.Element(worksheetNs + "customFilter");
+        customFilter.Should().NotBeNull();
+        customFilter!.Attribute("operator")!.Value.Should().Be("equal");
+        customFilter.Attribute("val")!.Value.Should().Be("");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MaterializesAndPreservesWorksheetAutoFilterTop10()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterTop10RetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterTop10Metadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.Top10.Should().NotBeNull();
+        loadedFilterColumn.Top10!.Top.Should().BeTrue();
+        loadedFilterColumn.Top10.Percent.Should().BeFalse();
+        loadedFilterColumn.Top10.Value.Should().Be(2);
+        loadedFilterColumn.Top10.FilterValue.Should().Be(20);
+        loadedFilterColumn.Top10.ValueRaw.Should().Be("2");
+        loadedFilterColumn.Top10.NativeAttributes.Should().Contain("{urn:freexcel:test}top10Flag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().Equal(2u);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var top10 = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "top10");
+        top10.Should().NotBeNull();
+        top10!.Attribute("val")!.Value.Should().Be("2");
+        top10.Attribute("filterVal")!.Value.Should().Be("20");
+        top10.Attribute(XName.Get("top10Flag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesWorksheetAutoFilterTop10DefaultValue()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterTop10DefaultTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:A2", null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: new WorksheetAutoFilterTop10Model(),
+            DynamicFilter: null,
+            NativeFilterXmls: []));
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "top10")!
+            .Attribute("val")!
+            .Value
+            .Should()
+            .Be("10");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MaterializesAndPreservesWorksheetAutoFilterDynamicAverage()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterDynamicAverageRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterDynamicAverageMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.DynamicFilter.Should().NotBeNull();
+        loadedFilterColumn.DynamicFilter!.Type.Should().Be("aboveAverage");
+        loadedFilterColumn.DynamicFilter.NativeAttributes.Should().Contain("{urn:freexcel:test}dynamicFilterFlag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().Equal(2u, 4u);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dynamicFilter = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "dynamicFilter");
+        dynamicFilter.Should().NotBeNull();
+        dynamicFilter!.Attribute("type")!.Value.Should().Be("aboveAverage");
+        dynamicFilter.Attribute(XName.Get("dynamicFilterFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterDynamicDateWithoutMaterializing()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterDynamicDateRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Date"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(45000));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterDynamicDateMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.DynamicFilter.Should().NotBeNull();
+        loadedFilterColumn.DynamicFilter!.Type.Should().Be("thisMonth");
+        loadedFilterColumn.DynamicFilter.Value.Should().Be(45000);
+        loadedFilterColumn.DynamicFilter.ValueRaw.Should().Be("45000");
+        loadedSheet.FilterHiddenRows.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dynamicFilter = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "dynamicFilter");
+        dynamicFilter.Should().NotBeNull();
+        dynamicFilter!.Attribute("type")!.Value.Should().Be("thisMonth");
+        dynamicFilter.Attribute("val")!.Value.Should().Be("45000");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterColorFilterWithoutMaterializing()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterColorFilterRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterColorFilterMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.ColorFilter.Should().NotBeNull();
+        loadedFilterColumn.ColorFilter!.DifferentialFormatId.Should().Be(3);
+        loadedFilterColumn.ColorFilter.DifferentialFormatIdRaw.Should().Be("3");
+        loadedFilterColumn.ColorFilter.CellColor.Should().BeFalse();
+        loadedFilterColumn.ColorFilter.CellColorRaw.Should().Be("0");
+        loadedFilterColumn.ColorFilter.NativeAttributes.Should().Contain("{urn:freexcel:test}colorFilterFlag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var colorFilter = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "colorFilter");
+        colorFilter.Should().NotBeNull();
+        colorFilter!.Attribute("dxfId")!.Value.Should().Be("3");
+        colorFilter.Attribute("cellColor")!.Value.Should().Be("0");
+        colorFilter.Attribute(XName.Get("colorFilterFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterIconFilterWithoutMaterializing()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterIconFilterRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Score"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterIconFilterMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.IconFilter.Should().NotBeNull();
+        loadedFilterColumn.IconFilter!.IconSet.Should().Be("3TrafficLights1");
+        loadedFilterColumn.IconFilter.IconId.Should().Be(2);
+        loadedFilterColumn.IconFilter.IconIdRaw.Should().Be("2");
+        loadedFilterColumn.IconFilter.NativeAttributes.Should().Contain("{urn:freexcel:test}iconFilterFlag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var iconFilter = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "iconFilter");
+        iconFilter.Should().NotBeNull();
+        iconFilter!.Attribute("iconSet")!.Value.Should().Be("3TrafficLights1");
+        iconFilter.Attribute("iconId")!.Value.Should().Be("2");
+        iconFilter.Attribute(XName.Get("iconFilterFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterDateGroupItemsWithoutMaterializing()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterDateGroupRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Date"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(45000));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(45031));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterDateGroupMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.IncludeBlank.Should().BeTrue();
+        loadedFilterColumn.NativeFiltersAttributes.Should().Contain("{urn:freexcel:test}filtersFlag", "keep");
+        loadedFilterColumn.DateGroups.Should().ContainSingle();
+        var dateGroup = loadedFilterColumn.DateGroups[0];
+        dateGroup.Year.Should().Be(2023);
+        dateGroup.Month.Should().Be(3);
+        dateGroup.DateTimeGrouping.Should().Be("month");
+        dateGroup.NativeAttributes.Should().Contain("{urn:freexcel:test}dateGroupFlag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var filters = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "filters");
+        filters.Should().NotBeNull();
+        filters!.Attribute("blank")!.Value.Should().Be("1");
+        filters.Attribute(XName.Get("filtersFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+        var savedDateGroup = filters.Element(worksheetNs + "dateGroupItem");
+        savedDateGroup.Should().NotBeNull();
+        savedDateGroup!.Attribute("year")!.Value.Should().Be("2023");
+        savedDateGroup.Attribute("month")!.Value.Should().Be("3");
+        savedDateGroup.Attribute("dateTimeGrouping")!.Value.Should().Be("month");
+        savedDateGroup.Attribute(XName.Get("dateGroupFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetAutoFilterValues()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterValuesTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B3", null)
+        {
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["customAutoFilterFlag"] = "keep",
+                ["invalid autoFilter attr"] = "skip"
+            },
+            NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-WORKSHEET-AUTOFILTER}\"/></extLst>"]
+        };
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: true,
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["customFilterColumnFlag"] = "keep",
+                ["invalid filterColumn attr"] = "skip"
+            }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            1,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [new WorksheetAutoFilterCustomFilterModel("equal", "A", new Dictionary<string, string> { ["customFilterFlag"] = "keep" })],
+            CustomFiltersAnd: false,
+            NativeCustomFiltersAttributes: new Dictionary<string, string> { ["customFiltersFlag"] = "keep" },
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["customFilterColumnFlag"] = "keep",
+                ["invalid filterColumn attr"] = "skip"
+            }));
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var autoFilter = worksheetXml.Root!.Element(worksheetNs + "autoFilter");
+        autoFilter.Should().NotBeNull();
+        autoFilter!.Attribute("ref")!.Value.Should().Be("A1:B3");
+        autoFilter.Attribute("customAutoFilterFlag")!.Value.Should().Be("keep");
+        autoFilter.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid autoFilter attr");
+        autoFilter.Element(worksheetNs + "extLst").Should().NotBeNull();
+        var filterColumns = autoFilter.Elements(worksheetNs + "filterColumn").ToArray();
+        filterColumns.Should().HaveCount(2);
+        var valueFilterColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "0");
+        valueFilterColumn.Attribute("customFilterColumnFlag")!.Value.Should().Be("keep");
+        valueFilterColumn.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid filterColumn attr");
+        valueFilterColumn.Element(worksheetNs + "filters")!.Attribute("blank")!.Value.Should().Be("1");
+        valueFilterColumn.Element(worksheetNs + "filters")!.Element(worksheetNs + "filter")!.Attribute("val")!.Value.Should().Be("A");
+        valueFilterColumn.Element(worksheetNs + "customFilters").Should().BeNull();
+        var customFilterColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "1");
+        customFilterColumn.Element(worksheetNs + "filters").Should().BeNull();
+        customFilterColumn.Element(worksheetNs + "customFilters")!.Attribute("customFiltersFlag")!.Value.Should().Be("keep");
+        customFilterColumn.Element(worksheetNs + "customFilters")!.Element(worksheetNs + "customFilter")!.Attribute("customFilterFlag")!.Value.Should().Be("keep");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesFilterHiddenRowsAsHiddenRows()
+    {
+        var workbook = new Workbook("WorksheetFilterHiddenRowsTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:A3", null);
+        sheet.FilterHiddenRows.Add(3);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Elements(worksheetNs + "row")
+            .Single(row => row.Attribute("r")?.Value == "3")
+            .Attribute("hidden")!
+            .Value
+            .Should()
+            .Be("1");
     }
 
     [Fact]
@@ -16814,6 +17676,186 @@ public partial class FileAdapterSmokeTests
         orderedElements.Should().Contain("mergeCells");
         orderedElements.IndexOf("autoFilter").Should().BeLessThan(orderedElements.IndexOf("mergeCells"));
         worksheetXml.Root!.Element(worksheetNs + "autoFilter")!.Attribute("ref")!.Value.Should().Be("A1:B2");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetAutoFilter()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).AutoFilter.Should().NotBeNull();
+        loaded.GetSheetAt(0).AutoFilter = null;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!.Element(worksheetNs + "autoFilter").Should().BeNull();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetAutoFilterValues()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterNativeJsonTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:D3", null)
+        {
+            NativeAttributes = new Dictionary<string, string> { ["customAutoFilterFlag"] = "keep" },
+            NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"/>"]
+        };
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: true,
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag"] = "keep" }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            1,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [new WorksheetAutoFilterCustomFilterModel("equal", "A", new Dictionary<string, string> { ["customFilterFlag"] = "keep" })],
+            CustomFiltersAnd: true,
+            NativeCustomFiltersAttributes: new Dictionary<string, string> { ["customFiltersFlag"] = "keep" },
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag2"] = "keep" }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            2,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: new WorksheetAutoFilterTop10Model(
+                Top: false,
+                Percent: true,
+                Value: 25,
+                FilterValue: 10,
+                PercentRaw: "1",
+                ValueRaw: "25",
+                FilterValueRaw: "10",
+                NativeAttributes: new Dictionary<string, string> { ["customTop10Flag"] = "keep" }),
+            DynamicFilter: null,
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag3"] = "keep" }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            3,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: new WorksheetAutoFilterDynamicFilterModel(
+                Type: "belowAverage",
+                NativeAttributes: new Dictionary<string, string> { ["customDynamicFilterFlag"] = "keep" }),
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag4"] = "keep" }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            4,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: null,
+            ColorFilter: new WorksheetAutoFilterColorFilterModel(
+                DifferentialFormatId: 7,
+                CellColor: true,
+                NativeAttributes: new Dictionary<string, string> { ["customColorFilterFlag"] = "keep" }),
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag5"] = "keep" }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            5,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: null,
+            ColorFilter: null,
+            IconFilter: new WorksheetAutoFilterIconFilterModel(
+                IconSet: "3Arrows",
+                IconId: 1,
+                NativeAttributes: new Dictionary<string, string> { ["customIconFilterFlag"] = "keep" }),
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string> { ["customFilterColumnFlag6"] = "keep" }));
+
+        var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = new NativeJsonAdapter().Load(stream);
+
+        var autoFilter = loaded.GetSheetAt(0).AutoFilter;
+        autoFilter.Should().NotBeNull();
+        autoFilter!.Reference.Should().Be("A1:D3");
+        autoFilter.NativeAttributes.Should().Contain("customAutoFilterFlag", "keep");
+        autoFilter.NativeChildXmls.Should().ContainSingle().Which.Should().Contain("extLst");
+        autoFilter.FilterColumns.Should().HaveCount(6);
+        var filterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 0);
+        filterColumn.ColumnId.Should().Be(0);
+        filterColumn.Values.Should().Equal("A");
+        filterColumn.IncludeBlank.Should().BeTrue();
+        filterColumn.CustomFilters.Should().BeEmpty();
+        filterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag", "keep");
+        var customFilterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 1);
+        customFilterColumn.Values.Should().BeEmpty();
+        customFilterColumn.IncludeBlank.Should().BeFalse();
+        customFilterColumn.CustomFiltersAnd.Should().BeTrue();
+        customFilterColumn.CustomFiltersAndRaw.Should().BeNull();
+        customFilterColumn.NativeCustomFiltersAttributes.Should().Contain("customFiltersFlag", "keep");
+        customFilterColumn.CustomFilters.Should().ContainSingle();
+        customFilterColumn.CustomFilters[0].Operator.Should().Be("equal");
+        customFilterColumn.CustomFilters[0].Value.Should().Be("A");
+        customFilterColumn.CustomFilters[0].NativeAttributes.Should().Contain("customFilterFlag", "keep");
+        customFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        customFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag2", "keep");
+        var top10Column = autoFilter.FilterColumns.Single(column => column.ColumnId == 2);
+        top10Column.Top10.Should().NotBeNull();
+        top10Column.Top10!.Top.Should().BeFalse();
+        top10Column.Top10.Percent.Should().BeTrue();
+        top10Column.Top10.PercentRaw.Should().Be("1");
+        top10Column.Top10.Value.Should().Be(25);
+        top10Column.Top10.FilterValue.Should().Be(10);
+        top10Column.Top10.NativeAttributes.Should().Contain("customTop10Flag", "keep");
+        top10Column.NativeAttributes.Should().Contain("customFilterColumnFlag3", "keep");
+        var dynamicFilterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 3);
+        dynamicFilterColumn.DynamicFilter.Should().NotBeNull();
+        dynamicFilterColumn.DynamicFilter!.Type.Should().Be("belowAverage");
+        dynamicFilterColumn.DynamicFilter.NativeAttributes.Should().Contain("customDynamicFilterFlag", "keep");
+        dynamicFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag4", "keep");
+        var colorFilterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 4);
+        colorFilterColumn.ColorFilter.Should().NotBeNull();
+        colorFilterColumn.ColorFilter!.DifferentialFormatId.Should().Be(7);
+        colorFilterColumn.ColorFilter.CellColor.Should().BeTrue();
+        colorFilterColumn.ColorFilter.NativeAttributes.Should().Contain("customColorFilterFlag", "keep");
+        colorFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag5", "keep");
+        var iconFilterColumn = autoFilter.FilterColumns.Single(column => column.ColumnId == 5);
+        iconFilterColumn.IconFilter.Should().NotBeNull();
+        iconFilterColumn.IconFilter!.IconSet.Should().Be("3Arrows");
+        iconFilterColumn.IconFilter.IconId.Should().Be(1);
+        iconFilterColumn.IconFilter.NativeAttributes.Should().Contain("customIconFilterFlag", "keep");
+        iconFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag6", "keep");
     }
 
     [Fact]
@@ -18782,8 +19824,14 @@ public partial class FileAdapterSmokeTests
         var filter = table.FilterColumns.Should().ContainSingle().Subject;
         filter.ColumnId.Should().Be(1);
         filter.Values.Should().BeEmpty();
-        filter.NativeFilterXml.Should().Contain("customFilters");
-        filter.NativeFilterXml.Should().Contain("greaterThan");
+        filter.CustomFilters.Should().ContainSingle();
+        filter.CustomFilters[0].Operator.Should().Be("greaterThan");
+        filter.CustomFilters[0].Value.Should().Be("10");
+        filter.CustomFilters[0].NativeAttributes.Should().Contain("{urn:freexcel:test}customFilterNsFlag", "keep");
+        filter.NativeCustomFiltersAttributes.Should().Contain("customFiltersFlag", "keep");
+        filter.NativeCustomFiltersAttributes.Should().Contain("{urn:freexcel:test}customFiltersNsFlag", "keep");
+        filter.NativeFilterXmls.Should().BeEmpty();
+        loaded.GetSheetAt(0).FilterHiddenRows.Should().BeEmpty();
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -18793,6 +19841,9 @@ public partial class FileAdapterSmokeTests
         var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         tableXml.Should().Contain("customFilters");
         tableXml.Should().Contain("customFilter operator=\"greaterThan\" val=\"10\"");
+        tableXml.Should().Contain("customFiltersFlag=\"keep\"");
+        tableXml.Should().Contain("customFiltersNsFlag=\"keep\"");
+        tableXml.Should().Contain("customFilterNsFlag=\"keep\"");
     }
 
     [Fact]
@@ -18813,10 +19864,12 @@ public partial class FileAdapterSmokeTests
         var filter = table.FilterColumns.Should().ContainSingle().Subject;
         filter.ColumnId.Should().Be(1);
         filter.Values.Should().BeEmpty();
-        filter.NativeFilterXmls.Should().HaveCount(2);
-        filter.NativeFilterXmls[0].Should().Contain("customFilters");
-        filter.NativeFilterXmls[1].Should().Contain("extLst");
-        filter.NativeFilterXmls[1].Should().Contain("{FREEXCEL-TABLE-FILTER-EXT}");
+        filter.CustomFilters.Should().ContainSingle();
+        filter.CustomFilters[0].Operator.Should().Be("greaterThan");
+        filter.CustomFilters[0].Value.Should().Be("10");
+        filter.NativeFilterXmls.Should().ContainSingle();
+        filter.NativeFilterXmls[0].Should().Contain("extLst");
+        filter.NativeFilterXmls[0].Should().Contain("{FREEXCEL-TABLE-FILTER-EXT}");
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -19057,6 +20110,75 @@ public partial class FileAdapterSmokeTests
         tableXml.Should().Contain("headerRowDxfId=\"2\"");
         tableXml.Should().Contain("extLst");
         tableXml.Should().Contain("{FREEXCEL-TABLE-ROOT-EXT}");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_SkipsInvalidStructuredTableNativeAttributeNames()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableInvalidNativeAttributesTest");
+        var sheet = workbook.GetSheetAt(0);
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HasAutoFilter = true,
+            TotalsRowShown = false,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["headerRowDxfId"] = "2",
+                ["invalid table attr"] = "skip"
+            },
+            NativeAutoFilterAttributes = new Dictionary<string, string>
+            {
+                ["customAutoFilterFlag"] = "keep",
+                ["invalid autoFilter attr"] = "skip"
+            },
+            NativeStyleInfoAttributes = new Dictionary<string, string>
+            {
+                ["pivot"] = "0",
+                ["invalid styleInfo attr"] = "skip"
+            }
+        };
+        table.Columns.Add(new StructuredTableColumnModel(
+            1,
+            "Category",
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["uniqueName"] = "CategoryNative",
+                ["invalid column attr"] = "skip"
+            }));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: false,
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["hiddenButton"] = "1",
+                ["invalid filterColumn attr"] = "skip"
+            }));
+        sheet.StructuredTables.Add(table);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        var save = () => adapter.Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("headerRowDxfId=\"2\"");
+        tableXml.Should().Contain("customAutoFilterFlag=\"keep\"");
+        tableXml.Should().Contain("pivot=\"0\"");
+        tableXml.Should().Contain("uniqueName=\"CategoryNative\"");
+        tableXml.Should().Contain("hiddenButton=\"1\"");
+        tableXml.Should().NotContain("invalid ");
     }
 
     [Fact]
@@ -19587,6 +20709,20 @@ public partial class FileAdapterSmokeTests
                 new XElement(
                     workbookNs + "indexedColors",
                     new XElement(workbookNs + "rgbColor", new XAttribute("rgb", "FF010203")))));
+            stylesXml.Root.Elements(workbookNs + "dxfs").Remove();
+            stylesXml.Root.Add(new XElement(
+                workbookNs + "dxfs",
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "dxf",
+                    new XAttribute("nativePivotDxf", "kept"),
+                    new XElement(
+                        workbookNs + "fill",
+                        new XElement(
+                            workbookNs + "patternFill",
+                            new XAttribute("patternType", "solid"),
+                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FFABCDEF")))),
+                    new XElement(freexcelNs + "pivotStyleDxfNativeChild", new XAttribute("value", "kept")))));
 
             var tableStyles = stylesXml.Root.Element(workbookNs + "tableStyles");
             if (tableStyles is null)
@@ -19700,6 +20836,43 @@ public partial class FileAdapterSmokeTests
 
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
         }
+    }
+
+    private static void AddCustomDocumentProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+            XNamespace docPropsVtNs = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+
+            ReplacePackageXml(archive, "docProps/custom.xml", new XDocument(
+                new XElement(
+                    customPropertiesNs + "Properties",
+                    new XAttribute(XNamespace.Xmlns + "vt", docPropsVtNs),
+                    new XElement(
+                        customPropertiesNs + "property",
+                        new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                        new XAttribute("pid", "2"),
+                        new XAttribute("name", "FreexcelCustomProperty"),
+                        new XElement(docPropsVtNs + "lpwstr", "kept")),
+                    new XElement(
+                        customPropertiesNs + "property",
+                        new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                        new XAttribute("pid", "3"),
+                        new XAttribute("name", "MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled"),
+                        new XElement(docPropsVtNs + "lpwstr", "true")))));
+
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            var contentTypes = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypes,
+                contentTypeNs,
+                "/docProps/custom.xml",
+                "application/vnd.openxmlformats-officedocument.custom-properties+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        packageStream.Position = 0;
     }
 
     private static void AddMinimalCustomSheetViews(MemoryStream packageStream)
@@ -20833,6 +22006,219 @@ public partial class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddWorksheetAutoFilterCustomFilterMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:B3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "1"),
+                    new XElement(
+                        worksheetNs + "customFilters",
+                        new XAttribute("and", "1"),
+                        new XAttribute("customFiltersFlag", "keep"),
+                        new XAttribute(freexcelNs + "customFiltersNsFlag", "keep"),
+                        new XElement(
+                            worksheetNs + "customFilter",
+                            new XAttribute("operator", "greaterThan"),
+                            new XAttribute("val", "10"),
+                            new XAttribute("customFilterFlag", "first"),
+                            new XAttribute(freexcelNs + "customFilterNsFlag", "first")),
+                        new XElement(
+                            worksheetNs + "customFilter",
+                            new XAttribute("operator", "lessThan"),
+                            new XAttribute("val", "20"))))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterCustomFilterEdgeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A2"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "customFilters",
+                        new XAttribute("and", "0"),
+                        new XElement(
+                            worksheetNs + "customFilter",
+                            new XAttribute("operator", "equal"),
+                            new XAttribute("val", ""))))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterTop10Metadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                        new XAttribute("ref", "A1:A5"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "top10",
+                        new XAttribute("val", "2"),
+                        new XAttribute("filterVal", "20"),
+                        new XAttribute(freexcelNs + "top10Flag", "keep")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterDynamicAverageMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A4"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "dynamicFilter",
+                        new XAttribute("type", "aboveAverage"),
+                        new XAttribute(freexcelNs + "dynamicFilterFlag", "keep")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterDynamicDateMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A2"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "dynamicFilter",
+                        new XAttribute("type", "thisMonth"),
+                        new XAttribute("val", "45000")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterColorFilterMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "colorFilter",
+                        new XAttribute("dxfId", "3"),
+                        new XAttribute("cellColor", "0"),
+                        new XAttribute(freexcelNs + "colorFilterFlag", "keep")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterIconFilterMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "iconFilter",
+                        new XAttribute("iconSet", "3TrafficLights1"),
+                        new XAttribute("iconId", "2"),
+                        new XAttribute(freexcelNs + "iconFilterFlag", "keep")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterDateGroupMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "filters",
+                        new XAttribute("blank", "1"),
+                        new XAttribute(freexcelNs + "filtersFlag", "keep"),
+                        new XElement(
+                            worksheetNs + "dateGroupItem",
+                            new XAttribute("year", "2023"),
+                            new XAttribute("month", "3"),
+                            new XAttribute("dateTimeGrouping", "month"),
+                            new XAttribute(freexcelNs + "dateGroupFlag", "keep"))))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddAdvancedSheetProtectionMetadata(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -21857,6 +23243,42 @@ public partial class FileAdapterSmokeTests
         </a:theme>
         """;
 
+    private const string TestThemeWithNativeColorAndFontSchemeXml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Freexcel Native Scheme Theme">
+          <a:themeElements>
+            <a:clrScheme name="Freexcel Native Colors">
+              <a:dk1><a:srgbClr val="010203"/></a:dk1>
+              <a:lt1><a:srgbClr val="FAFBFC"/></a:lt1>
+              <a:dk2><a:srgbClr val="44546A"/></a:dk2>
+              <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+              <a:accent1><a:srgbClr val="0C2238"><a:lumMod val="75000"/></a:srgbClr></a:accent1>
+              <a:accent2><a:srgbClr val="E97132"/></a:accent2>
+              <a:accent3><a:srgbClr val="196B24"/></a:accent3>
+              <a:accent4><a:srgbClr val="0F9ED5"/></a:accent4>
+              <a:accent5><a:srgbClr val="A02B93"/></a:accent5>
+              <a:accent6><a:srgbClr val="4EA72E"/></a:accent6>
+              <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+              <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+            </a:clrScheme>
+            <a:fontScheme name="Freexcel Native Fonts">
+              <a:majorFont>
+                <a:latin typeface="Major Native"/>
+                <a:ea typeface="Major East Asia"/>
+                <a:cs typeface="Major Complex"/>
+                <a:font script="Jpan" typeface="Yu Gothic"/>
+              </a:majorFont>
+              <a:minorFont>
+                <a:latin typeface="Minor Native"/>
+                <a:ea typeface="Minor East Asia"/>
+                <a:cs typeface="Minor Complex"/>
+              </a:minorFont>
+            </a:fontScheme>
+            <a:fmtScheme name="Effects Test"/>
+          </a:themeElements>
+        </a:theme>
+        """;
+
     private const string MinimalColumnChartXml = """
         <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
@@ -22124,6 +23546,7 @@ public partial class FileAdapterSmokeTests
 
     private const string StructuredTableWithCustomFilterXml = """
         <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               xmlns:fx="urn:freexcel:test"
                id="1"
                name="Table1"
                displayName="Table1"
@@ -22131,8 +23554,8 @@ public partial class FileAdapterSmokeTests
                totalsRowShown="0">
           <autoFilter ref="A1:B3">
             <filterColumn colId="1">
-              <customFilters>
-                <customFilter operator="greaterThan" val="10"/>
+              <customFilters customFiltersFlag="keep" fx:customFiltersNsFlag="keep">
+                <customFilter operator="greaterThan" val="10" fx:customFilterNsFlag="keep"/>
               </customFilters>
             </filterColumn>
           </autoFilter>

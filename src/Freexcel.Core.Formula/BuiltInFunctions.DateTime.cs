@@ -8,6 +8,21 @@ namespace Freexcel.Core.Formula;
 public static partial class BuiltInFunctions
 {
     // Date and time functions plus shared Excel date-system helpers.
+    private static readonly Regex DateTimeTextHasTimeSeparatorRegex = new(@"\d\s*:\s*\d");
+    private static readonly Regex DateTimeTextHasAmPmRegex = new(@"\b(?:AM|PM)\b", RegexOptions.IgnoreCase);
+    private static readonly Regex DateTimeTextHasDateSeparatorRegex = new(@"\d+\s*[-/]\s*\d+");
+    private static readonly Regex DateTimeTextHasMonthNameRegex = new(
+        @"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b",
+        RegexOptions.IgnoreCase);
+    private static readonly Regex DateTimeFakeLeapDayTextRegex = new(
+        @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$",
+        RegexOptions.IgnoreCase);
+
+    private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        DateTimeValue.FromDateTime(DateTime.Now);
+
+    private static ScalarValue Today(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        DateTimeValue.FromDateTime(DateTime.Today);
 
     private static ScalarValue Date(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -84,6 +99,9 @@ public static partial class BuiltInFunctions
         dt = SerialToDate(num);
         return true;
     }
+
+    private static DateTime OADateToDateTime(ScalarValue v) =>
+        DateTime.FromOADate(ToNumber(v));
 
     private static bool TryNonNegativeOADateToDateTime(ScalarValue v, out DateTime dt)
     {
@@ -340,6 +358,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue TimevalueScalar(ScalarValue value)
     {
         var text = ToText(value);
+        if (!TextHasTimeComponent(text)) return ErrorValue.Value;
         if (TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts.Days == 0)
             return new NumberValue(ts.TotalDays);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
@@ -359,17 +378,26 @@ public static partial class BuiltInFunctions
     {
         var text = ToText(value);
         if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
+        if (!TextHasDateComponent(text)) return ErrorValue.Value;
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
     }
 
+    private static bool TextHasTimeComponent(string text) =>
+        DateTimeTextHasTimeSeparatorRegex.IsMatch(text) ||
+        DateTimeTextHasAmPmRegex.IsMatch(text);
+
+    private static bool TextHasDateComponent(string text) =>
+        DateTimeTextHasDateSeparatorRegex.IsMatch(text) ||
+        DateTimeTextHasMonthNameRegex.IsMatch(text);
+
     private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
     {
         serial = 0;
         var trimmed = text.Trim();
-        var match = Regex.Match(trimmed, @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$", RegexOptions.IgnoreCase);
+        var match = DateTimeFakeLeapDayTextRegex.Match(trimmed);
         if (!match.Success) return false;
 
         serial = 60;
@@ -647,10 +675,17 @@ public static partial class BuiltInFunctions
     {
         int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
         int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (IsExcelNasdLastDayOfFebruary(d1)) dd1 = 30;
+        if (IsExcelNasdLastDayOfFebruary(d2) && dd1 == 30) dd2 = 30;
         if (dd1 == 31) dd1 = 30;
         if (dd2 == 31 && dd1 == 30) dd2 = 30;
         return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
     }
+
+    private static bool IsExcelNasdLastDayOfFebruary(DateTime date) =>
+        date.Year != 1900 &&
+        date.Month == 2 &&
+        date.Day == DateTime.DaysInMonth(date.Year, 2);
 
     private static double Days30E360(DateTime d1, DateTime d2)
     {
@@ -675,8 +710,10 @@ public static partial class BuiltInFunctions
     private static int ExcelDowToMonIndex(DateTime date)
     {
         int serial = (int)Math.Floor(DateToSerial(date));
-        return ((serial + 5) % 7 + 7) % 7;
+        return ExcelDowToMonIndex(serial);
     }
+
+    private static int ExcelDowToMonIndex(int serial) => ((serial + 5) % 7 + 7) % 7;
 
     private static int ExcelIsoWeeknum(DateTime date)
     {

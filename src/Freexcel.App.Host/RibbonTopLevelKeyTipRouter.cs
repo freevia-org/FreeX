@@ -16,6 +16,7 @@ public static class RibbonTopLevelKeyTipRouter
             "P" => RibbonTopLevelKeyTipAction.RibbonTab("Page Layout"),
             "M" => RibbonTopLevelKeyTipAction.RibbonTab("Formulas"),
             "A" => RibbonTopLevelKeyTipAction.RibbonTab("Data"),
+            "D" => RibbonTopLevelKeyTipAction.RibbonTab("Data"),
             "R" => RibbonTopLevelKeyTipAction.RibbonTab("Review"),
             "W" => RibbonTopLevelKeyTipAction.RibbonTab("View"),
             "JA" => RibbonTopLevelKeyTipAction.RibbonTab("PivotTable Analyze"),

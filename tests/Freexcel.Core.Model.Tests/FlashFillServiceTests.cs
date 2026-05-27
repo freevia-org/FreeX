@@ -94,6 +94,181 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ExtractFileExtension_ExtractsPartAfterDot()
+    {
+        var result = FlashFillService.Fill(
+            [("report.xlsx", "xlsx"), ("budget.csv", "csv")],
+            ["notes.txt"]);
+
+        result.Should().BeEquivalentTo(["txt"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractFileExtension_ReturnsNullWhenRemainingDotIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [("report.xlsx", "xlsx"), ("budget.csv", "csv")],
+            ["notes"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("North (Retail)", "Retail", "South (Wholesale)", "Wholesale", "East (Online)", "Online")]
+    [InlineData("INV [Open]", "Open", "INV [Closed]", "Closed", "INV [Pending]", "Pending")]
+    [InlineData("Batch {Ready}", "Ready", "Batch {Held}", "Held", "Batch {Review}", "Review")]
+    [InlineData("North \"Retail\"", "Retail", "South \"Wholesale\"", "Wholesale", "East \"Online\"", "Online")]
+    [InlineData("North 'Retail'", "Retail", "South 'Wholesale'", "Wholesale", "East 'Online'", "Online")]
+    [InlineData("Dept <Retail>", "Retail", "Dept <Wholesale>", "Wholesale", "Dept <Online>", "Online")]
+    public void Fill_PairedDelimiterExtraction_ExtractsTextBetweenMatchingDelimiters(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PairedDelimiterExtraction_ReturnsNullWhenRemainingDelimiterIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [("North (Retail)", "Retail"), ("South (Wholesale)", "Wholesale")],
+            ["East Online"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("North (Retail)", "North", "South (Wholesale)", "South", "East (Online)", "East")]
+    [InlineData("INV [Open]", "INV", "REQ [Closed]", "REQ", "PO [Pending]", "PO")]
+    [InlineData("Dept <Retail>", "Dept", "Team <Wholesale>", "Team", "Channel <Online>", "Channel")]
+    public void Fill_PairedDelimiterRemoval_RemovesDelimitedQualifier(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PairedDelimiterRemoval_ReturnsNullWhenRemainingDelimiterIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [("North (Retail)", "North"), ("South (Wholesale)", "South")],
+            ["East Online"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Status: Open", "Open", "Status: Closed", "Closed", "Status: Pending", "Pending")]
+    [InlineData("Priority = High", "High", "Priority = Low", "Low", "Priority = Medium", "Medium")]
+    [InlineData("Owner - Ada", "Ada", "Owner - Grace", "Grace", "Owner - Alan", "Alan")]
+    [InlineData("Status | Open", "Open", "Status | Closed", "Closed", "Status | Pending", "Pending")]
+    [InlineData("Status -> Open", "Open", "Status -> Closed", "Closed", "Status -> Pending", "Pending")]
+    public void Fill_LabelValueExtraction_ExtractsTrimmedValueAfterSeparator(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_LabelValueExtraction_ReturnsNullWhenRemainingSeparatorIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [("Status: Open", "Open"), ("Status: Closed", "Closed")],
+            ["Status Pending"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Status | Open", "Open", "Status | Closed", "Closed")]
+    [InlineData("Status -> Open", "Open", "Status -> Closed", "Closed")]
+    public void Fill_LabelValueExtraction_ReturnsNullWhenPipeOrArrowSeparatorIsMissing(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            ["Status Pending"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Status: Open", "Status", "Priority: High", "Priority", "Owner: Ada", "Owner")]
+    [InlineData("Status = Open", "Status", "Priority = High", "Priority", "Owner = Ada", "Owner")]
+    [InlineData("Status - Open", "Status", "Priority - High", "Priority", "Owner - Ada", "Owner")]
+    [InlineData("Status | Open", "Status", "Priority | High", "Priority", "Owner | Ada", "Owner")]
+    [InlineData("Status -> Open", "Status", "Priority -> High", "Priority", "Owner -> Ada", "Owner")]
+    public void Fill_LabelQualifierRemoval_RemovesValueAfterSeparator(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_LabelQualifierRemoval_ReturnsNullWhenRemainingSeparatorIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [("Status: Open", "Status"), ("Priority: High", "Priority")],
+            ["Owner Ada"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Status | Open", "Status", "Priority | High", "Priority")]
+    [InlineData("Status -> Open", "Status", "Priority -> High", "Priority")]
+    public void Fill_LabelQualifierRemoval_ReturnsNullWhenPipeOrArrowSeparatorIsMissing(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            ["Owner Ada"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_EmailDisplayName_ConvertsDottedUserNameToProperName()
     {
         var result = FlashFillService.Fill(
@@ -133,6 +308,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDisplayName_IgnoresPlusAddressTags()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.lovelace+analytics@contoso.com", "Ada Lovelace"),
+                ("grace.hopper+navy@contoso.com", "Grace Hopper")
+            ],
+            ["alan.turing+math@contoso.com"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_DelimitedWordsInitials_BuildsInitials()
     {
         var result = FlashFillService.Fill(
@@ -150,6 +338,130 @@ public sealed class FlashFillServiceTests
             ["Alan Turing"]);
 
         result.Should().BeEquivalentTo(["Turing, Alan"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_LastCommaFirstFullName_ReordersDelimitedNameParts()
+    {
+        var result = FlashFillService.Fill(
+            [("Lovelace, Ada", "Ada Lovelace"), ("Hopper, Grace", "Grace Hopper")],
+            ["Turing, Alan"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_LastCommaFirstFullName_ReturnsNullForMalformedRemainingSource()
+    {
+        var result = FlashFillService.Fill(
+            [("Lovelace, Ada", "Ada Lovelace"), ("Hopper, Grace", "Grace Hopper")],
+            ["Alan Turing"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_ThreePartNames_ExtractsFirstAndLast()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "Ada Lovelace"),
+                ("Grace Brewster Hopper", "Grace Hopper")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ThreePartNames_ReordersLastCommaFirst()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "Lovelace, Ada"),
+                ("Grace Brewster Hopper", "Hopper, Grace")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeEquivalentTo(["Turing, Alan"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNames_AbbreviatesFirstInitialLastName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "A. Lovelace"),
+                ("Grace Hopper", "G. Hopper")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo(["A. Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNames_AbbreviatesFirstNameLastInitial()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "Ada L."),
+                ("Grace Hopper", "Grace H.")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo(["Alan T."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNames_AbbreviatesLastNameFirstInitial()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "Lovelace A."),
+                ("Grace Hopper", "Hopper G.")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo(["Turing A."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNames_AbbreviatesLastCommaFirstInitial()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "Lovelace, A."),
+                ("Grace Hopper", "Hopper, G.")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo(["Turing, A."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ThreePartNames_AbbreviatesMiddleInitial()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "Ada B. Lovelace"),
+                ("Grace Brewster Hopper", "Grace B. Hopper")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeEquivalentTo(["Alan M. Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ThreePartNames_ReturnsNullForAmbiguousTokenCounts()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "Ada Lovelace"),
+                ("Grace Brewster Hopper", "Grace Hopper")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeNull();
     }
 
     [Fact]

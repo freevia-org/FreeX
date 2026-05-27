@@ -22,6 +22,15 @@ public static class ChartOptionCycler
             _ => ChartDataLabelNumberFormat.General
         };
 
+    public static ChartDataLabelSeparator NextDataLabelSeparator(ChartDataLabelSeparator current) =>
+        current switch
+        {
+            ChartDataLabelSeparator.Comma => ChartDataLabelSeparator.Semicolon,
+            ChartDataLabelSeparator.Semicolon => ChartDataLabelSeparator.NewLine,
+            ChartDataLabelSeparator.NewLine => ChartDataLabelSeparator.Space,
+            _ => ChartDataLabelSeparator.Comma
+        };
+
     public static ChartTrendlineType NextTrendlineType(ChartTrendlineType current) =>
         current switch
         {

@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Windows;
+using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
@@ -90,6 +91,113 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void TryCreateDrawingAnchorRect_UsesFirstMatchingAnchorMetrics()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(3, 20, 0),
+                new RowMetric(5, 20, 40),
+                new RowMetric(3, 20, 200)
+            ],
+            [
+                new ColMetric(2, 80, 0),
+                new ColMetric(4, 80, 160),
+                new ColMetric(2, 80, 300)
+            ]);
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 0, 2, 0),
+            new DrawingAnchorPoint(3, 0, 4, 0));
+
+        GridView.TryCreateDrawingAnchorRect(
+                viewport,
+                anchor,
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                out var rect)
+            .Should()
+            .BeTrue();
+        rect.Should().Be(new Rect(30, 18, 160, 40));
+    }
+
+    [Fact]
+    public void TryCreateDrawingAnchorRect_ReturnsFalseForMaxValueAnchorPoint()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0)],
+            [new ColMetric(1, 80, 0)]);
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(uint.MaxValue, 0, 0, 0),
+            new DrawingAnchorPoint(0, 0, 0, 0));
+
+        GridView.TryCreateDrawingAnchorRect(
+                viewport,
+                anchor,
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                out _)
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
+    public void TryCreateDrawingAnchorRect_UsesSinglePassAnchorMetricLookups()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridDrawingObjectPlanner.cs"));
+        var anchorRange = source[
+            source.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)..
+            source.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)];
+        var anchorHelpers = source[
+            source.IndexOf("private static bool TryGetAnchorPoints", StringComparison.Ordinal)..
+            source.IndexOf("private static double EmusToPixels", StringComparison.Ordinal)];
+
+        anchorRange.Should().Contain("TryGetAnchorPoints(viewport, anchor");
+        anchorRange.Should().NotContain("TryGetAnchorPoint(viewport, anchor.From");
+        anchorRange.Should().NotContain("TryGetAnchorPoint(viewport, anchor.To");
+        anchorHelpers.Should().Contain("TryFindAnchorColumns(viewport.ColMetrics");
+        anchorHelpers.Should().Contain("TryFindAnchorRows(viewport.RowMetrics");
+        anchorHelpers.Should().Contain("foreach (var metric in metrics)");
+        anchorHelpers.Should().NotContain("FirstOrDefault");
+        anchorHelpers.Should().NotContain(".Where(");
+        anchorHelpers.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
+    public void AnchoredObjectRendering_UsesSharedSinglePassMetricPlanner()
+    {
+        var planner = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridDrawingObjectPlanner.cs"));
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var plannerMethod = planner[
+            planner.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)..
+            planner.IndexOf("public static string GetNativeControlCaption", StringComparison.Ordinal)];
+        var renderTextBoxes = drawingObjects[
+            drawingObjects.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
+        var renderDrawingShapes = drawingObjects[
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
+        var renderPictures = pictures[
+            pictures.IndexOf("private void RenderPictures", StringComparison.Ordinal)..
+            pictures.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)];
+
+        plannerMethod.Should().Contain("TryFindAnchorRow(viewport.RowMetrics, anchor.Row");
+        plannerMethod.Should().Contain("TryFindAnchorColumn(viewport.ColMetrics, anchor.Col");
+        plannerMethod.Should().NotContain("FirstOrDefault");
+        renderTextBoxes.Should().Contain("TryCreateAnchoredObjectRect(textBox.Anchor");
+        renderTextBoxes.Should().NotContain("FirstOrDefault");
+        renderDrawingShapes.Should().Contain("TryCreateAnchoredObjectRect(shape.Anchor");
+        renderDrawingShapes.Should().NotContain("FirstOrDefault");
+        renderPictures.Should().Contain("TryCreateAnchoredObjectRect(picture.Anchor");
+        renderPictures.Should().NotContain("FirstOrDefault");
+    }
+
+    [Fact]
     public void GridView_ExposesObjectDisplayModeForExcelPlaceholderRendering()
     {
         var source =
@@ -110,7 +218,31 @@ public sealed class GridViewDrawingObjectThemeTests
 
         source.Should().Contain("DrawPictureSelectionAdorner");
         source.Should().Contain("SelectedRange?.Start != picture.Anchor");
-        source.Should().Contain("dc.DrawRectangle(null, selectedPen, rect);");
+        source.Should().Contain("dc.DrawRectangle(null, PictureSelectionPen, rect);");
+    }
+
+    [Fact]
+    public void PictureRenderer_ReusesFrozenStaticResources()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var renderStart = source.IndexOf("private void RenderPictures", StringComparison.Ordinal);
+        var renderEnd = source.IndexOf("private static bool HasPictureCrop", StringComparison.Ordinal);
+        renderStart.Should().BeGreaterThanOrEqualTo(0);
+        renderEnd.Should().BeGreaterThan(renderStart);
+        var renderPictures = source[
+            renderStart..
+            renderEnd];
+
+        GetStaticResource<Pen>("PictureBorderPen").IsFrozen.Should().BeTrue();
+        GetStaticResource<Pen>("PictureGridPen").IsFrozen.Should().BeTrue();
+        GetStaticResource<Brush>("PictureSelectionBrush").IsFrozen.Should().BeTrue();
+        GetStaticResource<Pen>("PictureSelectionPen").IsFrozen.Should().BeTrue();
+        source.Should().Contain("private static readonly Pen PictureBorderPen = CreateFrozenPen");
+        source.Should().Contain("private static readonly Pen PictureGridPen = CreateFrozenPen");
+        source.Should().Contain("private static readonly Brush PictureSelectionBrush = MakeBrush");
+        source.Should().Contain("private static readonly Pen PictureSelectionPen = CreateFrozenPen");
+        renderPictures.Should().NotContain("new Pen(new SolidColorBrush");
+        renderPictures.Should().NotContain("new SolidColorBrush");
     }
 
     [Fact]
@@ -202,6 +334,237 @@ public sealed class GridViewDrawingObjectThemeTests
         });
     }
 
+    [Fact]
+    public void DrawingObjectHitTesting_IncludesRenderedBodyBoundary()
+    {
+        RunOnStaThread(() =>
+        {
+            var sheetId = SheetId.New();
+            var picture = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = new CellAddress(sheetId, 1, 1),
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
+                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                Pictures = [picture]
+            };
+
+            grid.TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect)
+                .Should().BeTrue();
+
+            var hitTestDrawingObject = typeof(GridView).GetMethod(
+                "HitTestDrawingObject",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var hit = hitTestDrawingObject!.Invoke(grid, [new Point(rect.Right, rect.Bottom)]);
+
+            hit!.GetType().GetField("Item1")!.GetValue(hit).Should().Be(picture.Id);
+            hit.GetType().GetField("Item2")!.GetValue(hit).Should().Be(ObjectKind.Picture);
+        });
+    }
+
+    [Fact]
+    public void DrawingObjectHitTesting_ChoosesTopmostRenderedObject()
+    {
+        RunOnStaThread(() =>
+        {
+            var sheetId = SheetId.New();
+            var anchor = new CellAddress(sheetId, 1, 1);
+            var shape = new DrawingShapeModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = anchor,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var backPicture = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = anchor,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var frontPicture = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = anchor,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
+                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                DrawingShapes = [shape],
+                Pictures = [backPicture, frontPicture]
+            };
+
+            grid.TryCreateAnchoredObjectRect(anchor, frontPicture.Width, frontPicture.Height, 24, 18, out var rect)
+                .Should().BeTrue();
+
+            var hitTestDrawingObject = typeof(GridView).GetMethod(
+                "HitTestDrawingObject",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var hit = hitTestDrawingObject!.Invoke(grid, [new Point(rect.Left + 10, rect.Top + 10)]);
+
+            hit!.GetType().GetField("Item1")!.GetValue(hit).Should().Be(frontPicture.Id);
+            hit.GetType().GetField("Item2")!.GetValue(hit).Should().Be(ObjectKind.Picture);
+        });
+    }
+
+    [Fact]
+    public void GridObjectDragPlanner_CalculatesMoveResizeAndHandleTargets()
+    {
+        var start = new Rect(10, 20, 80, 40);
+
+        GridObjectDragPlanner.CalculateDragRect(
+                ObjectDragKind.Move,
+                start,
+                new Point(15, 25),
+                new Point(35, 45))
+            .Should()
+            .Be(new Rect(30, 40, 80, 40));
+        GridObjectDragPlanner.CalculateDragRect(
+                ObjectDragKind.ResizeSE,
+                start,
+                new Point(90, 60),
+                new Point(100, 75))
+            .Should()
+            .Be(new Rect(10, 20, 90, 55));
+        GridObjectDragPlanner.CalculateDragRect(
+                ObjectDragKind.ResizeE,
+                start,
+                new Point(90, 60),
+                new Point(0, 60))
+            .Width.Should().Be(8);
+        GridObjectDragPlanner.CalculateDragRect(
+                ObjectDragKind.ResizeS,
+                start,
+                new Point(90, 60),
+                new Point(90, 10))
+            .Height.Should().Be(8);
+
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Bottom), start)
+            .Should().Be(ObjectDragKind.ResizeSE);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Top + 10), start)
+            .Should().Be(ObjectDragKind.ResizeE);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 10, start.Bottom), start)
+            .Should().Be(ObjectDragKind.ResizeS);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 10, start.Top + 10), start)
+            .Should().Be(ObjectDragKind.Move);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left - 20, start.Top - 20), start)
+            .Should().Be(ObjectDragKind.None);
+    }
+
+    [Fact]
+    public void GridObjectDragPlanner_IncludesResizeHandleHitZoneBoundary()
+    {
+        var start = new Rect(10, 20, 80, 40);
+        const double handleSize = 8;
+        const double hitPadding = 4;
+        const double pad = handleSize / 2 + hitPadding;
+
+        GridObjectDragPlanner.HitTestHandle(
+                new Point(start.Right + pad, start.Bottom),
+                start,
+                handleSize,
+                hitPadding)
+            .Should().Be(ObjectDragKind.ResizeSE);
+        GridObjectDragPlanner.HitTestHandle(
+                new Point(start.Right, start.Bottom + pad),
+                start,
+                handleSize,
+                hitPadding)
+            .Should().Be(ObjectDragKind.ResizeSE);
+    }
+
+    [Fact]
+    public void GridObjectDragPlanner_HitTestsAnchorCellFromViewportMetrics()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(2, 20, 0), new RowMetric(3, 20, 20)],
+            [new ColMetric(4, 80, 0), new ColMetric(5, 80, 80)]);
+
+        GridObjectDragPlanner.HitTestAnchorCell(
+                viewport,
+                new Point(30 + 80 + 10, 18 + 20 + 10),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new CellAddress(default, 3, 5));
+        GridObjectDragPlanner.HitTestAnchorCell(
+                viewport,
+                new Point(4, 4),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
+    public void SelectedDrawingObjectAnchor_UsesCurrentSelectedObject()
+    {
+        RunOnStaThread(() =>
+        {
+            var sheetId = SheetId.New();
+            var first = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = new CellAddress(sheetId, 1, 1),
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var selected = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = new CellAddress(sheetId, 3, 4),
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                SelectedObjectId = selected.Id,
+                SelectedObjectKind = ObjectKind.Picture,
+                Pictures = [first, selected]
+            };
+
+            var getSelectedObjectAnchor = typeof(GridView).GetMethod(
+                "GetSelectedObjectAnchor",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            getSelectedObjectAnchor!.Invoke(grid, [])
+                .Should()
+                .Be(selected.Anchor);
+        });
+    }
+
+    [Fact]
+    public void GridViewObjectDrag_DelegatesGeometryToPlanner()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var dragSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.ObjectDrag.cs"));
+
+        inputSource.Should().Contain("GridObjectDragPlanner.CalculateDragRect(");
+        inputSource.Should().Contain("_objectDragStartAnchor = GetSelectedObjectAnchor() ?? HitTestAnchorCell(pos) ?? default;");
+        dragSource.Should().Contain("GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad)");
+        dragSource.Should().Contain("GridObjectDragPlanner.HitTestAnchorCell(");
+    }
+
     private static void RunOnStaThread(Action action)
     {
         Exception? exception = null;
@@ -221,6 +584,13 @@ public sealed class GridViewDrawingObjectThemeTests
         thread.Join();
         if (exception is not null)
             throw exception;
+    }
+
+    private static T GetStaticResource<T>(string fieldName)
+    {
+        var field = typeof(GridView).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static);
+        field.Should().NotBeNull();
+        return field!.GetValue(null).Should().BeAssignableTo<T>().Subject;
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)

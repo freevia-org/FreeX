@@ -34,7 +34,12 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new PivotTableDialog(_workbook, _currentSheetId, sourceRange) { Owner = this };
+        PivotTableDialog? dialog = null;
+        dialog = new PivotTableDialog(
+            _workbook,
+            _currentSheetId,
+            sourceRange,
+            request => ApplyPivotTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -102,6 +107,31 @@ public partial class MainWindow
             RefreshPivotFieldListPane();
     }
 
+    private void ApplyPivotTableRangeSelection(
+        PivotTableDialog? dialog,
+        PivotTableRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
     private void RefreshPivotTableBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -130,9 +160,8 @@ public partial class MainWindow
     private bool TryShowPivotTableDetails(bool showMessage)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var selected = SheetGrid.SelectedRange?.Start;
-        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange);
-        if (pivotTable is null || selected is null)
+        var target = PivotUiPlanner.ResolveShowDetailsTarget(sheet, SheetGrid.SelectedRange);
+        if (target is null)
         {
             if (showMessage)
             {
@@ -147,13 +176,13 @@ public partial class MainWindow
         }
 
         if (!TryExecuteCommand(
-                new DrillDownPivotTableCommand(_currentSheetId, pivotTable.Name, selected.Value),
-                "Show PivotTable Details"))
+                new DrillDownPivotTableCommand(_currentSheetId, target.PivotTableName, target.PivotCell),
+                "Show PivotTable Details",
+                out var outcome))
             return false;
 
-        var detailSheet = _workbook.Sheets.LastOrDefault();
-        if (detailSheet is not null)
-            _currentSheetId = detailSheet.Id;
+        if (outcome.AffectedCells?.FirstOrDefault() is { } detailAnchor)
+            _currentSheetId = detailAnchor.Sheet;
         RefreshSheetTabs();
         UpdateViewport();
         return true;
@@ -248,8 +277,10 @@ public partial class MainWindow
         if (sheet is null || pivotTable is null)
             return;
 
-        var dialog = new PivotTableDataSourceDialog(
+        PivotTableDataSourceDialog? dialog = null;
+        dialog = new PivotTableDataSourceDialog(
             FormatWorkbookRange(pivotTable.SourceRange),
+            request => ApplyPivotTableDataSourceRangeSelection(dialog, request),
             sheetId: sheet.Id,
             resolveSheetId: sheetName => _workbook.Sheets.FirstOrDefault(item =>
                 string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id)
@@ -265,6 +296,31 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+    }
+
+    private void ApplyPivotTableDataSourceRangeSelection(
+        PivotTableDataSourceDialog? dialog,
+        PivotTableDataSourceRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)

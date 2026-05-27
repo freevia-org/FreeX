@@ -1,0 +1,30 @@
+using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
+
+namespace Freexcel.App.Host;
+
+public enum BorderDrawMode
+{
+    None,
+    DrawGrid,
+    Erase
+}
+
+public static class BorderDrawPlanner
+{
+    public static StyleDiff CreateDiff(BorderDrawMode mode, BorderStyle style, CellColor color) => mode switch
+    {
+        BorderDrawMode.DrawGrid => BorderShortcutService.GetAllBorderDiff(style, color),
+        BorderDrawMode.Erase => BorderShortcutService.GetClearBorderDiff(),
+        BorderDrawMode.None => new StyleDiff(),
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+    };
+
+    public static string CommandTitle(BorderDrawMode mode) => mode switch
+    {
+        BorderDrawMode.DrawGrid => "Draw Border Grid",
+        BorderDrawMode.Erase => "Erase Border",
+        BorderDrawMode.None => "Border Draw",
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+    };
+}

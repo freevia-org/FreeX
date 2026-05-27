@@ -43,6 +43,32 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void CalculateDragAutoScroll_ExtendsForwardAtCurrentMaximumWithoutOvershootingViewportOrigin()
+    {
+        ViewportScrollCalculator.CalculateDragAutoScroll(
+                currentValue: 40,
+                currentMaximum: 40,
+                direction: 1,
+                step: 2,
+                visibleSpan: 40,
+                absoluteLimit: CellAddress.MaxCol)
+            .Should().Be((42d, 42d));
+    }
+
+    [Fact]
+    public void CalculateDragAutoScroll_MovesBackwardWithoutChangingMaximum()
+    {
+        ViewportScrollCalculator.CalculateDragAutoScroll(
+                currentValue: 40,
+                currentMaximum: 80,
+                direction: -1,
+                step: 2,
+                visibleSpan: 40,
+                absoluteLimit: CellAddress.MaxCol)
+            .Should().Be((80d, 38d));
+    }
+
+    [Fact]
     public void CalculateWheelScroll_UsesNormalizedTouchpadDeltaForSmallVerticalMovement()
     {
         var notches = ViewportScrollCalculator.NormalizeWheelNotches(-30);

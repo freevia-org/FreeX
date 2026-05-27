@@ -73,6 +73,7 @@ public sealed class PivotTableDialog : Window
         _selectTableRangeButton.Margin = new Thickness(0, 0, 0, 6);
         stack.Children.Add(_selectTableRangeButton);
         _sourceRangeBox.Text = Result.SourceRangeText;
+        AutomationProperties.SetName(_sourceRangeBox, "PivotTable source range");
         AddLabeledReferenceEditor(
             stack,
             "Table/_Range:",
@@ -90,6 +91,7 @@ public sealed class PivotTableDialog : Window
         stack.Children.Add(_existingWorksheetButton);
 
         _destinationRangeBox.Text = destinationText;
+        AutomationProperties.SetName(_destinationRangeBox, "PivotTable location");
         AddLabeledReferenceEditor(
             stack,
             "_Location:",
@@ -219,6 +221,22 @@ public sealed class PivotTableDialog : Window
         RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         FocusRangeSelectionInput(request.Target);
+    }
+
+    public void ApplyRangeSelection(PivotTableRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target == PivotTableRangeSelectionTarget.DestinationRange
+            ? _destinationRangeBox
+            : _sourceRangeBox;
+        textBox.Text = rangeText;
+
+        if (target == PivotTableRangeSelectionTarget.DestinationRange)
+        {
+            _existingWorksheetButton.IsChecked = true;
+            UpdateDestinationState();
+        }
+
+        FocusRangeSelectionInput(textBox);
     }
 
     private bool ValidateInputs()

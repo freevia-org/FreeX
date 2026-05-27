@@ -38,6 +38,7 @@ public sealed partial class FindReplaceDialog : Window
         {
             FindReplaceTabs.SelectedItem = ReplaceTab;
         }
+        UpdateReplaceButtonVisibility();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -58,6 +59,15 @@ public sealed partial class FindReplaceDialog : Window
     private void FindAll_Click(object sender, RoutedEventArgs e) => FindAll();
     private void Replace_Click(object sender, RoutedEventArgs e) => ReplaceOne();
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void FindReplaceTabs_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateReplaceButtonVisibility();
+
+    private void UpdateReplaceButtonVisibility()
+    {
+        var visibility = FindReplaceTabs.SelectedItem == ReplaceTab ? Visibility.Visible : Visibility.Collapsed;
+        ReplaceBtn.Visibility = visibility;
+        ReplaceAllBtn.Visibility = visibility;
+    }
+
     private void FindResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (FindResultsGrid.SelectedItem is FindResultRow row)
@@ -239,7 +249,7 @@ public sealed partial class FindReplaceDialog : Window
 
     private FindOptions CreateFindOptions() =>
         new(
-            Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Sheet : FindWithin.Workbook,
+            Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet,
             CurrentSheetId: _getCurrentSheetId(),
             SearchOrder: SearchCombo.SelectedIndex == 1 ? FindSearchOrder.ByColumns : FindSearchOrder.ByRows,
             LookIn: LookInCombo.SelectedIndex switch
@@ -296,7 +306,7 @@ public sealed partial class FindReplaceDialog : Window
 
     private static void SetFormatState(bool isSet, string toolTip, Button formatButton, Button clearButton)
     {
-        formatButton.Content = isSet ? "Format Set..." : "For_mat...";
+        formatButton.Content = isSet ? "For_mat Set..." : "For_mat...";
         formatButton.ToolTip = isSet ? toolTip : null;
         clearButton.Visibility = isSet ? Visibility.Visible : Visibility.Collapsed;
     }

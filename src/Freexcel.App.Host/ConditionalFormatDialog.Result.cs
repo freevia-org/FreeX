@@ -38,6 +38,9 @@ public partial class ConditionalFormatDialog
                 "Color Scale" => CfRuleType.ColorScale,
                 "Icon Set"    => CfRuleType.IconSet,
                 "Text Contains" => CfRuleType.ContainsText,
+                "Text Does Not Contain" => CfRuleType.NotContainsText,
+                "Text Begins With" => CfRuleType.BeginsWith,
+                "Text Ends With" => CfRuleType.EndsWith,
                 "Date Occurring" => CfRuleType.DateOccurring,
                 "Duplicate Values" => DuplicateValuesRuleType(_duplicateValuesKindBox.SelectedItem as string),
                 "Blanks" => CfRuleType.Blanks,
@@ -57,6 +60,9 @@ public partial class ConditionalFormatDialog
                     "Less Than"    => CfOperator.LessThan,
                     "Equal To"     => CfOperator.Equal,
                     "Between"      => CfOperator.Between,
+                    "Greater Than Or Equal To" => CfOperator.GreaterThanOrEqual,
+                    "Less Than Or Equal To" => CfOperator.LessThanOrEqual,
+                    "Not Between" => CfOperator.NotBetween,
                     _              => CfOperator.NotEqual
                 };
                 var value1 = _value1Box.Text.Trim();
@@ -67,7 +73,7 @@ public partial class ConditionalFormatDialog
                     return;
                 }
 
-                if (cf.Operator == CfOperator.Between && string.IsNullOrWhiteSpace(value2))
+                if (cf.Operator is CfOperator.Between or CfOperator.NotBetween && string.IsNullOrWhiteSpace(value2))
                 {
                     ShowInvalidInputWarning("Enter a maximum value for this conditional formatting rule.", _value2Box);
                     return;

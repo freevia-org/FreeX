@@ -1,11 +1,24 @@
 using System.IO;
 using FluentAssertions;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
 public sealed class AutoFilterDialogTests
 {
+    [Fact]
+    public void DialogLayout_ScrollsWhenTypedFilterControlsAreVisible()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+
+        source.Should().Contain("var scrollViewer = new ScrollViewer");
+        source.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
+        source.Should().Contain("DockPanel.SetDock(buttons, Dock.Bottom)");
+        source.Should().Contain("root.Children.Add(buttons)");
+        source.Should().Contain("scrollViewer.Content = stack");
+    }
+
     [Fact]
     public void FilterItems_ReturnsSearchMatchesWithoutChangingSelection()
     {
@@ -320,6 +333,14 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_FilterValueChecklistExposesAutomationName()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("AutomationProperties.SetName(_checklistBox, \"Filter values\");");
+    }
+
+    [Fact]
     public void DialogOpenedFromKeyboard_FocusesFirstSortCommand()
     {
         var source = ReadAutoFilterDialogSources();
@@ -350,12 +371,43 @@ public sealed class AutoFilterDialogTests
     {
         var source = ReadAutoFilterDialogSources();
 
+        source.Should().Contain("private readonly List<Button> _colorChoiceButtons");
+        source.Should().Contain("_colorChoiceButtons.Clear();");
+        source.Should().Contain("_colorChoiceButtons.Add(button);");
+        source.Should().Contain("KeyboardNavigation.SetDirectionalNavigation(swatches, KeyboardNavigationMode.Contained);");
+        source.Should().Contain("button.PreviewKeyDown += ColorChoiceButton_PreviewKeyDown;");
+        source.Should().Contain("private void ColorChoiceButton_PreviewKeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("Key.Left or Key.Up => currentIndex - 1");
+        source.Should().Contain("Key.Right or Key.Down => currentIndex + 1");
+        source.Should().Contain("Key.Home => 0");
+        source.Should().Contain("Key.End => _colorChoiceButtons.Count - 1");
+        source.Should().Contain("private void FocusColorChoiceButton(int index)");
+        source.Should().Contain("Keyboard.Focus(button);");
         source.Should().Contain("button.Click += (_, _) => ApplyColorChoice(colorFilter);");
         source.Should().Contain("private void ApplyColorChoice(AutoFilterColorFilter colorFilter)");
         source.Should().Contain("Result = BuildResult(");
         source.Should().Contain("colorFilter,");
         source.Should().Contain("DialogResult = true;");
         source.Should().NotContain("button.Click += (_, _) => _selectedColorFilter = colorFilter;");
+    }
+
+    [Fact]
+    public void DialogControls_ChecklistSupportsKeyboardToggleAndBoundaryNavigation()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("private readonly ListBox _checklistBox = new();");
+        source.Should().Contain("AutomationProperties.SetName(_checklistBox, \"Filter values\");");
+        source.Should().Contain("_checklistBox.PreviewKeyDown += ChecklistBox_PreviewKeyDown;");
+        source.Should().Contain("private void ChecklistBox_PreviewKeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("Key.Space => ToggleFocusedChecklistItem()");
+        source.Should().Contain("Key.Home => FocusChecklistItem(0)");
+        source.Should().Contain("Key.End => FocusChecklistItem(_items.Count - 1)");
+        source.Should().Contain("private bool ToggleFocusedChecklistItem()");
+        source.Should().Contain("item.IsSelected = !item.IsSelected;");
+        source.Should().Contain("_checklistBox.Items.Refresh();");
+        source.Should().Contain("private bool FocusChecklistItem(int index)");
+        source.Should().Contain("_checklistBox.ScrollIntoView(item);");
     }
 
     [Fact]
@@ -371,6 +423,24 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("new CellFontColorFilterCommand");
         source.Should().Contain("filterText.StartsWith(\"and:\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("filterText.StartsWith(\"or:\", StringComparison.OrdinalIgnoreCase)");
+    }
+
+    [Fact]
+    public void DataFilterCommands_ReapplyUsesRememberedFilterCommandWithoutOpeningDialog()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var homeEditingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeEditing.cs"));
+
+        dataSource.Should().Contain("private GridRange? _lastAutoFilterRange;");
+        dataSource.Should().Contain("private Func<GridRange, IWorkbookCommand>? _lastAutoFilterCommandFactory;");
+        dataSource.Should().Contain("private bool TryExecuteRememberedAutoFilterCommand(");
+        dataSource.Should().Contain("_lastAutoFilterCommandFactory = createCommand;");
+        dataSource.Should().Contain("private void ReapplyAutoFilter()");
+        dataSource.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
+        dataSource.Should().Contain("_lastAutoFilterCommandFactory");
+        dataSource.Should().Contain("private void ClearRememberedAutoFilterCommand()");
+        homeEditingSource.Should().Contain("private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => ReapplyAutoFilter();");
+        homeEditingSource.Should().NotContain("private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => FilterButton_Click(sender, e);");
     }
 
     [Fact]
@@ -413,6 +483,29 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void CriteriaPartial_DelegatesPureCriteriaBehaviorToPlanner()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Criteria.cs"));
+
+        source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildResult");
+        source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildCriteriaText");
+        source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildCompositeCriteriaText");
+    }
+
+    [Fact]
+    public void DialogControls_BetweenAndTopBottomCriteriaLabelsTargetInputs()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("new Label { Content = \"_Minimum:\", Target = _betweenMinBox");
+        source.Should().Contain("new Label { Content = \"And _maximum:\", Target = _betweenMaxBox");
+        source.Should().Contain("new Label { Content = \"_Show:\", Target = _topBottomCountBox");
+        source.Should().NotContain("new TextBlock { Text = \"_Minimum:\"");
+        source.Should().NotContain("new TextBlock { Text = \"And _maximum:\"");
+        source.Should().NotContain("new TextBlock { Text = \"_Show:\"");
+    }
+
+    [Fact]
     public void DialogControls_RenderFilterFamilyAsNestedMenuCommands()
     {
         var source = ReadAutoFilterDialogSources();
@@ -420,10 +513,44 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("ConfigureFilterFamilySubmenu(menuPlan);");
         source.Should().Contain("private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)");
         source.Should().Contain("new ContextMenu()");
+        source.Should().Contain("var usedAccessKeys = new HashSet<char>();");
+        source.Should().Contain("Header = AddUniqueAccessKey(child.Header, usedAccessKeys),");
+        source.Should().Contain("private static string AddUniqueAccessKey(string header, HashSet<char> usedAccessKeys)");
+        source.Should().Contain("usedAccessKeys.Add(char.ToUpperInvariant(ch))");
         source.Should().Contain("parentButton.ContextMenu = submenu;");
         source.Should().Contain("menuItem.Click += (_, _) => ApplyFilterFamilyChild(child);");
         source.Should().Contain("private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)");
         source.Should().Contain("AutoFilterMenuEntryKind.FilterFamilyCommand");
+    }
+
+    [Fact]
+    public void DialogControls_FilterFamilyContinuationKeyOpensVisibleSubmenu()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("PreviewKeyDown += AutoFilterDialog_PreviewKeyDown;");
+        source.Should().Contain("private void AutoFilterDialog_PreviewKeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("e.Key != Key.F");
+        source.Should().Contain("TryOpenVisibleFilterFamilySubmenu()");
+        source.Should().Contain("private bool TryOpenVisibleFilterFamilySubmenu()");
+        source.Should().Contain("_textFiltersButton, _numberFiltersButton, _dateFiltersButton");
+        source.Should().Contain("FirstOrDefault(button => button.Visibility == Visibility.Visible)");
+        source.Should().Contain("private bool TryOpenFilterFamilySubmenu(Button filterButton)");
+        source.Should().Contain("submenu.IsOpen = true;");
+        source.Should().Contain("Keyboard.Focus(firstItem);");
+        source.Should().Contain("filterButton.Click += (_, _) => TryOpenFilterFamilySubmenu(filterButton);");
+    }
+
+    [Fact]
+    public void DialogControls_FilterFamilyContinuationKeyDoesNotHijackTextEntry()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("if (IsTextInputElement(e.OriginalSource))");
+        source.Should().Contain("private static bool IsTextInputElement(object? originalSource)");
+        source.Should().Contain("originalSource is TextBox");
+        source.Should().Contain("originalSource is ComboBox { IsEditable: true }");
+        source.Should().Contain("return;");
     }
 
     [Fact]
@@ -464,6 +591,41 @@ public sealed class AutoFilterDialogTests
             .Be(expected);
     }
 
+    [Fact]
+    public void TypedCriteriaResult_DrivesFilterConditionCommandRowVisibility()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(10));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+        var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
+            .Single(item => item.Label == "Greater Than");
+        var result = AutoFilterDialog.BuildResult(
+            AutoFilterSortDirection.None,
+            [
+                new AutoFilterDialogItem("5", "5", true),
+                new AutoFilterDialogItem("10", "10", true)
+            ],
+            "",
+            AutoFilterDialog.BuildCriteriaText(option, "7"));
+
+        FilterInputParser.TryParseCriterion(result.CriteriaText, out var criterion, out var error)
+            .Should()
+            .BeTrue(error);
+        new FilterConditionCommand(sheet.Id, range, 1, criterion!).Apply(new SimpleCtx(workbook))
+            .Success
+            .Should()
+            .BeTrue();
+
+        sheet.FilterHiddenRows.Should().Contain(2);
+        sheet.FilterHiddenRows.Should().NotContain(3);
+    }
+
     private static string ReadAutoFilterDialogSources()
     {
         return string.Join(
@@ -471,7 +633,14 @@ public sealed class AutoFilterDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Controls.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Criteria.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialogCriteriaPlanner.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.State.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialogModel.cs")));
-}
+    }
+
+    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
+    }
 }

@@ -541,11 +541,13 @@ public sealed class PivotTableCommandTests
 
         var command = new DrillDownPivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "G4"));
 
-        command.Apply(ctx).Success.Should().BeTrue();
+        var outcome = command.Apply(ctx);
 
+        outcome.Success.Should().BeTrue();
         workbook.Sheets.Should().HaveCount(2);
         var detail = workbook.GetSheetAt(1);
         detail.Name.Should().StartWith("Detail");
+        outcome.AffectedCells.Should().Equal(new CellAddress(detail.Id, 1, 1));
         detail.GetCell(1, 1)!.Value.Should().Be(new TextValue("Category"));
         detail.GetCell(2, 1)!.Value.Should().Be(new TextValue("A"));
         detail.GetCell(2, 2)!.Value.Should().Be(new TextValue("Q1"));
@@ -554,6 +556,98 @@ public sealed class PivotTableCommandTests
         command.Revert(ctx);
 
         workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Data");
+    }
+
+    [Fact]
+    public void DrillDownPivotTableCommand_RejectsWhenShowDetailsDisabled()
+    {
+        var workbook = new Workbook("PivotDrillDownDisabledCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Quarter"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C2"),
+            TargetRange = Range(sheet, "E3", "H8"),
+            EnableDrill = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var outcome = new DrillDownPivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "G4")).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Show Details is disabled for this PivotTable.");
+        workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Data");
+    }
+
+    [Fact]
+    public void DrillDownPivotTableCommand_RejectsWhenWorkbookStructureProtected()
+    {
+        var workbook = new Workbook("PivotDrillDownStructureProtectedTest") { IsStructureProtected = true };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "D3", "F6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var outcome = new DrillDownPivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "F4")).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("The workbook structure is protected.");
+        workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Data");
+    }
+
+    [Fact]
+    public void DrillDownPivotTableCommand_UsesNextDetailSheetNameWhenDetailExists()
+    {
+        var workbook = new Workbook("PivotDrillDownUniqueNameTest");
+        workbook.AddSheet("Detail");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "D3", "F6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var outcome = new DrillDownPivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "F4")).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        workbook.Sheets.Select(item => item.Name).Should().ContainInOrder("Detail", "Data", "Detail2");
+        outcome.AffectedCells.Should().Equal(new CellAddress(workbook.GetSheet("Detail2")!.Id, 1, 1));
     }
 
     [Fact]
@@ -820,6 +914,46 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesEnableDrillAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotEnableDrillOptionsCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            EnableDrill = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            enableDrill: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.EnableDrill.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        pivot.EnableDrill.Should().BeTrue();
+    }
+
+    [Fact]
     public void ConfigurePivotTableOptionsCommand_ReplacesLayoutOptionsRefreshesAndUndoRestores()
     {
         var workbook = new Workbook("PivotOptionsCommandTest");
@@ -1049,6 +1183,105 @@ public sealed class PivotTableCommandTests
 
         pivot.EmptyValueText.Should().Be("-");
         sheet.GetCell(Addr(sheet, "G3"))!.Value.Should().Be(new TextValue("-"));
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesErrorCaptionAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotErrorCaptionOptionsCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            StyleName = "PivotStyleLight16",
+            ErrorCaption = "(old error)"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            errorCaption: "  #VALUE!  ",
+            updateErrorCaption: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.ErrorCaption.Should().Be("#VALUE!");
+
+        command.Revert(ctx);
+
+        pivot.ErrorCaption.Should().Be("(old error)");
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_PreservesOldOptionalArgumentOrder()
+    {
+        var workbook = new Workbook("PivotOptionsArgumentOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            StyleName = "PivotStyleLight16",
+            ErrorCaption = "(preserved)"
+        };
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            RefreshOnLoad = false,
+            SaveData = true,
+            EnableRefresh = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        workbook.PivotCaches.Add(cache);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            true,
+            true,
+            false,
+            PivotSubtotalPlacement.Bottom,
+            false,
+            false,
+            "PivotStyleLight16",
+            true,
+            true,
+            false,
+            false,
+            PivotReportLayout.Tabular,
+            null,
+            false,
+            true,
+            false,
+            false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        cache.RefreshOnLoad.Should().BeTrue();
+        cache.SaveData.Should().BeFalse();
+        cache.EnableRefresh.Should().BeFalse();
+        pivot.ErrorCaption.Should().Be("(preserved)");
     }
 
     [Fact]
@@ -1566,11 +1799,15 @@ public sealed class PivotTableCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        workbook.Slicers.Should().ContainSingle().Which.Should().Match<SlicerModel>(slicer =>
+        var slicer = workbook.Slicers.Should().ContainSingle().Which;
+        slicer.Should().Match<SlicerModel>(slicer =>
             slicer.Name == "Category Slicer" &&
             slicer.CacheName == "Slicer_Category_Slicer" &&
             slicer.SourcePivotTableName == "PivotTable1" &&
             slicer.SourceFieldName == "Category");
+        slicer.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 2, 0),
+            new DrawingAnchorPoint(9, 0, 10, 0)));
 
         command.Revert(ctx);
 
@@ -1773,16 +2010,56 @@ public sealed class PivotTableCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        workbook.Timelines.Should().ContainSingle().Which.Should().Match<TimelineModel>(timeline =>
+        var timeline = workbook.Timelines.Should().ContainSingle().Which;
+        timeline.Should().Match<TimelineModel>(timeline =>
             timeline.Name == "Date Timeline" &&
             timeline.CacheName == "Timeline_Date_Timeline" &&
             timeline.SourcePivotTableName == "PivotTable1" &&
             timeline.SourceFieldName == "Date" &&
             timeline.StartDate == "2026-01-05" &&
             timeline.EndDate == "2026-02-02");
+        timeline.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 2, 0),
+            new DrawingAnchorPoint(9, 0, 10, 0)));
 
         command.Revert(ctx);
 
+        workbook.Timelines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddTimelineCommand_RejectsNonDateSourceField()
+    {
+        var workbook = new Workbook("AddTimelineNonDateFieldTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("Hardware"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("Services"));
+        sheet.SetCell(Addr(sheet, "B3"), new NumberValue(30));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddTimelineCommand("Category Timeline", "PivotTable1", "Category").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Timeline source field must contain dates.");
+        workbook.Timelines.Should().BeEmpty();
+
+        outcome = new AddTimelineCommand("Amount Timeline", "PivotTable1", "Amount").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Timeline source field must contain dates.");
         workbook.Timelines.Should().BeEmpty();
     }
 

@@ -86,6 +86,12 @@ public class PhaseDLambdaTests
     }
 
     [Fact]
+    public void Lambda_BareFunctionValue_ReturnsCalcError()
+    {
+        Assert.Equal(ErrorValue.Calc, Eval("=LAMBDA(x, x+1)"));
+    }
+
+    [Fact]
     public void Lambda_RangeArgumentCanBeUsedInArrayExpression()
     {
         Set(1, 1, new NumberValue(1));
@@ -117,6 +123,22 @@ public class PhaseDLambdaTests
     {
         var result = Eval("=LET(f, LAMBDA(x, x+1), f(1, 2))");
         Assert.Equal(ErrorValue.Value, result);
+    }
+
+    [Fact]
+    public void IsOmitted_DetectsMissingLambdaArgument()
+    {
+        Assert.Equal(
+            new TextValue("Missing second argument"),
+            Eval("=LET(f, LAMBDA(x,y, IF(ISOMITTED(y), \"Missing second argument\", x+y)), f(1,))"));
+    }
+
+    [Fact]
+    public void IsOmitted_ReturnsFalseForProvidedBlankAndRegularValues()
+    {
+        Assert.Equal(new BoolValue(false), Eval("=LET(f, LAMBDA(x, ISOMITTED(x)), f(\"\"))"));
+        Assert.Equal(new BoolValue(false), Eval("=LET(f, LAMBDA(x, ISOMITTED(x)), f(A20))"));
+        Assert.Equal(new BoolValue(false), Eval("=ISOMITTED(\"\")"));
     }
 
     [Fact]
@@ -372,6 +394,18 @@ public class PhaseDLambdaTests
         Assert.Equal(3.0, Num(result.At(1, 2)));   // 1+2
         Assert.Equal(3.0, Num(result.At(2, 1)));   // 2+1
         Assert.Equal(4.0, Num(result.At(2, 2)));   // 2+2
+    }
+
+    [Fact]
+    public void MakeArray_AcceptsSpilledScalarDimensions()
+    {
+        var result = Rv(Eval("=MAKEARRAY(SEQUENCE(1,,2), SEQUENCE(1,,3), LAMBDA(r, c, r+c))"));
+
+        Assert.Equal(2, result.RowCount);
+        Assert.Equal(3, result.ColCount);
+        Assert.Equal(2.0, Num(result.At(1, 1)));
+        Assert.Equal(4.0, Num(result.At(1, 3)));
+        Assert.Equal(5.0, Num(result.At(2, 3)));
     }
 
     [Fact]

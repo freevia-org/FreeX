@@ -7,7 +7,7 @@ namespace Freexcel.App.Host;
 
 public sealed partial class SelectDataSourceDialog
 {
-    private static Grid CreateSourceListPanel(
+    private Grid CreateSourceListPanel(
         string title,
         string automationName,
         string helpText,
@@ -36,7 +36,7 @@ public sealed partial class SelectDataSourceDialog
         return panel;
     }
 
-    private static StackPanel AddEditRemoveButtons(
+    private StackPanel AddEditRemoveButtons(
         ((string Label, RoutedEventHandler Handler) Add, (string Label, RoutedEventHandler Handler)? Edit, (string Label, RoutedEventHandler Handler)? Remove) labels)
     {
         var stack = new StackPanel { Margin = new Thickness(8, 20, 0, 0) };
@@ -48,7 +48,7 @@ public sealed partial class SelectDataSourceDialog
         return stack;
     }
 
-    private static Button CreateSeriesButton(string content, RoutedEventHandler handler, Thickness margin)
+    private Button CreateSeriesButton(string content, RoutedEventHandler handler, Thickness margin)
     {
         var button = new Button
         {
@@ -57,6 +57,12 @@ public sealed partial class SelectDataSourceDialog
             Margin = margin
         };
         button.Click += handler;
+        if (content == "_Edit series")
+            _editSeriesButton = button;
+        else if (content == "_Remove series")
+            _removeSeriesButton = button;
+        else if (content == "_Edit Axis Labels")
+            _editAxisLabelsButton = button;
         return button;
     }
 }

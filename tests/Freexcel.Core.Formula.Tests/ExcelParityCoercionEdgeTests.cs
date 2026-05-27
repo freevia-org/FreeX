@@ -21,6 +21,35 @@ public sealed class ExcelParityCoercionEdgeTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=\"50%\"+0", 0.5)]
+    [InlineData("=0+\"$1,234.50\"", 1234.5)]
+    [InlineData("=\"1/2/2024\"+1", 45294)]
+    [InlineData("=\"1:30 PM\"*24", 13.5)]
+    [InlineData("=\"2/29/1900\"+0.25", 60.25)]
+    [InlineData("=-\"50%\"", -0.5)]
+    [InlineData("=SUM(\"50%\",\"$1,234.50\")", 1235.0)]
+    [InlineData("=ABS(\"50%\")", 0.5)]
+    public void RichNumericText_IsCoercedByScalarMathAndOperators(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void ReferencedRichNumericText_IsCoercedByArithmeticOperators()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("50%")),
+            (2, 1, new TextValue("$1,234.50")),
+            (3, 1, new TextValue("1/2/2024")),
+            (4, 1, new TextValue("1:30 PM")));
+
+        _eval.Evaluate("=A1+0", sheet).Should().Be(new NumberValue(0.5));
+        _eval.Evaluate("=A2+0", sheet).Should().Be(new NumberValue(1234.5));
+        _eval.Evaluate("=A3+1", sheet).Should().Be(new NumberValue(45294));
+        _eval.Evaluate("=A4*24", sheet).Should().Be(new NumberValue(13.5));
+    }
+
     [Fact]
     public void ReferencedNumericText_IsIgnoredByAggregateRanges()
     {

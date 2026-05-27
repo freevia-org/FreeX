@@ -23,8 +23,8 @@ internal static class XlsxCustomViewMapper
 
             var pane = customSheetView.Element(worksheetNs + "pane");
             var paneState = pane?.Attribute("state")?.Value;
-            var rowSplit = ParsePaneSplit(pane?.Attribute("ySplit")?.Value);
-            var columnSplit = ParsePaneSplit(pane?.Attribute("xSplit")?.Value);
+            var rowSplit = XlsxWorksheetXmlValueParser.ParsePaneSplit(pane?.Attribute("ySplit")?.Value);
+            var columnSplit = XlsxWorksheetXmlValueParser.ParsePaneSplit(pane?.Attribute("xSplit")?.Value);
             var frozenRows = paneState is "frozen" or "frozenSplit" ? rowSplit ?? 0 : 0;
             var frozenCols = paneState is "frozen" or "frozenSplit" ? columnSplit ?? 0 : 0;
             var splitRow = frozenRows == 0 && frozenCols == 0 ? rowSplit : null;
@@ -34,16 +34,16 @@ internal static class XlsxCustomViewMapper
                 id,
                 new WorksheetCustomViewState(
                     string.Empty,
-                    ParseWorksheetViewMode(customSheetView.Attribute("view")?.Value),
+                    XlsxWorksheetXmlValueParser.ParseWorksheetViewMode(customSheetView.Attribute("view")?.Value),
                     frozenRows,
                     frozenCols,
                     splitRow,
                     splitColumn,
-                    ShowGridlines: !IsFalse(customSheetView.Attribute("showGridLines")?.Value),
-                    ShowHeadings: !IsFalse(customSheetView.Attribute("showRowCol")?.Value),
-                    ShowRulers: !IsFalse(customSheetView.Attribute("showRuler")?.Value),
+                    ShowGridlines: !XlsxWorksheetXmlValueParser.IsFalse(customSheetView.Attribute("showGridLines")?.Value),
+                    ShowHeadings: !XlsxWorksheetXmlValueParser.IsFalse(customSheetView.Attribute("showRowCol")?.Value),
+                    ShowRulers: !XlsxWorksheetXmlValueParser.IsFalse(customSheetView.Attribute("showRuler")?.Value),
                     ZoomPercent: XlsxWorksheetValueSanitizer.ValidZoomPercentOrDefault(XlsxXmlAttributeReader.ReadIntAttribute(customSheetView, "scale") ?? 100),
-                    ShowFormulas: IsTruthy(customSheetView.Attribute("showFormulas")?.Value))));
+                    ShowFormulas: XlsxWorksheetXmlValueParser.IsTruthy(customSheetView.Attribute("showFormulas")?.Value))));
         }
 
         return customViews;
@@ -162,8 +162,8 @@ internal static class XlsxCustomViewMapper
 
     private static XElement ToCustomSheetViewXml(XNamespace workbookNs, string id, WorksheetCustomViewState state)
     {
-        var frozenRows = ValidFrozenRowsOrZero(state.FrozenRows);
-        var frozenCols = ValidFrozenColumnsOrZero(state.FrozenCols);
+        var frozenRows = XlsxWorksheetXmlValueParser.ValidFrozenRowsOrZero(state.FrozenRows);
+        var frozenCols = XlsxWorksheetXmlValueParser.ValidFrozenColumnsOrZero(state.FrozenCols);
         var hasFrozenPanes = frozenRows > 0 || frozenCols > 0;
         var splitRow = hasFrozenPanes ? null : state.SplitRow;
         var splitColumn = hasFrozenPanes ? null : state.SplitColumn;
@@ -267,30 +267,6 @@ internal static class XlsxCustomViewMapper
             insertionPoint.AddBeforeSelf(customSheetViews);
     }
 
-    private static uint? ParsePaneSplit(string? value) =>
-        uint.TryParse(value, out var parsed) ? parsed : null;
-
-    private static WorksheetViewMode ParseWorksheetViewMode(string? value) =>
-        value switch
-        {
-            "pageLayout" => WorksheetViewMode.PageLayout,
-            "pageBreakPreview" => WorksheetViewMode.PageBreakPreview,
-            _ => WorksheetViewMode.Normal
-        };
-
-    private static bool IsTruthy(string? value) =>
-        value is "1" ||
-        value is not null && bool.TryParse(value, out var parsed) && parsed;
-
-    private static bool IsFalse(string? value) =>
-        value is "0" ||
-        value is not null && bool.TryParse(value, out var parsed) && !parsed;
-
-    private static uint ValidFrozenRowsOrZero(uint row) =>
-        row <= CellAddress.MaxRow ? row : 0;
-
-    private static uint ValidFrozenColumnsOrZero(uint column) =>
-        column <= CellAddress.MaxCol ? column : 0;
 }
 
 internal sealed record XlsxWorksheetCustomViewState(string Id, WorksheetCustomViewState State);

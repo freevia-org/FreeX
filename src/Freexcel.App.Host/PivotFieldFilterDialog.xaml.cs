@@ -95,7 +95,13 @@ public partial class PivotFieldFilterDialog : Window
     private void UpdateSelectAllState()
     {
         var visible = _items.Where(item => FilterItem(item)).ToList();
-        SelectAllCheckBox.IsChecked = visible.Count > 0 && visible.All(item => item.IsChecked);
+        SelectAllCheckBox.IsChecked = visible.Count switch
+        {
+            0 => false,
+            _ when visible.All(item => item.IsChecked) => true,
+            _ when visible.All(item => !item.IsChecked) => false,
+            _ => null
+        };
     }
 
     private void FocusInitialKeyboardTarget()

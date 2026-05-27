@@ -88,18 +88,18 @@ public sealed class ChartTrendlineOptionsDialog : Window
         {
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _showBox);
-            ChartDialogHelpers.AddCombo(stack, "Type", _typeBox, Enum.GetValues<ChartTrendlineType>());
-            ChartDialogHelpers.AddNumericText(stack, "Moving average period", _periodBox, "Enter a period from 2 to 255.");
-            ChartDialogHelpers.AddNumericText(stack, "Polynomial order", _orderBox, "Enter an order from 2 to 6.");
+            ChartDialogHelpers.AddCombo(stack, "_Type", _typeBox, Enum.GetValues<ChartTrendlineType>());
+            ChartDialogHelpers.AddNumericText(stack, "Moving average _period", _periodBox, "Enter a period from 2 to 255.");
+            ChartDialogHelpers.AddNumericText(stack, "Polynomial _order", _orderBox, "Enter an order from 2 to 6.");
             ChartDialogHelpers.AddCheck(stack, _equationBox);
             ChartDialogHelpers.AddCheck(stack, _rSquaredBox);
             root.Children.Add(CreateGroupBox("Trendline Options", stack));
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, "Line color", _colorBox);
-            ChartDialogHelpers.AddNumericText(stack, "Line width", _thicknessBox, "Enter a line width in points.");
-            ChartDialogHelpers.AddCombo(stack, "Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>());
+            ChartDialogHelpers.AddColorText(stack, "_Line color", _colorBox);
+            ChartDialogHelpers.AddNumericText(stack, "Line _width", _thicknessBox, "Enter a line width in points.");
+            ChartDialogHelpers.AddCombo(stack, "_Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>());
             root.Children.Add(CreateGroupBox("Fill & Line", stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));

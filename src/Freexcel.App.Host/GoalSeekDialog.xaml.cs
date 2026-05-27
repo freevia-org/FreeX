@@ -100,6 +100,18 @@ public partial class GoalSeekDialog : Window
         Keyboard.Focus(target);
     }
 
+    public void ApplyRangeSelection(GoalSeekRangeSelectionTarget target, CellAddress address)
+    {
+        var textBox = target == GoalSeekRangeSelectionTarget.SetCell
+            ? SetCellBox
+            : ChangingCellBox;
+
+        textBox.Text = address.ToA1();
+        textBox.Focus();
+        textBox.SelectAll();
+        Keyboard.Focus(textBox);
+    }
+
     public static GoalSeekRangeSelectionRequest CreateRangeSelectionRequest(
         GoalSeekRangeSelectionTarget target,
         string currentText) =>

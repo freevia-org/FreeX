@@ -10,6 +10,115 @@ public static partial class BuiltInFunctions
 {
     // Core text functions and inline text formatting helpers.
 
+    private static ScalarValue Concat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var arg in args)
+        {
+            if (arg is ErrorValue err) return err;
+            sb.Append(ToText(arg));
+        }
+        return TextResult(sb.ToString());
+    }
+
+    private static ScalarValue Len(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args[0] is RangeValue range)
+        {
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (int r = 0; r < range.RowCount; r++)
+                for (int c = 0; c < range.ColCount; c++)
+                {
+                    var value = range.Cells[r, c];
+                    if (value is ErrorValue e) return e;
+                    cells[r, c] = LenScalar(value);
+                }
+
+            return new RangeValue(cells);
+        }
+
+        return LenScalar(args[0]);
+    }
+
+    private static ScalarValue LenScalar(ScalarValue value)
+    {
+        var text = ToText(value);
+        return new NumberValue(ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length);
+    }
+
+    private static ScalarValue Left(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, LeftScalarWithCount);
+    }
+
+    private static ScalarValue LeftScalarWithCount(ScalarValue value, ScalarValue countValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (countValue is ErrorValue countError) return countError;
+        var rawCount = ToNumber(countValue);
+        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        var count = (int)rawCount;
+        if (count < 0) return ErrorValue.Value;
+        return LeftScalar(value, count);
+    }
+
+    private static ScalarValue LeftScalar(ScalarValue value, int count)
+    {
+        var text = ToText(value);
+        count = Math.Min(count, text.Length);
+        if (ContainsSurrogatePair(text))
+            return TextResult(text[..AdvanceTextElements(text, 0, count)]);
+        return TextResult(text[..count]);
+    }
+
+    private static ScalarValue Right(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, RightScalarWithCount);
+    }
+
+    private static ScalarValue RightScalarWithCount(ScalarValue value, ScalarValue countValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (countValue is ErrorValue countError) return countError;
+        var rawCount = ToNumber(countValue);
+        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        var count = (int)rawCount;
+        if (count < 0) return ErrorValue.Value;
+        return RightScalar(value, count);
+    }
+
+    private static ScalarValue RightScalar(ScalarValue value, int count)
+    {
+        var text = ToText(value);
+        count = Math.Min(count, text.Length);
+        int start = ContainsSurrogatePair(text)
+            ? AdvanceTextElements(text, 0, Math.Max(0, CountTextElements(text) - count))
+            : text.Length - count;
+        return TextResult(text[start..]);
+    }
+
+    private static RangeValue MapTextSliceRange(RangeValue range, int count, bool fromRight)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e
+                    ? e
+                    : fromRight ? RightScalar(value, count) : LeftScalar(value, count);
+            }
+
+        return new RangeValue(cells);
+    }
+
     private static ScalarValue TextFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
@@ -484,24 +593,43 @@ public static partial class BuiltInFunctions
         var firstRange = first as RangeValue;
         var secondRange = second as RangeValue;
         var thirdRange = third as RangeValue;
-        var shape = firstRange ?? secondRange ?? thirdRange;
+        var shape = ChooseBroadcastShape(firstRange, secondRange, thirdRange);
         if (shape is null) return map(first, second, third);
-        if ((firstRange is not null && (firstRange.RowCount != shape.RowCount || firstRange.ColCount != shape.ColCount)) ||
-            (secondRange is not null && (secondRange.RowCount != shape.RowCount || secondRange.ColCount != shape.ColCount)) ||
-            (thirdRange is not null && (thirdRange.RowCount != shape.RowCount || thirdRange.ColCount != shape.ColCount)))
+        if ((firstRange is not null && !CanBroadcastToShape(firstRange, shape.RowCount, shape.ColCount)) ||
+            (secondRange is not null && !CanBroadcastToShape(secondRange, shape.RowCount, shape.ColCount)) ||
+            (thirdRange is not null && !CanBroadcastToShape(thirdRange, shape.RowCount, shape.ColCount)))
             return ErrorValue.Value;
 
         var cells = new ScalarValue[shape.RowCount, shape.ColCount];
         for (int r = 0; r < shape.RowCount; r++)
             for (int c = 0; c < shape.ColCount; c++)
             {
-                var firstValue = firstRange is null ? first : firstRange.Cells[r, c];
-                var secondValue = secondRange is null ? second : secondRange.Cells[r, c];
-                var thirdValue = thirdRange is null ? third : thirdRange.Cells[r, c];
+                var firstValue = firstRange is null ? first : ValueAtBroadcastCell(firstRange, r, c);
+                var secondValue = secondRange is null ? second : ValueAtBroadcastCell(secondRange, r, c);
+                var thirdValue = thirdRange is null ? third : ValueAtBroadcastCell(thirdRange, r, c);
                 cells[r, c] = map(firstValue, secondValue, thirdValue);
             }
 
         return new RangeValue(cells);
+    }
+
+    private static bool CanBroadcastToShape(RangeValue range, int rows, int cols) =>
+        (range.RowCount == rows && range.ColCount == cols) || (range.RowCount == 1 && range.ColCount == 1);
+
+    private static ScalarValue ValueAtBroadcastCell(RangeValue range, int row, int col) =>
+        range.RowCount == 1 && range.ColCount == 1 ? range.Cells[0, 0] : range.Cells[row, col];
+
+    private static RangeValue? ChooseBroadcastShape(params RangeValue?[] ranges)
+    {
+        RangeValue? fallback = null;
+        foreach (var range in ranges)
+        {
+            if (range is null) continue;
+            fallback ??= range;
+            if (range.RowCount != 1 || range.ColCount != 1) return range;
+        }
+
+        return fallback;
     }
 
     private static ScalarValue MapQuaternaryTextArgs(
@@ -515,22 +643,22 @@ public static partial class BuiltInFunctions
         var secondRange = second as RangeValue;
         var thirdRange = third as RangeValue;
         var fourthRange = fourth as RangeValue;
-        var shape = firstRange ?? secondRange ?? thirdRange ?? fourthRange;
+        var shape = ChooseBroadcastShape(firstRange, secondRange, thirdRange, fourthRange);
         if (shape is null) return map(first, second, third, fourth);
-        if ((firstRange is not null && (firstRange.RowCount != shape.RowCount || firstRange.ColCount != shape.ColCount)) ||
-            (secondRange is not null && (secondRange.RowCount != shape.RowCount || secondRange.ColCount != shape.ColCount)) ||
-            (thirdRange is not null && (thirdRange.RowCount != shape.RowCount || thirdRange.ColCount != shape.ColCount)) ||
-            (fourthRange is not null && (fourthRange.RowCount != shape.RowCount || fourthRange.ColCount != shape.ColCount)))
+        if ((firstRange is not null && !CanBroadcastToShape(firstRange, shape.RowCount, shape.ColCount)) ||
+            (secondRange is not null && !CanBroadcastToShape(secondRange, shape.RowCount, shape.ColCount)) ||
+            (thirdRange is not null && !CanBroadcastToShape(thirdRange, shape.RowCount, shape.ColCount)) ||
+            (fourthRange is not null && !CanBroadcastToShape(fourthRange, shape.RowCount, shape.ColCount)))
             return ErrorValue.Value;
 
         var cells = new ScalarValue[shape.RowCount, shape.ColCount];
         for (int r = 0; r < shape.RowCount; r++)
             for (int c = 0; c < shape.ColCount; c++)
             {
-                var firstValue = firstRange is null ? first : firstRange.Cells[r, c];
-                var secondValue = secondRange is null ? second : secondRange.Cells[r, c];
-                var thirdValue = thirdRange is null ? third : thirdRange.Cells[r, c];
-                var fourthValue = fourthRange is null ? fourth : fourthRange.Cells[r, c];
+                var firstValue = firstRange is null ? first : ValueAtBroadcastCell(firstRange, r, c);
+                var secondValue = secondRange is null ? second : ValueAtBroadcastCell(secondRange, r, c);
+                var thirdValue = thirdRange is null ? third : ValueAtBroadcastCell(thirdRange, r, c);
+                var fourthValue = fourthRange is null ? fourth : ValueAtBroadcastCell(fourthRange, r, c);
                 cells[r, c] = map(firstValue, secondValue, thirdValue, fourthValue);
             }
 
@@ -541,16 +669,19 @@ public static partial class BuiltInFunctions
         IReadOnlyList<ScalarValue> args,
         Func<IReadOnlyList<ScalarValue>, ScalarValue> map)
     {
-        RangeValue? shape = null;
-        foreach (var arg in args)
+        var ranges = new RangeValue?[args.Count];
+        for (int i = 0; i < args.Count; i++)
+            ranges[i] = args[i] as RangeValue;
+
+        var shape = ChooseBroadcastShape(ranges);
+        if (shape is null) return map(args);
+
+        foreach (var range in ranges)
         {
-            if (arg is not RangeValue range) continue;
-            shape ??= range;
-            if (range.RowCount != shape.RowCount || range.ColCount != shape.ColCount)
+            if (range is null) continue;
+            if (!CanBroadcastToShape(range, shape.RowCount, shape.ColCount))
                 return ErrorValue.Value;
         }
-
-        if (shape is null) return map(args);
 
         var cells = new ScalarValue[shape.RowCount, shape.ColCount];
         var scalarArgs = new ScalarValue[args.Count];
@@ -558,7 +689,7 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < shape.ColCount; c++)
             {
                 for (int i = 0; i < args.Count; i++)
-                    scalarArgs[i] = args[i] is RangeValue range ? range.Cells[r, c] : args[i];
+                    scalarArgs[i] = args[i] is RangeValue range ? ValueAtBroadcastCell(range, r, c) : args[i];
                 cells[r, c] = map(scalarArgs);
             }
 
@@ -667,30 +798,237 @@ public static partial class BuiltInFunctions
     {
         if (value is NumberValue nv) return nv;
         var text = ToText(value).Trim();
-        var usCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
-        if (text.EndsWith('%') &&
-            double.TryParse(text[..^1].Trim(), System.Globalization.NumberStyles.Any,
-                usCulture, out var pct))
-            return new NumberValue(pct / 100.0);
-        if (double.TryParse(text, System.Globalization.NumberStyles.Any,
-                usCulture, out var d))
+        if (ExcelTextNumberParser.TryParse(text, out var d))
             return new NumberValue(d);
-        if (TryParseExcelFakeLeapDayValueText(text, usCulture, out var fakeLeapSerial))
-            return new NumberValue(fakeLeapSerial);
-        if (DateTime.TryParse(text, usCulture,
-                System.Globalization.DateTimeStyles.None, out var dt))
-            return new NumberValue(IsTimeOnlyText(text) ? dt.TimeOfDay.TotalDays : DateToSerial(dt));
         return ErrorValue.Value;
     }
 
-    private static bool IsTimeOnlyText(string text)
+    private static ScalarValue Replace(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        var trimmed = text.Trim();
-        if (trimmed.Contains('/') || trimmed.Contains('-')) return false;
-        if (Regex.IsMatch(trimmed, @"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)", RegexOptions.IgnoreCase))
-            return false;
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
+        if (args[3] is ErrorValue e3) return e3;
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], ReplaceScalarWithArgs);
+    }
 
-        return trimmed.Contains(':')
-            || Regex.IsMatch(trimmed, @"\b(?:am|pm)\b", RegexOptions.IgnoreCase);
+    private static ScalarValue ReplaceScalarWithArgs(
+        ScalarValue value,
+        ScalarValue startValue,
+        ScalarValue numCharsValue,
+        ScalarValue newTextValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (startValue is ErrorValue startError) return startError;
+        if (numCharsValue is ErrorValue numCharsError) return numCharsError;
+        if (newTextValue is ErrorValue newTextError) return newTextError;
+        double rawStart = ToNumber(startValue);
+        double rawNumChars = ToNumber(numCharsValue);
+        if (!double.IsFinite(rawStart) || !double.IsFinite(rawNumChars)) return ErrorValue.Value;
+        if (rawStart > int.MaxValue || rawNumChars > int.MaxValue) return ErrorValue.Value;
+
+        int startNum = (int)rawStart;
+        int numChars = (int)rawNumChars;
+        if (startNum < 1 || numChars < 0) return ErrorValue.Value;
+
+        return ReplaceText(ToText(value), startNum, numChars, ToText(newTextValue));
+    }
+
+    private static RangeValue MapReplaceRange(RangeValue range, int startNum, int numChars, string newText)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : ReplaceText(ToText(value), startNum, numChars, newText);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue ReplaceText(string text, int startNum, int numChars, string newText)
+    {
+        bool hasSurrogatePair = ContainsSurrogatePair(text);
+        int start = hasSurrogatePair
+            ? TextElementIndexFromOneBasedPosition(text, startNum)
+            : Math.Min(startNum - 1, text.Length);
+        int end = hasSurrogatePair
+            ? AdvanceTextElements(text, start, numChars)
+            : Math.Min(start + numChars, text.Length);
+        return TextResult(text[..start] + newText + text[end..]);
+    }
+
+    private static ScalarValue Concatenate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var rangeIndex = -1;
+        for (int i = 0; i < args.Count; i++)
+        {
+            if (args[i] is ErrorValue e) return e;
+            if (args[i] is RangeValue)
+            {
+                if (rangeIndex >= 0) return ErrorValue.Value;
+                rangeIndex = i;
+            }
+        }
+
+        if (rangeIndex >= 0)
+            return MapConcatenateRange((RangeValue)args[rangeIndex], args, rangeIndex);
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var a in args)
+        {
+            sb.Append(ToText(a));
+        }
+        return TextResult(sb.ToString());
+    }
+
+    private static RangeValue MapConcatenateRange(RangeValue range, IReadOnlyList<ScalarValue> args, int rangeIndex)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                if (value is ErrorValue e)
+                {
+                    cells[r, c] = e;
+                    continue;
+                }
+
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < args.Count; i++)
+                    sb.Append(i == rangeIndex ? ToText(value) : ToText(args[i]));
+                cells[r, c] = TextResult(sb.ToString());
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue TFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, TScalar);
+        return TScalar(args[0]);
+    }
+
+    private static ScalarValue TScalar(ScalarValue value) =>
+        value is TextValue t ? TextResult(t.Value) : new TextValue("");
+
+    private static ScalarValue Hyperlink(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count > 1 && args[0] is RangeValue && args[1] is RangeValue)
+            return MapBinaryMathArgs(args[0], args[1], HyperlinkScalar);
+        if (args.Count > 1 && args[1] is RangeValue friendlyRange)
+            return MapUnaryTextRange(friendlyRange, value => HyperlinkScalar(args[0], value));
+        if (args[0] is RangeValue linkRange)
+            return MapUnaryTextRange(linkRange, value => HyperlinkScalar(value, args.Count > 1 ? args[1] : null));
+
+        return HyperlinkScalar(args[0], args.Count > 1 ? args[1] : null);
+    }
+
+    private static ScalarValue HyperlinkScalar(ScalarValue link, ScalarValue? friendlyName)
+    {
+        var display = friendlyName is not null && friendlyName is not BlankValue ? ToText(friendlyName) : ToText(link);
+        return TextResult(display);
+    }
+
+    private static ScalarValue Fixed(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var decimalsArg = args.Count > 1 ? args[1] : new NumberValue(2);
+        var noCommasArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapTernaryTextArgs(args[0], decimalsArg, noCommasArg, FixedScalarWithArgs);
+    }
+
+    private static ScalarValue FixedScalarWithArgs(ScalarValue value, ScalarValue decimalsValue, ScalarValue noCommasValue)
+    {
+        if (noCommasValue is ErrorValue noCommasError) return noCommasError;
+        bool noCommas = noCommasValue is not BlankValue && ToBool(noCommasValue);
+        return FixedScalarWithDecimals(value, decimalsValue, noCommas);
+    }
+
+    private static ScalarValue FixedScalarWithDecimals(ScalarValue value, ScalarValue decimalsValue, bool noCommas)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (decimalsValue is ErrorValue decimalsError) return decimalsError;
+        int dec = 2;
+        if (decimalsValue is not BlankValue)
+        {
+            double rawDec = ToNumber(decimalsValue);
+            if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
+            dec = (int)rawDec;
+        }
+        return FixedScalar(value, dec, noCommas);
+    }
+
+    private static ScalarValue FixedScalar(ScalarValue value, int dec, bool noCommas)
+    {
+        double n = ToNumber(value);
+        return TextResult(FormatRoundedNumber(n, dec, useCommas: !noCommas));
+    }
+
+    private static ScalarValue Clean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, CleanText);
+        return CleanText(args[0]);
+    }
+
+    private static ScalarValue CleanText(ScalarValue value)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in ToText(value))
+            if (c >= 32) sb.Append(c);
+        return TextResult(sb.ToString());
+    }
+
+    private static ScalarValue Dollar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        var decimalsArg = args.Count > 1 ? args[1] : new NumberValue(2);
+        return MapBinaryMathArgs(args[0], decimalsArg, DollarScalarWithDecimals);
+    }
+
+    private static ScalarValue DollarScalarWithDecimals(ScalarValue value, ScalarValue decimalsValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (decimalsValue is ErrorValue decimalsError) return decimalsError;
+        int dec = 2;
+        if (decimalsValue is BlankValue)
+        {
+            dec = 0;
+        }
+        else
+        {
+            double rawDec = ToNumber(decimalsValue);
+            if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
+            dec = (int)rawDec;
+        }
+        return DollarScalar(value, dec);
+    }
+
+    private static ScalarValue DollarScalar(ScalarValue value, int dec)
+    {
+        double n = ToNumber(value);
+        var numberText = FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
+        var formatted = "$" + numberText;
+        return TextResult(n < 0 && (dec >= 0 || numberText != "0") ? "(" + formatted + ")" : formatted);
+    }
+
+    private static string FormatRoundedNumber(double value, int decimals, bool useCommas)
+    {
+        if (!double.IsFinite(value)) throw new FormulaEvalException("#NUM!", "Invalid number");
+        if (decimals > 32767) throw new FormulaEvalException("#VALUE!", "Formatted text exceeds Excel cell text limit");
+
+        double rounded = decimals <= 15 ? RoundWithExcelDigits(value, decimals) : value;
+        int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
+        string format = (useCommas ? "N" : "F") + displayDecimals;
+        return rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
     }
 }

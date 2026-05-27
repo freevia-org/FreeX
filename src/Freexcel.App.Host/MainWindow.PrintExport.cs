@@ -43,16 +43,21 @@ public partial class MainWindow
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
-        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null) { Owner = this };
+        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage) { Owner = this };
         if (optionsDialog.ShowDialog() != true)
             return;
+
+        _options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;
+        _options.Save();
 
         var saveDlg = new Microsoft.Win32.SaveFileDialog
         {
             Title      = "Export as PDF / XPS",
             Filter     = "PDF files (*.pdf)|*.pdf|XPS files (*.xps)|*.xps",
             DefaultExt = ".pdf",
-            FileName   = _workbook.Name
+            FileName   = _workbook.Name,
+            AddExtension = true,
+            OverwritePrompt = true
         };
         if (saveDlg.ShowDialog() != true) return;
 
@@ -62,8 +67,8 @@ public partial class MainWindow
         var request = ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result);
         if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError))
         {
-            MessageBox.Show(
-                publishOptionsError,
+            ShowOwnedMessage(
+                publishOptionsError ?? "Unsupported export options.",
                 "Export Options",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -101,13 +106,14 @@ public partial class MainWindow
                 includeSelectableText: !options.BitmapTextWhenFontsMayNotBeEmbedded,
                 pdfLanguage: options.PdfLanguage);
 
-            MessageBox.Show(
+            ShowOwnedMessage(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
                 "Export PDF",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             RecordDiagnosticEvent("export_completed", new Dictionary<string, string?>
             {
+                ["fileType"] = "pdf",
                 ["format"] = "pdf",
                 ["scope"] = options.Scope.ToString()
             });
@@ -117,11 +123,12 @@ public partial class MainWindow
         {
             RecordDiagnosticEvent("export_failed", new Dictionary<string, string?>
             {
+                ["fileType"] = "pdf",
                 ["format"] = "pdf",
                 ["scope"] = options.Scope.ToString(),
                 ["reason"] = ex.GetType().Name
             });
-            MessageBox.Show(
+            ShowOwnedMessage(
                 $"Failed to save PDF file:\n{ex.Message}",
                 "Export Error",
                 MessageBoxButton.OK,
@@ -179,7 +186,7 @@ public partial class MainWindow
                 var detail = string.IsNullOrWhiteSpace(optionSummary)
                     ? $"Saved XPS file:\n{xpsPath}"
                     : $"{optionSummary}\n\nSaved XPS file:\n{xpsPath}";
-                MessageBox.Show(
+                ShowOwnedMessage(
                     detail,
                     "Export XPS",
                     MessageBoxButton.OK,
@@ -188,6 +195,7 @@ public partial class MainWindow
 
             RecordDiagnosticEvent("export_completed", new Dictionary<string, string?>
             {
+                ["fileType"] = "xps",
                 ["format"] = "xps",
                 ["scope"] = options.Scope.ToString()
             });
@@ -197,11 +205,12 @@ public partial class MainWindow
         {
             RecordDiagnosticEvent("export_failed", new Dictionary<string, string?>
             {
+                ["fileType"] = "xps",
                 ["format"] = "xps",
                 ["scope"] = options.Scope.ToString(),
                 ["reason"] = ex.GetType().Name
             });
-            MessageBox.Show(
+            ShowOwnedMessage(
                 $"Failed to save XPS file:\n{ex.Message}",
                 "Export Error",
                 MessageBoxButton.OK,
@@ -276,6 +285,7 @@ public partial class MainWindow
         sourcePage.Arrange(new Rect(size));
         sourcePage.UpdateLayout();
         var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
+        var linkOverlays = PdfLinkOverlayExtractor.Extract(sourcePage);
 
         var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
             Math.Max(1, (int)Math.Ceiling(width)),
@@ -293,8 +303,8 @@ public partial class MainWindow
             Width = width,
             Height = height
         });
-        if (textOverlays.Count > 0)
-            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays });
+        if (textOverlays.Count > 0 || linkOverlays.Count > 0)
+            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays, LinkOverlays = linkOverlays });
 
         var clone = new PageContent();
         ((System.Windows.Markup.IAddChild)clone).AddChild(fixedPage);
@@ -395,41 +405,4 @@ public partial class MainWindow
             // Export has already succeeded; opening the shell association is best effort.
         }
     }
-}
-
-internal static class ExportSheetSelectionPlanner
-{
-    public static IReadOnlyList<SheetId> ResolveSheetIds(
-        Workbook workbook,
-        ExportOptions options,
-        SheetId currentSheetId,
-        IReadOnlyCollection<SheetId> groupedSheetIds)
-    {
-        ArgumentNullException.ThrowIfNull(workbook);
-
-        if (options.Scope == ExportContentScope.EntireWorkbook)
-            return VisibleSheets(workbook).Select(sheet => sheet.Id).ToList();
-
-        if (options.Scope == ExportContentScope.Selection)
-            return ResolveSingleSheet(workbook, currentSheetId);
-
-        var groupedSet = groupedSheetIds.ToHashSet();
-        groupedSet.Add(currentSheetId);
-        var sheetIds = VisibleSheets(workbook)
-            .Where(sheet => groupedSet.Contains(sheet.Id))
-            .Select(sheet => sheet.Id)
-            .ToList();
-
-        return sheetIds.Count == 0
-            ? ResolveSingleSheet(workbook, currentSheetId)
-            : sheetIds;
-    }
-
-    private static IReadOnlyList<SheetId> ResolveSingleSheet(Workbook workbook, SheetId sheetId) =>
-        workbook.GetSheet(sheetId) is { IsHidden: false, IsVeryHidden: false } sheet
-            ? [sheet.Id]
-            : [];
-
-    private static IEnumerable<Sheet> VisibleSheets(Workbook workbook) =>
-        workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden);
 }

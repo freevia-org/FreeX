@@ -85,18 +85,18 @@ public sealed class ChartSeriesFormatDialog : Window
         var root = ChartDialogHelpers.DialogStack();
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddCombo(stack, "Series", _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => $"Series {index + 1}").ToArray());
+            ChartDialogHelpers.AddCombo(stack, "_Series", _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => $"Series {index + 1}").ToArray());
             stack.Children.Add(CreateInlineHelp("Choose the series to format without changing the chart data."));
             root.Children.Add(CreateGroupBox("Series Options", stack));
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, "Fill color", _fillBox);
-            ChartDialogHelpers.AddColorText(stack, "Line color", _strokeBox);
-            ChartDialogHelpers.AddNumericText(stack, "Line width", _strokeThicknessBox, "Blank keeps the automatic line width.");
-            ChartDialogHelpers.AddCombo(stack, "Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>().Cast<object>().Prepend("(none)").ToArray());
-            ChartDialogHelpers.AddCombo(stack, "Marker", _markerBox, Enum.GetValues<ChartMarkerStyle>().Cast<object>().Prepend("(none)").ToArray());
-            ChartDialogHelpers.AddNumericText(stack, "Marker size", _markerSizeBox, "Blank keeps the automatic marker size.");
+            ChartDialogHelpers.AddColorText(stack, "_Fill color", _fillBox);
+            ChartDialogHelpers.AddColorText(stack, "_Line color", _strokeBox);
+            ChartDialogHelpers.AddNumericText(stack, "Line _width", _strokeThicknessBox, "Blank keeps the automatic line width.");
+            ChartDialogHelpers.AddCombo(stack, "_Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>().Cast<object>().Prepend("(none)").ToArray());
+            ChartDialogHelpers.AddCombo(stack, "_Marker", _markerBox, Enum.GetValues<ChartMarkerStyle>().Cast<object>().Prepend("(none)").ToArray());
+            ChartDialogHelpers.AddNumericText(stack, "Marker _size", _markerSizeBox, "Blank keeps the automatic marker size.");
             root.Children.Add(CreateGroupBox("Fill & Line", stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));

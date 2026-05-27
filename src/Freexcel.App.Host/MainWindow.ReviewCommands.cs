@@ -18,10 +18,10 @@ public partial class MainWindow
 
         while (true)
         {
-            var issues = SpellCheckService.FindIssues(_workbook, _currentSheetId)
-                .Where(issue => !ignoredWords.Contains(issue.Word))
-                .Where(issue => !ignoredIssues.Contains((issue.Address, issue.Word)))
-                .ToList();
+            var issues = SpellCheckWorkflowPlanner.FilterIssues(
+                SpellCheckService.FindIssues(_workbook, _currentSheetId),
+                ignoredWords,
+                ignoredIssues);
             if (issues.Count == 0)
             {
                 MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -53,7 +53,7 @@ public partial class MainWindow
 
             if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
             {
-                var edits = BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement);
+                var edits = SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, issue.Word, replacement);
                 if (edits.Count > 0 && !TryExecuteSpellCheckEdits(edits))
                     return;
 
@@ -62,29 +62,13 @@ public partial class MainWindow
                 continue;
             }
 
-            var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
-            if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
+            if (!TryExecuteSpellCheckEdits([SpellCheckWorkflowPlanner.BuildReplacementEdit(issue, replacement)]))
                 return;
 
             UpdateViewport();
             RefreshStatusBar();
         }
     }
-
-    private static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildSpellCheckReplaceAllEdits(
-        IReadOnlyList<SpellingIssue> issues,
-        string word,
-        string replacement) =>
-        issues
-            .Where(issue => string.Equals(issue.Word, word, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(issue => issue.Address)
-            .Select(group =>
-            {
-                var issue = group.First();
-                var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
-                return (issue.Address, Cell.FromValue(new TextValue(corrected)));
-            })
-            .ToList();
 
     private bool TryExecuteSpellCheckEdits(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits) =>
         TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Spell Check");
@@ -100,7 +84,8 @@ public partial class MainWindow
     {
         var issues = AccessibilityCheckerService.FindIssues(_workbook);
         var dialog = new AccessibilityCheckerDialog(issues) { Owner = this };
-        dialog.ShowDialog();
+        if (dialog.ShowDialog() == true)
+            NavigateToCell(AccessibilityCheckerDialog.GetNavigationTarget(dialog.Result!.Issue));
     }
 
     private void SetAltTextBtn_Click(object sender, RoutedEventArgs e)
@@ -294,7 +279,7 @@ public partial class MainWindow
         var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password: null);
         if (!sheet.IsProtected)
         {
-            var dialog = new PasswordProtectionDialog("Protect Sheet", "Password (optional):") { Owner = this };
+            var dialog = new PasswordProtectionDialog("Protect Sheet", "_Password (optional):") { Owner = this };
             if (dialog.ShowDialog() != true) return;
             result = ProtectionDialogPlanner.CreateSheetResult(
                 sheet,
@@ -319,7 +304,7 @@ public partial class MainWindow
         string? pwd = null;
         if (!_workbook.IsStructureProtected)
         {
-            var dialog = new PasswordProtectionDialog("Protect Workbook", "Password (optional):") { Owner = this };
+            var dialog = new PasswordProtectionDialog("Protect Workbook", "_Password (optional):") { Owner = this };
             if (dialog.ShowDialog() != true) return;
             pwd = dialog.Password;
         }
@@ -339,7 +324,12 @@ public partial class MainWindow
             return;
 
         var defaultRange = SheetGrid.SelectedRange?.ToString() ?? "A1:A1";
-        var dialog = new AllowEditRangeDialog(_currentSheetId, defaultRange, sheet.AllowEditRanges) { Owner = this };
+        AllowEditRangeDialog? dialog = null;
+        dialog = new AllowEditRangeDialog(
+            _currentSheetId,
+            defaultRange,
+            sheet.AllowEditRanges,
+            request => ApplyAllowEditRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         IWorkbookCommand? command = null;
@@ -368,6 +358,29 @@ public partial class MainWindow
 
         MessageBox.Show(successMessage, "Allow Edit Ranges", MessageBoxButton.OK, MessageBoxImage.Information);
     }
+
+    private void ApplyAllowEditRangeSelection(AllowEditRangeDialog? dialog, AllowEditRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End));
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
     private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();
 
     private async Task ShareWorkbookAsync()
@@ -403,8 +416,17 @@ public partial class MainWindow
 
     private void HelpOnlineBtn_Click(object sender, RoutedEventArgs e)
     {
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        { FileName = AppInfo.HelpUrl, UseShellExecute = true });
+        OpenExternalHelpLink(AppInfo.HelpUrl, "Help Online");
+    }
+
+    private void CheckForUpdatesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        RecordDiagnosticEvent("update_check_opened", new Dictionary<string, string?>
+        {
+            ["source"] = "help"
+        });
+
+        OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, "Check for Updates");
     }
 
     private void AboutBtn_Click(object sender, RoutedEventArgs e)
@@ -422,8 +444,7 @@ public partial class MainWindow
             ["source"] = "help"
         });
 
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        { FileName = AppIssueReporter.CreateIssueUrl(context), UseShellExecute = true });
+        OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), "Feedback");
     }
 
     private void CopyDiagnosticsBtn_Click(object sender, RoutedEventArgs e)
@@ -460,5 +481,25 @@ public partial class MainWindow
             AppInfo.FeedbackUrl,
             _diagnosticsMetadata,
             _diagnosticsOptions.IsEnabled);
+    }
+
+    private void OpenExternalHelpLink(string url, string title)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            ShowOwnedMessage(
+                $"Could not open the external link:\n{url}\n\n{ex.Message}",
+                title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 }

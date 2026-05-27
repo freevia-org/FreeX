@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Freexcel.Core.IO;
 
 public static class XlsxPackagePath
@@ -22,7 +24,7 @@ public static class XlsxPackagePath
 
     public static string ResolveRelationshipTarget(string sourcePath, string target)
     {
-        var normalizedTarget = target.Replace('\\', '/');
+        var normalizedTarget = UnescapePathSegments(target.Replace('\\', '/'));
         if (normalizedTarget.StartsWith('/'))
             return normalizedTarget.TrimStart('/');
         if (normalizedTarget.StartsWith("xl/", StringComparison.OrdinalIgnoreCase))
@@ -40,45 +42,40 @@ public static class XlsxPackagePath
         var slash = sourceDirectory.LastIndexOf('/');
         sourceDirectory = slash >= 0 ? sourceDirectory[..slash] : "";
 
+        string target;
         if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
-            return $"../media/{targetPath["xl/media/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../media/{targetPath["xl/media/".Length..]}";
+        else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase))
-            return $"../drawings/{targetPath["xl/drawings/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../drawings/{targetPath["xl/drawings/".Length..]}";
+        else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
-            return $"../tables/{targetPath["xl/tables/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../tables/{targetPath["xl/tables/".Length..]}";
+        else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase))
-            return $"../pivotTables/{targetPath["xl/pivotTables/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../pivotTables/{targetPath["xl/pivotTables/".Length..]}";
+        else if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
-            return $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/slicers", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";
+        else if (sourceDirectory.Equals("xl/slicers", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
-            return $"../slicerCaches/{targetPath["xl/slicerCaches/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/timelines", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../slicerCaches/{targetPath["xl/slicerCaches/".Length..]}";
+        else if (sourceDirectory.Equals("xl/timelines", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase))
-            return $"../timelineCaches/{targetPath["xl/timelineCaches/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../timelineCaches/{targetPath["xl/timelineCaches/".Length..]}";
+        else if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase))
-            return $"../charts/{targetPath["xl/charts/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../charts/{targetPath["xl/charts/".Length..]}";
+        else if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
-            return $"../media/{targetPath["xl/media/".Length..]}";
-
-        return targetPath.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
+            target = $"../media/{targetPath["xl/media/".Length..]}";
+        else
+            target = targetPath.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
             ? targetPath["xl/".Length..]
             : targetPath;
+
+        return EscapePathSegments(target);
     }
 
     public static string NormalizeZipPath(string path)
@@ -135,4 +132,81 @@ public static class XlsxPackagePath
             ? candidate
             : $"{candidate}{extension}";
     }
+
+    private static string UnescapePathSegments(string path) =>
+        string.Join('/', path.Split('/').Select(UnescapePathSegment));
+
+    private static string EscapePathSegments(string path) =>
+        string.Join('/', path.Split('/').Select(EscapePathSegment));
+
+    private static string UnescapePathSegment(string segment)
+    {
+        try
+        {
+            if (IsEncodedDotControlSegment(segment))
+                return segment;
+
+            var separatorEscapeIndex = IndexOfEncodedPathSeparator(segment, 0);
+            if (separatorEscapeIndex >= 0)
+                return UnescapePathSegmentPreservingEncodedSeparators(segment, separatorEscapeIndex);
+
+            return Uri.UnescapeDataString(segment);
+        }
+        catch (UriFormatException)
+        {
+            return segment;
+        }
+    }
+
+    private static bool IsEncodedDotControlSegment(string segment)
+    {
+        if (!segment.Contains('%', StringComparison.Ordinal))
+            return false;
+
+        var unescaped = Uri.UnescapeDataString(segment);
+        return unescaped is "." or ".." && segment.All(IsDotControlSegmentCharacter);
+    }
+
+    private static bool IsDotControlSegmentCharacter(char value) =>
+        value is '.' or '%' or '2' or 'E' or 'e';
+
+    private static string UnescapePathSegmentPreservingEncodedSeparators(string segment, int firstSeparatorEscapeIndex)
+    {
+        var builder = new StringBuilder(segment.Length);
+        var segmentStart = 0;
+        var separatorEscapeIndex = firstSeparatorEscapeIndex;
+        while (separatorEscapeIndex >= 0)
+        {
+            builder.Append(Uri.UnescapeDataString(segment[segmentStart..separatorEscapeIndex]));
+            builder.Append(segment, separatorEscapeIndex, 3);
+            segmentStart = separatorEscapeIndex + 3;
+            separatorEscapeIndex = IndexOfEncodedPathSeparator(segment, segmentStart);
+        }
+
+        builder.Append(Uri.UnescapeDataString(segment[segmentStart..]));
+        return builder.ToString();
+    }
+
+    private static int IndexOfEncodedPathSeparator(string segment, int startIndex)
+    {
+        for (var i = startIndex; i <= segment.Length - 3; i++)
+        {
+            if (segment[i] != '%')
+                continue;
+
+            if (IsHexDigit(segment[i + 1], '2') && IsHexDigit(segment[i + 2], 'F') ||
+                IsHexDigit(segment[i + 1], '5') && IsHexDigit(segment[i + 2], 'C'))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool IsHexDigit(char value, char expected) =>
+        char.ToUpperInvariant(value) == expected;
+
+    private static string EscapePathSegment(string segment) =>
+        segment is "." or ".." ? segment : Uri.EscapeDataString(segment);
 }

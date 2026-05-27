@@ -81,7 +81,24 @@ public partial class MainWindow
             new CellAddress(_currentSheetId, Math.Min(anchor.Row, target.Row), Math.Min(anchor.Col, target.Col)),
             new CellAddress(_currentSheetId, Math.Max(anchor.Row, target.Row), Math.Max(anchor.Col, target.Col)));
 
-        if (!FormulaRangeEntryPlanner.TryApplyRangeSelection(
+        var getPivotDataPlan = range.Start == range.End
+            ? GetPivotDataFormulaPlanner.Create(
+                _workbook,
+                _workbook.GetSheet(formulaCell.Value.Sheet)!,
+                _workbook.GetSheet(_currentSheetId)!,
+                range.Start)
+            : null;
+
+        var applied = getPivotDataPlan is not null
+            ? FormulaRangeEntryPlanner.TryApplySelectionText(
+                editor.Text,
+                editor.CaretIndex,
+                editor.SelectionLength,
+                _formulaReferenceStart,
+                _formulaReferenceLength,
+                getPivotDataPlan.FunctionCall,
+                out var edit)
+            : FormulaRangeEntryPlanner.TryApplyRangeSelection(
                 editor.Text,
                 editor.CaretIndex,
                 editor.SelectionLength,
@@ -90,7 +107,9 @@ public partial class MainWindow
                 range,
                 formulaCell.Value,
                 _options.UseR1C1ReferenceStyle,
-                out var edit))
+                out edit);
+
+        if (!applied)
         {
             return false;
         }
@@ -112,6 +131,13 @@ public partial class MainWindow
         _formulaReferenceLength = edit.ReferenceLength;
         RefreshFormulaReferenceHighlights();
         editor.Focus();
+        editor.Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                editor.Focus();
+                System.Windows.Input.Keyboard.Focus(editor);
+            }),
+            System.Windows.Threading.DispatcherPriority.Input);
         return true;
     }
 
@@ -119,7 +145,34 @@ public partial class MainWindow
         FormulaReferenceHighlightPlanner.GetHighlights(
             text,
             _currentSheetId,
-            sheetName => _workbook.GetSheet(sheetName)?.Id);
+            sheetName => _workbook.GetSheet(sheetName)?.Id,
+            ResolveStructuredFormulaReference);
+
+    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector)
+    {
+        var currentSheet = _workbook.GetSheet(_currentSheetId);
+        var currentAddress = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+        var trimmedSelector = selector.Trim();
+
+        if (trimmedSelector.StartsWith('@') && trimmedSelector.Length > 1)
+        {
+            var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
+                _workbook,
+                currentSheet,
+                currentAddress,
+                string.IsNullOrWhiteSpace(tableName) ? null : tableName,
+                trimmedSelector[1..].Trim());
+
+            return address is null ? null : new GridRange(address.Value, address.Value);
+        }
+
+        return StructuredReferenceResolver.Resolve(
+            _workbook,
+            currentSheet,
+            tableName,
+            trimmedSelector,
+            currentAddress);
+    }
 
     private void RefreshFormulaReferenceHighlights()
     {

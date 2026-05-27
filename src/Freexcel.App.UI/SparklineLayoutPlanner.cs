@@ -18,18 +18,30 @@ public static class SparklineLayoutPlanner
         if (values.Count == 1)
             return new SparklineLineLayout(new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2), []);
 
-        var min = values.Min();
-        var max = values.Max();
-        var span = Math.Abs(max - min) < 0.0000001 ? 1 : max - min;
-        var points = values
-            .Select((value, index) => new Point(
-                rect.Left + rect.Width * index / (values.Count - 1),
-                rect.Bottom - ((value - min) / span * rect.Height)))
-            .ToArray();
+        var min = values[0];
+        var max = values[0];
+        for (var i = 1; i < values.Count; i++)
+        {
+            var value = values[i];
+            if (value < min)
+                min = value;
+            if (value > max)
+                max = value;
+        }
 
-        var segments = new List<(Point Start, Point End)>(points.Length - 1);
-        for (var i = 1; i < points.Length; i++)
-            segments.Add((points[i - 1], points[i]));
+        var span = Math.Abs(max - min) < 0.0000001 ? 1 : max - min;
+        var previous = new Point(
+            rect.Left,
+            rect.Bottom - ((values[0] - min) / span * rect.Height));
+        var segments = new List<(Point Start, Point End)>(values.Count - 1);
+        for (var i = 1; i < values.Count; i++)
+        {
+            var point = new Point(
+                rect.Left + rect.Width * i / (values.Count - 1),
+                rect.Bottom - ((values[i] - min) / span * rect.Height));
+            segments.Add((previous, point));
+            previous = point;
+        }
 
         return new SparklineLineLayout(null, segments);
     }
@@ -39,7 +51,14 @@ public static class SparklineLayoutPlanner
         if (values.Count == 0)
             return new SparklineColumnLayout([]);
 
-        var maxAbs = values.Select(Math.Abs).DefaultIfEmpty(1).Max();
+        var maxAbs = 0d;
+        foreach (var value in values)
+        {
+            var absolute = Math.Abs(value);
+            if (absolute > maxAbs)
+                maxAbs = absolute;
+        }
+
         if (maxAbs < 0.0000001)
             maxAbs = 1;
 

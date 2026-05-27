@@ -35,8 +35,9 @@ public sealed partial class NativeJsonAdapter
             .Select(FromConditionalFormat)
             .ToList();
 
-    private static ConditionalFormat ToConditionalFormat(ConditionalFormatDto formatDto, SheetId sheetId) =>
-        new()
+    private static ConditionalFormat ToConditionalFormat(ConditionalFormatDto formatDto, SheetId sheetId)
+    {
+        var format = new ConditionalFormat
         {
             AppliesTo = GridRange.Parse(formatDto.AppliesTo!, sheetId),
             Priority = formatDto.Priority < 1 ? 1 : formatDto.Priority,
@@ -49,6 +50,9 @@ public sealed partial class NativeJsonAdapter
             MidColor = formatDto.MidColor,
             MaxColor = formatDto.MaxColor,
             UseThreeColorScale = formatDto.UseThreeColorScale,
+            MinThresholdGreaterThanOrEqual = formatDto.MinThresholdGreaterThanOrEqual,
+            MidThresholdGreaterThanOrEqual = formatDto.MidThresholdGreaterThanOrEqual,
+            MaxThresholdGreaterThanOrEqual = formatDto.MaxThresholdGreaterThanOrEqual,
             DataBarColor = formatDto.DataBarColor,
             DataBarMinThresholdType = formatDto.DataBarMinThresholdType,
             DataBarMinThresholdValue = formatDto.DataBarMinThresholdValue,
@@ -65,6 +69,9 @@ public sealed partial class NativeJsonAdapter
             DataBarNegativeBorderColor = formatDto.DataBarNegativeBorderColor,
             AboveAverage = formatDto.AboveAverage,
             FormulaText = formatDto.FormulaText,
+            IconSetStyle = formatDto.IconSetStyle,
+            IconSetShowValue = formatDto.IconSetShowValue,
+            IconSetReverse = formatDto.IconSetReverse,
             TopBottomRank = formatDto.TopBottomRank,
             TopBottomPercent = formatDto.TopBottomPercent,
             TextRuleText = formatDto.TextRuleText,
@@ -77,6 +84,10 @@ public sealed partial class NativeJsonAdapter
             NativeContainerAttributes = formatDto.NativeContainerAttributes,
             NativeContainerChildXmls = formatDto.NativeContainerChildXmls
         };
+        format.IconSetThresholds.AddRange(formatDto.IconSetThresholds ?? []);
+        format.IconOverrides.AddRange(formatDto.IconOverrides ?? []);
+        return format;
+    }
 
     private static ConditionalFormatDto FromConditionalFormat(ConditionalFormat format) =>
         new()
@@ -92,6 +103,9 @@ public sealed partial class NativeJsonAdapter
             MidColor = format.MidColor,
             MaxColor = format.MaxColor,
             UseThreeColorScale = format.UseThreeColorScale,
+            MinThresholdGreaterThanOrEqual = format.MinThresholdGreaterThanOrEqual,
+            MidThresholdGreaterThanOrEqual = format.MidThresholdGreaterThanOrEqual,
+            MaxThresholdGreaterThanOrEqual = format.MaxThresholdGreaterThanOrEqual,
             DataBarColor = format.DataBarColor,
             DataBarMinThresholdType = format.DataBarMinThresholdType,
             DataBarMinThresholdValue = format.DataBarMinThresholdValue,
@@ -108,6 +122,11 @@ public sealed partial class NativeJsonAdapter
             DataBarNegativeBorderColor = format.DataBarNegativeBorderColor,
             AboveAverage = format.AboveAverage,
             FormulaText = format.FormulaText,
+            IconSetStyle = format.IconSetStyle,
+            IconSetShowValue = format.IconSetShowValue,
+            IconSetReverse = format.IconSetReverse,
+            IconSetThresholds = [.. format.IconSetThresholds],
+            IconOverrides = [.. format.IconOverrides],
             TopBottomRank = format.TopBottomRank,
             TopBottomPercent = format.TopBottomPercent,
             TextRuleText = format.TextRuleText,

@@ -377,9 +377,20 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        bool cum = ToBool(args[1]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => NormSDistScalar(value, cum));
-        return NormSDistScalar(args[0], cum);
+        return MapBinaryMathArgs(args[0], args[1], NormSDistScalar);
+    }
+
+    private static ScalarValue NormSDistCompat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => NormSDistScalar(value, cum: true));
+        return NormSDistScalar(args[0], cum: true);
+    }
+
+    private static ScalarValue NormSDistScalar(ScalarValue zValue, ScalarValue cumulativeValue)
+    {
+        bool cum = ToBool(cumulativeValue);
+        return NormSDistScalar(zValue, cum);
     }
 
     private static ScalarValue NormSDistScalar(ScalarValue zValue, bool cum)
@@ -400,6 +411,34 @@ public static partial class BuiltInFunctions
         double prob = ToNumber(probabilityValue);
         if (prob <= 0 || prob >= 1) return ErrorValue.Num;
         return NumberResult(NormSInv(prob));
+    }
+
+    private static ScalarValue Phi(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, PhiScalar);
+        return PhiScalar(args[0]);
+    }
+
+    private static ScalarValue PhiScalar(ScalarValue xValue)
+    {
+        double x = ToNumber(xValue);
+        if (!double.IsFinite(x)) return ErrorValue.Num;
+        return NumberResult(NormSPdf(x));
+    }
+
+    private static ScalarValue Gauss(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, GaussScalar);
+        return GaussScalar(args[0]);
+    }
+
+    private static ScalarValue GaussScalar(ScalarValue zValue)
+    {
+        double z = ToNumber(zValue);
+        if (!double.IsFinite(z)) return ErrorValue.Num;
+        return NumberResult(NormSCdf(z) - 0.5);
     }
 
     private static ScalarValue Standardize(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -452,6 +491,23 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         return MapBinaryMathArgs(args[0], args[1], TDistRtScalar);
+    }
+
+    private static ScalarValue TDistCompat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
+        return MapTernaryTextArgs(args[0], args[1], args[2], (xValue, dfValue, tailsValue) =>
+        {
+            var tails = (int)Math.Truncate(ToNumber(tailsValue));
+            return tails switch
+            {
+                1 => TDistRtScalar(xValue, dfValue),
+                2 => TDist2TScalar(xValue, dfValue),
+                _ => ErrorValue.Num
+            };
+        });
     }
 
     private static ScalarValue TDistRtScalar(ScalarValue xValue, ScalarValue dfValue)
@@ -583,6 +639,38 @@ public static partial class BuiltInFunctions
 
         double p = tails == 1 ? 1.0 - TCdf(Math.Abs(t), df) : 2.0 * (1.0 - TCdf(Math.Abs(t), df));
         return NumberResult(p);
+    }
+
+    private static ScalarValue ZTest(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+
+        var (nums, err) = args[0] is RangeValue range
+            ? CollectRangeNumbers(range)
+            : CollectNumbers([args[0]]);
+        if (err is not null) return err;
+        if (nums!.Count == 0) return ErrorValue.NA;
+
+        double hypothesizedMean = ToNumber(args[1]);
+        double sigma;
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            sigma = ToNumber(args[2]);
+            if (sigma <= 0 || !double.IsFinite(sigma)) return ErrorValue.Num;
+        }
+        else
+        {
+            if (nums.Count < 2) return ErrorValue.DivByZero;
+            double sampleMean = nums.Average();
+            double variance = nums.Sum(value => (value - sampleMean) * (value - sampleMean)) / (nums.Count - 1);
+            sigma = Math.Sqrt(variance);
+            if (sigma == 0) return ErrorValue.DivByZero;
+        }
+
+        double z = (nums.Average() - hypothesizedMean) / (sigma / Math.Sqrt(nums.Count));
+        return NumberResult(1.0 - NormSCdf(z));
     }
 
     // ── B2: F distribution ────────────────────────────────────────────────────
@@ -1044,6 +1132,14 @@ public static partial class BuiltInFunctions
         return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], NegbinomDistScalar);
     }
 
+    private static ScalarValue NegbinomDistCompat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
+        return MapTernaryTextArgs(args[0], args[1], args[2], (failures, successes, probability) => NegbinomDistScalar(failures, successes, probability, new BoolValue(false)));
+    }
+
     private static ScalarValue NegbinomDistScalar(ScalarValue failuresValue, ScalarValue successesValue, ScalarValue probabilityValue, ScalarValue cumulativeValue)
     {
         int r = (int)Math.Truncate(ToNumber(successesValue));
@@ -1107,6 +1203,12 @@ public static partial class BuiltInFunctions
         return MapScalarArgs(args, values => HypergeomDistScalar(values[0], values[1], values[2], values[3], values[4]));
     }
 
+    private static ScalarValue HypergeomDistCompat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (FirstError(args) is { } e) return e;
+        return MapScalarArgs(args, values => HypergeomDistScalar(values[0], values[1], values[2], values[3], new BoolValue(false)));
+    }
+
     private static ScalarValue HypergeomDistScalar(ScalarValue sampleSuccessesValue, ScalarValue sampleSizeValue, ScalarValue populationSuccessesValue, ScalarValue populationSizeValue, ScalarValue cumulativeValue)
     {
         int n = (int)Math.Truncate(ToNumber(sampleSizeValue));
@@ -1139,10 +1241,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double lambda = ToNumber(args[1]);
-        bool cum = ToBool(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ExponDistScalar(value, lambda, cum));
-        return ExponDistScalar(args[0], lambda, cum);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ExponDistScalar);
+    }
+
+    private static ScalarValue ExponDistScalar(ScalarValue xValue, ScalarValue lambdaValue, ScalarValue cumulativeValue)
+    {
+        double lambda = ToNumber(lambdaValue);
+        bool cum = ToBool(cumulativeValue);
+        return ExponDistScalar(xValue, lambda, cum);
     }
 
     private static ScalarValue ExponDistScalar(ScalarValue xValue, double lambda, bool cum)
@@ -1262,6 +1368,14 @@ public static partial class BuiltInFunctions
         return MapScalarArgs([args[0], args[1], args[2], args[3], lowerArg, upperArg], values => BetaDistScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
     }
 
+    private static ScalarValue BetaDistCompat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (FirstError(args) is { } e) return e;
+        var lowerArg = args.Count >= 4 ? args[3] : BlankValue.Instance;
+        var upperArg = args.Count >= 5 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], lowerArg, upperArg], values => BetaDistScalar(values[0], values[1], values[2], new BoolValue(true), values[3], values[4]));
+    }
+
     private static ScalarValue BetaDistScalar(ScalarValue xValue, ScalarValue alphaValue, ScalarValue betaValue, ScalarValue cumulativeValue, ScalarValue lowerValue, ScalarValue upperValue)
     {
         double alpha = ToNumber(alphaValue), beta = ToNumber(betaValue);
@@ -1313,6 +1427,14 @@ public static partial class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
         return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], LognormDistScalar);
+    }
+
+    private static ScalarValue LognormDistCompat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
+        return MapTernaryTextArgs(args[0], args[1], args[2], (x, mean, stdev) => LognormDistScalar(x, mean, stdev, new BoolValue(true)));
     }
 
     private static ScalarValue LognormDistScalar(ScalarValue xValue, ScalarValue meanValue, ScalarValue stdevValue, ScalarValue cumulativeValue)

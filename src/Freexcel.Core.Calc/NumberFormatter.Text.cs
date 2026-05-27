@@ -7,17 +7,18 @@ public static partial class NumberFormatter
     private static FormatResult FormatTextWithColor(
         string text,
         string[] sections,
-        WorkbookIndexedColorPalette? indexedColors)
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme)
     {
         if (sections.Length <= 3)
         {
-            var firstSection = ParseSection(sections[0], indexedColors);
+            var firstSection = ParseSection(sections[0], indexedColors, theme);
             return firstSection.Format.Contains('@', StringComparison.Ordinal)
                 ? new FormatResult(ApplyTextSection(firstSection.Format, text), firstSection.ColorHex)
                 : new FormatResult(text);
         }
 
-        var parsed = ParseSection(sections[3], indexedColors);
+        var parsed = ParseSection(sections[3], indexedColors, theme);
         if (parsed.Format == "")
             return new FormatResult("", parsed.ColorHex);
 

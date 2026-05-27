@@ -41,6 +41,7 @@ public partial class MainWindow
     {
         FormulaBar.Focus();
         FormulaBar.CaretIndex = FormulaBar.Text.Length;
+        SetStatusBarModeText("Edit");
     }
 
     private void ShowInlineEditor(CellAddress addr)
@@ -87,7 +88,9 @@ public partial class MainWindow
             _inlineEditor.LostFocus  += InlineEditor_LostFocus;
             _inlineEditor.TextChanged += (_, _) =>
             {
-                FormulaBar.Text = _inlineEditor.Text;
+                SyncFormulaBarTextFromInlineEditor();
+                if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(_inlineEditor.Text))
+                    _formulaRangeEntryMode = true;
                 RefreshInlineEditorTextSurface();
                 RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();
@@ -144,6 +147,42 @@ public partial class MainWindow
         _inlineEditor.Focus();
         _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
         _inlineEditor.SelectionLength = 0;
+        SetStatusBarModeText("Edit");
+    }
+
+    private void SyncFormulaBarTextFromInlineEditor()
+    {
+        if (_inlineEditor is null || _syncingFormulaEditorText || FormulaBar.Text == _inlineEditor.Text)
+            return;
+
+        try
+        {
+            _syncingFormulaEditorText = true;
+            FormulaBar.Text = _inlineEditor.Text;
+        }
+        finally
+        {
+            _syncingFormulaEditorText = false;
+        }
+    }
+
+    private void SyncInlineEditorTextFromFormulaBar()
+    {
+        if (_inlineEditor?.IsVisible != true || _syncingFormulaEditorText || _inlineEditor.Text == FormulaBar.Text)
+            return;
+
+        try
+        {
+            _syncingFormulaEditorText = true;
+            _inlineEditor.Text = FormulaBar.Text;
+        }
+        finally
+        {
+            _syncingFormulaEditorText = false;
+        }
+
+        RefreshInlineEditorTextSurface();
+        RefreshInlineEditorChromeBorder();
     }
 
     private void RefreshInlineEditorTextSurface()
@@ -251,7 +290,8 @@ public partial class MainWindow
             return;
         }
 
-        if (e.Key == Key.F4 && _inlineEditor is not null)
+        if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(e.Key, Keyboard.Modifiers, e.SystemKey) &&
+            _inlineEditor is not null)
         {
             if (TryCycleFormulaReference(_inlineEditor))
             {
@@ -287,17 +327,41 @@ public partial class MainWindow
         var current = formulaRangeEntryActive
             ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
             : selectedRange.Value.Start;
+        var modifiers = Keyboard.Modifiers;
+        var pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+        var colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
+
+        if (formulaRangeEntryActive &&
+            FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                e.Key,
+                e.SystemKey,
+                modifiers,
+                current,
+                _workbook.GetSheet(_currentSheetId),
+                pageSize,
+                colPageSize) is { } formulaReferenceShortcutTarget)
+        {
+            if (TryApplyFormulaRangeSelection(
+                    formulaReferenceShortcutTarget,
+                    extendSelection: modifiers.HasFlag(ModifierKeys.Shift)))
+            {
+                EnsureCellVisible(formulaReferenceShortcutTarget);
+                e.Handled = true;
+            }
+            return;
+        }
 
         var intent = ExcelEditKeyPlanner.GetIntent(
             e.Key,
-            Keyboard.Modifiers,
+            modifiers,
             current,
-            pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
+            pageSize: pageSize,
             allowFormulaBarNavigationKeys: false,
             formulaRangeEntryActive: formulaRangeEntryActive,
             inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow,
             moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-            enterDirection: _options.AfterEnterDirection);
+            enterDirection: _options.AfterEnterDirection,
+            systemKey: e.SystemKey);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -389,18 +453,12 @@ public partial class MainWindow
         _selectionMode = mode;
         if (mode != ExcelSelectionMode.Normal)
             _endMode = false;
-        if (StatusStatsPanel is not null)
-            StatusStatsPanel.Visibility = Visibility.Collapsed;
-        if (StatusReadyText is null)
-            return;
-
-        StatusReadyText.Visibility = Visibility.Visible;
-        StatusReadyText.Text = mode switch
+        SetStatusBarModeText(mode switch
         {
             ExcelSelectionMode.Extend => "Extend Selection",
             ExcelSelectionMode.Add => "Add to Selection",
             _ => "Ready"
-        };
+        });
     }
 
     private void SetEndMode(bool enabled)
@@ -408,13 +466,18 @@ public partial class MainWindow
         _endMode = enabled;
         if (enabled)
             _selectionMode = ExcelSelectionMode.Normal;
+        SetStatusBarModeText(enabled ? "End Mode" : "Ready");
+    }
+
+    private void SetStatusBarModeText(string text)
+    {
         if (StatusStatsPanel is not null)
             StatusStatsPanel.Visibility = Visibility.Collapsed;
         if (StatusReadyText is null)
             return;
 
         StatusReadyText.Visibility = Visibility.Visible;
-        StatusReadyText.Text = enabled ? "End Mode" : "Ready";
+        StatusReadyText.Text = text;
     }
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -426,7 +489,10 @@ public partial class MainWindow
                 ClearFormulaReferenceEntrySpan();
             e.Handled = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
         }
-        else if (e.Key == Key.F4)
+        else if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
+                     e.Key,
+                     e.KeyboardDevice.Modifiers,
+                     e.SystemKey))
         {
             if (TryCycleFormulaReference(FormulaBar))
                 e.Handled = true;
@@ -453,15 +519,38 @@ public partial class MainWindow
                 ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange, _selectionCursor)
                 : selectedRange.Start;
             int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+            int colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
+            var modifiers = e.KeyboardDevice.Modifiers;
+            if (formulaRangeEntryActive &&
+                FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                    e.Key,
+                    e.SystemKey,
+                    modifiers,
+                    current,
+                    _workbook.GetSheet(_currentSheetId),
+                    pageSize,
+                    colPageSize) is { } formulaReferenceShortcutTarget)
+            {
+                if (TryApplyFormulaRangeSelection(
+                        formulaReferenceShortcutTarget,
+                        extendSelection: modifiers.HasFlag(ModifierKeys.Shift)))
+                {
+                    EnsureCellVisible(formulaReferenceShortcutTarget);
+                    e.Handled = true;
+                }
+                return;
+            }
+
             var intent = ExcelEditKeyPlanner.GetIntent(
                 e.Key,
-                e.KeyboardDevice.Modifiers,
+                modifiers,
                 current,
                 pageSize,
                 allowFormulaBarNavigationKeys: !formulaTextActive,
                 formulaRangeEntryActive: formulaRangeEntryActive,
                 moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-                enterDirection: _options.AfterEnterDirection);
+                enterDirection: _options.AfterEnterDirection,
+                systemKey: e.SystemKey);
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {
@@ -494,6 +583,47 @@ public partial class MainWindow
                 e.Handled = true;
             }
         }
+    }
+
+    private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)
+        {
+            RestoreCellAddressBoxText();
+            FocusSheetGridIfNeeded();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)
+            return;
+
+        if (!GoToDialog.TryParseReferenceRange(
+                CellAddressBox.Text,
+                _currentSheetId,
+                _workbook.NamedRanges,
+                out var selectedRange))
+        {
+            CellAddressBox.Focus();
+            CellAddressBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        _currentSheetId = selectedRange.Start.Sheet;
+        SetSelectionRange(selectedRange, selectedRange.Start);
+        EnsureCellVisible(selectedRange.Start);
+        UpdateViewport();
+        RefreshValidationDropdown();
+        e.Handled = true;
+    }
+
+    private void RestoreCellAddressBoxText()
+    {
+        CellAddressBox.Text = SheetGrid.SelectedRange is { } range
+            ? FormatRangeReference(range.Start, range.End)
+            : "A1";
+        CellAddressBox.SelectAll();
     }
 
     private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
@@ -674,8 +804,7 @@ public partial class MainWindow
 
     private void UpdateTitleBar()
     {
-        var groupSuffix = IsWorkbookGrouped() ? " [Group]" : "";
-        var displayName = $"{_workbook.Name}{groupSuffix} - Freexcel";
+        var displayName = WorkbookTitleFormatter.Format(_workbook.Name, _workbookDirty, IsWorkbookGrouped());
         WorkbookNameText.Text = displayName;
         this.Title = displayName;
     }
@@ -687,6 +816,10 @@ public partial class MainWindow
 
     private bool? ShowOwnedDialog(Window dialog)
     {
+        RecordDiagnosticEvent("dialog_opened", new Dictionary<string, string?>
+        {
+            ["dialog"] = dialog.GetType().Name
+        });
         dialog.Owner = this;
         dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
         dialog.ShowActivated = true;

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -19,38 +20,80 @@ public partial class MainWindow
             .ToList();
         if (adapters.Count == 0)
         {
-            MessageBox.Show("No import adapters are available.", "Get Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+            RecordDiagnosticEvent("import_failed", new Dictionary<string, string?>
+            {
+                ["reason"] = "no_adapter"
+            });
+            ShowOwnedMessage("No import adapters are available.", "Get Data", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = filter,
+            CheckFileExists = true,
+            Multiselect = false
+        };
         if (dialog.ShowDialog() != true) return;
 
         var ext = System.IO.Path.GetExtension(dialog.FileName).ToLowerInvariant();
-        var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out _);
-        if (adapter is null) return;
+        var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format);
+        if (adapter is null)
+        {
+            RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, null, "unsupported_extension"));
+            return;
+        }
 
         try
         {
             using var stream = System.IO.File.OpenRead(dialog.FileName);
             var imported = adapter.Load(stream);
-            if (imported.Sheets.Count == 0) return;
+            if (imported.Sheets.Count == 0)
+            {
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "empty_workbook", imported.Sheets.Count));
+                return;
+            }
 
             var destination = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
             if (!TryExecuteCommand(new ImportSheetCommand(_currentSheetId, destination, imported.Sheets[0]), "Get Data", out var outcome))
+            {
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "command_failed", imported.Sheets.Count));
                 return;
+            }
 
             RecalculateIfAutomatic(outcome.AffectedCells ?? []);
             SetActiveCell(destination);
             EnsureCellVisible(destination);
             UpdateViewport();
             RefreshStatusBar();
+            RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, null, imported.Sheets.Count));
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to import data:\n{ex.Message}", "Get Data", MessageBoxButton.OK, MessageBoxImage.Error);
+            RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, ex.GetType().Name));
+            ShowOwnedMessage($"Failed to import data:\n{ex.Message}", "Get Data", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private static Dictionary<string, string?> BuildImportDiagnosticProperties(
+        string extension,
+        string? format,
+        string? reason = null,
+        int? worksheetCount = null)
+    {
+        var properties = new Dictionary<string, string?>
+        {
+            ["extension"] = extension,
+            ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(extension)
+        };
+        if (!string.IsNullOrWhiteSpace(format))
+            properties["format"] = format;
+        if (worksheetCount is not null)
+            properties["worksheetCount"] = worksheetCount.Value.ToString(CultureInfo.InvariantCulture);
+        if (!string.IsNullOrWhiteSpace(reason))
+            properties["reason"] = reason;
+        return properties;
     }
     private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click(sender, e);
 
@@ -68,7 +111,11 @@ public partial class MainWindow
         }
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range), range.Start) { Owner = this };
+        TextToColumnsDialog? dialog = null;
+        dialog = new TextToColumnsDialog(
+            TextToColumnsDialog.BuildPreviewRows(sheet, range),
+            range.Start,
+            request => ApplyTextToColumnsRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var currentRange = SheetGrid.SelectedRange ?? range;
@@ -93,6 +140,30 @@ public partial class MainWindow
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
+    }
+
+    private void ApplyTextToColumnsRangeSelection(
+        TextToColumnsDialog? dialog,
+        TextToColumnsRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(selectedRange.Start);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, TextToColumnsDialogResult result)
@@ -163,7 +234,7 @@ public partial class MainWindow
                 }))
             return;
 
-        MessageBox.Show($"Removed {command?.RemovedRowCount ?? 0} duplicate rows.", "Remove Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
+        ShowOwnedMessage($"Removed {command?.RemovedRowCount ?? 0} duplicate rows.", "Remove Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
         UpdateViewport();
     }
 
@@ -172,7 +243,12 @@ public partial class MainWindow
         var defaultList = SheetGrid.SelectedRange is { } selected
             ? FormatWorkbookRange(selected)
             : "A1:C10";
-        var dialog = new AdvancedFilterDialog(_currentSheetId, defaultList, ResolveSheetIdByName) { Owner = this };
+        AdvancedFilterDialog? dialog = null;
+        dialog = new AdvancedFilterDialog(
+            _currentSheetId,
+            defaultList,
+            ResolveSheetIdByName,
+            request => ApplyAdvancedFilterRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var result = dialog.Result;
@@ -196,6 +272,31 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void ApplyAdvancedFilterRangeSelection(
+        AdvancedFilterDialog? dialog,
+        AdvancedFilterRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
     private bool TryParseAdvancedFilterRange(string input, out GridRange range)
         => AdvancedFilterInputParser.TryParseRange(
             _currentSheetId,
@@ -212,7 +313,12 @@ public partial class MainWindow
         var selected = SheetGrid.SelectedRange;
         var defaultSource = selected?.ToString() ?? "A1:B2";
         var defaultDestination = selected?.Start.ToA1() ?? "A1";
-        var dialog = new ConsolidateDialog(_currentSheetId, defaultSource, defaultDestination) { Owner = this };
+        ConsolidateDialog? dialog = null;
+        dialog = new ConsolidateDialog(
+            _currentSheetId,
+            defaultSource,
+            defaultDestination,
+            request => ApplyConsolidateRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var outcome = _commandBus.ExecuteRepeatable(
@@ -234,6 +340,33 @@ public partial class MainWindow
         SetActiveCell(dialog.Result.DestinationCell);
         EnsureCellVisible(dialog.Result.DestinationCell);
         UpdateViewport();
+    }
+
+    private void ApplyConsolidateRangeSelection(
+        ConsolidateDialog? dialog,
+        ConsolidateRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = request.Target == ConsolidateRangeSelectionTarget.DestinationCell
+            ? FormatCellReference(selectedRange.Start)
+            : FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     // ── What-If Analysis ─────────────────────────────────────────────────────
@@ -291,7 +424,11 @@ public partial class MainWindow
     private void GoalSeekBtn_Click(object sender, RoutedEventArgs e)
     {
         var selectedCell = _selectionAnchor;
-        var dlg = new GoalSeekDialog(_currentSheetId, selectedCell) { Owner = this };
+        GoalSeekDialog? dlg = null;
+        dlg = new GoalSeekDialog(
+            _currentSheetId,
+            selectedCell,
+            request => ApplyGoalSeekRangeSelection(dlg, request)) { Owner = this };
 
         if (dlg.ShowDialog() != true)
             return;
@@ -308,6 +445,30 @@ public partial class MainWindow
             var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
             if (TryExecuteCommand(cmd, "Goal Seek"))
                 RecalculateIfAutomatic([changingCell]);
+        }
+    }
+
+    private void ApplyGoalSeekRangeSelection(
+        GoalSeekDialog? dialog,
+        GoalSeekRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, selectedRange.Start);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
         }
     }
 
@@ -353,7 +514,11 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new DataTableDialog(_currentSheetId, range) { Owner = this };
+        DataTableDialog? dialog = null;
+        dialog = new DataTableDialog(
+            _currentSheetId,
+            range,
+            request => ApplyDataTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null)
             return;
         var formulaCell = dialog.Result.FormulaCell;
@@ -378,5 +543,29 @@ public partial class MainWindow
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
+    }
+
+    private void ApplyDataTableRangeSelection(
+        DataTableDialog? dialog,
+        DataTableRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, selectedRange.Start);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 }

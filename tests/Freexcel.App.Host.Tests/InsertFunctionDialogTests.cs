@@ -83,6 +83,31 @@ public sealed class InsertFunctionDialogTests
             .Select(argument => argument.Name)
             .Should()
             .Equal("Value", "Format_text");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("FILTER")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Array", "Include", "If_empty");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("DSUM")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Database", "Field", "Criteria");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("CONVERT")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Number", "From_unit", "To_unit");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("MAP")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Array1", "Lambda", "Array2");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("GETPIVOTDATA")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Data_field", "Pivot_table", "Field1", "Item1");
     }
 
     [Fact]
@@ -91,6 +116,23 @@ public sealed class InsertFunctionDialogTests
         FunctionArgumentsDialog.CreateFormula(" if ", ["A1>0", "\"Yes\"", ""])
             .Should()
             .Be("IF(A1>0, \"Yes\")");
+    }
+
+    [Fact]
+    public void FunctionArgumentsDialog_ArgumentLabelsExposeAccessKeysAndTargets()
+    {
+        FunctionArgumentsDialog.CreateArgumentLabels(FunctionArgumentsDialog.GetArgumentSpecs("IF"))
+            .Should()
+            .Equal("_Logical__test:", "_Value__if__true:", "V_alue__if__false:");
+
+        var xlookupLabels = FunctionArgumentsDialog.CreateArgumentLabels(FunctionArgumentsDialog.GetArgumentSpecs("XLOOKUP"));
+        xlookupLabels.Should().AllSatisfy(label => label.Should().Contain("_"));
+        xlookupLabels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
+
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
+        source.Should().Contain("AddArgumentRow(body, _arguments[index], argumentLabels[index])");
+        source.Should().Contain("Content = labelText");
+        source.Should().Contain("Target = box");
     }
 
     [Fact]
@@ -104,6 +146,28 @@ public sealed class InsertFunctionDialogTests
         source.Should().Contain("firstArgument.Focus();");
         source.Should().Contain("firstArgument.SelectAll();");
         source.Should().Contain("Keyboard.Focus(firstArgument);");
+    }
+
+    [Fact]
+    public void FunctionArgumentsDialog_ExposesExcelLikeHelpAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
+
+        source.Should().Contain("Content = \"_Help on this function\"");
+        source.Should().Contain("ShowFunctionHelp");
+        source.Should().Contain("btnRow.Children.Add(help)");
+        source.Should().Contain("btnRow.Children.Add(ok)");
+        source.Should().Contain("btnRow.Children.Add(cancel)");
+    }
+
+    [Fact]
+    public void FunctionArgumentsDialog_LabelsFormulaResultPreviewForAccessibility()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
+
+        source.Should().Contain("Text = \"Formula result =\"");
+        source.Should().Contain("AutomationProperties.SetName(_formulaPreview, \"Formula result\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_formulaPreview");
     }
 
     [Fact]
@@ -137,6 +201,25 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void InsertFunctionDialog_FunctionListExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
+
+        source.Should().Contain("using System.Windows.Automation;");
+        source.Should().Contain("AutomationProperties.SetName(_listBox, \"Functions\");");
+    }
+
+    [Fact]
+    public void DialogCommands_ExposeOnlyOkAsTheDefaultAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
+
+        source.Should().Contain("var ok = new Button { Content = \"_OK\", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };");
+        source.Should().Contain("var go = new Button { Content = \"_Go\", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6) };");
+        source.Should().NotContain("Content = \"_Go\", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6), IsDefault = true");
+    }
+
+    [Fact]
     public void Dialog_ExposesExcelLikeSearchResultsAndHelpAffordances()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
@@ -151,5 +234,15 @@ public sealed class InsertFunctionDialogTests
         source.Should().Contain("_Help on this function");
         source.Should().Contain("FunctionArgumentsDialog");
         source.Should().Contain("argumentsDialog.ResultFormula");
+    }
+
+    private static char GetAccessKey(string label)
+    {
+        var index = label.IndexOf('_', StringComparison.Ordinal);
+        while (index >= 0 && index + 1 < label.Length && label[index + 1] == '_')
+            index = label.IndexOf('_', index + 2);
+
+        index.Should().BeGreaterThanOrEqualTo(0);
+        return char.ToUpperInvariant(label[index + 1]);
     }
 }

@@ -49,7 +49,8 @@ public partial class MainWindow
         StatusStatsPanel.Visibility = Visibility.Visible;
         StatusAvgText.Text   = stats.Average.HasValue ? $"Average: {StatusBarCalculator.FormatNumber(stats.Average.Value)}" : "";
         StatusCountText.Text = $"Count: {stats.Count}";
-        StatusSumText.Text   = $"Sum: {StatusBarCalculator.FormatNumber(stats.Sum)}";
+        StatusNumericalCountText.Text = $"Numerical Count: {stats.NumericalCount}";
+        StatusSumText.Text   = stats.NumericalCount > 0 ? $"Sum: {StatusBarCalculator.FormatNumber(stats.Sum)}" : "";
         StatusMinText.Text   = stats.Min.HasValue ? $"Min: {StatusBarCalculator.FormatNumber(stats.Min.Value)}" : "";
         StatusMaxText.Text   = stats.Max.HasValue ? $"Max: {StatusBarCalculator.FormatNumber(stats.Max.Value)}" : "";
     }
@@ -97,6 +98,19 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void OnColumnAutoFitRequested(uint col)
+    {
+        var (startCol, endCol) = GetSelectedColRange(col);
+        var range = new GridRange(
+            new CellAddress(_currentSheetId, 1, startCol),
+            new CellAddress(_currentSheetId, CellAddress.MaxRow, endCol));
+
+        if (!TryExecuteGroupedSheetCommand("Auto Column Width", sheetId => CreateAutoFitColumnWidthCommand(sheetId, range)))
+            return;
+
+        UpdateViewport();
+    }
+
     private void OnRowResizing(uint row, double newHeightPx)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -105,6 +119,19 @@ public partial class MainWindow
         CaptureRowResizeSnapshot(sheet, startRow, endRow);
         for (uint r = startRow; r <= endRow; r++)
             sheet.RowHeights[r] = newHeightPx;
+        UpdateViewport();
+    }
+
+    private void OnRowAutoFitRequested(uint row)
+    {
+        var (startRow, endRow) = GetSelectedRowRange(row);
+        var range = new GridRange(
+            new CellAddress(_currentSheetId, startRow, 1),
+            new CellAddress(_currentSheetId, endRow, CellAddress.MaxCol));
+
+        if (!TryExecuteGroupedSheetCommand("Auto Row Height", sheetId => CreateAutoFitRowHeightCommand(sheetId, range)))
+            return;
+
         UpdateViewport();
     }
 

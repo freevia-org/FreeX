@@ -13,7 +13,7 @@ public sealed class UserTestPublishScriptTests
 
         script.Should().Contain("[string]$OutputRoot = \"artifacts\\releases\"");
         script.Should().Contain("[string]$Version = \"\"");
-        script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\")]");
+        script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\")]");
         script.Should().Contain("[string]$PublishMode = \"SingleFile\"");
         script.Should().Contain("AppInfo.cs");
         script.Should().Contain("rev-parse --short=8 HEAD");

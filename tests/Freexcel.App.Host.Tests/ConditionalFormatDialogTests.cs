@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FluentAssertions;
@@ -33,6 +34,7 @@ public sealed class ConditionalFormatDialogTests
         source.Should().Contain("CreateAccessLabel(\"_Icon set:\", _iconSetStyleBox)");
         source.Should().Contain("CreateAccessLabel(\"_Date period:\", _dateOccurringPeriodBox)");
         source.Should().Contain("CreateAccessLabel(\"Format cells that _contain:\", _duplicateValuesKindBox)");
+        source.Should().Contain("Content = \"_Format...\"");
         source.Should().Contain("Content = \"_Show value\"");
         source.Should().Contain("Content = \"_Reverse icon order\"");
         source.Should().Contain("Content = \"_Show Bar Only\"");
@@ -50,6 +52,7 @@ public sealed class ConditionalFormatDialogTests
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_formulaBox is { IsVisible: true }");
+        source.Should().Contain("_conditionKindBox.IsVisible");
         source.Should().Contain("_value1Box.IsVisible");
         source.Should().Contain("_topBottomRankBox.IsVisible");
         source.Should().Contain("_dataBarMinTypeBox.IsVisible");
@@ -79,6 +82,7 @@ public sealed class ConditionalFormatDialogTests
                 "Format only cells that contain",
                 "Use a formula to determine which cells to format"
             ]);
+            AutomationProperties.GetName(ruleTypeList).Should().Be("Rule type");
             ruleTypeList.SelectedItem.Should().Be("Use a formula to determine which cells to format");
 
             dialog.Close();
@@ -129,6 +133,73 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void NewRuleDialog_ContainsShellShowsExcelConditionKindSelectors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Greater Than", RangeFor(SheetId.New())));
+
+            var conditionKind = GetControl<ComboBox>(dialog, "_conditionKindBox");
+            var cellOperator = GetControl<ComboBox>(dialog, "_cellValueOperatorBox");
+
+            conditionKind.Items.Cast<string>().Should().Contain([
+                "Cell Value",
+                "Specific Text",
+                "Dates Occurring",
+                "Blanks",
+                "No Blanks",
+                "Errors",
+                "No Errors"
+            ]);
+            conditionKind.SelectedItem.Should().Be("Cell Value");
+            cellOperator.SelectedItem.Should().Be("greater than");
+            FindLabel(dialog.Content, "Format only cells _with:").Should().NotBeNull();
+            FindLabel(dialog.Content, "_Operator:").Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void NewRuleDialog_ContainsShellCanCreateBlankRuleWithoutValue()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Greater Than", RangeFor(SheetId.New())));
+
+            GetControl<ComboBox>(dialog, "_conditionKindBox").SelectedItem = "Blanks";
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.Blanks);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void NewRuleDialog_ContainsShellCanCreateBetweenCellValueRule()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Greater Than", RangeFor(SheetId.New())));
+
+            GetControl<ComboBox>(dialog, "_cellValueOperatorBox").SelectedItem = "between";
+            GetControl<TextBox>(dialog, "_value1Box").Text = "5";
+            GetControl<TextBox>(dialog, "_value2Box").Text = "10";
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.CellValue);
+            dialog.ResultRule.Operator.Should().Be(CfOperator.Between);
+            dialog.ResultRule.Value1.Should().Be("5");
+            dialog.ResultRule.Value2.Should().Be("10");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
     public void HighlightRuleDialog_OffersExcelFormatPresetsAndFormatButton()
     {
         StaTestRunner.Run(() =>
@@ -141,7 +212,7 @@ public sealed class ConditionalFormatDialogTests
                 "Yellow Fill with Dark Yellow Text",
                 "Custom Format..."
             ]);
-            FindButton(dialog.Content, "Format...").Should().NotBeNull();
+            FindButton(dialog.Content, "_Format...").Should().NotBeNull();
 
             dialog.Close();
         });
@@ -876,6 +947,7 @@ public sealed class ConditionalFormatDialogTests
         string.Join(Environment.NewLine, new[]
         {
             "ConditionalFormatDialog.cs",
+            "ConditionalFormatDialog.Catalog.cs",
             "ConditionalFormatDialog.ColorEditors.cs",
             "ConditionalFormatDialog.IconSets.cs",
             "ConditionalFormatDialog.Parsing.cs",

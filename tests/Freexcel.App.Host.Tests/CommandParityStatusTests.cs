@@ -42,6 +42,17 @@ public sealed class CommandParityStatusTests
         }
     }
 
+    [Fact]
+    public void ScenarioManagerRepeatability_DistinguishesShowFromDialogManagementActions()
+    {
+        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+
+        doc.Should().Contain("Scenario Manager Show applies the selected scenario through the repeatable command path");
+        doc.Should().Contain("Scenario Manager add/edit/delete/report/list actions");
+        doc.Should().Contain("Scenario Manager Show is repeatable after the first explicit apply");
+        doc.Should().NotContain("| Data / What-If | Goal Seek, Scenario Manager, Forecast Sheet |");
+    }
+
     private static IReadOnlyList<CommandTableRow> ParseMarkdownTableRows(string doc)
     {
         List<CommandTableRow> rows = [];

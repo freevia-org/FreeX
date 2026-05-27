@@ -39,7 +39,10 @@ public enum TokenType
     // Delimiters
     OpenParen,
     CloseParen,
+    OpenBrace,
+    CloseBrace,
     Comma,
+    Semicolon,
     Colon,
 
     // Special

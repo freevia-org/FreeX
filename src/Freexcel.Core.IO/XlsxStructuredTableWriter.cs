@@ -125,8 +125,7 @@ internal static class XlsxStructuredTableWriter
             root.SetAttributeValue("comment", table.Comment);
         foreach (var (name, value) in table.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && root.Attribute(name) is null)
-                root.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(root, name, value);
         }
 
         if (table.HasAutoFilter)
@@ -184,8 +183,7 @@ internal static class XlsxStructuredTableWriter
 
         foreach (var (name, value) in column.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         foreach (var nativeChildXml in (column.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -220,8 +218,7 @@ internal static class XlsxStructuredTableWriter
 
         foreach (var (name, value) in table.NativeStyleInfoAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         foreach (var nativeChildXml in (table.NativeStyleInfoChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -256,8 +253,7 @@ internal static class XlsxStructuredTableWriter
     {
         foreach (var (name, value) in table.NativeAutoFilterAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         foreach (var nativeChildXml in (table.NativeAutoFilterChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -284,11 +280,11 @@ internal static class XlsxStructuredTableWriter
             new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
         foreach (var (name, value) in filterColumn.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
-        if (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank)
+        var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
+        if (!hasCustomFilters && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
         {
             element.Add(new XElement(
                 workbookNs + "filters",
@@ -296,12 +292,30 @@ internal static class XlsxStructuredTableWriter
                 filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value)))));
         }
 
+        if (hasCustomFilters)
+        {
+            var customFilters = new XElement(
+                workbookNs + "customFilters",
+                filterColumn.CustomFilters.Select(filter => ToCustomFilterXml(filter, workbookNs)));
+            if (filterColumn.CustomFiltersAndRaw is not null)
+                customFilters.SetAttributeValue("and", filterColumn.CustomFiltersAndRaw);
+            else if (filterColumn.CustomFiltersAnd)
+                customFilters.SetAttributeValue("and", "1");
+
+            foreach (var (name, value) in filterColumn.NativeCustomFiltersAttributes ?? new Dictionary<string, string>())
+            {
+                TrySetNativeAttributeIfMissing(customFilters, name, value);
+            }
+
+            element.Add(customFilters);
+        }
+
         foreach (var nativeFilterXml in filterColumn.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)))
         {
             try
             {
                 var nativeFilter = XElement.Parse(nativeFilterXml);
-                if (nativeFilter.Name.Namespace == workbookNs && nativeFilter.Name.LocalName != "filters")
+                if (nativeFilter.Name.Namespace == workbookNs && nativeFilter.Name.LocalName != "filters" && nativeFilter.Name.LocalName != "customFilters")
                     element.Add(nativeFilter);
             }
             catch
@@ -313,11 +327,44 @@ internal static class XlsxStructuredTableWriter
         return element;
     }
 
+    private static XElement ToCustomFilterXml(StructuredTableCustomFilterModel filter, XNamespace workbookNs)
+    {
+        var element = new XElement(workbookNs + "customFilter");
+        if (filter.Operator is not null)
+            element.SetAttributeValue("operator", filter.Operator);
+        if (filter.Value is not null)
+            element.SetAttributeValue("val", filter.Value);
+
+        foreach (var (name, value) in filter.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            TrySetNativeAttributeIfMissing(element, name, value);
+        }
+
+        return element;
+    }
+
     private static int ExtractTrailingNumber(string text)
     {
         var digits = new string(text.Reverse().TakeWhile(char.IsDigit).Reverse().ToArray());
         return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0
             ? value
             : 1;
+    }
+
+    private static void TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        try
+        {
+            var attributeName = XName.Get(name);
+            if (element.Attribute(attributeName) is null)
+                element.SetAttributeValue(attributeName, value);
+        }
+        catch
+        {
+            // Ignore malformed native table attribute names from authored metadata.
+        }
     }
 }

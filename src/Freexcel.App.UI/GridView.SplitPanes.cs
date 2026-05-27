@@ -76,7 +76,7 @@ public partial class GridView
                 var pinnedRows = splitPanes.TopRows ?? [];
                 horizontalY = pinnedRows.Count > 0
                     ? ColHeaderHeight + pinnedRows.Sum(row => row.Height)
-                    : viewport.RowMetrics.FirstOrDefault(row => row.Row == splitRow)?.TopOffset + ColHeaderHeight;
+                    : FindRowMetric(viewport.RowMetrics, splitRow)?.TopOffset + ColHeaderHeight;
             }
 
             if (splitPanes.Column is { } splitColumn)
@@ -84,11 +84,33 @@ public partial class GridView
                 var pinnedColumns = splitPanes.LeftColumns ?? [];
                 verticalX = pinnedColumns.Count > 0
                     ? CalculateRowHeaderWidth(viewport) + pinnedColumns.Sum(column => column.Width)
-                    : viewport.ColMetrics.FirstOrDefault(column => column.Col == splitColumn)?.LeftOffset + CalculateRowHeaderWidth(viewport);
+                    : FindColMetric(viewport.ColMetrics, splitColumn)?.LeftOffset + CalculateRowHeaderWidth(viewport);
             }
         }
 
         return new SplitDividerLayout(horizontalY, verticalX);
+    }
+
+    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Row == row)
+                return metric;
+        }
+
+        return null;
+    }
+
+    private static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint column)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Col == column)
+                return metric;
+        }
+
+        return null;
     }
 
     public static SplitPaneScrollbarChrome CalculateSplitPaneScrollbarChrome(
@@ -328,45 +350,13 @@ public partial class GridView
     public static SplitPaneClipRects CalculateSplitPaneClipRects(
         ViewportModel viewport,
         double actualWidth,
-        double actualHeight)
-    {
-        var layout = CalculateSplitDividerLayout(viewport);
-        var horizontalY = layout.HorizontalY ?? actualHeight;
-        var verticalX = layout.VerticalX ?? actualWidth;
-        var top = ColHeaderHeight;
-        var left = CalculateRowHeaderWidth(viewport);
-        var right = Math.Max(verticalX, actualWidth);
-        var bottom = Math.Max(horizontalY, actualHeight);
+        double actualHeight) =>
+        SplitPaneClipLayoutPlanner.CalculateClipRects(viewport, actualWidth, actualHeight);
 
-        return new SplitPaneClipRects(
-            new Rect(left, top, Math.Max(0, verticalX - left), Math.Max(0, horizontalY - top)),
-            new Rect(verticalX, top, Math.Max(0, right - verticalX), Math.Max(0, horizontalY - top)),
-            new Rect(left, horizontalY, Math.Max(0, verticalX - left), Math.Max(0, bottom - horizontalY)),
-            new Rect(verticalX, horizontalY, Math.Max(0, right - verticalX), Math.Max(0, bottom - horizontalY)));
-    }
-
-    private static Rect GetSplitPaneClipRectForCell(
-        ViewportModel viewport,
-        DisplayCell cell,
-        SplitPaneClipRects clips)
-    {
-        if (viewport.SplitPanes is not { } splitPanes)
-            return clips.BottomRight;
-
-        var isTop = (splitPanes.TopRows ?? []).Any(row => row.Row == cell.Row);
-        var isLeft = (splitPanes.LeftColumns ?? []).Any(column => column.Col == cell.Col);
-        return (isTop, isLeft) switch
-        {
-            (true, true) => clips.TopLeft,
-            (true, false) => clips.TopRight,
-            (false, true) => clips.BottomLeft,
-            _ => clips.BottomRight
-        };
-    }
 }
 
 public sealed record SplitDividerLayout(double? HorizontalY, double? VerticalX);
-public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect);
+public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region);
 public sealed record SplitDividerDragTarget(uint? Row, uint? Column);
 public sealed record SplitPaneScrollbarChrome(
     SplitPaneScrollbar? HorizontalTopRight,

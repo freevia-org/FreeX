@@ -5,6 +5,8 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -207,6 +209,21 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void FillSeriesStepDialog_DisablesDateUnitsUntilDateTypeSelected()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("_linearButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("_growthButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("_dateButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("_autoFillButton.Checked += (_, _) => UpdateDateUnitAvailability();");
+        source.Should().Contain("private void UpdateDateUnitAvailability()");
+        source.Should().Contain("var isDateSeries = _dateButton.IsChecked == true;");
+        foreach (var button in new[] { "_dayButton", "_weekdayButton", "_monthButton", "_yearButton" })
+            source.Should().Contain($"{button}.IsEnabled = isDateSeries;");
+    }
+
+    [Fact]
     public void ZoomDialog_TryCreateResult_AcceptsPercentWithinExcelRange()
     {
         ZoomDialog.TryCreateResult("125", out var result, out _).Should().BeTrue();
@@ -232,15 +249,55 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
-    public void ZoomDialogOpenedFromKeyboard_FocusesCustomZoomEntry()
+    public void ZoomDialog_CustomPercentBoxExposesAutomationName()
+    {
+        var source = ReadClassSource("ZoomDialog.cs", "public sealed class ZoomDialog", "public sealed record __NoNextZoomDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_zoomBox, \"Custom zoom percent\");");
+    }
+
+    [Fact]
+    public void ZoomDialogOpenedFromKeyboard_FocusesPresetOrCustomZoomChoice()
     {
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_customZoomButton.Focus();");
+        source.Should().Contain("var checkedPreset = _presetButtons.FirstOrDefault(button => button.IsChecked == true);");
+        source.Should().Contain("if (checkedPreset is not null)");
+        source.Should().Contain("checkedPreset.Focus();");
+        source.Should().Contain("Keyboard.Focus(checkedPreset);");
+        source.Should().Contain("else");
         source.Should().Contain("_zoomBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_zoomBox);");
+    }
+
+    [Fact]
+    public void ZoomDialogOpenedWithCustomPercent_FocusesAndSelectsCustomPercent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ZoomDialog(125);
+            try
+            {
+                dialog.Show();
+                PumpDispatcher();
+
+                var customButton = GetField<RadioButton>(dialog, "_customZoomButton");
+                var zoomBox = GetField<TextBox>(dialog, "_zoomBox");
+
+                customButton.IsChecked.Should().BeTrue();
+                Keyboard.FocusedElement.Should().BeSameAs(zoomBox);
+                zoomBox.Text.Should().Be("125");
+                zoomBox.SelectionStart.Should().Be(0);
+                zoomBox.SelectionLength.Should().Be(zoomBox.Text.Length);
+            }
+            finally
+            {
+                dialog.Close();
+                PumpDispatcher();
+            }
+        });
     }
 
     [Fact]
@@ -318,6 +375,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void PageBreakDialog_NumberInputsExposeAutomationNames()
+    {
+        var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_rowBreakBox, \"Row page break\");");
+        source.Should().Contain("AutomationProperties.SetName(_columnBreakBox, \"Column page break\");");
+    }
+
+    [Fact]
     public void PageBreakDialogInvalidBreakEntry_ShowsOwnedWarningAndRefocusesEntry()
     {
         var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
@@ -355,16 +421,18 @@ public sealed class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialog_ExposesKeyboardAccessKeysForButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs"));
 
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("IsCancel = true");
     }
 
     [Fact]
     public void GoalSeekStatusDialogOpenedFromKeyboard_FocusesDefaultButton()
     {
-        var source = ReadClassSource("StatusDialogs.cs", "public sealed class GoalSeekStatusDialog", "public sealed class WorkbookStatisticsDialog");
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs"));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -382,7 +450,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void StatusDialogs_ExposeClearExcelLikeStatusLabelsAndButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = ReadStatusDialogSources();
 
         source.Should().Contain("Target value:");
         source.Should().Contain("Current formula result:");
@@ -411,7 +479,10 @@ public sealed class RemainingDialogTests
     [Fact]
     public void WorkbookStatisticsDialogOpenedFromKeyboard_FocusesOkButton()
     {
-        var source = ReadClassSource("StatusDialogs.cs", "public sealed class WorkbookStatisticsDialog", "public sealed class AccessibilityCheckerDialog");
+        var source = string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogKeyboardFocus.cs")));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -419,6 +490,24 @@ public sealed class RemainingDialogTests
         source.Should().Contain("private static Button? FindDefaultButton");
         source.Should().Contain("button.Focus();");
         source.Should().Contain("Keyboard.Focus(button);");
+    }
+
+    [Fact]
+    public void WorkbookStatisticsDialog_UsesSingleExcelLikeOkButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs"));
+
+        source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
+        source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
+    }
+
+    [Fact]
+    public void WorkbookStatisticsDialog_StatisticsSummaryExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(statisticsBlock, \"Workbook statistics\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(statisticsBlock, \"Summarizes sheet, cell, formula, comment, and object counts for the workbook.\");");
     }
 
     [Fact]
@@ -441,18 +530,79 @@ public sealed class RemainingDialogTests
     [Fact]
     public void AccessibilityCheckerDialogOpenedFromKeyboard_FocusesIssueText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_messageBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(_messageBox);");
+        source.Should().Contain("_issueList.Focus();");
+        source.Should().Contain("Keyboard.Focus(_issueList);");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_UsesIssueListAndGoToAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
+        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("public sealed record AccessibilityCheckerDialogResult");
+        source.Should().Contain("private readonly ListBox _issueList");
+        source.Should().Contain("private readonly Button _goToButton");
+        source.Should().Contain("Content = \"_Go To\"");
+        source.Should().Contain("_issueList.MouseDoubleClick +=");
+        source.Should().Contain("private void GoToSelectedIssue()");
+        reviewSource.Should().Contain("if (dialog.ShowDialog() == true)");
+        reviewSource.Should().Contain("NavigateToCell(AccessibilityCheckerDialog.GetNavigationTarget(dialog.Result!.Issue));");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_CleanStateUsesSingleExcelLikeOkButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
+
+        source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
+        source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_ResultControlsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_messageBox, \"Accessibility checker result\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_messageBox, \"Summarizes the workbook accessibility check when no issues are found.\");");
+        source.Should().Contain("AutomationProperties.SetName(_issueList, \"Accessibility issues\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_issueList, \"Select an accessibility issue and choose Go To to navigate to its workbook location.\");");
+        source.Should().Contain("AutomationProperties.SetName(_goToButton, \"Go to selected accessibility issue\");");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_GetNavigationTarget_UsesFirstCellInIssueLocation()
+    {
+        var sheetId = SheetId.New();
+
+        AccessibilityCheckerDialog.GetNavigationTarget(new AccessibilityIssue(
+                AccessibilityIssueKind.ChartMissingTitle,
+                sheetId,
+                "Sheet1",
+                "C3:E8",
+                "Chart is missing a title."))
+            .Should()
+            .Be(new CellAddress(sheetId, 3, 3));
+
+        AccessibilityCheckerDialog.GetNavigationTarget(new AccessibilityIssue(
+                AccessibilityIssueKind.DefaultWorksheetName,
+                sheetId,
+                "Sheet1",
+                "Sheet1",
+                "Worksheet tab names should describe their contents."))
+            .Should()
+            .Be(new CellAddress(sheetId, 1, 1));
     }
 
     [Fact]
     public void StatusDialogs_UseSharedExcelStyleButtonRows()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = ReadStatusDialogSources();
 
         source.Should().Contain("DialogButtonRowFactory.Create");
         source.Should().NotContain("InsertChartDialog.CreateButtonRow");
@@ -478,6 +628,11 @@ public sealed class RemainingDialogTests
         remainingSource.Should().Contain("Column _width:");
         remainingSource.Should().Contain("Forecast _periods:");
         remainingSource.Should().Contain("Sheet _name:");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_thresholdBox, \"Conditional format threshold\");");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_heightBox, \"Row height\");");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_widthBox, \"Column width\");");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_periodsBox, \"Forecast periods\");");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_nameBox, \"Sheet name\");");
         objectSource.Should().Contain("Target = box");
         objectSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72)");
     }
@@ -508,6 +663,17 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_periodsBox.Focus();");
         source.Should().Contain("_periodsBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_periodsBox);");
+    }
+
+    [Fact]
+    public void ForecastSheetDialog_UsesExcelLikeCreateDefaultAction()
+    {
+        var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
+        var helperSource = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed class ObjectRotationDialog");
+
+        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(\"Forecast _periods:\", _periodsBox, Accept, acceptContent: \"_Create\")");
+        helperSource.Should().Contain("string acceptContent = \"_OK\"");
+        helperSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72, acceptContent: acceptContent)");
     }
 
     [Fact]
@@ -547,7 +713,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SparklineDialog_CreateResult_TrimsRangeAndLocation()
     {
-        SparklineDialog.CreateResult(" A1:E1 ", " F1 ", SparklineKindChoice.Column)
+        SparklineDialogPlanner.CreateResult(" A1:E1 ", " F1 ", SparklineKindChoice.Column)
             .Should()
             .Be(new SparklineDialogResult("A1:E1", "F1", SparklineKindChoice.Column));
     }
@@ -555,7 +721,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SparklineDialog_CreateRangeSelectionRequest_TrimsCurrentTextAndRequestsCollapse()
     {
-        SparklineDialog.CreateRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, " A1:E1 ")
+        SparklineDialogPlanner.CreateRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, " A1:E1 ")
             .Should()
             .Be(new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, "A1:E1", CollapseDialog: true));
     }
@@ -576,6 +742,42 @@ public sealed class RemainingDialogTests
                 new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.Location, "F1", CollapseDialog: true));
             dialog.RangeSelectionRequest.Should().Be(requests[^1]);
         });
+    }
+
+    [Fact]
+    public void SparklineDialogApplyRangeSelection_UpdatesRequestedInput()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line);
+            try
+            {
+                dialog.ApplyRangeSelection(SparklineRangeSelectionTarget.DataRange, "Sheet2!A1:D6");
+                dialog.ApplyRangeSelection(SparklineRangeSelectionTarget.Location, "K5");
+
+                GetField<TextBox>(dialog, "_dataRangeBox").Text.Should().Be("Sheet2!A1:D6");
+                GetField<TextBox>(dialog, "_locationBox").Text.Should().Be("K5");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresSparklineRangePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+
+        source.Should().Contain("new SparklineDialog(");
+        source.Should().Contain("request => ApplySparklineRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplySparklineRangeSelection(");
+        source.Should().Contain("SparklineRangeSelectionRequest request");
+        source.Should().Contain("request.Target == SparklineRangeSelectionTarget.Location");
+        source.Should().Contain("FormatCellReference(selectedRange.Start)");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
     }
 
     [Fact]
@@ -601,11 +803,20 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_RangeEditorsExposeAutomationNames()
+    {
+        var source = ReadRemainingDialogSources();
+
+        source.Should().Contain("AutomationProperties.SetName(_dataRangeBox, \"Sparkline data range\");");
+        source.Should().Contain("AutomationProperties.SetName(_locationBox, \"Sparkline location\");");
+    }
+
+    [Fact]
     public void SparklineDialog_UsesExcelWinLossLabel()
     {
-        SparklineDialog.GetKindLabel(SparklineKindChoice.Line).Should().Be("Line");
-        SparklineDialog.GetKindLabel(SparklineKindChoice.Column).Should().Be("Column");
-        SparklineDialog.GetKindLabel(SparklineKindChoice.WinLoss).Should().Be("Win/Loss");
+        SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.Line).Should().Be("Line");
+        SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.Column).Should().Be("Column");
+        SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.WinLoss).Should().Be("Win/Loss");
 
         var source = ReadRemainingDialogSources();
         source.Should().Contain("GetKindLabel(choice)");
@@ -642,16 +853,31 @@ public sealed class RemainingDialogTests
     public void SparklineDialogInvalidRanges_ShowOwnedWarningAndRefocusBadInput()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs"));
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialogPlanner.cs"));
         var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
 
         source.Should().Contain("if (!ValidateInputs())");
-        source.Should().Contain("SparklineInputParser.TryParseDataRange(_dataRangeBox.Text, _sheetId, out _)");
-        source.Should().Contain("SparklineInputParser.TryParseLocation(_locationBox.Text, _sheetId, out _)");
-        source.Should().Contain("ShowInvalidInputWarning(\"Invalid data range.\", _dataRangeBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Invalid location cell.\", _locationBox);");
+        source.Should().Contain("SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId)");
+        plannerSource.Should().Contain("SparklineInputParser.TryParseDataRange(dataRangeText, sheetId, out _)");
+        plannerSource.Should().Contain("SparklineInputParser.TryParseLocation(locationText, sheetId, out _)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Invalid data range.\", _dataRangeBox)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Invalid location cell.\", _locationBox)");
         source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
         source.Should().Contain("FocusRangeSelectionInput(textBox);");
         insertSource.Should().Contain("_currentSheetId,");
+    }
+
+    [Fact]
+    public void SparklineDialogPlanner_ValidatesInputsWithParser()
+    {
+        var sheetId = SheetId.New();
+
+        SparklineDialogPlanner.ValidateInputs("A1:E1", "F1", sheetId)
+            .Should().Be(SparklineDialogValidationResult.Valid);
+        SparklineDialogPlanner.ValidateInputs("A1:E1", "F1:G1", sheetId)
+            .Should().Be(SparklineDialogValidationResult.InvalidLocation);
+        SparklineDialogPlanner.ValidateInputs("A1", "F1", sheetId)
+            .Should().Be(SparklineDialogValidationResult.InvalidDataRange);
     }
 
     [Fact]
@@ -720,7 +946,15 @@ public sealed class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
-        source.Should().Contain("new Label { Content = \"_Sheet:\", Target = _sheetBox");
+        source.Should().Contain("new Label { Content = \"_Unhide sheet:\", Target = _sheetBox");
+    }
+
+    [Fact]
+    public void UnhideSheetDialog_SheetListExposesAutomationName()
+    {
+        var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_sheetBox, \"Unhide sheet\");");
     }
 
     [Fact]
@@ -743,6 +977,33 @@ public sealed class RemainingDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_sheetBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_sheetBox);");
+    }
+
+    [Fact]
+    public void UnhideSheetDialogSheetList_DoubleClickAcceptsSelectedSheet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new UnhideSheetDialog(["Hidden 1", "Hidden 2"]);
+            var sheetBox = GetField<ListBox>(dialog, "_sheetBox");
+            dialog.Dispatcher.BeginInvoke(() =>
+            {
+                sheetBox.SelectedItem = "Hidden 2";
+                sheetBox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                {
+                    RoutedEvent = Control.MouseDoubleClickEvent
+                });
+
+                dialog.Dispatcher.BeginInvoke(() =>
+                {
+                    if (dialog.DialogResult is null)
+                        dialog.Close();
+                }, DispatcherPriority.ContextIdle);
+            }, DispatcherPriority.ApplicationIdle);
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.Result.Should().Be(new UnhideSheetDialogResult("Hidden 2"));
+        });
     }
 
     [Fact]
@@ -785,17 +1046,50 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SpellCheckDialog_FieldControlsExposeAutomationNames()
+    {
+        var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_notInDictionaryBox, \"Not in Dictionary\");");
+        source.Should().Contain("AutomationProperties.SetName(_suggestionsBox, \"Suggestions\");");
+        source.Should().Contain("AutomationProperties.SetName(_replacementBox, \"Change to\");");
+    }
+
+    [Fact]
     public void SpellCheckDialog_ExposesExcelLikeIgnoreChangeAndAddActions()
     {
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("SpellCheckDialogAction.Add");
-        source.Should().Contain("Content = \"_Ignore\"");
+        source.Should().Contain("Content = \"Ignore _Once\"");
         source.Should().Contain("Content = \"_Change\"");
-        source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("Content = \"_Change\", Width = 90, IsDefault = true");
+        source.Should().Contain("Content = \"Add to _Dictionary\"");
         source.Should().Contain("CreateIgnoreAllResult");
         source.Should().Contain("CreateReplaceAllResult(word, _replacementBox.Text)");
         source.Should().Contain("CreateAddResult");
+    }
+
+    [Fact]
+    public void SpellCheckDialog_ActionButtonsUseUniqueExcelLikeAccessKeys()
+    {
+        var labels = new[]
+        {
+            "Ignore _Once",
+            "Ignore _All",
+            "_Change",
+            "Change A_ll",
+            "Add to _Dictionary",
+            "Ca_ncel"
+        };
+
+        labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
+
+        var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
+        foreach (var label in labels)
+        {
+            source.Should().Contain($"Content = \"{label}\"");
+        }
     }
 
     [Fact]
@@ -811,6 +1105,34 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_replacementBox.Focus();");
         source.Should().Contain("_replacementBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_replacementBox);");
+    }
+
+    [Fact]
+    public void SpellCheckDialogSuggestionsList_DoubleClickAcceptsSelectedSuggestion()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SpellCheckDialog("mispelled", "misspelled");
+            var suggestionsBox = GetField<ListBox>(dialog, "_suggestionsBox");
+
+            dialog.Dispatcher.BeginInvoke(() =>
+            {
+                suggestionsBox.SelectedItem = "misspelled";
+                suggestionsBox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                {
+                    RoutedEvent = Control.MouseDoubleClickEvent
+                });
+
+                dialog.Dispatcher.BeginInvoke(() =>
+                {
+                    if (dialog.DialogResult is null)
+                        dialog.Close();
+                }, DispatcherPriority.ContextIdle);
+            }, DispatcherPriority.ApplicationIdle);
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.Result.Should().Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+        });
     }
 
     [Fact]
@@ -845,7 +1167,16 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = \"Page _Setup...\"");
         source.Should().Contain("Content = \"_Print...\"");
         source.Should().Contain("Content = \"_Close Preview\"");
+        source.Should().Contain("IsCancel = true");
         source.Should().Contain("closeButton.Click += (_, _) => Close();");
+    }
+
+    private static char GetAccessKey(string label)
+    {
+        var marker = label.IndexOf('_', StringComparison.Ordinal);
+        marker.Should().BeGreaterThanOrEqualTo(0);
+        marker.Should().BeLessThan(label.Length - 1);
+        return char.ToUpperInvariant(label[marker + 1]);
     }
 
     private static string ReadRemainingDialogSources()
@@ -863,11 +1194,22 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckDialog.cs")));
     }
 
+    private static string ReadStatusDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogKeyboardFocus.cs")));
+
     private static string ReadPrintPreviewDialogSources() =>
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Layout.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewSettingsPanelFactory.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewToolbarPlanner.cs")));
 
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)
     {
@@ -884,7 +1226,9 @@ public sealed class RemainingDialogTests
     private static string ReadObjectDialogSources() =>
         string.Join(
             Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextEntryDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ThreadedCommentDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
     private static T GetField<T>(object instance, string name)
         where T : class
@@ -892,4 +1236,14 @@ public sealed class RemainingDialogTests
         var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(instance).Should().BeOfType<T>().Subject;
-    }}
+    }
+
+    private static void PumpDispatcher()
+    {
+        var frame = new DispatcherFrame();
+        Dispatcher.CurrentDispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
+    }
+}

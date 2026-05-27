@@ -16,6 +16,20 @@ public sealed class FormulaEvaluatorPerformanceTests
         _output = output;
     }
 
+    [Fact]
+    public void FunctionArgumentClassification_UsesCachedLookupSets()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.Formula", "FormulaEvaluator.cs"));
+        var classificationHelpers = source[
+            source.IndexOf("private static bool IsAggregateFunction", StringComparison.Ordinal)..];
+
+        source.Should().Contain("private static readonly HashSet<string> AggregateFunctions");
+        source.Should().Contain("private static readonly HashSet<string> StructuredRangeFunctions");
+        classificationHelpers.Should().Contain("AggregateFunctions.Contains(name)");
+        classificationHelpers.Should().Contain("StructuredRangeFunctions.Contains(name)");
+        classificationHelpers.Should().NotContain("private static bool IsStructuredRangeFunction(string name) =>\r\n        name is");
+    }
+
     [Theory]
     [InlineData("=SUM(A1:A100000)", 5_000_050_000d)]
     [InlineData("=AVERAGE(A1:A100000)", 50_000.5d)]
@@ -42,7 +56,107 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(1_000_000);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Fact]
+    public void CrossSheetSingleDirectRangeAggregate_CachesSheetNameLookup()
+    {
+        var evaluator = new FormulaEvaluator();
+        var workbook = MakeWorkbookWithDataSheetAfterLookupNoise();
+        var formulaSheet = workbook.GetSheet("Formula")!;
+        var dataSheet = workbook.GetSheet("Data")!;
+        const string crossSheetFormula = "=SUM(Data!A1:A100000)";
+        const string sameSheetFormula = "=SUM(A1:A100000)";
+        const double expected = 5_000_050_000d;
+
+        evaluator.Evaluate(crossSheetFormula, formulaSheet, workbook).Should().Be(new NumberValue(expected));
+        evaluator.Evaluate(sameSheetFormula, dataSheet, workbook).Should().Be(new NumberValue(expected));
+        evaluator.Evaluate("=SUM(data!A1:A2)", formulaSheet, workbook).Should().Be(new NumberValue(3d));
+        evaluator.Evaluate("=SUM(Missing!A1:A2)", formulaSheet, workbook).Should().Be(ErrorValue.Ref);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeSameSheetBytes = GC.GetAllocatedBytesForCurrentThread();
+        var sameSheetStopwatch = Stopwatch.StartNew();
+        var sameSheetResult = evaluator.Evaluate(sameSheetFormula, dataSheet, workbook);
+        sameSheetStopwatch.Stop();
+        var sameSheetAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeSameSheetBytes;
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeCrossSheetBytes = GC.GetAllocatedBytesForCurrentThread();
+        var crossSheetStopwatch = Stopwatch.StartNew();
+        var crossSheetResult = evaluator.Evaluate(crossSheetFormula, formulaSheet, workbook);
+        crossSheetStopwatch.Stop();
+        var crossSheetAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeCrossSheetBytes;
+
+        sameSheetResult.Should().Be(new NumberValue(expected));
+        crossSheetResult.Should().Be(new NumberValue(expected));
+        _output.WriteLine(
+            $"{sameSheetFormula}: elapsed={sameSheetStopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={sameSheetAllocatedBytes:N0} bytes");
+        _output.WriteLine(
+            $"{crossSheetFormula}: elapsed={crossSheetStopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={crossSheetAllocatedBytes:N0} bytes");
+
+        crossSheetAllocatedBytes.Should().BeLessThan(1_000_000);
+        crossSheetStopwatch.Elapsed.Should().BeLessThan(sameSheetStopwatch.Elapsed * 4 + TimeSpan.FromMilliseconds(10));
+    }
+
+    [Fact]
+    public void MultiRangeAggregateExpansion_AvoidsExcessAllocationChurn()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeNumericSheet();
+        const string formula = "=SUM(A1:A100000,A1:A100000)";
+        const double expected = 10_000_100_000d;
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Fact]
+    public void NamedRangeAggregate_AvoidsRangeExpansion()
+    {
+        var evaluator = new FormulaEvaluator();
+        var workbook = MakeWorkbookWithNamedNumericRange();
+        var sheet = workbook.GetSheet("Sheet1")!;
+        const string formula = "=SUM(BigInputs)";
+        const double expected = 5_000_050_000d;
+
+        evaluator.Evaluate(formula, sheet, workbook).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet, workbook);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
@@ -72,7 +186,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(maxAllocatedBytes);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Fact]
@@ -98,7 +212,34 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(1_000_000);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Theory]
+    [InlineData("=SUBTOTAL(9,A1:A100000)", 5_000_050_000d)]
+    [InlineData("=SUBTOTAL(1,A1:A100000)", 50_000.5d)]
+    [InlineData("=SUBTOTAL(2,A1:A100000)", 100_000d)]
+    public void SubtotalLargeRanges_AvoidsNumericListMaterialization(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeNumericSheet();
+
+        ((NumberValue)evaluator.Evaluate(formula, sheet)).Value.Should().BeApproximately(expected, 1e-10);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-10);
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
@@ -130,7 +271,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-10);
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(maxAllocatedBytes);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
@@ -156,7 +297,33 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(1_850_000);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Theory]
+    [InlineData("=XMATCH(100000,A1:A100000,0,2)", 100_000d)]
+    [InlineData("=XMATCH(1,A1:A100000,0,-2)", 1d)]
+    public void XmatchLargeDirectRangeBinarySearch_AvoidsIndexListAllocation(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeNumericSheet();
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_850_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
@@ -182,7 +349,33 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(2_650_000);
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Theory]
+    [InlineData("=XLOOKUP(100000,A1:A100000,B1:B100000,,0,2)", 200_000d)]
+    [InlineData("=XLOOKUP(1,A1:A100000,B1:B100000,,0,-2)", 2d)]
+    public void XlookupLargeDirectRangeBinarySearch_AvoidsIndexListAllocation(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeLookupSheet();
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(2_650_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     private static Sheet MakeNumericSheet()
@@ -191,6 +384,34 @@ public sealed class FormulaEvaluatorPerformanceTests
         for (uint row = 1; row <= RowCount; row++)
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
         return sheet;
+    }
+
+    private static Workbook MakeWorkbookWithDataSheetAfterLookupNoise()
+    {
+        var workbook = new Workbook();
+        workbook.AddSheet("Formula");
+        for (var index = 0; index < 500; index++)
+            workbook.AddSheet($"Noise{index}");
+
+        var dataSheet = workbook.AddSheet("Data");
+        for (uint row = 1; row <= RowCount; row++)
+            dataSheet.SetCell(new CellAddress(dataSheet.Id, row, 1), new NumberValue(row));
+
+        return workbook;
+    }
+
+    private static Workbook MakeWorkbookWithNamedNumericRange()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        for (uint row = 1; row <= RowCount; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+
+        workbook.DefineNamedRange("BigInputs", new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, RowCount, 1)));
+
+        return workbook;
     }
 
     private static Sheet MakeConditionalAggregateSheet()
@@ -238,5 +459,27 @@ public sealed class FormulaEvaluatorPerformanceTests
         }
 
         return sheet;
+    }
+
+    private static TimeSpan MaxElapsedForPerformanceAssertion()
+    {
+        return string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase)
+            ? TimeSpan.FromSeconds(30)
+            : TimeSpan.FromSeconds(2);
+    }
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 }

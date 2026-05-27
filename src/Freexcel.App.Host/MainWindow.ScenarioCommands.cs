@@ -24,7 +24,8 @@ public partial class MainWindow
                     dialog.ChangingCellsText,
                     dialog.CommentText,
                     dialog.ScenarioHidden,
-                    dialog.ScenarioLocked);
+                    dialog.ScenarioLocked,
+                    dialog.SelectedAction == ScenarioManagerAction.Edit ? dialog.SelectedScenarioName : null);
                 break;
             case ScenarioManagerAction.Show:
                 ShowScenarioByName(dialog.SelectedScenarioName);
@@ -36,7 +37,7 @@ public partial class MainWindow
                 ListScenarios();
                 break;
             case ScenarioManagerAction.Report:
-                CreateScenarioSummaryReport();
+                CreateScenarioSummaryReport(dialog.ResultCellsText);
                 break;
         }
     }
@@ -46,7 +47,8 @@ public partial class MainWindow
         string? changingCellsText,
         string? comment,
         bool hidden,
-        bool locked)
+        bool locked,
+        string? replaceScenarioName = null)
     {
         GridRange range;
         if (TryParseScenarioChangingCells(changingCellsText, out var parsedRange))
@@ -76,7 +78,7 @@ public partial class MainWindow
         var changes = range.AllCells()
             .Select(address => new ScenarioCellValue(address, sheet.GetValue(address.Row, address.Col)))
             .ToList();
-        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked), "Scenario Manager"))
+        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName), "Scenario Manager"))
             return;
 
         MessageBox.Show(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count),
@@ -151,9 +153,26 @@ public partial class MainWindow
         MessageBox.Show(message, "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void CreateScenarioSummaryReport()
+    private IReadOnlyList<CellAddress> ParseScenarioResultCells(string? resultCellsText)
     {
-        if (!TryExecuteCommand(new ScenarioSummaryReportCommand(), "Scenario Manager"))
+        if (!string.IsNullOrWhiteSpace(resultCellsText) &&
+            WorkbookRangeTextCodec.TryParseMany(_currentSheetId, resultCellsText, ResolveSheetIdByName, out var ranges))
+            return ranges.SelectMany(range => range.AllCells()).Distinct().ToList();
+
+        return [];
+    }
+
+    private void CreateScenarioSummaryReport(string? resultCellsText = null)
+    {
+        if (!TryExecuteCommand(
+            new ScenarioSummaryReportCommand(
+                ParseScenarioResultCells(resultCellsText),
+                (workbook, changedCells) =>
+                {
+                    if (workbook.CalculationMode == WorkbookCalculationMode.Automatic)
+                        _recalcEngine.Recalculate(workbook, changedCells);
+                }),
+            "Scenario Manager"))
             return;
 
         var report = _workbook.Sheets.LastOrDefault();

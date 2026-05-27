@@ -19,13 +19,13 @@ public sealed class StatusBarStatsCacheTests
         var second = cache.GetOrCreate(sheet, range, revision: 4, CreateStats);
 
         calls.Should().Be(1);
-        second.Should().Be(new StatusBarCalculator.Stats(42, 2, 21, 10, 32));
+        second.Should().Be(new StatusBarCalculator.Stats(42, 2, 2, 21, 10, 32));
         return;
 
         StatusBarCalculator.Stats CreateStats()
         {
             calls++;
-            return new StatusBarCalculator.Stats(42, 2, 21, 10, 32);
+            return new StatusBarCalculator.Stats(42, 2, 2, 21, 10, 32);
         }
     }
 
@@ -49,7 +49,7 @@ public sealed class StatusBarStatsCacheTests
         StatusBarCalculator.Stats CreateStats()
         {
             calls++;
-            return new StatusBarCalculator.Stats(calls, calls, calls, calls, calls);
+            return new StatusBarCalculator.Stats(calls, calls, calls, calls, calls, calls);
         }
     }
 
@@ -73,7 +73,7 @@ public sealed class StatusBarStatsCacheTests
         StatusBarCalculator.Stats CreateStats()
         {
             calls++;
-            return new StatusBarCalculator.Stats(calls, calls, calls, calls, calls);
+            return new StatusBarCalculator.Stats(calls, calls, calls, calls, calls, calls);
         }
     }
 }

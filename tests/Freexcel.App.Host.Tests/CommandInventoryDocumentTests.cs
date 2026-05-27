@@ -17,6 +17,20 @@ public sealed class CommandInventoryDocumentTests
     }
 
     [Fact]
+    public void CommandSurfaceTabCoverageCallouts_MatchInventoryTabCounts()
+    {
+        var inventory = LoadInventory();
+        var doc = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+
+        var callouts = doc
+            .Where(line => line.StartsWith("> **Tab coverage:", StringComparison.Ordinal))
+            .Select(NormalizeLineEndings)
+            .ToArray();
+
+        callouts.Should().Equal(inventory.CommandSurfaceTabs.Select(BuildTabCoverageCallout));
+    }
+
+    [Fact]
     public void MenuToolbarCoverageSummary_IsGeneratedFromInventory()
     {
         var inventory = LoadInventory();
@@ -24,6 +38,20 @@ public sealed class CommandInventoryDocumentTests
 
         ExtractGeneratedBlock(doc, "command-inventory:coverage-summary").Should().Be(
             BuildCoverageSummary(inventory.MenuToolbarTabs, boldCoverageHeader: false));
+    }
+
+    [Fact]
+    public void UiTestCatalog_CommandInventoryCountsMatchInventory()
+    {
+        var inventory = LoadInventory();
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var commandSurfaceInScope = inventory.CommandSurfaceTabs.Sum(tab => tab.Implemented + tab.Partial);
+        var menuToolbarInScope = inventory.MenuToolbarTabs.Sum(tab => tab.Implemented + tab.Partial);
+
+        catalog.Should().Contain(
+            $"| Command surface in-scope rows | {commandSurfaceInScope} | From `COMMAND_INVENTORY.json`: Implemented + Partial command-surface rows. |");
+        catalog.Should().Contain(
+            $"| Menu/toolbar in-scope rows | {menuToolbarInScope} | Includes the current Draw tab menu/toolbar delta. |");
     }
 
     [Fact]
@@ -196,6 +224,22 @@ public sealed class CommandInventoryDocumentTests
         var deferred = boldLabel ? $"**{tab.Deferred}**" : tab.Deferred.ToString();
         var excluded = boldLabel ? $"**{tab.Excluded}**" : tab.Excluded.ToString();
         return $"| {label} | {implemented} | {partial} | {notImplemented} | {deferred} | {excluded} | **{tab.CoveragePercent}%** |";
+    }
+
+    private static string BuildTabCoverageCallout(CommandInventoryTab tab)
+    {
+        var inScope = tab.Implemented + tab.Partial + tab.NotImplemented;
+        var qualifiers = new List<string>();
+        if (tab.Deferred > 0)
+            qualifiers.Add($"{tab.Deferred} Deferred");
+        if (tab.Excluded > 0)
+            qualifiers.Add($"{tab.Excluded} Excluded");
+
+        var qualifierText = qualifiers.Count == 0
+            ? string.Empty
+            : $" ({string.Join(", ", qualifiers)})";
+
+        return $"> **Tab coverage: {tab.Implemented} Implemented + {tab.Partial} Partial = {tab.CoveragePercent}% of {inScope} in-scope commands{qualifierText}**";
     }
 
     private static string BuildCommandRows(CommandInventoryCommandSection section)

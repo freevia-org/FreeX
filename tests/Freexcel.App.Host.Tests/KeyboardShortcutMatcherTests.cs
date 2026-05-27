@@ -59,6 +59,12 @@ public sealed class KeyboardShortcutMatcherTests
                     Chord = chord,
                     Matches = GetShortcutFamilyMatches(Key.None, chord.Key, chord.Modifiers).ToList()
                 }))
+            .Concat(EnumeratePhysicalChords()
+                .Select(chord => new
+                {
+                    Chord = chord,
+                    Matches = GetShortcutFamilyMatches(Key.System, chord.Key, chord.Modifiers).ToList()
+                }))
             .Where(result => result.Matches.Count > 1)
             .Select(result => $"{result.Chord.Modifiers}+{result.Chord.Key}: {string.Join(", ", result.Matches)}")
             .ToList();
@@ -70,9 +76,12 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Add, Key.None, ModifierKeys.Control, true)]
     [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control, true)]
     [InlineData(Key.None, Key.Add, ModifierKeys.Control, true)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Control, true)]
     [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control | ModifierKeys.Shift, true)]
     [InlineData(Key.None, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, true)]
     [InlineData(Key.Add, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.C, Key.OemPlus, ModifierKeys.Control, false)]
+    [InlineData(Key.C, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, false)]
     public void IsCtrlPlus_RecognizesExcelInsertShortcut(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
     {
         KeyboardShortcutMatcher.IsCtrlPlus(key, systemKey, modifiers).Should().Be(expected);
@@ -82,7 +91,9 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Subtract, Key.None, ModifierKeys.Control, true)]
     [InlineData(Key.OemMinus, Key.None, ModifierKeys.Control, true)]
     [InlineData(Key.None, Key.OemMinus, ModifierKeys.Control, true)]
+    [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control, true)]
     [InlineData(Key.Subtract, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.C, Key.OemMinus, ModifierKeys.Control, false)]
     public void IsCtrlMinus_RecognizesExcelDeleteShortcut(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
     {
         KeyboardShortcutMatcher.IsCtrlMinus(key, systemKey, modifiers).Should().Be(expected);
@@ -94,6 +105,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.V, Key.None, ModifierKeys.Control, false)]
     [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
     [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.C, Key.V, ModifierKeys.Control | ModifierKeys.Alt, false)]
     public void IsPasteSpecialShortcut_RecognizesExcelCtrlAltVOnly(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
     {
         KeyboardShortcutMatcher.IsPasteSpecialShortcut(key, systemKey, modifiers).Should().Be(expected);
@@ -233,12 +245,41 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.System, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
+    [InlineData(Key.System, Key.F1, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.System, Key.Add, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.System, Key.Down, ModifierKeys.Alt, KeyboardCommandShortcut.OpenActiveDropdown)]
+    [InlineData(Key.System, Key.Right, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.GroupSelection)]
+    [InlineData(Key.System, Key.Left, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.UngroupSelection)]
+    [InlineData(Key.System, Key.Oem1, ModifierKeys.Alt, KeyboardCommandShortcut.SelectVisibleCellsOnly)]
+    [InlineData(Key.System, Key.F9, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.CalculateNow)]
+    [InlineData(Key.System, Key.F9, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.RebuildDependenciesAndCalculate)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.System, Key.Add, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    [InlineData(Key.System, Key.Subtract, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    public void TryGetCommandShortcut_MapsSystemKeyCommandShortcuts(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        KeyboardCommandShortcut expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out var shortcut);
+
+        result.Should().BeTrue();
+        shortcut.Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.A, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.Z, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.Y, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Alt)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Alt | ModifierKeys.Shift)]
     public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
     {
         var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out _);
@@ -319,7 +360,7 @@ public sealed class KeyboardShortcutMatcherTests
 
     private static IEnumerable<string> GetShortcutFamilyMatches(Key key, Key systemKey, ModifierKeys modifiers)
     {
-        var effectiveKey = key == Key.None ? systemKey : key;
+        var effectiveKey = key is Key.None or Key.System ? systemKey : key;
 
         if (KeyboardShortcutMatcher.IsCtrlPlus(key, systemKey, modifiers))
             yield return "Insert cells";

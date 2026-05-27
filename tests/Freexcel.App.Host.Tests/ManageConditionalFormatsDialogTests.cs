@@ -66,6 +66,20 @@ public sealed class ManageConditionalFormatsDialogTests
             .Should().Be("Icon Set: 3TrafficLights1 (reverse, icons only)");
     }
 
+    [Fact]
+    public void DescribeRule_IconSetIncludesCustomIconOverrides()
+    {
+        var rule = new ConditionalFormat
+        {
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "5Arrows"
+        };
+        rule.IconOverrides.Add(new CfIconOverride("3TrafficLights1", 0));
+
+        ManageConditionalFormatsDialog.DescribeRule(rule)
+            .Should().Be("Icon Set: 5Arrows (custom icons)");
+    }
+
     [Theory]
     [InlineData(CfRuleType.ContainsText, "Text contains \"urgent\"")]
     [InlineData(CfRuleType.DateOccurring, "Date occurring: Last 7 Days")]
@@ -270,6 +284,15 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void RulesList_IsLabeledAndNamedForAccessibility()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("new Label { Content = \"_Rules:\", Target = _listView");
+        source.Should().Contain("AutomationProperties.SetName(_listView, \"Conditional formatting rules\");");
+    }
+
+    [Fact]
     public void ScopeSelector_DefaultsToCurrentSelectionWhenSelectionIsProvided()
     {
         StaTestRunner.Run(() =>
@@ -285,6 +308,69 @@ public sealed class ManageConditionalFormatsDialogTests
 
             dialog.Close();
         });
+    }
+
+    [Fact]
+    public void ScopeSelector_IncludesTableScopeWhenSelectionIntersectsStructuredTable()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var tableRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 6, 4));
+            sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "Sales", DisplayName = "Sales", Range = tableRange });
+            var selection = new GridRange(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 3, 3));
+            var dialog = new ManageConditionalFormatsDialog(sheet, selection);
+
+            var scope = GetControl<ComboBox>(dialog, "_scopeBox");
+
+            scope.Items.Cast<string>().Should().Equal("This Worksheet", "This Table", "Current Selection");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ScopeSelector_TableScopeFiltersRulesByTableRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var tableRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 6, 4));
+            sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "Sales", DisplayName = "Sales", Range = tableRange });
+            sheet.ConditionalFormats.Add(CreateRule(sheet.Id, 3, 3, 1));
+            sheet.ConditionalFormats.Add(CreateRule(sheet.Id, 10, 10, 2));
+            var selection = new GridRange(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 3, 3));
+            var dialog = new ManageConditionalFormatsDialog(sheet, selection);
+
+            GetControl<ComboBox>(dialog, "_scopeBox").SelectedItem = "This Table";
+            var listView = GetControl<ListView>(dialog, "_listView");
+
+            listView.Items.Cast<ConditionalFormat>().Should().ContainSingle(rule => rule.AppliesTo.Start.Row == 3);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void BuildResultRules_ForTableScopePreservesRulesOutsideTable()
+    {
+        var sheetId = SheetId.New();
+        var tableRange = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 6, 4));
+        var tableRule = CreateRule(sheetId, 3, 3, 1);
+        var outsideRule = CreateRule(sheetId, 10, 10, 2);
+        var editedTableRule = CreateRule(sheetId, 4, 4, 99, stopIfTrue: true);
+
+        var result = ManageConditionalFormatsDialog.BuildResultRules(
+            [tableRule, outsideRule],
+            tableRange,
+            filterToSelection: true,
+            [editedTableRule]);
+
+        result.Should().HaveCount(2);
+        result[0].StopIfTrue.Should().BeTrue();
+        result[0].Priority.Should().Be(1);
+        result[1].AppliesTo.Should().Be(outsideRule.AppliesTo);
+        result[1].Priority.Should().Be(2);
     }
 
     [Fact]
@@ -372,6 +458,77 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void ApplyCommand_CommitsRulesThroughCallbackWithoutClosingDialog()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var first = CreateRule(sheet.Id, 1, 1, 1);
+            var second = CreateRule(sheet.Id, 2, 1, 2);
+            sheet.ConditionalFormats.Add(first);
+            sheet.ConditionalFormats.Add(second);
+
+            IReadOnlyList<ConditionalFormat>? applied = null;
+            var dialog = new ManageConditionalFormatsDialog(
+                sheet,
+                selection: null,
+                applyRules: rules => applied = rules);
+
+            var listView = GetControl<ListView>(dialog, "_listView");
+            var moveDownButton = GetControl<Button>(dialog, "_moveDownBtn");
+            var applyButton = GetControl<Button>(dialog, "_applyBtn");
+
+            listView.SelectedIndex = 0;
+            moveDownButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            applyButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            applied.Should().NotBeNull();
+            applied!.Select(rule => rule.Id).Should().Equal(second.Id, first.Id);
+            applied.Select(rule => rule.Priority).Should().Equal(1, 2);
+            dialog.ResultRules.Should().BeEquivalentTo(applied);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ApplyCommand_DoesNotSetDialogResultOrCloseLikeOk()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("_applyRules?.Invoke(ResultRules);");
+        source.Should().Contain("private void ApplyBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().NotContain("private void ApplyBtn_Click(object sender, RoutedEventArgs e)\r\n    {\r\n        CommitResult();\r\n        DialogResult = true;");
+    }
+
+    [Fact]
+    public void ApplyAppliesToRangeSelection_UpdatesOnlyRequestingRule()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var first = CreateRule(sheet.Id, 1, 1, 1);
+            var second = CreateRule(sheet.Id, 2, 2, 2);
+            sheet.ConditionalFormats.Add(first);
+            sheet.ConditionalFormats.Add(second);
+            var dialog = new ManageConditionalFormatsDialog(sheet, selection: null);
+
+            var newRange = new GridRange(new CellAddress(sheet.Id, 5, 3), new CellAddress(sheet.Id, 8, 4));
+            dialog.ApplyAppliesToRangeSelection(second.Id, newRange);
+
+            var listView = GetControl<ListView>(dialog, "_listView");
+            var rules = listView.Items.Cast<ConditionalFormat>().ToList();
+            rules[0].AppliesTo.Should().Be(first.AppliesTo);
+            rules[1].Id.Should().Be(second.Id);
+            rules[1].AppliesTo.Should().Be(newRange);
+            rules[1].Priority.Should().Be(2);
+            listView.SelectedItem.Should().BeSameAs(rules[1]);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
     public void NewRuleCommand_OpensExcelStyleRuleTypeShellOnFirstCategory()
     {
         var source = ReadManageConditionalFormatsDialogSource();
@@ -404,10 +561,13 @@ public sealed class ManageConditionalFormatsDialogTests
             UseThreeColorScale = true,
             MinThresholdType = CfThresholdType.Number,
             MinThresholdValue = "5",
+            MinThresholdGreaterThanOrEqual = false,
             MidThresholdType = CfThresholdType.Percent,
             MidThresholdValue = "50",
+            MidThresholdGreaterThanOrEqual = true,
             MaxThresholdType = CfThresholdType.Formula,
             MaxThresholdValue = "A1",
+            MaxThresholdGreaterThanOrEqual = false,
             DataBarColor = new RgbColor(9, 8, 7),
             DataBarMinThresholdType = CfThresholdType.Percentile,
             DataBarMinThresholdValue = "10",

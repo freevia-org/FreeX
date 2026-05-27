@@ -7,10 +7,20 @@ namespace Freexcel.App.UI;
 
 internal static class ConditionalIconGlyphRenderer
 {
+    private static readonly SolidColorBrush IconDarkRedBrush = FrozenBrush(0xC0, 0x00, 0x00);
+    private static readonly SolidColorBrush IconOrangeBrush = FrozenBrush(0xED, 0x7D, 0x31);
+    private static readonly SolidColorBrush IconYellowBrush = FrozenBrush(0xFF, 0xC0, 0x00);
+    private static readonly SolidColorBrush IconLightGreenBrush = FrozenBrush(0x92, 0xD0, 0x50);
+    private static readonly SolidColorBrush IconGreenBrush = FrozenBrush(0x00, 0xB0, 0x50);
+    private static readonly SolidColorBrush IconGrayBrush = FrozenBrush(0x66, 0x66, 0x66);
+    private static readonly Pen OutlinePen = FrozenPen(FrozenBrush(96, 96, 96), 0.75);
+    private static readonly Pen WhiteThinPen = FrozenPen(Brushes.White, 1.2);
+    private static readonly Pen WhiteMediumPen = FrozenPen(Brushes.White, 1.4);
+
     public static void Draw(DrawingContext dc, ConditionalFormatIcon icon, Rect rect)
     {
-        var brush = (SolidColorBrush)new BrushConverter().ConvertFromString(ConditionalIconLayoutPlanner.ResolveColor(icon))!;
-        var outline = new Pen(MakeBrush(96, 96, 96), 0.75);
+        var brush = BrushForResolvedColor(ConditionalIconLayoutPlanner.ResolveColor(icon));
+        var outline = OutlinePen;
 
         switch (ConditionalIconLayoutPlanner.ResolveGlyphKind(icon))
         {
@@ -41,7 +51,30 @@ internal static class ConditionalIconGlyphRenderer
         }
     }
 
-    private static SolidColorBrush MakeBrush(byte r, byte g, byte b) => new(Color.FromRgb(r, g, b));
+    private static SolidColorBrush BrushForResolvedColor(string color) => color switch
+    {
+        "#C00000" => IconDarkRedBrush,
+        "#ED7D31" => IconOrangeBrush,
+        "#FFC000" => IconYellowBrush,
+        "#92D050" => IconLightGreenBrush,
+        "#00B050" => IconGreenBrush,
+        "#666666" => IconGrayBrush,
+        _ => IconGreenBrush,
+    };
+
+    private static SolidColorBrush FrozenBrush(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Pen FrozenPen(Brush brush, double thickness)
+    {
+        var pen = new Pen(brush, thickness);
+        pen.Freeze();
+        return pen;
+    }
 
     private static Point Center(Rect rect) =>
         new(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
@@ -51,21 +84,20 @@ internal static class ConditionalIconGlyphRenderer
         if (icon.IconIndex <= 0)
         {
             dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-            dc.DrawLine(new Pen(Brushes.White, 1.2), new Point(rect.Left + rect.Width * 0.28, rect.Top + rect.Height * 0.28), new Point(rect.Right - rect.Width * 0.28, rect.Bottom - rect.Height * 0.28));
-            dc.DrawLine(new Pen(Brushes.White, 1.2), new Point(rect.Right - rect.Width * 0.28, rect.Top + rect.Height * 0.28), new Point(rect.Left + rect.Width * 0.28, rect.Bottom - rect.Height * 0.28));
+            dc.DrawLine(WhiteThinPen, new Point(rect.Left + rect.Width * 0.28, rect.Top + rect.Height * 0.28), new Point(rect.Right - rect.Width * 0.28, rect.Bottom - rect.Height * 0.28));
+            dc.DrawLine(WhiteThinPen, new Point(rect.Right - rect.Width * 0.28, rect.Top + rect.Height * 0.28), new Point(rect.Left + rect.Width * 0.28, rect.Bottom - rect.Height * 0.28));
         }
         else if (icon.IconIndex == 1)
         {
             dc.DrawGeometry(brush, outline, CreateTriangleGeometry(rect, pointUp: true));
-            dc.DrawLine(new Pen(Brushes.White, 1.2), new Point(rect.Left + rect.Width * 0.5, rect.Top + rect.Height * 0.3), new Point(rect.Left + rect.Width * 0.5, rect.Top + rect.Height * 0.62));
+            dc.DrawLine(WhiteThinPen, new Point(rect.Left + rect.Width * 0.5, rect.Top + rect.Height * 0.3), new Point(rect.Left + rect.Width * 0.5, rect.Top + rect.Height * 0.62));
             dc.DrawEllipse(Brushes.White, null, new Point(rect.Left + rect.Width * 0.5, rect.Top + rect.Height * 0.75), 0.9, 0.9);
         }
         else
         {
             dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-            var pen = new Pen(Brushes.White, 1.4);
-            dc.DrawLine(pen, new Point(rect.Left + rect.Width * 0.28, rect.Top + rect.Height * 0.56), new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72));
-            dc.DrawLine(pen, new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72), new Point(rect.Right - rect.Width * 0.24, rect.Top + rect.Height * 0.3));
+            dc.DrawLine(WhiteMediumPen, new Point(rect.Left + rect.Width * 0.28, rect.Top + rect.Height * 0.56), new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72));
+            dc.DrawLine(WhiteMediumPen, new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72), new Point(rect.Right - rect.Width * 0.24, rect.Top + rect.Height * 0.3));
         }
     }
 
@@ -74,20 +106,19 @@ internal static class ConditionalIconGlyphRenderer
         if (icon.IconIndex <= 0)
         {
             dc.DrawGeometry(brush, outline, CreateDiamondGeometry(rect));
-            dc.DrawLine(new Pen(Brushes.White, 1.2), new Point(rect.Left + rect.Width * 0.32, rect.Top + rect.Height * 0.32), new Point(rect.Right - rect.Width * 0.32, rect.Bottom - rect.Height * 0.32));
-            dc.DrawLine(new Pen(Brushes.White, 1.2), new Point(rect.Right - rect.Width * 0.32, rect.Top + rect.Height * 0.32), new Point(rect.Left + rect.Width * 0.32, rect.Bottom - rect.Height * 0.32));
+            dc.DrawLine(WhiteThinPen, new Point(rect.Left + rect.Width * 0.32, rect.Top + rect.Height * 0.32), new Point(rect.Right - rect.Width * 0.32, rect.Bottom - rect.Height * 0.32));
+            dc.DrawLine(WhiteThinPen, new Point(rect.Right - rect.Width * 0.32, rect.Top + rect.Height * 0.32), new Point(rect.Left + rect.Width * 0.32, rect.Bottom - rect.Height * 0.32));
         }
         else if (icon.IconIndex == 1)
         {
             dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-            dc.DrawLine(new Pen(Brushes.White, 1.2), new Point(rect.Left + rect.Width * 0.3, rect.Top + rect.Height * 0.5), new Point(rect.Right - rect.Width * 0.3, rect.Top + rect.Height * 0.5));
+            dc.DrawLine(WhiteThinPen, new Point(rect.Left + rect.Width * 0.3, rect.Top + rect.Height * 0.5), new Point(rect.Right - rect.Width * 0.3, rect.Top + rect.Height * 0.5));
         }
         else
         {
             dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-            var pen = new Pen(Brushes.White, 1.4);
-            dc.DrawLine(pen, new Point(rect.Left + rect.Width * 0.28, rect.Top + rect.Height * 0.56), new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72));
-            dc.DrawLine(pen, new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72), new Point(rect.Right - rect.Width * 0.24, rect.Top + rect.Height * 0.3));
+            dc.DrawLine(WhiteMediumPen, new Point(rect.Left + rect.Width * 0.28, rect.Top + rect.Height * 0.56), new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72));
+            dc.DrawLine(WhiteMediumPen, new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72), new Point(rect.Right - rect.Width * 0.24, rect.Top + rect.Height * 0.3));
         }
     }
 

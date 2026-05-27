@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Commands;
@@ -60,6 +61,8 @@ public sealed partial class GoToDialog : Window
             _historyList.Items.Add(reference);
 
         _historyList.ToolTip = "Recent references and defined names";
+        AutomationProperties.SetName(_historyList, "Go to");
+        AutomationProperties.SetHelpText(_historyList, "Lists recent references and defined names available for navigation.");
         _historyList.MinHeight = 130;
         _historyList.Margin = new Thickness(0, 24, 0, 0);
         _historyList.SelectionChanged += (_, _) =>
@@ -67,6 +70,7 @@ public sealed partial class GoToDialog : Window
             if (_historyList.SelectedItem is string reference)
                 _addressBox.Text = reference;
         };
+        _historyList.MouseDoubleClick += (_, _) => Accept();
         _historyList.SelectedIndex = 0;
         Grid.SetRow(_historyList, 1);
         Grid.SetColumnSpan(_historyList, 2);
@@ -84,6 +88,8 @@ public sealed partial class GoToDialog : Window
         root.Children.Add(referenceLabel);
 
         _addressBox.Text = defaultAddress;
+        AutomationProperties.SetName(_addressBox, "Reference");
+        AutomationProperties.SetHelpText(_addressBox, "Enter a cell reference, range, or defined name to navigate to.");
         _addressBox.Margin = new Thickness(0, 8, 0, 12);
         Grid.SetRow(_addressBox, 2);
         Grid.SetColumn(_addressBox, 1);

@@ -50,6 +50,23 @@ public partial class GridView
         };
     }
 
+    private CellAddress? GetSelectedObjectAnchor()
+    {
+        if (SelectedObjectId == Guid.Empty || SelectedObjectKind == ObjectKind.None)
+            return null;
+
+        return SelectedObjectKind switch
+        {
+            ObjectKind.Picture when Pictures is not null =>
+                TryGetObjectAnchor(Pictures, p => p.Id == SelectedObjectId, p => p.Anchor),
+            ObjectKind.Shape when DrawingShapes is not null =>
+                TryGetObjectAnchor(DrawingShapes, s => s.Id == SelectedObjectId, s => s.Anchor),
+            ObjectKind.TextBox when TextBoxes is not null =>
+                TryGetObjectAnchor(TextBoxes, t => t.Id == SelectedObjectId, t => t.Anchor),
+            _ => null
+        };
+    }
+
     private Rect TryGetObjectRect<T>(IEnumerable<T> items, Func<T, bool> match, Func<T, (CellAddress Anchor, double Width, double Height)> props)
     {
         foreach (var item in items)
@@ -60,6 +77,17 @@ public partial class GridView
                 return rect;
         }
         return Rect.Empty;
+    }
+
+    private static CellAddress? TryGetObjectAnchor<T>(IEnumerable<T> items, Func<T, bool> match, Func<T, CellAddress> anchor)
+    {
+        foreach (var item in items)
+        {
+            if (match(item))
+                return anchor(item);
+        }
+
+        return null;
     }
 
     internal void DrawObjectSelectionHandles(DrawingContext dc, Rect r)
@@ -89,39 +117,15 @@ public partial class GridView
     }
 
     private ObjectDragKind HitTestObjectHandle(Point pos, Rect objRect)
-    {
-        if (objRect.IsEmpty) return ObjectDragKind.None;
-        double pad = HandleHitPad + HandleSize / 2;
-
-        bool nearRight  = Math.Abs(pos.X - objRect.Right) < pad;
-        bool nearBottom = Math.Abs(pos.Y - objRect.Bottom) < pad;
-        bool inVertical = pos.Y >= objRect.Top - pad && pos.Y <= objRect.Bottom + pad;
-        bool inHoriz    = pos.X >= objRect.Left - pad && pos.X <= objRect.Right + pad;
-
-        if (nearRight && nearBottom) return ObjectDragKind.ResizeSE;
-        if (nearRight && inVertical) return ObjectDragKind.ResizeE;
-        if (nearBottom && inHoriz)   return ObjectDragKind.ResizeS;
-        if (objRect.Contains(pos))   return ObjectDragKind.Move;
-        return ObjectDragKind.None;
-    }
+        => GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad);
 
     // Returns the cell address closest to the given screen coordinates (for anchor snapping)
-    private CellAddress? HitTestAnchorCell(Point pos)
-    {
-        if (Viewport is null) return null;
-        foreach (var row in Viewport.RowMetrics)
-        {
-            double top = row.TopOffset + EffectiveColHeaderHeight;
-            if (pos.Y < top || pos.Y >= top + row.Height) continue;
-            foreach (var col in Viewport.ColMetrics)
-            {
-                double left = col.LeftOffset + ActualRowHeaderWidth;
-                if (pos.X >= left && pos.X < left + col.Width)
-                    return new CellAddress(default, row.Row, col.Col);
-            }
-        }
-        return null;
-    }
+    private CellAddress? HitTestAnchorCell(Point pos) =>
+        GridObjectDragPlanner.HitTestAnchorCell(
+            Viewport,
+            pos,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight);
 
     private static readonly Brush DragPreviewFill;
     private static readonly Pen DragPreviewPen;
@@ -152,25 +156,31 @@ public partial class GridView
         _ => Cursors.Arrow
     };
 
-    private (Guid Id, ObjectKind Kind, Rect Rect) HitTestDrawingObject(Point pos)
+    private (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) HitTestDrawingObject(Point pos)
     {
         if (Viewport is null) return default;
 
         if (TextBoxes is not null)
-            foreach (var t in TextBoxes)
-                if (t.IsVisible && TryCreateAnchoredObjectRect(t.Anchor, t.Width, t.Height, 8, 8, out var r) && r.Contains(pos))
-                    return (t.Id, ObjectKind.TextBox, r);
-
-        if (DrawingShapes is not null)
-            foreach (var s in DrawingShapes)
-                if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && r.Contains(pos))
-                    return (s.Id, ObjectKind.Shape, r);
+            foreach (var t in TextBoxes.Reverse())
+                if (t.IsVisible && TryCreateAnchoredObjectRect(t.Anchor, t.Width, t.Height, 8, 8, out var r) && ContainsInclusive(r, pos))
+                    return (t.Id, ObjectKind.TextBox, r, t.Anchor);
 
         if (Pictures is not null)
-            foreach (var p in Pictures)
-                if (p.IsVisible && TryCreateAnchoredObjectRect(p.Anchor, p.Width, p.Height, 24, 18, out var r) && r.Contains(pos))
-                    return (p.Id, ObjectKind.Picture, r);
+            foreach (var p in Pictures.Reverse())
+                if (p.IsVisible && TryCreateAnchoredObjectRect(p.Anchor, p.Width, p.Height, 24, 18, out var r) && ContainsInclusive(r, pos))
+                    return (p.Id, ObjectKind.Picture, r, p.Anchor);
+
+        if (DrawingShapes is not null)
+            foreach (var s in DrawingShapes.Reverse())
+                if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && ContainsInclusive(r, pos))
+                    return (s.Id, ObjectKind.Shape, r, s.Anchor);
 
         return default;
     }
+
+    private static bool ContainsInclusive(Rect rect, Point pos) =>
+        pos.X >= rect.Left &&
+        pos.X <= rect.Right &&
+        pos.Y >= rect.Top &&
+        pos.Y <= rect.Bottom;
 }

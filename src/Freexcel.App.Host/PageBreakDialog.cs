@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -144,6 +145,8 @@ public sealed class PageBreakDialog : Window
         _resetAllButton.IsChecked = result.Action == PageBreakDialogAction.Clear;
         _rowBreakBox.Text = (result.RowBreak ?? 2).ToString(CultureInfo.InvariantCulture);
         _columnBreakBox.Text = (result.ColumnBreak ?? 2).ToString(CultureInfo.InvariantCulture);
+        AutomationProperties.SetName(_rowBreakBox, "Row page break");
+        AutomationProperties.SetName(_columnBreakBox, "Column page break");
     }
 
     private UIElement CreateContent()

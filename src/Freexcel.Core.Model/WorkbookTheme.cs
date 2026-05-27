@@ -9,6 +9,8 @@ public sealed record WorkbookTheme(
     string MinorFontName,
     string EffectsName,
     IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> Colors,
+    string? NativeColorSchemeXml = null,
+    string? NativeFontSchemeXml = null,
     string? NativeFormatSchemeXml = null)
 {
     private static readonly IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> OfficeColors =
@@ -55,7 +57,8 @@ public sealed record WorkbookTheme(
         this with
         {
             MajorFontName = string.IsNullOrWhiteSpace(majorFontName) ? Office.MajorFontName : majorFontName.Trim(),
-            MinorFontName = string.IsNullOrWhiteSpace(minorFontName) ? Office.MinorFontName : minorFontName.Trim()
+            MinorFontName = string.IsNullOrWhiteSpace(minorFontName) ? Office.MinorFontName : minorFontName.Trim(),
+            NativeFontSchemeXml = null
         };
 
     public WorkbookTheme WithEffects(string effectsName) =>
@@ -71,13 +74,25 @@ public sealed record WorkbookTheme(
             NativeFormatSchemeXml = string.IsNullOrWhiteSpace(formatSchemeXml) ? null : formatSchemeXml.Trim()
         };
 
+    public WorkbookTheme WithNativeColorSchemeXml(string? colorSchemeXml) =>
+        this with
+        {
+            NativeColorSchemeXml = string.IsNullOrWhiteSpace(colorSchemeXml) ? null : colorSchemeXml.Trim()
+        };
+
+    public WorkbookTheme WithNativeFontSchemeXml(string? fontSchemeXml) =>
+        this with
+        {
+            NativeFontSchemeXml = string.IsNullOrWhiteSpace(fontSchemeXml) ? null : fontSchemeXml.Trim()
+        };
+
     public WorkbookTheme WithColor(WorkbookThemeColorSlot slot, CellColor color)
     {
         var colors = new Dictionary<WorkbookThemeColorSlot, CellColor>(Colors)
         {
             [slot] = color
         };
-        return this with { Colors = colors };
+        return this with { Colors = colors, NativeColorSchemeXml = null };
     }
 
     private static byte ApplyTint(byte channel, double tint)

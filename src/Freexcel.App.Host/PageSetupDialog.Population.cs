@@ -78,6 +78,27 @@ public partial class PageSetupDialog
 
     private void FocusInitialKeyboardTarget()
     {
+        if (_initialFocusTarget == PageSetupInitialFocusTarget.RepeatRows)
+        {
+            PageSetupTabs.SelectedItem = SheetTab;
+            RowsRepeatBox.Focus();
+            RowsRepeatBox.SelectAll();
+            Keyboard.Focus(RowsRepeatBox);
+            return;
+        }
+
+        if (_initialFocusTarget == PageSetupInitialFocusTarget.ScaleToFit)
+        {
+            PageSetupTabs.SelectedItem = PageTab;
+            var target = AdjustToRadioButton.IsChecked == true
+                ? ScalePercentBox
+                : FitPagesWideBox;
+            target.Focus();
+            target.SelectAll();
+            Keyboard.Focus(target);
+            return;
+        }
+
         OrientationBox.Focus();
         Keyboard.Focus(OrientationBox);
     }

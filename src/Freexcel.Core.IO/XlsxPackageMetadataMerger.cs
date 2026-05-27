@@ -59,26 +59,30 @@ internal static class XlsxPackageMetadataMerger
         var existingDefaults = targetRoot
             .Elements(contentTypeNs + "Default")
             .Select(element => element.Attribute("Extension")?.Value)
+            .OfType<string>()
             .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(NormalizeContentTypeExtension)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceDefault in sourceRoot.Elements(contentTypeNs + "Default"))
         {
             var extension = sourceDefault.Attribute("Extension")?.Value;
-            if (!string.IsNullOrWhiteSpace(extension) && existingDefaults.Add(extension))
+            if (!string.IsNullOrWhiteSpace(extension) && existingDefaults.Add(NormalizeContentTypeExtension(extension)))
                 targetRoot.Add(new XElement(sourceDefault));
         }
 
         var existingOverrides = targetRoot
             .Elements(contentTypeNs + "Override")
             .Select(element => element.Attribute("PartName")?.Value)
+            .OfType<string>()
             .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(NormalizeContentTypePartName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceOverride in sourceRoot.Elements(contentTypeNs + "Override"))
         {
             var partName = sourceOverride.Attribute("PartName")?.Value;
             if (IsExcludedSourcePart(partName, excludedSourceParts))
                 continue;
-            if (!string.IsNullOrWhiteSpace(partName) && existingOverrides.Add(partName))
+            if (!string.IsNullOrWhiteSpace(partName) && existingOverrides.Add(NormalizeContentTypePartName(partName)))
                 targetRoot.Add(new XElement(sourceOverride));
         }
 
@@ -157,6 +161,12 @@ internal static class XlsxPackageMetadataMerger
         string.Equals(entryName, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
         entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
 
+    private static string NormalizeContentTypePartName(string value) =>
+        XlsxPackagePath.NormalizeZipPath(value.Trim().Replace('\\', '/').TrimStart('/'));
+
+    private static string NormalizeContentTypeExtension(string value) =>
+        value.Trim().TrimStart('.');
+
     private static bool ShouldPreserveRelationship(
         string relationshipPartPath,
         XElement relationship,
@@ -164,22 +174,20 @@ internal static class XlsxPackageMetadataMerger
         IReadOnlySet<string> generatedEntriesBeforeMerge,
         IReadOnlySet<string>? excludedSourceParts)
     {
-        var targetMode = relationship.Attribute("TargetMode")?.Value;
-        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var relationshipType = relationship.Attribute("Type")?.Value;
         if (string.Equals(
-                relationshipType,
+                NormalizeRelationshipType(relationship),
                 "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
                 StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        var target = relationship.Attribute("Target")?.Value;
+        var target = NormalizeRelationshipTarget(relationship);
         if (string.IsNullOrWhiteSpace(target))
             return false;
+
+        if (IsExternalRelationship(relationship))
+            return true;
 
         var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
         if (IsExcludedSourcePart(targetPart, excludedSourceParts))
@@ -203,10 +211,10 @@ internal static class XlsxPackageMetadataMerger
         var relationships = relationshipsXml.Root?.Elements(relationshipNs + "Relationship").ToList() ?? [];
         return relationships.Count > 0 && relationships.All(relationship =>
         {
-            if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            if (IsExternalRelationship(relationship))
                 return false;
 
-            var target = relationship.Attribute("Target")?.Value;
+            var target = NormalizeRelationshipTarget(relationship);
             return !string.IsNullOrWhiteSpace(target) &&
                    IsExcludedSourcePart(XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target), excludedSourceParts);
         });
@@ -217,14 +225,29 @@ internal static class XlsxPackageMetadataMerger
         if (excludedSourceParts is null || excludedSourceParts.Count == 0 || string.IsNullOrWhiteSpace(path))
             return false;
 
-        return excludedSourceParts.Contains(XlsxPackagePath.NormalizeZipPath(path.Replace('\\', '/').TrimStart('/')));
+        return excludedSourceParts.Contains(XlsxPackagePath.NormalizeZipPath(path.Trim().Replace('\\', '/').TrimStart('/')));
     }
+
+    private static bool IsExternalRelationship(XElement relationship) =>
+        string.Equals(NormalizeRelationshipTargetMode(relationship), "External", StringComparison.OrdinalIgnoreCase);
 
     private static string RelationshipSignature(XElement relationship) =>
         string.Join("|",
-            relationship.Attribute("Type")?.Value ?? "",
-            relationship.Attribute("Target")?.Value ?? "",
-            relationship.Attribute("TargetMode")?.Value ?? "");
+            NormalizeRelationshipType(relationship),
+            NormalizeRelationshipTarget(relationship),
+            NormalizeRelationshipTargetMode(relationship));
+
+    private static string NormalizeRelationshipType(XElement relationship) =>
+        relationship.Attribute("Type")?.Value.Trim() ?? "";
+
+    private static string NormalizeRelationshipTarget(XElement relationship)
+    {
+        var target = relationship.Attribute("Target")?.Value.Trim() ?? "";
+        return IsExternalRelationship(relationship) ? target : target.Replace('\\', '/');
+    }
+
+    private static string NormalizeRelationshipTargetMode(XElement relationship) =>
+        relationship.Attribute("TargetMode")?.Value.Trim() ?? "";
 
     private static string RelationshipPartToSourcePart(string relationshipPartPath)
     {

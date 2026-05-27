@@ -14,28 +14,18 @@ public partial class GridView
 {
     // Grid rendering for freeze dividers, selection, headers, cells, borders, and text decorations.
 
-    private (double Top, double Left, double Bottom, double Right,
-        double MarginLeft, double MarginRight, double MarginTop, double MarginBottom)?
-        GetPageMarginGuidePixels(GridRange printArea)
+    private PageMarginGuideLayout? GetPageMarginGuidePixels(GridRange printArea)
     {
         if (Viewport == null) return null;
-        var (top, left, bottom, right) = GetRangePixels(Viewport, printArea);
-        if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return null;
 
-        var guide = WorksheetPageLayout.GetMarginGuideFractions(PaperSize, PageOrientation, PageMargins);
-        var width = right.Value - left.Value;
-        var height = bottom.Value - top.Value;
-        if (width <= 0 || height <= 0) return null;
-
-        return (
-            top.Value,
-            left.Value,
-            bottom.Value,
-            right.Value,
-            left.Value + width * guide.Left,
-            left.Value + width * guide.Right,
-            top.Value + height * guide.Top,
-            top.Value + height * guide.Bottom);
+        return PageMarginGuideLayoutPlanner.CalculateGuide(
+            Viewport,
+            printArea,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            PaperSize,
+            PageOrientation,
+            PageMargins);
     }
 
     private void RenderGridLines(DrawingContext dc)
@@ -48,6 +38,10 @@ public partial class GridView
         if (Viewport?.SplitPanes?.Cells is not { Count: > 0 }) return;
 
         var clips = CalculateSplitPaneClipRects(Viewport, ActualWidth, ActualHeight);
+        var topLeftClip = FrozenClipGeometry(clips.TopLeft);
+        var topRightClip = FrozenClipGeometry(clips.TopRight);
+        var bottomLeftClip = FrozenClipGeometry(clips.BottomLeft);
+        var bottomRightClip = FrozenClipGeometry(clips.BottomRight);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var brushCache = new Dictionary<CellColor, SolidColorBrush>();
         var borderPenCache = new Dictionary<CellBorder, Pen>();
@@ -57,8 +51,13 @@ public partial class GridView
             var cell = layout.Cell;
             var rect = layout.Rect;
             var style = cell.Style;
-            var clipRect = GetSplitPaneClipRectForCell(Viewport, cell, clips);
-            dc.PushClip(new RectangleGeometry(clipRect));
+            var clipGeometry = GetSplitPaneClipGeometryForRegion(
+                layout.Region,
+                topLeftClip,
+                topRightClip,
+                bottomLeftClip,
+                bottomRightClip);
+            dc.PushClip(clipGeometry);
 
             Brush? fill = WorksheetBackground == null ? Brushes.White : null;
             if (style?.FillColor is { } fillColor)
@@ -155,6 +154,27 @@ public partial class GridView
         }
     }
 
+    private static RectangleGeometry FrozenClipGeometry(Rect rect)
+    {
+        var geometry = new RectangleGeometry(rect);
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static RectangleGeometry GetSplitPaneClipGeometryForRegion(
+        SplitPaneRegion region,
+        RectangleGeometry topLeft,
+        RectangleGeometry topRight,
+        RectangleGeometry bottomLeft,
+        RectangleGeometry bottomRight) =>
+        region switch
+        {
+            SplitPaneRegion.TopLeft => topLeft,
+            SplitPaneRegion.TopRight => topRight,
+            SplitPaneRegion.BottomLeft => bottomLeft,
+            _ => bottomRight
+        };
+
     private GridRange? FindMerge(uint row, uint col)
     {
         return _mergeLookup.TryGetValue((row, col), out var r) ? r : null;
@@ -162,16 +182,14 @@ public partial class GridView
 
     private void RenderCells(DrawingContext dc)
     {
-        var styleLookup = Viewport!.Cells
-            .Where(c => c.Style != null)
-            .ToDictionary(c => (c.Row, c.Col), c => c.Style!);
-
-        var rowLookupAll = Viewport.RowMetrics.ToDictionary(r => r.Row);
-        var colLookupAll = Viewport.ColMetrics.ToDictionary(c => c.Col);
+        var styleLookup = BuildRenderCellStyleLookup(Viewport!.Cells);
+        var rowLookupAll = BuildRenderRowMetricLookup(Viewport.RowMetrics);
+        var colLookupAll = BuildRenderColumnMetricLookup(Viewport.ColMetrics);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var brushCache = new Dictionary<CellColor, SolidColorBrush>();
         var borderPenCache = new Dictionary<CellBorder, Pen>();
         var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
+        var underlinePenCache = new Dictionary<Brush, Pen>();
 
 
         // Pass 1: backgrounds
@@ -377,11 +395,42 @@ public partial class GridView
             if (style?.DoubleUnderline == true)
             {
                 double uY = textY + text.Height + 1;
-                dc.DrawLine(new Pen(textBrush, 1), new Point(textX, uY), new Point(textX + text.Width, uY));
-                dc.DrawLine(new Pen(textBrush, 1), new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
+                var underlinePen = UnderlinePenForTextBrush(textBrush, underlinePenCache);
+                dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));
+                dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
             }
             dc.Pop();
         }
+    }
+
+    private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup(IReadOnlyList<DisplayCell> cells)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), CellStyle>();
+        foreach (var cell in cells)
+        {
+            if (cell.Style is { } style)
+                lookup.Add((cell.Row, cell.Col), style);
+        }
+
+        return lookup;
+    }
+
+    private static Dictionary<uint, RowMetric> BuildRenderRowMetricLookup(IReadOnlyList<RowMetric> rows)
+    {
+        var lookup = new Dictionary<uint, RowMetric>(rows.Count);
+        foreach (var row in rows)
+            lookup.Add(row.Row, row);
+
+        return lookup;
+    }
+
+    private static Dictionary<uint, ColMetric> BuildRenderColumnMetricLookup(IReadOnlyList<ColMetric> columns)
+    {
+        var lookup = new Dictionary<uint, ColMetric>(columns.Count);
+        foreach (var column in columns)
+            lookup.Add(column.Col, column);
+
+        return lookup;
     }
 
     private static void DrawCommentIndicator(DrawingContext dc, Rect rect)
@@ -396,6 +445,17 @@ public partial class GridView
         }
         geometry.Freeze();
         dc.DrawGeometry(Brushes.Red, null, geometry);
+    }
+
+    private static Pen UnderlinePenForTextBrush(Brush textBrush, Dictionary<Brush, Pen> underlinePenCache)
+    {
+        if (underlinePenCache.TryGetValue(textBrush, out var pen))
+            return pen;
+
+        pen = new Pen(textBrush, 1);
+        pen.Freeze();
+        underlinePenCache[textBrush] = pen;
+        return pen;
     }
 
 }

@@ -1,4 +1,8 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -99,6 +103,17 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void GoToDialog_ExposesUIANamesAndHelpTextForReferenceSurfaces()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_historyList, \"Go to\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_historyList, \"Lists recent references and defined names available for navigation.\");");
+        source.Should().Contain("AutomationProperties.SetName(_addressBox, \"Reference\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_addressBox, \"Enter a cell reference, range, or defined name to navigate to.\");");
+    }
+
+    [Fact]
     public void GoToDialogOpenedFromKeyboard_FocusesReferenceBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToDialog.cs"));
@@ -108,6 +123,31 @@ public sealed class GoToDialogsTests
         source.Should().Contain("_addressBox.Focus();");
         source.Should().Contain("_addressBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_addressBox);");
+    }
+
+    [Fact]
+    public void GoToDialogReferenceList_DoubleClickAcceptsSelectedReference()
+    {
+        var sheetId = SheetId.New();
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new GoToDialog(sheetId, defaultAddress: "A1", recentReferences: ["D10"]);
+            var historyList = GetPrivateControl<ListBox>(dialog, "_historyList");
+            dialog.Dispatcher.BeginInvoke(() =>
+            {
+                historyList.SelectedItem = "D10";
+
+                historyList.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                {
+                    RoutedEvent = Control.MouseDoubleClickEvent
+                });
+            }, DispatcherPriority.ApplicationIdle);
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(sheetId, 10, 4),
+                new CellAddress(sheetId, 10, 4)));
+        });
     }
 
     [Fact]
@@ -133,6 +173,31 @@ public sealed class GoToDialogsTests
         source.Should().Contain("dialog.SelectedRange is { } selectedRange");
         source.Should().Contain("SheetGrid.SelectedRange = selectedRange");
         source.Should().Contain("CellAddressBox.Text = FormatRangeReference(selectedRange.Start, selectedRange.End)");
+    }
+
+    [Fact]
+    public void MainWindow_NameBoxEnterRoutesTypedReferenceThroughGoToParser()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+
+        xaml.Should().Contain("KeyDown=\"CellAddressBox_KeyDown\"");
+        editingSource.Should().Contain("if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)");
+        editingSource.Should().Contain("_workbook.NamedRanges");
+        editingSource.Should().Contain("SetSelectionRange(selectedRange, selectedRange.Start);");
+        editingSource.Should().Contain("UpdateViewport();");
+        editingSource.Should().Contain("RefreshValidationDropdown();");
+    }
+
+    [Fact]
+    public void MainWindow_NameBoxEscapeCancelsTypedReference()
+    {
+        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+
+        editingSource.Should().Contain("if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)");
+        editingSource.Should().Contain("RestoreCellAddressBoxText();");
+        editingSource.Should().Contain("FocusSheetGridIfNeeded();");
+        editingSource.Should().Contain("CellAddressBox.SelectAll();");
     }
 
     [Fact]
@@ -170,13 +235,13 @@ public sealed class GoToDialogsTests
             "new(GoToSpecialKind.Comments, \"Co_mments\")",
             "new(GoToSpecialKind.CurrentRegion, \"Current _region\")",
             "new(GoToSpecialKind.RowDifferences, \"Row _differences\")",
-            "new(GoToSpecialKind.ColumnDifferences, \"Column dif_ferences\")",
+            "new(GoToSpecialKind.ColumnDifferences, \"Column diff_erences\")",
             "new(GoToSpecialKind.LastCell, \"_Last cell\")",
-            "new(GoToSpecialKind.ConditionalFormats, \"Conditional _formats\")",
+            "new(GoToSpecialKind.ConditionalFormats, \"Conditional forma_ts\")",
             "new(GoToSpecialKind.Objects, \"_Objects\")",
             "new(GoToSpecialKind.Precedents, \"_Precedents\")",
-            "new(GoToSpecialKind.Dependents, \"_Dependents\")",
-            "new(GoToSpecialKind.DataValidation, \"_Data validation\")",
+            "new(GoToSpecialKind.Dependents, \"Depe_ndents\")",
+            "new(GoToSpecialKind.DataValidation, \"Data valid_ation\")",
             "new(GoToSpecialKind.VisibleCellsOnly, \"_Visible cells only\")"
         })
             source.Should().Contain(expected);
@@ -187,6 +252,19 @@ public sealed class GoToDialogsTests
         source.Should().NotContain("shown for parity");
         source.Should().NotContain("The selectable options match");
         source.Should().Contain("DialogButtonRowFactory.Create");
+    }
+
+    [Fact]
+    public void GoToSpecialDialog_UsesUniqueChoiceAccessKeys()
+    {
+        var duplicateAccessKeys = GoToSpecialDialog.GetChoices()
+            .Select(choice => new { choice.Label, AccessKey = GetAccessKey(choice.Label) })
+            .Where(choice => choice.AccessKey is not null)
+            .GroupBy(choice => choice.AccessKey)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key}: {string.Join(", ", group.Select(choice => choice.Label))}");
+
+        duplicateAccessKeys.Should().BeEmpty();
     }
 
     [Fact]
@@ -245,5 +323,22 @@ public sealed class GoToDialogsTests
         GoToSpecialDialog.TryParseChoice("dependents", out kind).Should().BeTrue();
 
         kind.Should().Be(GoToSpecialKind.Dependents);
+    }
+
+    private static char? GetAccessKey(string label)
+    {
+        var index = label.IndexOf('_', StringComparison.Ordinal);
+        if (index < 0 || index + 1 >= label.Length)
+            return null;
+
+        return char.ToUpperInvariant(label[index + 1]);
+    }
+
+    private static T GetPrivateControl<T>(GoToDialog dialog, string fieldName)
+        where T : class
+    {
+        var field = typeof(GoToDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
 }

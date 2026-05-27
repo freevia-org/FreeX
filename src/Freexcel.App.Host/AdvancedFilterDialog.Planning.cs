@@ -13,32 +13,15 @@ public sealed partial class AdvancedFilterDialog
         Func<string, SheetId?>? resolveSheetId,
         out AdvancedFilterDialogResult result,
         out string? error)
-    {
-        result = default!;
-        error = null;
-        resolveSheetId ??= _ => null;
-
-        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, listRangeText, resolveSheetId, out var listRange))
-        {
-            error = "Enter a valid list range.";
-            return false;
-        }
-
-        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, criteriaRangeText, resolveSheetId, out var criteriaRange))
-        {
-            error = "Enter a valid criteria range.";
-            return false;
-        }
-
-        if (!AdvancedFilterInputParser.TryParseCopyDestinationRange(copyToCellText ?? "", currentSheetId, out var copyToRange))
-        {
-            error = "Enter a valid copy-to cell or one-row header range.";
-            return false;
-        }
-
-        result = new AdvancedFilterDialogResult(listRange, criteriaRange, copyToRange?.Start, uniqueRecordsOnly, copyToRange);
-        return true;
-    }
+        => AdvancedFilterDialogPlanner.TryParse(
+            currentSheetId,
+            listRangeText,
+            criteriaRangeText,
+            copyToCellText,
+            uniqueRecordsOnly,
+            resolveSheetId,
+            out result,
+            out error);
 
     public static bool TryParse(
         SheetId currentSheetId,
@@ -100,5 +83,5 @@ public sealed partial class AdvancedFilterDialog
     public static AdvancedFilterRangeSelectionRequest CreateRangeSelectionRequest(
         AdvancedFilterRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        AdvancedFilterDialogPlanner.CreateRangeSelectionRequest(target, currentText);
 }

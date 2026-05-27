@@ -28,6 +28,9 @@ public sealed partial class SelectDataSourceDialog
 
     public static SelectDataSourcePreview InferPreviewEntries(string sourceRangeText, bool firstColumnIsCategories)
     {
+        if (string.IsNullOrWhiteSpace(sourceRangeText))
+            return new SelectDataSourcePreview([], [], "");
+
         var parsed = TryParseRangeReference(sourceRangeText);
         if (parsed is null)
         {

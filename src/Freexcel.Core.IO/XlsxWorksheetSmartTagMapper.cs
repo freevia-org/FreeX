@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -84,7 +85,7 @@ internal static class XlsxWorksheetSmartTagMapper
                 .Select(ReadCellSmartTag)
                 .ToList()
         };
-        ReadNativeAttributes(element, model.NativeAttributes, ["r"]);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(element, model.NativeAttributes, ["r"]);
         return model;
     }
 
@@ -98,7 +99,7 @@ internal static class XlsxWorksheetSmartTagMapper
                 .Select(ReadCellSmartTagProperty)
                 .ToList()
         };
-        ReadNativeAttributes(element, model.NativeAttributes, ["type", "deleted"]);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(element, model.NativeAttributes, ["type", "deleted"]);
         return model;
     }
 
@@ -109,7 +110,7 @@ internal static class XlsxWorksheetSmartTagMapper
             Key = element.Attribute("key")?.Value,
             Value = element.Attribute("val")?.Value
         };
-        ReadNativeAttributes(element, model.NativeAttributes, ["key", "val"]);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(element, model.NativeAttributes, ["key", "val"]);
         return model;
     }
 
@@ -137,8 +138,8 @@ internal static class XlsxWorksheetSmartTagMapper
             model.Cells.Select(cell =>
             {
                 var element = new XElement(WorksheetNs + "cellSmartTags");
-                ApplyNativeAttributes(element, cell.NativeAttributes, ["r"]);
-                element.SetAttributeValue("r", NullIfWhiteSpace(cell.Reference));
+                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, cell.NativeAttributes, ["r"]);
+                element.SetAttributeValue("r", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(cell.Reference));
                 foreach (var tag in cell.Tags)
                     element.Add(ToXml(tag));
                 return element;
@@ -148,8 +149,8 @@ internal static class XlsxWorksheetSmartTagMapper
     private static XElement ToXml(WorksheetCellSmartTagModel model)
     {
         var element = new XElement(WorksheetNs + "cellSmartTag");
-        ApplyNativeAttributes(element, model.NativeAttributes, ["type", "deleted"]);
-        element.SetAttributeValue("type", NullIfWhiteSpace(model.Type));
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, model.NativeAttributes, ["type", "deleted"]);
+        element.SetAttributeValue("type", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Type));
         element.SetAttributeValue("deleted", model.Deleted is { } deleted ? deleted ? "1" : "0" : null);
         foreach (var property in model.Properties)
             element.Add(ToXml(property));
@@ -159,43 +160,9 @@ internal static class XlsxWorksheetSmartTagMapper
     private static XElement ToXml(WorksheetCellSmartTagPropertyModel model)
     {
         var element = new XElement(WorksheetNs + "cellSmartTagPr");
-        ApplyNativeAttributes(element, model.NativeAttributes, ["key", "val"]);
-        element.SetAttributeValue("key", NullIfWhiteSpace(model.Key));
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, model.NativeAttributes, ["key", "val"]);
+        element.SetAttributeValue("key", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Key));
         element.SetAttributeValue("val", model.Value);
         return element;
     }
-
-    private static void ReadNativeAttributes(
-        XElement element,
-        Dictionary<string, string> target,
-        IReadOnlyCollection<string> modeledNames)
-    {
-        foreach (var attribute in element.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || modeledNames.Contains(attribute.Name.LocalName, StringComparer.Ordinal))
-                continue;
-
-            target[attribute.Name.ToString()] = attribute.Value;
-        }
-    }
-
-    private static void ApplyNativeAttributes(
-        XElement element,
-        Dictionary<string, string> attributes,
-        IReadOnlyCollection<string> modeledNames)
-    {
-        foreach (var attribute in attributes)
-        {
-            if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                modeledNames.Contains(attribute.Key, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
-        }
-    }
-
-    private static string? NullIfWhiteSpace(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value;
 }

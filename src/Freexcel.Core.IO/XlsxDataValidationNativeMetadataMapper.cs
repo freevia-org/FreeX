@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -23,17 +24,19 @@ internal static class XlsxDataValidationNativeMetadataMapper
             if (string.IsNullOrWhiteSpace(sqref))
                 continue;
 
-            var firstRef = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(firstRef))
-                continue;
-
             try
             {
-                var appliesTo = firstRef.Contains(':', StringComparison.Ordinal)
-                    ? GridRange.Parse(firstRef, tempSheet)
-                    : new GridRange(CellAddress.Parse(firstRef, tempSheet), CellAddress.Parse(firstRef, tempSheet));
+                var ranges = ParseSqrefRanges(sqref, tempSheet);
+                if (ranges.Count == 0)
+                    continue;
+
                 result.Add(new DataValidationNativeMetadata(
-                    appliesTo,
+                    ranges[0],
+                    ranges,
+                    sqref,
+                    ReadModeledAttributes(validation),
+                    validation.Element(worksheetNs + "formula1")?.Value,
+                    validation.Element(worksheetNs + "formula2")?.Value,
                     ReadAttributes(validation),
                     ReadChildXmls(validation, worksheetNs),
                     containerAttributes,
@@ -56,12 +59,15 @@ internal static class XlsxDataValidationNativeMetadataMapper
         foreach (var validation in sheet.DataValidations)
         {
             var metadata = nativeMetadata.FirstOrDefault(item =>
-                item.AppliesTo.Start.Row == validation.AppliesTo.Start.Row &&
-                item.AppliesTo.Start.Col == validation.AppliesTo.Start.Col &&
-                item.AppliesTo.End.Row == validation.AppliesTo.End.Row &&
-                item.AppliesTo.End.Col == validation.AppliesTo.End.Col);
+                RangesEqual(item.AppliesTo, validation.AppliesTo));
             if (metadata is null)
                 continue;
+
+            validation.AdditionalRanges.Clear();
+            validation.AdditionalRanges.AddRange(metadata.AppliesToRanges.Skip(1).Select(range =>
+                new GridRange(
+                    new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
+                    new CellAddress(sheet.Id, range.End.Row, range.End.Col))));
 
             if (metadata.NativeAttributes.Count > 0)
                 validation.NativeAttributes = metadata.NativeAttributes;
@@ -72,6 +78,8 @@ internal static class XlsxDataValidationNativeMetadataMapper
             if (metadata.NativeContainerChildXmls.Count > 0)
                 validation.NativeContainerChildXmls = metadata.NativeContainerChildXmls;
         }
+
+        RemoveDuplicateMultiAreaValidations(sheet, nativeMetadata);
     }
 
     public static bool HasNativeMetadata(DataValidation validation) =>
@@ -145,8 +153,11 @@ internal static class XlsxDataValidationNativeMetadataMapper
 
             foreach (var validation in sheet.DataValidations.Where(HasNativeMetadata))
             {
-                if (validationsByRange.TryGetValue(validation.AppliesTo.ToString(), out var validationElement))
+                if (validationsByRange.TryGetValue(ToSqref(validation), out var validationElement) ||
+                    validationsByRange.TryGetValue(validation.AppliesTo.ToString(), out validationElement))
+                {
                     changed |= ApplyValidationNativeMetadata(validationElement, validation, workbookNs);
+                }
             }
 
             if (changed)
@@ -175,6 +186,84 @@ internal static class XlsxDataValidationNativeMetadataMapper
             .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
             .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
     }
+
+    private static Dictionary<string, string> ReadModeledAttributes(XElement validation)
+    {
+        string[] modeledAttributes =
+        [
+            "type",
+            "errorStyle",
+            "operator",
+            "allowBlank",
+            "showDropDown",
+            "showInputMessage",
+            "showErrorMessage",
+            "errorTitle",
+            "error",
+            "promptTitle",
+            "prompt"
+        ];
+        return validation.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && modeledAttributes.Contains(attribute.Name.LocalName))
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+    }
+
+    private static List<GridRange> ParseSqrefRanges(string sqref, SheetId sheetId)
+    {
+        var ranges = new List<GridRange>();
+        foreach (var reference in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var range = reference.Contains(':', StringComparison.Ordinal)
+                ? GridRange.Parse(reference, sheetId)
+                : new GridRange(CellAddress.Parse(reference, sheetId), CellAddress.Parse(reference, sheetId));
+            ranges.Add(range);
+        }
+
+        return ranges;
+    }
+
+    private static string ToSqref(DataValidation validation) =>
+        string.Join(' ', new[] { validation.AppliesTo }.Concat(validation.AdditionalRanges).Select(range => range.ToString()));
+
+    private static void RemoveDuplicateMultiAreaValidations(
+        Sheet sheet,
+        IReadOnlyList<DataValidationNativeMetadata> nativeMetadata)
+    {
+        foreach (var metadata in nativeMetadata.Where(item => item.AppliesToRanges.Count > 1))
+        {
+            foreach (var duplicateRange in metadata.AppliesToRanges.Skip(1))
+            {
+                var duplicate = sheet.DataValidations.FirstOrDefault(validation =>
+                    RangesEqual(validation.AppliesTo, duplicateRange) &&
+                    validation.AdditionalRanges.Count == 0 &&
+                    MatchesNativeValidation(validation, metadata));
+                if (duplicate is not null)
+                    sheet.DataValidations.Remove(duplicate);
+            }
+        }
+    }
+
+    private static bool MatchesNativeValidation(DataValidation validation, DataValidationNativeMetadata metadata) =>
+        MatchesType(validation.Type, metadata.ModeledAttributes.GetValueOrDefault("type")) &&
+        string.Equals(validation.Formula1 ?? "", metadata.Formula1 ?? "", StringComparison.Ordinal) &&
+        string.Equals(validation.Formula2 ?? "", metadata.Formula2 ?? "", StringComparison.Ordinal);
+
+    private static bool MatchesType(DvType type, string? nativeType) =>
+        string.IsNullOrWhiteSpace(nativeType) ||
+        string.Equals(nativeType, TypeToNativeName(type), StringComparison.OrdinalIgnoreCase);
+
+    private static string TypeToNativeName(DvType type) => type switch
+    {
+        DvType.WholeNumber => "whole",
+        DvType.TextLength => "textLength",
+        _ => type.ToString()
+    };
+
+    private static bool RangesEqual(GridRange left, GridRange right) =>
+        left.Start.Row == right.Start.Row &&
+        left.Start.Col == right.Start.Col &&
+        left.End.Row == right.End.Row &&
+        left.End.Col == right.End.Col;
 
     private static List<string> ReadChildXmls(XElement validation, XNamespace worksheetNs)
     {
@@ -207,11 +296,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
         var changed = false;
         foreach (var (name, value) in source.NativeContainerAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && dataValidations.Attribute(name) is null)
-            {
-                dataValidations.SetAttributeValue(name, value);
-                changed = true;
-            }
+            changed |= TrySetNativeAttributeIfMissing(dataValidations, name, value);
         }
 
         foreach (var nativeChildXml in (source.NativeContainerChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -242,11 +327,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
         var changed = false;
         foreach (var (name, value) in source.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && validationElement.Attribute(name) is null)
-            {
-                validationElement.SetAttributeValue(name, value);
-                changed = true;
-            }
+            changed |= TrySetNativeAttributeIfMissing(validationElement, name, value);
         }
 
         foreach (var nativeChildXml in (source.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -268,10 +349,39 @@ internal static class XlsxDataValidationNativeMetadataMapper
 
         return changed;
     }
+
+    private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        try
+        {
+            var attributeName = XName.Get(name);
+            if (element.Attribute(attributeName) is not null)
+                return false;
+
+            element.SetAttributeValue(attributeName, value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
 }
 
 internal sealed record DataValidationNativeMetadata(
     GridRange AppliesTo,
+    IReadOnlyList<GridRange> AppliesToRanges,
+    string Sqref,
+    IReadOnlyDictionary<string, string> ModeledAttributes,
+    string? Formula1,
+    string? Formula2,
     IReadOnlyDictionary<string, string> NativeAttributes,
     IReadOnlyList<string> NativeChildXmls,
     IReadOnlyDictionary<string, string> NativeContainerAttributes,

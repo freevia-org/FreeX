@@ -16,10 +16,10 @@ public static partial class BuiltInFunctions
     {
         if (args.Count < 3) return ErrorValue.Value;
         if (args[0] is ErrorValue e0) return e0;
-        if (args[1] is ErrorValue e1) return e1;
+        if (!TryGetScalarControlArgument(args[1], out var ignoreEmptyArg, out var ignoreEmptyError)) return ignoreEmptyError;
         var delimiters = FlattenTextjoinArgument(args[0]);
         if (delimiters.Error is not null) return delimiters.Error;
-        bool ignoreEmpty = ToBool(args[1]);
+        bool ignoreEmpty = ToBool(ignoreEmptyArg);
         var parts = new List<string>();
         for (int i = 2; i < args.Count; i++)
         {
@@ -84,8 +84,9 @@ public static partial class BuiltInFunctions
     {
         var leftRange = left as RangeValue;
         var rightRange = right as RangeValue;
-        int rows = leftRange?.RowCount ?? rightRange?.RowCount ?? 1;
-        int cols = leftRange?.ColCount ?? rightRange?.ColCount ?? 1;
+        var shape = ChooseBroadcastShape(leftRange, rightRange);
+        int rows = shape?.RowCount ?? 1;
+        int cols = shape?.ColCount ?? 1;
         if (leftRange is not null && !CanBroadcastExactRange(leftRange, rows, cols)) return ErrorValue.Value;
         if (rightRange is not null && !CanBroadcastExactRange(rightRange, rows, cols)) return ErrorValue.Value;
 

@@ -63,6 +63,22 @@ public sealed class ShortcutParityMatrixTests
         catalog.Should().Contain($"{summary.TotalInScope} documented shortcut rows;");
     }
 
+    [Fact]
+    public void NewestStatusReport_ShortcutSnapshotMatchesShortcutMatrixSummary()
+    {
+        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var newestStatusReport = Directory
+            .GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var report = File.ReadAllText(newestStatusReport);
+        var summary = ReadCoverageSummary(matrix);
+
+        report.Should().Contain(
+            $"| Keyboard shortcuts | **{summary.ParityPercent}% parity** ({summary.Parity}/{summary.TotalInScope}), **{summary.PartialPercent}% partial** ({summary.Partial}/{summary.TotalInScope}), **{summary.NotImplemented} missing**. |");
+    }
+
     private static IReadOnlyList<string> ReadNextWorkItems(IReadOnlyList<string> lines)
     {
         var sectionStart = Array.FindIndex(lines.ToArray(), line => line == "## Next Shortcut Work");

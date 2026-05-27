@@ -16,6 +16,8 @@ public sealed partial class RemoveDuplicatesDialog : Window
     private readonly StackPanel _columnsPanel = new();
     private readonly IReadOnlyList<RemoveDuplicateColumnChoice> _headerColumns;
     private readonly IReadOnlyList<RemoveDuplicateColumnChoice> _genericColumns;
+    private readonly Button _selectAllButton = new() { Content = "_Select All", Width = 88, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Button _unselectAllButton = new() { Content = "_Unselect All", Width = 88 };
 
     public RemoveDuplicatesDialogResult? Result { get; private set; }
 
@@ -38,15 +40,21 @@ public sealed partial class RemoveDuplicatesDialog : Window
         var root = new StackPanel { Margin = new Thickness(12) };
         _hasHeadersBox.Checked += (_, _) => RefreshColumnLabels();
         _hasHeadersBox.Unchecked += (_, _) => RefreshColumnLabels();
+        _columnsPanel.Focusable = true;
+        _columnsPanel.GotKeyboardFocus += (_, _) => FocusFirstColumnChoice();
         root.Children.Add(_hasHeadersBox);
-        root.Children.Add(new TextBlock { Text = "Columns:", Margin = new Thickness(0, 0, 0, 4) });
+        root.Children.Add(new Label
+        {
+            Content = "_Columns:",
+            Target = _columnsPanel,
+            Margin = new Thickness(0, 0, 0, 4),
+            Padding = new Thickness(0)
+        });
         var bulkButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        var selectAllButton = new Button { Content = "_Select All", Width = 88, Margin = new Thickness(0, 0, 8, 0) };
-        selectAllButton.Click += SelectAllButton_Click;
-        var unselectAllButton = new Button { Content = "_Unselect All", Width = 88 };
-        unselectAllButton.Click += UnselectAllButton_Click;
-        bulkButtons.Children.Add(selectAllButton);
-        bulkButtons.Children.Add(unselectAllButton);
+        _selectAllButton.Click += SelectAllButton_Click;
+        _unselectAllButton.Click += UnselectAllButton_Click;
+        bulkButtons.Children.Add(_selectAllButton);
+        bulkButtons.Children.Add(_unselectAllButton);
         root.Children.Add(bulkButtons);
 
         foreach (var column in _headerColumns)
@@ -58,6 +66,8 @@ public sealed partial class RemoveDuplicatesDialog : Window
                 IsChecked = column.IsSelected,
                 Margin = new Thickness(0, 0, 0, 4)
             };
+            box.Checked += (_, _) => RefreshBulkButtonState();
+            box.Unchecked += (_, _) => RefreshBulkButtonState();
             _boxes.Add(box);
             _columnsPanel.Children.Add(box);
         }
@@ -70,6 +80,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
         RefreshColumnLabels();
+        RefreshBulkButtonState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -116,6 +127,14 @@ public sealed partial class RemoveDuplicatesDialog : Window
     {
         foreach (var box in _boxes)
             box.IsChecked = isSelected;
+        RefreshBulkButtonState();
+    }
+
+    private void RefreshBulkButtonState()
+    {
+        var selectedCount = _boxes.Count(box => box.IsChecked == true);
+        _selectAllButton.IsEnabled = selectedCount < _boxes.Count;
+        _unselectAllButton.IsEnabled = selectedCount > 0;
     }
 
     private void Accept()

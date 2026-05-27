@@ -68,52 +68,93 @@ public static partial class PivotTableRefreshService
             if (row < bodyStart.Row)
             {
                 if (pageFieldRows > 0 && row <= pageFieldEndRow)
-                    ApplyPivotVisualStyle(workbook, cell, headerStyle);
+                    ApplyPivotVisualStyle(workbook, cell, headerStyle, pivotTable);
                 continue;
             }
 
             if (row <= headerEndRow)
             {
                 if (ShouldApplyPivotHeaderStyle(pivotTable, col))
-                    ApplyPivotVisualStyle(workbook, cell, headerStyle);
+                    ApplyPivotVisualStyle(workbook, cell, headerStyle, pivotTable);
                 continue;
             }
 
             if (grandTotalRows.Contains(row) || grandTotalColumns.Contains(col))
             {
-                ApplyPivotVisualStyle(workbook, cell, grandTotalStyle);
+                ApplyPivotVisualStyle(workbook, cell, grandTotalStyle, pivotTable);
                 continue;
             }
 
             if (subtotalRows.Contains(row))
             {
-                ApplyPivotVisualStyle(workbook, cell, subtotalStyle);
+                ApplyPivotVisualStyle(workbook, cell, subtotalStyle, pivotTable);
                 continue;
             }
 
             var bodyRowIndex = row - headerEndRow - 1;
             var bodyColIndex = col - materialized.Start.Col;
             if (pivotTable.ShowRowStripes && bodyRowIndex % 2 == 0)
-                ApplyPivotVisualStyle(workbook, cell, stripeStyle);
+                ApplyPivotVisualStyle(workbook, cell, stripeStyle, pivotTable);
             if (pivotTable.ShowColumnStripes && bodyColIndex % 2 == 1)
-                ApplyPivotVisualStyle(workbook, cell, stripeStyle);
+                ApplyPivotVisualStyle(workbook, cell, stripeStyle, pivotTable);
         }
 
         ApplyCompactRowLabelIndent(workbook, sheet, pivotTable, materialized, headerEndRow, subtotalRows, grandTotalRows);
     }
 
-    private static void ApplyPivotVisualStyle(Workbook workbook, Cell cell, StyleId visualStyleId)
+    private static void ApplyPivotVisualStyle(Workbook workbook, Cell cell, StyleId visualStyleId, PivotTableModel pivotTable)
     {
         var numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
-        if (numberFormat == CellStyle.Default.NumberFormat)
+        if (pivotTable.ApplyFontFormats &&
+            pivotTable.ApplyPatternFormats &&
+            pivotTable.ApplyBorderFormats &&
+            numberFormat == CellStyle.Default.NumberFormat)
         {
             cell.StyleId = visualStyleId;
             return;
         }
 
-        var style = workbook.GetStyle(visualStyleId);
+        var visualStyle = workbook.GetStyle(visualStyleId);
+        var style = CellStyle.Default.Clone();
         style.NumberFormat = numberFormat;
+
+        if (pivotTable.ApplyFontFormats)
+            ApplyPivotFontStyle(style, visualStyle);
+        if (pivotTable.ApplyPatternFormats)
+            ApplyPivotPatternStyle(style, visualStyle);
+        if (pivotTable.ApplyBorderFormats)
+            ApplyPivotBorderStyle(style, visualStyle);
+
         cell.StyleId = workbook.RegisterStyle(style);
+    }
+
+    private static void ApplyPivotFontStyle(CellStyle target, CellStyle source)
+    {
+        target.FontName = source.FontName;
+        target.FontSize = source.FontSize;
+        target.Bold = source.Bold;
+        target.Italic = source.Italic;
+        target.Underline = source.Underline;
+        target.Strikethrough = source.Strikethrough;
+        target.Superscript = source.Superscript;
+        target.Subscript = source.Subscript;
+        target.FontColor = source.FontColor;
+        target.DoubleUnderline = source.DoubleUnderline;
+    }
+
+    private static void ApplyPivotPatternStyle(CellStyle target, CellStyle source)
+    {
+        target.FillColor = source.FillColor;
+        target.FillPatternStyle = source.FillPatternStyle;
+        target.FillPatternColor = source.FillPatternColor;
+    }
+
+    private static void ApplyPivotBorderStyle(CellStyle target, CellStyle source)
+    {
+        target.BorderTop = source.BorderTop;
+        target.BorderRight = source.BorderRight;
+        target.BorderBottom = source.BorderBottom;
+        target.BorderLeft = source.BorderLeft;
     }
 
     private static bool ShouldApplyPivotHeaderStyle(PivotTableModel pivotTable, uint col)

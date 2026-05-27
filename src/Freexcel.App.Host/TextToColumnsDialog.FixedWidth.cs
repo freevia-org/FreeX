@@ -67,21 +67,12 @@ public sealed partial class TextToColumnsDialog
     }
 
     private int FindNearestBreakIndex(IReadOnlyList<int> positions, double x, double tolerance)
-    {
-        var nearestIndex = -1;
-        var nearestDistance = double.MaxValue;
-        for (var index = 0; index < positions.Count; index++)
-        {
-            var distance = Math.Abs(RulerXFromPosition(positions[index]) - x);
-            if (distance < nearestDistance)
-            {
-                nearestDistance = distance;
-                nearestIndex = index;
-            }
-        }
-
-        return nearestDistance <= tolerance ? nearestIndex : -1;
-    }
+        => TextToColumnsFixedWidthRulerPlanner.FindNearestBreakIndex(
+            positions,
+            x,
+            tolerance,
+            _fixedWidthRuler.ActualWidth,
+            FixedWidthMaxLength());
 
     private void UpdateFixedWidthBreakPositions(IReadOnlyList<int> positions)
     {
@@ -143,18 +134,13 @@ public sealed partial class TextToColumnsDialog
     }
 
     private int FixedWidthMaxLength() =>
-        Math.Max(2, _previewRows.Count == 0 ? 2 : _previewRows.Max(row => row.Length));
+        TextToColumnsFixedWidthRulerPlanner.MaxLength(_previewRows);
 
-    private int PositionFromRulerX(double x)
-    {
-        var width = RulerWidth();
-        return (int)Math.Round(Math.Clamp(x, 0, width) / width * FixedWidthMaxLength());
-    }
+    private int PositionFromRulerX(double x) =>
+        TextToColumnsFixedWidthRulerPlanner.PositionFromRulerX(x, _fixedWidthRuler.ActualWidth, FixedWidthMaxLength());
 
-    private double RulerXFromPosition(int position)
-    {
-        return Math.Clamp(position, 0, FixedWidthMaxLength()) / (double)FixedWidthMaxLength() * RulerWidth();
-    }
+    private double RulerXFromPosition(int position) =>
+        TextToColumnsFixedWidthRulerPlanner.RulerXFromPosition(position, _fixedWidthRuler.ActualWidth, FixedWidthMaxLength());
 
-    private double RulerWidth() => _fixedWidthRuler.ActualWidth > 1 ? _fixedWidthRuler.ActualWidth : 440;
+    private double RulerWidth() => TextToColumnsFixedWidthRulerPlanner.EffectiveRulerWidth(_fixedWidthRuler.ActualWidth);
 }

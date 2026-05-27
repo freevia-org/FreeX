@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
@@ -7,6 +8,8 @@ namespace Freexcel.App.UI;
 
 public partial class GridView
 {
+    private static readonly ConcurrentDictionary<uint, string> ColumnHeaderCache = new();
+
     private void RenderFreezeDivider(DrawingContext dc)
     {
         if (Viewport?.FrozenPanes == null) return;
@@ -14,7 +17,7 @@ public partial class GridView
 
         if (fp.Rows > 0)
         {
-            var lastFrozenRow = Viewport.RowMetrics.FirstOrDefault(r => r.Row == fp.Rows);
+            var lastFrozenRow = FindRowMetric(Viewport.RowMetrics, fp.Rows);
             if (lastFrozenRow != null)
             {
                 double y = lastFrozenRow.TopOffset + lastFrozenRow.Height + EffectiveColHeaderHeight;
@@ -24,7 +27,7 @@ public partial class GridView
 
         if (fp.Cols > 0)
         {
-            var lastFrozenCol = Viewport.ColMetrics.FirstOrDefault(c => c.Col == fp.Cols);
+            var lastFrozenCol = FindColMetric(Viewport.ColMetrics, fp.Cols);
             if (lastFrozenCol != null)
             {
                 double x = lastFrozenCol.LeftOffset + lastFrozenCol.Width + ActualRowHeaderWidth;
@@ -39,14 +42,11 @@ public partial class GridView
 
         var selectedRanges = SelectedRanges;
         var selRange = SelectedRange;
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
         foreach (var col in Viewport!.ColMetrics)
         {
-            bool inSel = selectedRanges is { Count: > 0 }
-                ? selectedRanges.Any(r => col.Col >= r.Start.Col && col.Col <= r.End.Col)
-                : selRange.HasValue
-                    && col.Col >= selRange.Value.Start.Col
-                    && col.Col <= selRange.Value.End.Col;
+            bool inSel = IsColumnHeaderSelected(col.Col, selectedRanges, selRange);
 
             var bg = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
             var rect = new Rect(col.LeftOffset + ActualRowHeaderWidth, 0, col.Width, EffectiveColHeaderHeight);
@@ -57,7 +57,7 @@ public partial class GridView
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 DefaultTypeface, 11, TextBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                pixelsPerDip);
 
             dc.DrawText(text, new Point(
                 rect.Left + (rect.Width - text.Width) / 2,
@@ -66,11 +66,7 @@ public partial class GridView
 
         foreach (var row in Viewport!.RowMetrics)
         {
-            bool inSel = selectedRanges is { Count: > 0 }
-                ? selectedRanges.Any(r => row.Row >= r.Start.Row && row.Row <= r.End.Row)
-                : selRange.HasValue
-                    && row.Row >= selRange.Value.Start.Row
-                    && row.Row <= selRange.Value.End.Row;
+            bool inSel = IsRowHeaderSelected(row.Row, selectedRanges, selRange);
 
             var bg = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
             var rect = new Rect(0, row.TopOffset + EffectiveColHeaderHeight, ActualRowHeaderWidth, row.Height);
@@ -81,7 +77,7 @@ public partial class GridView
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 DefaultTypeface, 11, TextBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                pixelsPerDip);
 
             dc.DrawText(text, new Point(
                 rect.Left + (rect.Width - text.Width) / 2,
@@ -92,8 +88,44 @@ public partial class GridView
             new Rect(0, 0, ActualRowHeaderWidth, EffectiveColHeaderHeight));
     }
 
+    private static bool IsColumnHeaderSelected(uint column, IReadOnlyList<GridRange>? selectedRanges, GridRange? selectedRange)
+    {
+        if (selectedRanges is { Count: > 0 })
+        {
+            foreach (var range in selectedRanges)
+            {
+                if (column >= range.Start.Col && column <= range.End.Col)
+                    return true;
+            }
+
+            return false;
+        }
+
+        return selectedRange.HasValue &&
+            column >= selectedRange.Value.Start.Col &&
+            column <= selectedRange.Value.End.Col;
+    }
+
+    private static bool IsRowHeaderSelected(uint row, IReadOnlyList<GridRange>? selectedRanges, GridRange? selectedRange)
+    {
+        if (selectedRanges is { Count: > 0 })
+        {
+            foreach (var range in selectedRanges)
+            {
+                if (row >= range.Start.Row && row <= range.End.Row)
+                    return true;
+            }
+
+            return false;
+        }
+
+        return selectedRange.HasValue &&
+            row >= selectedRange.Value.Start.Row &&
+            row <= selectedRange.Value.End.Row;
+    }
+
     internal static string FormatColumnHeader(uint column, bool useR1C1ReferenceStyle) =>
         useR1C1ReferenceStyle
             ? column.ToString(CultureInfo.InvariantCulture)
-            : CellAddress.NumberToColumnName(column);
+            : ColumnHeaderCache.GetOrAdd(column, static col => CellAddress.NumberToColumnName(col));
 }

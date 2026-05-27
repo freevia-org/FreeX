@@ -47,6 +47,9 @@ public sealed partial class NativeJsonAdapter
         public string? MajorFontName { get; set; }
         public string? MinorFontName { get; set; }
         public string? EffectsName { get; set; }
+        public string? NativeColorSchemeXml { get; set; }
+        public string? NativeFontSchemeXml { get; set; }
+        public string? NativeFormatSchemeXml { get; set; }
         public List<WorkbookThemeColorDto> Colors { get; set; } = [];
     }
 
@@ -173,6 +176,93 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Reference { get; set; }
         public string? NativeXml { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+        public List<string>? NativeChildXmls { get; set; }
+        public List<WorksheetAutoFilterColumnDto> FilterColumns { get; set; } = [];
+    }
+
+    private class WorksheetAutoFilterColumnDto
+    {
+        public int ColumnId { get; set; }
+        public List<string> Values { get; set; } = [];
+        public bool IncludeBlank { get; set; }
+        public List<WorksheetAutoFilterDateGroupItemDto> DateGroups { get; set; } = [];
+        public Dictionary<string, string>? NativeFiltersAttributes { get; set; }
+        public List<WorksheetAutoFilterCustomFilterDto> CustomFilters { get; set; } = [];
+        public bool CustomFiltersAnd { get; set; }
+        public string? CustomFiltersAndRaw { get; set; }
+        public Dictionary<string, string>? NativeCustomFiltersAttributes { get; set; }
+        public WorksheetAutoFilterTop10Dto? Top10 { get; set; }
+        public WorksheetAutoFilterDynamicFilterDto? DynamicFilter { get; set; }
+        public WorksheetAutoFilterColorFilterDto? ColorFilter { get; set; }
+        public WorksheetAutoFilterIconFilterDto? IconFilter { get; set; }
+        public List<string> NativeFilterXmls { get; set; } = [];
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+    }
+
+    private class WorksheetAutoFilterCustomFilterDto
+    {
+        public string? Operator { get; set; }
+        public string? Value { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+    }
+
+    private class WorksheetAutoFilterDateGroupItemDto
+    {
+        public int? Year { get; set; }
+        public int? Month { get; set; }
+        public int? Day { get; set; }
+        public int? Hour { get; set; }
+        public int? Minute { get; set; }
+        public int? Second { get; set; }
+        public string? DateTimeGrouping { get; set; }
+        public string? YearRaw { get; set; }
+        public string? MonthRaw { get; set; }
+        public string? DayRaw { get; set; }
+        public string? HourRaw { get; set; }
+        public string? MinuteRaw { get; set; }
+        public string? SecondRaw { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+    }
+
+    private class WorksheetAutoFilterTop10Dto
+    {
+        public bool Top { get; set; } = true;
+        public bool Percent { get; set; }
+        public double? Value { get; set; }
+        public double? FilterValue { get; set; }
+        public string? TopRaw { get; set; }
+        public string? PercentRaw { get; set; }
+        public string? ValueRaw { get; set; }
+        public string? FilterValueRaw { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+    }
+
+    private class WorksheetAutoFilterDynamicFilterDto
+    {
+        public string? Type { get; set; }
+        public double? Value { get; set; }
+        public double? MaxValue { get; set; }
+        public string? ValueRaw { get; set; }
+        public string? MaxValueRaw { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+    }
+
+    private class WorksheetAutoFilterColorFilterDto
+    {
+        public int? DifferentialFormatId { get; set; }
+        public bool CellColor { get; set; } = true;
+        public string? DifferentialFormatIdRaw { get; set; }
+        public string? CellColorRaw { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+    }
+
+    private class WorksheetAutoFilterIconFilterDto
+    {
+        public string? IconSet { get; set; }
+        public int? IconId { get; set; }
+        public string? IconIdRaw { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
     }
 
     private class WorksheetSmartTagsDto
@@ -507,6 +597,7 @@ public sealed partial class NativeJsonAdapter
     private class DataValidationDto
     {
         public string? AppliesTo { get; set; }
+        public List<string>? AdditionalRanges { get; set; }
         public DvType Type { get; set; } = DvType.Any;
         public DvOperator Operator { get; set; } = DvOperator.Between;
         public string? Formula1 { get; set; }
@@ -539,6 +630,9 @@ public sealed partial class NativeJsonAdapter
         public RgbColor MidColor { get; set; } = new(255, 235, 132);
         public RgbColor MaxColor { get; set; } = new(248, 105, 107);
         public bool UseThreeColorScale { get; set; }
+        public bool? MinThresholdGreaterThanOrEqual { get; set; }
+        public bool? MidThresholdGreaterThanOrEqual { get; set; }
+        public bool? MaxThresholdGreaterThanOrEqual { get; set; }
         public RgbColor DataBarColor { get; set; } = new(99, 142, 198);
         public CfThresholdType DataBarMinThresholdType { get; set; } = CfThresholdType.Min;
         public string? DataBarMinThresholdValue { get; set; }
@@ -555,6 +649,11 @@ public sealed partial class NativeJsonAdapter
         public RgbColor? DataBarNegativeBorderColor { get; set; }
         public bool AboveAverage { get; set; } = true;
         public string? FormulaText { get; set; }
+        public string? IconSetStyle { get; set; }
+        public bool IconSetShowValue { get; set; } = true;
+        public bool IconSetReverse { get; set; }
+        public List<CfThresholdModel> IconSetThresholds { get; set; } = [];
+        public List<CfIconOverride> IconOverrides { get; set; } = [];
         public int TopBottomRank { get; set; } = 10;
         public bool TopBottomPercent { get; set; }
         public string? TextRuleText { get; set; }

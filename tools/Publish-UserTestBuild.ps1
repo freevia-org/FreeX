@@ -3,7 +3,7 @@ param(
     [string]$RuntimeIdentifier = "win-x64",
     [string]$OutputRoot = "artifacts\releases",
     [string]$Version = "",
-    [ValidateSet("SingleFile", "Folder")]
+    [ValidateSet("SingleFile", "Folder", "Msix")]
     [string]$PublishMode = "SingleFile"
 )
 
@@ -51,12 +51,16 @@ $publishDir = if ($PublishMode -eq "SingleFile") {
     Join-Path $artifactRoot $artifactName
 }
 $artifactExePath = Join-Path $artifactRoot "$artifactName.exe"
+$artifactMsixPath = Join-Path $artifactRoot "$artifactName.msix"
 
 if (Test-Path -LiteralPath $publishDir) {
     Remove-Item -LiteralPath $publishDir -Recurse -Force
 }
 if ($PublishMode -eq "SingleFile" -and (Test-Path -LiteralPath $artifactExePath)) {
     Remove-Item -LiteralPath $artifactExePath -Force
+}
+if ($PublishMode -eq "Msix" -and (Test-Path -LiteralPath $artifactMsixPath)) {
+    Remove-Item -LiteralPath $artifactMsixPath -Force
 }
 
 New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
@@ -108,6 +112,90 @@ if ($PublishMode -eq "SingleFile") {
     Move-Item -LiteralPath $launchExePath -Destination $artifactExePath
     Remove-Item -LiteralPath $publishDir -Recurse -Force
     Write-Host "Created $artifactExePath"
+    exit 0
+}
+
+if ($PublishMode -eq "Msix") {
+    $assetsDir = Join-Path $publishDir "Assets"
+    New-Item -ItemType Directory -Force -Path $assetsDir | Out-Null
+    $pngBytes = [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")
+    [IO.File]::WriteAllBytes((Join-Path $assetsDir "Square44x44Logo.png"), $pngBytes)
+    [IO.File]::WriteAllBytes((Join-Path $assetsDir "Square150x150Logo.png"), $pngBytes)
+
+    $numericParts = [regex]::Matches($Version, '\d+') | ForEach-Object { $_.Value }
+    if ($numericParts.Count -eq 0) {
+        throw "MSIX packaging requires a numeric version, but '$Version' contains no numeric parts."
+    }
+
+    $msixParts = @()
+    for ($i = 0; $i -lt 4; $i++) {
+        $part = if ($i -lt $numericParts.Count) { [int]$numericParts[$i] } else { 0 }
+        if ($part -lt 0 -or $part -gt 65535) {
+            throw "MSIX version part '$part' is outside the 0-65535 range."
+        }
+        $msixParts += $part
+    }
+    $msixVersion = $msixParts -join "."
+    $msixExeName = Split-Path -Leaf $launchExePath
+
+    $manifestPath = Join-Path $publishDir "AppxManifest.xml"
+    $manifest = @"
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+  <Identity Name="Freexcel.Tester" Publisher="CN=FreexcelLocal" Version="$msixVersion" />
+  <Properties>
+    <DisplayName>Freexcel</DisplayName>
+    <PublisherDisplayName>Freexcel</PublisherDisplayName>
+    <Logo>Assets\Square150x150Logo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Applications>
+    <Application Id="Freexcel" Executable="$msixExeName" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Freexcel" Description="Freexcel tester build" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
+"@
+    Set-Content -LiteralPath $manifestPath -Value $manifest -Encoding UTF8
+
+    $makeAppxCommand = Get-Command makeappx.exe -ErrorAction SilentlyContinue
+    $makeAppxPath = if ($null -ne $makeAppxCommand) { $makeAppxCommand.Source } else { $null }
+    if ($null -eq $makeAppxPath) {
+        $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+        if (Test-Path -LiteralPath $kitRoot) {
+            $makeAppxPath = Get-ChildItem -LiteralPath $kitRoot -Recurse -Filter makeappx.exe |
+                Sort-Object FullName -Descending |
+                Select-Object -First 1 -ExpandProperty FullName
+        }
+    }
+    if ($null -eq $makeAppxPath) {
+        throw "makeappx.exe was not found. Install the Windows SDK to create unsigned local MSIX packages."
+    }
+
+    & $makeAppxPath pack /d $publishDir /p $artifactMsixPath /o
+    if ($LASTEXITCODE -ne 0) {
+        throw "makeappx pack failed with exit code $LASTEXITCODE"
+    }
+    if (-not (Test-Path -LiteralPath $artifactMsixPath)) {
+        throw "makeappx did not create $artifactMsixPath"
+    }
+
+    $hash = Get-FileHash -LiteralPath $artifactMsixPath -Algorithm SHA256
+    Set-Content -LiteralPath "$artifactMsixPath.sha256" -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $artifactMsixPath)" -Encoding ASCII
+    Write-Host "Created $artifactMsixPath"
+    Write-Host "Created $artifactMsixPath.sha256"
     exit 0
 }
 

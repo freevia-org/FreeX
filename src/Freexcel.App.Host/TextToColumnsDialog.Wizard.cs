@@ -94,15 +94,14 @@ public sealed partial class TextToColumnsDialog
                 Accept();
         };
         panel.Children.Add(_nextButton);
-        var finishButton = new Button
+        _finishButton = new Button
         {
             Content = "_Finish",
             Width = 72,
-            Margin = new Thickness(0, 0, 8, 0),
-            IsDefault = true
+            Margin = new Thickness(0, 0, 8, 0)
         };
-        finishButton.Click += (_, _) => Accept();
-        panel.Children.Add(finishButton);
+        _finishButton.Click += (_, _) => Accept();
+        panel.Children.Add(_finishButton);
         panel.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
         return panel;
     }
@@ -115,26 +114,27 @@ public sealed partial class TextToColumnsDialog
 
     private void UpdateWizardStep()
     {
-        _wizardHeader.Text = $"Text Wizard - Step {_wizardStep} of 3";
-        _wizardInstruction.Text = _wizardStep switch
-        {
-            1 => "Choose the file type that best describes your data.",
-            2 => "Choose the delimiters that separate your selected text.",
-            _ => "Select each column and set the data format and destination."
-        };
+        var plan = TextToColumnsWizardPlanner.CreateStepPlan(_wizardStep, _fixedWidthButton.IsChecked == true);
+        _wizardHeader.Text = plan.Header;
+        _wizardInstruction.Text = plan.Instruction;
 
-        SetVisible(_originalDataTypePanel, _wizardStep == 1);
-        SetVisible(_delimiterPanel, _wizardStep == 2 && _fixedWidthButton.IsChecked != true);
-        SetVisible(_fixedWidthPanel, _wizardStep == 2 && _fixedWidthButton.IsChecked == true);
+        SetVisible(_originalDataTypePanel, plan.ShowOriginalDataTypePanel);
+        SetVisible(_delimiterPanel, plan.ShowDelimiterPanel);
+        SetVisible(_fixedWidthPanel, plan.ShowFixedWidthPanel);
         SetVisible(_dataPreviewLabel, true);
         _previewGrid.Visibility = Visibility.Visible;
-        SetVisible(_columnFormatPanel, _wizardStep == 3);
-        SetVisible(_destinationPanel, _wizardStep == 3);
+        SetVisible(_columnFormatPanel, plan.ShowColumnFormatPanel);
+        SetVisible(_destinationPanel, plan.ShowDestinationPanel);
 
         if (_backButton is not null)
-            _backButton.IsEnabled = _wizardStep > 1;
+            _backButton.IsEnabled = plan.BackEnabled;
         if (_nextButton is not null)
-            _nextButton.IsEnabled = _wizardStep < 3;
+        {
+            _nextButton.IsEnabled = plan.NextEnabled;
+            _nextButton.IsDefault = plan.NextDefault;
+        }
+        if (_finishButton is not null)
+            _finishButton.IsDefault = plan.FinishDefault;
     }
 
     private static void SetVisible(FrameworkElement? element, bool visible)
@@ -145,18 +145,20 @@ public sealed partial class TextToColumnsDialog
 
     private void RefreshMode()
     {
-        var fixedWidth = _fixedWidthButton.IsChecked == true;
-        _tabBox.IsEnabled = !fixedWidth;
-        _semicolonBox.IsEnabled = !fixedWidth;
-        _commaBox.IsEnabled = !fixedWidth;
-        _spaceBox.IsEnabled = !fixedWidth;
-        _otherBox.IsEnabled = !fixedWidth;
-        _customBox.IsEnabled = !fixedWidth && _otherBox.IsChecked == true;
-        _textQualifierBox.IsEnabled = !fixedWidth;
-        _treatConsecutiveDelimitersBox.IsEnabled = !fixedWidth;
-        _fixedWidthBreaksBox.IsEnabled = fixedWidth;
-        _fixedWidthRuler.IsEnabled = fixedWidth;
-        _fixedWidthRuler.Opacity = fixedWidth ? 1.0 : 0.55;
+        var plan = TextToColumnsWizardPlanner.CreateModePlan(
+            _fixedWidthButton.IsChecked == true,
+            _otherBox.IsChecked == true);
+        _tabBox.IsEnabled = plan.DelimitedControlsEnabled;
+        _semicolonBox.IsEnabled = plan.DelimitedControlsEnabled;
+        _commaBox.IsEnabled = plan.DelimitedControlsEnabled;
+        _spaceBox.IsEnabled = plan.DelimitedControlsEnabled;
+        _otherBox.IsEnabled = plan.DelimitedControlsEnabled;
+        _customBox.IsEnabled = plan.CustomDelimiterEnabled;
+        _textQualifierBox.IsEnabled = plan.DelimitedControlsEnabled;
+        _treatConsecutiveDelimitersBox.IsEnabled = plan.DelimitedControlsEnabled;
+        _fixedWidthBreaksBox.IsEnabled = plan.FixedWidthControlsEnabled;
+        _fixedWidthRuler.IsEnabled = plan.FixedWidthControlsEnabled;
+        _fixedWidthRuler.Opacity = plan.FixedWidthRulerOpacity;
         UpdateWizardStep();
         RefreshPreview();
     }

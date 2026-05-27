@@ -36,8 +36,10 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("accounting") || name.Contains("currency")) return new(RibbonCommandIconKind.Currency);
         if (name.Contains("number format")) return new(RibbonCommandIconKind.Number);
         if (name.Contains("percent")) return new(RibbonCommandIconKind.Percent);
+        if (name.EndsWith('%')) return new(RibbonCommandIconKind.Percent);
         if (name.Contains("comma style")) return new(RibbonCommandIconKind.Comma);
         if (name.Contains("selection pane")) return new(RibbonCommandIconKind.Window);
+        if (name is "hide" or "unhide") return new(RibbonCommandIconKind.Window);
         if (name.Contains("find") || name.Contains("select")) return new(RibbonCommandIconKind.Search);
         if (name.Contains("increase decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("decrease decimal")) return new(RibbonCommandIconKind.Decimal);
@@ -59,6 +61,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("axis") || name.Contains("legend") || name.Contains("plot") || name.Contains("series")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("sparkline")) return new(RibbonCommandIconKind.Sparkline, RibbonCommandIconAccent.Chart);
+        if (name.Contains("stocks") || name.Contains("geography")) return new(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data);
         if (name.Contains("slicer")) return new(RibbonCommandIconKind.Filter);
         if (name.Contains("timeline")) return new(RibbonCommandIconKind.Date);
         if (name.Contains("link")) return new(RibbonCommandIconKind.Link);
@@ -70,6 +73,10 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("note") || name.Contains("comment")) return new(RibbonCommandIconKind.Comment);
         if (name.Contains("symbol")) return new(RibbonCommandIconKind.Symbol);
         if (name.Contains("picture")) return new(RibbonCommandIconKind.Picture);
+        if (name.Contains("eraser")) return new(RibbonCommandIconKind.Clear);
+        if (name.Contains("lasso")) return new(RibbonCommandIconKind.Search);
+        if (name.Contains("highlighter")) return new(RibbonCommandIconKind.Line, RibbonCommandIconAccent.Fill);
+        if (name.Contains("pencil") || name.Contains("pen") || name.Contains("draw with touch")) return new(RibbonCommandIconKind.Line);
         if (name.Contains("shape")) return new(RibbonCommandIconKind.Rectangle);
         if (name.Contains("object")) return new(RibbonCommandIconKind.Rectangle);
         if (name.Contains("rectangle")) return new(RibbonCommandIconKind.Rectangle);
@@ -92,7 +99,6 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("effect")) return new(RibbonCommandIconKind.Effects);
         if (name.Contains("background")) return new(RibbonCommandIconKind.Picture);
         if (name.Contains("margin")) return new(RibbonCommandIconKind.Margins);
-        if (name.Contains("orientation")) return new(RibbonCommandIconKind.Orientation);
         if (name.Contains("paper") || name.Contains("page setup")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("scale to fit")) return new(RibbonCommandIconKind.Scale);
         if (name.Contains("print area")) return new(RibbonCommandIconKind.Table);
@@ -184,7 +190,6 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("training")) return new(RibbonCommandIconKind.Book, RibbonCommandIconAccent.Help);
         if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("community")) return new(RibbonCommandIconKind.Share);
-        if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("blog")) return new(RibbonCommandIconKind.Generic);
         if (name.Contains("mobile")) return new(RibbonCommandIconKind.Window);
         if (name.Contains("help")) return new(RibbonCommandIconKind.Help, RibbonCommandIconAccent.Help);
@@ -252,6 +257,8 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("active field")) return new(RibbonCommandIconKind.List);
         if (name == "group") return new(RibbonCommandIconKind.Group);
         if (name.Contains("action")) return new(RibbonCommandIconKind.Target);
+        if (name == "tools") return new(RibbonCommandIconKind.Search);
+        if (name == "pens") return new(RibbonCommandIconKind.Line);
         if (name.Contains("tool")) return new(RibbonCommandIconKind.ChartColumn);
         if (name == "show") return new(RibbonCommandIconKind.View);
         if (name == "layout") return new(RibbonCommandIconKind.Page);

@@ -15,6 +15,21 @@ public static partial class BuiltInFunctions
         return args.Count > 2 ? args[2] : new BoolValue(false);
     }
 
+    private static ScalarValue IfError(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue) return args[1];
+        return args[0];
+    }
+
+    private static ScalarValue IfNa(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e && e.Code == "#N/A") return args[1];
+        return args[0];
+    }
+
+    private static ScalarValue NaFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        ErrorValue.NA;
+
     private static ScalarValue And(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         bool hadUsableValue = false;
@@ -123,4 +138,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue FalseFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         new BoolValue(false);
+
+    private static ScalarValue IsOmitted(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(args[0] is OmittedLambdaArgumentValue);
 }

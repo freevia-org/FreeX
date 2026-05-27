@@ -12,16 +12,11 @@ public partial class GridView
 
         if (_objectDragKind != ObjectDragKind.None)
         {
-            var dx = pos.X - _objectDragStartPos.X;
-            var dy = pos.Y - _objectDragStartPos.Y;
-            _objectDragCurrentRect = _objectDragKind switch
-            {
-                ObjectDragKind.Move     => new Rect(_objectDragStartRect.X + dx, _objectDragStartRect.Y + dy, _objectDragStartRect.Width, _objectDragStartRect.Height),
-                ObjectDragKind.ResizeSE => new Rect(_objectDragStartRect.X, _objectDragStartRect.Y, Math.Max(8, _objectDragStartRect.Width + dx), Math.Max(8, _objectDragStartRect.Height + dy)),
-                ObjectDragKind.ResizeE  => new Rect(_objectDragStartRect.X, _objectDragStartRect.Y, Math.Max(8, _objectDragStartRect.Width + dx), _objectDragStartRect.Height),
-                ObjectDragKind.ResizeS  => new Rect(_objectDragStartRect.X, _objectDragStartRect.Y, _objectDragStartRect.Width, Math.Max(8, _objectDragStartRect.Height + dy)),
-                _ => _objectDragStartRect
-            };
+            _objectDragCurrentRect = GridObjectDragPlanner.CalculateDragRect(
+                _objectDragKind,
+                _objectDragStartRect,
+                _objectDragStartPos,
+                pos);
             Cursor = ObjectDragCursor(_objectDragKind);
             InvalidateVisual();
             e.Handled = true;
@@ -61,7 +56,11 @@ public partial class GridView
                     SplitPaneScrollbarScrolled?.Invoke(target);
             }
 
-            Cursor = null;
+            Cursor = _splitPaneScrollbarDragSource?.Orientation == SplitPaneScrollbarOrientation.Horizontal
+                ? Cursors.SizeWE
+                : _splitPaneScrollbarDragSource?.Orientation == SplitPaneScrollbarOrientation.Vertical
+                    ? Cursors.SizeNS
+                    : null;
             InvalidateVisual();
             e.Handled = true;
             return;
@@ -69,73 +68,88 @@ public partial class GridView
 
         if (_autofillDragging && Viewport != null && _autofillSourceRange.HasValue)
         {
+            var scrollRequest = CalculateAutofillEdgeScrollIntent(
+                pos.X,
+                pos.Y,
+                ActualWidth,
+                ActualHeight,
+                ActualRowHeaderWidth,
+                EffectiveColHeaderHeight);
+            if (scrollRequest.HasAnyDirection)
+                AutofillEdgeScrollRequested?.Invoke(scrollRequest);
+
             var src = _autofillSourceRange.Value;
-
-            var srcTopRow    = Viewport.RowMetrics.FirstOrDefault(r => r.Row == src.Start.Row);
-            var srcBottomRow = Viewport.RowMetrics.FirstOrDefault(r => r.Row == src.End.Row);
-            var srcLeftCol   = Viewport.ColMetrics.FirstOrDefault(c => c.Col == src.Start.Col);
-            var srcRightCol  = Viewport.ColMetrics.FirstOrDefault(c => c.Col == src.End.Col);
-
-            if (srcTopRow != null && srcBottomRow != null && srcLeftCol != null && srcRightCol != null)
-            {
-                double srcTop    = srcTopRow.TopOffset    + EffectiveColHeaderHeight;
-                double srcBottom = srcBottomRow.TopOffset + EffectiveColHeaderHeight + srcBottomRow.Height;
-                double srcLeft   = srcLeftCol.LeftOffset  + ActualRowHeaderWidth;
-                double srcRight  = srcRightCol.LeftOffset + ActualRowHeaderWidth + srcRightCol.Width;
-
-                double boundTop    = Math.Min(srcTop,    pos.Y);
-                double boundBottom = Math.Max(srcBottom, pos.Y);
-                double boundLeft   = Math.Min(srcLeft,   pos.X);
-                double boundRight  = Math.Max(srcRight,  pos.X);
-
-                CellAddress? newTarget = null;
-                foreach (var rm in Viewport.RowMetrics)
-                {
-                    double midY = rm.TopOffset + EffectiveColHeaderHeight + rm.Height / 2;
-                    if (midY < boundTop || midY > boundBottom) continue;
-                    foreach (var cm in Viewport.ColMetrics)
-                    {
-                        double midX = cm.LeftOffset + ActualRowHeaderWidth + cm.Width / 2;
-                        if (midX < boundLeft || midX > boundRight) continue;
-                        newTarget = new CellAddress(default, rm.Row, cm.Col);
-                    }
-                }
-
-                if (newTarget.HasValue)
-                    _autofillTarget = ConstrainAutofillTarget(src, newTarget.Value);
-            }
+            if (GridAutofillPlanner.CalculateDragTarget(
+                    Viewport,
+                    src,
+                    pos,
+                    ActualRowHeaderWidth,
+                    EffectiveColHeaderHeight) is { } newTarget)
+                _autofillTarget = ConstrainAutofillTarget(src, newTarget);
 
             InvalidateVisual();
+            Cursor = Cursors.Cross;
+            e.Handled = true;
+            return;
+        }
+
+        if (_autofillDragging)
+        {
+            Cursor = Cursors.Cross;
+            e.Handled = true;
             return;
         }
 
         if (_resizeTarget == ResizeTarget.Column)
         {
             var col = Viewport!.ColMetrics.FirstOrDefault(c => c.Col == _resizeIndex);
-            if (col is null) return;
+            if (col is null)
+            {
+                Cursor = Cursors.SizeWE;
+                e.Handled = true;
+                return;
+            }
             double newWidth = Math.Max(MinCellSize, _resizeSizeStart + (pos.X - _resizeDragStart));
             _resizeLinePos = col.LeftOffset + newWidth + ActualRowHeaderWidth;
             ColumnResizing?.Invoke(_resizeIndex, newWidth);
+            Cursor = Cursors.SizeWE;
             InvalidateVisual();
+            e.Handled = true;
+            return;
         }
         else if (_resizeTarget == ResizeTarget.Row)
         {
             var row = Viewport!.RowMetrics.FirstOrDefault(r => r.Row == _resizeIndex);
-            if (row is null) return;
+            if (row is null)
+            {
+                Cursor = Cursors.SizeNS;
+                e.Handled = true;
+                return;
+            }
             double newHeight = Math.Max(MinCellSize, _resizeSizeStart + (pos.Y - _resizeDragStart));
             _resizeLinePos = row.TopOffset + newHeight + EffectiveColHeaderHeight;
             RowResizing?.Invoke(_resizeIndex, newHeight);
+            Cursor = Cursors.SizeNS;
             InvalidateVisual();
+            e.Handled = true;
+            return;
         }
         else
         {
             var (target, _, _) = HitTestResize(pos);
+            var selectedObjectDragKind = ObjectDragKind.None;
+            if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
+                selectedObjectDragKind = HitTestObjectHandle(pos, GetSelectedObjectRect());
+            var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None &&
+                HitTestDrawingObject(pos).Id != Guid.Empty;
             var marginGuide = HitTestPageMarginGuide(pos);
             var splitHandle = Viewport is null ? SplitDividerHandle.None : HitTestSplitDividerHandle(Viewport, pos);
             var splitScrollbarHit = Viewport is null
                 ? null
                 : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight), pos);
-            Cursor = target == ResizeTarget.Column ? Cursors.SizeWE
+            Cursor = selectedObjectDragKind != ObjectDragKind.None ? ObjectDragCursor(selectedObjectDragKind)
+                   : hoveringObjectBody ? Cursors.SizeAll
+                   : target == ResizeTarget.Column ? Cursors.SizeWE
                    : target == ResizeTarget.Row    ? Cursors.SizeNS
                    : splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll
                    : splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE
@@ -144,9 +158,27 @@ public partial class GridView
                    : splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Vertical ? Cursors.SizeNS
                    : marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
                    : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
+                   : IsOnAutofillHandle(pos) ? Cursors.Cross
                    : null;
         }
     }
+
+    public static GridAutoScrollRequest CalculateAutofillEdgeScrollIntent(
+        double pointerX,
+        double pointerY,
+        double width,
+        double height,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double edgeThreshold = 24)
+        => GridAutofillPlanner.CalculateEdgeScrollIntent(
+            pointerX,
+            pointerY,
+            width,
+            height,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            edgeThreshold);
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
@@ -159,11 +191,15 @@ public partial class GridView
             var dragKind = HitTestObjectHandle(pos, selRect);
             if (dragKind != ObjectDragKind.None)
             {
+                _selectedObjectId = SelectedObjectId;
+                _selectedObjectKind = SelectedObjectKind;
                 _objectDragKind = dragKind;
                 _objectDragStartPos = pos;
                 _objectDragStartRect = selRect;
                 _objectDragCurrentRect = selRect;
+                _objectDragStartAnchor = GetSelectedObjectAnchor() ?? HitTestAnchorCell(pos) ?? default;
                 Cursor = ObjectDragCursor(dragKind);
+                InvalidateVisual();
                 CaptureMouse();
                 e.Handled = true;
                 return;
@@ -182,8 +218,9 @@ public partial class GridView
             _objectDragStartPos = pos;
             _objectDragStartRect = hit.Rect;
             _objectDragCurrentRect = hit.Rect;
-            _objectDragStartAnchor = HitTestAnchorCell(pos) ?? default;
+            _objectDragStartAnchor = hit.Anchor;
             Cursor = Cursors.SizeAll;
+            InvalidateVisual();
             CaptureMouse();
             e.Handled = true;
             return;
@@ -232,6 +269,11 @@ public partial class GridView
                     : scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal
                         ? pos.X - _splitPaneScrollbarDragSource.Thumb.Left
                         : pos.Y - _splitPaneScrollbarDragSource.Thumb.Top;
+                if (!_splitPaneScrollbarDragging)
+                {
+                    _splitPaneScrollbarDragSource = null;
+                    _splitPaneScrollbarDragPointerOffset = 0;
+                }
                 if (CalculateSplitPaneScrollbarInteractionTarget(Viewport, chrome, pos) is { } scrollTarget)
                     SplitPaneScrollbarScrolled?.Invoke(scrollTarget);
                 Cursor = scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal ? Cursors.SizeWE : Cursors.SizeNS;
@@ -268,6 +310,17 @@ public partial class GridView
         var (target, index, size) = HitTestResize(pos);
         if (target != ResizeTarget.None)
         {
+            if (e.ClickCount >= 2)
+            {
+                if (target == ResizeTarget.Column)
+                    ColumnAutoFitRequested?.Invoke(index);
+                else
+                    RowAutoFitRequested?.Invoke(index);
+
+                e.Handled = true;
+                return;
+            }
+
             _resizeTarget    = target;
             _resizeIndex     = index;
             _resizeSizeStart = size;
@@ -302,6 +355,53 @@ public partial class GridView
         {
             PivotChartFieldButtonRequested?.Invoke(pivotButton.Chart, pivotButton.FieldButton, pos);
             e.Handled = true;
+            return;
+        }
+
+        var objectHit = HitTestDrawingObject(pos);
+        if (objectHit.Id != Guid.Empty)
+        {
+            SelectedObjectId = objectHit.Id;
+            SelectedObjectKind = objectHit.Kind;
+            _selectedObjectId = objectHit.Id;
+            _selectedObjectKind = objectHit.Kind;
+            InvalidateVisual();
+            ContextMenuRequested?.Invoke(objectHit.Anchor, pos);
+            e.Handled = true;
+            return;
+        }
+
+        if (pos.Y <= EffectiveColHeaderHeight && pos.X >= ActualRowHeaderWidth)
+        {
+            foreach (var cm in Viewport.ColMetrics)
+            {
+                double left = cm.LeftOffset + ActualRowHeaderWidth;
+                if (pos.X >= left && pos.X < left + cm.Width)
+                {
+                    HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Column, cm.Col, pos);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            base.OnMouseRightButtonDown(e);
+            return;
+        }
+
+        if (pos.X <= ActualRowHeaderWidth && pos.Y >= EffectiveColHeaderHeight)
+        {
+            foreach (var rm in Viewport.RowMetrics)
+            {
+                double top = rm.TopOffset + EffectiveColHeaderHeight;
+                if (pos.Y >= top && pos.Y < top + rm.Height)
+                {
+                    HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Row, rm.Row, pos);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            base.OnMouseRightButtonDown(e);
             return;
         }
 
@@ -397,11 +497,13 @@ public partial class GridView
         if (_splitPaneScrollbarDragging)
         {
             var pos = e.GetPosition(this);
-            if (Viewport is not null)
+            if (Viewport is not null && _splitPaneScrollbarDragSource is not null)
             {
-                var chrome = CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight);
-                if (CalculateSplitPaneScrollbarScrollTarget(chrome, pos) is { } target)
-                    SplitPaneScrollbarScrolled?.Invoke(target);
+                var target = CalculateSplitPaneScrollbarThumbDragTarget(
+                    _splitPaneScrollbarDragSource,
+                    pos,
+                    _splitPaneScrollbarDragPointerOffset);
+                SplitPaneScrollbarScrolled?.Invoke(target);
             }
 
             _splitPaneScrollbarDragging = false;
@@ -422,29 +524,17 @@ public partial class GridView
 
             if (_autofillSourceRange.HasValue && _autofillTarget.HasValue)
             {
-                var src    = _autofillSourceRange.Value;
-                var target = _autofillTarget.Value;
-                if (target.Row > src.End.Row || target.Col > src.End.Col)
+                var src = _autofillSourceRange.Value;
+                var fillRange = GridAutofillPlanner.CalculateFillRange(src, _autofillTarget.Value);
+                if (fillRange.HasValue)
                 {
-                    GridRange fillRange;
-                    if (target.Row > src.End.Row)
-                    {
-                        fillRange = new GridRange(
-                            new CellAddress(src.Start.Sheet, src.End.Row + 1, src.Start.Col),
-                            new CellAddress(src.Start.Sheet, target.Row,      src.End.Col));
-                    }
-                    else
-                    {
-                        fillRange = new GridRange(
-                            new CellAddress(src.Start.Sheet, src.Start.Row, src.End.Col + 1),
-                            new CellAddress(src.Start.Sheet, src.End.Row,   target.Col));
-                    }
-                    AutofillRequested?.Invoke(src, fillRange);
+                    AutofillRequested?.Invoke(src, fillRange.Value);
                 }
             }
 
             _autofillSourceRange = null;
             _autofillTarget      = null;
+            InvalidateVisual();
             e.Handled = true;
             return;
         }
@@ -476,7 +566,9 @@ public partial class GridView
 
     protected override void OnMouseLeave(MouseEventArgs e)
     {
-        if (_resizeTarget == ResizeTarget.None &&
+        if (_objectDragKind == ObjectDragKind.None &&
+            !_autofillDragging &&
+            _resizeTarget == ResizeTarget.None &&
             !_marginDragEdge.HasValue &&
             _splitDividerDragHandle == SplitDividerHandle.None &&
             !_splitPaneScrollbarDragging)
