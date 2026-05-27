@@ -503,6 +503,48 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageRecentAndPinnedItems_ExposeStableUiAutomationAndContextKeyTips()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var buttons = document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute("Click")?.Value is "SsRecentItem_Click" or "SsPinItem_Click" or "SsUnpinItem_Click")
+            .Select(button => button.ToString())
+            .ToList();
+
+        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstageRecentFileItem\""));
+        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstagePinnedFileItem\""));
+        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstageRecentPinButton\""));
+        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstagePinnedUnpinButton\""));
+        buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.Name="));
+        buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.HelpText="));
+
+        var contextMenuItems = document
+            .Descendants(presentation + "MenuItem")
+            .Where(item => item.Attribute("Click")?.Value is "SsPinItem_Click" or "SsUnpinItem_Click" or "SsRemoveRecentItem_Click")
+            .Select(item => new
+            {
+                Header = item.Attribute("Header")?.Value,
+                Click = item.Attribute("Click")?.Value,
+                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                AutomationId = item.Attribute("AutomationProperties.AutomationId")?.Value,
+                AutomationName = item.Attribute("AutomationProperties.Name")?.Value,
+                AutomationHelpText = item.Attribute("AutomationProperties.HelpText")?.Value
+            })
+            .ToList();
+
+        contextMenuItems.Should().Contain(item => item.Header == "Pin to list" && item.KeyTip == "P");
+        contextMenuItems.Should().Contain(item => item.Header == "Unpin from list" && item.KeyTip == "U");
+        contextMenuItems.Should().Contain(item => item.Header == "Remove from list" && item.KeyTip == "R");
+        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationId));
+        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationName));
+        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationHelpText));
+    }
+
+    [Fact]
     public void ConditionalFormattingTopBottomRules_ExposeExcelParityMenuChoices()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
