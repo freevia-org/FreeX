@@ -1298,6 +1298,11 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("ScrollChanged=\"SheetTabsScroller_ScrollChanged\"");
         xaml.Should().Contain("SizeChanged=\"SheetTabsScroller_SizeChanged\"");
         xaml.Should().Contain("x:Name=\"AddSheetButton\" Grid.Column=\"2\"");
+        xaml.Should().Contain("Padding=\"10,3,10,1\"");
+        xaml.Should().Contain("MinWidth=\"36\"");
+        xaml.Should().Contain("MinHeight=\"22\"");
+        xaml.Should().Contain("Opacity=\"0.82\"");
+        xaml.Should().NotContain("x:Name=\"AddSheetButton\" Grid.Column=\"2\" Content=\"+\" Width=\"28\" Height=\"22\"");
         xaml.Should().Contain("CornerRadius=\"3,3,0,0\"");
         xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"4\"");
         xaml.Should().Contain("HorizontalAlignment=\"Right\"");
@@ -1369,13 +1374,16 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
         var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFitPlanner.cs"));
+        var dimensionPlanner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RowColumnDimensionPlanner.cs"));
 
         source.Should().Contain("AutoFitPlanner.PlanRowHeights");
         source.Should().Contain("AutoFitPlanner.PlanColumnWidths");
-        source.Should().Contain("new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
-        source.Should().Contain("new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
-        source.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
-        source.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
+        dimensionPlanner.Should().Contain("new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
+        dimensionPlanner.Should().Contain("new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
+        dimensionPlanner.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        dimensionPlanner.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
         source.Should().NotContain("return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
         source.Should().NotContain("return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width)");
         planner.Should().Contain("AutoFitSizingService.EstimateRowHeight");
@@ -1600,7 +1608,8 @@ public sealed class MainWindowSourceHygieneTests
         sheetTabsSource.Should().Contain("Key.Right => FocusAdjacentVisibleSheetTab(1)");
         sheetTabsSource.Should().Contain("Key.Home => FocusEdgeVisibleSheetTab(first: true)");
         sheetTabsSource.Should().Contain("Key.End => FocusEdgeVisibleSheetTab(first: false)");
-        sheetTabsSource.Should().Contain("FocusSheetTab(tab.Id);");
+        sheetTabsSource.Should().Contain("FocusSheetTab(nextSheetId.Value);");
+        sheetTabsSource.Should().Contain("FocusSheetTab(sheetId.Value);");
     }
 
     [Fact]
@@ -2069,14 +2078,18 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("SpellCheckDialogAction.Ignore");
         source.Should().Contain("SpellCheckDialogAction.Add");
         source.Should().Contain("while (true)");
-        source.Should().Contain("ignoredWords.Contains(issue.Word)");
-        source.Should().Contain("ignoredIssues.Contains((issue.Address, issue.Word))");
-        source.Should().Contain("BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement)");
-        source.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, issue.Word, replacement)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementEdit(issue, replacement)");
         source.Should().NotContain("BuildSpellCheckEdits");
         source.Should().Contain("TryExecuteSpellCheckEdits");
         source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
+
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckWorkflowPlanner.cs"));
+        plannerSource.Should().Contain("ignoredWords.Contains(issue.Word)");
+        plannerSource.Should().Contain("ignoredIssues.Contains((issue.Address, issue.Word))");
+        plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
     }
 
     [Fact]
@@ -2172,6 +2185,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void GoalSeekAndForecastSheet_DialogWorkflowsAreNotBlindF4Repeatable()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+        var goalSeekMethod = ExtractMethodSource(dataSource, "private void GoalSeekBtn_Click(");
+        var forecastMethod = ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(");
+
+        goalSeekMethod.Should().Contain("new GoalSeekDialog(");
+        goalSeekMethod.Should().Contain("new GoalSeekStatusDialog(");
+        goalSeekMethod.Should().Contain("new GoalSeekCommand(");
+        goalSeekMethod.Should().Contain("TryExecuteCommand(cmd, \"Goal Seek\")");
+        goalSeekMethod.Should().NotContain("ExecuteRepeatable");
+        goalSeekMethod.Should().NotContain("TryExecuteRepeatable");
+
+        forecastMethod.Should().Contain("new ForecastSheetDialog");
+        forecastMethod.Should().Contain("new ForecastSheetCommand(");
+        forecastMethod.Should().Contain("TryExecuteCommand(new ForecastSheetCommand(range, dialog.Result.Periods), \"Forecast Sheet\")");
+        forecastMethod.Should().NotContain("ExecuteRepeatable");
+        forecastMethod.Should().NotContain("TryExecuteRepeatable");
+    }
+
+    [Fact]
     public void RowAndColumnDimensionDialogs_AreRepeatableForF4AgainstCurrentSelection()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
@@ -2179,19 +2213,23 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         source.Should().Contain("\"Row Height\",");
         source.Should().Contain("\"Column Width\",");
-        source.Should().Contain("var dialog = new RowHeightDialog(GetSelectedRowHeightDialogValue(range)) { Owner = this };");
-        source.Should().Contain("var dialog = new ColumnWidthDialog(GetSelectedColumnWidthDialogValue(range)) { Owner = this };");
-        source.Should().Contain("private double GetSelectedRowHeightDialogValue(GridRange range)");
-        source.Should().Contain("private double GetSelectedColumnWidthDialogValue(GridRange range)");
-        source.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
-        source.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
+        source.Should().Contain("new RowHeightDialog(RowColumnDimensionPlanner.GetRowHeightDialogValue(sheet, range)) { Owner = this };");
+        source.Should().Contain("new ColumnWidthDialog(RowColumnDimensionPlanner.GetColumnWidthDialogValue(sheet, range)) { Owner = this };");
         source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
-        source.Should().Contain("var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);");
-        source.Should().Contain("var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);");
-        source.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, dialog.Result.Height)");
-        source.Should().Contain("new SetColumnWidthCommand(sheetId, startCol, endCol, dialog.Result.Width)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
         source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Row Height\"");
         source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Column Width\"");
+
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RowColumnDimensionPlanner.cs"));
+        plannerSource.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
+        plannerSource.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
+        plannerSource.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, height)");
+        plannerSource.Should().Contain("new SetColumnWidthCommand(sheetId, startCol, endCol, width)");
+        plannerSource.Should().Contain("new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden)");
+        plannerSource.Should().Contain("new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden)");
     }
 
     [Fact]
@@ -2391,6 +2429,31 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.PivotDesignCommands.cs",
                 "MainWindow.PivotSlicerTimeline.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static string ExtractMethodSource(string source, string signature)
+    {
+        var signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
+        signatureIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain {signature}");
+
+        var bodyStart = source.IndexOf('{', signatureIndex);
+        bodyStart.Should().BeGreaterThanOrEqualTo(signatureIndex, $"source should contain a body for {signature}");
+
+        var depth = 0;
+        for (var index = bodyStart; index < source.Length; index++)
+        {
+            depth += source[index] switch
+            {
+                '{' => 1,
+                '}' => -1,
+                _ => 0
+            };
+
+            if (depth == 0)
+                return source.Substring(signatureIndex, index - signatureIndex + 1);
+        }
+
+        throw new InvalidOperationException($"Could not find the end of {signature}.");
     }
 
     private static int CountOccurrences(string source, string value)

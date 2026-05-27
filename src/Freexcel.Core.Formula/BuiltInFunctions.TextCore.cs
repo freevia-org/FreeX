@@ -484,24 +484,43 @@ public static partial class BuiltInFunctions
         var firstRange = first as RangeValue;
         var secondRange = second as RangeValue;
         var thirdRange = third as RangeValue;
-        var shape = firstRange ?? secondRange ?? thirdRange;
+        var shape = ChooseBroadcastShape(firstRange, secondRange, thirdRange);
         if (shape is null) return map(first, second, third);
-        if ((firstRange is not null && (firstRange.RowCount != shape.RowCount || firstRange.ColCount != shape.ColCount)) ||
-            (secondRange is not null && (secondRange.RowCount != shape.RowCount || secondRange.ColCount != shape.ColCount)) ||
-            (thirdRange is not null && (thirdRange.RowCount != shape.RowCount || thirdRange.ColCount != shape.ColCount)))
+        if ((firstRange is not null && !CanBroadcastToShape(firstRange, shape.RowCount, shape.ColCount)) ||
+            (secondRange is not null && !CanBroadcastToShape(secondRange, shape.RowCount, shape.ColCount)) ||
+            (thirdRange is not null && !CanBroadcastToShape(thirdRange, shape.RowCount, shape.ColCount)))
             return ErrorValue.Value;
 
         var cells = new ScalarValue[shape.RowCount, shape.ColCount];
         for (int r = 0; r < shape.RowCount; r++)
             for (int c = 0; c < shape.ColCount; c++)
             {
-                var firstValue = firstRange is null ? first : firstRange.Cells[r, c];
-                var secondValue = secondRange is null ? second : secondRange.Cells[r, c];
-                var thirdValue = thirdRange is null ? third : thirdRange.Cells[r, c];
+                var firstValue = firstRange is null ? first : ValueAtBroadcastCell(firstRange, r, c);
+                var secondValue = secondRange is null ? second : ValueAtBroadcastCell(secondRange, r, c);
+                var thirdValue = thirdRange is null ? third : ValueAtBroadcastCell(thirdRange, r, c);
                 cells[r, c] = map(firstValue, secondValue, thirdValue);
             }
 
         return new RangeValue(cells);
+    }
+
+    private static bool CanBroadcastToShape(RangeValue range, int rows, int cols) =>
+        (range.RowCount == rows && range.ColCount == cols) || (range.RowCount == 1 && range.ColCount == 1);
+
+    private static ScalarValue ValueAtBroadcastCell(RangeValue range, int row, int col) =>
+        range.RowCount == 1 && range.ColCount == 1 ? range.Cells[0, 0] : range.Cells[row, col];
+
+    private static RangeValue? ChooseBroadcastShape(params RangeValue?[] ranges)
+    {
+        RangeValue? fallback = null;
+        foreach (var range in ranges)
+        {
+            if (range is null) continue;
+            fallback ??= range;
+            if (range.RowCount != 1 || range.ColCount != 1) return range;
+        }
+
+        return fallback;
     }
 
     private static ScalarValue MapQuaternaryTextArgs(
@@ -515,22 +534,22 @@ public static partial class BuiltInFunctions
         var secondRange = second as RangeValue;
         var thirdRange = third as RangeValue;
         var fourthRange = fourth as RangeValue;
-        var shape = firstRange ?? secondRange ?? thirdRange ?? fourthRange;
+        var shape = ChooseBroadcastShape(firstRange, secondRange, thirdRange, fourthRange);
         if (shape is null) return map(first, second, third, fourth);
-        if ((firstRange is not null && (firstRange.RowCount != shape.RowCount || firstRange.ColCount != shape.ColCount)) ||
-            (secondRange is not null && (secondRange.RowCount != shape.RowCount || secondRange.ColCount != shape.ColCount)) ||
-            (thirdRange is not null && (thirdRange.RowCount != shape.RowCount || thirdRange.ColCount != shape.ColCount)) ||
-            (fourthRange is not null && (fourthRange.RowCount != shape.RowCount || fourthRange.ColCount != shape.ColCount)))
+        if ((firstRange is not null && !CanBroadcastToShape(firstRange, shape.RowCount, shape.ColCount)) ||
+            (secondRange is not null && !CanBroadcastToShape(secondRange, shape.RowCount, shape.ColCount)) ||
+            (thirdRange is not null && !CanBroadcastToShape(thirdRange, shape.RowCount, shape.ColCount)) ||
+            (fourthRange is not null && !CanBroadcastToShape(fourthRange, shape.RowCount, shape.ColCount)))
             return ErrorValue.Value;
 
         var cells = new ScalarValue[shape.RowCount, shape.ColCount];
         for (int r = 0; r < shape.RowCount; r++)
             for (int c = 0; c < shape.ColCount; c++)
             {
-                var firstValue = firstRange is null ? first : firstRange.Cells[r, c];
-                var secondValue = secondRange is null ? second : secondRange.Cells[r, c];
-                var thirdValue = thirdRange is null ? third : thirdRange.Cells[r, c];
-                var fourthValue = fourthRange is null ? fourth : fourthRange.Cells[r, c];
+                var firstValue = firstRange is null ? first : ValueAtBroadcastCell(firstRange, r, c);
+                var secondValue = secondRange is null ? second : ValueAtBroadcastCell(secondRange, r, c);
+                var thirdValue = thirdRange is null ? third : ValueAtBroadcastCell(thirdRange, r, c);
+                var fourthValue = fourthRange is null ? fourth : ValueAtBroadcastCell(fourthRange, r, c);
                 cells[r, c] = map(firstValue, secondValue, thirdValue, fourthValue);
             }
 
@@ -541,16 +560,19 @@ public static partial class BuiltInFunctions
         IReadOnlyList<ScalarValue> args,
         Func<IReadOnlyList<ScalarValue>, ScalarValue> map)
     {
-        RangeValue? shape = null;
-        foreach (var arg in args)
+        var ranges = new RangeValue?[args.Count];
+        for (int i = 0; i < args.Count; i++)
+            ranges[i] = args[i] as RangeValue;
+
+        var shape = ChooseBroadcastShape(ranges);
+        if (shape is null) return map(args);
+
+        foreach (var range in ranges)
         {
-            if (arg is not RangeValue range) continue;
-            shape ??= range;
-            if (range.RowCount != shape.RowCount || range.ColCount != shape.ColCount)
+            if (range is null) continue;
+            if (!CanBroadcastToShape(range, shape.RowCount, shape.ColCount))
                 return ErrorValue.Value;
         }
-
-        if (shape is null) return map(args);
 
         var cells = new ScalarValue[shape.RowCount, shape.ColCount];
         var scalarArgs = new ScalarValue[args.Count];
@@ -558,7 +580,7 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < shape.ColCount; c++)
             {
                 for (int i = 0; i < args.Count; i++)
-                    scalarArgs[i] = args[i] is RangeValue range ? range.Cells[r, c] : args[i];
+                    scalarArgs[i] = args[i] is RangeValue range ? ValueAtBroadcastCell(range, r, c) : args[i];
                 cells[r, c] = map(scalarArgs);
             }
 

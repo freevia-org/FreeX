@@ -195,6 +195,7 @@ public sealed class PivotFilterDialogXamlTests
             .Should()
             .Be("ShowValuesAsBox_SelectionChanged");
         source.Should().Contain("UpdateBaseFieldState()");
+        source.Should().Contain("PivotValueFieldSettingsDialogPlanner.ShowValuesAsFromIndex");
         source.Should().Contain("ShowValuesAsRequiresBaseField");
     }
 

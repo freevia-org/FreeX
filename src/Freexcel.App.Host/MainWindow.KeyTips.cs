@@ -178,7 +178,7 @@ public partial class MainWindow
             : Visibility.Visible;
     }
 
-    private static bool ShouldShowKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope)
+    private bool ShouldShowKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope)
     {
         var isQuickAccessButton =
             element is Button button &&
@@ -186,7 +186,9 @@ public partial class MainWindow
         if (scope == RibbonKeyTipScope.TopLevel)
             return element is TabItem || isQuickAccessButton;
 
-        return element is not TabItem && !isQuickAccessButton;
+        return element is not TabItem &&
+               !isQuickAccessButton &&
+               !IsDescendantOf(element, StatusBarGrid);
     }
 
     private static bool IsEnabledKeyTipTarget(FrameworkElement element) =>

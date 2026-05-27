@@ -463,6 +463,30 @@ public sealed class AccessibilityCheckerServiceTests
         issue.Location.Should().Be("A1");
     }
 
+    [Theory]
+    [InlineData(18, false)]
+    [InlineData(14, true)]
+    public void FindIssues_UsesLowerContrastThresholdForLargeCellText(double fontSize, bool bold)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var largeTextStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(120, 120, 120),
+            FillColor = CellColor.White,
+            FontSize = fontSize,
+            Bold = bold
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = new TextValue("Large readable heading"),
+            StyleId = largeTextStyle
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
     [Fact]
     public void FindIssues_IgnoresBlankCellsAndSufficientContrast()
     {

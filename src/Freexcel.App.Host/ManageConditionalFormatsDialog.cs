@@ -156,9 +156,15 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         _listView.SelectionChanged += ListView_SelectionChanged;
         _listView.MouseDoubleClick += EditRule_Click;
         _listView.KeyDown += ListView_KeyDown;
+        AutomationProperties.SetName(_listView, "Conditional formatting rules");
 
         _listView.View = CreateRulesGridView();
-        root.Children.Add(_listView);
+        var rulesPanel = new DockPanel();
+        var rulesLabel = new Label { Content = "_Rules:", Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(rulesLabel, Dock.Top);
+        rulesPanel.Children.Add(rulesLabel);
+        rulesPanel.Children.Add(_listView);
+        root.Children.Add(rulesPanel);
 
         Content = root;
 

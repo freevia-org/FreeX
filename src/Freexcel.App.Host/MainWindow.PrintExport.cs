@@ -283,6 +283,7 @@ public partial class MainWindow
         sourcePage.Arrange(new Rect(size));
         sourcePage.UpdateLayout();
         var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
+        var linkOverlays = PdfLinkOverlayExtractor.Extract(sourcePage);
 
         var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
             Math.Max(1, (int)Math.Ceiling(width)),
@@ -300,8 +301,8 @@ public partial class MainWindow
             Width = width,
             Height = height
         });
-        if (textOverlays.Count > 0)
-            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays });
+        if (textOverlays.Count > 0 || linkOverlays.Count > 0)
+            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays, LinkOverlays = linkOverlays });
 
         var clone = new PageContent();
         ((System.Windows.Markup.IAddChild)clone).AddChild(fixedPage);
@@ -402,41 +403,4 @@ public partial class MainWindow
             // Export has already succeeded; opening the shell association is best effort.
         }
     }
-}
-
-internal static class ExportSheetSelectionPlanner
-{
-    public static IReadOnlyList<SheetId> ResolveSheetIds(
-        Workbook workbook,
-        ExportOptions options,
-        SheetId currentSheetId,
-        IReadOnlyCollection<SheetId> groupedSheetIds)
-    {
-        ArgumentNullException.ThrowIfNull(workbook);
-
-        if (options.Scope == ExportContentScope.EntireWorkbook)
-            return VisibleSheets(workbook).Select(sheet => sheet.Id).ToList();
-
-        if (options.Scope == ExportContentScope.Selection)
-            return ResolveSingleSheet(workbook, currentSheetId);
-
-        var groupedSet = groupedSheetIds.ToHashSet();
-        groupedSet.Add(currentSheetId);
-        var sheetIds = VisibleSheets(workbook)
-            .Where(sheet => groupedSet.Contains(sheet.Id))
-            .Select(sheet => sheet.Id)
-            .ToList();
-
-        return sheetIds.Count == 0
-            ? ResolveSingleSheet(workbook, currentSheetId)
-            : sheetIds;
-    }
-
-    private static IReadOnlyList<SheetId> ResolveSingleSheet(Workbook workbook, SheetId sheetId) =>
-        workbook.GetSheet(sheetId) is { IsHidden: false, IsVeryHidden: false } sheet
-            ? [sheet.Id]
-            : [];
-
-    private static IEnumerable<Sheet> VisibleSheets(Workbook workbook) =>
-        workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden);
 }

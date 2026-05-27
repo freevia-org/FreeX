@@ -1,4 +1,6 @@
 using System.IO;
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 
@@ -45,6 +47,32 @@ public sealed partial class DocumentationIndexTests
         report.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
         report.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
         report.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
+    }
+
+    [Fact]
+    public void NewestStatusReport_RepositoryMetricsMatchTrackedSources()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var repositoryRoot = Directory.GetParent(docsDirectory)!.FullName;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var report = File.ReadAllText(newestStatusReport);
+        var metrics = ReadMetricTable(report);
+        var trackedFiles = RunGitLines(repositoryRoot, "ls-files");
+        var sourceFiles = trackedFiles.Where(path => path.StartsWith("src/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
+        var testFiles = trackedFiles.Where(path => path.StartsWith("tests/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
+        var docsFiles = trackedFiles.Where(path => path.StartsWith("docs/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal)).ToArray();
+
+        metrics["Tracked files"].Should().Be(trackedFiles.Count);
+        metrics["C# source files under `src/`"].Should().Be(sourceFiles.Length);
+        metrics["C# test files under `tests/`"].Should().Be(testFiles.Length);
+        metrics["Markdown docs under `docs/`"].Should().Be(docsFiles.Length);
+        metrics["Source lines under `src/`"].Should().Be(CountLines(repositoryRoot, sourceFiles));
+        metrics["Test lines under `tests/`"].Should().Be(CountLines(repositoryRoot, testFiles));
+        metrics["Documentation lines under `docs/`"].Should().Be(CountLines(repositoryRoot, docsFiles));
+        metrics["Test methods marked `[Fact]` / `[Theory]`"].Should().Be(
+            testFiles.Sum(file => FactOrTheoryAttribute().Matches(File.ReadAllText(Path.Combine(repositoryRoot, ToPlatformPath(file)))).Count));
     }
 
     [Fact]
@@ -179,6 +207,42 @@ public sealed partial class DocumentationIndexTests
         }
     }
 
+    private static IReadOnlyDictionary<string, int> ReadMetricTable(string report) =>
+        report
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => MetricTableRow().Match(line))
+            .Where(match => match.Success)
+            .ToDictionary(
+                match => match.Groups["metric"].Value,
+                match => int.Parse(match.Groups["count"].Value.Replace(",", string.Empty), CultureInfo.InvariantCulture),
+                StringComparer.Ordinal);
+
+    private static IReadOnlyList<string> RunGitLines(string workingDirectory, string arguments)
+    {
+        using var process = Process.Start(new ProcessStartInfo("git", arguments)
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        }) ?? throw new InvalidOperationException("Could not start git.");
+
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        process.ExitCode.Should().Be(0, error);
+        return output
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .ToArray();
+    }
+
+    private static int CountLines(string repositoryRoot, IEnumerable<string> relativePaths) =>
+        relativePaths.Sum(file => File.ReadLines(Path.Combine(repositoryRoot, ToPlatformPath(file))).Count());
+
+    private static string ToPlatformPath(string path) =>
+        path.Replace('/', Path.DirectorySeparatorChar);
+
     private static IReadOnlyList<string> ReadNumberedBoldItems(IReadOnlyList<string> lines, string sectionHeading)
     {
         var sectionStart = Array.IndexOf(lines.ToArray(), sectionHeading);
@@ -201,6 +265,12 @@ public sealed partial class DocumentationIndexTests
 
     [GeneratedRegex(@"^\d+\. \*\*(?<title>[^*]+)\*\*")]
     private static partial Regex NumberedBoldItem();
+
+    [GeneratedRegex(@"^\| (?<metric>[^|]+) \| (?<count>[\d,]+) \|$")]
+    private static partial Regex MetricTableRow();
+
+    [GeneratedRegex(@"\[(?:Fact|Theory)\]")]
+    private static partial Regex FactOrTheoryAttribute();
 
     [GeneratedRegex(@"\| Existing UI evidence screenshots \| (?<count>\d+) \|")]
     private static partial Regex UiEvidenceScreenshotCount();

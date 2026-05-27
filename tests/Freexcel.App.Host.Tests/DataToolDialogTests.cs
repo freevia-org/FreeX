@@ -1091,6 +1091,39 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterCopyToLabel_DisabledUntilCopyToAnotherLocationSelected()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AdvancedFilterDialog(SheetId.New(), "A1:C12");
+            dialog.Show();
+            try
+            {
+                var copyToLabel = FindVisualChildren<Label>(dialog)
+                    .Single(label => Equals(label.Content, "Copy _to:"));
+                var inPlace = FindVisualChildren<RadioButton>(dialog)
+                    .Single(button => Equals(button.Content, "_Filter the list, in-place"));
+                var copyToAnotherLocation = FindVisualChildren<RadioButton>(dialog)
+                    .Single(button => Equals(button.Content, "_Copy to another location"));
+
+                copyToLabel.IsEnabled.Should().BeFalse();
+
+                copyToAnotherLocation.IsChecked = true;
+
+                copyToLabel.IsEnabled.Should().BeTrue();
+
+                inPlace.IsChecked = true;
+
+                copyToLabel.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void MainWindow_WiresAdvancedFilterReferencePickersToCurrentSelection()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
@@ -1330,6 +1363,14 @@ public sealed class DataToolDialogTests
         source.Should().Contain("CreateReferenceEditor(_referenceBox");
         source.Should().Contain("RequestRangeSelection");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+    }
+
+    [Fact]
+    public void ConsolidateDialog_AllReferencesListExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_referencesList, \"All references\");");
     }
 
     [Fact]

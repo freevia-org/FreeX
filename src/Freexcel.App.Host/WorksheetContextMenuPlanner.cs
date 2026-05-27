@@ -143,7 +143,7 @@ public static class WorksheetContextMenuPlanner
     {
         var commands = new List<WorksheetContextMenuCommand>
         {
-            new(formatHeader, WorksheetContextMenuAction.FormatDrawingObject, AccessHeader: "_Format..."),
+            new(formatHeader, WorksheetContextMenuAction.FormatDrawingObject, AccessHeader: $"_Format {formatHeader["Format ".Length..]}"),
             new("Size and Properties...", WorksheetContextMenuAction.ResizeDrawingObject, AccessHeader: "_Size and Properties..."),
             new("Rotate...", WorksheetContextMenuAction.RotateDrawingObject, AccessHeader: "_Rotate..."),
             new("Shape Fill...", WorksheetContextMenuAction.ShapeFill, AccessHeader: "Shape _Fill..."),

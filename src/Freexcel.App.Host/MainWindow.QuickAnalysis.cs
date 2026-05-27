@@ -344,6 +344,12 @@ public partial class MainWindow
             QuickAnalysisPreviewVisualKind.ColumnSparkline => GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
             QuickAnalysisPreviewVisualKind.WinLossSparkline => GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
             QuickAnalysisPreviewVisualKind.ColumnChart => GridQuickAnalysisPreviewVisualKind.ColumnChart,
+            QuickAnalysisPreviewVisualKind.LineChart => GridQuickAnalysisPreviewVisualKind.LineChart,
+            QuickAnalysisPreviewVisualKind.BarChart => GridQuickAnalysisPreviewVisualKind.BarChart,
+            QuickAnalysisPreviewVisualKind.StackedColumnChart => GridQuickAnalysisPreviewVisualKind.StackedColumnChart,
+            QuickAnalysisPreviewVisualKind.PieChart => GridQuickAnalysisPreviewVisualKind.PieChart,
+            QuickAnalysisPreviewVisualKind.AreaChart => GridQuickAnalysisPreviewVisualKind.AreaChart,
+            QuickAnalysisPreviewVisualKind.ScatterChart => GridQuickAnalysisPreviewVisualKind.ScatterChart,
             _ => GridQuickAnalysisPreviewVisualKind.None
         };
 }

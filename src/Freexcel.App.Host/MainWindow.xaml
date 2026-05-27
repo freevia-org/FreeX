@@ -1228,6 +1228,10 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
+                                <Button Content="Recommended" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RecommendedPivotTablesMenuItem_Click"
+                                        local:RibbonTooltip.Title="Recommended PivotTables"
+                                        local:RibbonTooltip.KeyTip="R"
+                                        local:RibbonTooltip.Description="Preview recommended PivotTable layouts for the selected range."/>
                                 <Button Content="Table" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="Table"
                                         local:RibbonTooltip.KeyTip="TB"
@@ -1747,6 +1751,19 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌Comments ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="New Comment" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
+                                        local:RibbonTooltip.Title="New Comment"
+                                        local:RibbonTooltip.KeyTip="CM"
+                                        local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Comments" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Text ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
@@ -1783,19 +1800,6 @@
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Symbols" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
-                        <!-- ▌Comments ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="New Comment" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
-                                        local:RibbonTooltip.Title="New Comment"
-                                        local:RibbonTooltip.KeyTip="CM"
-                                        local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell."/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Comments" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
 
                     </StackPanel>
                     </ScrollViewer>
@@ -1810,28 +1814,49 @@
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Draw ▌ -->
+                        <!-- ▌Tools ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Rectangle" Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawRectBtn_Click"
-                                        local:RibbonTooltip.Title="Rectangle"
-                                        local:RibbonTooltip.KeyTip="RE"
-                                        local:RibbonTooltip.Description="Draw a rectangle shape on the sheet."/>
-                                <Button Content="Ellipse"   Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawEllipseBtn_Click"
-                                        local:RibbonTooltip.Title="Ellipse"
+                                <Button Content="Draw" Width="78" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Draw with Touch"
+                                        local:RibbonTooltip.KeyTip="DT"
+                                        local:RibbonTooltip.Description="Draw ink with touch or a pen. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Eraser" Width="78" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Eraser"
                                         local:RibbonTooltip.KeyTip="E"
-                                        local:RibbonTooltip.Description="Draw an ellipse or circle on the sheet."/>
-                                <Button Content="Line"      Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawLineBtn_Click"
-                                        local:RibbonTooltip.Title="Line"
-                                        local:RibbonTooltip.KeyTip="L"
-                                        local:RibbonTooltip.Description="Draw a straight line on the sheet."/>
-                                <Button Content="Text Box"  Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawTextBtn_Click"
-                                        local:RibbonTooltip.Title="Text Box"
-                                        local:RibbonTooltip.KeyTip="X"
-                                        local:RibbonTooltip.Description="Insert a text box you can position and resize anywhere on the sheet."/>
+                                        local:RibbonTooltip.Description="Erase ink strokes. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Lasso Select" Width="92" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Lasso Select"
+                                        local:RibbonTooltip.KeyTip="LS"
+                                        local:RibbonTooltip.Description="Select ink strokes with a freeform lasso. Ink authoring is deferred in Freexcel."/>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Draw" Style="{StaticResource GroupLbl}"/></Border>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Tools" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Pens ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Pen" Width="62" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Pen"
+                                        local:RibbonTooltip.KeyTip="P"
+                                        local:RibbonTooltip.Description="Draw with a pen. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Pencil" Width="62" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Pencil"
+                                        local:RibbonTooltip.KeyTip="N"
+                                        local:RibbonTooltip.Description="Draw with a pencil. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Highlighter" Width="82" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Highlighter"
+                                        local:RibbonTooltip.KeyTip="H"
+                                        local:RibbonTooltip.Description="Highlight with translucent ink. Ink authoring is deferred in Freexcel."/>
+                                <Button Content="Add Pen" Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Add Pen"
+                                        local:RibbonTooltip.KeyTip="AP"
+                                        local:RibbonTooltip.Description="Add another pen to the gallery. Ink authoring is deferred in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Pens" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
@@ -2077,14 +2102,6 @@
                                         local:RibbonTooltip.Title="Print Titles"
                                         local:RibbonTooltip.KeyTip="PT"
                                         local:RibbonTooltip.Description="Repeat selected rows or columns on every printed page."/>
-                                <Button Content="Header/Footer" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HeaderFooterBtn_Click"
-                                        local:RibbonTooltip.Title="Header &amp; Footer"
-                                        local:RibbonTooltip.KeyTip="H"
-                                        local:RibbonTooltip.Description="Edit printed page headers and footers."/>
-                                <Button Content="Page Setup" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageSetupDialogBtn_Click"
-                                        local:RibbonTooltip.Title="Page Setup"
-                                        local:RibbonTooltip.KeyTip="PS"
-                                        local:RibbonTooltip.Description="Open the Page Setup dialog for page, margin, and sheet print options."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Page Setup" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2405,55 +2422,62 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌Data Types ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Stocks" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Stocks"
+                                        local:RibbonTooltip.KeyTip="ST"
+                                        local:RibbonTooltip.Description="Linked stock data types are deferred in Freexcel."/>
+                                <Button Content="Geography" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Geography"
+                                        local:RibbonTooltip.KeyTip="Y"
+                                        local:RibbonTooltip.Description="Linked geography data types are deferred in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data Types" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Sort &amp; Filter ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
                                             local:RibbonTooltip.Title="Sort A to Z"
                                             local:RibbonTooltip.KeyTip="SA"
                                             local:RibbonTooltip.Description="Sort the selected column from smallest to largest (A to Z).">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="SortAscending" IconSize="12" Margin="0,0,3,0"/>
-                                            <TextBlock Text="A-Z" FontSize="10" VerticalAlignment="Center"/>
-                                        </StackPanel>
+                                        <TextBlock Text="A-Z" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                    <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
                                             local:RibbonTooltip.Title="Sort Z to A"
                                             local:RibbonTooltip.KeyTip="SD"
                                             local:RibbonTooltip.Description="Sort the selected column from largest to smallest (Z to A).">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="SortDescending" IconSize="12" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Z-A" FontSize="10" VerticalAlignment="Center"/>
-                                        </StackPanel>
+                                        <TextBlock Text="Z-A" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
                                             local:RibbonTooltip.Title="Filter"
                                             local:RibbonTooltip.KeyTip="T"
                                             local:RibbonTooltip.Description="Enable dropdown filters on each column to show only the rows you want.">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="Filter" IconSize="11"
-                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
-                                            <TextBlock Text="Filter" VerticalAlignment="Center" FontSize="10"/>
-                                        </StackPanel>
+                                        <TextBlock Text="Filter" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                    <Button Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
                                             local:RibbonTooltip.Title="Clear Filter"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Remove all active filters and show all rows in the current range.">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="Filter" IconSize="11"
-                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
-                                            <TextBlock Text="Clear Filter" VerticalAlignment="Center" FontSize="10"/>
-                                        </StackPanel>
+                                        <TextBlock Text="Clear" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                    <Button Content="Advanced" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
                                             local:RibbonTooltip.Title="Advanced Filter"
                                             local:RibbonTooltip.KeyTip="A"
-                                            local:RibbonTooltip.Description="Filter a list using an Excel-style criteria range, optionally copying matching rows elsewhere."/>
+                                            local:RibbonTooltip.Description="Filter a list using an Excel-style criteria range, optionally copying matching rows elsewhere.">
+                                        <TextBlock Text="Advanced" Tag="RibbonIcon" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Sort &amp; Filter" Style="{StaticResource GroupLbl}"/></Border>
@@ -2464,30 +2488,46 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Text to Columns"   Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TextToColumnsBtn_Click"
-                                        local:RibbonTooltip.Title="Text to Columns"
-                                        local:RibbonTooltip.KeyTip="E"
-                                        local:RibbonTooltip.Description="Split text in one column into multiple columns using a delimiter such as a comma or space."/>
-                                <Button Content="Flash Fill"        Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
-                                        local:RibbonTooltip.Title="Flash Fill"
-                                        local:RibbonTooltip.KeyTip="FF"
-                                        local:RibbonTooltip.Description="Automatically fill values from examples in adjacent columns."/>
-                                <Button Content="Remove Duplicates" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
-                                        local:RibbonTooltip.Title="Remove Duplicates"
-                                        local:RibbonTooltip.KeyTip="M"
-                                        local:RibbonTooltip.Description="Delete duplicate rows from the selected range."/>
-                                <Button Content="Data Validation"   Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ValidationButton_Click"
-                                        local:RibbonTooltip.Title="Data Validation"
-                                        local:RibbonTooltip.KeyTip="V"
-                                        local:RibbonTooltip.Description="Control what data can be entered in the selected cells."/>
-                                <Button Content="Consolidate"       Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ConsolidateBtn_Click"
-                                        local:RibbonTooltip.Title="Consolidate"
-                                        local:RibbonTooltip.KeyTip="N"
-                                        local:RibbonTooltip.Description="Combine values from multiple ranges into a single summary range."/>
-                                <Button Content="Subtotal"         Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SubtotalBtn_Click"
-                                        local:RibbonTooltip.Title="Subtotal"
-                                        local:RibbonTooltip.KeyTip="B"
-                                        local:RibbonTooltip.Description="Insert subtotal rows for grouped data in the selected range."/>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TextToColumnsBtn_Click"
+                                            local:RibbonTooltip.Title="Text to Columns"
+                                            local:RibbonTooltip.KeyTip="E"
+                                            local:RibbonTooltip.Description="Split text in one column into multiple columns using a delimiter such as a comma or space.">
+                                        <TextBlock Text="Text to Columns" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
+                                            local:RibbonTooltip.Title="Flash Fill"
+                                            local:RibbonTooltip.KeyTip="FF"
+                                            local:RibbonTooltip.Description="Automatically fill values from examples in adjacent columns.">
+                                        <TextBlock Text="Flash Fill" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
+                                            local:RibbonTooltip.Title="Remove Duplicates"
+                                            local:RibbonTooltip.KeyTip="M"
+                                            local:RibbonTooltip.Description="Delete duplicate rows from the selected range.">
+                                        <TextBlock Text="Remove Duplicates" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ValidationButton_Click"
+                                            local:RibbonTooltip.Title="Data Validation"
+                                            local:RibbonTooltip.KeyTip="V"
+                                            local:RibbonTooltip.Description="Control what data can be entered in the selected cells.">
+                                        <TextBlock Text="Data Validation" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ConsolidateBtn_Click"
+                                            local:RibbonTooltip.Title="Consolidate"
+                                            local:RibbonTooltip.KeyTip="N"
+                                            local:RibbonTooltip.Description="Combine values from multiple ranges into a single summary range.">
+                                        <TextBlock Text="Consolidate" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SubtotalBtn_Click"
+                                            local:RibbonTooltip.Title="Subtotal"
+                                            local:RibbonTooltip.KeyTip="B"
+                                            local:RibbonTooltip.Description="Insert subtotal rows for grouped data in the selected range.">
+                                        <TextBlock Text="Subtotal" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data Tools" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2766,20 +2806,10 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="-"    Width="28" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomOutBtn_Click"
-                                            local:RibbonTooltip.Title="Zoom Out"
-                                            local:RibbonTooltip.KeyTip="ZO"
-                                            local:RibbonTooltip.Description="Decrease the zoom level to see more of the sheet."/>
-                                    <Button Content="100%" Width="44" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Zoom100Btn_Click"
-                                            local:RibbonTooltip.Title="Zoom to 100%"
-                                            local:RibbonTooltip.KeyTip="Z1"
-                                            local:RibbonTooltip.Description="Reset the zoom level to 100%."/>
-                                    <Button Content="+"    Width="28" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomInBtn_Click"
-                                            local:RibbonTooltip.Title="Zoom In"
-                                            local:RibbonTooltip.KeyTip="ZI"
-                                            local:RibbonTooltip.Description="Increase the zoom level for a closer look at cells."/>
-                                </StackPanel>
+                                <Button Content="100%" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Zoom100Btn_Click"
+                                        local:RibbonTooltip.Title="100%"
+                                        local:RibbonTooltip.KeyTip="Z1"
+                                        local:RibbonTooltip.Description="Reset the zoom level to 100%."/>
                                 <Button Content="Zoom to Selection" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomSelectionBtn_Click"
                                         local:RibbonTooltip.Title="Zoom to Selection"
                                         local:RibbonTooltip.KeyTip="ZS"
@@ -2793,57 +2823,71 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Freeze Panes" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FreezePanesPickerBtn_Click"
-                                        local:RibbonTooltip.Title="Freeze Panes"
-                                        local:RibbonTooltip.KeyTip="FP"
-                                        local:RibbonTooltip.Description="Keep rows or columns visible while scrolling; creating frozen panes clears split panes.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Freeze Panes" local:RibbonTooltip.KeyTip="F" Click="FreezeAtSelectionMenuItem_Click"/>
-                                            <MenuItem Header="Freeze Top Row" local:RibbonTooltip.KeyTip="R" Click="FreezeTopRowMenuItem_Click"/>
-                                            <MenuItem Header="Freeze First Column" local:RibbonTooltip.KeyTip="C" Click="FreezeFirstColMenuItem_Click"/>
-                                            <Separator/>
-                                            <MenuItem Header="Unfreeze All" local:RibbonTooltip.KeyTip="U" Click="UnfreezeAllMenuItem_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <ToggleButton x:Name="SplitViewBtn" Content="Split" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="SplitViewBtn_Click"
-                                              local:RibbonTooltip.Title="Split"
-                                              local:RibbonTooltip.KeyTip="SP"
-                                              local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split; creating a split clears frozen panes."/>
-                                <Button Content="New Window" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="New Window"
-                                        local:RibbonTooltip.KeyTip="NW"
-                                        local:RibbonTooltip.Description="Deferred: requires multiple live windows over the same workbook session."/>
-                                <Button Content="Arrange All" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ArrangeAllPickerBtn_Click"
-                                        local:RibbonTooltip.Title="Arrange All"
-                                        local:RibbonTooltip.KeyTip="A"
-                                        local:RibbonTooltip.Description="Store the workbook-window arrangement to use when multi-window hosting is available.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu Opened="ArrangeAllContextMenu_Opened">
-                                            <MenuItem Header="Tiled"      Tag="Tiled"      IsCheckable="True" local:RibbonTooltip.KeyTip="T" Click="ArrangeAllMenuItem_Click"/>
-                                            <MenuItem Header="Horizontal" Tag="Horizontal" IsCheckable="True" local:RibbonTooltip.KeyTip="H" Click="ArrangeAllMenuItem_Click"/>
-                                            <MenuItem Header="Vertical"   Tag="Vertical"   IsCheckable="True" local:RibbonTooltip.KeyTip="V" Click="ArrangeAllMenuItem_Click"/>
-                                            <MenuItem Header="Cascade"    Tag="Cascade"    IsCheckable="True" local:RibbonTooltip.KeyTip="C" Click="ArrangeAllMenuItem_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <Button Content="View Side by Side" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="View Side by Side"
-                                        local:RibbonTooltip.KeyTip="B"
-                                        local:RibbonTooltip.Description="Deferred: requires multi-window workbook hosting and synchronized scroll routing."/>
-                                <Button Content="Synchronous Scrolling" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Synchronous Scrolling"
-                                        local:RibbonTooltip.KeyTip="SS"
-                                        local:RibbonTooltip.Description="Deferred: requires paired workbook windows with synchronized viewport state."/>
-                                <Button Content="Reset Window Position" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Reset Window Position"
-                                        local:RibbonTooltip.KeyTip="RP"
-                                        local:RibbonTooltip.Description="Deferred: requires paired workbook windows and side-by-side layout state."/>
-                                <Button Content="Switch Windows" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Switch Windows"
-                                        local:RibbonTooltip.KeyTip="W"
-                                        local:RibbonTooltip.Description="Deferred: requires a multi-window workbook registry."/>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Content="New Window" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="New Window"
+                                            local:RibbonTooltip.KeyTip="NW"
+                                            local:RibbonTooltip.Description="Deferred: requires multiple live windows over the same workbook session."/>
+                                    <Button Content="Arrange All" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ArrangeAllPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Arrange All"
+                                            local:RibbonTooltip.KeyTip="A"
+                                            local:RibbonTooltip.Description="Store the workbook-window arrangement to use when multi-window hosting is available.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu Opened="ArrangeAllContextMenu_Opened">
+                                                <MenuItem Header="Tiled"      Tag="Tiled"      IsCheckable="True" local:RibbonTooltip.KeyTip="T" Click="ArrangeAllMenuItem_Click"/>
+                                                <MenuItem Header="Horizontal" Tag="Horizontal" IsCheckable="True" local:RibbonTooltip.KeyTip="H" Click="ArrangeAllMenuItem_Click"/>
+                                                <MenuItem Header="Vertical"   Tag="Vertical"   IsCheckable="True" local:RibbonTooltip.KeyTip="V" Click="ArrangeAllMenuItem_Click"/>
+                                                <MenuItem Header="Cascade"    Tag="Cascade"    IsCheckable="True" local:RibbonTooltip.KeyTip="C" Click="ArrangeAllMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                    <Button Content="Freeze Panes" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FreezePanesPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Freeze Panes"
+                                            local:RibbonTooltip.KeyTip="FP"
+                                            local:RibbonTooltip.Description="Keep rows or columns visible while scrolling; creating frozen panes clears split panes.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Freeze Panes" local:RibbonTooltip.KeyTip="F" Click="FreezeAtSelectionMenuItem_Click"/>
+                                                <MenuItem Header="Freeze Top Row" local:RibbonTooltip.KeyTip="R" Click="FreezeTopRowMenuItem_Click"/>
+                                                <MenuItem Header="Freeze First Column" local:RibbonTooltip.KeyTip="C" Click="FreezeFirstColMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Unfreeze All" local:RibbonTooltip.KeyTip="U" Click="UnfreezeAllMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <ToggleButton x:Name="SplitViewBtn" Content="Split" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="SplitViewBtn_Click"
+                                                  local:RibbonTooltip.Title="Split"
+                                                  local:RibbonTooltip.KeyTip="SP"
+                                                  local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split; creating a split clears frozen panes."/>
+                                    <Button Content="Hide" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Hide"
+                                            local:RibbonTooltip.KeyTip="H"
+                                            local:RibbonTooltip.Description="Deferred: requires workbook-window visibility state."/>
+                                    <Button Content="Unhide" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Unhide"
+                                            local:RibbonTooltip.KeyTip="U"
+                                            local:RibbonTooltip.Description="Deferred: requires workbook-window visibility state."/>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Content="View Side by Side" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="View Side by Side"
+                                            local:RibbonTooltip.KeyTip="B"
+                                            local:RibbonTooltip.Description="Deferred: requires multi-window workbook hosting and synchronized scroll routing."/>
+                                    <Button Content="Synchronous Scrolling" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Synchronous Scrolling"
+                                            local:RibbonTooltip.KeyTip="SS"
+                                            local:RibbonTooltip.Description="Deferred: requires paired workbook windows with synchronized viewport state."/>
+                                    <Button Content="Reset Window Position" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Reset Window Position"
+                                            local:RibbonTooltip.KeyTip="RP"
+                                            local:RibbonTooltip.Description="Deferred: requires paired workbook windows and side-by-side layout state."/>
+                                    <Button Content="Switch Windows" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                            local:RibbonTooltip.Title="Switch Windows"
+                                            local:RibbonTooltip.KeyTip="W"
+                                            local:RibbonTooltip.Description="Deferred: requires a multi-window workbook registry."/>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Window" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -3673,10 +3717,10 @@
                         </ItemsControl>
                 </ScrollViewer>
 
-                <Button x:Name="AddSheetButton" Grid.Column="2" Content="+" Width="28" Height="22"
-                        FontSize="14" Margin="2,0,0,0" Padding="0"
-                        Background="#F7FBF8" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1,1,1,0"
-                        Foreground="{StaticResource FreexcelGreenDarkBrush}"
+                <Button x:Name="AddSheetButton" Grid.Column="2" Content="+" MinWidth="36" MinHeight="22"
+                        FontSize="13" FontWeight="SemiBold" Margin="2,0,0,0" Padding="10,3,10,1"
+                        Background="#FAFCFA" BorderBrush="{StaticResource FreexcelBorderBrush}" BorderThickness="1,1,1,0"
+                        Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.82"
                         VerticalAlignment="Center" Cursor="Hand"
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         AutomationProperties.Name="Insert Sheet"
@@ -3692,16 +3736,19 @@
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
                                     CornerRadius="3,3,0,0"
+                                    Opacity="{TemplateBinding Opacity}"
                                     SnapsToDevicePixels="True">
                                 <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
                                     <Setter TargetName="GhostTabChrome" Property="Background" Value="{StaticResource FreexcelGreenSoftBrush}"/>
                                     <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreexcelGreenBrush}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
                                     <Setter TargetName="GhostTabChrome" Property="Background" Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                                     <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreexcelGreenDarkBrush}"/>
                                 </Trigger>

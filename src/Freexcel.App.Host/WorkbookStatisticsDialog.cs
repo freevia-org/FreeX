@@ -30,7 +30,7 @@ public sealed class WorkbookStatisticsDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
-        stack.Children.Add(DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
+        stack.Children.Add(DialogButtonRowFactory.CreateOkOnly(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;
     }
 

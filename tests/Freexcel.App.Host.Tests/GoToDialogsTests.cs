@@ -103,6 +103,17 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void GoToDialog_ExposesUIANamesAndHelpTextForReferenceSurfaces()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_historyList, \"Go to\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_historyList, \"Lists recent references and defined names available for navigation.\");");
+        source.Should().Contain("AutomationProperties.SetName(_addressBox, \"Reference\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_addressBox, \"Enter a cell reference, range, or defined name to navigate to.\");");
+    }
+
+    [Fact]
     public void GoToDialogOpenedFromKeyboard_FocusesReferenceBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToDialog.cs"));

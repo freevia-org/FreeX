@@ -277,6 +277,43 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedPowerQueryRetentionPackage_LinksQueryTableFromWorksheet()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-power-query-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        var worksheetRelsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        worksheetEntry.Should().NotBeNull();
+        worksheetRelsEntry.Should().NotBeNull();
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+        XDocument worksheetRelsXml;
+        using (var stream = worksheetRelsEntry!.Open())
+            worksheetRelsXml = XDocument.Load(stream);
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var queryTablePart = worksheetXml.Root!
+            .Element(sheetNs + "queryTableParts")!
+            .Elements(sheetNs + "queryTablePart")
+            .Should().ContainSingle().Subject;
+        var relationshipId = queryTablePart.Attribute(relNs + "id")!.Value;
+
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == relationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable" &&
+                relationship.Attribute("Target")?.Value == "../queryTables/queryTable1.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()
@@ -2462,12 +2499,16 @@ public class XlsxCorpusRunnerTests
             using var source = File.OpenRead(path);
             var workbook = adapter.Load(source);
             workbook.SheetCount.Should().BeGreaterThan(0, row.Id);
+            source.Position = 0;
+            AssertExpectedPublicPackageTags(row, source);
             var before = CapturePublicComparableSummary(workbook);
 
             using var saved = new MemoryStream();
             adapter.Save(workbook, saved);
             saved.Length.Should().BeGreaterThan(0, row.Id);
             AssertPackageHealth(saved, row.Id);
+            saved.Position = 0;
+            AssertExpectedPublicPackageTags(row, saved);
 
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
@@ -2689,6 +2730,29 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("merged-cells"))
             summary.Sheets.Sum(sheet => sheet.MergedRegionCount).Should().BeGreaterThan(0, row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("sheet-names") && tags.Contains("boundary"))
+            summary.Sheets.Should().Contain(sheet => sheet.Name.Length == 31, row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("inline-strings"))
+            summary.Sheets
+                .SelectMany(sheet => sheet.Cells)
+                .Should()
+                .Contain(cell => cell.Value.Kind == "Text" && !string.IsNullOrEmpty(cell.Value.Value), row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("shared-strings"))
+            summary.Sheets
+                .SelectMany(sheet => sheet.Cells)
+                .Should()
+                .Contain(cell => cell.Value.Kind == "Text" && !string.IsNullOrEmpty(cell.Value.Value), row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("cell-types"))
+            summary.Sheets
+                .SelectMany(sheet => sheet.Cells)
+                .Select(cell => cell.Value.Kind)
+                .Distinct(StringComparer.Ordinal)
+                .Should()
+                .HaveCountGreaterThanOrEqualTo(3, row.Id);
 
         if (tags.Contains("formulas"))
             summary.Sheets.Sum(sheet => sheet.FormulaCount).Should().BeGreaterThan(0, row.Id);
@@ -3941,6 +4005,31 @@ public class XlsxCorpusRunnerTests
         style.FillColor.HasValue && style.FillPatternStyle == CellFillPatternStyle.None
             ? CellFillPatternStyle.Solid
             : style.FillPatternStyle;
+
+    private static void AssertExpectedPublicPackageTags(ManifestRow row, Stream package)
+    {
+        if (row.SourceType != "public")
+            return;
+
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (!tags.Contains("styles") && !tags.Contains("formatting"))
+            return;
+
+        var originalPosition = package.CanSeek ? package.Position : 0;
+        if (package.CanSeek)
+            package.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+            archive.GetEntry("xl/styles.xml").Should().NotBeNull(row.Id);
+        }
+        finally
+        {
+            if (package.CanSeek)
+                package.Position = originalPosition;
+        }
+    }
 
     private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
         new(

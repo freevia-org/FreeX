@@ -75,40 +75,13 @@ public partial class GridView
                 AutofillEdgeScrollRequested?.Invoke(scrollRequest);
 
             var src = _autofillSourceRange.Value;
-
-            var srcTopRow    = Viewport.RowMetrics.FirstOrDefault(r => r.Row == src.Start.Row);
-            var srcBottomRow = Viewport.RowMetrics.FirstOrDefault(r => r.Row == src.End.Row);
-            var srcLeftCol   = Viewport.ColMetrics.FirstOrDefault(c => c.Col == src.Start.Col);
-            var srcRightCol  = Viewport.ColMetrics.FirstOrDefault(c => c.Col == src.End.Col);
-
-            if (srcTopRow != null && srcBottomRow != null && srcLeftCol != null && srcRightCol != null)
-            {
-                double srcTop    = srcTopRow.TopOffset    + EffectiveColHeaderHeight;
-                double srcBottom = srcBottomRow.TopOffset + EffectiveColHeaderHeight + srcBottomRow.Height;
-                double srcLeft   = srcLeftCol.LeftOffset  + ActualRowHeaderWidth;
-                double srcRight  = srcRightCol.LeftOffset + ActualRowHeaderWidth + srcRightCol.Width;
-
-                double boundTop    = Math.Min(srcTop,    pos.Y);
-                double boundBottom = Math.Max(srcBottom, pos.Y);
-                double boundLeft   = Math.Min(srcLeft,   pos.X);
-                double boundRight  = Math.Max(srcRight,  pos.X);
-
-                CellAddress? newTarget = null;
-                foreach (var rm in Viewport.RowMetrics)
-                {
-                    double midY = rm.TopOffset + EffectiveColHeaderHeight + rm.Height / 2;
-                    if (midY < boundTop || midY > boundBottom) continue;
-                    foreach (var cm in Viewport.ColMetrics)
-                    {
-                        double midX = cm.LeftOffset + ActualRowHeaderWidth + cm.Width / 2;
-                        if (midX < boundLeft || midX > boundRight) continue;
-                        newTarget = new CellAddress(default, rm.Row, cm.Col);
-                    }
-                }
-
-                if (newTarget.HasValue)
-                    _autofillTarget = ConstrainAutofillTarget(src, newTarget.Value);
-            }
+            if (GridAutofillPlanner.CalculateDragTarget(
+                    Viewport,
+                    src,
+                    pos,
+                    ActualRowHeaderWidth,
+                    EffectiveColHeaderHeight) is { } newTarget)
+                _autofillTarget = ConstrainAutofillTarget(src, newTarget);
 
             InvalidateVisual();
             return;
@@ -161,23 +134,14 @@ public partial class GridView
         double rowHeaderWidth,
         double columnHeaderHeight,
         double edgeThreshold = 24)
-    {
-        if (width <= 0 || height <= 0)
-            return new GridAutoScrollRequest(0, 0);
-
-        var horizontal = pointerX >= width - edgeThreshold
-            ? 1
-            : pointerX <= rowHeaderWidth + edgeThreshold
-                ? -1
-                : 0;
-        var vertical = pointerY >= height - edgeThreshold
-            ? 1
-            : pointerY <= columnHeaderHeight + edgeThreshold
-                ? -1
-                : 0;
-
-        return new GridAutoScrollRequest(horizontal, vertical);
-    }
+        => GridAutofillPlanner.CalculateEdgeScrollIntent(
+            pointerX,
+            pointerY,
+            width,
+            height,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            edgeThreshold);
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
@@ -453,24 +417,11 @@ public partial class GridView
 
             if (_autofillSourceRange.HasValue && _autofillTarget.HasValue)
             {
-                var src    = _autofillSourceRange.Value;
-                var target = _autofillTarget.Value;
-                if (target.Row > src.End.Row || target.Col > src.End.Col)
+                var src = _autofillSourceRange.Value;
+                var fillRange = GridAutofillPlanner.CalculateFillRange(src, _autofillTarget.Value);
+                if (fillRange.HasValue)
                 {
-                    GridRange fillRange;
-                    if (target.Row > src.End.Row)
-                    {
-                        fillRange = new GridRange(
-                            new CellAddress(src.Start.Sheet, src.End.Row + 1, src.Start.Col),
-                            new CellAddress(src.Start.Sheet, target.Row,      src.End.Col));
-                    }
-                    else
-                    {
-                        fillRange = new GridRange(
-                            new CellAddress(src.Start.Sheet, src.Start.Row, src.End.Col + 1),
-                            new CellAddress(src.Start.Sheet, src.End.Row,   target.Col));
-                    }
-                    AutofillRequested?.Invoke(src, fillRange);
+                    AutofillRequested?.Invoke(src, fillRange.Value);
                 }
             }
 

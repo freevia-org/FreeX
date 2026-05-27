@@ -40,14 +40,16 @@ public class XlsxCorpusScaffoldTests
         rows.Should().HaveCountGreaterThanOrEqualTo(11, "the corpus starts with a header plus 10 generated fixture rows");
         rows[0].Split(',').Should().Equal(ExpectedManifestHeader);
 
-        var generatedRows = rows.Skip(1)
+        var manifestRows = rows.Skip(1)
             .Select(line => line.Split(','))
             .Where(columns => columns.Length == ExpectedManifestHeader.Length)
+            .ToArray();
+        var generatedRows = manifestRows
             .Where(columns => columns[2] == "generated")
             .ToArray();
 
         generatedRows.Should().HaveCountGreaterThanOrEqualTo(10);
-        generatedRows.Should().OnlyContain(columns => AllowedStatuses.Contains(columns[8]));
+        manifestRows.Should().OnlyContain(columns => AllowedStatuses.Contains(columns[8]));
     }
 
     [Fact]
@@ -66,6 +68,29 @@ public class XlsxCorpusScaffoldTests
         readme.Should().Contain("local-private");
         readme.Should().Contain("must not be committed");
         readme.Should().Contain("redistribution");
+    }
+
+    [Fact]
+    public void CorpusPlan_DocumentsAllAllowedManifestStatuses()
+    {
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_TEST_CORPUS_PLAN.md"));
+
+        foreach (var status in AllowedStatuses)
+            plan.Should().Contain($"`{status}`");
+    }
+
+    [Fact]
+    public void CorpusPlan_StatesCurrentManifestBaselineCounts()
+    {
+        var manifestRows = ReadManifestRows();
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_TEST_CORPUS_PLAN.md"));
+        var generatedCount = manifestRows.Count(row => row.SourceType == "generated");
+        var publicCount = manifestRows.Count(row => row.SourceType == "public");
+        var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
+        var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
+
+        plan.Should().Contain(
+            $"Current executable manifest baseline: {manifestRows.Count} rows ({generatedCount} generated, {publicCount} public, {localPrivateCount} local-private, {regressionCount} regression).");
     }
 
     [Fact]
@@ -101,6 +126,141 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_LastUpdatedMatchesCorpusPlan()
+    {
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_TEST_CORPUS_PLAN.md"));
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        report.Should().Contain($"**Last updated:** {ReadLastUpdatedDate(plan)}");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesTopFailureSummary()
+    {
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        report.Should().Contain("## Top Failures");
+        report.Should().Contain("No active automated XLSX corpus failures are currently recorded.");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesPrioritizedFixListMappedToCommandParity()
+    {
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        report.Should().Contain("## Prioritized Fix List");
+        report.Should().Contain("`docs/COMMAND_SURFACE_PARITY.md`");
+    }
+
+    [Fact]
+    public void CorpusReport_DoesNotListCompletedLocalPrivateManifestRowsAsOpenGap()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Count(row => row.SourceType == "local-private")
+            .Should().BeGreaterThan(0, "optional local-private workbook rows are already represented in the manifest");
+        report.Should().NotContain(
+            "Add local-private workbook rows",
+            "the report gap list should not ask for manifest rows after they exist");
+    }
+
+    [Fact]
+    public void CorpusReport_UsesCurrentManifestBaselineInExpansionGap()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        report.Should().NotContain(
+            "Continue expanding the 100-row corpus beyond the current baseline",
+            "the executable manifest has moved past the original 100-row target");
+        report.Should().Contain(
+            $"Continue expanding the {manifestRows.Count}-row corpus baseline",
+            "the report gap list should track the live manifest size");
+    }
+
+    [Fact]
+    public void CorpusManifest_UsesPublicPassOnlyForPublicRows()
+    {
+        var manifestRows = ReadManifestRows();
+
+        manifestRows
+            .Where(row => row.ExpectedStatus == "public-pass")
+            .Should()
+            .OnlyContain(row => row.SourceType == "public", "`public-pass` is reserved for redistributed public corpus files");
+    }
+
+    [Fact]
+    public void CorpusManifest_KnownGapRowsDeclareWarningsAndNotes()
+    {
+        var manifestRows = ReadManifestRows();
+
+        manifestRows
+            .Where(row => row.ExpectedStatus == "supported-known-gap")
+            .Should()
+            .OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings) && !string.IsNullOrWhiteSpace(row.Notes));
+    }
+
+    [Fact]
+    public void CorpusManifest_NonPublicUnsupportedFeatureTagsDeclareWarningExpectations()
+    {
+        var manifestRows = ReadManifestRows();
+
+        manifestRows
+            .Where(row => row.SourceType != "public")
+            .Select(row => new { Row = row, ExpectedWarnings = ExpectedWarningsFor(row) })
+            .Where(entry => entry.ExpectedWarnings.Count > 0)
+            .Should()
+            .OnlyContain(
+                entry =>
+                    entry.Row.ExpectedStatus == "supported-known-gap" &&
+                    entry.ExpectedWarnings.All(warning =>
+                        entry.Row.ExpectedWarnings.Contains(warning, StringComparison.Ordinal)),
+                "non-public corpus rows with unsupported feature tags should be known-gap rows with explicit warning text");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesNonPublicUnsupportedAndExcludedWarningDeclarations()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var warningDeclarationCount = manifestRows
+            .Where(row => row.SourceType != "public" && ExpectedWarningsFor(row).Count > 0)
+            .Count();
+
+        warningDeclarationCount.Should().BeGreaterThan(0);
+        report.Should().Contain($"| Non-public unsupported/excluded warning declarations | {warningDeclarationCount}/{warningDeclarationCount} present in manifest |");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesPublicUnsupportedTagWarningDetectionCount()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var publicUnsupportedTagCount = manifestRows
+            .Where(row => row.SourceType == "public" && ExpectedWarningsFor(row).Count > 0)
+            .Count();
+
+        publicUnsupportedTagCount.Should().BeGreaterThan(0);
+        report.Should().Contain($"| Public unsupported-tag warning detection | {publicUnsupportedTagCount}/{publicUnsupportedTagCount} exercised by corpus runner |");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var localPrivateKnownGapCount = manifestRows.Count(row => row.SourceType == "local-private" && row.ExpectedStatus == "supported-known-gap");
+
+        manifestRows
+            .Where(row => row.SourceType == "local-private" && row.ExpectedStatus == "supported-known-gap")
+            .Should()
+            .OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings));
+        report.Should().Contain("known-gap warning expectations are declared for optional private rows");
+        report.Should().Contain($"| Local-private known-gap warning declarations | {localPrivateKnownGapCount}/{localPrivateKnownGapCount} present in manifest for skipped optional private rows |");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
@@ -118,6 +278,24 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void RegressionFormulaCachedWorkbooks_AreAllRepresentedInCorpusManifest()
+    {
+        var manifestRows = ReadManifestRows();
+        var regressionWorkbookPaths = Directory
+            .EnumerateFiles(FindWorkspaceDirectory("test-corpus", "regressions", "formula-cached"), "*.xlsx", SearchOption.TopDirectoryOnly)
+            .Select(path => Path.GetRelativePath(FindWorkspaceDirectory("test-corpus"), path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var manifestRegressionPaths = manifestRows
+            .Where(row => row.SourceType == "regression")
+            .Select(row => row.Path)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        manifestRegressionPaths.Should().Equal(regressionWorkbookPaths);
+    }
+
+    [Fact]
     public void NewestStatusReport_StatesCurrentCorpusManifestCount()
     {
         var manifestRows = ReadManifestRows();
@@ -127,7 +305,10 @@ public class XlsxCorpusScaffoldTests
             .Last();
         var report = File.ReadAllText(newestStatusReport);
 
-        report.Should().Contain($"expanded to {manifestRows.Count} manifest rows");
+        report.Should().ContainAny(
+            $"expanded to {manifestRows.Count} manifest rows",
+            $"Manifest baseline is {manifestRows.Count} rows",
+            $"XLSX corpus manifest rows | {manifestRows.Count}");
         report.Should().Contain($"{manifestRows.Count} workbook manifest rows");
         report.Should().Contain($"Expand the {manifestRows.Count}-row corpus baseline");
     }
@@ -146,7 +327,60 @@ public class XlsxCorpusScaffoldTests
     {
         var columns = line.Split(',');
         columns.Should().HaveCount(ExpectedManifestHeader.Length);
-        return new ManifestRow(columns[2], columns[8]);
+        return new ManifestRow(columns[1], columns[2], columns[6], columns[7], columns[8], columns[9]);
+    }
+
+    private static string ReadLastUpdatedDate(string markdown)
+    {
+        var line = markdown
+            .Split(["\r\n", "\n"], StringSplitOptions.None)
+            .First(line => line.StartsWith("**Last updated:**", StringComparison.Ordinal));
+
+        return line
+            .Replace("**Last updated:**", string.Empty, StringComparison.Ordinal)
+            .Trim()
+            .TrimEnd();
+    }
+
+    private static IReadOnlyList<string> ExpectedWarningsFor(ManifestRow row)
+    {
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var warnings = new List<string>();
+
+        if (tags.Contains("unsupported-chart-family"))
+            warnings.Add("unsupported chart package disclosed");
+        if (tags.Contains("embedded-objects"))
+            warnings.Add("unsupported embedded object disclosed");
+        if (tags.Contains("threaded-comments"))
+            warnings.Add("unsupported threaded comment disclosed");
+        if (tags.Contains("track-changes") || tags.Contains("revision-history"))
+            warnings.Add("unsupported track changes disclosed");
+        if (tags.Contains("form-controls") || tags.Contains("activex"))
+            warnings.Add("unsupported form control disclosed");
+        if (tags.Contains("digital-signatures"))
+            warnings.Add("unsupported digital signature disclosed");
+        if (tags.Contains("custom-ribbon-ui"))
+            warnings.Add("unsupported custom ribbon UI disclosed");
+        if (tags.Contains("office-addins") || tags.Contains("webextensions"))
+            warnings.Add("unsupported Office add-in disclosed");
+        if (tags.Contains("live-web-queries") || tags.Contains("web-publish"))
+            warnings.Add("unsupported live web query disclosed");
+        if (tags.Contains("sensitivity-labels") || tags.Contains("irm"))
+            warnings.Add("unsupported sensitivity label disclosed");
+        if (tags.Contains("smartart") || tags.Contains("diagrams"))
+            warnings.Add("unsupported SmartArt diagram disclosed");
+        if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets") || tags.Contains("unsupported-sheet-types"))
+            warnings.Add("unsupported sheet type disclosed");
+        if (tags.Contains("macros"))
+            warnings.Add("excluded VBA macro disclosed");
+        if (tags.Contains("power-query"))
+            warnings.Add("excluded Power Query disclosed");
+        if (tags.Contains("data-model") || tags.Contains("power-pivot"))
+            warnings.Add("excluded Data Model disclosed");
+        if (tags.Contains("linked-data-types") || tags.Contains("rich-data"))
+            warnings.Add("excluded linked data type disclosed");
+
+        return warnings;
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
@@ -164,5 +398,26 @@ public class XlsxCorpusScaffoldTests
         throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 
-    private sealed record ManifestRow(string SourceType, string ExpectedStatus);
+    private static string FindWorkspaceDirectory(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
+            if (Directory.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException($"Could not locate workspace directory: {Path.Combine(relativeParts)}");
+    }
+
+    private sealed record ManifestRow(
+        string Path,
+        string SourceType,
+        string FeatureTags,
+        string ExpectedWarnings,
+        string ExpectedStatus,
+        string Notes);
 }

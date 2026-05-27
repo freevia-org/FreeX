@@ -61,6 +61,23 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void HomeRibbon_KeepsCellsVisibleBeforeEditingAtCommonWideWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(1366);
+
+            harness.CollapsedRibbonGroupNames.Should().NotContain("Cells", harness.DebugRibbonChildren);
+            harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Insert", "Delete", "Format"],
+                "Excel keeps the Cells group visible at common wide widths and collapses Editing first");
+        });
+    }
+
+    [Fact]
     public void FormulasRibbon_KeepsFunctionLibraryExpandedAtNormalWideWidths()
     {
         StaTestRunner.Run(() =>
@@ -137,7 +154,7 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["PivotTable", "Table"],
+                ["PivotTable", "Recommended", "Table"],
                 "Excel keeps the first Insert groups expanded at normal narrow widths before collapsing gallery-heavy groups");
         });
     }
@@ -161,20 +178,52 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
-    [Theory]
-    [InlineData("Data", "Sort & Filter")]
-    [InlineData("View", "Show")]
-    public void RibbonTabs_KeepSecondaryExcelGroupsExpandedAtMediumWidths(string tab, string secondaryGroup)
+    [Fact]
+    public void DataRibbon_KeepsSortFilterExpandedAtMediumWidths()
     {
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.SelectRibbonTab(tab, 1120);
+            harness.SelectRibbonTab("Data", 1120);
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
-                secondaryGroup,
-                $"{tab} should keep the second Excel-style group available at medium widths and collapse later utility groups first");
+                "Sort & Filter",
+                "Data should keep the second Excel-style group available at medium widths and collapse later utility groups first");
+        });
+    }
+
+    [Fact]
+    public void DataRibbon_KeepsDataToolsAndForecastVisibleAtMediumWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Data", 1120);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Data Tools", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Forecast", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Data Validation", "What-If Analysis", "Forecast Sheet"],
+                "Excel keeps the medium-priority Data Tools and Forecast affordances visible around 1120px");
+        });
+    }
+
+    [Fact]
+    public void ViewRibbon_KeepsShowWithZoomAndWindowAtMediumWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("View", 1366);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Show", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Zoom", harness.DebugActiveRibbonChildren);
+            harness.VisibleViewShowCheckBoxLabels.Should().Contain(
+                ["Gridlines", "Headings", "Formula Bar"],
+                "Excel keeps the Show checkbox group visible at medium workbook widths before collapsing Macros");
         });
     }
 
@@ -315,6 +364,26 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void PageLayoutPageSetup_KeepsCommandsInsideRibbonRow()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Page Layout", 1465);
+
+            harness.ActiveRibbonGroupCommandOverflow("Page Setup").Should().BeLessThanOrEqualTo(
+                0.5,
+                "Excel lays out Page Setup as compact command rows instead of letting the command stack clip behind the group label");
+            harness.ActiveRibbonGroupDenseCommandRows("Page Setup").Should().Contain(
+                3,
+                "Excel-like Page Setup commands should use three short rows, not one tall vertical stack that clips");
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Margins", "Orientation", "Size", "Print Area", "Breaks", "Background", "Print Titles"]);
+        });
+    }
+
+    [Fact]
     public void VerticallyStackedRibbonCommands_AlignIconSlots()
     {
         StaTestRunner.Run(() =>
@@ -343,7 +412,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.SelectRibbonTab("View", 1465);
+            harness.SelectRibbonTab("View", 2200);
 
             harness.ViewShowCheckBoxLabelOffsets
                 .Select(offset => Math.Round(offset.Offset, 1))
@@ -354,6 +423,27 @@ public sealed class MainWindowAdaptiveRibbonTests
             harness.ViewShowCheckBoxContentAlignments.Should().OnlyContain(
                 alignment => alignment == System.Windows.HorizontalAlignment.Left,
                 "ribbon checkbox rows should not center short labels inside the widest checkbox row");
+        });
+    }
+
+    [Fact]
+    public void ViewRibbon_RulerCheckBoxIsEnabledOnlyInPageLayoutView()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("View", 1465);
+
+            harness.ViewRulerCheckBoxIsEnabled.Should().BeFalse("Excel disables Ruler outside Page Layout view");
+
+            harness.ClickActiveRibbonButton("Page Layout");
+
+            harness.ViewRulerCheckBoxIsEnabled.Should().BeTrue("Excel enables Ruler in Page Layout view");
+
+            harness.ClickActiveRibbonButton("Normal");
+
+            harness.ViewRulerCheckBoxIsEnabled.Should().BeFalse("returning to Normal view should disable Ruler again");
         });
     }
 
@@ -603,6 +693,42 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Select(button => button.Height)
                 .ToList();
 
+        public double ActiveRibbonGroupCommandOverflow(string groupName)
+        {
+            if (FindActiveRibbonGroup(groupName) is not { } group)
+                return 0;
+
+            var labelTop = group.Children
+                .OfType<Border>()
+                .Where(border => Grid.GetRow(border) == 1)
+                .Select(border => border.TransformToAncestor(group).Transform(new Point(0, 0)).Y)
+                .DefaultIfEmpty(group.ActualHeight)
+                .Min();
+
+            var maxCommandBottom = EnumerateSelfAndVisualDescendants(group)
+                .OfType<Button>()
+                .Where(IsEffectivelyVisible)
+                .Where(button => button.Tag is not string tag || tag != "RibbonCollapsedGroupButton")
+                .Select(button =>
+                {
+                    var top = button.TransformToAncestor(group).Transform(new Point(0, 0)).Y;
+                    return top + button.ActualHeight;
+                })
+                .DefaultIfEmpty(0)
+                .Max();
+
+            return maxCommandBottom - labelTop;
+        }
+
+        public IReadOnlyList<int> ActiveRibbonGroupDenseCommandRows(string groupName) =>
+            FindActiveRibbonGroup(groupName) is { } group
+                ? EnumerateSelfAndVisualDescendants(group)
+                    .OfType<UniformGrid>()
+                    .Where(grid => grid.Children.OfType<Button>().Count() > 3)
+                    .Select(grid => grid.Rows)
+                    .ToList()
+                : [];
+
         public IReadOnlyList<RibbonIconStackOffsets> VerticallyStackedRibbonIconOffsets =>
             EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
                 .OfType<Panel>()
@@ -627,6 +753,15 @@ public sealed class MainWindowAdaptiveRibbonTests
             ViewShowCheckBoxes
                 .Select(checkBox => checkBox.HorizontalContentAlignment)
                 .ToList();
+
+        public IReadOnlyList<string> VisibleViewShowCheckBoxLabels =>
+            ViewShowCheckBoxes
+                .Select(checkBox => checkBox.Content?.ToString() ?? "")
+                .Where(label => !string.IsNullOrWhiteSpace(label))
+                .ToList();
+
+        public bool? ViewRulerCheckBoxIsEnabled =>
+            (_window.FindName("ViewRulerChk") as CheckBox)?.IsEnabled;
 
         public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
             _window.FindName("RibbonTabs") is TabControl tabs
@@ -680,6 +815,15 @@ public sealed class MainWindowAdaptiveRibbonTests
                                              panel.Children.OfType<Grid>().Any(IsRibbonGroupGrid))
                 : null;
 
+        private Grid? FindActiveRibbonGroup(string groupName) =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Grid>()
+                .FirstOrDefault(grid => grid.Children
+                    .OfType<Border>()
+                    .Any(border => Grid.GetRow(border) == 1 &&
+                                   border.Child is TextBlock label &&
+                                   string.Equals(label.Text, groupName, StringComparison.Ordinal)));
+
         public void SetRibbonWidth(double width)
         {
             if (_window.FindName("RibbonTabs") is TabControl tabs)
@@ -706,6 +850,20 @@ public sealed class MainWindowAdaptiveRibbonTests
             PumpDispatcher();
             PumpDispatcher();
             _updateRibbonCompactMode.Invoke(_window, [true]);
+            PumpDispatcher();
+        }
+
+        public void ClickActiveRibbonButton(string title)
+        {
+            var button = EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .Concat(EnumerateLogicalDescendants(SelectedRibbonContentRoot))
+                .OfType<Button>()
+                .Distinct()
+                .FirstOrDefault(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal));
+
+            button.Should().NotBeNull(DebugActiveRibbonChildren);
+            button!.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            _window.UpdateLayout();
             PumpDispatcher();
         }
 

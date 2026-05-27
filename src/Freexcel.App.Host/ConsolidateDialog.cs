@@ -60,6 +60,7 @@ public sealed partial class ConsolidateDialog : Window
         _referenceBox.Text = defaultSource;
         foreach (var sourceRange in SplitSourceRangeText(defaultSource))
             _referencesList.Items.Add(sourceRange);
+        AutomationProperties.SetName(_referencesList, "All references");
         _referencesList.SelectionChanged += (_, _) => UpdateReferenceButtons();
         _referencesList.KeyDown += ReferencesList_KeyDown;
 

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -45,6 +46,8 @@ internal sealed class NameDefinitionDialog : Window
         _commentBox.Text = initial.Comment;
         _refersToBox.Text = initial.RefersTo;
         _rangePickerButton.ToolTip = "Collapse dialog and select the referenced range from the worksheet";
+        AutomationProperties.SetName(_rangePickerButton, "Select referenced range");
+        AutomationProperties.SetHelpText(_rangePickerButton, "Collapse dialog and select the referenced range from the worksheet.");
         _rangePickerButton.Click += (_, _) =>
         {
             RangeSelectionRequest = NamedRangeDialog.CreateRangeSelectionRequest(

@@ -54,4 +54,20 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
         source.Should().Contain("Content = \"_Evaluate\", Width = 80, Height = 26, IsDefault = true");
         source.Should().Contain("Content = \"_Close\", Width = 80, Height = 26, IsCancel = true");
     }
+
+    [Fact]
+    public void EvaluateFormulaDialog_DisablesStepInWithEvaluateAndFocusesEnabledCommand()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));
+
+        source.Should().Contain("private readonly Button _stepInButton;");
+        source.Should().Contain("_stepInButton = new Button { Content = \"Step _In\"");
+        source.Should().Contain("_session.StepIn()");
+        source.Should().NotContain("_stepInButton.Click += (_, _) =>\r\n        {\r\n            _session.MoveNext();");
+        source.Should().Contain("_stepInButton.IsEnabled = _session.CanStepIn;");
+        source.Should().Contain("FocusFirstEnabledCommand();");
+        source.Should().Contain("private void FocusFirstEnabledCommand()");
+        source.Should().Contain("_nextButton.IsEnabled ? _nextButton");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
 }

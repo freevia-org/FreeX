@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Commands;
@@ -82,7 +83,12 @@ public sealed class WatchWindowDialog : Window
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
+        var listPanel = new DockPanel();
         _listView = new ListView { ItemsSource = _rows, SelectionMode = SelectionMode.Extended };
+        AutomationProperties.SetName(_listView, "Watches");
+        var listLabel = new Label { Content = "_Watches:", Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(listLabel, Dock.Top);
+        listPanel.Children.Add(listLabel);
         _listView.MouseDoubleClick += ListView_MouseDoubleClick;
         _listView.SelectionChanged += (_, _) => UpdateDeleteButtonState();
         _listView.KeyDown += ListView_KeyDown;
@@ -98,7 +104,8 @@ public sealed class WatchWindowDialog : Window
                 new GridViewColumn { Header = "Formula", Width = 170, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
             }
         };
-        root.Children.Add(_listView);
+        listPanel.Children.Add(_listView);
+        root.Children.Add(listPanel);
 
         Refresh();
         Loaded += (_, _) => FocusInitialKeyboardTarget();

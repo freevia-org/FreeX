@@ -124,6 +124,28 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void FunctionArgumentsDialog_ExposesExcelLikeHelpAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
+
+        source.Should().Contain("Content = \"_Help on this function\"");
+        source.Should().Contain("ShowFunctionHelp");
+        source.Should().Contain("btnRow.Children.Add(help)");
+        source.Should().Contain("btnRow.Children.Add(ok)");
+        source.Should().Contain("btnRow.Children.Add(cancel)");
+    }
+
+    [Fact]
+    public void FunctionArgumentsDialog_LabelsFormulaResultPreviewForAccessibility()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
+
+        source.Should().Contain("Text = \"Formula result =\"");
+        source.Should().Contain("AutomationProperties.SetName(_formulaPreview, \"Formula result\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_formulaPreview");
+    }
+
+    [Fact]
     public void InsertFunctionDialogOpenedFromKeyboard_FocusesSearchBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
@@ -151,6 +173,15 @@ public sealed class InsertFunctionDialogTests
         source.Should().NotContain("SystemSounds.Asterisk.Play");
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
+    }
+
+    [Fact]
+    public void InsertFunctionDialog_FunctionListExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
+
+        source.Should().Contain("using System.Windows.Automation;");
+        source.Should().Contain("AutomationProperties.SetName(_listBox, \"Functions\");");
     }
 
     [Fact]

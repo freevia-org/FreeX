@@ -210,7 +210,7 @@ public sealed record MoveChartDialogResult(MoveChartTargetKind TargetKind, strin
 
 public sealed class MoveChartDialog : Window
 {
-    private readonly RadioButton _objectInSheet = new() { Content = "_Object in sheet", IsChecked = true };
+    private readonly RadioButton _objectInSheet = new() { Content = "_Object in:", IsChecked = true };
     private readonly TextBox _targetBox = new();
 
     public MoveChartDialogResult Result { get; private set; }
@@ -227,8 +227,11 @@ public sealed class MoveChartDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         _targetBox.Text = currentSheetName;
+        AutomationProperties.SetName(_targetBox, "Target chart sheet or object sheet name");
+        AutomationProperties.SetHelpText(_targetBox, "Enter the worksheet or chart sheet name that will contain the chart.");
         stack.Children.Add(_objectInSheet);
         stack.Children.Add(new RadioButton { Content = "_New chart sheet", Margin = new Thickness(0, 4, 0, 8) });
+        stack.Children.Add(new Label { Content = "_Target name:", Target = _targetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         stack.Children.Add(_targetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;

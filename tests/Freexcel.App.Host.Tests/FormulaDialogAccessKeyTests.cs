@@ -25,6 +25,16 @@ public sealed class FormulaDialogAccessKeyTests
     }
 
     [Fact]
+    public void CreateNamesFromSelectionDialog_ExposesNamedOptionsGroupHelpText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateNamesFromSelectionDialog.cs"));
+
+        source.Should().Contain("using System.Windows.Automation;");
+        source.Should().Contain("AutomationProperties.SetName(group, \"Create names from selected labels\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(group, \"Choose which row or column labels Excel uses to create named ranges.\");");
+    }
+
+    [Fact]
     public void CreateNamesFromSelectionDialogOpenedFromKeyboard_FocusesTopRowChoice()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateNamesFromSelectionDialog.cs"));
@@ -56,13 +66,15 @@ public sealed class FormulaDialogAccessKeyTests
     }
 
     [Fact]
-    public void EvaluateFormulaDialogOpenedFromKeyboard_FocusesEvaluateButton()
+    public void EvaluateFormulaDialogOpenedFromKeyboard_FocusesFirstEnabledCommand()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_nextButton.Focus();");
-        source.Should().Contain("Keyboard.Focus(_nextButton);");
+        source.Should().Contain("FocusFirstEnabledCommand();");
+        source.Should().Contain("var target = _nextButton.IsEnabled ? _nextButton : _closeButton;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 }

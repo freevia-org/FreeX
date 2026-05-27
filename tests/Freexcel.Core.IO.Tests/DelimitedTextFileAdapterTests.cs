@@ -18,18 +18,29 @@ public sealed class DelimitedTextFileAdapterTests
             "text load should decode the buffered stream segment without duplicating the full byte array");
     }
 
+    [Fact]
+    public void Save_ReusesDelimiterBuffersInsteadOfAllocatingPerChunk()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.IO", "DelimitedTextWorkbookWriter.cs"));
+
+        source.Should().NotContain(
+            "new string(delimiter",
+            "wide sparse delimited saves should not allocate delimiter strings for every row chunk");
+    }
+
     [Theory]
     [InlineData(".txt")]
     [InlineData(".tsv")]
     [InlineData(".tab")]
-    public void Formats_AreOpenOnly(string extension)
+    public void Formats_CanOpenAndSave(string extension)
     {
         var adapter = new DelimitedTextFileAdapter(extension, "Text (Tab delimited)", '\t');
 
         adapter.Formats.Should().ContainSingle(format =>
             format.Extension == extension &&
             format.CanOpen &&
-            !format.CanSave);
+            format.CanSave);
     }
 
     [Fact]
@@ -49,10 +60,43 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsExcelUnicodeTextExportWithUtf16Bom()
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        var bytes = Encoding.Unicode.GetPreamble()
+            .Concat(Encoding.Unicode.GetBytes("Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n"))
+            .ToArray();
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Caf\u00e9"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(42));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
     public void Load_HonorsExcelSeparatorDirectiveForTextFiles()
     {
         var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=;\r\nName;Amount\r\nAlice;3.5\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("Amount"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Alice"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(3.5));
+    }
+
+    [Fact]
+    public void Load_HonorsTabSeparatorDirectiveForTextFiles()
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=\t\r\nName\tAmount\r\nAlice\t3.5\r\n"));
 
         var workbook = adapter.Load(stream);
         var sheet = workbook.Sheets.Single();
@@ -95,21 +139,21 @@ public sealed class DelimitedTextFileAdapterTests
     public void Load_UsesExcelLikeTextCoercionForPercentages()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("12.5%\t-3%\t\"-4%\"\r\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("12.5%\t-3%\t4%\r\n"));
 
         var workbook = adapter.Load(stream);
         var sheet = workbook.Sheets.Single();
 
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(0.125));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(-0.03));
-        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(-0.04));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(0.04));
     }
 
     [Fact]
     public void Load_UsesExcelLikeTextCoercionForErrorLiterals()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#N/A\t#DIV/0!\t#REF!\r\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#N/A\t#DIV/0!\t#REF!\t#CIRCULAR!\t#GETTING_DATA\r\n"));
 
         var workbook = adapter.Load(stream);
         var sheet = workbook.Sheets.Single();
@@ -117,6 +161,8 @@ public sealed class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(ErrorValue.NA);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(ErrorValue.DivByZero);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(ErrorValue.Ref);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 4)).Should().Be(ErrorValue.Circular);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 5)).Should().Be(new ErrorValue("#GETTING_DATA"));
     }
 
     [Fact]
@@ -162,6 +208,63 @@ public sealed class DelimitedTextFileAdapterTests
             .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
             .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 15, 250)));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForIsoDateTimesWithOffsets()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T09:30:00Z\t2026-05-17T11:30:00+02:00\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        var expectedUtc = new DateTime(2026, 5, 17, 9, 30, 0, DateTimeKind.Unspecified);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+    }
+
+    [Fact]
+    public void Load_DoesNotCoerceNonIsoSingleDigitHourDateTimesWithOffsets()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T9:30Z\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("2026-05-17T9:30Z"));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForIsoDateTimesWithFractionalSecondOffsets()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T09:30:15.250Z\t2026-05-17T11:30:15.25+02:00\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        var expectedUtc = new DateTime(2026, 5, 17, 9, 30, 15, 250);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+    }
+
+    [Fact]
+    public void Load_DoesNotCoerceIsoOffsetDateTimesWithBareFractionalSecondDecimal()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T09:30:00.Z\t2026-05-17T09:30:00.+02:00\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("2026-05-17T09:30:00.Z"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("2026-05-17T09:30:00.+02:00"));
     }
 
     [Fact]
@@ -311,6 +414,19 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForStandaloneAmPmHours()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("9 AM\t9 PM\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new DateTimeValue(new TimeSpan(9, 0, 0).TotalDays));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new DateTimeValue(new TimeSpan(21, 0, 0).TotalDays));
+    }
+
+    [Fact]
     public void Load_IgnoresFieldsBeyondExcelColumnLimit()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
@@ -373,13 +489,39 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
-    public void Save_IsNotSupported()
+    public void Save_WritesTabDelimitedRowsAndQuotesTabs()
     {
-        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Alice"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("a\tb"));
 
-        var act = () => adapter.Save(new Workbook("Book1"), new MemoryStream());
+        using var stream = new MemoryStream();
+        new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t').Save(workbook, stream);
 
-        act.Should().Throw<NotSupportedException>();
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("Name\tNote\r\nAlice\t\"a\tb\"\r\n");
+    }
+
+    [Fact]
+    public void Save_RoundTripsFormulaLikeTextFieldsAsLiteralText()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("=A1*2"));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue("=A1*2"));
     }
 
     private static string FindWorkspaceFile(params string[] parts)

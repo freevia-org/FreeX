@@ -115,4 +115,13 @@ public sealed class WatchWindowMessageFormatterTests
         source.Should().Contain("_listView.Focus();");
         source.Should().Contain("Keyboard.Focus(_listView);");
     }
+
+    [Fact]
+    public void WatchWindowDialog_LabelsWatchListWithAccessKeyAndAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Watches:\", Target = _listView");
+        source.Should().Contain("AutomationProperties.SetName(_listView, \"Watches\");");
+    }
 }

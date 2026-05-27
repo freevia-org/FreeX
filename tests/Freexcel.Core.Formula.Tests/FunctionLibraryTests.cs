@@ -1352,6 +1352,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Substitute_OneCellInstanceRange_BroadcastsAcrossTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("aababc")),
+            (2, 1, new TextValue("banana")),
+            (1, 2, new NumberValue(2)));
+
+        AssertTextColumn(_eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",\"x\",B1:B1)", sheet), "axbabc", "banxna");
+    }
+
+    [Fact]
     public void Substitute_MismatchedTextOrInstanceArgument_ReturnsValueError()
     {
         var sheet = MakeSheet(
@@ -1520,6 +1531,17 @@ public class FunctionLibraryTests
             (2, 2, new TextValue("Banana")));
 
         AssertColumn(_eval.Evaluate("=FIND(A1:A2,B1:B2)", sheet), new NumberValue(2), new NumberValue(3));
+    }
+
+    [Fact]
+    public void Find_LeadingOneCellFindTextRange_BroadcastsAcrossWithinTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 2, new TextValue("cat")),
+            (2, 2, new TextValue("bad")));
+
+        AssertColumn(_eval.Evaluate("=FIND(A1:A1,B1:B2)", sheet), new NumberValue(2), new NumberValue(2));
     }
 
     [Fact]
@@ -2553,6 +2575,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void BinaryMath_OneCellRangeArgument_BroadcastsAcrossOtherRange()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)), (2, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(2)));
+
+        AssertColumn(_eval.Evaluate("=MOD(A1:A2,B1:B1)", sheet), new NumberValue(0), new NumberValue(1));
+    }
+
+    [Fact]
     public void BinaryMath_MismatchedRangeArgumentShapes_ReturnValueError()
     {
         var sheet = MakeSheet(
@@ -2753,6 +2785,24 @@ public class FunctionLibraryTests
             var n = ((NumberValue)result).Value;
             n.Should().BeGreaterThanOrEqualTo(1).And.BeLessThanOrEqualTo(10);
         }
+    }
+
+    [Fact]
+    public void Randbetween_SameShapeBottomAndTopRanges_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(5)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(6)));
+
+        var result = _eval.Evaluate("=RANDBETWEEN(A1:A2,B1:B2)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        ((NumberValue)result.At(1, 1)).Value.Should().Be(1);
+        ((NumberValue)result.At(2, 1)).Value.Should().BeGreaterThanOrEqualTo(5).And.BeLessThanOrEqualTo(6);
     }
 
     [Fact]
@@ -4781,6 +4831,34 @@ public class FunctionLibraryTests
         AssertColumn(_eval.Evaluate("=PERCENTILE.EXC(A1:A4,B1:B2)", sheet), new NumberValue(2), new NumberValue(3));
     }
 
+    [Fact]
+    public void ExponDist_LeadingOneCellLambdaRange_BroadcastsAcrossXArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (1, 2, new NumberValue(0.5)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=EXPON.DIST(A1:A2,B1:B1,FALSE)", sheet),
+            ((NumberValue)_eval.Evaluate("=EXPON.DIST(A1,B1,FALSE)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=EXPON.DIST(A2,B1,FALSE)", sheet)).Value);
+    }
+
+    [Fact]
+    public void NormSDist_LeadingOneCellCumulativeRange_BroadcastsAcrossZArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-1)),
+            (2, 1, new NumberValue(1)),
+            (1, 2, new BoolValue(true)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=NORM.S.DIST(A1:A2,B1:B1)", sheet),
+            ((NumberValue)_eval.Evaluate("=NORM.S.DIST(A1,B1)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=NORM.S.DIST(A2,B1)", sheet)).Value);
+    }
+
     [Fact] public void Quartile_Q1_Returns25th()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));
@@ -5132,6 +5210,36 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Pmt_OneCellControlRanges_BroadcastAcrossRateArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.01)),
+            (2, 1, new NumberValue(0.02)),
+            (1, 2, new NumberValue(12)),
+            (1, 3, new NumberValue(1000)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=PMT(A1:A2,B1:B1,C1:C1)", sheet),
+            ((NumberValue)_eval.Evaluate("=PMT(A1,B1,C1)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=PMT(A2,B1,C1)", sheet)).Value);
+    }
+
+    [Fact]
+    public void Pmt_LeadingOneCellRateRange_BroadcastsAcrossLaterArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.01)),
+            (1, 2, new NumberValue(12)),
+            (2, 2, new NumberValue(24)),
+            (1, 3, new NumberValue(1000)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=PMT(A1:A1,B1:B2,C1:C1)", sheet),
+            ((NumberValue)_eval.Evaluate("=PMT(A1,B1,C1)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=PMT(A1,B2,C1)", sheet)).Value);
+    }
+
+    [Fact]
     public void IpmtAndPpmt_SameShapeRateAndPeriodRanges_SpillElementwise()
     {
         var sheet = MakeSheet(
@@ -5157,6 +5265,54 @@ public class FunctionLibraryTests
 
         _eval.Evaluate("=IPMT(A1:A2,B1:C1,60,10000)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=PPMT(A1:A2,B1:C1,60,10000)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void CumipmtAndCumprinc_LeadingOneCellRateRange_BroadcastsAcrossStartArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.05 / 12)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=CUMIPMT(A1:A1,60,10000,B1:B2,12,0)", sheet),
+            ((NumberValue)_eval.Evaluate("=CUMIPMT(A1,60,10000,B1,12,0)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=CUMIPMT(A1,60,10000,B2,12,0)", sheet)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=CUMPRINC(A1:A1,60,10000,B1:B2,12,0)", sheet),
+            ((NumberValue)_eval.Evaluate("=CUMPRINC(A1,60,10000,B1,12,0)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=CUMPRINC(A1,60,10000,B2,12,0)", sheet)).Value);
+    }
+
+    [Fact]
+    public void Xnpv_RateRange_SpillsElementwiseAgainstValueAndDateArrays()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.05)), (2, 1, new NumberValue(0.10)),
+            (1, 2, new NumberValue(-1000)), (2, 2, new NumberValue(600)), (3, 2, new NumberValue(600)),
+            (1, 3, new NumberValue(new DateTime(2026, 1, 1).ToOADate())),
+            (2, 3, new NumberValue(new DateTime(2026, 7, 1).ToOADate())),
+            (3, 3, new NumberValue(new DateTime(2027, 1, 1).ToOADate())));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=XNPV(A1:A2,B1:B3,C1:C3)", sheet),
+            ((NumberValue)_eval.Evaluate("=XNPV(A1,B1:B3,C1:C3)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=XNPV(A2,B1:B3,C1:C3)", sheet)).Value);
+    }
+
+    [Fact]
+    public void Mirr_FinanceAndReinvestRateRanges_SpillElementwiseAgainstCashFlowArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-1000)), (2, 1, new NumberValue(400)), (3, 1, new NumberValue(700)),
+            (1, 2, new NumberValue(0.05)), (2, 2, new NumberValue(0.06)),
+            (1, 3, new NumberValue(0.07)), (2, 3, new NumberValue(0.08)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=MIRR(A1:A3,B1:B2,C1:C2)", sheet),
+            ((NumberValue)_eval.Evaluate("=MIRR(A1:A3,B1,C1)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=MIRR(A1:A3,B2,C2)", sheet)).Value);
     }
 
     [Fact] public void Pmt_TypeError_PropagatesError() =>
@@ -5875,6 +6031,17 @@ public class FunctionLibraryTests
 
         AssertTextColumn(_eval.Evaluate("=FIXED(A1:A2,B1:B2,TRUE)", sheet), "1234.6", "-12");
         AssertTextColumn(_eval.Evaluate("=DOLLAR(A1:A2,B1:B2)", sheet), "$1,234.6", "($12)");
+    }
+
+    [Fact]
+    public void Fixed_LeadingOneCellNoCommasRange_BroadcastsAcrossValueArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(9876.54)),
+            (1, 2, new BoolValue(true)));
+
+        AssertTextColumn(_eval.Evaluate("=FIXED(A1:A2,1,B1:B1)", sheet), "1234.6", "9876.5");
     }
 
     [Fact]
@@ -7210,8 +7377,10 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1,1,new TextValue("A")), (2,1,new TextValue("B")));
 
         _eval.Evaluate("=CHOOSEROWS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSEROWS(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=CHOOSEROWS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=CHOOSECOLS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSECOLS(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=CHOOSECOLS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
     }
 
@@ -7442,6 +7611,32 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_PadWithOneCellRange_UsesScalarValue()
+    {
+        var rowSheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(9)));
+        var rows = _eval.Evaluate("=WRAPROWS(A1:A1,2,B1:B1)", rowSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rows.RowCount.Should().Be(1);
+        rows.ColCount.Should().Be(2);
+        rows.Cells[0, 0].Should().Be(new NumberValue(1));
+        rows.Cells[0, 1].Should().Be(new NumberValue(9));
+
+        var colSheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 2, new TextValue("z")));
+        var cols = _eval.Evaluate("=WRAPCOLS(A1:A1,2,B1:B1)", colSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        cols.RowCount.Should().Be(2);
+        cols.ColCount.Should().Be(1);
+        cols.Cells[0, 0].Should().Be(new TextValue("a"));
+        cols.Cells[1, 0].Should().Be(new TextValue("z"));
+    }
+
+    [Fact]
     public void WraprowsAndWrapcols_OmittedPadWith_DefaultsToNA()
     {
         var rowSheet = MakeSheet(
@@ -7568,6 +7763,22 @@ public class FunctionLibraryTests
         rv.Cells[0, 0].Should().Be(new NumberValue(1));
         rv.Cells[0, 1].Should().Be(new TextValue("x"));
         rv.Cells[1, 0].Should().Be(new TextValue("x"));
+    }
+
+    [Fact]
+    public void Expand_PadWithOneCellRange_UsesScalarValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(9)));
+
+        var result = _eval.Evaluate("=EXPAND(A1:A1,2,2,B1:B1)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[0, 1].Should().Be(new NumberValue(9));
+        rv.Cells[1, 0].Should().Be(new NumberValue(9));
+        rv.Cells[1, 1].Should().Be(new NumberValue(9));
     }
 
     [Fact]
@@ -7780,6 +7991,17 @@ public class FunctionLibraryTests
             (3, 1, new NumberValue(30)));
         var result = _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet);
         result.Should().Be(new NumberValue(60));
+    }
+
+    [Fact]
+    public void Subtotal_FuncNumOneCellRange_IsScalarized()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(10)),
+            (2, 2, new NumberValue(20)));
+
+        _eval.Evaluate("=SUBTOTAL(A1:A1,B1:B2)", sheet).Should().Be(new NumberValue(30));
     }
 
     [Fact]
@@ -8110,6 +8332,17 @@ public class FunctionLibraryTests
         result.ColCount.Should().Be(1);
         result.Cells[0, 0].Should().Be(new BoolValue(true));
         result.Cells[1, 0].Should().Be(new BoolValue(false));
+    }
+
+    [Fact]
+    public void Exact_LeadingOneCellRange_BroadcastsAcrossLaterTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("x")),
+            (1, 2, new TextValue("x")),
+            (2, 2, new TextValue("y")));
+
+        AssertColumn(_eval.Evaluate("=EXACT(A1:A1,B1:B2)", sheet), new BoolValue(true), new BoolValue(false));
     }
 
     [Fact]
@@ -8452,6 +8685,18 @@ public class FunctionLibraryTests
             (2, 3, new TextValue(" ")));
 
         AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(1234.56), new NumberValue(1234.5));
+    }
+
+    [Fact]
+    public void Numbervalue_OneCellSeparatorRanges_BroadcastAcrossTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("1,2")),
+            (2, 1, new TextValue("3,4")),
+            (1, 2, new TextValue(",")),
+            (1, 3, new TextValue(".")));
+
+        AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B1,C1:C1)", sheet), new NumberValue(1.2), new NumberValue(3.4));
     }
 
     [Fact]

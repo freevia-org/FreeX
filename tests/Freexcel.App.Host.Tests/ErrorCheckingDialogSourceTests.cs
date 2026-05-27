@@ -1,5 +1,10 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Controls;
 using FluentAssertions;
+using Freexcel.Core.Commands;
+using Freexcel.Core.Formula;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -72,6 +77,15 @@ public sealed class ErrorCheckingDialogSourceTests
     }
 
     [Fact]
+    public void ErrorCheckingDialog_LabelsIssueListWithAccessKeyAndAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Issues:\", Target = _listView");
+        source.Should().Contain("AutomationProperties.SetName(_listView, \"Issues\");");
+    }
+
+    [Fact]
     public void ErrorCheckingDialog_UsesExcelLikeErrorHelpAndActionStructure()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
@@ -83,5 +97,80 @@ public sealed class ErrorCheckingDialogSourceTests
         source.Should().Contain("Content = \"_Ignore Error\"");
         source.Should().Contain("Content = \"_Edit in Formula Bar\"");
         source.Should().NotContain("SystemSounds.Asterisk.Play");
+    }
+
+    [Fact]
+    public void ErrorCheckingDialog_UpdatesCommandDisabledStatesForSelectionBoundaries()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var issues = new[]
+            {
+                CreateIssue(sheetId, row: 1),
+                CreateIssue(sheetId, row: 2)
+            };
+            var dialog = new ErrorCheckingDialog(issues, _ => { }, _ => true, _ => { });
+            dialog.Show();
+            try
+            {
+                var buttons = FindVisualChildren<Button>(dialog)
+                    .Where(button => button.Content is string)
+                    .GroupBy(button => (string)button.Content)
+                    .ToDictionary(group => group.Key, group => group.ToList());
+                var list = FindVisualChildren<ListView>(dialog).Single();
+
+                buttons["_Previous"].Single().IsEnabled.Should().BeFalse();
+                buttons["_Next"].Single().IsEnabled.Should().BeTrue();
+                buttons["_Go To"].Single().IsEnabled.Should().BeTrue();
+                buttons["_Ignore Error"].Should().AllSatisfy(button => button.IsEnabled.Should().BeTrue());
+                buttons["Show _Calculation Steps"].Single().IsEnabled.Should().BeTrue();
+                buttons["_Help on this error"].Single().IsEnabled.Should().BeTrue();
+
+                list.SelectedIndex = 1;
+
+                buttons["_Previous"].Single().IsEnabled.Should().BeTrue();
+                buttons["_Next"].Single().IsEnabled.Should().BeFalse();
+
+                list.SelectedIndex = -1;
+
+                buttons["_Previous"].Single().IsEnabled.Should().BeFalse();
+                buttons["_Next"].Single().IsEnabled.Should().BeFalse();
+                buttons["_Go To"].Single().IsEnabled.Should().BeFalse();
+                buttons["_Ignore Error"].Should().AllSatisfy(button => button.IsEnabled.Should().BeFalse());
+                buttons["_Trace Error"].Single().IsEnabled.Should().BeFalse();
+                buttons["Show _Calculation Steps"].Single().IsEnabled.Should().BeFalse();
+                buttons["_Edit in Formula Bar"].Single().IsEnabled.Should().BeFalse();
+                buttons["_Help on this error"].Single().IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    private static FormulaErrorIssue CreateIssue(SheetId sheetId, uint row) =>
+        new(
+            sheetId,
+            "Sheet1",
+            new CellAddress(sheetId, row, 1),
+            $"A{row}",
+            ErrorValue.Value.Code,
+            "=A1",
+            "Formula uses an incompatible value.");
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
     }
 }

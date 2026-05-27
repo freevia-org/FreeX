@@ -1,6 +1,9 @@
 using System.IO;
+using System.Reflection;
+using System.Windows;
 using System.Windows.Controls;
 using System.Xml.Linq;
+using Freexcel.Core.Commands;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -268,11 +271,32 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("request => ApplyPageSetupRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplyPageSetupRangeSelection(");
         source.Should().Contain("PageSetupRangeSelectionRequest request");
-        source.Should().Contain("FormatPageSetupRangeSelection(request.Target, selectedRange)");
+        source.Should().Contain("PageSetupRangeSelectionFormatter.Format(");
         source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
         source.Should().Contain("dialog.Hide();");
         source.Should().Contain("dialog.Show();");
         source.Should().Contain("dialog.Activate();");
+    }
+
+    [Theory]
+    [InlineData(PageSetupRangeSelectionTarget.PrintArea, false, "B2:D8")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatRows, false, "2:8")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatColumns, false, "B:D")]
+    [InlineData(PageSetupRangeSelectionTarget.PrintArea, true, "R2C2:R8C4")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatColumns, true, "C2:C4")]
+    public void PageSetupRangeSelectionFormatter_FormatsPickerSelectionForTarget(
+        PageSetupRangeSelectionTarget target,
+        bool useR1C1ReferenceStyle,
+        string expected)
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 4));
+
+        PageSetupRangeSelectionFormatter.Format(target, range, useR1C1ReferenceStyle)
+            .Should()
+            .Be(expected);
     }
 
     [Fact]
@@ -378,25 +402,68 @@ public sealed class PageSetupDialogXamlTests
     public void PageSetupHandler_AppliesHeaderFooterValuesReturnedByDialog()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+        var builderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupCommandBuilder.cs"));
 
-        source.Should().Contain("new CompositeWorkbookCommand(");
+        source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
+        builderSource.Should().Contain("new CompositeWorkbookCommand(");
         source.Should().Contain("new PageSetupDialog(");
         source.Should().Contain("SheetGrid.SelectedRange");
-        source.Should().Contain("new SetHeaderFooterCommand(");
-        source.Should().Contain("dialog.FirstPageHeader");
-        source.Should().Contain("dialog.EvenPageFooter");
-        source.Should().Contain("dialog.ScaleHeaderFooterWithDocument");
-        source.Should().Contain("dialog.AlignHeaderFooterWithMargins");
+        builderSource.Should().Contain("new SetHeaderFooterCommand(");
+        builderSource.Should().Contain("dialog.FirstPageHeader");
+        builderSource.Should().Contain("dialog.EvenPageFooter");
+        builderSource.Should().Contain("dialog.ScaleHeaderFooterWithDocument");
+        builderSource.Should().Contain("dialog.AlignHeaderFooterWithMargins");
     }
 
     [Fact]
     public void PageSetupHandler_AppliesPrintAreaReturnedByDialog()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+        var builderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupCommandBuilder.cs"));
 
-        source.Should().Contain("CreatePageSetupPrintAreaCommand(sheetId, dialog.PrintArea)");
-        source.Should().Contain("new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))");
-        source.Should().Contain("new ClearPrintAreaCommand(sheetId)");
+        source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
+        builderSource.Should().Contain("CreatePrintAreaCommand(sheetId, dialog.PrintArea)");
+        builderSource.Should().Contain("new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))");
+        builderSource.Should().Contain("new ClearPrintAreaCommand(sheetId)");
+    }
+
+    [Fact]
+    public void PageSetupDialogCommand_AppliesCenterOnPageAndPageOrderSelections()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Sheet1");
+            var dialog = new PageSetupDialog(sheet);
+            try
+            {
+                ((CheckBox)dialog.FindName("CenterHorizontallyBox")).IsChecked = true;
+                ((CheckBox)dialog.FindName("CenterVerticallyBox")).IsChecked = true;
+                SelectComboItemByTag((ComboBox)dialog.FindName("PageOrderBox"), "OverThenDown");
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
+                var outcome = PageSetupCommandBuilder.Build(sheet.Id, dialog).Apply(new SimpleCtx(workbook));
+
+                outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+                sheet.CenterHorizontallyOnPage.Should().BeTrue();
+                sheet.CenterVerticallyOnPage.Should().BeTrue();
+                sheet.PageOrder.Should().Be(WorksheetPageOrder.OverThenDown);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void UiTestCatalog_PageSetupRowNoLongerListsCenterAndPageOrderProofAsRemaining()
+    {
+        var catalog = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var pageSetupRow = catalog.Single(line => line.StartsWith("| UI-CMD-PAGE-003 |", StringComparison.Ordinal));
+
+        pageSetupRow.Should().Contain("Center on Page and Page Order dialog choices flow through the command builder into the worksheet model");
+        pageSetupRow.Should().NotContain("Remaining work is Center on Page, Page Order");
     }
 
     private static string ReadPageSetupDialogSource() =>
@@ -406,5 +473,34 @@ public sealed class PageSetupDialogXamlTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.HeaderFooter.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.Population.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.RangeSelection.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.ValidationFocus.cs")));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.ValidationFocus.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupRangeSelectionFormatter.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupCommandBuilder.cs")));
+
+    private static void SelectComboItemByTag(ComboBox comboBox, string tag)
+    {
+        comboBox.SelectedItem = comboBox.Items
+            .OfType<ComboBoxItem>()
+            .Single(item => string.Equals(item.Tag as string, tag, StringComparison.Ordinal));
+    }
+
+    private static void InvokePrivateAllowingNonModalDialogResult(PageSetupDialog dialog, string methodName)
+    {
+        var method = typeof(PageSetupDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        try
+        {
+            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
+                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+        }
+    }
+
+    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
+    }
 }

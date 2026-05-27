@@ -46,7 +46,8 @@ public sealed class SymbolPickerDialogSourceTests
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("void SelectSymbol(char value)");
-        source.Should().Contain("SelectedChar = value");
+        source.Should().Contain("SymbolPickerSelectionPlanner.CreateSelection(value)");
+        source.Should().Contain("ApplySelection(selection)");
         source.Should().Contain("insert.Click += (_, _) =>");
         source.Should().Contain("DialogResult = true");
         source.Should().NotContain("SelectedChar = c;\r\n                    DialogResult = true");
@@ -59,8 +60,8 @@ public sealed class SymbolPickerDialogSourceTests
 
         source.Should().Contain("void AcceptSelectedSymbol()");
         source.Should().Contain("button.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();");
-        source.Should().Contain("specialList.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();");
-        source.Should().Contain("insert.Click += (_, _) => AcceptSelectedSymbol();");
+        source.Should().Contain("specialList.MouseDoubleClick += (_, _) => acceptSelectedSymbol();");
+        source.Should().Contain("insert.Click += (_, _) => acceptSelectedSymbol();");
     }
 
     [Fact]
@@ -124,6 +125,15 @@ public sealed class SymbolPickerDialogSourceTests
         source.Should().Contain("Keyboard.Focus(firstSymbol);");
     }
 
+    [Fact]
+    public void Dialog_NamesSymbolGridAndSpecialCharacterListForAccessibility()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("AutomationProperties.SetName(grid, \"Symbols\");");
+        source.Should().Contain("AutomationProperties.SetName(specialList, \"Special characters\");");
+    }
+
     [Theory]
     [InlineData("03C0", "\u03c0")]
     [InlineData("U+2192", "\u2192")]
@@ -159,7 +169,20 @@ public sealed class SymbolPickerDialogSourceTests
             .Should().Equal(["\u20ac", "\u03c0", "\u00a3"]);
     }
 
+    [Theory]
+    [InlineData("\u03c0", '\u03c0', "03C0")]
+    [InlineData("\ud83d\ude00", '\0', "1F600")]
+    [InlineData("", '\0', "")]
+    public void SelectionPlanner_FormatsSelectedSymbolState(string symbol, char selectedChar, string codeText)
+    {
+        SymbolPickerSelectionPlanner.CreateSelection(symbol)
+            .Should()
+            .Be(new SymbolPickerSelection(symbol, selectedChar, codeText));
+    }
+
     private static string ReadSymbolPickerDialogSources() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs")) +
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Catalog.cs"));
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Layout.cs")) +
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Catalog.cs")) +
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerSelectionPlanner.cs"));
 }

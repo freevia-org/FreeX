@@ -103,6 +103,64 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_AttachesTextOverlaysToHeaderFooterText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("HeaderFooterBook.xlsx");
+            var sheet = workbook.AddSheet("Summary");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Printed"));
+            sheet.PageHeader = new WorksheetHeaderFooter(
+                "Left page &[Page]",
+                "Center pages &[Pages]",
+                "Right file &[File] &[Picture]");
+            sheet.PageFooter = new WorksheetHeaderFooter(
+                "Left tab &[Tab]",
+                "Center footer",
+                "Right footer");
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlayTexts = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlayTexts.Should().Contain("Left page 1");
+            overlayTexts.Should().Contain("Center pages 1");
+            overlayTexts.Should().Contain("Right file HeaderFooterBook.xlsx");
+            overlayTexts.Should().Contain("Left tab Summary");
+            overlayTexts.Should().Contain("Center footer");
+            overlayTexts.Should().Contain("Right footer");
+            overlayTexts.Should().NotContain(text => text.Contains("&[Picture]", StringComparison.Ordinal));
+            overlayTexts.Should().NotContain(text => text.Contains("&G", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_BoundsLongHeaderFooterTextOverlaysToVisiblePrintText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Long header print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Printed"));
+            sheet.PageHeader = new WorksheetHeaderFooter(
+                $"{new string('x', 300)} hidden-tail-token",
+                "",
+                "");
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlayTexts = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlayTexts.Should().Contain(text => text.EndsWith("\u2026", StringComparison.Ordinal));
+            overlayTexts.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_DraftQualitySkipsDisplayedCommentGraphics()
     {
         StaTestRunner.Run(() =>
@@ -269,6 +327,159 @@ public sealed class PrintRendererPageSetupTests
 
             overlays.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
             overlays.Should().Contain(text => text.EndsWith("\u2026", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_BoundsLongCellTextOverlaysToVisiblePrintText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Long cell print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(
+                new CellAddress(sheet.Id, 1, 1),
+                new TextValue("visible prefix worksheet text hidden-tail-token"));
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 12));
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlays.Should().Contain(text => text.Contains("\u2026", StringComparison.Ordinal));
+            overlays.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_DoesNotEllipsizeCellOverlayWhenOnlyTrailingSpacesOverflow()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Trailing space cell print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("abcdefg  "));
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 1));
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlays.Should().Contain("abcdefg");
+            overlays.Should().NotContain(text => text.Contains("\u2026", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_AttachesLinkOverlayForVisibleExternalHyperlinkCellOnly()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Hyperlink print");
+            var sheet = workbook.AddSheet("Sheet1");
+            var printedAddress = new CellAddress(sheet.Id, 1, 1);
+            var outsideSelectionAddress = new CellAddress(sheet.Id, 1, 2);
+            sheet.SetCell(printedAddress, new TextValue("Docs"));
+            sheet.SetCell(outsideSelectionAddress, new TextValue("Hidden"));
+            sheet.Hyperlinks[printedAddress] = "https://example.com/freexcel";
+            sheet.Hyperlinks[outsideSelectionAddress] = "https://example.com/outside-selection";
+
+            var document = PrintRenderer.RenderWorksheet(
+                workbook,
+                sheet.Id,
+                new ViewportService(),
+                printRangeOverride: new GridRange(printedAddress, printedAddress));
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+
+            var overlay = PdfLinkOverlayExtractor.Extract(page).Should().ContainSingle().Subject;
+            overlay.Target.Should().Be("https://example.com/freexcel");
+            overlay.X.Should().BeApproximately(sheet.PageMargins.Left * 96.0, 0.01);
+            overlay.Y.Should().BeApproximately(sheet.PageMargins.Top * 96.0, 0.01);
+            overlay.Width.Should().BeGreaterThan(40);
+            overlay.Height.Should().BeApproximately(20.0, 0.01);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_DoesNotAttachLinkOverlayForInternalWorksheetHyperlink()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Internal hyperlink print");
+            var sheet = workbook.AddSheet("Sheet1");
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(address, new TextValue("Jump"));
+            sheet.Hyperlinks[address] = "Sheet1!A10";
+            sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+                HyperlinkTargetKind.PlaceInThisDocument);
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+
+            PdfLinkOverlayExtractor.Extract(page).Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public void RenderWorkbook_PreservesPrintedCellLinkOverlaysWhenCloningBitmapPages()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Workbook hyperlink export");
+            var sheet = workbook.AddSheet("Sheet1");
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(address, new TextValue("Mail"));
+            sheet.Hyperlinks[address] = "mailto:review@example.com";
+
+            var document = PrintRenderer.RenderWorkbook(workbook, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+
+            PdfLinkOverlayExtractor.Extract(page)
+                .Should()
+                .ContainSingle()
+                .Which.Target.Should()
+                .Be("mailto:review@example.com");
+        });
+    }
+
+    [Theory]
+    [InlineData(WorksheetPrintErrorValue.Blank, "")]
+    [InlineData(WorksheetPrintErrorValue.Dash, "--")]
+    [InlineData(WorksheetPrintErrorValue.NotAvailable, "#N/A")]
+    public void RenderWorksheet_AppliesPrintErrorOptionsBeforeCellTextOverlays(
+        WorksheetPrintErrorValue printErrorValue,
+        string expectedOverlayText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Printed error overlays");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), ErrorValue.DivByZero);
+            sheet.PrintErrorValue = printErrorValue;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            if (expectedOverlayText.Length == 0)
+            {
+                overlays.Should().NotContain("#DIV/0!");
+            }
+            else
+            {
+                overlays.Should().Contain(expectedOverlayText);
+                overlays.Should().NotContain("#DIV/0!");
+            }
         });
     }
 

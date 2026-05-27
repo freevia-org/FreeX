@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Commands;
@@ -16,6 +17,15 @@ public sealed class ErrorCheckingDialog : Window
     private readonly ObservableCollection<FormulaErrorIssue> _issues = [];
     private readonly ListView _listView;
     private readonly TextBlock _header;
+    private readonly Button _helpButton;
+    private readonly Button _showStepsButton;
+    private readonly Button _sideIgnoreButton;
+    private readonly Button _editFormulaButton;
+    private readonly Button _goToButton;
+    private readonly Button _previousButton;
+    private readonly Button _nextButton;
+    private readonly Button _ignoreButton;
+    private readonly Button _traceButton;
 
     public ErrorCheckingDialog(
         IReadOnlyList<FormulaErrorIssue> issues,
@@ -62,18 +72,18 @@ public sealed class ErrorCheckingDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
-        var help = new Button { Content = "_Help on this error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
-        help.Click += (_, _) => ShowSelectedIssueHelp();
-        actionStack.Children.Add(help);
-        var showSteps = new Button { Content = "Show _Calculation Steps", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
-        showSteps.Click += (_, _) => TraceSelected();
-        actionStack.Children.Add(showSteps);
-        var ignoreAction = new Button { Content = "_Ignore Error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
-        ignoreAction.Click += (_, _) => IgnoreSelected();
-        actionStack.Children.Add(ignoreAction);
-        var editFormula = new Button { Content = "_Edit in Formula Bar", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
-        editFormula.Click += (_, _) => NavigateSelected();
-        actionStack.Children.Add(editFormula);
+        _helpButton = new Button { Content = "_Help on this error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        _helpButton.Click += (_, _) => ShowSelectedIssueHelp();
+        actionStack.Children.Add(_helpButton);
+        _showStepsButton = new Button { Content = "Show _Calculation Steps", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        _showStepsButton.Click += (_, _) => TraceSelected();
+        actionStack.Children.Add(_showStepsButton);
+        _sideIgnoreButton = new Button { Content = "_Ignore Error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        _sideIgnoreButton.Click += (_, _) => IgnoreSelected();
+        actionStack.Children.Add(_sideIgnoreButton);
+        _editFormulaButton = new Button { Content = "_Edit in Formula Bar", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        _editFormulaButton.Click += (_, _) => NavigateSelected();
+        actionStack.Children.Add(_editFormulaButton);
         root.Children.Add(actionPanel);
 
         var buttons = new StackPanel
@@ -85,25 +95,25 @@ public sealed class ErrorCheckingDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        var goTo = new Button { Content = "_Go To", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        goTo.Click += (_, _) => NavigateSelected();
-        buttons.Children.Add(goTo);
+        _goToButton = new Button { Content = "_Go To", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _goToButton.Click += (_, _) => NavigateSelected();
+        buttons.Children.Add(_goToButton);
 
-        var previous = new Button { Content = "_Previous", Width = 84, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        previous.Click += (_, _) => MoveSelection(-1);
-        buttons.Children.Add(previous);
+        _previousButton = new Button { Content = "_Previous", Width = 84, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _previousButton.Click += (_, _) => MoveSelection(-1);
+        buttons.Children.Add(_previousButton);
 
-        var next = new Button { Content = "_Next", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        next.Click += (_, _) => MoveSelection(1);
-        buttons.Children.Add(next);
+        _nextButton = new Button { Content = "_Next", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _nextButton.Click += (_, _) => MoveSelection(1);
+        buttons.Children.Add(_nextButton);
 
-        var ignore = new Button { Content = "_Ignore Error", Width = 104, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        ignore.Click += (_, _) => IgnoreSelected();
-        buttons.Children.Add(ignore);
+        _ignoreButton = new Button { Content = "_Ignore Error", Width = 104, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _ignoreButton.Click += (_, _) => IgnoreSelected();
+        buttons.Children.Add(_ignoreButton);
 
-        var trace = new Button { Content = "_Trace Error", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        trace.Click += (_, _) => TraceSelected();
-        buttons.Children.Add(trace);
+        _traceButton = new Button { Content = "_Trace Error", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _traceButton.Click += (_, _) => TraceSelected();
+        buttons.Children.Add(_traceButton);
 
         var options = new Button { Content = "_Options...", Width = 92, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         options.Click += (_, _) => _openOptions?.Invoke();
@@ -113,7 +123,13 @@ public sealed class ErrorCheckingDialog : Window
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
+        var listPanel = new DockPanel();
         _listView = new ListView { ItemsSource = _issues };
+        AutomationProperties.SetName(_listView, "Issues");
+        var listLabel = new Label { Content = "_Issues:", Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(listLabel, Dock.Top);
+        listPanel.Children.Add(listLabel);
+        _listView.SelectionChanged += (_, _) => UpdateCommandStates();
         _listView.MouseDoubleClick += ListView_MouseDoubleClick;
         _listView.KeyDown += ListView_KeyDown;
         _listView.View = new System.Windows.Controls.GridView
@@ -127,7 +143,8 @@ public sealed class ErrorCheckingDialog : Window
                 new GridViewColumn { Header = "Description", Width = 260, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.Description)) }
             }
         };
-        root.Children.Add(_listView);
+        listPanel.Children.Add(_listView);
+        root.Children.Add(listPanel);
 
         foreach (var issue in issues)
             _issues.Add(issue);
@@ -136,6 +153,7 @@ public sealed class ErrorCheckingDialog : Window
         {
             _listView.SelectedIndex = 0;
         }
+        UpdateCommandStates();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -162,6 +180,7 @@ public sealed class ErrorCheckingDialog : Window
         _listView.SelectedIndex = nextIndex;
         _listView.ScrollIntoView(_issues[nextIndex]);
         NavigateSelected();
+        UpdateCommandStates();
     }
 
     private void IgnoreSelected()
@@ -190,11 +209,27 @@ public sealed class ErrorCheckingDialog : Window
         _listView.SelectedIndex = Math.Min(index, _issues.Count - 1);
         _listView.ScrollIntoView(_listView.SelectedItem);
         NavigateSelected();
+        UpdateCommandStates();
     }
 
     private void RefreshHeader()
     {
         _header.Text = $"{_issues.Count} issue(s) found.";
+    }
+
+    private void UpdateCommandStates()
+    {
+        var selectedIndex = _listView.SelectedIndex;
+        var hasSelection = selectedIndex >= 0 && selectedIndex < _issues.Count;
+        _helpButton.IsEnabled = hasSelection;
+        _showStepsButton.IsEnabled = hasSelection;
+        _sideIgnoreButton.IsEnabled = hasSelection;
+        _editFormulaButton.IsEnabled = hasSelection;
+        _goToButton.IsEnabled = hasSelection;
+        _ignoreButton.IsEnabled = hasSelection;
+        _traceButton.IsEnabled = hasSelection;
+        _previousButton.IsEnabled = hasSelection && selectedIndex > 0;
+        _nextButton.IsEnabled = hasSelection && selectedIndex < _issues.Count - 1;
     }
 
     private void TraceSelected()

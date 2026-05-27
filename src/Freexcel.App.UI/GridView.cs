@@ -25,7 +25,13 @@ public enum GridQuickAnalysisPreviewVisualKind
     LineSparkline,
     ColumnSparkline,
     WinLossSparkline,
-    ColumnChart
+    ColumnChart,
+    LineChart,
+    BarChart,
+    StackedColumnChart,
+    PieChart,
+    AreaChart,
+    ScatterChart
 }
 
 /// <summary>
@@ -102,6 +108,9 @@ public partial class GridView : FrameworkElement
     private static readonly Brush QuickAnalysisWinLossPositiveBrush = MakeBrushAlpha(180, 84, 130, 53);
     private static readonly Brush QuickAnalysisWinLossNegativeBrush = MakeBrushAlpha(180, 192, 80, 77);
     private static readonly Brush QuickAnalysisColumnChartPreviewBrush = MakeBrushAlpha(170, 68, 114, 196);
+    private static readonly Brush QuickAnalysisPieChartAccentBrush = MakeBrushAlpha(176, 237, 125, 49);
+    private static readonly Brush QuickAnalysisAreaChartPreviewBrush = MakeBrushAlpha(96, 68, 114, 196);
+    private static readonly Brush QuickAnalysisScatterChartPreviewBrush = MakeBrushAlpha(190, 112, 173, 71);
     private static readonly Pen QuickAnalysisColumnChartAxisPen = new(MakeBrush(89, 89, 89), 1);
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
     private static readonly Pen FreezePen = MakeFreezePen();
@@ -149,14 +158,7 @@ public partial class GridView : FrameworkElement
     }
 
     public static CellAddress ConstrainAutofillTarget(GridRange source, CellAddress target)
-    {
-        var verticalDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
-        var horizontalDistance = target.Col > source.End.Col ? target.Col - source.End.Col : 0;
-
-        return verticalDistance >= horizontalDistance
-            ? new CellAddress(target.Sheet, target.Row, source.End.Col)
-            : new CellAddress(target.Sheet, source.End.Row, target.Col);
-    }
+        => GridAutofillPlanner.ConstrainTarget(source, target);
 
     private static Pen MakeResizeLinePen()
     {

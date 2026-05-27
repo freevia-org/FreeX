@@ -234,13 +234,18 @@ public static partial class BuiltInFunctions
     private static ScalarValue Cumipmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate  = ToNumber(args[0]);
-        double nper  = ToNumber(args[1]);
-        double pv    = ToNumber(args[2]);
-        double end   = ToNumber(args[4]);
-        double type  = ToNumber(args[5]);
-        if (args[3] is RangeValue startRange) return MapUnaryTextRange(startRange, value => CumipmtScalar(rate, nper, pv, value, end, type));
-        return CumipmtScalar(rate, nper, pv, args[3], end, type);
+        return MapScalarArgs(args, values => CumipmtScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue CumipmtScalar(ScalarValue rateValue, ScalarValue nperValue, ScalarValue pvValue, ScalarValue startValue, ScalarValue endValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValue is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (startValue is ErrorValue startError) return startError;
+        if (endValue is ErrorValue endError) return endError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return CumipmtScalar(ToNumber(rateValue), ToNumber(nperValue), ToNumber(pvValue), startValue, ToNumber(endValue), ToNumber(typeValue));
     }
 
     private static ScalarValue CumipmtScalar(double rate, double nper, double pv, ScalarValue startValue, double end, double type)
@@ -263,13 +268,18 @@ public static partial class BuiltInFunctions
     private static ScalarValue Cumprinc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate  = ToNumber(args[0]);
-        double nper  = ToNumber(args[1]);
-        double pv    = ToNumber(args[2]);
-        double end   = ToNumber(args[4]);
-        double type  = ToNumber(args[5]);
-        if (args[3] is RangeValue startRange) return MapUnaryTextRange(startRange, value => CumprincScalar(rate, nper, pv, value, end, type));
-        return CumprincScalar(rate, nper, pv, args[3], end, type);
+        return MapScalarArgs(args, values => CumprincScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue CumprincScalar(ScalarValue rateValue, ScalarValue nperValue, ScalarValue pvValue, ScalarValue startValue, ScalarValue endValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValue is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (startValue is ErrorValue startError) return startError;
+        if (endValue is ErrorValue endError) return endError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return CumprincScalar(ToNumber(rateValue), ToNumber(nperValue), ToNumber(pvValue), startValue, ToNumber(endValue), ToNumber(typeValue));
     }
 
     private static ScalarValue CumprincScalar(double rate, double nper, double pv, ScalarValue startValue, double end, double type)
@@ -326,8 +336,13 @@ public static partial class BuiltInFunctions
         var valRange = args[0] is RangeValue valuesRange
             ? valuesRange
             : SingleCellArray(args[0]);
-        double financeRate  = ToNumber(args[1]);
-        double reinvestRate = ToNumber(args[2]);
+        return MapBinaryMathArgs(args[1], args[2], (financeRateValue, reinvestRateValue) => MirrScalar(valRange, financeRateValue, reinvestRateValue));
+    }
+
+    private static ScalarValue MirrScalar(RangeValue valRange, ScalarValue financeRateValue, ScalarValue reinvestRateValue)
+    {
+        double financeRate  = ToNumber(financeRateValue);
+        double reinvestRate = ToNumber(reinvestRateValue);
         if (!double.IsFinite(financeRate) || !double.IsFinite(reinvestRate)) return ErrorValue.Num;
         var (values, err) = CollectRangeNumbers(valRange);
         if (err is not null) return err;
@@ -391,13 +406,20 @@ public static partial class BuiltInFunctions
     private static ScalarValue Xnpv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
         var valRange = args[1] is RangeValue valuesRange
             ? valuesRange
             : SingleCellArray(args[1]);
         var dateRange = args[2] is RangeValue datesRange
             ? datesRange
             : SingleCellArray(args[2]);
+        if (args[0] is RangeValue rateRange)
+            return MapUnaryTextRange(rateRange, rateValue => XnpvScalar(rateValue, valRange, dateRange));
+        return XnpvScalar(args[0], valRange, dateRange);
+    }
+
+    private static ScalarValue XnpvScalar(ScalarValue rateValue, RangeValue valRange, RangeValue dateRange)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || rate <= -1) return ErrorValue.Num;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);

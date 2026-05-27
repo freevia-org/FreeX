@@ -94,13 +94,25 @@ public static class RibbonAdaptiveLayoutPlanner
 
         if (IsDataRibbonGroupSet(groupNames))
         {
+            ApplyPriorityState(
+                states,
+                groupNames,
+                ["Get & Transform Data", "Data Tools", "Forecast"],
+                RibbonAdaptiveGroupState.Full);
+            ApplyPriorityState(
+                states,
+                groupNames,
+                ["Sort & Filter"],
+                availableWidth <= 1120
+                    ? RibbonAdaptiveGroupState.IconOnly
+                    : RibbonAdaptiveGroupState.Full);
             ApplyPriorityCollapse(
                 states,
                 groupNames,
                 availableWidth <= 1120
-                    ? ["Queries & Connections", "Forecast", "Outline"]
+                    ? ["Queries & Connections", "Data Types", "Outline"]
                     : availableWidth <= 1320
-                        ? ["Forecast", "Outline"]
+                        ? ["Data Types", "Outline"]
                         : []);
             return true;
         }
@@ -118,6 +130,35 @@ public static class RibbonAdaptiveLayoutPlanner
             return true;
         }
 
+        if (IsReviewRibbonGroupSet(groupNames))
+        {
+            ApplyPriorityCollapse(
+                states,
+                groupNames,
+                availableWidth <= 1120
+                    ? ["Notes", "Protect"]
+                    : availableWidth <= 1320
+                        ? ["Notes", "Protect"]
+                        : []);
+            return true;
+        }
+
+        if (IsViewRibbonGroupSet(groupNames))
+        {
+            ApplyPriorityState(
+                states,
+                groupNames,
+                ["Workbook Views", "Show", "Zoom", "Window"],
+                RibbonAdaptiveGroupState.Full);
+            ApplyPriorityCollapse(
+                states,
+                groupNames,
+                availableWidth <= 760
+                    ? ["Show", "Macros"]
+                    : ["Macros"]);
+            return true;
+        }
+
         var firstCollapsedIndex = GetFirstCollapsedIndexForKnownTab(availableWidth, groupNames);
         if (firstCollapsedIndex is null)
             return false;
@@ -131,11 +172,11 @@ public static class RibbonAdaptiveLayoutPlanner
         if (availableWidth <= 760)
             return 0;
 
-        if (IsViewRibbonGroupSet(groupNames) || IsReviewRibbonGroupSet(groupNames))
+        if (IsViewRibbonGroupSet(groupNames))
             return availableWidth <= 1120 ? 2 : availableWidth <= 1320 ? 3 : null;
 
         if (IsDrawRibbonGroupSet(groupNames))
-            return availableWidth <= 1120 ? 1 : availableWidth <= 1320 ? 2 : null;
+            return availableWidth <= 1120 ? 3 : availableWidth <= 1320 ? 4 : null;
 
         return null;
     }
@@ -151,10 +192,19 @@ public static class RibbonAdaptiveLayoutPlanner
         IReadOnlyList<string> groupNames,
         IReadOnlyList<string> collapsedGroups)
     {
-        foreach (var groupName in collapsedGroups)
+        ApplyPriorityState(states, groupNames, collapsedGroups, RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    private static void ApplyPriorityState(
+        RibbonAdaptiveGroupState[] states,
+        IReadOnlyList<string> groupNames,
+        IReadOnlyList<string> groupNamesToUpdate,
+        RibbonAdaptiveGroupState state)
+    {
+        foreach (var groupName in groupNamesToUpdate)
         {
             if (TryFindGroupIndex(groupNames, groupName, out var index))
-                states[index] = RibbonAdaptiveGroupState.Collapsed;
+                states[index] = state;
         }
     }
 
@@ -197,10 +247,11 @@ public static class RibbonAdaptiveLayoutPlanner
 
     private static bool IsDataRibbonGroupSet(IReadOnlyList<string> groupNames) =>
         groupNames.Count >= 5 &&
-        TryFindGroupIndex(groupNames, "Get & Transform Data", out _) &&
-        TryFindGroupIndex(groupNames, "Queries & Connections", out _) &&
-        TryFindGroupIndex(groupNames, "Sort & Filter", out _) &&
-        TryFindGroupIndex(groupNames, "Data Tools", out _);
+            TryFindGroupIndex(groupNames, "Get & Transform Data", out _) &&
+            TryFindGroupIndex(groupNames, "Queries & Connections", out _) &&
+            TryFindGroupIndex(groupNames, "Data Types", out _) &&
+            TryFindGroupIndex(groupNames, "Sort & Filter", out _) &&
+            TryFindGroupIndex(groupNames, "Data Tools", out _);
 
     private static bool IsViewRibbonGroupSet(IReadOnlyList<string> groupNames) =>
         groupNames.Count >= 5 &&
@@ -222,9 +273,9 @@ public static class RibbonAdaptiveLayoutPlanner
 
     private static bool IsDrawRibbonGroupSet(IReadOnlyList<string> groupNames) =>
         groupNames.Count >= 3 &&
-        TryFindGroupIndex(groupNames, "Draw", out _) &&
-        TryFindGroupIndex(groupNames, "Arrange", out _) &&
-        TryFindGroupIndex(groupNames, "Format", out _);
+        TryFindGroupIndex(groupNames, "Tools", out _) &&
+        TryFindGroupIndex(groupNames, "Pens", out _) &&
+        TryFindGroupIndex(groupNames, "Convert", out _);
 
     private static bool IsTinyRibbonGroupSet(IReadOnlyList<string> groupNames) =>
         groupNames.Count <= 2 &&
@@ -255,7 +306,7 @@ public static class RibbonAdaptiveLayoutPlanner
             ApplyPriorityCollapse(
                 states,
                 groupNames,
-                ["Illustrations", "Add-ins", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"]);
+                ["Add-ins", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"]);
             return;
         }
 
@@ -284,7 +335,7 @@ public static class RibbonAdaptiveLayoutPlanner
 
         if (availableWidth <= 1120)
         {
-            for (var i = 1; i < states.Length; i++)
+            for (var i = 2; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
         }
         else if (availableWidth <= 1320)
@@ -300,17 +351,17 @@ public static class RibbonAdaptiveLayoutPlanner
         RibbonAdaptiveGroupState[] states)
     {
         if (availableWidth <= 900 &&
-            TryFindGroupIndex(groupNames, "Font", out var fontIndex))
+            TryFindGroupIndex(groupNames, "Alignment", out var alignmentIndexAtNarrow))
         {
-            for (var i = fontIndex; i < states.Length; i++)
+            for (var i = alignmentIndexAtNarrow; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
             return;
         }
 
         if (availableWidth <= 1120 &&
-            TryFindGroupIndex(groupNames, "Alignment", out var alignmentIndex))
+            TryFindGroupIndex(groupNames, "Styles", out var stylesIndexAtMedium))
         {
-            for (var i = alignmentIndex; i < states.Length; i++)
+            for (var i = stylesIndexAtMedium; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
             return;
         }
@@ -319,14 +370,6 @@ public static class RibbonAdaptiveLayoutPlanner
             TryFindGroupIndex(groupNames, "Styles", out var stylesIndex))
         {
             for (var i = stylesIndex; i < states.Length; i++)
-                states[i] = RibbonAdaptiveGroupState.Collapsed;
-            return;
-        }
-
-        if (availableWidth <= 1500 &&
-            TryFindGroupIndex(groupNames, "Cells", out var cellsIndex))
-        {
-            for (var i = cellsIndex; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
             return;
         }

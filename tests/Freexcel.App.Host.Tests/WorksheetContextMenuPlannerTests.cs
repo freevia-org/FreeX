@@ -310,6 +310,8 @@ public sealed class WorksheetContextMenuPlannerTests
 
         commands.Single(command => command.Header == formatHeader)
             .Action.Should().Be(WorksheetContextMenuAction.FormatDrawingObject);
+        commands.Single(command => command.Header == formatHeader)
+            .AccessHeader.Should().Be($"_Format {formatHeader["Format ".Length..]}");
     }
 
     [Fact]
