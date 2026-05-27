@@ -2218,6 +2218,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
         source.Should().Contain("RowColumnDimensionPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)");
         source.Should().Contain("RowColumnDimensionPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
         source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Row Height\"");
         source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Column Width\"");
 
@@ -2226,6 +2228,8 @@ public sealed class MainWindowSourceHygieneTests
         plannerSource.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
         plannerSource.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, height)");
         plannerSource.Should().Contain("new SetColumnWidthCommand(sheetId, startCol, endCol, width)");
+        plannerSource.Should().Contain("new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden)");
+        plannerSource.Should().Contain("new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden)");
     }
 
     [Fact]

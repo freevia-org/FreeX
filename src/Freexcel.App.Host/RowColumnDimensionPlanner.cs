@@ -35,6 +35,18 @@ public static class RowColumnDimensionPlanner
         return new SetColumnWidthCommand(sheetId, startCol, endCol, width);
     }
 
+    public static IWorkbookCommand CreateRowsHiddenCommand(SheetId sheetId, GridRange range, bool hidden)
+    {
+        var (startRow, endRow) = SelectionRangeService.GetRowSpan(range);
+        return new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden);
+    }
+
+    public static IWorkbookCommand CreateColumnsHiddenCommand(SheetId sheetId, GridRange range, bool hidden)
+    {
+        var (startCol, endCol) = SelectionRangeService.GetColumnSpan(range);
+        return new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden);
+    }
+
     public static IWorkbookCommand CreateAutoFitRowHeightCommand(
         SheetId sheetId,
         IReadOnlyList<AutoFitSizePlan> plans)
