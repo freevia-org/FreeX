@@ -50,7 +50,15 @@ public sealed class CommandBus : ICommandBus
 
         var ctx = _contextFactory(workbookId);
         var command = stack.PopUndo();
-        command.Revert(ctx);
+        try
+        {
+            command.Revert(ctx);
+        }
+        catch (Exception ex)
+        {
+            stack.RollbackPopUndo(command); // restore the command so the undo chain is intact
+            return new CommandOutcome(false, $"Undo failed: {ex.Message}");
+        }
 
         return new CommandOutcome(true, AffectedCells: GetAffectedCells(command));
     }
@@ -63,7 +71,16 @@ public sealed class CommandBus : ICommandBus
 
         var ctx = _contextFactory(workbookId);
         var command = stack.PopRedo();
-        var outcome = command.Apply(ctx);
+        CommandOutcome outcome;
+        try
+        {
+            outcome = command.Apply(ctx);
+        }
+        catch (Exception ex)
+        {
+            stack.PushRedo(command); // restore so the user can retry
+            return new CommandOutcome(false, $"Redo failed: {ex.Message}");
+        }
 
         if (outcome.Success)
             stack.PushWithoutClearingRedo(command);
@@ -148,6 +165,21 @@ public sealed class CommandBus : ICommandBus
         public void PushRedo(IWorkbookCommand command)
         {
             _redoStack.Push(command);
+        }
+
+        /// <summary>
+        /// Un-does a <see cref="PopUndo"/>: removes the command from the redo stack and puts it
+        /// back on top of the undo stack.  Call this when <see cref="IWorkbookCommand.Revert"/>
+        /// throws so the undo chain is not permanently broken.
+        /// </summary>
+        public void RollbackPopUndo(IWorkbookCommand command)
+        {
+            // PopUndo pushed the command onto the redo stack — reverse that first.
+            if (_redoStack.Count > 0 && ReferenceEquals(_redoStack.Peek(), command))
+                _redoStack.Pop();
+
+            // Put the command back at the top of the undo stack.
+            _undoStack.AddLast(command);
         }
     }
 }
