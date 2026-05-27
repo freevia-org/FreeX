@@ -85,6 +85,56 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void QuickAccessToolbar_SaveUndoRedoExposeKeyTipsAndSharedCommandRoutes()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var keyTipSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyTips.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CommandExecution.cs"));
+        var shellSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Shell.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var qatButtons = document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute(x + "Name")?.Value is "SaveQatBtn" or "UndoQatBtn" or "RedoQatBtn")
+            .Select(button => new
+            {
+                Name = button.Attribute(x + "Name")?.Value,
+                Click = button.Attribute("Click")?.Value,
+                KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                AutomationName = button.Attribute("AutomationProperties.Name")?.Value
+            })
+            .ToList();
+
+        qatButtons.Should().BeEquivalentTo(
+        [
+            new { Name = "SaveQatBtn", Click = "SaveButton_Click", KeyTip = "1", AutomationName = "Save" },
+            new { Name = "UndoQatBtn", Click = "UndoQatBtn_Click", KeyTip = "2", AutomationName = "Undo" },
+            new { Name = "RedoQatBtn", Click = "RedoQatBtn_Click", KeyTip = "3", AutomationName = "Redo" }
+        ]);
+
+        keyTipSource.Should().Contain("private bool TryInvokeTopLevelQatKeyTip(string keyTip)");
+        keyTipSource.Should().Contain("GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)");
+        keyTipSource.Should().Contain("if (!match.IsEnabled)");
+        keyTipSource.Should().Contain("match.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, match));");
+
+        backstageSource.Should().Contain("private async void SaveButton_Click(object sender, RoutedEventArgs e)");
+        backstageSource.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
+        backstageSource.Should().Contain("await SaveWorkbookToTargetAsync(target!)");
+        backstageSource.Should().Contain("await SaveWorkbookWithDialogAsync()");
+        backstageSource.Should().Contain("MarkWorkbookSaved()");
+        backstageSource.Should().Contain("UpdateTitleBar()");
+
+        shellSource.Should().Contain("private void UndoQatBtn_Click(object sender, RoutedEventArgs e) => ExecuteUndo();");
+        shellSource.Should().Contain("private void RedoQatBtn_Click(object sender, RoutedEventArgs e) => ExecuteRedo();");
+        commandSource.Should().Contain("_commandBus.Undo(_workbook.Id)");
+        commandSource.Should().Contain("_commandBus.Redo(_workbook.Id)");
+        commandSource.Should().Contain("RefreshToolbar()");
+    }
+
+    [Fact]
     public void EditableFontSizeBox_CommitsTypedKeyboardInputWithEnter()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
