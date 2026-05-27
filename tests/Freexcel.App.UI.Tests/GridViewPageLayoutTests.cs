@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
+using System.IO;
 using System.Windows;
 
 namespace Freexcel.App.UI.Tests;
@@ -64,6 +65,23 @@ public sealed class GridViewPageLayoutTests
                 WorksheetPageOrientation.Portrait,
                 WorksheetPageMargins.Normal)
             .Should().BeNull();
+    }
+
+    [Fact]
+    public void PageMarginGuideLayoutPlanner_CalculatesVisibleEdgesWithSingleMetricPasses()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "PageMarginGuideLayoutPlanner.cs"));
+        var calculateGuide = source[
+            source.IndexOf("public static PageMarginGuideLayout? CalculateGuide", StringComparison.Ordinal)..
+            source.IndexOf("public static WorksheetPageMarginEdge? HitTestGuide", StringComparison.Ordinal)];
+
+        calculateGuide.Should().Contain("TryFindRowMetrics(viewport.RowMetrics");
+        calculateGuide.Should().Contain("TryFindColumnMetrics(viewport.ColMetrics");
+        calculateGuide.Should().Contain("foreach (var metric in metrics)");
+        calculateGuide.Should().NotContain("FirstOrDefault");
+        calculateGuide.Should().NotContain(".Where(");
+        calculateGuide.Should().NotContain(".ToList()");
     }
 
     [Fact]
@@ -169,5 +187,19 @@ public sealed class GridViewPageLayoutTests
             new Point(115, 300));
 
         margins.Left.Should().BeApproximately(0.85, 0.001);
+    }
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 }
