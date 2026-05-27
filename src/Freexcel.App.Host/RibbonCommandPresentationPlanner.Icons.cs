@@ -99,7 +99,6 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("effect")) return new(RibbonCommandIconKind.Effects);
         if (name.Contains("background")) return new(RibbonCommandIconKind.Picture);
         if (name.Contains("margin")) return new(RibbonCommandIconKind.Margins);
-        if (name.Contains("orientation")) return new(RibbonCommandIconKind.Orientation);
         if (name.Contains("paper") || name.Contains("page setup")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("scale to fit")) return new(RibbonCommandIconKind.Scale);
         if (name.Contains("print area")) return new(RibbonCommandIconKind.Table);
@@ -191,7 +190,6 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("training")) return new(RibbonCommandIconKind.Book, RibbonCommandIconAccent.Help);
         if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("community")) return new(RibbonCommandIconKind.Share);
-        if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("blog")) return new(RibbonCommandIconKind.Generic);
         if (name.Contains("mobile")) return new(RibbonCommandIconKind.Window);
         if (name.Contains("help")) return new(RibbonCommandIconKind.Help, RibbonCommandIconAccent.Help);
