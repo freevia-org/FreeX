@@ -3050,7 +3050,7 @@ public class ExportPlannerTests
         var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = \"_All pages\"");
-        source.Should().Contain("Content = \"Current pa_ge\"");
+        source.Should().Contain("Content = \"Current pag_e\"");
         source.Should().Contain("Content = \"Pa_ges\"");
         source.Should().Contain("fromPageBox");
         source.Should().Contain("toPageBox");
@@ -3062,6 +3062,18 @@ public class ExportPlannerTests
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
         source.Should().Contain("ShowInvalidPageRangeWarning(fromPageBox, toPageBox, pageRangeError)");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_PrintRangeAccessKeysAreUnique()
+    {
+        var source = ReadPrintPreviewDialogSources();
+        var rangeLabels = new[] { "_All pages", "Current pag_e", "Pa_ges" };
+
+        var accessKeys = rangeLabels.Select(ExtractAccessKey).ToList();
+
+        source.Should().ContainAll(rangeLabels.Select(label => $"Content = \"{label}\""));
+        accessKeys.Should().OnlyHaveUniqueItems("Print Preview range choices share one access-key scope");
     }
 
     [Fact]
@@ -3109,6 +3121,16 @@ public class ExportPlannerTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewSettingsPanelFactory.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewToolbarPlanner.cs")));
+
+    private static char ExtractAccessKey(string label)
+    {
+        var underscoreIndex = label.IndexOf('_', StringComparison.Ordinal);
+
+        underscoreIndex.Should().BeGreaterThanOrEqualTo(0, $"label '{label}' should declare an access key");
+        underscoreIndex.Should().BeLessThan(label.Length - 1, $"label '{label}' should include a character after '_'");
+
+        return char.ToUpperInvariant(label[underscoreIndex + 1]);
+    }
 
     private static string? ReadPrintScaling(PdfDocument pdf) =>
         pdf.Internals.Catalog.Elements
