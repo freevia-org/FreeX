@@ -512,6 +512,27 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptionsDialog_ExposesPublishScopePageRangeQualityAndOpenAfterPublishControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("Content = \"Active _sheet(s)\", IsChecked = true");
+        source.Should().Contain("Content = \"Selected _range\"");
+        source.Should().Contain("Content = \"_Workbook\"");
+        source.Should().Contain("_selectionButton.IsEnabled = hasSelection;");
+        source.Should().Contain("Content = \"_All\", GroupName = \"PageRange\", IsChecked = true");
+        source.Should().Contain("Content = \"_Pages\", GroupName = \"PageRange\"");
+        source.Should().Contain("_allPagesButton.Checked += (_, _) => SetPageRangeFieldsEnabled(false);");
+        source.Should().Contain("_pagesRangeButton.Checked += (_, _) => SetPageRangeFieldsEnabled(true);");
+        source.Should().Contain("Content = \"_Standard\", IsChecked = true");
+        source.Should().Contain("Content = \"_Minimum size\"");
+        source.Should().Contain("Content = \"_Open after publishing\"");
+        source.Should().Contain("ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error)");
+        source.Should().Contain("_minimumSizeButton.IsChecked == true");
+        source.Should().Contain("_openAfterPublishBox.IsChecked == true");
+    }
+
+    [Fact]
     public void ExportOptionsDialog_DisabledChoicesExposeAutomationHelpText()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
