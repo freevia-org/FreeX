@@ -462,6 +462,26 @@ public sealed class WorksheetContextMenuPlannerTests
     }
 
     [Theory]
+    [MemberData(nameof(RowColumnSizingVisibilityCases))]
+    public void BuildCommands_RowAndColumnTargetsExposeSizingVisibilityMetadata(
+        WorksheetContextMenuTargetKind targetKind,
+        WorksheetContextMenuCommand[] expectedCommands)
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(targetKind)
+            .Where(command => !command.IsSeparator)
+            .ToList();
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            expectedCommands.Select(command => command.Header));
+        foreach (var expectedCommand in expectedCommands)
+        {
+            commands.Single(command => command.Header == expectedCommand.Header)
+                .Should()
+                .BeEquivalentTo(expectedCommand);
+        }
+    }
+
+    [Theory]
     [MemberData(nameof(TargetSpecificCommandEnvelopeCases))]
     public void BuildCommands_TargetSpecificMenusExposeOnlyExpectedCommandFamilies(
         WorksheetContextMenuTargetKind targetKind,
@@ -578,6 +598,41 @@ public sealed class WorksheetContextMenuPlannerTests
                 "Format Picture...",
                 "Bring Forward",
                 "Send Backward"
+            ]
+        }
+    };
+
+    public static TheoryData<WorksheetContextMenuTargetKind, WorksheetContextMenuCommand[]> RowColumnSizingVisibilityCases => new()
+    {
+        {
+            WorksheetContextMenuTargetKind.Worksheet,
+            [
+                new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
+                new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws"),
+                new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
+                new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight"),
+                new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
+                new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns"),
+                new("Column Width...", WorksheetContextMenuAction.ColumnWidth, AccessHeader: "Column _Width..."),
+                new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth")
+            ]
+        },
+        {
+            WorksheetContextMenuTargetKind.RowSelection,
+            [
+                new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
+                new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight"),
+                new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
+                new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws")
+            ]
+        },
+        {
+            WorksheetContextMenuTargetKind.ColumnSelection,
+            [
+                new("Column Width...", WorksheetContextMenuAction.ColumnWidth, AccessHeader: "Column _Width..."),
+                new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth"),
+                new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
+                new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns")
             ]
         }
     };
