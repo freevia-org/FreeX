@@ -41,6 +41,42 @@ public sealed class StatusBarLayoutTests
     }
 
     [Fact]
+    public void StatusModeText_RendersReadyInputPromptAndInlineEditMode()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet = harness.ActiveWorkbook.GetSheet(harness.CurrentSheetId)
+                ?? throw new InvalidOperationException("The active sheet should exist.");
+            var inputCell = new CellAddress(sheet.Id, 2, 1);
+            sheet.DataValidations.Add(new DataValidation
+            {
+                AppliesTo = new GridRange(inputCell, inputCell),
+                ShowInputMessage = true,
+                PromptTitle = "Input",
+                PromptMessage = "Use a whole number"
+            });
+
+            harness.SelectRange(1, 1, 1, 1);
+            harness.RefreshStatusBar();
+            harness.StatusReadyVisibility.Should().Be(Visibility.Visible);
+            harness.StatusStatsVisibility.Should().Be(Visibility.Collapsed);
+            harness.StatusText("StatusReadyText").Should().Be("Ready");
+
+            harness.SelectRange(2, 1, 2, 1);
+            harness.RefreshStatusBar();
+            harness.StatusReadyVisibility.Should().Be(Visibility.Visible);
+            harness.StatusStatsVisibility.Should().Be(Visibility.Collapsed);
+            harness.StatusText("StatusReadyText").Should().Be("Input: Use a whole number");
+
+            harness.ShowInlineEditor(inputCell);
+            harness.StatusReadyVisibility.Should().Be(Visibility.Visible);
+            harness.StatusStatsVisibility.Should().Be(Visibility.Collapsed);
+            harness.StatusText("StatusReadyText").Should().Be("Edit");
+        });
+    }
+
+    [Fact]
     public void AggregateViewport_StaysClearOfZoomControlsAtCompactWidth()
     {
         StaTestRunner.Run(() =>
@@ -195,6 +231,7 @@ public sealed class StatusBarLayoutTests
         private readonly FieldInfo _currentSheetId;
         private readonly MethodInfo _getCurrentShellFocusTarget;
         private readonly MethodInfo _refreshStatusBar;
+        private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _tryHandleFocusedStatusBarKeyboardNavigation;
 
         private MainWindowHarness(MainWindow window, Workbook workbook)
@@ -216,6 +253,9 @@ public sealed class StatusBarLayoutTests
             _refreshStatusBar = typeof(MainWindow)
                 .GetMethod("RefreshStatusBar", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "RefreshStatusBar");
+            _showInlineEditor = typeof(MainWindow)
+                .GetMethod("ShowInlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ShowInlineEditor");
             _tryHandleFocusedStatusBarKeyboardNavigation = typeof(MainWindow)
                 .GetMethod("TryHandleFocusedStatusBarKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedStatusBarKeyboardNavigation");
@@ -263,6 +303,12 @@ public sealed class StatusBarLayoutTests
         public void RefreshStatusBar()
         {
             _refreshStatusBar.Invoke(_window, []);
+            PumpDispatcher();
+        }
+
+        public void ShowInlineEditor(CellAddress address)
+        {
+            _showInlineEditor.Invoke(_window, [address]);
             PumpDispatcher();
         }
 
