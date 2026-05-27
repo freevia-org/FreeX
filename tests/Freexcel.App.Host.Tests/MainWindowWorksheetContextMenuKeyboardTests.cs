@@ -29,6 +29,38 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
     }
 
     [Fact]
+    public void MouseWorksheetContextMenu_RightClickOutsideSelectionMovesActiveCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(2, 2, 3, 3);
+            harness.OpenMouseContextMenu(6, 4);
+
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 6, 4),
+                new CellAddress(harness.CurrentSheetId, 6, 4)));
+            harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
+        });
+    }
+
+    [Fact]
+    public void MouseWorksheetContextMenu_RightClickInsideSelectionPreservesSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expectedRange = harness.SelectRange(2, 2, 4, 5);
+
+            harness.OpenMouseContextMenu(3, 4);
+
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
+        });
+    }
+
+    [Fact]
     public void KeyboardWorksheetContextMenu_WithWholeRowSelectionShowsRowScopedCommands()
     {
         StaTestRunner.Run(() =>
@@ -224,6 +256,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
     {
         private readonly MainWindow _window;
         private readonly MethodInfo _openKeyboardContextMenu;
+        private readonly MethodInfo _onGridContextMenuRequested;
         private readonly MethodInfo _getWorksheetContextMenuTargetKind;
         private readonly MethodInfo _applyAutoFilterDialogResult;
         private readonly MethodInfo _reapplyAutoFilter;
@@ -237,6 +270,9 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             _openKeyboardContextMenu = typeof(MainWindow)
                 .GetMethod("OpenKeyboardContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "OpenKeyboardContextMenu");
+            _onGridContextMenuRequested = typeof(MainWindow)
+                .GetMethod("OnGridContextMenuRequested", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "OnGridContextMenuRequested");
             _getWorksheetContextMenuTargetKind = typeof(MainWindow)
                 .GetMethod("GetWorksheetContextMenuTargetKind", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetWorksheetContextMenuTargetKind");
@@ -269,6 +305,10 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 .ToList() ?? [];
 
         public IReadOnlyCollection<uint> FilterHiddenRows => CurrentSheet.FilterHiddenRows;
+
+        public SheetId CurrentSheetId => CurrentSheet.Id;
+
+        public GridRange? SelectedRange => SheetGrid.SelectedRange;
 
         public void AddPictureAt(uint row, uint col)
         {
@@ -311,6 +351,17 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             var address = new CellAddress(sheet.Id, row, col);
             SheetGrid.SelectedRange = new GridRange(address, address);
             PumpDispatcher();
+        }
+
+        public GridRange SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
+        {
+            var sheet = CurrentSheet;
+            var range = new GridRange(
+                new CellAddress(sheet.Id, startRow, startCol),
+                new CellAddress(sheet.Id, endRow, endCol));
+            SheetGrid.SelectedRange = range;
+            PumpDispatcher();
+            return range;
         }
 
         public void SelectWholeRows(uint startRow, uint endRow)
@@ -383,6 +434,17 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         public void OpenKeyboardContextMenu()
         {
             _openKeyboardContextMenu.Invoke(_window, null);
+            PumpDispatcher();
+            PumpDispatcher();
+            PumpDispatcher();
+        }
+
+        public void OpenMouseContextMenu(uint row, uint col)
+        {
+            var sheet = CurrentSheet;
+            _onGridContextMenuRequested.Invoke(
+                _window,
+                [new CellAddress(sheet.Id, row, col), new System.Windows.Point(100, 100)]);
             PumpDispatcher();
             PumpDispatcher();
             PumpDispatcher();
