@@ -52,12 +52,31 @@ public partial class MainWindow
             ? new CellAddress(_currentSheetId, index, 1)
             : new CellAddress(_currentSheetId, 1, index);
 
-        if (target == GridHeaderContextMenuTarget.Row)
+        if (target == GridHeaderContextMenuTarget.Row && !ShouldPreserveHeaderContextSelection(target, index))
             SelectRow(index);
-        else
+        else if (target == GridHeaderContextMenuTarget.Column && !ShouldPreserveHeaderContextSelection(target, index))
             SelectColumn(index);
 
         OnGridContextMenuRequested(address, gridPos);
+    }
+
+    private bool ShouldPreserveHeaderContextSelection(GridHeaderContextMenuTarget target, uint index)
+    {
+        if (SheetGrid.SelectedRange is not { } selectedRange)
+            return false;
+
+        return target switch
+        {
+            GridHeaderContextMenuTarget.Row =>
+                SelectionRangeService.IsWholeRowSelection(selectedRange) &&
+                index >= selectedRange.Start.Row &&
+                index <= selectedRange.End.Row,
+            GridHeaderContextMenuTarget.Column =>
+                SelectionRangeService.IsWholeColumnSelection(selectedRange) &&
+                index >= selectedRange.Start.Col &&
+                index <= selectedRange.End.Col,
+            _ => false
+        };
     }
 
     private static void WorksheetContextMenu_Opened(object sender, RoutedEventArgs e)
