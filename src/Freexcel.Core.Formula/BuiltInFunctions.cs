@@ -1068,64 +1068,6 @@ public static partial class BuiltInFunctions
     // IFS(condition1, value1, [condition2, value2, ...])
     // SWITCH(expr, val1, result1, [val2, result2, ...], [default])
     // ═══════════════════════════════════════════════════════════════════
-    // Phase 5 – Reference helpers: ROW, COLUMN, ROWS, COLUMNS
-    // ═══════════════════════════════════════════════════════════════════
-
-    private static ScalarValue Row(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args.Count == 0) return ctx.CurrentCellAddress is { } cell
-            ? new NumberValue(cell.Row)
-            : ErrorValue.Value;
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return RowNumbers(rv);
-        return ErrorValue.Value;
-    }
-
-    private static ScalarValue Column(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args.Count == 0) return ctx.CurrentCellAddress is { } cell
-            ? new NumberValue(cell.Col)
-            : ErrorValue.Value;
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return ColumnNumbers(rv);
-        return ErrorValue.Value;
-    }
-
-    private static ScalarValue RowNumbers(RangeValue range)
-    {
-        if (range.RowCount == 1) return new NumberValue(range.StartRow);
-
-        var cells = new ScalarValue[range.RowCount, 1];
-        for (int r = 0; r < range.RowCount; r++)
-            cells[r, 0] = new NumberValue(range.StartRow + r);
-        return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
-    }
-
-    private static ScalarValue ColumnNumbers(RangeValue range)
-    {
-        if (range.ColCount == 1) return new NumberValue(range.StartCol);
-
-        var cells = new ScalarValue[1, range.ColCount];
-        for (int c = 0; c < range.ColCount; c++)
-            cells[0, c] = new NumberValue(range.StartCol + c);
-        return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
-    }
-
-    private static ScalarValue Rows(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return new NumberValue(rv.RowCount);
-        return new NumberValue(1);
-    }
-
-    private static ScalarValue Columns(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return new NumberValue(rv.ColCount);
-        return new NumberValue(1);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
     // Phase 5 – Text: TEXTJOIN, EXACT, CODE, CHAR
     // ═══════════════════════════════════════════════════════════════════
 
