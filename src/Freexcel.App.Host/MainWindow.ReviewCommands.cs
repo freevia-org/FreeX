@@ -416,8 +416,7 @@ public partial class MainWindow
 
     private void HelpOnlineBtn_Click(object sender, RoutedEventArgs e)
     {
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        { FileName = AppInfo.HelpUrl, UseShellExecute = true });
+        OpenExternalHelpLink(AppInfo.HelpUrl, "Help Online");
     }
 
     private void CheckForUpdatesBtn_Click(object sender, RoutedEventArgs e)
@@ -427,8 +426,7 @@ public partial class MainWindow
             ["source"] = "help"
         });
 
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        { FileName = AppUpdateSource.CreateDefault().ReleasePageUrl, UseShellExecute = true });
+        OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, "Check for Updates");
     }
 
     private void AboutBtn_Click(object sender, RoutedEventArgs e)
@@ -446,8 +444,7 @@ public partial class MainWindow
             ["source"] = "help"
         });
 
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        { FileName = AppIssueReporter.CreateIssueUrl(context), UseShellExecute = true });
+        OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), "Feedback");
     }
 
     private void CopyDiagnosticsBtn_Click(object sender, RoutedEventArgs e)
@@ -484,5 +481,25 @@ public partial class MainWindow
             AppInfo.FeedbackUrl,
             _diagnosticsMetadata,
             _diagnosticsOptions.IsEnabled);
+    }
+
+    private void OpenExternalHelpLink(string url, string title)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            ShowOwnedMessage(
+                $"Could not open the external link:\n{url}\n\n{ex.Message}",
+                title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 }

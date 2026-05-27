@@ -584,6 +584,20 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void HelpExternalLinks_RouteThroughGuardedOwnedMessageHelper()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("private void OpenExternalHelpLink(string url, string title)");
+        source.Should().Contain("UseShellExecute = true");
+        source.Should().Contain("catch (Exception ex)");
+        source.Should().Contain("ShowOwnedMessage(");
+        source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, \"Help Online\")");
+        source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, \"Check for Updates\")");
+        source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), \"Feedback\")");
+    }
+
+    [Fact]
     public void ShareWorkbookWorkflow_RoutesUnsavedAndSavedFilesThroughPlannerAndShareService()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;

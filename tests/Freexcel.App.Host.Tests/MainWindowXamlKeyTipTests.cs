@@ -595,6 +595,8 @@ public sealed class MainWindowXamlKeyTipTests
             ["InsertFunctionBtn_Click"] = "FormulasInsertFunctionButton",
             ["SsAccountBtn_Click"] = "BackstageAccountButton",
             ["SsOptionsBtn_Click"] = "BackstageOptionsButton",
+            ["HelpOnlineBtn_Click"] = "HelpOnlineButton",
+            ["SendFeedbackBtn_Click"] = "HelpFeedbackButton",
             ["AboutBtn_Click"] = "HelpAboutFreexcelButton",
         };
 
@@ -616,6 +618,31 @@ public sealed class MainWindowXamlKeyTipTests
 
         foreach (var automationId in expected.Values)
             automationInvokeButtonMarkup.Should().Contain(element => element.Contains($"AutomationProperties.AutomationId=\"{automationId}\""));
+    }
+
+    [Fact]
+    public void HelpExternalEntryPoints_ExposeStableAutomationAndHonestHelpText()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var helpOnline = document
+            .Descendants()
+            .Single(element => element.Attribute(x + "Name")?.Value == "HelpOnlineButton");
+        var feedback = document
+            .Descendants()
+            .Single(element => element.Attribute(x + "Name")?.Value == "HelpFeedbackButton");
+
+        helpOnline.Attribute("Click")?.Value.Should().Be("HelpOnlineBtn_Click");
+        helpOnline.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpOnlineButton\"");
+        helpOnline.ToString().Should().Contain("AutomationProperties.HelpText=\"Open the Freexcel help documentation in a web browser.");
+        helpOnline.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("HO");
+
+        feedback.Attribute("Click")?.Value.Should().Be("SendFeedbackBtn_Click");
+        feedback.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpFeedbackButton\"");
+        feedback.ToString().Should().Contain("AutomationProperties.HelpText=\"Open a prefilled GitHub issue with safe app diagnostics.");
+        feedback.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FE");
     }
 
     [Fact]

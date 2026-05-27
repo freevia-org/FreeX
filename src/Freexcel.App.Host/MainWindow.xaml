@@ -3146,14 +3146,22 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Vertical">
-                                    <Button Content="Help Online" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HelpOnlineBtn_Click"
-                                            local:RibbonTooltip.Title="Help Online"
-                                            local:RibbonTooltip.KeyTip="HO"
-                                            local:RibbonTooltip.Description="Open the Freexcel help documentation in a web browser."/>
-                                    <Button Content="Feedback" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
-                                            local:RibbonTooltip.Title="Feedback"
-                                            local:RibbonTooltip.KeyTip="FE"
-                                            local:RibbonTooltip.Description="Open a prefilled GitHub issue with safe app diagnostics."/>
+                                    <local:AutomationInvokeButton x:Name="HelpOnlineButton"
+                                                                  Content="Help Online" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HelpOnlineBtn_Click"
+                                                                  AutomationProperties.Name="Help Online"
+                                                                  AutomationProperties.AutomationId="HelpOnlineButton"
+                                                                  AutomationProperties.HelpText="Open the Freexcel help documentation in a web browser."
+                                                                  local:RibbonTooltip.Title="Help Online"
+                                                                  local:RibbonTooltip.KeyTip="HO"
+                                                                  local:RibbonTooltip.Description="Open the Freexcel help documentation in a web browser."/>
+                                    <local:AutomationInvokeButton x:Name="HelpFeedbackButton"
+                                                                  Content="Feedback" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
+                                                                  AutomationProperties.Name="Feedback"
+                                                                  AutomationProperties.AutomationId="HelpFeedbackButton"
+                                                                  AutomationProperties.HelpText="Open a prefilled GitHub issue with safe app diagnostics."
+                                                                  local:RibbonTooltip.Title="Feedback"
+                                                                  local:RibbonTooltip.KeyTip="FE"
+                                                                  local:RibbonTooltip.Description="Open a prefilled GitHub issue with safe app diagnostics."/>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
                                     <Button Content="Copy Diagnostics" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CopyDiagnosticsBtn_Click"
