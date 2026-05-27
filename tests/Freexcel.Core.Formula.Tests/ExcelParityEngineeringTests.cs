@@ -158,6 +158,9 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=ERF(1,2)", 0.15262147)]
     [InlineData("=ERFC(0)", 1)]
     [InlineData("=ERFC(1)", 0.15729921)]
+    [InlineData("=ERF.PRECISE(0.745)", 0.70792892)]
+    [InlineData("=ERF.PRECISE(1)", 0.84270079)]
+    [InlineData("=ERFC.PRECISE(1)", 0.15729921)]
     public void ErrorFunctions_ReturnExcelResults(string formula, double expected)
     {
         AssertNumberApproximately(_eval.Evaluate(formula, MakeSheet()), expected);
@@ -175,12 +178,16 @@ public sealed class ExcelParityEngineeringTests
         AssertColumnApproximately(_eval.Evaluate("=ERF(A1:A2)", sheet), 0, 0.84270079);
         AssertColumnApproximately(_eval.Evaluate("=ERFC(A1:A2)", sheet), 1, 0.15729921);
         AssertColumnApproximately(_eval.Evaluate("=ERF(A1:A2,B1:B2)", sheet), 0.84270079, 0.15262147);
+        AssertColumnApproximately(_eval.Evaluate("=ERF.PRECISE(A1:A2)", sheet), 0, 0.84270079);
+        AssertColumnApproximately(_eval.Evaluate("=ERFC.PRECISE(A1:A2)", sheet), 1, 0.15729921);
     }
 
     [Theory]
     [InlineData("=ERF(\"x\")")]
     [InlineData("=ERF(0,\"x\")")]
     [InlineData("=ERFC(\"x\")")]
+    [InlineData("=ERF.PRECISE(\"x\")")]
+    [InlineData("=ERFC.PRECISE(\"x\")")]
     public void ErrorFunctions_NonnumericArguments_ReturnValueError(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
@@ -327,6 +334,8 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=ERF(NA())")]
     [InlineData("=ERF(0,NA())")]
     [InlineData("=ERFC(NA())")]
+    [InlineData("=ERF.PRECISE(NA())")]
+    [InlineData("=ERFC.PRECISE(NA())")]
     public void EngineeringFunctions_PropagateExcelErrors(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);
