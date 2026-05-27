@@ -148,18 +148,21 @@ public sealed class CsvFileAdapter : IFileAdapter
         value[0] is '=' or '+' or '-' or '@' ||
         IsErrorLikeText(value);
 
-    private static bool IsErrorLikeText(string value) =>
-        value.Equals("#DIV/0!", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#VALUE!", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#REF!", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#NAME?", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#NULL!", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#N/A", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#NUM!", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#CIRCULAR!", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#SPILL!", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#CALC!", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("#GETTING_DATA", StringComparison.OrdinalIgnoreCase);
+    private static bool IsErrorLikeText(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Equals("#DIV/0!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#VALUE!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#REF!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#NAME?", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#NULL!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#N/A", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#NUM!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#CIRCULAR!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#SPILL!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#CALC!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#GETTING_DATA", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string FormatCell(Cell cell) =>
         cell.FormulaText is { } formulaText
