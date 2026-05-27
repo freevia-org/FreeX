@@ -192,12 +192,43 @@ internal static class DelimitedTextWorkbookWriter
                string.Equals(trimmed, "FALSE", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsDateTimeLikeText(string value) =>
-        DateTime.TryParse(
-            value.Trim(),
+    private static bool IsDateTimeLikeText(string value)
+    {
+        var trimmed = value.Trim();
+        if (!HasSupportedDateTimeShape(trimmed))
+            return false;
+
+        return DateTime.TryParse(
+            trimmed,
             CultureInfo.InvariantCulture,
             DateTimeStyles.NoCurrentDateDefault,
             out _);
+    }
+
+    private static bool HasSupportedDateTimeShape(string value) =>
+        value.Contains(':') ||
+        HasFourConsecutiveDigits(value) ||
+        value.Any(char.IsLetter);
+
+    private static bool HasFourConsecutiveDigits(string value)
+    {
+        var run = 0;
+        foreach (var ch in value)
+        {
+            if (char.IsDigit(ch))
+            {
+                run++;
+                if (run >= 4)
+                    return true;
+            }
+            else
+            {
+                run = 0;
+            }
+        }
+
+        return false;
+    }
 
     private static bool IsUnsignedCurrencyText(string value)
     {
