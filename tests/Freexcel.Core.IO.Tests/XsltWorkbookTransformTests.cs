@@ -156,6 +156,34 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_AcceptsNonSeekableInputStreams()
+    {
+        using var source = NonSeekableStreamFromString("<rows><row name=\"Charlie\" /></rows>");
+        using var stylesheet = NonSeekableStreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Data">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("Charlie");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_Failure_LeavesInputStreamsOpen()
     {
         using var source = StreamFromString("<rows>");
@@ -431,6 +459,9 @@ public sealed class XsltWorkbookTransformTests
     private static MemoryStream StreamFromString(string value) =>
         new(Encoding.UTF8.GetBytes(value));
 
+    private static Stream NonSeekableStreamFromString(string value) =>
+        new NonSeekableReadStream(StreamFromString(value));
+
     private static MemoryStream PositionedStreamFromString(string prefix, string value)
     {
         var prefixBytes = Encoding.UTF8.GetBytes(prefix);
@@ -438,5 +469,35 @@ public sealed class XsltWorkbookTransformTests
         var stream = new MemoryStream(prefixBytes.Concat(valueBytes).ToArray());
         stream.Position = prefixBytes.Length;
         return stream;
+    }
+
+    private sealed class NonSeekableReadStream(Stream inner) : Stream
+    {
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                inner.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
     }
 }
