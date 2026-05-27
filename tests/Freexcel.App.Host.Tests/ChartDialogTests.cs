@@ -384,6 +384,15 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialog_RangeEditorExposesAutomationName()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Chart data range\");");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_ExposesExcelStylePickerSeriesAndAxisControls()
     {
         var source = ReadChartDialogSource();

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Model;
@@ -40,6 +41,7 @@ public sealed partial class SelectDataSourceDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Chart data range:", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _rangeBox.Text = Result.SourceRangeText;
+        AutomationProperties.SetName(_rangeBox, "Chart data range");
         stack.Children.Add(CreateReferenceEditor(_rangeBox, "Select chart data range"));
         _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
         stack.Children.Add(_switchRowColumnBox);
