@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Model;
@@ -61,9 +62,11 @@ public sealed class SparklineDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Data range:", Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _dataRangeBox.Text = Result.DataRangeText;
+        AutomationProperties.SetName(_dataRangeBox, "Sparkline data range");
         stack.Children.Add(CreateRangePickerRow(_dataRangeBox, _dataRangePickerButton));
         stack.Children.Add(new Label { Content = "_Location:", Target = _locationBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _locationBox.Text = Result.LocationText;
+        AutomationProperties.SetName(_locationBox, "Sparkline location");
         stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
         stack.Children.Add(new Label { Content = "Sparkline _type:", Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>()
