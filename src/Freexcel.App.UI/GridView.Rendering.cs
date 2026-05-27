@@ -152,12 +152,9 @@ public partial class GridView
 
     private void RenderCells(DrawingContext dc)
     {
-        var styleLookup = Viewport!.Cells
-            .Where(c => c.Style != null)
-            .ToDictionary(c => (c.Row, c.Col), c => c.Style!);
-
-        var rowLookupAll = Viewport.RowMetrics.ToDictionary(r => r.Row);
-        var colLookupAll = Viewport.ColMetrics.ToDictionary(c => c.Col);
+        var styleLookup = BuildRenderCellStyleLookup(Viewport!.Cells);
+        var rowLookupAll = BuildRenderRowMetricLookup(Viewport.RowMetrics);
+        var colLookupAll = BuildRenderColumnMetricLookup(Viewport.ColMetrics);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var brushCache = new Dictionary<CellColor, SolidColorBrush>();
         var borderPenCache = new Dictionary<CellBorder, Pen>();
@@ -374,6 +371,36 @@ public partial class GridView
             }
             dc.Pop();
         }
+    }
+
+    private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup(IReadOnlyList<DisplayCell> cells)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), CellStyle>();
+        foreach (var cell in cells)
+        {
+            if (cell.Style is { } style)
+                lookup.Add((cell.Row, cell.Col), style);
+        }
+
+        return lookup;
+    }
+
+    private static Dictionary<uint, RowMetric> BuildRenderRowMetricLookup(IReadOnlyList<RowMetric> rows)
+    {
+        var lookup = new Dictionary<uint, RowMetric>(rows.Count);
+        foreach (var row in rows)
+            lookup.Add(row.Row, row);
+
+        return lookup;
+    }
+
+    private static Dictionary<uint, ColMetric> BuildRenderColumnMetricLookup(IReadOnlyList<ColMetric> columns)
+    {
+        var lookup = new Dictionary<uint, ColMetric>(columns.Count);
+        foreach (var column in columns)
+            lookup.Add(column.Col, column);
+
+        return lookup;
     }
 
     private static void DrawCommentIndicator(DrawingContext dc, Rect rect)

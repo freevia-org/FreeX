@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -23,6 +24,7 @@ public sealed class ForecastSheetDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _periodsBox.Text = periods.ToString(CultureInfo.InvariantCulture);
+        AutomationProperties.SetName(_periodsBox, "Forecast periods");
         Content = ObjectSizeDialog.CreateSingleInputContent("Forecast _periods:", _periodsBox, Accept, acceptContent: "_Create");
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }

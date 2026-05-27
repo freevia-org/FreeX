@@ -1,5 +1,6 @@
 using Freexcel.Core.Model;
 using FluentAssertions;
+using System.Diagnostics;
 
 namespace Freexcel.Core.Model.Tests;
 
@@ -178,6 +179,74 @@ public class SheetTests
         sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
             new CellAddress(sheet.Id, 3, 1),
             new CellAddress(sheet.Id, 4, 2)));
+    }
+
+    [Fact]
+    public void GetUsedRange_RecomputesAfterBoundaryCellsAreCleared()
+    {
+        var sheet = new Sheet(SheetId.New(), "Test");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("inside"));
+        sheet.SetCell(new CellAddress(sheet.Id, 20, 30), new TextValue("edge"));
+        sheet.GetUsedRange().Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 20, 30)));
+
+        sheet.ClearCell(new CellAddress(sheet.Id, 20, 30));
+
+        sheet.GetUsedRange().Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 2, 3)));
+    }
+
+    [Fact]
+    public void GetUsedRange_ExpandsAfterCachedRangeIsRead()
+    {
+        var sheet = new Sheet(SheetId.New(), "Test");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("inside"));
+        sheet.GetUsedRange().Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 2, 3)));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 20, 30), new TextValue("edge"));
+
+        sheet.GetUsedRange().Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 20, 30)));
+    }
+
+    [Fact]
+    public void GetUsedRange_RepeatedCallsReuseCachedBounds()
+    {
+        var sheet = new Sheet(SheetId.New(), "Large");
+        for (uint row = 1; row <= 200; row++)
+        {
+            for (uint col = 1; col <= 100; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row + col));
+        }
+
+        sheet.GetUsedRange().Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 200, 100)));
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 10_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        GridRange? range = null;
+        for (var i = 0; i < repetitions; i++)
+            range = sheet.GetUsedRange();
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        range.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 200, 100)));
+        Console.WriteLine(
+            $"GetUsedRange cached repeated {repetitions}x over {sheet.CellCount:N0} cells: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(1_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
     }
 }
 

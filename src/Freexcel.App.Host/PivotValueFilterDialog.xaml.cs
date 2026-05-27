@@ -32,6 +32,7 @@ public partial class PivotValueFilterDialog : Window
         ValueFilterKindBox.ItemsSource = Options.Select(option => option.Label);
         ValueFilterKindBox.SelectedIndex = 2;
         ValueFilterValueBox.Text = "0";
+        UpdateValueInputState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -56,6 +57,31 @@ public partial class PivotValueFilterDialog : Window
 
         ResultFilter = filter;
         DialogResult = true;
+    }
+
+    private (string Label, PivotValueFilterKind Kind, bool UsesCount) GetSelectedOption() =>
+        Options[Math.Max(0, ValueFilterKindBox.SelectedIndex)];
+
+    private void ValueFilterKindBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateValueInputState();
+
+    private void UpdateValueInputState()
+    {
+        var option = GetSelectedOption();
+        var usesPrimaryValue = option.UsesCount ||
+            option.Kind is not (PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage);
+        var usesSecondValue = option.Kind is PivotValueFilterKind.Between or PivotValueFilterKind.NotBetween;
+
+        SetInputState(ValueFilterValueLabel, ValueFilterValueBox, usesPrimaryValue);
+        SetInputState(ValueFilterValue2Label, ValueFilterValue2Box, usesSecondValue);
+    }
+
+    private static void SetInputState(UIElement label, Control input, bool isVisible)
+    {
+        var visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+        label.Visibility = visibility;
+        input.Visibility = visibility;
+        input.IsEnabled = isVisible;
     }
 
     private void FocusInitialKeyboardTarget()
