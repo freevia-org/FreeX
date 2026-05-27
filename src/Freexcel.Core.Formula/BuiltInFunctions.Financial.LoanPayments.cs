@@ -23,6 +23,30 @@ public static partial class BuiltInFunctions
         return type == 0 ? -(pvAtPer * rate) : -((pvAtPer - pmt) * rate);
     }
 
+    private static ScalarValue Ispmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (FirstError(args) is { } e) return e;
+        return MapScalarArgs(args, values => IspmtScalar(values[0], values[1], values[2], values[3]));
+    }
+
+    private static ScalarValue IspmtScalar(ScalarValue rateValue, ScalarValue periodValue, ScalarValue nperValue, ScalarValue pvValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (periodValue is ErrorValue periodError) return periodError;
+        if (nperValue is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+
+        double rate = ToNumber(rateValue);
+        double per = Math.Truncate(ToNumber(periodValue));
+        double nper = ToNumber(nperValue);
+        double pv = ToNumber(pvValue);
+        if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) || !double.IsFinite(pv))
+            return ErrorValue.Num;
+        if (nper <= 0 || per < 0 || per > nper) return ErrorValue.Num;
+
+        return NumberResult(-pv * rate * (nper - per) / nper);
+    }
+
     private static ScalarValue Ipmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
