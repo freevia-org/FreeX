@@ -1579,6 +1579,38 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void NameBox_CommitsTypedReferenceWithEnter()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var nameBox = document
+            .Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "CellAddressBox");
+
+        nameBox.Attribute("KeyDown")?.Value.Should().Be("CellAddressBox_KeyDown");
+        source.Should().Contain("private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)");
+        source.Should().Contain("GoToDialog.TryParseReferenceRange(");
+        source.Should().Contain("SetSelectionRange(selectedRange, selectedRange.Start);");
+        source.Should().Contain("CellAddressBox.SelectAll();");
+    }
+
+    [Fact]
+    public void NameBox_EscapeCancelsTypedReferenceAndReturnsToGrid()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+
+        source.Should().Contain("if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)");
+        source.Should().Contain("RestoreCellAddressBoxText();");
+        source.Should().Contain("FocusSheetGridIfNeeded();");
+        source.Should().Contain("private void RestoreCellAddressBoxText()");
+        source.Should().Contain("CellAddressBox.Text = SheetGrid.SelectedRange is { } range");
+        source.Should().Contain("? FormatRangeReference(range.Start, range.End)");
+    }
+
+    [Fact]
     public void FormulaBarTextFields_UseReadableExcelScaleSizing()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
