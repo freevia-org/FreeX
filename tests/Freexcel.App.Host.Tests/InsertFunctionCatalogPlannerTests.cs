@@ -7,6 +7,7 @@ public sealed class InsertFunctionCatalogPlannerTests
     [Theory]
     [InlineData("IF", "Logical")]
     [InlineData("XLOOKUP", "Lookup & Reference")]
+    [InlineData("GETPIVOTDATA", "Lookup & Reference")]
     [InlineData("TEXT", "Text")]
     [InlineData("TODAY", "Date & Time")]
     [InlineData("AVERAGE", "Statistical")]
@@ -23,6 +24,17 @@ public sealed class InsertFunctionCatalogPlannerTests
     public void GetDescription_UsesKnownDescriptionOrFallback()
     {
         InsertFunctionCatalogPlanner.GetDescription("SUM").Should().Be("Adds numbers.");
+        InsertFunctionCatalogPlanner.GetDescription("GETPIVOTDATA").Should().Contain("PivotTable");
         InsertFunctionCatalogPlanner.GetDescription("CUSTOM").Should().Be("CUSTOM function.");
+    }
+
+    [Fact]
+    public void FilterCatalog_FindsGetPivotDataByPivotSearch()
+    {
+        var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
+
+        InsertFunctionCatalogPlanner.FilterCatalog(catalog, "Lookup & Reference", "pivot")
+            .Should()
+            .ContainSingle(entry => entry.Name == "GETPIVOTDATA");
     }
 }

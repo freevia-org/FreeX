@@ -83,6 +83,47 @@ public sealed class PivotUiPlannerTests
     }
 
     [Fact]
+    public void ResolveShowDetailsTarget_ReturnsNullForMissingSheetSelectionOrOutsideSelection()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.PivotTables.Add(CreatePivot("Pivot", 5, sheet.Id));
+
+        PivotUiPlanner.ResolveShowDetailsTarget(null, null).Should().BeNull();
+        PivotUiPlanner.ResolveShowDetailsTarget(sheet, null).Should().BeNull();
+        PivotUiPlanner.ResolveShowDetailsTarget(
+                sheet,
+                new GridRange(new CellAddress(sheet.Id, 50, 1), new CellAddress(sheet.Id, 50, 1)))
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
+    public void ResolveShowDetailsTarget_UsesSelectedRangeStartInsidePivot()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var pivot = CreatePivot("Pivot", 5, sheet.Id);
+        sheet.PivotTables.Add(pivot);
+        var start = new CellAddress(sheet.Id, 6, 2);
+        var selected = new GridRange(start, new CellAddress(sheet.Id, 8, 4));
+
+        var target = PivotUiPlanner.ResolveShowDetailsTarget(sheet, selected);
+
+        target.Should().Be(new PivotShowDetailsTarget("Pivot", start));
+    }
+
+    [Fact]
+    public void ResolveShowDetailsTarget_DoesNotUseOverlapWhenSelectionStartIsOutsidePivot()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.PivotTables.Add(CreatePivot("Pivot", 5, sheet.Id));
+        var selected = new GridRange(
+            new CellAddress(sheet.Id, 4, 1),
+            new CellAddress(sheet.Id, 6, 2));
+
+        PivotUiPlanner.ResolveShowDetailsTarget(sheet, selected).Should().BeNull();
+    }
+
+    [Fact]
     public void ChooseDefaultDataField_UsesFirstNumericOrDateColumnAfterHeader()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

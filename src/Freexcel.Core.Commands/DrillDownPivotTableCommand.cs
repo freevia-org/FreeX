@@ -30,6 +30,8 @@ public sealed class DrillDownPivotTableCommand : IWorkbookCommand
             return new CommandOutcome(false, "PivotTable was not found.");
         if (!pivotTable.EnableDrill)
             return new CommandOutcome(false, "Show Details is disabled for this PivotTable.");
+        if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } structureProtectedOutcome)
+            return structureProtectedOutcome;
 
         var details = PivotTableRefreshService.ExtractDetailRows(ctx.Workbook, sheet, pivotTable, _pivotCell);
         if (details.Headers.Count == 0 || details.Rows.Count == 0)

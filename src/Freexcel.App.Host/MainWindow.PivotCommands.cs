@@ -160,9 +160,8 @@ public partial class MainWindow
     private bool TryShowPivotTableDetails(bool showMessage)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var selected = SheetGrid.SelectedRange?.Start;
-        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange);
-        if (pivotTable is null || selected is null)
+        var target = PivotUiPlanner.ResolveShowDetailsTarget(sheet, SheetGrid.SelectedRange);
+        if (target is null)
         {
             if (showMessage)
             {
@@ -177,13 +176,13 @@ public partial class MainWindow
         }
 
         if (!TryExecuteCommand(
-                new DrillDownPivotTableCommand(_currentSheetId, pivotTable.Name, selected.Value),
-                "Show PivotTable Details"))
+                new DrillDownPivotTableCommand(_currentSheetId, target.PivotTableName, target.PivotCell),
+                "Show PivotTable Details",
+                out var outcome))
             return false;
 
-        var detailSheet = _workbook.Sheets.LastOrDefault();
-        if (detailSheet is not null)
-            _currentSheetId = detailSheet.Id;
+        if (outcome.AffectedCells?.FirstOrDefault() is { } detailAnchor)
+            _currentSheetId = detailAnchor.Sheet;
         RefreshSheetTabs();
         UpdateViewport();
         return true;

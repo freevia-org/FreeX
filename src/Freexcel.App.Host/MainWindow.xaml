@@ -3668,7 +3668,7 @@
                             </ItemsControl.ItemContainerStyle>
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="8,0,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Margin="6,0,0,0"/>
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
@@ -3682,16 +3682,16 @@
                                           MouseRightButtonDown="SheetTab_MouseRightButtonDown">
                                         <Grid.Style>
                                             <Style TargetType="Grid">
-                                                <Setter Property="Margin"       Value="-8,0,0,1"/>
+                                                <Setter Property="Margin"       Value="-6,0,0,1"/>
                                                 <Setter Property="Panel.ZIndex" Value="0"/>
-                                                <Setter Property="MinHeight"    Value="31"/>
+                                                <Setter Property="MinHeight"    Value="27"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                        <Setter Property="Margin"       Value="-8,-2,0,0"/>
+                                                        <Setter Property="Margin"       Value="-6,-2,0,0"/>
                                                         <Setter Property="Panel.ZIndex" Value="5"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                        <Setter Property="Margin"       Value="-8,-3,0,0"/>
+                                                        <Setter Property="Margin"       Value="-6,-3,0,0"/>
                                                         <Setter Property="Panel.ZIndex" Value="10"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -3715,20 +3715,39 @@
                                                 <MenuItem Header="Move Right"      local:RibbonTooltip.KeyTip="M" Click="SheetCtxMoveRight_Click"/>
                                             </ContextMenu>
                                         </Grid.ContextMenu>
-                                        <Path Data="M -8,0 A 8,8 0 0 1 0,8"
+                                        <Path Data="M -6,0 A 6,6 0 0 1 0,6"
                                               Stroke="{Binding ElementName=TabBorder, Path=BorderBrush}"
-                                              StrokeThickness="{Binding ElementName=TabBorder, Path=BorderThickness.Left}"
+                                              StrokeThickness="1"
                                               SnapsToDevicePixels="True"
                                               IsHitTestVisible="False"/>
-                                        <Path Data="M 0,8 A 8,8 0 0 1 8,0"
+                                        <Path Data="M 0,6 A 6,6 0 0 1 6,0"
                                               HorizontalAlignment="Right"
-                                              Margin="0,0,-8,0"
+                                              Margin="0,0,-6,0"
                                               Stroke="{Binding ElementName=TabBorder, Path=BorderBrush}"
-                                              StrokeThickness="{Binding ElementName=TabBorder, Path=BorderThickness.Right}"
+                                              StrokeThickness="1"
                                               SnapsToDevicePixels="True"
                                               IsHitTestVisible="False"/>
+                                        <Border Height="2"
+                                                VerticalAlignment="Top"
+                                                Margin="0,-1,0,0"
+                                                Background="{StaticResource FreexcelRibbonSurfaceBrush}"
+                                                Panel.ZIndex="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>
                                         <Border x:Name="TabBorder"
-                                                CornerRadius="0,0,5,5" Padding="13,3,13,4">
+                                                CornerRadius="0,0,4,4" Padding="12,1,12,3">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Background"      Value="{Binding TabBrush}"/>
@@ -3738,52 +3757,68 @@
                                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                                             <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                                                             <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
-                                                            <Setter Property="BorderThickness" Value="2,0,2,2"/>
+                                                            <Setter Property="BorderThickness" Value="1,0,1,1"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                             <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                                                             <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
-                                                            <Setter Property="BorderThickness" Value="2,0,2,2"/>
+                                                            <Setter Property="BorderThickness" Value="1,0,1,1"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
-                                            <Grid MouseDown="SheetTab_LabelMouseDown">
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="2"/>
-                                                </Grid.RowDefinitions>
-                                                <TextBlock Text="{Binding Name}" FontSize="13">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="FontWeight" Value="Normal"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <Border Grid.Row="1" Height="2" Margin="0,1,0,0"
-                                                        Background="{StaticResource FreexcelGreenBrush}">
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                </Border>
+                                            <Grid>
+                                                <Border Width="2"
+                                                        Height="6"
+                                                        HorizontalAlignment="Left"
+                                                        VerticalAlignment="Top"
+                                                        Background="{StaticResource FreexcelSheetSurfaceBrush}"
+                                                        IsHitTestVisible="False"
+                                                        Panel.ZIndex="2"/>
+                                                <Border Width="2"
+                                                        Height="6"
+                                                        HorizontalAlignment="Right"
+                                                        VerticalAlignment="Top"
+                                                        Background="{StaticResource FreexcelSheetSurfaceBrush}"
+                                                        IsHitTestVisible="False"
+                                                        Panel.ZIndex="2"/>
+                                                <Grid MouseDown="SheetTab_LabelMouseDown">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="2"/>
+                                                    </Grid.RowDefinitions>
+                                                    <TextBlock Text="{Binding Name}" FontSize="13">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="FontWeight" Value="Normal"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <Border Grid.Row="1" Height="2" Margin="0,1,0,0"
+                                                            Background="{StaticResource FreexcelGreenBrush}">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                    </Border>
+                                                </Grid>
                                             </Grid>
                                         </Border>
                                     </Grid>
@@ -3792,8 +3827,8 @@
                         </ItemsControl>
                 </ScrollViewer>
 
-                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="40" MinHeight="31"
-                        FontSize="13" FontWeight="SemiBold" Margin="-8,0,0,1" Padding="13,3,13,4"
+                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="38" MinHeight="27"
+                        FontSize="13" FontWeight="SemiBold" Margin="-6,0,0,1" Padding="12,1,12,3"
                         Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1,0,1,1"
                         Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
                         VerticalAlignment="Top" Cursor="Hand"
@@ -3807,14 +3842,14 @@
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Grid Opacity="{TemplateBinding Opacity}">
-                                <Path Data="M -8,0 A 8,8 0 0 1 0,8"
+                                <Path Data="M -6,0 A 6,6 0 0 1 0,6"
                                       Stroke="{TemplateBinding BorderBrush}"
                                       StrokeThickness="1"
                                       SnapsToDevicePixels="True"
                                       IsHitTestVisible="False"/>
-                                <Path Data="M 0,8 A 8,8 0 0 1 8,0"
+                                <Path Data="M 0,6 A 6,6 0 0 1 6,0"
                                       HorizontalAlignment="Right"
-                                      Margin="0,0,-8,0"
+                                      Margin="0,0,-6,0"
                                       Stroke="{TemplateBinding BorderBrush}"
                                       StrokeThickness="1"
                                       SnapsToDevicePixels="True"
@@ -3823,10 +3858,24 @@
                                         Background="{TemplateBinding Background}"
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="{TemplateBinding BorderThickness}"
-                                        CornerRadius="0,0,5,5"
+                                        CornerRadius="0,0,4,4"
                                         SnapsToDevicePixels="True">
+                                    <Grid>
+                                        <Border Width="2"
+                                                Height="6"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top"
+                                                Background="{StaticResource FreexcelSheetSurfaceBrush}"
+                                                IsHitTestVisible="False"/>
+                                        <Border Width="2"
+                                                Height="6"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top"
+                                                Background="{StaticResource FreexcelSheetSurfaceBrush}"
+                                                IsHitTestVisible="False"/>
                                     <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                    </Grid>
                                 </Border>
                             </Grid>
                             <ControlTemplate.Triggers>

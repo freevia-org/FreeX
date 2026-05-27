@@ -541,11 +541,13 @@ public sealed class PivotTableCommandTests
 
         var command = new DrillDownPivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "G4"));
 
-        command.Apply(ctx).Success.Should().BeTrue();
+        var outcome = command.Apply(ctx);
 
+        outcome.Success.Should().BeTrue();
         workbook.Sheets.Should().HaveCount(2);
         var detail = workbook.GetSheetAt(1);
         detail.Name.Should().StartWith("Detail");
+        outcome.AffectedCells.Should().Equal(new CellAddress(detail.Id, 1, 1));
         detail.GetCell(1, 1)!.Value.Should().Be(new TextValue("Category"));
         detail.GetCell(2, 1)!.Value.Should().Be(new TextValue("A"));
         detail.GetCell(2, 2)!.Value.Should().Be(new TextValue("Q1"));
@@ -587,6 +589,65 @@ public sealed class PivotTableCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Be("Show Details is disabled for this PivotTable.");
         workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Data");
+    }
+
+    [Fact]
+    public void DrillDownPivotTableCommand_RejectsWhenWorkbookStructureProtected()
+    {
+        var workbook = new Workbook("PivotDrillDownStructureProtectedTest") { IsStructureProtected = true };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "D3", "F6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var outcome = new DrillDownPivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "F4")).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("The workbook structure is protected.");
+        workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Data");
+    }
+
+    [Fact]
+    public void DrillDownPivotTableCommand_UsesNextDetailSheetNameWhenDetailExists()
+    {
+        var workbook = new Workbook("PivotDrillDownUniqueNameTest");
+        workbook.AddSheet("Detail");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "D3", "F6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var outcome = new DrillDownPivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "F4")).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        workbook.Sheets.Select(item => item.Name).Should().ContainInOrder("Detail", "Data", "Detail2");
+        outcome.AffectedCells.Should().Equal(new CellAddress(workbook.GetSheet("Detail2")!.Id, 1, 1));
     }
 
     [Fact]
