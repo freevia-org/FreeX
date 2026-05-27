@@ -4419,6 +4419,11 @@ public class XlsxCorpusRunnerTests
                     .Should()
                     .HaveCountGreaterThanOrEqualTo(3, row.Id);
 
+            if (tags.Contains("sheet-names") && tags.Contains("boundary"))
+                PublicWorkbookSheetNames(archive)
+                    .Should()
+                    .Contain(name => name.Length == 31, row.Id);
+
             if (tags.Contains("unsupported-sheet-types"))
                 archive.Entries.Should().Contain(entry => entry.FullName.StartsWith("xl/chartsheets/", StringComparison.Ordinal), row.Id);
         }
@@ -4448,6 +4453,18 @@ public class XlsxCorpusRunnerTests
             .ToArray();
     }
 
+    private static IReadOnlyList<string> PublicWorkbookSheetNames(ZipArchive archive)
+    {
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        workbookEntry.Should().NotBeNull("public workbook packages should contain workbook.xml");
+
+        return LoadPackageXml(workbookEntry!)
+            .Descendants(WorksheetNs + "sheet")
+            .Select(sheet => sheet.Attribute("name")?.Value ?? "")
+            .Where(name => name.Length > 0)
+            .ToArray();
+    }
+
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
     private static bool HasExpectedPublicPackageTags(ManifestRow row)
@@ -4462,6 +4479,7 @@ public class XlsxCorpusRunnerTests
                tags.Contains("merged-cells") ||
                tags.Contains("inline-strings") ||
                tags.Contains("cell-types") ||
+               (tags.Contains("sheet-names") && tags.Contains("boundary")) ||
                tags.Contains("unsupported-sheet-types");
     }
 
