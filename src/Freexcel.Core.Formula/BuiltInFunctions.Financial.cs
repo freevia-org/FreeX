@@ -371,7 +371,16 @@ public static partial class BuiltInFunctions
         var dateRange = args[1] is RangeValue datesRange
             ? datesRange
             : SingleCellArray(args[1]);
-        double guess = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0.1;
+        var guessArg = args.Count > 2 ? args[2] : new NumberValue(0.1);
+        if (guessArg is RangeValue guessRange)
+            return MapUnaryTextRange(guessRange, guessValue => XirrScalar(valRange, dateRange, guessValue));
+        return XirrScalar(valRange, dateRange, guessArg);
+    }
+
+    private static ScalarValue XirrScalar(RangeValue valRange, RangeValue dateRange, ScalarValue guessValue)
+    {
+        if (guessValue is ErrorValue guessError) return guessError;
+        double guess = guessValue is not BlankValue ? ToNumber(guessValue) : 0.1;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);
         if (ve is not null) return ve;
