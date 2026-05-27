@@ -353,6 +353,13 @@ public partial class MainWindow
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
+        if (SheetGrid.SelectedRange is { } selectedRange)
+        {
+            var activeCell = selectedRange.Start;
+            FormulaBar.Text = FormatFormulaBarText(
+                _workbook.GetSheet(_currentSheetId)?.GetCell(activeCell),
+                activeCell);
+        }
     }
 
     private void PasteSpecialBtn_Click(object sender, RoutedEventArgs e)
