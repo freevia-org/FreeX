@@ -344,7 +344,10 @@ public sealed class MainWindowSourceHygieneTests
         var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
 
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
-        dataCommandsSource.Should().Contain("new Microsoft.Win32.OpenFileDialog { Filter = filter }");
+        dataCommandsSource.Should().Contain("new Microsoft.Win32.OpenFileDialog");
+        dataCommandsSource.Should().Contain("Filter = filter");
+        dataCommandsSource.Should().Contain("CheckFileExists = true");
+        dataCommandsSource.Should().Contain("Multiselect = false");
         dataCommandsSource.Should().Contain("if (dialog.ShowDialog() != true) return;");
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");
@@ -354,6 +357,8 @@ public sealed class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");
         dataCommandsSource.Should().Contain("RefreshStatusBar();");
+        dataCommandsSource.Should().Contain("ShowOwnedMessage(\"No import adapters are available.\"");
+        dataCommandsSource.Should().Contain("ShowOwnedMessage($\"Failed to import data:");
     }
 
     [Fact]
@@ -464,6 +469,24 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void InsertPicture_UsesGuardedSingleFileDialogAndOwnedReadFailureMessage()
+    {
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
+
+        drawingSource.Should().Contain("Title = \"Insert Picture\"");
+        drawingSource.Should().Contain("Filter = \"Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)");
+        drawingSource.Should().Contain("CheckFileExists = true");
+        drawingSource.Should().Contain("Multiselect = false");
+        drawingSource.Should().Contain("if (dialog.ShowDialog(this) != true) return;");
+        drawingSource.Should().Contain("System.IO.File.ReadAllBytes(dialog.FileName)");
+        drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
+        drawingSource.Should().Contain("new InsertPictureCommand(");
+        drawingSource.Should().Contain("ShowOwnedMessage($\"Could not read picture file:");
+        drawingSource.Should().Contain("SetActiveCell(range.Start);");
+        drawingSource.Should().Contain("UpdateViewport();");
+    }
+
+    [Fact]
     public void PrintAndExportController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -532,6 +555,32 @@ public sealed class MainWindowSourceHygieneTests
         pageLayoutSource.Should().Contain("private void PageMarginsBtn_Click(");
         pageLayoutSource.Should().Contain("private void PrintAreaBtn_Click(");
         pageLayoutSource.Should().Contain("private void PageSetupDialogBtn_Click(");
+    }
+
+    [Fact]
+    public void SheetBackgroundImport_UsesNativeImageDialogGuardrailsAndOwnedWarnings()
+    {
+        var pageLayoutSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+
+        pageLayoutSource.Should().Contain("private void BackgroundChooseMenuItem_Click(");
+        pageLayoutSource.Should().Contain("Title = \"Sheet Background\"");
+        pageLayoutSource.Should().Contain("Filter = \"Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*\"");
+        pageLayoutSource.Should().Contain("CheckFileExists = true");
+        pageLayoutSource.Should().Contain("Multiselect = false");
+        pageLayoutSource.Should().Contain("if (dialog.ShowDialog(this) != true)");
+        pageLayoutSource.Should().Contain("IsSupportedSheetBackgroundFile(dialog.FileName)");
+        pageLayoutSource.Should().Contain("\"Choose a PNG, JPG, JPEG, BMP, or GIF image file.\"");
+        pageLayoutSource.Should().Contain("File.ReadAllBytes(dialog.FileName)");
+        pageLayoutSource.Should().Contain("ShowOwnedMessage($\"Could not read the selected image:");
+        pageLayoutSource.Should().Contain("new WorksheetBackgroundImage(");
+        pageLayoutSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
+        pageLayoutSource.Should().Contain("TryExecuteGroupedSheetCommand(\"Sheet Background\"");
+        pageLayoutSource.Should().Contain("new SetWorksheetBackgroundCommand(sheetId, background)");
+        pageLayoutSource.Should().Contain("private static bool IsSupportedSheetBackgroundFile(string fileName)");
+        pageLayoutSource.Should().Contain("\".png\" or \".jpg\" or \".jpeg\" or \".bmp\" or \".gif\" => true");
+        pageLayoutSource.Should().Contain("private void BackgroundClearMenuItem_Click(");
+        pageLayoutSource.Should().Contain("TryExecuteGroupedSheetCommand(\"Clear Sheet Background\"");
+        pageLayoutSource.Should().Contain("new ClearWorksheetBackgroundCommand(sheetId)");
     }
 
     [Fact]
@@ -2357,6 +2406,36 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ExportPlanner.DescribeRequest(request)");
         source.Should().Contain("OpenExportedFile(request.ActualPath)");
         source.Should().NotContain("ExportPdfFallbackAsXps");
+    }
+
+    [Fact]
+    public void ExportPdfXpsSaveDialog_DeclaresNativeGuardrailsAndOwnedMessages()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
+        var exportMethod = ExtractMethodSource(source, "private void ExportPdfButton_Click(");
+        var exportPdfMethod = ExtractMethodSource(source, "private bool ExportAsPdf(");
+        var exportXpsMethod = ExtractMethodSource(source, "private bool ExportAsXps(");
+
+        exportMethod.Should().Contain("new Microsoft.Win32.SaveFileDialog");
+        exportMethod.Should().Contain("Title      = \"Export as PDF / XPS\"");
+        exportMethod.Should().Contain("Filter     = \"PDF files (*.pdf)|*.pdf|XPS files (*.xps)|*.xps\"");
+        exportMethod.Should().Contain("DefaultExt = \".pdf\"");
+        exportMethod.Should().Contain("AddExtension = true");
+        exportMethod.Should().Contain("OverwritePrompt = true");
+        exportMethod.Should().Contain("var selectedFormat = saveDlg.FilterIndex == 2");
+        exportMethod.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
+        exportMethod.Should().Contain("ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError)");
+        exportMethod.Should().Contain("ShowOwnedMessage(");
+        exportMethod.Should().Contain("OpenExportedFile(request.ActualPath)");
+        exportMethod.Should().NotContain("MessageBox.Show(");
+
+        exportPdfMethod.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
+        exportPdfMethod.Should().Contain("ShowOwnedMessage(");
+        exportPdfMethod.Should().NotContain("MessageBox.Show(");
+
+        exportXpsMethod.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options))");
+        exportXpsMethod.Should().Contain("ShowOwnedMessage(");
+        exportXpsMethod.Should().NotContain("MessageBox.Show(");
     }
 
     [Fact]

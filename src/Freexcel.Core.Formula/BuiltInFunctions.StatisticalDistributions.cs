@@ -413,6 +413,34 @@ public static partial class BuiltInFunctions
         return NumberResult(NormSInv(prob));
     }
 
+    private static ScalarValue Phi(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, PhiScalar);
+        return PhiScalar(args[0]);
+    }
+
+    private static ScalarValue PhiScalar(ScalarValue xValue)
+    {
+        double x = ToNumber(xValue);
+        if (!double.IsFinite(x)) return ErrorValue.Num;
+        return NumberResult(NormSPdf(x));
+    }
+
+    private static ScalarValue Gauss(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, GaussScalar);
+        return GaussScalar(args[0]);
+    }
+
+    private static ScalarValue GaussScalar(ScalarValue zValue)
+    {
+        double z = ToNumber(zValue);
+        if (!double.IsFinite(z)) return ErrorValue.Num;
+        return NumberResult(NormSCdf(z) - 0.5);
+    }
+
     private static ScalarValue Standardize(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
@@ -611,6 +639,38 @@ public static partial class BuiltInFunctions
 
         double p = tails == 1 ? 1.0 - TCdf(Math.Abs(t), df) : 2.0 * (1.0 - TCdf(Math.Abs(t), df));
         return NumberResult(p);
+    }
+
+    private static ScalarValue ZTest(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+
+        var (nums, err) = args[0] is RangeValue range
+            ? CollectRangeNumbers(range)
+            : CollectNumbers([args[0]]);
+        if (err is not null) return err;
+        if (nums!.Count == 0) return ErrorValue.NA;
+
+        double hypothesizedMean = ToNumber(args[1]);
+        double sigma;
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            sigma = ToNumber(args[2]);
+            if (sigma <= 0 || !double.IsFinite(sigma)) return ErrorValue.Num;
+        }
+        else
+        {
+            if (nums.Count < 2) return ErrorValue.DivByZero;
+            double sampleMean = nums.Average();
+            double variance = nums.Sum(value => (value - sampleMean) * (value - sampleMean)) / (nums.Count - 1);
+            sigma = Math.Sqrt(variance);
+            if (sigma == 0) return ErrorValue.DivByZero;
+        }
+
+        double z = (nums.Average() - hypothesizedMean) / (sigma / Math.Sqrt(nums.Count));
+        return NumberResult(1.0 - NormSCdf(z));
     }
 
     // ── B2: F distribution ────────────────────────────────────────────────────

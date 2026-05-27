@@ -420,6 +420,8 @@ public static partial class BuiltInFunctions
         ["NORM.S.DIST"]  = (NormSDist, 2, 2),
         ["NORMSINV"]     = (NormSInvFunc, 1, 1),
         ["NORM.S.INV"]   = (NormSInvFunc, 1, 1),
+        ["PHI"]          = (Phi, 1, 1),
+        ["GAUSS"]        = (Gauss, 1, 1),
         ["STANDARDIZE"]  = (Standardize, 3, 3),
 
         // ── Phase B2: T, F, Chi-Squared + Tests ─────────────────────────────
@@ -432,6 +434,8 @@ public static partial class BuiltInFunctions
         ["T.INV.2T"]     = (TInv2TFunc, 2, 2),
         ["TTEST"]        = (TTest, 4, 4),
         ["T.TEST"]       = (TTest, 4, 4),
+        ["ZTEST"]        = (ZTest, 2, 3),
+        ["Z.TEST"]       = (ZTest, 2, 3),
         ["FDIST"]        = (FDistRt, 3, 3),
         ["F.DIST"]       = (FDist, 4, 4),
         ["F.DIST.RT"]    = (FDistRt, 3, 3),
