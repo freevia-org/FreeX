@@ -30,6 +30,8 @@ public sealed class XlsxPackagePathTests
     [InlineData("xl/drawings/drawing1.xml", "../media/image%201.png", "xl/media/image 1.png")]
     [InlineData("xl/drawings/drawing1.xml", "../media/image%2F1.png", "xl/media/image%2F1.png")]
     [InlineData("xl/drawings/drawing1.xml", "../media/image%5C1.png", "xl/media/image%5C1.png")]
+    [InlineData("xl/drawings/drawing1.xml", "%2E/media/image.png", "xl/drawings/%2E/media/image.png")]
+    [InlineData("xl/drawings/drawing1.xml", "%2E%2E/media/image.png", "xl/drawings/%2E%2E/media/image.png")]
     [InlineData("xl/drawings/drawing1.xml", "../media/image%E0%A4%A.png", "xl/media/image%E0%A4%A.png")]
     [InlineData("xl/workbook.xml", "/xl/externalLinks/externalLink1.xml", "xl/externalLinks/externalLink1.xml")]
     [InlineData("xl/workbook.xml", "xl/sharedStrings.xml", "xl/sharedStrings.xml")]
