@@ -5,6 +5,12 @@ namespace Freexcel.App.Host;
 
 public static class ExcelEditKeyPlanner
 {
+    public static bool ShouldCycleFormulaReference(Key key, ModifierKeys modifiers, Key systemKey = Key.None)
+    {
+        var effectiveKey = key == Key.None || key == Key.System ? systemKey : key;
+        return effectiveKey == Key.F4 && modifiers == ModifierKeys.None;
+    }
+
     public static ExcelEditKeyIntent GetIntent(
         Key key,
         ModifierKeys modifiers,

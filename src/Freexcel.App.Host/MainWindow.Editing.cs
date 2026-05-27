@@ -290,7 +290,8 @@ public partial class MainWindow
             return;
         }
 
-        if (e.Key == Key.F4 && _inlineEditor is not null)
+        if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(e.Key, Keyboard.Modifiers, e.SystemKey) &&
+            _inlineEditor is not null)
         {
             if (TryCycleFormulaReference(_inlineEditor))
             {
@@ -488,7 +489,10 @@ public partial class MainWindow
                 ClearFormulaReferenceEntrySpan();
             e.Handled = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
         }
-        else if (e.Key == Key.F4)
+        else if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
+                     e.Key,
+                     e.KeyboardDevice.Modifiers,
+                     e.SystemKey))
         {
             if (TryCycleFormulaReference(FormulaBar))
                 e.Handled = true;
