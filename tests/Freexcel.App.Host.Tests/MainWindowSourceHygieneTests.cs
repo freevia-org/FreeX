@@ -88,6 +88,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ScreenshotTour_CapturesFullRibbonBandAndGridSliver()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ScreenshotTour.cs"));
+
+        source.Should().Contain("ScreenshotTourCaptureHeight = 300");
+        source.Should().Contain("rtb.Render(this)");
+        source.Should().Contain("CroppedBitmap");
+        source.Should().NotContain("rtb.Render(RibbonTabs)");
+        source.Should().NotContain("RibbonTabs.ActualHeight");
+    }
+
+    [Fact]
     public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
     {
         var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
