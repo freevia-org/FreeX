@@ -37,6 +37,7 @@ public sealed class CreateTableDialog : Window
         ShowInTaskbar = false;
 
         _rangeBox.Text = defaultRangeText;
+        AutomationProperties.SetName(_rangeBox, "Table range");
         var root = new StackPanel { Margin = new Thickness(16) };
         root.Children.Add(new Label { Content = "_Where is the data for your table?", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         root.Children.Add(CreateReferenceEditor(_rangeBox, "Select table range", RequestRangeSelection));
