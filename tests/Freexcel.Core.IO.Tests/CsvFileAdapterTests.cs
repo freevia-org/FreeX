@@ -398,6 +398,20 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForIsoDateTimesWithOffsets()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T12:30+03:00,2026-05-17T09:30Z\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        var expectedUtc = new DateTime(2026, 5, 17, 9, 30, 0);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+    }
+
+    [Fact]
     public void Save_WritesDateTimeValuesAsInvariantText()
     {
         var workbook = new Workbook("Book1");
