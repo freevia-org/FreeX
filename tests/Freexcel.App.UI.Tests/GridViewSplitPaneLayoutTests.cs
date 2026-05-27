@@ -383,6 +383,25 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneScrollbarLayoutPlanner_IncludesThumbAndTrackHitBoundaries()
+    {
+        var scrollbar = new SplitPaneScrollbar(
+            SplitPaneScrollbarOrientation.Horizontal,
+            SplitPaneRegion.TopRight,
+            new Rect(100, 20, 200, 10),
+            new Rect(120, 21, 30, 8),
+            VisibleSpan: 10,
+            MaxStartIndex: 191);
+
+        SplitPaneScrollbarLayoutPlanner.HitTestScrollbar(scrollbar, new Point(scrollbar.Thumb.Right, scrollbar.Thumb.Bottom))
+            .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Thumb, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
+        SplitPaneScrollbarLayoutPlanner.HitTestScrollbar(scrollbar, new Point(scrollbar.Track.Right, scrollbar.Track.Bottom))
+            .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Track, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
+        SplitPaneScrollbarLayoutPlanner.CalculateScrollTarget(scrollbar, new Point(scrollbar.Track.Right, scrollbar.Track.Bottom))
+            .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 191));
+    }
+
+    [Fact]
     public void CalculateSplitPaneScrollbarChrome_SizesThumbsFromVisibleSpan()
     {
         var viewport = SplitViewport();
