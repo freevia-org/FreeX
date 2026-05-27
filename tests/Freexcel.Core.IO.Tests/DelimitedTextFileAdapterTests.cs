@@ -584,6 +584,18 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsFinalQuotedEmptyFieldWithoutTrailingNewline()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"\""));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue(""));
+    }
+
+    [Fact]
     public void Save_WritesTabDelimitedRowsAndQuotesTabs()
     {
         var workbook = new Workbook("Book1");

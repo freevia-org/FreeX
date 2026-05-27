@@ -49,7 +49,11 @@ internal static partial class DelimitedTextWorkbookReader
 
                 var field = fields[i].Value;
                 if (field.Length == 0)
+                {
+                    if (fields[i].WasQuoted)
+                        sheet.SetCell(new CellAddress(sheet.Id, row, (uint)(i + 1)), new TextValue(""));
                     continue;
+                }
 
                 var address = new CellAddress(sheet.Id, row, (uint)(i + 1));
                 if (!fields[i].WasQuoted && TryReadFormula(field, out var formulaText))
@@ -163,7 +167,7 @@ internal static partial class DelimitedTextWorkbookReader
             }
         }
 
-        if (current.Length > 0 || fields.Count > 0)
+        if (current.Length > 0 || fields.Count > 0 || currentWasQuoted)
         {
             fields.Add(new DelimitedTextField(current.ToString(), currentWasQuoted));
             return true;

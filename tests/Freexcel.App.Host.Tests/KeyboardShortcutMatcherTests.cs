@@ -253,7 +253,13 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.System, Key.Right, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.GroupSelection)]
     [InlineData(Key.System, Key.Left, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.UngroupSelection)]
     [InlineData(Key.System, Key.Oem1, ModifierKeys.Alt, KeyboardCommandShortcut.SelectVisibleCellsOnly)]
-    public void TryGetCommandShortcut_MapsSystemKeyAltCommandShortcuts(
+    [InlineData(Key.System, Key.F9, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.CalculateNow)]
+    [InlineData(Key.System, Key.F9, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.RebuildDependenciesAndCalculate)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.System, Key.Add, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    [InlineData(Key.System, Key.Subtract, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    public void TryGetCommandShortcut_MapsSystemKeyCommandShortcuts(
         Key key,
         Key systemKey,
         ModifierKeys modifiers,
