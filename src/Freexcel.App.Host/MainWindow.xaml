@@ -550,6 +550,9 @@
                                     <Button x:Name="FillColorBtn" Width="28" Height="22"
                                             Style="{StaticResource RibbonIconButton}"
                                             Click="FillColorBtn_Click"
+                                            AutomationProperties.Name="Fill Color"
+                                            AutomationProperties.AutomationId="HomeFillColorButton"
+                                            AutomationProperties.HelpText="Open the fill color picker for selected cells."
                                             local:RibbonTooltip.Title="Fill Color"
                                             local:RibbonTooltip.KeyTip="H"
                                             local:RibbonTooltip.Description="Color the background of the selected cells.">
@@ -566,6 +569,9 @@
                                     <Button x:Name="FontColorBtn" Width="28" Height="22"
                                             Style="{StaticResource RibbonIconButton}"
                                             Click="FontColorBtn_Click"
+                                            AutomationProperties.Name="Font Color"
+                                            AutomationProperties.AutomationId="HomeFontColorButton"
+                                            AutomationProperties.HelpText="Open the font color picker for selected cells."
                                             local:RibbonTooltip.Title="Font Color"
                                             local:RibbonTooltip.KeyTip="FC"
                                             local:RibbonTooltip.Description="Change the color of the text.">
@@ -3771,9 +3777,9 @@
                                                 Panel.ZIndex="3"
                                                 IsHitTestVisible="False"/>
                                         <Border x:Name="ActiveTabTopCutout"
-                                                Height="3"
+                                                Height="2.25"
                                                 VerticalAlignment="Top"
-                                                Margin="4,0,4,0"
+                                                Margin="2,0,2,0"
                                                 Background="{StaticResource FreexcelRibbonSurfaceBrush}"
                                                 Panel.ZIndex="6"
                                                 IsHitTestVisible="False">
@@ -3841,18 +3847,16 @@
                                     </Grid>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 4,1 A 6,6 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
-                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 8,1 A 6,6 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabBottomOutline" Property="Margin" Value="7,0,7,0"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 4,1 A 6,6 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
-                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 8,1 A 6,6 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabBottomOutline" Property="Margin" Value="7,0,7,0"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -3888,7 +3892,7 @@
                                       IsHitTestVisible="False"/>
                                 <Path Data="M 12,0 A 8,8 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"
                                       HorizontalAlignment="Right"
-                                      Stroke="{StaticResource FreexcelGreenBrush}"
+                                      Stroke="{StaticResource FreexcelGreenDarkBrush}"
                                       StrokeThickness="1.25"
                                       StrokeStartLineCap="Round"
                                       StrokeEndLineCap="Round"
@@ -3931,6 +3935,13 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
+
+                <Border Grid.Column="3"
+                        BorderBrush="{StaticResource FreexcelGreenBrush}"
+                        BorderThickness="0,1,0,0"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="6"
+                        IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="5" Content="&gt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
