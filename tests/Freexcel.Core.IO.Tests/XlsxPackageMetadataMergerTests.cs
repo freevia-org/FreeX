@@ -60,6 +60,26 @@ public sealed class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeContentTypes_DeduplicatesOverridesWithEquivalentTrimmedPartNames()
+    {
+        using var sourcePackage = CreatePackageWithWhitespacePaddedWorksheetOverride();
+        using var targetPackage = CreatePackageWithExistingContentTypes();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+
+        var contentTypesXml = LoadXml(targetArchive.GetEntry("[Content_Types].xml")!);
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Where(element => ((string?)element.Attribute("PartName"))?.Trim().TrimStart('/') == "xl/worksheets/sheet1.xml")
+            .Should()
+            .ContainSingle();
+    }
+
+    [Fact]
     public void MergeContentTypes_DeduplicatesDefaultsWithEquivalentExtensions()
     {
         using var sourcePackage = CreatePackageWithEquivalentImageDefaultExtension();
@@ -184,6 +204,25 @@ public sealed class XlsxPackageMetadataMergerTests
                   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
                   <Default Extension="xml" ContentType="application/xml"/>
                   <Override PartName="xl/worksheets/sheet1.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                </Types>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream CreatePackageWithWhitespacePaddedWorksheetOverride()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName=" /xl/worksheets/sheet1.xml "
                             ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
                 </Types>
                 """);
