@@ -93,11 +93,12 @@ public sealed partial class AutoFilterDialog
             _ => _textFiltersButton
         };
         var submenu = new ContextMenu();
+        var usedAccessKeys = new HashSet<char>();
         foreach (var child in family.Children)
         {
             var menuItem = new MenuItem
             {
-                Header = child.Header,
+                Header = AddUniqueAccessKey(child.Header, usedAccessKeys),
                 Tag = child
             };
             menuItem.Click += (_, _) => ApplyFilterFamilyChild(child);
@@ -105,6 +106,23 @@ public sealed partial class AutoFilterDialog
         }
 
         parentButton.ContextMenu = submenu;
+    }
+
+    private static string AddUniqueAccessKey(string header, HashSet<char> usedAccessKeys)
+    {
+        if (string.IsNullOrWhiteSpace(header) || header.Contains('_', StringComparison.Ordinal))
+            return header;
+
+        for (var i = 0; i < header.Length; i++)
+        {
+            var ch = header[i];
+            if (!char.IsLetterOrDigit(ch) || !usedAccessKeys.Add(char.ToUpperInvariant(ch)))
+                continue;
+
+            return string.Concat(header.AsSpan(0, i), "_", header.AsSpan(i));
+        }
+
+        return header;
     }
 
     private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)
