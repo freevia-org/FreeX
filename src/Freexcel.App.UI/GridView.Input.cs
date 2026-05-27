@@ -332,6 +332,7 @@ public partial class GridView
             SelectedObjectKind = objectHit.Kind;
             _selectedObjectId = objectHit.Id;
             _selectedObjectKind = objectHit.Kind;
+            InvalidateVisual();
             ContextMenuRequested?.Invoke(objectHit.Anchor, pos);
             e.Handled = true;
             return;
