@@ -3142,44 +3142,58 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Help Online"   Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HelpOnlineBtn_Click"
-                                        local:RibbonTooltip.Title="Help Online"
-                                        local:RibbonTooltip.KeyTip="HO"
-                                        local:RibbonTooltip.Description="Open the Freexcel help documentation in a web browser."/>
-                                <Button Content="Contact Support" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="Contact Support"
-                                        local:RibbonTooltip.KeyTip="CS"
-                                        local:RibbonTooltip.Description="Contact support for Freexcel. In-app support is not yet implemented."/>
-                                <Button Content="Feedback"  Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
-                                        local:RibbonTooltip.Title="Feedback"
-                                        local:RibbonTooltip.KeyTip="FE"
-                                        local:RibbonTooltip.Description="Open a prefilled GitHub issue with safe app diagnostics."/>
-                                <Button Content="Copy Diagnostics" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CopyDiagnosticsBtn_Click"
-                                        local:RibbonTooltip.Title="Copy Diagnostics"
-                                        local:RibbonTooltip.KeyTip="DG"
-                                        local:RibbonTooltip.Description="Copy safe app version, runtime, OS, and session diagnostics for tester reports."/>
-                                <local:AutomationInvokeButton x:Name="HelpCheckForUpdatesButton"
-                                                              Content="Check for Updates" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CheckForUpdatesBtn_Click"
-                                                              AutomationProperties.Name="Check for Updates"
-                                                              AutomationProperties.AutomationId="HelpCheckForUpdatesButton"
-                                                              local:RibbonTooltip.Title="Check for Updates"
-                                                              local:RibbonTooltip.KeyTip="UP"
-                                                              local:RibbonTooltip.Description="Open the latest Freexcel tester release in a web browser."/>
-                                <Button Content="Show Training" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="Show Training"
-                                        local:RibbonTooltip.KeyTip="TR"
-                                        local:RibbonTooltip.Description="Open Freexcel training content. Training content is not yet implemented."/>
-                                <Button Content="What's New" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="What's New"
-                                        local:RibbonTooltip.KeyTip="WN"
-                                        local:RibbonTooltip.Description="Show recent Freexcel updates. What's New content is not yet implemented."/>
-                                <local:AutomationInvokeButton x:Name="HelpAboutFreexcelButton"
-                                                              Content="About Freexcel" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AboutBtn_Click"
-                                                              AutomationProperties.Name="About Freexcel"
-                                                              AutomationProperties.AutomationId="HelpAboutFreexcelButton"
-                                                              local:RibbonTooltip.Title="About Freexcel"
-                                                              local:RibbonTooltip.KeyTip="AB"
-                                                              local:RibbonTooltip.Description="View version and license information about Freexcel."/>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Content="Help Online" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HelpOnlineBtn_Click"
+                                            local:RibbonTooltip.Title="Help Online"
+                                            local:RibbonTooltip.KeyTip="HO"
+                                            local:RibbonTooltip.Description="Open the Freexcel help documentation in a web browser."/>
+                                    <Button Content="Feedback" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
+                                            local:RibbonTooltip.Title="Feedback"
+                                            local:RibbonTooltip.KeyTip="FE"
+                                            local:RibbonTooltip.Description="Open a prefilled GitHub issue with safe app diagnostics."/>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Content="Copy Diagnostics" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CopyDiagnosticsBtn_Click"
+                                            local:RibbonTooltip.Title="Copy Diagnostics"
+                                            local:RibbonTooltip.KeyTip="DG"
+                                            local:RibbonTooltip.Description="Copy safe app version, runtime, OS, and session diagnostics for tester reports."/>
+                                    <local:AutomationInvokeButton x:Name="HelpCheckForUpdatesButton"
+                                                                  Content="Check for Updates" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CheckForUpdatesBtn_Click"
+                                                                  AutomationProperties.Name="Check for Updates"
+                                                                  AutomationProperties.AutomationId="HelpCheckForUpdatesButton"
+                                                                  local:RibbonTooltip.Title="Check for Updates"
+                                                                  local:RibbonTooltip.KeyTip="UP"
+                                                                  local:RibbonTooltip.Description="Open the latest Freexcel tester release in a web browser."/>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <local:AutomationInvokeButton x:Name="HelpAboutFreexcelButton"
+                                                                  Content="About Freexcel" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AboutBtn_Click"
+                                                                  AutomationProperties.Name="About Freexcel"
+                                                                  AutomationProperties.AutomationId="HelpAboutFreexcelButton"
+                                                                  local:RibbonTooltip.Title="About Freexcel"
+                                                                  local:RibbonTooltip.KeyTip="AB"
+                                                                  local:RibbonTooltip.Description="View version and license information about Freexcel."/>
+                                    <Button Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="Contact Support"
+                                            local:RibbonTooltip.KeyTip="CS"
+                                            local:RibbonTooltip.Description="Contact support for Freexcel. In-app support is not yet implemented.">
+                                        <TextBlock Text="Contact Support" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="Show Training"
+                                            local:RibbonTooltip.KeyTip="TR"
+                                            local:RibbonTooltip.Description="Open Freexcel training content. Training content is not yet implemented.">
+                                        <TextBlock Text="Show Training" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="What's New"
+                                            local:RibbonTooltip.KeyTip="WN"
+                                            local:RibbonTooltip.Description="Show recent Freexcel updates. What's New content is not yet implemented.">
+                                        <TextBlock Text="What's New" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Help" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
