@@ -153,6 +153,28 @@ public sealed class XlsxPackageMetadataMergerTests
             (string?)element.Attribute("Id") != "rIdHyperlink");
     }
 
+    [Fact]
+    public void MergeRelationshipParts_DeduplicatesExternalTargetsWithTrimmedTargetMode()
+    {
+        using var sourcePackage = CreatePackageWithWhitespacePaddedExternalWorksheetRelationship();
+        using var targetPackage = CreatePackageWithExistingWorksheetRelationships();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        var relsXml = LoadXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        relsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(element =>
+                element.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" &&
+                element.Attribute("Target")?.Value == "https://example.com/docs")
+            .Should()
+            .ContainSingle();
+    }
+
     private static MemoryStream CreatePackageWithAdditionalContentTypes()
     {
         var package = new MemoryStream();
@@ -309,6 +331,31 @@ public sealed class XlsxPackageMetadataMergerTests
                                 Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
                                 Target="https://example.com/from-source"
                                 TargetMode="External"/>
+                </Relationships>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream CreatePackageWithWhitespacePaddedExternalWorksheetRelationship()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                </Types>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdHyperlink"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                Target="https://example.com/docs"
+                                TargetMode=" External "/>
                 </Relationships>
                 """);
         }
