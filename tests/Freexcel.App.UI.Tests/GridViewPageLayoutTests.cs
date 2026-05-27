@@ -123,6 +123,25 @@ public sealed class GridViewPageLayoutTests
     }
 
     [Fact]
+    public void HitTestPageMarginRulerHandles_IncludesHandleBoundary()
+    {
+        var handles = new PageMarginRulerHandles(
+            new Rect(126, 4, 8, 12),
+            new Rect(776, 4, 8, 12),
+            new Rect(16, 114, 12, 8),
+            new Rect(16, 1014, 12, 8));
+
+        GridView.HitTestPageMarginRulerHandles(handles, new Point(134, 16))
+            .Should().Be(WorksheetPageMarginEdge.Left);
+        GridView.HitTestPageMarginRulerHandles(handles, new Point(784, 16))
+            .Should().Be(WorksheetPageMarginEdge.Right);
+        GridView.HitTestPageMarginRulerHandles(handles, new Point(28, 122))
+            .Should().Be(WorksheetPageMarginEdge.Top);
+        GridView.HitTestPageMarginRulerHandles(handles, new Point(28, 1022))
+            .Should().Be(WorksheetPageMarginEdge.Bottom);
+    }
+
+    [Fact]
     public void HitTestPageMarginRulerHandles_ReturnsNullWhenRulersAreHidden()
     {
         var handles = new PageMarginRulerHandles(
