@@ -77,7 +77,7 @@ public sealed class FormulaEvaluator
         "DVAR", "DVARP",
         "ROW", "COLUMN", "ROWS", "COLUMNS", "COUNTBLANK",
         "AGGREGATE", "CELL", "GETPIVOTDATA",
-        "TTEST", "T.TEST", "FTEST", "F.TEST", "CHITEST", "CHISQ.TEST",
+        "TTEST", "T.TEST", "ZTEST", "Z.TEST", "FTEST", "F.TEST", "CHITEST", "CHISQ.TEST",
         "FREQUENCY",
         "MIRR", "XIRR", "XNPV", "FVSCHEDULE",
         "PMT", "PV", "FV", "NPER", "RATE", "IPMT", "PPMT",
