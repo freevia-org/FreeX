@@ -72,6 +72,18 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.FocusedMenuHeader.Should().Be("Bar");
             harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.BarChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Pie");
+
+            harness.FocusedMenuHeader.Should().Be("Pie");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.PieChart);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Doughnut");
+
+            harness.FocusedMenuHeader.Should().Be("Doughnut");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.PieChart);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
         });
     }
 
