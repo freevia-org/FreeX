@@ -144,7 +144,7 @@ public static class AutoFilterDropdownPlanner
         var headerText = SpreadsheetDisplayFormatter.FormatCellValue(
             sheet.GetValue(plan.Range.Start.Row, plan.Range.Start.Col + plan.FilterColumnOffset));
         if (string.IsNullOrWhiteSpace(headerText))
-            headerText = FormatColumnHeader(plan.FilterColumnOffset);
+            headerText = FormatBlankHeader(plan.Range.Start.Col + plan.FilterColumnOffset);
 
         var filterKind = DetectFilterKind(sheet, plan);
         var filterEntry = AutoFilterMenuCatalog.CreateFilterFamilyEntry(filterKind);
@@ -249,17 +249,6 @@ public static class AutoFilterDropdownPlanner
         return AutoFilterMenuFilterKind.Text;
     }
 
-    private static string FormatColumnHeader(uint offset)
-    {
-        var index = offset + 1;
-        var chars = new Stack<char>();
-        while (index > 0)
-        {
-            index--;
-            chars.Push((char)('A' + index % 26));
-            index /= 26;
-        }
-
-        return new string(chars.ToArray());
-    }
+    private static string FormatBlankHeader(uint absoluteColumn) =>
+        $"Column {CellAddress.NumberToColumnName(absoluteColumn)}";
 }
