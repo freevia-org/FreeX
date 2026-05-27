@@ -93,6 +93,24 @@ public static partial class BuiltInFunctions
         return count == 0 ? ErrorValue.DivByZero : NumberResult(total / count);
     }
 
+    private static ScalarValue AverageA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double total = 0;
+        int count = 0;
+        foreach (var arg in args)
+        {
+            var (values, error) = CollectAValues(arg);
+            if (error is not null) return error;
+            foreach (var value in values)
+            {
+                total += value;
+                count++;
+            }
+        }
+
+        return count == 0 ? ErrorValue.DivByZero : NumberResult(total / count);
+    }
+
     private static ScalarValue Min(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         double? min = null;
@@ -119,6 +137,20 @@ public static partial class BuiltInFunctions
             var val = ToNumber(arg);
             if (min is null || val < min) min = val;
         }
+        return min.HasValue ? NumberResult(min.Value) : new NumberValue(0);
+    }
+
+    private static ScalarValue MinA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double? min = null;
+        foreach (var arg in args)
+        {
+            var (values, error) = CollectAValues(arg);
+            if (error is not null) return error;
+            foreach (var value in values)
+                if (min is null || value < min) min = value;
+        }
+
         return min.HasValue ? NumberResult(min.Value) : new NumberValue(0);
     }
 
@@ -149,6 +181,74 @@ public static partial class BuiltInFunctions
             if (max is null || val > max) max = val;
         }
         return max.HasValue ? NumberResult(max.Value) : new NumberValue(0);
+    }
+
+    private static ScalarValue MaxA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double? max = null;
+        foreach (var arg in args)
+        {
+            var (values, error) = CollectAValues(arg);
+            if (error is not null) return error;
+            foreach (var value in values)
+                if (max is null || value > max) max = value;
+        }
+
+        return max.HasValue ? NumberResult(max.Value) : new NumberValue(0);
+    }
+
+    private static (IReadOnlyList<double> Values, ErrorValue? Error) CollectAValues(ScalarValue value)
+    {
+        var values = new List<double>();
+        var error = AddAValues(value, values, directText: value is DirectTextLiteralValue);
+        return (values, error);
+    }
+
+    private static ErrorValue? AddAValues(ScalarValue value, List<double> values, bool directText)
+    {
+        switch (value)
+        {
+            case ErrorValue e:
+                return e;
+            case ReferencedScalarValue referenced:
+                return AddAValues(referenced.Value, values, directText: false);
+            case RangeValue range:
+                foreach (var cell in range.Flatten())
+                {
+                    var error = AddAValues(cell, values, directText: false);
+                    if (error is not null) return error;
+                }
+                return null;
+            case BlankValue:
+                return null;
+            case NumberValue n:
+                values.Add(n.Value);
+                return null;
+            case DateTimeValue d:
+                values.Add(d.Value);
+                return null;
+            case BoolValue b:
+                values.Add(b.Value ? 1.0 : 0.0);
+                return null;
+            case DirectTextLiteralValue t:
+                if (ExcelTextNumberParser.TryParse(t.Value, out var directParsed))
+                    values.Add(directParsed);
+                else if (t.Value.Length == 0 || !directText)
+                    values.Add(0.0);
+                else
+                    return ErrorValue.Value;
+                return null;
+            case TextValue t:
+                if (ExcelTextNumberParser.TryParse(t.Value, out var textParsed))
+                    values.Add(textParsed);
+                else if (t.Value.Length == 0 || !directText)
+                    values.Add(0.0);
+                else
+                    return ErrorValue.Value;
+                return null;
+            default:
+                return ErrorValue.Value;
+        }
     }
 
     private static ScalarValue Count(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
