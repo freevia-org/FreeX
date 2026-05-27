@@ -125,6 +125,62 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
+    [InlineData("=COMPLEX(3,4)", "3+4i")]
+    [InlineData("=COMPLEX(3,-4,\"j\")", "3-4j")]
+    [InlineData("=COMPLEX(0,1)", "i")]
+    [InlineData("=COMPLEX(0,-1)", "-i")]
+    [InlineData("=COMPLEX(3,0)", "3")]
+    public void Complex_ReturnsExcelComplexText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=IMREAL(\"6-9i\")", 6)]
+    [InlineData("=IMAGINARY(\"3+4i\")", 4)]
+    [InlineData("=IMAGINARY(\"0-j\")", -1)]
+    [InlineData("=IMAGINARY(4)", 0)]
+    [InlineData("=IMABS(\"5+12i\")", 13)]
+    public void ComplexInspectionFunctions_ReturnExcelResults(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=IMCONJUGATE(\"3+4i\")", "3-4i")]
+    [InlineData("=IMSUM(\"3+6i\",\"5-2i\")", "8+4i")]
+    [InlineData("=IMSUB(\"13+4i\",\"5+3i\")", "8+i")]
+    [InlineData("=IMPRODUCT(\"3+4i\",\"5-3i\")", "27+11i")]
+    [InlineData("=IMPRODUCT(\"1+2i\",30)", "30+60i")]
+    [InlineData("=IMDIV(\"2+4i\",\"1+i\")", "3+i")]
+    public void ComplexArithmeticFunctions_ReturnExcelComplexText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void ComplexFunctions_HandleRangesAndErrors()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("3+4i")),
+            (2, 1, new TextValue("5-2i")),
+            (3, 1, ErrorValue.NA));
+
+        AssertColumn(_eval.Evaluate("=IMREAL(A1:A2)", sheet), new NumberValue(3), new NumberValue(5));
+        _eval.Evaluate("=IMSUM(A1:A2)", sheet).Should().Be(new TextValue("8+2i"));
+        _eval.Evaluate("=IMSUM(A1:A3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Theory]
+    [InlineData("=COMPLEX(1,2,\"x\")", "#VALUE!")]
+    [InlineData("=IMREAL(\"not complex\")", "#NUM!")]
+    [InlineData("=IMDIV(\"1+i\",\"0\")", "#NUM!")]
+    public void ComplexFunctions_ReturnExcelErrors(string formula, string error)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new ErrorValue(error));
+    }
+
+    [Theory]
     [InlineData("=BIN2DEC(\"102\")")]
     [InlineData("=BIN2DEC(\"10101010101\")")]
     [InlineData("=DEC2BIN(512)")]

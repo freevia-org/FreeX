@@ -324,6 +324,15 @@ public static partial class BuiltInFunctions
 
         // ── Phase A2: CONVERT ───────────────────────────────────────────────
         ["CONVERT"]     = (Convert, 3, 3),
+        ["COMPLEX"]     = (ComplexFunc, 2, 3),
+        ["IMABS"]       = (ImAbs, 1, 1),
+        ["IMAGINARY"]   = (Imaginary, 1, 1),
+        ["IMCONJUGATE"] = (ImConjugate, 1, 1),
+        ["IMDIV"]       = (ImDiv, 2, 2),
+        ["IMPRODUCT"]   = (ImProduct, 1, 255),
+        ["IMREAL"]      = (ImReal, 1, 1),
+        ["IMSUB"]       = (ImSub, 2, 2),
+        ["IMSUM"]       = (ImSum, 1, 255),
         ["BIN2DEC"]     = (Bin2Dec, 1, 1),
         ["BIN2HEX"]     = (Bin2Hex, 1, 2),
         ["BIN2OCT"]     = (Bin2Oct, 1, 2),
