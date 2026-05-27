@@ -165,6 +165,46 @@ public sealed class FormulaRangeEntryPlannerTests
             .Be(CellAddress.Parse("E2", sheet.Id));
     }
 
+    [Theory]
+    [InlineData(Key.None, Key.Right)]
+    [InlineData(Key.System, Key.Right)]
+    public void GetKeyboardSelectionTarget_NormalizesSyntheticSystemArrowKeys(Key key, Key systemKey)
+    {
+        var current = CellAddress.Parse("B2", SheetId);
+
+        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                key,
+                systemKey,
+                ModifierKeys.Shift,
+                current,
+                sheet: null,
+                rowPageSize: 20,
+                colPageSize: 10)
+            .Should()
+            .Be(CellAddress.Parse("C2", SheetId));
+    }
+
+    [Theory]
+    [InlineData(Key.Right, Key.None, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.Right, ModifierKeys.Alt)]
+    [InlineData(Key.Right, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    public void GetKeyboardSelectionTarget_IgnoresUnsupportedAltNavigationChords(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers)
+    {
+        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                key,
+                systemKey,
+                modifiers,
+                CellAddress.Parse("B2", SheetId),
+                sheet: null,
+                rowPageSize: 20,
+                colPageSize: 10)
+            .Should()
+            .BeNull();
+    }
+
     [Fact]
     public void TryApplyRangeSelection_IgnoresNonFormulaText()
     {
