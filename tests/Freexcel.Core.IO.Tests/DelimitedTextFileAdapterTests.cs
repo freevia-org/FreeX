@@ -18,6 +18,17 @@ public sealed class DelimitedTextFileAdapterTests
             "text load should decode the buffered stream segment without duplicating the full byte array");
     }
 
+    [Fact]
+    public void Save_ReusesDelimiterBuffersInsteadOfAllocatingPerChunk()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.IO", "DelimitedTextWorkbookWriter.cs"));
+
+        source.Should().NotContain(
+            "new string(delimiter",
+            "wide sparse delimited saves should not allocate delimiter strings for every row chunk");
+    }
+
     [Theory]
     [InlineData(".txt")]
     [InlineData(".tsv")]
