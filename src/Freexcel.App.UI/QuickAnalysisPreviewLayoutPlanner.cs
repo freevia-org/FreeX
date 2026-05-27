@@ -19,30 +19,32 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        var numericCells = viewport.Cells
-            .Where(cell => cell.Row >= range.Start.Row
-                && cell.Row <= range.End.Row
-                && cell.Col >= range.Start.Col
-                && cell.Col <= range.End.Col
-                && TryGetPreviewNumber(cell, out _))
-            .ToList();
+        var numericCells = new List<(DisplayCell Cell, double Value)>();
+        var max = 0d;
+        foreach (var cell in viewport.Cells)
+        {
+            if (cell.Row < range.Start.Row ||
+                cell.Row > range.End.Row ||
+                cell.Col < range.Start.Col ||
+                cell.Col > range.End.Col ||
+                !TryGetPreviewNumber(cell, out var value))
+                continue;
+
+            numericCells.Add((cell, value));
+            max = Math.Max(max, Math.Max(0, value));
+        }
+
         if (numericCells.Count == 0)
             return [];
-
-        var max = numericCells
-            .Select(cell => TryGetPreviewNumber(cell, out var value) ? Math.Max(0, value) : 0)
-            .DefaultIfEmpty(0)
-            .Max();
 
         var rows = viewport.RowMetrics.ToDictionary(row => row.Row);
         var cols = viewport.ColMetrics.ToDictionary(col => col.Col);
         var rects = new List<Rect>();
-        foreach (var cell in numericCells)
+        foreach (var (cell, value) in numericCells)
         {
             if (!rows.TryGetValue(cell.Row, out var row) || !cols.TryGetValue(cell.Col, out var col))
                 continue;
 
-            TryGetPreviewNumber(cell, out var value);
             var fraction = max <= 0 ? 0 : Math.Clamp(Math.Max(0, value) / max, 0, 1);
             var availableWidth = Math.Max(0, col.Width - 6);
             rects.Add(new Rect(

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
+using System.IO;
 using System.Windows;
 
 namespace Freexcel.App.UI.Tests;
@@ -173,6 +174,23 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
+    public void CalculateQuickAnalysisDataBarPreviewRects_StoresNumericValuesDuringCellScan()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "QuickAnalysisPreviewLayoutPlanner.cs"));
+        var dataBars = source[
+            source.IndexOf("public static IReadOnlyList<Rect> CalculateDataBarPreviewRects", StringComparison.Ordinal)..
+            source.IndexOf("public static IReadOnlyList<Rect> CalculateCellPreviewRects", StringComparison.Ordinal)];
+
+        dataBars.Should().Contain("var numericCells = new List<(DisplayCell Cell, double Value)>();");
+        dataBars.Should().Contain("numericCells.Add((cell, value));");
+        dataBars.Should().Contain("foreach (var (cell, value) in numericCells)");
+        dataBars.Should().NotContain(".Where(");
+        dataBars.Should().NotContain(".Select(");
+        dataBars.Should().NotContain(".DefaultIfEmpty(");
+    }
+
+    [Fact]
     public void CalculateQuickAnalysisCellPreviewRects_ReturnsInsetCellsForColorScalePreview()
     {
         var sheetId = SheetId.New();
@@ -246,4 +264,18 @@ public sealed class GridViewSelectionLayoutTests
             [],
             [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20), new RowMetric(3, 20, 40)],
             [new ColMetric(1, 60, 0), new ColMetric(2, 80, 60), new ColMetric(3, 60, 140)]);
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
+    }
 }
