@@ -34,6 +34,36 @@ public sealed class XlsxRelationshipReaderTests
         targets.Should().NotContainKey("rIdExternal");
     }
 
+    [Theory]
+    [InlineData("https://example.com/workbook.xlsx")]
+    [InlineData("file:///C:/Temp/workbook.xlsx")]
+    [InlineData("mailto:support@example.com")]
+    public void ReadTargets_SkipsAbsoluteUriTargetsEvenWhenTargetModeIsMissing(string target)
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = new XDocument(new XElement(
+            relationshipNs + "Relationships",
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdInternal"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"),
+                new XAttribute("Target", "worksheets/sheet1.xml")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdUri"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"),
+                new XAttribute("Target", target))));
+
+        var targets = XlsxRelationshipReader.ReadTargets(
+            relationshipsXml,
+            relationshipNs,
+            target => XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target));
+
+        targets.Should().ContainSingle();
+        targets.Should().ContainKey("rIdInternal").WhoseValue.Should().Be("xl/worksheets/sheet1.xml");
+        targets.Should().NotContainKey("rIdUri");
+    }
+
     [Fact]
     public void ReadTargets_IgnoresDuplicateRelationshipIdsWhenBuildingInternalPartMap()
     {

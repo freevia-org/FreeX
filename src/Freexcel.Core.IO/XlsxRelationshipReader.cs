@@ -18,7 +18,8 @@ internal static class XlsxRelationshipReader
             if (string.IsNullOrWhiteSpace(id) ||
                 string.IsNullOrWhiteSpace(target) ||
                 targets.ContainsKey(id) ||
-                string.Equals(element.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                string.Equals(element.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase) ||
+                IsAbsoluteUriTarget(target))
             {
                 continue;
             }
@@ -28,6 +29,10 @@ internal static class XlsxRelationshipReader
 
         return targets;
     }
+
+    private static bool IsAbsoluteUriTarget(string target) =>
+        Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
+        !string.IsNullOrWhiteSpace(uri.Scheme);
 
     public static Dictionary<string, string> LoadTargets(
         ZipArchive archive,
