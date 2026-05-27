@@ -217,6 +217,7 @@ public static partial class BuiltInFunctions
         ["AVEDEV"]           = (Avedev, 1, 255),
         ["PERCENTRANK"]      = (PercentrankInc, 2, 3),
         ["PERCENTRANK.INC"]  = (PercentrankInc, 2, 3),
+        ["PERCENTOF"]        = (PercentOf, 2, 2),
         ["MODE"]             = (ModeSngl, 1, 255),
         ["MODE.SNGL"]        = (ModeSngl, 1, 255),
         ["CORREL"]           = (Correl, 2, 2),
