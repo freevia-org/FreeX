@@ -225,7 +225,7 @@ internal static class XlsxPackageMetadataMerger
         if (excludedSourceParts is null || excludedSourceParts.Count == 0 || string.IsNullOrWhiteSpace(path))
             return false;
 
-        return excludedSourceParts.Contains(XlsxPackagePath.NormalizeZipPath(path.Replace('\\', '/').TrimStart('/')));
+        return excludedSourceParts.Contains(XlsxPackagePath.NormalizeZipPath(path.Trim().Replace('\\', '/').TrimStart('/')));
     }
 
     private static bool IsExternalRelationship(XElement relationship) =>
