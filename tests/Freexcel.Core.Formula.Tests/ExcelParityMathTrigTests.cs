@@ -57,6 +57,9 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=LCM(4,6)", 12)]
     [InlineData("=LN(EXP(1))", 1)]
     [InlineData("=LOG(100,10)", 2)]
+    [InlineData("=LOG10(86)", 1.9344984512435677)]
+    [InlineData("=LOG10(10)", 1)]
+    [InlineData("=LOG10(100000)", 5)]
     [InlineData("=MOD(-3,2)", 1)]
     [InlineData("=MROUND(7,2)", 8)]
     [InlineData("=MULTINOMIAL(2,3,4)", 1260)]
@@ -105,6 +108,8 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=GCD(-1,2)")]
     [InlineData("=LCM(-1,2)")]
     [InlineData("=LOG(-1)")]
+    [InlineData("=LOG10(0)")]
+    [InlineData("=LOG10(-1)")]
     [InlineData("=MROUND(5,-2)")]
     [InlineData("=SEC(134217728)")]
     [InlineData("=SQRT(-1)")]
@@ -132,6 +137,7 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=FACTDOUBLE(\"x\")")]
     [InlineData("=FLOOR.MATH(\"x\")")]
     [InlineData("=ISO.CEILING(\"x\")")]
+    [InlineData("=LOG10(\"x\")")]
     [InlineData("=PERMUTATIONA(\"x\",2)")]
     [InlineData("=PRODUCT(\"x\")")]
     [InlineData("=SEC(\"x\")")]
@@ -323,6 +329,10 @@ public sealed class ExcelParityMathTrigTests
         var acot = _eval.Evaluate("=ACOT(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
         ((NumberValue)acot.At(1, 1)).Value.Should().BeApproximately(Math.PI / 4.0, 1e-10);
         ((NumberValue)acot.At(2, 1)).Value.Should().BeApproximately(Math.Atan(0.5), 1e-10);
+
+        var log10 = _eval.Evaluate("=LOG10(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)log10.At(1, 1)).Value.Should().BeApproximately(0, 1e-12);
+        ((NumberValue)log10.At(2, 1)).Value.Should().BeApproximately(Math.Log10(2), 1e-12);
     }
 
     [Fact]
