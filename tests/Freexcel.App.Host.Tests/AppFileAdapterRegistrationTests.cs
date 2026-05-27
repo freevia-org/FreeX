@@ -28,6 +28,7 @@ public sealed class AppFileAdapterRegistrationTests
         formats.Should().Contain(format => format.Extension == ".txt" && format.CanOpen && format.CanSave);
         formats.Should().Contain(format => format.Extension == ".tsv" && format.CanOpen && format.CanSave);
         formats.Should().Contain(format => format.Extension == ".tab" && format.CanOpen && format.CanSave);
+        formats.Should().Contain(format => format.Extension == ".xml" && format.CanOpen && format.CanSave);
     }
 
     private static ServiceProvider BuildAppServices()

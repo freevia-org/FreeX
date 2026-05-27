@@ -22,7 +22,7 @@ public static class XlsxPackagePath
 
     public static string ResolveRelationshipTarget(string sourcePath, string target)
     {
-        var normalizedTarget = target.Replace('\\', '/');
+        var normalizedTarget = UnescapePathSegments(target.Replace('\\', '/'));
         if (normalizedTarget.StartsWith('/'))
             return normalizedTarget.TrimStart('/');
         if (normalizedTarget.StartsWith("xl/", StringComparison.OrdinalIgnoreCase))
@@ -40,45 +40,40 @@ public static class XlsxPackagePath
         var slash = sourceDirectory.LastIndexOf('/');
         sourceDirectory = slash >= 0 ? sourceDirectory[..slash] : "";
 
+        string target;
         if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
-            return $"../media/{targetPath["xl/media/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../media/{targetPath["xl/media/".Length..]}";
+        else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase))
-            return $"../drawings/{targetPath["xl/drawings/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../drawings/{targetPath["xl/drawings/".Length..]}";
+        else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
-            return $"../tables/{targetPath["xl/tables/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../tables/{targetPath["xl/tables/".Length..]}";
+        else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase))
-            return $"../pivotTables/{targetPath["xl/pivotTables/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../pivotTables/{targetPath["xl/pivotTables/".Length..]}";
+        else if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
-            return $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/slicers", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";
+        else if (sourceDirectory.Equals("xl/slicers", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
-            return $"../slicerCaches/{targetPath["xl/slicerCaches/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/timelines", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../slicerCaches/{targetPath["xl/slicerCaches/".Length..]}";
+        else if (sourceDirectory.Equals("xl/timelines", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase))
-            return $"../timelineCaches/{targetPath["xl/timelineCaches/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../timelineCaches/{targetPath["xl/timelineCaches/".Length..]}";
+        else if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase))
-            return $"../charts/{targetPath["xl/charts/".Length..]}";
-
-        if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
+            target = $"../charts/{targetPath["xl/charts/".Length..]}";
+        else if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
-            return $"../media/{targetPath["xl/media/".Length..]}";
-
-        return targetPath.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
+            target = $"../media/{targetPath["xl/media/".Length..]}";
+        else
+            target = targetPath.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
             ? targetPath["xl/".Length..]
             : targetPath;
+
+        return EscapePathSegments(target);
     }
 
     public static string NormalizeZipPath(string path)
@@ -135,4 +130,25 @@ public static class XlsxPackagePath
             ? candidate
             : $"{candidate}{extension}";
     }
+
+    private static string UnescapePathSegments(string path) =>
+        string.Join('/', path.Split('/').Select(UnescapePathSegment));
+
+    private static string EscapePathSegments(string path) =>
+        string.Join('/', path.Split('/').Select(EscapePathSegment));
+
+    private static string UnescapePathSegment(string segment)
+    {
+        try
+        {
+            return Uri.UnescapeDataString(segment);
+        }
+        catch (UriFormatException)
+        {
+            return segment;
+        }
+    }
+
+    private static string EscapePathSegment(string segment) =>
+        segment is "." or ".." ? segment : Uri.EscapeDataString(segment);
 }

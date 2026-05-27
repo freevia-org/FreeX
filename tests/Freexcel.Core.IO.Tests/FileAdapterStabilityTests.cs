@@ -13,6 +13,7 @@ public sealed class FileAdapterStabilityTests
         yield return [".txt", new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t')];
         yield return [".tsv", new DelimitedTextFileAdapter(".tsv", "TSV (Tab-separated values)", '\t')];
         yield return [".tab", new DelimitedTextFileAdapter(".tab", "Tab-delimited text", '\t')];
+        yield return [".xml", new SpreadsheetXmlFileAdapter()];
         yield return [".fxl", new NativeJsonAdapter()];
     }
 
@@ -115,6 +116,7 @@ public sealed class FileAdapterStabilityTests
         new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t'),
         new DelimitedTextFileAdapter(".tsv", "TSV (Tab-separated values)", '\t'),
         new DelimitedTextFileAdapter(".tab", "Tab-delimited text", '\t'),
+        new SpreadsheetXmlFileAdapter(),
         new NativeJsonAdapter()
     ];
 
