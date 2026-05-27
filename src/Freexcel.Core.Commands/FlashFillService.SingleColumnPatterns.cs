@@ -115,6 +115,13 @@ public static partial class FlashFillService
             return false;
 
         var userName = source[..atIndex];
+        var plusIndex = userName.IndexOf('+');
+        if (plusIndex >= 0)
+            userName = userName[..plusIndex];
+
+        if (userName.Length == 0)
+            return false;
+
         var separator = userName.Contains('.', StringComparison.Ordinal)
             ? '.'
             : userName.Contains('_', StringComparison.Ordinal)
