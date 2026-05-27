@@ -495,10 +495,18 @@ public static partial class BuiltInFunctions
     private static ScalarValue Fvschedule(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double principal = ToNumber(args[0]);
         var schedRange = args[1] is RangeValue scheduleRange
             ? scheduleRange
             : SingleCellArray(args[1]);
+        if (args[0] is RangeValue principalRange)
+            return MapUnaryTextRange(principalRange, principalValue => FvscheduleScalar(principalValue, schedRange));
+        return FvscheduleScalar(args[0], schedRange);
+    }
+
+    private static ScalarValue FvscheduleScalar(ScalarValue principalValue, RangeValue schedRange)
+    {
+        if (principalValue is ErrorValue principalError) return principalError;
+        double principal = ToNumber(principalValue);
         if (!double.IsFinite(principal)) return ErrorValue.Num;
         var (rates, re) = CollectRangeNumbers(schedRange);
         if (re is not null) return re;

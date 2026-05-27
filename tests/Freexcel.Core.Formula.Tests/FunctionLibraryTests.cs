@@ -5331,6 +5331,19 @@ public class FunctionLibraryTests
             ((NumberValue)_eval.Evaluate("=XIRR(A1:A3,B1:B3,C2)", sheet)).Value);
     }
 
+    [Fact]
+    public void Fvschedule_PrincipalRange_SpillsElementwiseAgainstScheduleArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(100)), (2, 1, new NumberValue(200)),
+            (1, 2, new NumberValue(0.10)), (2, 2, new NumberValue(0.05)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=FVSCHEDULE(A1:A2,B1:B2)", sheet),
+            ((NumberValue)_eval.Evaluate("=FVSCHEDULE(A1,B1:B2)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=FVSCHEDULE(A2,B1:B2)", sheet)).Value);
+    }
+
     [Fact] public void Pmt_TypeError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
