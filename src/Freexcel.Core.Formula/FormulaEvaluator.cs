@@ -86,6 +86,7 @@ public sealed class FormulaEvaluator
         "PRICE", "YIELD", "PRICEDISC", "PRICEMAT", "YIELDDISC", "YIELDMAT", "DURATION", "MDURATION",
         "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL",
         "TEXTJOIN", "TEXTBEFORE", "TEXTAFTER", "TEXTSPLIT",
+        "REGEXTEST", "REGEXEXTRACT", "REGEXREPLACE",
         "EXACT", "CODE", "CHAR", "LEN", "LEFT", "RIGHT", "MID", "REPLACE",
         "FIND", "SEARCH",
         "TRIM", "UPPER", "LOWER", "PROPER", "CLEAN",

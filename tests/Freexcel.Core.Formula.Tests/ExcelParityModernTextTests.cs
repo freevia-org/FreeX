@@ -179,6 +179,89 @@ public sealed class ExcelParityModernTextTests
         _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
     }
 
+    [Theory]
+    [InlineData("=REGEXTEST(\"abc-123\",\"[0-9]+\")", true)]
+    [InlineData("=REGEXTEST(\"abc\",\"[0-9]+\")", false)]
+    [InlineData("=REGEXTEST(\"Alpha\",\"alpha\")", false)]
+    [InlineData("=REGEXTEST(\"Alpha\",\"alpha\",1)", true)]
+    public void RegexTest_ReturnsExcelBooleanMatchResults(string formula, bool expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new BoolValue(expected));
+    }
+
+    [Fact]
+    public void RegexTest_SpillsOverTextRanges()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("A-100")),
+            (2, 1, new TextValue("pending")));
+
+        AssertColumn(
+            _eval.Evaluate("=REGEXTEST(A1:A2,\"[0-9]+\")", sheet),
+            new BoolValue(true),
+            new BoolValue(false));
+    }
+
+    [Theory]
+    [InlineData("=REGEXEXTRACT(\"Order ID: SO-12345\",\"[A-Z]{2}-[0-9]+\")", "SO-12345")]
+    [InlineData("=REGEXEXTRACT(\"Alpha\",\"alpha\",0,1)", "Alpha")]
+    public void RegexExtract_ReturnsFirstMatch(string formula, string expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void RegexExtract_ReturnsAllMatchesAsColumn()
+    {
+        AssertColumn(
+            _eval.Evaluate("=REGEXEXTRACT(\"A1 B22 C333\",\"[0-9]+\",1)", Sheet()),
+            new TextValue("1"),
+            new TextValue("22"),
+            new TextValue("333"));
+    }
+
+    [Fact]
+    public void RegexExtract_ReturnsCaptureGroupsAsRow()
+    {
+        var result = _eval.Evaluate("=REGEXEXTRACT(\"Ada Lovelace\",\"(\\w+)\\s+(\\w+)\",2)", Sheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(2);
+        result.At(1, 1).Should().Be(new TextValue("Ada"));
+        result.At(1, 2).Should().Be(new TextValue("Lovelace"));
+    }
+
+    [Fact]
+    public void RegexExtract_ReturnsNaWhenNoMatchOrNoCaptureGroup()
+    {
+        _eval.Evaluate("=REGEXEXTRACT(\"abc\",\"[0-9]+\")", Sheet()).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=REGEXEXTRACT(\"abc\",\"[a-z]+\",2)", Sheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Theory]
+    [InlineData("=REGEXREPLACE(\"abc-123-def\",\"[0-9]+\",\"###\")", "abc-###-def")]
+    [InlineData("=REGEXREPLACE(\"one two three\",\"\\w+\",\"X\",2)", "one X three")]
+    [InlineData("=REGEXREPLACE(\"John Smith\",\"(\\w+)\\s+(\\w+)\",\"$2, $1\")", "Smith, John")]
+    [InlineData("=REGEXREPLACE(\"Alpha\",\"alpha\",\"beta\",0,1)", "beta")]
+    [InlineData("=REGEXREPLACE(\"abc\",\"[0-9]+\",\"#\",1)", "abc")]
+    public void RegexReplace_ReturnsExcelReplacementText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=REGEXTEST(\"abc\",\"[\")")]
+    [InlineData("=REGEXEXTRACT(\"abc\",\"[\",0)")]
+    [InlineData("=REGEXREPLACE(\"abc\",\"[\",\"x\")")]
+    [InlineData("=REGEXTEST(\"abc\",\"abc\",2)")]
+    [InlineData("=REGEXEXTRACT(\"abc\",\"abc\",3)")]
+    [InlineData("=REGEXREPLACE(\"abc\",\"abc\",\"x\",-1)")]
+    public void RegexFunctions_ReturnValueForInvalidPatternOrMode(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+    }
+
     private static Sheet Sheet(params (int Row, int Col, ScalarValue Value)[] cells)
     {
         var sheet = new Sheet(SheetId.New(), "S");
