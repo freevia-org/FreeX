@@ -3309,8 +3309,7 @@
                     <Border x:Name="GridBottomRuleSpacer"
                             DockPanel.Dock="Left"
                             Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"/>
-                    <Border BorderBrush="{StaticResource FreexcelGreenBrush}"
-                            BorderThickness="0,0,0,1"/>
+                    <Border BorderThickness="0"/>
                 </DockPanel>
                 <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
                 <Canvas x:Name="EditOverlay"
@@ -3649,6 +3648,13 @@
                         BorderThickness="0,0,0,1"
                         IsHitTestVisible="False"/>
 
+                <Border Grid.Column="2" Grid.ColumnSpan="5"
+                        BorderBrush="{StaticResource FreexcelGreenBrush}"
+                        BorderThickness="0,1,0,0"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="0"
+                        IsHitTestVisible="False"/>
+
                 <Button x:Name="SheetNavLeftBtn" Grid.Column="1" Content="&lt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
                         Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="2,2,0,0"
@@ -3825,15 +3831,11 @@
                                     </Grid>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
-                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
-                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
