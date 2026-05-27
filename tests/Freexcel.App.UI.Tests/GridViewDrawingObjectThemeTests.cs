@@ -335,6 +335,42 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectHitTesting_IncludesRenderedBodyBoundary()
+    {
+        RunOnStaThread(() =>
+        {
+            var sheetId = SheetId.New();
+            var picture = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = new CellAddress(sheetId, 1, 1),
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
+                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                Pictures = [picture]
+            };
+
+            grid.TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect)
+                .Should().BeTrue();
+
+            var hitTestDrawingObject = typeof(GridView).GetMethod(
+                "HitTestDrawingObject",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var hit = hitTestDrawingObject!.Invoke(grid, [new Point(rect.Right, rect.Bottom)]);
+
+            hit!.GetType().GetField("Item1")!.GetValue(hit).Should().Be(picture.Id);
+            hit.GetType().GetField("Item2")!.GetValue(hit).Should().Be(ObjectKind.Picture);
+        });
+    }
+
+    [Fact]
     public void DrawingObjectHitTesting_ChoosesTopmostRenderedObject()
     {
         RunOnStaThread(() =>
