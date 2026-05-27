@@ -554,6 +554,33 @@ public sealed class DelimitedTextFileAdapterTests
         cell.Value.Should().Be(new TextValue("=A1*2"));
     }
 
+    [Theory]
+    [InlineData("0042")]
+    [InlineData("$42.00")]
+    [InlineData(" ($42.25) ")]
+    [InlineData(" 12.5% ")]
+    [InlineData(" TRUE ")]
+    [InlineData("2026-05-17")]
+    [InlineData("#N/A")]
+    public void Save_RoundTripsCoercionLikeTextFieldsAsLiteralText(string text)
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue(text));
+    }
+
     private static string FindWorkspaceFile(params string[] parts)
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
