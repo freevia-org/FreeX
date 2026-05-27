@@ -146,6 +146,7 @@ public sealed class GridViewRenderPerformanceTests
         properties.Should().Contain("FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender)");
         onRender.Should().Contain("var isLiveResizing = IsLiveResizing;");
         onRender.Should().Contain("if (!isLiveResizing)");
+        onRender.Should().Contain("RenderLiveResizeContinuation(dc);");
         onRender.Should().Contain("RenderCells(dc);");
         onRender.Should().Contain("RenderSelection(dc);");
 
@@ -158,6 +159,54 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void LiveResizeContinuation_PaintsExpandedGridWithoutViewportRefresh()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var continuation = rendering[
+            rendering.IndexOf("private void RenderLiveResizeContinuation", StringComparison.Ordinal)..
+            rendering.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)];
+
+        continuation.Should().Contain("ActualWidth > gridRight");
+        continuation.Should().Contain("ActualHeight > gridBottom");
+        continuation.Should().Contain("RenderLiveResizeColumnContinuation");
+        continuation.Should().Contain("RenderLiveResizeRowContinuation");
+        continuation.Should().Contain("DrawLiveResizeHorizontalGridLines");
+        continuation.Should().Contain("DrawLiveResizeVerticalGridLines");
+        continuation.Should().Contain("dc.DrawRectangle(Brushes.White, null");
+        continuation.Should().NotContain("UpdateViewport");
+        continuation.Should().NotContain("Viewport =");
+    }
+
+    [Fact]
+    public void RenderCaches_AreClassLevelFieldsNotLocalAllocations()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
+
+        gridViewSource.Should().Contain("private readonly Dictionary<CellColor, SolidColorBrush> _brushCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<CellBorder, Pen> _borderPenCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<Brush, Pen> _underlinePenCache = new();");
+    }
+
+    [Fact]
+    public void RenderCells_ClearsCachesAtStartOfEachPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("// Pass 1: backgrounds", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("_brushCache.Clear();");
+        renderCells.Should().Contain("_borderPenCache.Clear();");
+        renderCells.Should().Contain("_typefaceCache.Clear();");
+        renderCells.Should().Contain("_underlinePenCache.Clear();");
+        renderCells.Should().NotContain("new Dictionary<CellColor, SolidColorBrush>");
+        renderCells.Should().NotContain("new Dictionary<CellBorder, Pen>");
+        renderCells.Should().NotContain("new Dictionary<CellTypefaceKey, Typeface>");
+        renderCells.Should().NotContain("new Dictionary<Brush, Pen>");
+    }
+
+    [Fact]
     public void RenderCells_ReusesCellColorBrushesWithinRenderPass()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
@@ -165,9 +214,8 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("var brushCache = new Dictionary<CellColor, SolidColorBrush>();");
-        renderCells.Should().Contain("BrushForCellColor(bg.FillColor.Value, brushCache)");
-        renderCells.Should().Contain("BrushForCellColor(fc, brushCache)");
+        renderCells.Should().Contain("BrushForCellColor(bg.FillColor.Value, _brushCache)");
+        renderCells.Should().Contain("BrushForCellColor(fc, _brushCache)");
         renderCells.Should().NotContain("new SolidColorBrush");
     }
 
@@ -179,8 +227,7 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("var borderPenCache = new Dictionary<CellBorder, Pen>();");
-        renderCells.Should().Contain("brushCache, borderPenCache");
+        renderCells.Should().Contain("_brushCache, _borderPenCache");
     }
 
     [Fact]
@@ -191,8 +238,7 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();");
-        renderCells.Should().Contain("CreateCellTypeface(style, typefaceCache)");
+        renderCells.Should().Contain("CreateCellTypeface(style, _typefaceCache)");
     }
 
     [Fact]
@@ -203,8 +249,7 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("var underlinePenCache = new Dictionary<Brush, Pen>();");
-        renderCells.Should().Contain("UnderlinePenForTextBrush(textBrush, underlinePenCache)");
+        renderCells.Should().Contain("UnderlinePenForTextBrush(textBrush, _underlinePenCache)");
         source.Should().Contain("private static Pen UnderlinePenForTextBrush");
         source.Should().Contain("pen.Freeze();");
         renderCells.Should().NotContain("new Pen(textBrush");

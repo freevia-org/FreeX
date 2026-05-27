@@ -33,6 +33,155 @@ public partial class GridView
         // Grid lines are drawn as cell/header rectangle borders.
     }
 
+    private void RenderLiveResizeContinuation(DrawingContext dc)
+    {
+        if (Viewport is null)
+            return;
+
+        var rowHeaderWidth = ActualRowHeaderWidth;
+        var columnHeaderHeight = EffectiveColHeaderHeight;
+        var gridLeft = rowHeaderWidth;
+        var gridTop = columnHeaderHeight;
+        var gridRight = Viewport.ColMetrics.Count > 0
+            ? rowHeaderWidth + Viewport.ColMetrics[^1].LeftOffset + Viewport.ColMetrics[^1].Width
+            : gridLeft;
+        var gridBottom = Viewport.RowMetrics.Count > 0
+            ? columnHeaderHeight + Viewport.RowMetrics[^1].TopOffset + Viewport.RowMetrics[^1].Height
+            : gridTop;
+
+        if (ActualWidth > gridRight)
+            RenderLiveResizeColumnContinuation(dc, gridRight, gridTop);
+
+        if (ActualHeight > gridBottom)
+            RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom);
+
+        if (ActualWidth > gridRight && ActualHeight > gridBottom)
+        {
+            DrawLiveResizeHorizontalGridLines(dc, gridRight, ActualWidth, gridBottom);
+            DrawLiveResizeVerticalGridLines(dc, gridRight, ActualHeight);
+        }
+    }
+
+    private void RenderLiveResizeColumnContinuation(
+        DrawingContext dc,
+        double startX,
+        double gridTop)
+    {
+        if (startX >= ActualWidth)
+            return;
+
+        var columnWidth = Viewport!.ColMetrics.Count > 0
+            ? Math.Max(1, Viewport.ColMetrics[^1].Width)
+            : 64;
+        var lastColumn = Viewport.ColMetrics.Count > 0 ? Viewport.ColMetrics[^1].Col : 0;
+        var height = Math.Max(0, ActualHeight - gridTop);
+        if (height > 0)
+            dc.DrawRectangle(Brushes.White, null, new Rect(startX, gridTop, ActualWidth - startX, height));
+
+        for (var x = startX; x < ActualWidth; x += columnWidth)
+        {
+            var width = Math.Min(columnWidth, ActualWidth - x);
+            if (EffectiveColHeaderHeight > 0)
+            {
+                var headerRect = new Rect(x, 0, width, EffectiveColHeaderHeight);
+                dc.DrawRectangle(HeaderBackgroundBrush, GridPen, headerRect);
+                DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect);
+            }
+
+            if (height > 0)
+                dc.DrawLine(GridPen, new Point(x, gridTop), new Point(x, ActualHeight));
+        }
+
+        if (height > 0)
+            dc.DrawLine(GridPen, new Point(ActualWidth, gridTop), new Point(ActualWidth, ActualHeight));
+
+        DrawLiveResizeHorizontalGridLines(dc, startX, ActualWidth, gridTop);
+    }
+
+    private void RenderLiveResizeRowContinuation(
+        DrawingContext dc,
+        double gridLeft,
+        double gridRight,
+        double startY)
+    {
+        if (startY >= ActualHeight)
+            return;
+
+        var rowHeight = Viewport!.RowMetrics.Count > 0
+            ? Math.Max(1, Viewport.RowMetrics[^1].Height)
+            : 20;
+        var lastRow = Viewport.RowMetrics.Count > 0 ? Viewport.RowMetrics[^1].Row : 0;
+        var width = Math.Max(0, gridRight - gridLeft);
+        if (width > 0)
+            dc.DrawRectangle(Brushes.White, null, new Rect(gridLeft, startY, width, ActualHeight - startY));
+
+        for (var y = startY; y < ActualHeight; y += rowHeight)
+        {
+            var height = Math.Min(rowHeight, ActualHeight - y);
+            if (ActualRowHeaderWidth > 0)
+            {
+                var headerRect = new Rect(0, y, ActualRowHeaderWidth, height);
+                dc.DrawRectangle(HeaderBackgroundBrush, GridPen, headerRect);
+                DrawLiveResizeHeaderText(dc, (++lastRow).ToString(CultureInfo.InvariantCulture), headerRect);
+            }
+
+            if (width > 0)
+                dc.DrawLine(GridPen, new Point(gridLeft, y), new Point(gridRight, y));
+        }
+
+        if (width > 0)
+            dc.DrawLine(GridPen, new Point(gridLeft, ActualHeight), new Point(gridRight, ActualHeight));
+
+        DrawLiveResizeVerticalGridLines(dc, gridLeft, ActualHeight);
+    }
+
+    private void DrawLiveResizeHorizontalGridLines(DrawingContext dc, double startX, double endX, double startY)
+    {
+        if (endX <= startX || startY >= ActualHeight)
+            return;
+
+        var rowHeight = Viewport!.RowMetrics.Count > 0
+            ? Math.Max(1, Viewport.RowMetrics[^1].Height)
+            : 20;
+        for (var y = startY; y < ActualHeight; y += rowHeight)
+            dc.DrawLine(GridPen, new Point(startX, y), new Point(endX, y));
+
+        dc.DrawLine(GridPen, new Point(startX, ActualHeight), new Point(endX, ActualHeight));
+    }
+
+    private void DrawLiveResizeVerticalGridLines(DrawingContext dc, double startX, double endY)
+    {
+        if (startX >= ActualWidth || endY <= EffectiveColHeaderHeight)
+            return;
+
+        var columnWidth = Viewport!.ColMetrics.Count > 0
+            ? Math.Max(1, Viewport.ColMetrics[^1].Width)
+            : 64;
+        for (var x = startX; x < ActualWidth; x += columnWidth)
+            dc.DrawLine(GridPen, new Point(x, EffectiveColHeaderHeight), new Point(x, endY));
+
+        dc.DrawLine(GridPen, new Point(ActualWidth, EffectiveColHeaderHeight), new Point(ActualWidth, endY));
+    }
+
+    private static void DrawLiveResizeHeaderText(DrawingContext dc, string text, Rect rect)
+    {
+        if (string.IsNullOrWhiteSpace(text) || rect.Width <= 4 || rect.Height <= 4)
+            return;
+
+        var formatted = new FormattedText(
+            text,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            DefaultTypeface,
+            11,
+            TextBrush,
+            1);
+
+        dc.DrawText(formatted, new Point(
+            rect.Left + Math.Max(2, (rect.Width - formatted.Width) / 2),
+            rect.Top + Math.Max(1, (rect.Height - formatted.Height) / 2)));
+    }
+
     private void RenderSplitPaneCells(DrawingContext dc)
     {
         if (Viewport?.SplitPanes?.Cells is not { Count: > 0 }) return;
@@ -43,9 +192,9 @@ public partial class GridView
         var bottomLeftClip = FrozenClipGeometry(clips.BottomLeft);
         var bottomRightClip = FrozenClipGeometry(clips.BottomRight);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        var brushCache = new Dictionary<CellColor, SolidColorBrush>();
-        var borderPenCache = new Dictionary<CellBorder, Pen>();
-        var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
+        _brushCache.Clear();
+        _borderPenCache.Clear();
+        _typefaceCache.Clear();
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions))
         {
             var cell = layout.Cell;
@@ -61,17 +210,17 @@ public partial class GridView
 
             Brush? fill = WorksheetBackground == null ? Brushes.White : null;
             if (style?.FillColor is { } fillColor)
-                fill = BrushForCellColor(fillColor, brushCache);
+                fill = BrushForCellColor(fillColor, _brushCache);
 
             dc.DrawRectangle(fill, GridPen, rect);
-            DrawFillPattern(dc, rect, style, brushCache);
+            DrawFillPattern(dc, rect, style, _brushCache);
 
             if (style is not null)
             {
-                DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), brushCache, borderPenCache);
-                DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), brushCache, borderPenCache);
-                DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), brushCache, borderPenCache);
-                DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), brushCache, borderPenCache);
+                DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache);
+                DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+                DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache);
+                DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
             }
 
             if (!ShouldDrawCellContent(cell, EditingCell))
@@ -95,11 +244,11 @@ public partial class GridView
 
             var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
             var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-            var typeface = CreateCellTypeface(style, typefaceCache);
+            var typeface = CreateCellTypeface(style, _typefaceCache);
             var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
-                textBrush = BrushForCellColor(fontColor, brushCache);
+                textBrush = BrushForCellColor(fontColor, _brushCache);
 
             var indentPx = (style?.IndentLevel ?? 0) * 8.0;
             if (style?.ShrinkToFit == true && style.WrapText != true)
@@ -186,11 +335,10 @@ public partial class GridView
         var rowLookupAll = BuildRenderRowMetricLookup(Viewport.RowMetrics);
         var colLookupAll = BuildRenderColumnMetricLookup(Viewport.ColMetrics);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        var brushCache = new Dictionary<CellColor, SolidColorBrush>();
-        var borderPenCache = new Dictionary<CellBorder, Pen>();
-        var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
-        var underlinePenCache = new Dictionary<Brush, Pen>();
-
+        _brushCache.Clear();
+        _borderPenCache.Clear();
+        _typefaceCache.Clear();
+        _underlinePenCache.Clear();
 
         // Pass 1: backgrounds
         foreach (var rowMetric in Viewport.RowMetrics)
@@ -219,12 +367,12 @@ public partial class GridView
                 if (styleLookup.TryGetValue((rowMetric.Row, colMetric.Col), out var bg)
                     && bg.FillColor.HasValue)
                 {
-                    fill = BrushForCellColor(bg.FillColor.Value, brushCache);
+                    fill = BrushForCellColor(bg.FillColor.Value, _brushCache);
                 }
 
                 dc.DrawRectangle(fill, GridPen, rect);
                 if (bg is not null)
-                    DrawFillPattern(dc, rect, bg, brushCache);
+                    DrawFillPattern(dc, rect, bg, _brushCache);
             }
         }
 
@@ -240,10 +388,10 @@ public partial class GridView
             double w = colMetric.Width;
             double h = rowMetric.Height;
 
-            DrawBorderEdge(dc, cell.Style.BorderTop,    new Point(x,     y),     new Point(x + w, y),     brushCache, borderPenCache);
-            DrawBorderEdge(dc, cell.Style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), brushCache, borderPenCache);
-            DrawBorderEdge(dc, cell.Style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h), brushCache, borderPenCache);
-            DrawBorderEdge(dc, cell.Style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h), brushCache, borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderTop,    new Point(x,     y),     new Point(x + w, y),     _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h), _brushCache, _borderPenCache);
         }
 
         // Pass 2b: comment/note indicators
@@ -320,7 +468,7 @@ public partial class GridView
                 }
             }
 
-            var typeface = CreateCellTypeface(style, typefaceCache);
+            var typeface = CreateCellTypeface(style, _typefaceCache);
 
             // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
             // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
@@ -328,7 +476,7 @@ public partial class GridView
 
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fc && !fc.IsBlack)
-                textBrush = BrushForCellColor(fc, brushCache);
+                textBrush = BrushForCellColor(fc, _brushCache);
 
             double indentPx = (style?.IndentLevel ?? 0) * 8.0;
             if (style?.ShrinkToFit == true && !wrapText)
@@ -395,7 +543,7 @@ public partial class GridView
             if (style?.DoubleUnderline == true)
             {
                 double uY = textY + text.Height + 1;
-                var underlinePen = UnderlinePenForTextBrush(textBrush, underlinePenCache);
+                var underlinePen = UnderlinePenForTextBrush(textBrush, _underlinePenCache);
                 dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));
                 dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
             }

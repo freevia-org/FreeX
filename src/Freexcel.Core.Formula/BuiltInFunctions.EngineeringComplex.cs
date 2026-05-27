@@ -208,6 +208,35 @@ public static partial class BuiltInFunctions
         return TextResult(FormatComplex(real, imaginary, suffix));
     }
 
+    private static ScalarValue ImPower(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], ImPowerScalar);
+    }
+
+    private static ScalarValue ImPowerScalar(ScalarValue value, ScalarValue exponentValue)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+        if (exponentValue is ErrorValue error) return error;
+
+        double exponent = ToNumber(exponentValue);
+        if (!double.IsFinite(exponent)) return ErrorValue.Num;
+
+        double modulus = Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary);
+        if (modulus == 0 && exponent <= 0) return ErrorValue.Num;
+
+        double magnitude = Math.Pow(modulus, exponent);
+        double angle = Math.Atan2(parsed.Imaginary, parsed.Real) * exponent;
+        if (!double.IsFinite(magnitude) || !double.IsFinite(angle)) return ErrorValue.Num;
+
+        return TextResult(FormatComplex(
+            magnitude * Math.Cos(angle),
+            magnitude * Math.Sin(angle),
+            parsed.Suffix));
+    }
+
     private static ScalarValue ImDiv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var left = ParseComplexArgument(args[0]);
@@ -221,6 +250,262 @@ public static partial class BuiltInFunctions
         var real = (left.Real * right.Real + left.Imaginary * right.Imaginary) / denominator;
         var imaginary = (left.Imaginary * right.Real - left.Real * right.Imaginary) / denominator;
         return TextResult(FormatComplex(real, imaginary, left.Suffix));
+    }
+
+    private static ScalarValue ImCos(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImCosScalar);
+        return ImCosScalar(args[0]);
+    }
+
+    private static ScalarValue ImCosScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return TextResult(FormatComplex(
+            Math.Cos(parsed.Real) * Math.Cosh(parsed.Imaginary),
+            -Math.Sin(parsed.Real) * Math.Sinh(parsed.Imaginary),
+            parsed.Suffix));
+    }
+
+    private static ScalarValue ImCot(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImCotScalar);
+        return ImCotScalar(args[0]);
+    }
+
+    private static ScalarValue ImCotScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        double tanDenominator = Math.Cos(2.0 * parsed.Real) + Math.Cosh(2.0 * parsed.Imaginary);
+        if (tanDenominator == 0) return ErrorValue.Num;
+
+        double tanReal = Math.Sin(2.0 * parsed.Real) / tanDenominator;
+        double tanImaginary = Math.Sinh(2.0 * parsed.Imaginary) / tanDenominator;
+        return FormatReciprocalComplex(tanReal, tanImaginary, parsed.Suffix);
+    }
+
+    private static ScalarValue ImCosh(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImCoshScalar);
+        return ImCoshScalar(args[0]);
+    }
+
+    private static ScalarValue ImCoshScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return TextResult(FormatComplex(
+            Math.Cosh(parsed.Real) * Math.Cos(parsed.Imaginary),
+            Math.Sinh(parsed.Real) * Math.Sin(parsed.Imaginary),
+            parsed.Suffix));
+    }
+
+    private static ScalarValue ImCsc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImCscScalar);
+        return ImCscScalar(args[0]);
+    }
+
+    private static ScalarValue ImCscScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return FormatReciprocalComplex(
+            Math.Sin(parsed.Real) * Math.Cosh(parsed.Imaginary),
+            Math.Cos(parsed.Real) * Math.Sinh(parsed.Imaginary),
+            parsed.Suffix);
+    }
+
+    private static ScalarValue ImCsch(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImCschScalar);
+        return ImCschScalar(args[0]);
+    }
+
+    private static ScalarValue ImCschScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return FormatReciprocalComplex(
+            Math.Sinh(parsed.Real) * Math.Cos(parsed.Imaginary),
+            Math.Cosh(parsed.Real) * Math.Sin(parsed.Imaginary),
+            parsed.Suffix);
+    }
+
+    private static ScalarValue ImExp(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImExpScalar);
+        return ImExpScalar(args[0]);
+    }
+
+    private static ScalarValue ImExpScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        double magnitude = Math.Exp(parsed.Real);
+        return TextResult(FormatComplex(
+            magnitude * Math.Cos(parsed.Imaginary),
+            magnitude * Math.Sin(parsed.Imaginary),
+            parsed.Suffix));
+    }
+
+    private static ScalarValue ImSec(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImSecScalar);
+        return ImSecScalar(args[0]);
+    }
+
+    private static ScalarValue ImSecScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return FormatReciprocalComplex(
+            Math.Cos(parsed.Real) * Math.Cosh(parsed.Imaginary),
+            -Math.Sin(parsed.Real) * Math.Sinh(parsed.Imaginary),
+            parsed.Suffix);
+    }
+
+    private static ScalarValue ImSech(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImSechScalar);
+        return ImSechScalar(args[0]);
+    }
+
+    private static ScalarValue ImSechScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return FormatReciprocalComplex(
+            Math.Cosh(parsed.Real) * Math.Cos(parsed.Imaginary),
+            Math.Sinh(parsed.Real) * Math.Sin(parsed.Imaginary),
+            parsed.Suffix);
+    }
+
+    private static ScalarValue ImLn(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImLnScalar);
+        return ImLnScalar(args[0]);
+    }
+
+    private static ScalarValue ImLnScalar(ScalarValue value) =>
+        ImLogScalar(value, 1.0);
+
+    private static ScalarValue ImLog10(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImLog10Scalar);
+        return ImLog10Scalar(args[0]);
+    }
+
+    private static ScalarValue ImLog10Scalar(ScalarValue value) =>
+        ImLogScalar(value, Math.Log(10.0));
+
+    private static ScalarValue ImLog2(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImLog2Scalar);
+        return ImLog2Scalar(args[0]);
+    }
+
+    private static ScalarValue ImLog2Scalar(ScalarValue value) =>
+        ImLogScalar(value, Math.Log(2.0));
+
+    private static ScalarValue ImLogScalar(ScalarValue value, double divisor)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        double modulus = Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary);
+        if (modulus == 0) return ErrorValue.Num;
+
+        double angle = Math.Atan2(parsed.Imaginary, parsed.Real);
+        return TextResult(FormatComplex(Math.Log(modulus) / divisor, angle / divisor, parsed.Suffix));
+    }
+
+    private static ScalarValue ImSin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImSinScalar);
+        return ImSinScalar(args[0]);
+    }
+
+    private static ScalarValue ImSinScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return TextResult(FormatComplex(
+            Math.Sin(parsed.Real) * Math.Cosh(parsed.Imaginary),
+            Math.Cos(parsed.Real) * Math.Sinh(parsed.Imaginary),
+            parsed.Suffix));
+    }
+
+    private static ScalarValue ImSinh(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImSinhScalar);
+        return ImSinhScalar(args[0]);
+    }
+
+    private static ScalarValue ImSinhScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        return TextResult(FormatComplex(
+            Math.Sinh(parsed.Real) * Math.Cos(parsed.Imaginary),
+            Math.Cosh(parsed.Real) * Math.Sin(parsed.Imaginary),
+            parsed.Suffix));
+    }
+
+    private static ScalarValue ImSqrt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImSqrtScalar);
+        return ImSqrtScalar(args[0]);
+    }
+
+    private static ScalarValue ImSqrtScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        double modulus = Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary);
+        double real = Math.Sqrt((modulus + parsed.Real) / 2.0);
+        double imaginary = Math.CopySign(Math.Sqrt(Math.Max(0.0, (modulus - parsed.Real) / 2.0)), parsed.Imaginary);
+        return TextResult(FormatComplex(real, imaginary, parsed.Suffix));
+    }
+
+    private static ScalarValue ImTan(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImTanScalar);
+        return ImTanScalar(args[0]);
+    }
+
+    private static ScalarValue ImTanScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        double denominator = Math.Cos(2.0 * parsed.Real) + Math.Cosh(2.0 * parsed.Imaginary);
+        if (denominator == 0) return ErrorValue.Num;
+
+        double real = Math.Sin(2.0 * parsed.Real) / denominator;
+        double imaginary = Math.Sinh(2.0 * parsed.Imaginary) / denominator;
+        return TextResult(FormatComplex(real, imaginary, parsed.Suffix));
+    }
+
+    private static ScalarValue FormatReciprocalComplex(double real, double imaginary, string suffix)
+    {
+        double denominator = real * real + imaginary * imaginary;
+        if (denominator == 0) return ErrorValue.Num;
+
+        return TextResult(FormatComplex(real / denominator, -imaginary / denominator, suffix));
     }
 
     private static IEnumerable<ScalarValue> FlattenComplexArguments(IReadOnlyList<ScalarValue> args)

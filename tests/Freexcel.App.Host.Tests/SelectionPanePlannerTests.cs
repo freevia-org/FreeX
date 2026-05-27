@@ -279,6 +279,33 @@ public sealed class SelectionPanePlannerTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_list, \"Objects\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_list, \"Workbook objects available for selection, rename, visibility, and stacking order changes.\");");
+        source.Should().Contain("AutomationProperties.SetName(_searchBox, \"Search objects\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_searchBox, \"Filter selection pane objects by name or object type.\");");
+        source.Should().Contain("AutomationProperties.SetName(_filterBox, \"Object filter\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_filterBox, \"Show all objects or limit the list to visible, hidden, or a specific object type.\");");
+        source.Should().Contain("AutomationProperties.SetName(_renameBox, \"Object name\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_renameBox, \"Edit the selected object's name.\");");
+        source.Should().Contain("AutomationProperties.SetName(_renameButton, \"Rename selected object\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_renameButton, \"Apply the typed name to the selected object.\");");
+        source.Should().Contain("AutomationProperties.SetName(_toggleVisibilityButton, \"Toggle selected object visibility\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_toggleVisibilityButton, \"Show or hide the selected object.\");");
+        source.Should().Contain("AutomationProperties.SetName(_moveUpButton, \"Bring selected object forward\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_moveUpButton, \"Move the selected object forward within its object type stack.\");");
+        source.Should().Contain("AutomationProperties.SetName(_moveDownButton, \"Send selected object backward\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_moveDownButton, \"Move the selected object backward within its object type stack.\");");
+        source.Should().Contain("AutomationProperties.SetName(_showAllButton, \"Show all objects\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_showAllButton, \"Mark every listed object visible.\");");
+        source.Should().Contain("AutomationProperties.SetName(_hideAllButton, \"Hide all objects\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_hideAllButton, \"Mark every listed object hidden.\");");
+        source.Should().Contain("AutomationProperties.SetName(okButton, \"Apply selection pane changes\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(okButton, \"Apply visibility, rename, and stacking order changes.\");");
+        source.Should().Contain("AutomationProperties.SetName(cancelButton, \"Cancel selection pane changes\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(cancelButton, \"Close the selection pane without applying pending changes.\");");
+        source.Should().Contain("checkBox.SetValue(AutomationProperties.NameProperty, \"Object visibility\");");
+        source.Should().Contain("checkBox.SetValue(AutomationProperties.HelpTextProperty, \"Toggle whether this object is visible.\");");
+        source.Should().Contain("name.SetValue(AutomationProperties.NameProperty, \"Object name\");");
+        source.Should().Contain("name.SetValue(AutomationProperties.HelpTextProperty, \"Edit this object's display name.\");");
     }
 
     [Fact]

@@ -8,6 +8,24 @@ namespace Freexcel.Core.Formula;
 /// </summary>
 public sealed class FormulaEvaluator
 {
+    /// <summary>
+    /// Maximum recursive evaluation depth before returning #NUM!.
+    /// A single formula can nest at most this many EvaluateNode calls deep before we
+    /// cut off. This prevents deeply-nested or circular-looking formulas from
+    /// causing a StackOverflowException that would crash the process.
+    /// Trade-off: extremely pathological nesting (>256 levels) returns #NUM!
+    /// rather than the "correct" result, but such formulas don't arise in practice.
+    /// </summary>
+    private const int MaxEvalDepth = 256;
+
+    /// <summary>
+    /// Per-thread evaluation depth counter. ThreadStatic avoids the need to thread
+    /// the counter through every EvaluateNode call or add it to IEvalContext
+    /// (which has many implementations). Reset to 0 at each public Evaluate() entry.
+    /// </summary>
+    [ThreadStatic]
+    private static int _evalDepth;
+
     private static readonly HashSet<string> AggregateFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
         "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
@@ -87,7 +105,7 @@ public sealed class FormulaEvaluator
         "SLN", "SYD", "DB", "DDB", "VDB", "AMORDEGRC", "AMORLINC",
         "DOLLARDE", "DOLLARFR",
         "DISC", "INTRATE", "RECEIVED",
-        "ACCRINT", "ODDFPRICE", "ODDFYIELD", "ODDLPRICE", "ODDLYIELD",
+        "ACCRINT", "ACCRINTM", "ODDFPRICE", "ODDFYIELD", "ODDLPRICE", "ODDLYIELD",
         "TBILLEQ", "TBILLPRICE", "TBILLYIELD",
         "COUPDAYBS", "COUPDAYS", "COUPDAYSNC", "COUPNCD", "COUPNUM", "COUPPCD",
         "PRICE", "YIELD", "PRICEDISC", "PRICEMAT", "YIELDDISC", "YIELDMAT", "DURATION", "MDURATION",
@@ -97,17 +115,17 @@ public sealed class FormulaEvaluator
         "EXACT", "CODE", "CHAR", "LEN", "LEFT", "RIGHT", "MID", "REPLACE",
         "FIND", "SEARCH",
         "TRIM", "UPPER", "LOWER", "PROPER", "CLEAN",
-        "ROMAN",
+        "ARABIC", "ROMAN",
         "TEXT", "VALUE",
         "SUBSTITUTE", "REPT", "CONCATENATE",
         "FIXED", "DOLLAR", "T", "HYPERLINK", "ENCODEURL", "FILTERXML", "BAHTTEXT",
         "VALUETOTEXT", "ARRAYTOTEXT",
-        "ASC", "DBCS",
+        "ASC", "DBCS", "JIS",
         "UNICHAR", "UNICODE", "NUMBERVALUE",
         "ABS", "SQRT", "INT", "SIGN",
-        "MOD", "POWER", "LOG", "QUOTIENT", "CEILING", "FLOOR", "MROUND",
-        "SIN", "COS", "TAN", "DEGREES", "RADIANS",
-        "ASIN", "ACOS", "ATAN", "ATAN2", "LN", "EXP", "FACT",
+        "MOD", "POWER", "LOG", "LOG10", "QUOTIENT", "CEILING", "FLOOR", "MROUND",
+        "SIN", "SINH", "COS", "COSH", "TAN", "TANH", "DEGREES", "RADIANS",
+        "ASIN", "ASINH", "ACOS", "ACOSH", "ATAN", "ATAN2", "ATANH", "LN", "EXP", "FACT",
         "ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC",
         "ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISERR", "ISNA", "ISNONTEXT", "ISLOGICAL",
         "ISEVEN", "ISODD", "ODD", "EVEN",
@@ -126,7 +144,7 @@ public sealed class FormulaEvaluator
         "BIN2DEC", "HEX2DEC", "OCT2DEC",
         "DEC2BIN", "DEC2HEX", "DEC2OCT",
         "BIN2HEX", "BIN2OCT", "HEX2BIN", "HEX2OCT", "OCT2BIN", "OCT2HEX",
-        "COMPLEX", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE", "GESTEP", "IMABS", "IMAGINARY", "IMCONJUGATE", "IMDIV", "IMPRODUCT", "IMREAL", "IMSUB", "IMSUM",
+        "COMPLEX", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE", "GESTEP", "IMABS", "IMAGINARY", "IMCONJUGATE", "IMCOS", "IMCOSH", "IMCOT", "IMCSC", "IMCSCH", "IMDIV", "IMEXP", "IMLN", "IMLOG10", "IMLOG2", "IMPOWER", "IMPRODUCT", "IMREAL", "IMSEC", "IMSECH", "IMSIN", "IMSINH", "IMSQRT", "IMSUB", "IMSUM", "IMTAN",
         "CONVERT",
         "NORMDIST", "NORM.DIST", "NORMINV", "NORM.INV", "NORMSDIST", "NORM.S.DIST", "NORMSINV", "NORM.S.INV", "PHI", "GAUSS", "FISHER", "FISHERINV", "STANDARDIZE",
         "GAMMA", "GAMMALN", "GAMMALN.PRECISE", "GAMMADIST", "GAMMA.DIST", "GAMMAINV", "GAMMA.INV",
@@ -154,6 +172,7 @@ public sealed class FormulaEvaluator
         Freexcel.Core.Model.Workbook? workbook = null,
         Freexcel.Core.Model.CellAddress? currentCell = null)
     {
+        _evalDepth = 0;
         var lexer = new Lexer(formulaText);
         var tokens = lexer.Tokenize();
         var parser = new Parser(tokens);
@@ -171,6 +190,7 @@ public sealed class FormulaEvaluator
         Freexcel.Core.Model.Workbook? workbook = null,
         Freexcel.Core.Model.CellAddress? currentCell = null)
     {
+        _evalDepth = 0;
         var context = new SheetEvalContext(sheet, workbook, this, currentCell);
         return NormalizeTopLevelResult(EvaluateNode(ast, context));
     }
@@ -183,28 +203,39 @@ public sealed class FormulaEvaluator
     /// </summary>
     internal ScalarValue EvaluateNode(FormulaNode node, IEvalContext context)
     {
-        return node switch
+        if (_evalDepth >= MaxEvalDepth)
+            return ErrorValue.Num;
+
+        _evalDepth++;
+        try
         {
-            NumberNode n => new NumberValue(n.Value),
-            StringNode s => new TextValue(s.Value),
-            BooleanNode b => new BoolValue(b.Value),
-            OmittedArgumentNode => BlankValue.Instance,
-            ArrayConstantNode array => EvaluateArrayConstant(array, context),
-            ErrorNode err => err.Error,
-            CellRefNode cell when cell.SheetName is not null
-                => context.GetCellValue(cell.SheetName, cell.Row, cell.ColumnNumber),
-            CellRefNode cell => context.GetCellValue(cell.Row, cell.ColumnNumber),
-            RangeRefNode range => EvaluateRange(range, context),
-            FullColumnRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
-            FullRowRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
-            NamedRangeNode named => EvaluateNamedRange(named, context),
-            StructuredReferenceNode structured => EvaluateStructuredReference(structured, context),
-            StructuredCurrentRowReferenceNode currentRow => EvaluateCurrentRowReference(currentRow, context),
-            BinaryOpNode binary => EvaluateBinaryOp(binary, context),
-            UnaryOpNode unary => EvaluateUnaryOp(unary, context),
-            FunctionCallNode func => EvaluateFunction(func, context),
-            _ => throw new FormulaEvalException("#VALUE!", $"Unknown node type: {node.GetType().Name}")
-        };
+            return node switch
+            {
+                NumberNode n => new NumberValue(n.Value),
+                StringNode s => new TextValue(s.Value),
+                BooleanNode b => new BoolValue(b.Value),
+                OmittedArgumentNode => BlankValue.Instance,
+                ArrayConstantNode array => EvaluateArrayConstant(array, context),
+                ErrorNode err => err.Error,
+                CellRefNode cell when cell.SheetName is not null
+                    => context.GetCellValue(cell.SheetName, cell.Row, cell.ColumnNumber),
+                CellRefNode cell => context.GetCellValue(cell.Row, cell.ColumnNumber),
+                RangeRefNode range => EvaluateRange(range, context),
+                FullColumnRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
+                FullRowRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
+                NamedRangeNode named => EvaluateNamedRange(named, context),
+                StructuredReferenceNode structured => EvaluateStructuredReference(structured, context),
+                StructuredCurrentRowReferenceNode currentRow => EvaluateCurrentRowReference(currentRow, context),
+                BinaryOpNode binary => EvaluateBinaryOp(binary, context),
+                UnaryOpNode unary => EvaluateUnaryOp(unary, context),
+                FunctionCallNode func => EvaluateFunction(func, context),
+                _ => throw new FormulaEvalException("#VALUE!", $"Unknown node type: {node.GetType().Name}")
+            };
+        }
+        finally
+        {
+            _evalDepth--;
+        }
     }
 
     private ScalarValue EvaluateArrayConstant(ArrayConstantNode node, IEvalContext context)

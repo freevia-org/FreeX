@@ -5,6 +5,14 @@ namespace Freexcel.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
+    private static readonly JsonSerializerOptions SaveOptions = new()
+    {
+        WriteIndented = false,
+    };
+
+    /// <summary>Exposed for unit tests to verify the static instance is reused.</summary>
+    internal static JsonSerializerOptions SaveOptionsForTest => SaveOptions;
+
     public void Save(Workbook workbook, Stream stream)
     {
         var dto = new WorkbookDto
@@ -30,7 +38,9 @@ public sealed partial class NativeJsonAdapter
             SmartTags = FromWorkbookSmartTags(workbook.SmartTags),
             AdditionalViews = FromWorkbookAdditionalViews(workbook.AdditionalViews),
             IsStructureProtected = workbook.IsStructureProtected,
-            StructureProtectionPassword = workbook.IsStructureProtected ? workbook.StructureProtectionPassword : null,
+            StructureProtectionPassword = workbook.IsStructureProtected && workbook.StructureProtectionPassword is { } swp
+                ? NativePasswordHelper.HashPassword(swp)
+                : null,
             ProtectionMetadata = FromWorkbookProtectionMetadata(workbook.ProtectionMetadata),
             WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
             DisabledFormulaErrorCodes = workbook.DisabledFormulaErrorCodes
@@ -99,7 +109,9 @@ public sealed partial class NativeJsonAdapter
                 IsHidden = s.IsHidden,
                 TabColor = s.TabColor is { } color ? FormatColor(color) : null,
                 IsProtected = s.IsProtected,
-                ProtectionPassword = s.IsProtected ? s.ProtectionPassword : null,
+                ProtectionPassword = s.IsProtected && s.ProtectionPassword is { } shp
+                    ? NativePasswordHelper.HashPassword(shp)
+                    : null,
                 ProtectionPermissions = s.ProtectionPermissions
                     .Where(Enum.IsDefined)
                     .Distinct()
@@ -280,7 +292,7 @@ public sealed partial class NativeJsonAdapter
 
         PopulateCalculationOptions(workbook, dto);
 
-        JsonSerializer.Serialize(stream, dto, new JsonSerializerOptions { WriteIndented = true });
+        JsonSerializer.Serialize(stream, dto, SaveOptions);
     }
 }
 

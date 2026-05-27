@@ -174,21 +174,19 @@ internal static class XlsxPackageMetadataMerger
         IReadOnlySet<string> generatedEntriesBeforeMerge,
         IReadOnlySet<string>? excludedSourceParts)
     {
-        var relationshipType = relationship.Attribute("Type")?.Value;
         if (string.Equals(
-                relationshipType,
+                NormalizeRelationshipType(relationship),
                 "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
                 StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        var target = relationship.Attribute("Target")?.Value;
+        var target = NormalizeRelationshipTarget(relationship);
         if (string.IsNullOrWhiteSpace(target))
             return false;
 
-        var targetMode = relationship.Attribute("TargetMode")?.Value;
-        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        if (IsExternalRelationship(relationship))
             return true;
 
         var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
@@ -213,10 +211,10 @@ internal static class XlsxPackageMetadataMerger
         var relationships = relationshipsXml.Root?.Elements(relationshipNs + "Relationship").ToList() ?? [];
         return relationships.Count > 0 && relationships.All(relationship =>
         {
-            if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            if (IsExternalRelationship(relationship))
                 return false;
 
-            var target = relationship.Attribute("Target")?.Value;
+            var target = NormalizeRelationshipTarget(relationship);
             return !string.IsNullOrWhiteSpace(target) &&
                    IsExcludedSourcePart(XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target), excludedSourceParts);
         });
@@ -227,14 +225,29 @@ internal static class XlsxPackageMetadataMerger
         if (excludedSourceParts is null || excludedSourceParts.Count == 0 || string.IsNullOrWhiteSpace(path))
             return false;
 
-        return excludedSourceParts.Contains(XlsxPackagePath.NormalizeZipPath(path.Replace('\\', '/').TrimStart('/')));
+        return excludedSourceParts.Contains(XlsxPackagePath.NormalizeZipPath(path.Trim().Replace('\\', '/').TrimStart('/')));
     }
+
+    private static bool IsExternalRelationship(XElement relationship) =>
+        string.Equals(NormalizeRelationshipTargetMode(relationship), "External", StringComparison.OrdinalIgnoreCase);
 
     private static string RelationshipSignature(XElement relationship) =>
         string.Join("|",
-            relationship.Attribute("Type")?.Value ?? "",
-            relationship.Attribute("Target")?.Value ?? "",
-            relationship.Attribute("TargetMode")?.Value ?? "");
+            NormalizeRelationshipType(relationship),
+            NormalizeRelationshipTarget(relationship),
+            NormalizeRelationshipTargetMode(relationship));
+
+    private static string NormalizeRelationshipType(XElement relationship) =>
+        relationship.Attribute("Type")?.Value.Trim() ?? "";
+
+    private static string NormalizeRelationshipTarget(XElement relationship)
+    {
+        var target = relationship.Attribute("Target")?.Value.Trim() ?? "";
+        return IsExternalRelationship(relationship) ? target : target.Replace('\\', '/');
+    }
+
+    private static string NormalizeRelationshipTargetMode(XElement relationship) =>
+        relationship.Attribute("TargetMode")?.Value.Trim() ?? "";
 
     private static string RelationshipPartToSourcePart(string relationshipPartPath)
     {

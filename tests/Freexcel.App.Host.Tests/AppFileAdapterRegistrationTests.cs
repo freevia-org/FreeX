@@ -44,6 +44,26 @@ public sealed class AppFileAdapterRegistrationTests
         saveFilter.Should().Contain("XML Spreadsheet 2003 (*.xml)|*.xml");
     }
 
+    [Fact]
+    public void ConfigureServices_XmlSpreadsheetResolvesOpenAndSaveAdapters()
+    {
+        using var provider = BuildAppServices();
+        var adapters = provider.GetServices<IFileAdapter>().ToList();
+
+        var openAdapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ".xml", out var openFormat);
+        var saveAdapter = FileDialogFilterBuilder.FindSaveAdapter(adapters, ".xml", out var saveFormat);
+
+        openAdapter.Should().BeOfType<SpreadsheetXmlFileAdapter>();
+        openFormat.Should().NotBeNull();
+        openFormat!.Extension.Should().Be(".xml");
+        openFormat.CanOpen.Should().BeTrue();
+
+        saveAdapter.Should().BeSameAs(openAdapter);
+        saveFormat.Should().NotBeNull();
+        saveFormat!.Extension.Should().Be(".xml");
+        saveFormat.CanSave.Should().BeTrue();
+    }
+
     private static ServiceProvider BuildAppServices()
     {
         var services = new ServiceCollection();

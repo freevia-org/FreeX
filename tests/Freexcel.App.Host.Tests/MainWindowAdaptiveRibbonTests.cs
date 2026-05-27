@@ -287,18 +287,27 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void WindowResize_SchedulesRibbonFallbackCompactionBeforeRender()
+    public void WindowResize_UsesCachedRibbonBreakpointsBeforeNormalizing()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var workbookUiState = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var ribbonSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
 
-        var method = source.Substring(
-            source.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal),
-            source.IndexOf("private string FormatCellReference", StringComparison.Ordinal) -
-            source.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal));
+        var sizeChanged = workbookUiState.Substring(
+            workbookUiState.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal),
+            workbookUiState.IndexOf("private string FormatCellReference", StringComparison.Ordinal) -
+            workbookUiState.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal));
+        var resizeNormalizer = ribbonSource.Substring(
+            ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterResize", StringComparison.Ordinal),
+            ribbonSource.IndexOf("private void PrepareSelectedRibbonTabForImmediateCompaction", StringComparison.Ordinal) -
+            ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterResize", StringComparison.Ordinal));
 
-        method.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange");
-        method.Should().Contain("ScheduleViewportResizeRefresh();");
-        method.Should().NotContain("UpdateRibbonCompactMode();");
+        sizeChanged.Should().Contain("NormalizeRibbonSurfaceAfterResize();");
+        sizeChanged.Should().Contain("ScheduleViewportResizeRefresh();");
+        sizeChanged.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange");
+        resizeNormalizer.Should().Contain("ShouldNormalizeRibbonSurfaceForResize()");
+        resizeNormalizer.Should().Contain("_ribbonResizeThresholds");
+        resizeNormalizer.Should().Contain("scheduleFallback: !_isInWindowResizeMoveLoop");
+        resizeNormalizer.Should().NotContain("UpdateRibbonCompactMode();");
     }
 
     [Fact]
@@ -350,7 +359,33 @@ public sealed class MainWindowAdaptiveRibbonTests
         wndProc.Should().Contain("SheetGrid.IsLiveResizing = true;");
         wndProc.Should().Contain("msg == WM_EXITSIZEMOVE && _isInWindowResizeMoveLoop");
         wndProc.Should().Contain("_isInWindowResizeMoveLoop = false;");
+        wndProc.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange();");
         wndProc.Should().Contain("CompleteViewportResizeRefresh();");
+    }
+
+    [Fact]
+    public void UpdateRibbonCompactMode_CachesAdaptiveGroupMeasurementsAndResizeThresholds()
+    {
+        var fields = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.RibbonAdaptive.cs"));
+
+        fields.Should().Contain("private string? _ribbonAdaptiveMeasurementCacheKey;");
+        fields.Should().Contain("private IReadOnlyList<RibbonAdaptiveGroup>? _ribbonAdaptiveGroupCache;");
+        fields.Should().Contain("private IReadOnlyList<double> _ribbonResizeThresholds = [];");
+        fields.Should().Contain("private bool _ribbonResizeNormalizationRequired = true;");
+        fields.Should().Contain("private string? _lastRibbonAdaptiveAppliedStateKey;");
+        source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
+        source.Should().Contain("_ribbonAdaptiveGroupCache");
+        source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])");
+        source.Should().Contain("UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);");
+        source.Should().Contain("RibbonAdaptiveLayoutPlanner.Plan(width, adaptiveGroups, fixedChromeWidth)");
+        source.Should().Contain("ApplyBreakpointOverrides(width, groupNames, states)");
+        source.Should().Contain("EnsureRibbonCollapsedGroupButtons(activePanel, groups)");
+        source.Should().Contain("FitRibbonAdaptiveStatesToWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth)");
+        source.Should().Contain("ExpandRibbonAdaptiveStatesIntoAvailableWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth)");
+        source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth)");
+        source.Should().Contain("CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates)");
+        source.Should().NotContain("RemoveRibbonCollapsedGroupButtons(activePanel)");
     }
 
     [Fact]

@@ -17,12 +17,17 @@ public sealed class DeferredCommandMessageTests
         message.Body.Should().Contain("documented parity gap");
     }
 
-    [Fact]
-    public void MultiWindowMessage_NamesDeferredWindowHosting()
+    [Theory]
+    [InlineData("New Window")]
+    [InlineData("View Side by Side")]
+    [InlineData("Synchronous Scrolling")]
+    [InlineData("Reset Window Position")]
+    [InlineData("Switch Windows")]
+    public void MultiWindowMessage_NamesDeferredWindowHosting(string commandName)
     {
-        var message = DeferredCommandMessages.MultiWindow("New Window");
+        var message = DeferredCommandMessages.MultiWindow(commandName);
 
-        message.Title.Should().Be("New Window");
+        message.Title.Should().Be(commandName);
         message.Body.Should().Contain("deferred");
         message.Body.Should().Contain("multi-window workbook hosting");
         message.Body.Should().Contain("documented parity gap");

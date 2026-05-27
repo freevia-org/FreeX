@@ -78,6 +78,14 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
+    private string? _ribbonAdaptiveMeasurementCacheKey;
+    private IReadOnlyList<RibbonAdaptiveGroup>? _ribbonAdaptiveGroupCache;
+    private double _ribbonAdaptiveFixedChromeWidthCache;
+    private string? _ribbonResizeThresholdCacheKey;
+    private IReadOnlyList<double> _ribbonResizeThresholds = [];
+    private double _lastRibbonResizeWidth = double.NaN;
+    private bool _ribbonResizeNormalizationRequired = true;
+    private string? _lastRibbonAdaptiveAppliedStateKey;
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;
