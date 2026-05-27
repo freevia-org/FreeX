@@ -5,6 +5,7 @@ namespace Freexcel.Core.Commands;
 public sealed class SaveScenarioCommand : IWorkbookCommand
 {
     private readonly WorkbookScenario _scenario;
+    private readonly string? _replaceScenarioName;
     private WorkbookScenario? _previousScenario;
     private int _previousIndex = -1;
     private bool _applied;
@@ -16,7 +17,8 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
         IReadOnlyList<ScenarioCellValue> changingCells,
         string? comment = null,
         bool hidden = false,
-        bool locked = false)
+        bool locked = false,
+        string? replaceScenarioName = null)
     {
         _scenario = new WorkbookScenario(
             name.Trim(),
@@ -24,6 +26,7 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
             string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
             hidden,
             locked);
+        _replaceScenarioName = string.IsNullOrWhiteSpace(replaceScenarioName) ? null : replaceScenarioName.Trim();
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -43,8 +46,16 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, _scenario.ChangingCells) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousIndex = ctx.Workbook.Scenarios.FindIndex(s =>
+        var targetNameIndex = ctx.Workbook.Scenarios.FindIndex(s =>
             string.Equals(s.Name, _scenario.Name, StringComparison.OrdinalIgnoreCase));
+        if (_replaceScenarioName is not null &&
+            targetNameIndex >= 0 &&
+            !string.Equals(ctx.Workbook.Scenarios[targetNameIndex].Name, _replaceScenarioName, StringComparison.OrdinalIgnoreCase))
+            return new CommandOutcome(false, "Scenario name already exists.");
+
+        var nameToReplace = _replaceScenarioName ?? _scenario.Name;
+        _previousIndex = ctx.Workbook.Scenarios.FindIndex(s =>
+            string.Equals(s.Name, nameToReplace, StringComparison.OrdinalIgnoreCase));
         if (_previousIndex >= 0)
         {
             _previousScenario = ctx.Workbook.Scenarios[_previousIndex];
