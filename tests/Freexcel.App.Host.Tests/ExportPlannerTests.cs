@@ -2867,6 +2867,34 @@ public class ExportPlannerTests
     }
 
     [Theory]
+    [InlineData(1, 3, 1, 3, false, false, true, true, "Page 1 of 3")]
+    [InlineData(2, 3, 2, 3, true, true, true, true, "Page 2 of 3")]
+    [InlineData(3, 3, 3, 3, true, true, false, false, "Page 3 of 3")]
+    [InlineData(0, 0, 1, 1, false, false, false, false, "Page 1 of 1")]
+    [InlineData(5, 3, 3, 3, true, true, false, false, "Page 3 of 3")]
+    public void PrintPreviewDialog_CreateNavigationState_NormalizesPageStatusAndButtonStates(
+        int currentPage,
+        int totalPages,
+        int expectedCurrentPage,
+        int expectedTotalPages,
+        bool canGoFirst,
+        bool canGoPrevious,
+        bool canGoNext,
+        bool canGoLast,
+        string statusText)
+    {
+        var state = PrintPreviewDialog.CreateNavigationState(currentPage, totalPages);
+
+        state.CurrentPage.Should().Be(expectedCurrentPage);
+        state.TotalPages.Should().Be(expectedTotalPages);
+        state.CanGoFirst.Should().Be(canGoFirst);
+        state.CanGoPrevious.Should().Be(canGoPrevious);
+        state.CanGoNext.Should().Be(canGoNext);
+        state.CanGoLast.Should().Be(canGoLast);
+        state.StatusText.Should().Be(statusText);
+    }
+
+    [Theory]
     [InlineData(PrintPreviewSidesMode.OneSided, Duplexing.OneSided)]
     [InlineData(PrintPreviewSidesMode.TwoSidedLongEdge, Duplexing.TwoSidedLongEdge)]
     [InlineData(PrintPreviewSidesMode.TwoSidedShortEdge, Duplexing.TwoSidedShortEdge)]
@@ -3035,7 +3063,8 @@ public class ExportPlannerTests
         source.Should().Contain("Content = \"_Page:\"");
         source.Should().Contain("pageNumberBox");
         source.Should().Contain("pageStatusText");
-        source.Should().Contain("Page 1 of");
+        source.Should().Contain("CreateNavigationState(1, totalPages).StatusText");
+        source.Should().Contain("CreateNavigationState(pageNumber, totalPages).StatusText");
         source.Should().Contain("NavigationCommands.GoToPage");
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
