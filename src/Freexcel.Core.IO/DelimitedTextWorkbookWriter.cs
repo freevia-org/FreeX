@@ -7,6 +7,7 @@ namespace Freexcel.Core.IO;
 internal static class DelimitedTextWorkbookWriter
 {
     private const int DelimiterBufferLength = 256;
+    private static readonly Dictionary<char, string> DelimiterBuffers = new();
 
     public static void Save(Workbook workbook, Stream stream, char delimiter)
     {
@@ -102,14 +103,32 @@ internal static class DelimitedTextWorkbookWriter
             return;
         }
 
+        var delimiterBuffer = GetDelimiterBuffer(delimiter);
         while (count >= DelimiterBufferLength)
         {
-            writer.Write(new string(delimiter, DelimiterBufferLength));
+            writer.Write(delimiterBuffer);
             count -= DelimiterBufferLength;
         }
 
         if (count > 0)
-            writer.Write(new string(delimiter, (int)count));
+            writer.Write(delimiterBuffer.AsSpan(0, (int)count));
+    }
+
+    private static string GetDelimiterBuffer(char delimiter)
+    {
+        lock (DelimiterBuffers)
+        {
+            if (!DelimiterBuffers.TryGetValue(delimiter, out var buffer))
+            {
+                buffer = string.Create(
+                    DelimiterBufferLength,
+                    delimiter,
+                    static (chars, value) => chars.Fill(value));
+                DelimiterBuffers[delimiter] = buffer;
+            }
+
+            return buffer;
+        }
     }
 
     private static void WriteField(TextWriter writer, char delimiter, string value, bool isTextValue)

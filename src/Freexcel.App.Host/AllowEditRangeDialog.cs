@@ -65,6 +65,7 @@ public sealed class AllowEditRangeDialog : Window
         var existingGroup = new GroupBox { Margin = new Thickness(0, 0, 0, 10) };
         var existingPanel = new DockPanel { Margin = new Thickness(8) };
         _existingRangesBox.ItemsSource = AllowEditRangeDialogPlanner.BuildExistingRangeItems(existingRanges);
+        System.Windows.Automation.AutomationProperties.SetName(_existingRangesBox, "Ranges unlocked by password");
         _existingRangesBox.MinHeight = 80;
         _existingRangesBox.SelectionMode = SelectionMode.Single;
         _existingRangesBox.SelectionChanged += (_, _) => UpdateRangeButtons();

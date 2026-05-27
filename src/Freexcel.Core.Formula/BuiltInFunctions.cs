@@ -1465,9 +1465,16 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
         var decimalsArg = args.Count > 1 ? args[1] : new NumberValue(2);
-        return MapBinaryMathArgs(args[0], decimalsArg, (value, decimalsValue) => FixedScalarWithDecimals(value, decimalsValue, noCommas));
+        var noCommasArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapTernaryTextArgs(args[0], decimalsArg, noCommasArg, FixedScalarWithArgs);
+    }
+
+    private static ScalarValue FixedScalarWithArgs(ScalarValue value, ScalarValue decimalsValue, ScalarValue noCommasValue)
+    {
+        if (noCommasValue is ErrorValue noCommasError) return noCommasError;
+        bool noCommas = noCommasValue is not BlankValue && ToBool(noCommasValue);
+        return FixedScalarWithDecimals(value, decimalsValue, noCommas);
     }
 
     private static ScalarValue FixedScalarWithDecimals(ScalarValue value, ScalarValue decimalsValue, bool noCommas)

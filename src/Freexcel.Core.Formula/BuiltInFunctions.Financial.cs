@@ -401,13 +401,20 @@ public static partial class BuiltInFunctions
     private static ScalarValue Xnpv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
         var valRange = args[1] is RangeValue valuesRange
             ? valuesRange
             : SingleCellArray(args[1]);
         var dateRange = args[2] is RangeValue datesRange
             ? datesRange
             : SingleCellArray(args[2]);
+        if (args[0] is RangeValue rateRange)
+            return MapUnaryTextRange(rateRange, rateValue => XnpvScalar(rateValue, valRange, dateRange));
+        return XnpvScalar(args[0], valRange, dateRange);
+    }
+
+    private static ScalarValue XnpvScalar(ScalarValue rateValue, RangeValue valRange, RangeValue dateRange)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || rate <= -1) return ErrorValue.Num;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);

@@ -106,6 +106,7 @@ public sealed class FormulaEvaluator
         "DATEVALUE", "TIMEVALUE",
         "DAYS", "DAYS360", "YEARFRAC",
         "SQRTPI", "SERIESSUM",
+        "RANDBETWEEN",
         "N", "ERROR.TYPE",
         "COMBIN", "PERMUT",
         "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT",

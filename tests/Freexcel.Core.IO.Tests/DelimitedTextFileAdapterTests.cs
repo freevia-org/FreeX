@@ -25,12 +25,22 @@ public sealed class DelimitedTextFileAdapterTests
             "src", "Freexcel.Core.IO", "DelimitedTextWorkbookReader.cs"));
         var coercion = source[
             source.IndexOf("private static ScalarValue CoerceValue", StringComparison.Ordinal)..
-            source.IndexOf("private static bool TryReadFormula", StringComparison.Ordinal)];
+            source.IndexOf("private static bool TryReadError", StringComparison.Ordinal)];
 
+        CountOccurrences(coercion, "field.Trim()").Should().Be(1);
         coercion.Should().Contain("var trimmed = field.Trim();");
         coercion.Should().NotContain("ToUpperInvariant()");
-        coercion.Replace("var trimmed = field.Trim();", "", StringComparison.Ordinal)
-            .Should().NotContain("field.Trim()");
+    }
+
+    [Fact]
+    public void Save_ReusesDelimiterBuffersInsteadOfAllocatingPerChunk()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.IO", "DelimitedTextWorkbookWriter.cs"));
+
+        source.Should().NotContain(
+            "new string(delimiter",
+            "wide sparse delimited saves should not allocate delimiter strings for every row chunk");
     }
 
     [Theory]
@@ -557,5 +567,18 @@ public sealed class DelimitedTextFileAdapterTests
         }
 
         throw new FileNotFoundException($"Could not locate workspace file {Path.Combine(parts)}.");
+    }
+
+    private static int CountOccurrences(string value, string text)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = value.IndexOf(text, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += text.Length;
+        }
+
+        return count;
     }
 }

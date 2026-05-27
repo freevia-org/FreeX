@@ -2075,14 +2075,18 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("SpellCheckDialogAction.Ignore");
         source.Should().Contain("SpellCheckDialogAction.Add");
         source.Should().Contain("while (true)");
-        source.Should().Contain("ignoredWords.Contains(issue.Word)");
-        source.Should().Contain("ignoredIssues.Contains((issue.Address, issue.Word))");
-        source.Should().Contain("BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement)");
-        source.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, issue.Word, replacement)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementEdit(issue, replacement)");
         source.Should().NotContain("BuildSpellCheckEdits");
         source.Should().Contain("TryExecuteSpellCheckEdits");
         source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
+
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckWorkflowPlanner.cs"));
+        plannerSource.Should().Contain("ignoredWords.Contains(issue.Word)");
+        plannerSource.Should().Contain("ignoredIssues.Contains((issue.Address, issue.Word))");
+        plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
     }
 
     [Fact]
@@ -2175,6 +2179,27 @@ public sealed class MainWindowSourceHygieneTests
         dataSource.Should().Contain("result.UniqueRecordsOnly");
         dataSource.Should().Contain("result.CopyToRange");
         dataSource.Should().NotContain("_commandBus.Execute(\r\n            _workbook.Id,\r\n            new AdvancedFilterCommand(");
+    }
+
+    [Fact]
+    public void GoalSeekAndForecastSheet_DialogWorkflowsAreNotBlindF4Repeatable()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+        var goalSeekMethod = ExtractMethodSource(dataSource, "private void GoalSeekBtn_Click(");
+        var forecastMethod = ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(");
+
+        goalSeekMethod.Should().Contain("new GoalSeekDialog(");
+        goalSeekMethod.Should().Contain("new GoalSeekStatusDialog(");
+        goalSeekMethod.Should().Contain("new GoalSeekCommand(");
+        goalSeekMethod.Should().Contain("TryExecuteCommand(cmd, \"Goal Seek\")");
+        goalSeekMethod.Should().NotContain("ExecuteRepeatable");
+        goalSeekMethod.Should().NotContain("TryExecuteRepeatable");
+
+        forecastMethod.Should().Contain("new ForecastSheetDialog");
+        forecastMethod.Should().Contain("new ForecastSheetCommand(");
+        forecastMethod.Should().Contain("TryExecuteCommand(new ForecastSheetCommand(range, dialog.Result.Periods), \"Forecast Sheet\")");
+        forecastMethod.Should().NotContain("ExecuteRepeatable");
+        forecastMethod.Should().NotContain("TryExecuteRepeatable");
     }
 
     [Fact]
@@ -2397,6 +2422,31 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.PivotDesignCommands.cs",
                 "MainWindow.PivotSlicerTimeline.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static string ExtractMethodSource(string source, string signature)
+    {
+        var signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
+        signatureIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain {signature}");
+
+        var bodyStart = source.IndexOf('{', signatureIndex);
+        bodyStart.Should().BeGreaterThanOrEqualTo(signatureIndex, $"source should contain a body for {signature}");
+
+        var depth = 0;
+        for (var index = bodyStart; index < source.Length; index++)
+        {
+            depth += source[index] switch
+            {
+                '{' => 1,
+                '}' => -1,
+                _ => 0
+            };
+
+            if (depth == 0)
+                return source.Substring(signatureIndex, index - signatureIndex + 1);
+        }
+
+        throw new InvalidOperationException($"Could not find the end of {signature}.");
     }
 
     private static int CountOccurrences(string source, string value)
