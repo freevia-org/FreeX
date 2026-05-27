@@ -359,7 +359,8 @@ public partial class MainWindow
             formulaRangeEntryActive: formulaRangeEntryActive,
             inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow,
             moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-            enterDirection: _options.AfterEnterDirection);
+            enterDirection: _options.AfterEnterDirection,
+            systemKey: e.SystemKey);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -544,7 +545,8 @@ public partial class MainWindow
                 allowFormulaBarNavigationKeys: !formulaTextActive,
                 formulaRangeEntryActive: formulaRangeEntryActive,
                 moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-                enterDirection: _options.AfterEnterDirection);
+                enterDirection: _options.AfterEnterDirection,
+                systemKey: e.SystemKey);
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {

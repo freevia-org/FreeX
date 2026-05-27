@@ -190,6 +190,21 @@ public sealed class ExcelEditKeyPlannerTests
     }
 
     [Fact]
+    public void GetIntent_MapsSystemAltEnterToLineBreakInsertion()
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.System,
+            ModifierKeys.Alt,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            systemKey: Key.Enter);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.InsertLineBreak);
+        intent.Target.Should().BeNull();
+    }
+
+    [Fact]
     public void GetIntent_MapsCtrlEnterToCommitSelection()
     {
         var intent = ExcelEditKeyPlanner.GetIntent(Key.Enter, ModifierKeys.Control, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
