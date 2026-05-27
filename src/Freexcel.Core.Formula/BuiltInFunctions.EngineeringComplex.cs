@@ -42,6 +42,62 @@ public static partial class BuiltInFunctions
         return new NumberValue(valueNumber >= stepNumber ? 1 : 0);
     }
 
+    private static ScalarValue ErfFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count == 1)
+        {
+            if (args[0] is RangeValue range) return MapUnaryTextRange(range, ErfScalar);
+            return ErfScalar(args[0]);
+        }
+
+        return MapBinaryMathArgs(args[0], args[1], ErfBetweenScalar);
+    }
+
+    private static ScalarValue ErfScalar(ScalarValue value)
+    {
+        if (value is ErrorValue e) return e;
+        var number = ToNumber(value);
+        return double.IsFinite(number) ? new NumberValue(ErfApprox(number)) : ErrorValue.Num;
+    }
+
+    private static ScalarValue ErfBetweenScalar(ScalarValue lower, ScalarValue upper)
+    {
+        if (lower is ErrorValue e0) return e0;
+        if (upper is ErrorValue e1) return e1;
+        var lowerNumber = ToNumber(lower);
+        var upperNumber = ToNumber(upper);
+        if (!double.IsFinite(lowerNumber) || !double.IsFinite(upperNumber)) return ErrorValue.Num;
+        return NumberResult(ErfApprox(upperNumber) - ErfApprox(lowerNumber));
+    }
+
+    private static ScalarValue ErfcFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ErfcScalar);
+        return ErfcScalar(args[0]);
+    }
+
+    private static ScalarValue ErfcScalar(ScalarValue value)
+    {
+        if (value is ErrorValue e) return e;
+        var number = ToNumber(value);
+        return double.IsFinite(number) ? new NumberValue(1.0 - ErfApprox(number)) : ErrorValue.Num;
+    }
+
+    private static double ErfApprox(double x)
+    {
+        if (x == 0) return 0;
+
+        var sign = Math.Sign(x);
+        var ax = Math.Abs(x);
+        const double p = 0.3275911;
+        var t = 1.0 / (1.0 + p * ax);
+        var y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.Exp(-ax * ax);
+        return sign * y;
+    }
+
     private static ScalarValue ComplexFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
