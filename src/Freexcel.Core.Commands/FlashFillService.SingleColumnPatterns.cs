@@ -359,6 +359,32 @@ public static partial class FlashFillService
         return extracted.Length > 0;
     }
 
+    private static Func<string, string?>? TryLabelQualifierRemoval(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var separator in LabelValueSeparators)
+        {
+            if (!examples.All(e => TryRemoveLabelValue(e.Source, separator, out var removed) && removed == e.Expected))
+                continue;
+
+            return source => TryRemoveLabelValue(source, separator, out var removed)
+                ? removed
+                : null;
+        }
+
+        return null;
+    }
+
+    private static bool TryRemoveLabelValue(string source, string separator, out string removed)
+    {
+        removed = string.Empty;
+        var separatorIndex = source.IndexOf(separator, StringComparison.Ordinal);
+        if (separatorIndex <= 0)
+            return false;
+
+        removed = source[..separatorIndex].Trim();
+        return removed.Length > 0;
+    }
+
     private static bool TrySplitWhitespaceTokens(string source, out string[] tokens)
     {
         tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
