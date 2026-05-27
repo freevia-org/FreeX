@@ -89,9 +89,15 @@ public static partial class NumberFormatter
     }
 
     private static ParsedSection ParseSection(string section)
-        => ParseSection(section, null);
+        => ParseSection(section, null, null);
 
     private static ParsedSection ParseSection(string section, WorkbookIndexedColorPalette? indexedColors)
+        => ParseSection(section, indexedColors, null);
+
+    private static ParsedSection ParseSection(
+        string section,
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme)
     {
         string? color = null;
         FormatCondition? condition = null;
@@ -104,9 +110,15 @@ public static partial class NumberFormatter
                 break;
 
             string token = section[(index + 1)..close];
-            if (NumberFormatColorMapper.TryMapColor(token, indexedColors, out var tokenColor))
+            if (NumberFormatColorMapper.TryMapColor(token, indexedColors, theme, out var tokenColor))
             {
                 color = tokenColor;
+                index = SkipInterDirectiveWhitespace(section, close + 1);
+                continue;
+            }
+
+            if (NumberFormatColorMapper.IsThemeColorDirective(token))
+            {
                 index = SkipInterDirectiveWhitespace(section, close + 1);
                 continue;
             }

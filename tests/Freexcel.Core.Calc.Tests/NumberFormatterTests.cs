@@ -235,6 +235,62 @@ public class NumberFormatterTests
         Assert.Equal("#010203", result.ColorHex);
     }
 
+    [Fact]
+    public void CustomNumberSubset_ResolvesThemeColorDirectivesWithWorkbookTheme()
+    {
+        var theme = WorkbookTheme.Office.WithColor(
+            WorkbookThemeColorSlot.Accent1,
+            CellColor.FromArgb(0x12, 0x34, 0x56));
+
+        var result = NumberFormatter.FormatWithColor(
+            new NumberValue(12.5),
+            "[ThemeAccent1]0.0",
+            new WorkbookIndexedColorPalette(),
+            theme);
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Equal("#123456", result.ColorHex);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_IgnoresThemeColorDirectivesWithoutThemeContext()
+    {
+        var result = NumberFormatter.FormatWithColor(new NumberValue(12.5), "[ThemeAccent1]0.0");
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Null(result.ColorHex);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_UnsupportedThemeColorDirectiveDoesNotBlockConditions()
+    {
+        var result = NumberFormatter.FormatWithColor(
+            new NumberValue(12.5),
+            "[ThemeAccent1Tint40][>10]0.0;0");
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Null(result.ColorHex);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_ThemeContextDoesNotChangeIndexedColorResolution()
+    {
+        var palette = new WorkbookIndexedColorPalette();
+        palette.SetColor(5, CellColor.FromArgb(1, 2, 3));
+        var theme = WorkbookTheme.Office.WithColor(
+            WorkbookThemeColorSlot.Accent1,
+            CellColor.FromArgb(0xAA, 0xBB, 0xCC));
+
+        var result = NumberFormatter.FormatWithColor(
+            new NumberValue(12.5),
+            "[Color 5]0.0",
+            palette,
+            theme);
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Equal("#010203", result.ColorHex);
+    }
+
     [Theory]
     [InlineData("[Color9]m/d/yyyy", 45292, "1/1/2024", "#800000")]
     [InlineData("[Color 9]m/d/yyyy", 45292, "1/1/2024", "#800000")]

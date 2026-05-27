@@ -265,6 +265,25 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesLocalPrivatePrivacyMetadataCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var localPrivateRows = manifestRows
+            .Where(row => row.SourceType == "local-private")
+            .ToArray();
+
+        localPrivateRows.Should().HaveCountGreaterThan(0);
+        localPrivateRows.Should().OnlyContain(
+            row =>
+                row.Path.StartsWith("local-private/", StringComparison.Ordinal) &&
+                row.SourceUrl == "user-approved-local" &&
+                row.License == "private-local",
+            "local-private corpus rows should disclose capability coverage without leaking private workbook provenance");
+        report.Should().Contain($"| Local-private privacy metadata coverage | {localPrivateRows.Length}/{localPrivateRows.Length} rows use local-only source markers and private-local license |");
+    }
+
+    [Fact]
     public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
     {
         var manifestRows = ReadManifestRows();
