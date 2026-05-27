@@ -65,6 +65,19 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void AutofillDragMouseMoveKeepsCrossCursorAndHandlesEvent()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var dragBlock = source[
+            source.IndexOf("if (_autofillDragging && Viewport != null && _autofillSourceRange.HasValue)", StringComparison.Ordinal)..
+            source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)];
+
+        dragBlock.Should().Contain("Cursor = Cursors.Cross;");
+        dragBlock.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
     public void MouseLeavePreservesCursorDuringCapturedDrags()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
