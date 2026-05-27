@@ -3912,7 +3912,12 @@
                             local:RibbonTooltip.Title="Zoom In"
                             local:RibbonTooltip.KeyTip="SX"/>
                     <TextBlock x:Name="StatusZoomText" Grid.Column="6" Text="100%" Foreground="White" FontSize="12"
-                               VerticalAlignment="Center" Width="38"/>
+                               VerticalAlignment="Center" Width="38" Focusable="True" Cursor="Hand"
+                               ToolTip="Zoom"
+                               AutomationProperties.Name="Zoom percentage"
+                               AutomationProperties.HelpText="Open the Zoom dialog"
+                               MouseLeftButtonUp="StatusZoomText_OpenZoomDialog"
+                               PreviewKeyDown="StatusZoomText_PreviewKeyDown"/>
                 </Grid>
             </Grid>
         </Border>
