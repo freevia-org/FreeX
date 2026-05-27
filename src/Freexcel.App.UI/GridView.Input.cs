@@ -250,6 +250,11 @@ public partial class GridView
                     : scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal
                         ? pos.X - _splitPaneScrollbarDragSource.Thumb.Left
                         : pos.Y - _splitPaneScrollbarDragSource.Thumb.Top;
+                if (!_splitPaneScrollbarDragging)
+                {
+                    _splitPaneScrollbarDragSource = null;
+                    _splitPaneScrollbarDragPointerOffset = 0;
+                }
                 if (CalculateSplitPaneScrollbarInteractionTarget(Viewport, chrome, pos) is { } scrollTarget)
                     SplitPaneScrollbarScrolled?.Invoke(scrollTarget);
                 Cursor = scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal ? Cursors.SizeWE : Cursors.SizeNS;
