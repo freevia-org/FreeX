@@ -184,6 +184,48 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void LegacyDistributionTestAliases_MatchModernFunctions()
+    {
+        var sheet = Values();
+        Number("=TDIST(1,10,1)", sheet).Should().BeApproximately(Number("=T.DIST.RT(1,10)", sheet), 1e-12);
+        Number("=TDIST(1,10,2)", sheet).Should().BeApproximately(Number("=T.DIST.2T(1,10)", sheet), 1e-12);
+        Number("=TINV(0.1,10)", sheet).Should().BeApproximately(Number("=T.INV.2T(0.1,10)", sheet), 1e-12);
+        Number("=FDIST(1,5,6)", sheet).Should().BeApproximately(Number("=F.DIST.RT(1,5,6)", sheet), 1e-12);
+        Number("=FINV(0.25,5,6)", sheet).Should().BeApproximately(Number("=F.INV.RT(0.25,5,6)", sheet), 1e-12);
+        Number("=CHIDIST(3,4)", sheet).Should().BeApproximately(Number("=CHISQ.DIST.RT(3,4)", sheet), 1e-12);
+        Number("=CHIINV(0.25,4)", sheet).Should().BeApproximately(Number("=CHISQ.INV.RT(0.25,4)", sheet), 1e-12);
+    }
+
+    [Fact]
+    public void LegacyDiscreteAndContinuousAliases_MatchModernFunctions()
+    {
+        var sheet = Values();
+        Number("=BINOMDIST(2,5,0.4,TRUE)", sheet).Should().BeApproximately(Number("=BINOM.DIST(2,5,0.4,TRUE)", sheet), 1e-12);
+        Number("=CRITBINOM(10,0.5,0.75)", sheet).Should().BeApproximately(Number("=BINOM.INV(10,0.5,0.75)", sheet), 1e-12);
+        Number("=NEGBINOMDIST(3,4,0.4)", sheet).Should().BeApproximately(Number("=NEGBINOM.DIST(3,4,0.4,FALSE)", sheet), 1e-12);
+        Number("=POISSON(2,5,TRUE)", sheet).Should().BeApproximately(Number("=POISSON.DIST(2,5,TRUE)", sheet), 1e-12);
+        Number("=HYPGEOMDIST(1,4,8,20)", sheet).Should().BeApproximately(Number("=HYPERGEOM.DIST(1,4,8,20,FALSE)", sheet), 1e-12);
+        Number("=EXPONDIST(0.2,10,TRUE)", sheet).Should().BeApproximately(Number("=EXPON.DIST(0.2,10,TRUE)", sheet), 1e-12);
+        Number("=WEIBULL(105,20,100,TRUE)", sheet).Should().BeApproximately(Number("=WEIBULL.DIST(105,20,100,TRUE)", sheet), 1e-12);
+        Number("=GAMMADIST(10,9,2,TRUE)", sheet).Should().BeApproximately(Number("=GAMMA.DIST(10,9,2,TRUE)", sheet), 1e-12);
+        Number("=GAMMAINV(0.5,9,2)", sheet).Should().BeApproximately(Number("=GAMMA.INV(0.5,9,2)", sheet), 1e-12);
+    }
+
+    [Fact]
+    public void LegacyTestAliases_MatchModernRangeTests()
+    {
+        var sheet = Values(1, 2, 3, 4);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(5));
+
+        Number("=TTEST(A1:A4,B1:B4,2,2)", sheet).Should().BeApproximately(Number("=T.TEST(A1:A4,B1:B4,2,2)", sheet), 1e-12);
+        Number("=FTEST(A1:A4,B1:B4)", sheet).Should().BeApproximately(Number("=F.TEST(A1:A4,B1:B4)", sheet), 1e-12);
+        Number("=CHITEST(A1:A4,B1:B4)", sheet).Should().BeApproximately(Number("=CHISQ.TEST(A1:A4,B1:B4)", sheet), 1e-12);
+    }
+
+    [Fact]
     public void ModeSngl_ReturnsFirstLowestMostFrequentValue()
     {
         Number("=MODE.SNGL(A1:A5)", Values(3, 2, 2, 3, 2)).Should().Be(2);
