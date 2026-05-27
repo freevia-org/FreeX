@@ -53,6 +53,22 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void LeftClickObjectInvalidatesSelectionBeforeCapturingDrag()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var objectClickBlock = inputSource[
+            inputSource.IndexOf("// Check if clicking on a new drawing object", StringComparison.Ordinal)..
+            inputSource.IndexOf("// Clicking empty space deselects", StringComparison.Ordinal)];
+
+        objectClickBlock.Should().Contain("SelectedObjectId = hit.Id;");
+        objectClickBlock.Should().Contain("SelectedObjectKind = hit.Kind;");
+        objectClickBlock.Should().Contain("InvalidateVisual();");
+        objectClickBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal)
+            .Should().BeLessThan(objectClickBlock.IndexOf("CaptureMouse();", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneScrollbarDragPreservesOrientationCursor()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
