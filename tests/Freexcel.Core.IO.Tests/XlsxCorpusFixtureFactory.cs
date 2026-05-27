@@ -699,7 +699,34 @@ internal static class XlsxCorpusFixtureFactory
         "generated-power-query-001" => CreatePackage(
             ("xl/connections.xml", "<connections/>"),
             ("xl/queries/query1.xml", "<query/>"),
-            ("xl/queryTables/queryTable1.xml", "<queryTable/>")),
+            ("xl/queryTables/queryTable1.xml", """
+                <queryTable xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            name="FreexcelQueryTable"
+                            connectionId="1"
+                            autoFormatId="16"
+                            applyNumberFormats="0"
+                            applyBorderFormats="0"
+                            applyFontFormats="0"
+                            applyPatternFormats="0"
+                            applyAlignmentFormats="0"
+                            applyWidthHeightFormats="0"/>
+                """),
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheetData/>
+                  <queryTableParts count="1">
+                    <queryTablePart r:id="rIdFreexcelQueryTable"/>
+                  </queryTableParts>
+                </worksheet>
+                """),
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdFreexcelQueryTable"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable"
+                                Target="../queryTables/queryTable1.xml"/>
+                </Relationships>
+                """)),
         "generated-data-model-001" => CreatePackage(
             ("xl/model/item.data", "Freexcel generated data model placeholder"),
             ("xl/model/item.xml", "<dataModel/>")),
