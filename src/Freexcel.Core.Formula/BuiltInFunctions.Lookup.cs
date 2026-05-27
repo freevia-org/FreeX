@@ -1,5 +1,7 @@
 ﻿using Freexcel.Core.Model;
 
+using System.Text.RegularExpressions;
+
 namespace Freexcel.Core.Formula;
 
 public static partial class BuiltInFunctions
@@ -539,6 +541,57 @@ public static partial class BuiltInFunctions
 
         return TryParseR1C1Ref(refText[..colon], currentCell, out startRow, out startCol)
             && TryParseR1C1Ref(refText[(colon + 1)..], currentCell, out endRow, out endCol);
+    }
+
+    private static bool TryParseA1Ref(string cellRef, out uint row, out uint col)
+    {
+        row = 0; col = 0;
+        int i = 0;
+        // Skip optional leading '$' (absolute column marker)
+        if (i < cellRef.Length && cellRef[i] == '$') i++;
+        while (i < cellRef.Length && char.IsLetter(cellRef[i])) i++;
+        if (i == 0 || i >= cellRef.Length) return false;
+        // Strip leading '$' from the column portion when building colStr
+        int colStart = cellRef[0] == '$' ? 1 : 0;
+        string colStr = cellRef[colStart..i].ToUpperInvariant();
+        string rowPart = cellRef[i..];
+        // Skip optional '$' before row number
+        if (rowPart.Length > 0 && rowPart[0] == '$') rowPart = rowPart[1..];
+        if (!uint.TryParse(rowPart, out row)) return false;
+        col = CellAddress.ColumnNameToNumber(colStr);
+        return row > 0 && row <= CellAddress.MaxRow && col > 0 && col <= CellAddress.MaxCol;
+    }
+
+    private static bool TryParseR1C1Ref(string cellRef, CellAddress? currentCell, out uint row, out uint col)
+    {
+        row = 0; col = 0;
+        var match = Regex.Match(cellRef, @"^R(?:(\d+)|\[(-?\d+)\])?C(?:(\d+)|\[(-?\d+)\])?$", RegexOptions.IgnoreCase);
+        if (!match.Success) return false;
+        if (!ResolveR1C1Part(match.Groups[1].Value, match.Groups[2].Value, currentCell?.Row, CellAddress.MaxRow, out row))
+            return false;
+        if (!ResolveR1C1Part(match.Groups[3].Value, match.Groups[4].Value, currentCell?.Col, CellAddress.MaxCol, out col))
+            return false;
+        return true;
+    }
+
+    private static bool ResolveR1C1Part(string absoluteText, string relativeText, uint? current, uint max, out uint value)
+    {
+        value = 0;
+        if (absoluteText.Length > 0)
+            return uint.TryParse(absoluteText, out value) && value > 0 && value <= max;
+
+        if (current is null) return false;
+
+        long resolved = current.Value;
+        if (relativeText.Length > 0)
+        {
+            if (!long.TryParse(relativeText, out var offset)) return false;
+            resolved += offset;
+        }
+
+        if (resolved <= 0 || resolved > max) return false;
+        value = (uint)resolved;
+        return true;
     }
 
     private static ScalarValue Address(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
