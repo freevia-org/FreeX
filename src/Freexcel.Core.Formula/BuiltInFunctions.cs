@@ -191,12 +191,18 @@ public static partial class BuiltInFunctions
 
         // ── Phase 4a: Math / Trig ────────────────────────────────────────────
         ["SIN"]      = (Sin, 1, 1),
+        ["SINH"]     = (Sinh, 1, 1),
         ["COS"]      = (Cos, 1, 1),
+        ["COSH"]     = (Cosh, 1, 1),
         ["TAN"]      = (Tan, 1, 1),
+        ["TANH"]     = (Tanh, 1, 1),
         ["ASIN"]     = (Asin, 1, 1),
+        ["ASINH"]    = (Asinh, 1, 1),
         ["ACOS"]     = (Acos, 1, 1),
+        ["ACOSH"]    = (Acosh, 1, 1),
         ["ATAN"]     = (Atan, 1, 1),
         ["ATAN2"]    = (Atan2Func, 2, 2),
+        ["ATANH"]    = (Atanh, 1, 1),
         ["ACOT"]     = (Acot, 1, 1),
         ["ACOTH"]    = (Acoth, 1, 1),
         ["COT"]      = (Cot, 1, 1),
