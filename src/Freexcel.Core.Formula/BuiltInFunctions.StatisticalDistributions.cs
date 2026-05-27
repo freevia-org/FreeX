@@ -377,9 +377,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        bool cum = ToBool(args[1]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => NormSDistScalar(value, cum));
-        return NormSDistScalar(args[0], cum);
+        return MapBinaryMathArgs(args[0], args[1], NormSDistScalar);
+    }
+
+    private static ScalarValue NormSDistScalar(ScalarValue zValue, ScalarValue cumulativeValue)
+    {
+        bool cum = ToBool(cumulativeValue);
+        return NormSDistScalar(zValue, cum);
     }
 
     private static ScalarValue NormSDistScalar(ScalarValue zValue, bool cum)
