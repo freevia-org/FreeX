@@ -11,10 +11,14 @@ public sealed class ExcelParityInformationTests
     [Theory]
     [InlineData("=ISBLANK(A1)", true)]
     [InlineData("=ISERROR(1/0)", true)]
+    [InlineData("=ISERR(1/0)", true)]
+    [InlineData("=ISERR(NA())", false)]
     [InlineData("=ISEVEN(4)", true)]
     [InlineData("=ISFORMULA(B1)", true)]
     [InlineData("=ISLOGICAL(TRUE)", true)]
     [InlineData("=ISNA(NA())", true)]
+    [InlineData("=ISNONTEXT(42)", true)]
+    [InlineData("=ISNONTEXT(\"x\")", false)]
     [InlineData("=ISNUMBER(42)", true)]
     [InlineData("=ISODD(3)", true)]
     [InlineData("=ISREF(A1)", true)]
@@ -25,6 +29,19 @@ public sealed class ExcelParityInformationTests
         sheet.SetFormula(new CellAddress(sheet.Id, 1, 2), "1+1");
 
         _eval.Evaluate(formula, sheet).Should().Be(new BoolValue(expected));
+    }
+
+    [Fact]
+    public void IsErrAndIsNonText_SpillOverRanges()
+    {
+        var sheet = Sheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), ErrorValue.Value);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), ErrorValue.NA);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("x"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(42));
+
+        AssertColumn(_eval.Evaluate("=ISERR(A1:A4)", sheet), true, false, false, false);
+        AssertColumn(_eval.Evaluate("=ISNONTEXT(A1:A4)", sheet), true, true, false, true);
     }
 
     [Fact]
@@ -45,4 +62,13 @@ public sealed class ExcelParityInformationTests
     }
 
     private static Sheet Sheet() => new(SheetId.New(), "S");
+
+    private static void AssertColumn(ScalarValue value, params bool[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            range.At(row + 1, 1).Should().Be(new BoolValue(expected[row]));
+    }
 }

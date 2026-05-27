@@ -159,10 +159,20 @@ public static partial class BuiltInFunctions
             ? MapPredicateRange(range, value => value is ErrorValue)
             : new BoolValue(args[0] is ErrorValue);
 
+    private static ScalarValue Iserr(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is ErrorValue error && error.Code != "#N/A")
+            : new BoolValue(args[0] is ErrorValue error && error.Code != "#N/A");
+
     private static ScalarValue Isna(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         args[0] is RangeValue range
             ? MapPredicateRange(range, value => value is ErrorValue e2 && e2.Code == "#N/A")
             : new BoolValue(args[0] is ErrorValue e2 && e2.Code == "#N/A");
+
+    private static ScalarValue Isnontext(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is not TextValue)
+            : new BoolValue(args[0] is not TextValue);
 
     private static ScalarValue Islogical(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         args[0] is RangeValue range

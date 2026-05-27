@@ -107,7 +107,7 @@ public sealed class FormulaEvaluator
         "SIN", "COS", "TAN", "DEGREES", "RADIANS",
         "ASIN", "ACOS", "ATAN", "ATAN2", "LN", "EXP", "FACT",
         "ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC",
-        "ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISNA", "ISLOGICAL",
+        "ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISERR", "ISNA", "ISNONTEXT", "ISLOGICAL",
         "ISEVEN", "ISODD", "ODD", "EVEN",
         "DATE", "TIME",
         "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",
