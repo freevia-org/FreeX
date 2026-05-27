@@ -93,10 +93,22 @@ public partial class GridView
             return;
         }
 
+        if (_autofillDragging)
+        {
+            Cursor = Cursors.Cross;
+            e.Handled = true;
+            return;
+        }
+
         if (_resizeTarget == ResizeTarget.Column)
         {
             var col = Viewport!.ColMetrics.FirstOrDefault(c => c.Col == _resizeIndex);
-            if (col is null) return;
+            if (col is null)
+            {
+                Cursor = Cursors.SizeWE;
+                e.Handled = true;
+                return;
+            }
             double newWidth = Math.Max(MinCellSize, _resizeSizeStart + (pos.X - _resizeDragStart));
             _resizeLinePos = col.LeftOffset + newWidth + ActualRowHeaderWidth;
             ColumnResizing?.Invoke(_resizeIndex, newWidth);
@@ -108,7 +120,12 @@ public partial class GridView
         else if (_resizeTarget == ResizeTarget.Row)
         {
             var row = Viewport!.RowMetrics.FirstOrDefault(r => r.Row == _resizeIndex);
-            if (row is null) return;
+            if (row is null)
+            {
+                Cursor = Cursors.SizeNS;
+                e.Handled = true;
+                return;
+            }
             double newHeight = Math.Max(MinCellSize, _resizeSizeStart + (pos.Y - _resizeDragStart));
             _resizeLinePos = row.TopOffset + newHeight + EffectiveColHeaderHeight;
             RowResizing?.Invoke(_resizeIndex, newHeight);
