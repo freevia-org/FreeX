@@ -61,6 +61,40 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
     }
 
     [Fact]
+    public void MouseWorksheetHeaderContextMenu_RightClickRowHeaderSelectsRowMenu()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenMouseHeaderContextMenu(Freexcel.App.UI.GridHeaderContextMenuTarget.Row, 5);
+
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 5, 1),
+                new CellAddress(harness.CurrentSheetId, 5, CellAddress.MaxCol)));
+            harness.OpenMenuHeaders.Should().Contain("Row _Height...");
+            harness.OpenMenuHeaders.Should().NotContain("Column _Width...");
+        });
+    }
+
+    [Fact]
+    public void MouseWorksheetHeaderContextMenu_RightClickColumnHeaderSelectsColumnMenu()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenMouseHeaderContextMenu(Freexcel.App.UI.GridHeaderContextMenuTarget.Column, 4);
+
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 4),
+                new CellAddress(harness.CurrentSheetId, CellAddress.MaxRow, 4)));
+            harness.OpenMenuHeaders.Should().Contain("Column _Width...");
+            harness.OpenMenuHeaders.Should().NotContain("Row _Height...");
+        });
+    }
+
+    [Fact]
     public void KeyboardWorksheetContextMenu_WithWholeRowSelectionShowsRowScopedCommands()
     {
         StaTestRunner.Run(() =>
@@ -257,6 +291,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         private readonly MainWindow _window;
         private readonly MethodInfo _openKeyboardContextMenu;
         private readonly MethodInfo _onGridContextMenuRequested;
+        private readonly MethodInfo _onGridHeaderContextMenuRequested;
         private readonly MethodInfo _getWorksheetContextMenuTargetKind;
         private readonly MethodInfo _applyAutoFilterDialogResult;
         private readonly MethodInfo _reapplyAutoFilter;
@@ -273,6 +308,9 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             _onGridContextMenuRequested = typeof(MainWindow)
                 .GetMethod("OnGridContextMenuRequested", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "OnGridContextMenuRequested");
+            _onGridHeaderContextMenuRequested = typeof(MainWindow)
+                .GetMethod("OnGridHeaderContextMenuRequested", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "OnGridHeaderContextMenuRequested");
             _getWorksheetContextMenuTargetKind = typeof(MainWindow)
                 .GetMethod("GetWorksheetContextMenuTargetKind", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetWorksheetContextMenuTargetKind");
@@ -445,6 +483,16 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             _onGridContextMenuRequested.Invoke(
                 _window,
                 [new CellAddress(sheet.Id, row, col), new System.Windows.Point(100, 100)]);
+            PumpDispatcher();
+            PumpDispatcher();
+            PumpDispatcher();
+        }
+
+        public void OpenMouseHeaderContextMenu(Freexcel.App.UI.GridHeaderContextMenuTarget target, uint index)
+        {
+            _onGridHeaderContextMenuRequested.Invoke(
+                _window,
+                [target, index, new System.Windows.Point(100, 100)]);
             PumpDispatcher();
             PumpDispatcher();
             PumpDispatcher();
