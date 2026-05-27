@@ -992,6 +992,31 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void MainWindow_PivotStyleOptionButtons_PreserveCurrentStyleAndToggleOnlyTargetFlag()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotDesignCommands.cs"));
+
+        AssertPivotStyleOptionHandler(source, "PivotRowHeadersBtn_Click", "!pivotTable.ShowRowHeaders");
+        AssertPivotStyleOptionHandler(source, "PivotColumnHeadersBtn_Click", "!pivotTable.ShowColumnHeaders");
+        AssertPivotStyleOptionHandler(source, "PivotBandedRowsBtn_Click", "!pivotTable.ShowRowStripes");
+        AssertPivotStyleOptionHandler(source, "PivotBandedColumnsBtn_Click", "!pivotTable.ShowColumnStripes");
+    }
+
+    private static void AssertPivotStyleOptionHandler(string source, string handlerName, string toggledFlag)
+    {
+        var start = source.IndexOf($"private void {handlerName}", StringComparison.Ordinal);
+        var end = source.IndexOf("    private void", start + 1, StringComparison.Ordinal);
+        var handlerSource = source[start..end];
+
+        handlerSource.Should().Contain("ApplyPivotOptions(");
+        handlerSource.Should().Contain("pivotTable.StyleName");
+        handlerSource.Should().Contain(toggledFlag);
+        handlerSource.Should().NotContain("PivotStyleLight16");
+        handlerSource.Should().NotContain("PivotStyleMedium");
+        handlerSource.Should().NotContain("PivotStyleDark");
+    }
+
+    [Fact]
     public void PivotTableOptionsDialog_UsesExcelStyleTabbedOptionShell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableOptionsDialog.cs"));

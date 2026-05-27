@@ -1885,6 +1885,24 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void PivotTableShowDetailsCommand_UsesUndoableDrillDownAndActivatesCreatedDetailSheet()
+    {
+        var source = ReadPivotCommandSource();
+        var handlerSource = source[
+            source.IndexOf("private bool TryShowPivotTableDetails", StringComparison.Ordinal)..
+            source.IndexOf("private void RefreshPivotFieldListPane", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("new DrillDownPivotTableCommand(_currentSheetId, pivotTable.Name, selected.Value)");
+        handlerSource.Should().Contain("\"Show PivotTable Details\"");
+        handlerSource.Should().Contain("var detailSheet = _workbook.Sheets.LastOrDefault();");
+        handlerSource.Should().Contain("_currentSheetId = detailSheet.Id;");
+        handlerSource.Should().Contain("RefreshSheetTabs();");
+        handlerSource.Should().Contain("UpdateViewport();");
+        handlerSource.Should().NotContain("new AddSheetCommand");
+        handlerSource.Should().NotContain("PivotTableRefreshService.Refresh");
+    }
+
+    [Fact]
     public void PivotChartEntryPoint_IsAvailableOnInsertRibbon()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

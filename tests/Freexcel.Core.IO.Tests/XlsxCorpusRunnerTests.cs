@@ -355,6 +355,30 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedVbaMacrosRetentionPackage_LinksWorkbookToVbaProject()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-vba-macros-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var vbaProjectEntry = archive.GetEntry("xl/vbaProject.bin");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        vbaProjectEntry.Should().NotBeNull();
+        workbookRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2006/relationships/vbaProject" &&
+                relationship.Attribute("Target")?.Value == "vbaProject.bin")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedThreadedCommentsRetentionPackage_LinksWorksheetAndPersonsParts()
     {
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-threaded-comments-001");
@@ -546,6 +570,29 @@ public class XlsxCorpusRunnerTests
             .Where(relationship =>
                 relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle" &&
                 relationship.Attribute("Target")?.Value == "../diagrams/quickStyle1.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedDataModelRetentionPackage_LinksWorkbookToModelPart()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-data-model-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        workbookRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/model" &&
+                relationship.Attribute("Target")?.Value == "model/item.data")
             .Should().ContainSingle();
     }
 
