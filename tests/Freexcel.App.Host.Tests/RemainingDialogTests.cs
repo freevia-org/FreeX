@@ -966,6 +966,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SpellCheckDialog_FieldControlsExposeAutomationNames()
+    {
+        var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_notInDictionaryBox, \"Not in Dictionary\");");
+        source.Should().Contain("AutomationProperties.SetName(_suggestionsBox, \"Suggestions\");");
+        source.Should().Contain("AutomationProperties.SetName(_replacementBox, \"Change to\");");
+    }
+
+    [Fact]
     public void SpellCheckDialog_ExposesExcelLikeIgnoreChangeAndAddActions()
     {
         var source = ReadRemainingDialogSources();

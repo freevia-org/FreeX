@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -38,7 +39,9 @@ public sealed class SpellCheckDialog : Window
         _notInDictionaryBox.IsReadOnly = true;
         _notInDictionaryBox.Height = 56;
         _notInDictionaryBox.TextWrapping = TextWrapping.Wrap;
+        AutomationProperties.SetName(_notInDictionaryBox, "Not in Dictionary");
         _replacementBox.Text = suggestion;
+        AutomationProperties.SetName(_replacementBox, "Change to");
         if (!string.IsNullOrWhiteSpace(suggestion))
         {
             _suggestionsBox.Items.Add(suggestion);
@@ -46,6 +49,7 @@ public sealed class SpellCheckDialog : Window
         }
 
         _suggestionsBox.Height = 76;
+        AutomationProperties.SetName(_suggestionsBox, "Suggestions");
         _suggestionsBox.SelectionChanged += (_, _) =>
         {
             if (_suggestionsBox.SelectedItem is string selected)
