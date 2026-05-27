@@ -183,7 +183,7 @@ internal static class XlsxPackageMetadataMerger
             return false;
         }
 
-        var target = relationship.Attribute("Target")?.Value;
+        var target = NormalizeRelationshipTarget(relationship);
         if (string.IsNullOrWhiteSpace(target))
             return false;
 
@@ -215,7 +215,7 @@ internal static class XlsxPackageMetadataMerger
             if (IsExternalRelationship(relationship))
                 return false;
 
-            var target = relationship.Attribute("Target")?.Value;
+            var target = NormalizeRelationshipTarget(relationship);
             return !string.IsNullOrWhiteSpace(target) &&
                    IsExcludedSourcePart(XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target), excludedSourceParts);
         });
@@ -235,8 +235,11 @@ internal static class XlsxPackageMetadataMerger
     private static string RelationshipSignature(XElement relationship) =>
         string.Join("|",
             relationship.Attribute("Type")?.Value ?? "",
-            relationship.Attribute("Target")?.Value ?? "",
+            NormalizeRelationshipTarget(relationship),
             NormalizeRelationshipTargetMode(relationship));
+
+    private static string NormalizeRelationshipTarget(XElement relationship) =>
+        relationship.Attribute("Target")?.Value.Trim() ?? "";
 
     private static string NormalizeRelationshipTargetMode(XElement relationship) =>
         relationship.Attribute("TargetMode")?.Value.Trim() ?? "";
