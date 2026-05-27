@@ -246,6 +246,25 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesPublicSourceMetadataCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var publicRows = manifestRows
+            .Where(row => row.SourceType == "public")
+            .ToArray();
+
+        publicRows.Should().HaveCountGreaterThan(0);
+        publicRows.Should().OnlyContain(
+            row =>
+                row.SourceUrl.StartsWith("https://", StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(row.RetrievedOn) &&
+                !string.IsNullOrWhiteSpace(row.License),
+            "redistributed public corpus rows need auditable provenance metadata");
+        report.Should().Contain($"| Public source metadata coverage | {publicRows.Length}/{publicRows.Length} rows declare source URL, retrieval date, and license |");
+    }
+
+    [Fact]
     public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
     {
         var manifestRows = ReadManifestRows();
@@ -327,7 +346,7 @@ public class XlsxCorpusScaffoldTests
     {
         var columns = line.Split(',');
         columns.Should().HaveCount(ExpectedManifestHeader.Length);
-        return new ManifestRow(columns[1], columns[2], columns[6], columns[7], columns[8], columns[9]);
+        return new ManifestRow(columns[1], columns[2], columns[3], columns[4], columns[5], columns[6], columns[7], columns[8], columns[9]);
     }
 
     private static string ReadLastUpdatedDate(string markdown)
@@ -416,6 +435,9 @@ public class XlsxCorpusScaffoldTests
     private sealed record ManifestRow(
         string Path,
         string SourceType,
+        string SourceUrl,
+        string RetrievedOn,
+        string License,
         string FeatureTags,
         string ExpectedWarnings,
         string ExpectedStatus,
