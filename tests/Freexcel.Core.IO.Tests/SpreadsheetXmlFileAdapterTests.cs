@@ -199,6 +199,39 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_UsesCurrentStreamPositionsAndLeavesInputStreamsOpen()
+    {
+        using var source = PositionedStreamFromString("ignored", "<rows><row name=\"Gamma\"/></rows>");
+        using var stylesheet = PositionedStreamFromString("ignored", """
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Offset">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell>
+                          <ss:Data ss:Type="String"><xsl:value-of select="/rows/row/@name"/></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Offset");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Gamma"));
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void LoadTransformed_RejectsExternalDocumentFunction()
     {
         using var source = StreamFromString("<rows/>");
@@ -232,4 +265,13 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
     private static MemoryStream StreamFromString(string value) =>
         new(Encoding.UTF8.GetBytes(value));
+
+    private static MemoryStream PositionedStreamFromString(string prefix, string value)
+    {
+        var prefixBytes = Encoding.UTF8.GetBytes(prefix);
+        var valueBytes = Encoding.UTF8.GetBytes(value);
+        var stream = new MemoryStream(prefixBytes.Concat(valueBytes).ToArray());
+        stream.Position = prefixBytes.Length;
+        return stream;
+    }
 }
