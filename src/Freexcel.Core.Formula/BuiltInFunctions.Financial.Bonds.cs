@@ -246,4 +246,89 @@ public static partial class BuiltInFunctions
         double num = (1 + rate * dim) / (pr / 100.0) - 1;
         return NumberResult(num / dsm);
     }
+
+    private static ScalarValue Duration(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (FirstError(args) is { } e) return e;
+        var basisArg = args.Count > 5 ? args[5] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], basisArg],
+            values => DurationScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue DurationScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue couponValue, ScalarValue yieldValue, ScalarValue frequencyValue, ScalarValue basisValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double coupon = ToNumber(couponValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        return DurationScalar(settlement, maturity, coupon, yieldValue, frequency, basis);
+    }
+
+    private static ScalarValue DurationScalar(double settlement, double maturity, double coupon, ScalarValue yieldValue, int frequency, int basis)
+    {
+        double yld = ToNumber(yieldValue);
+        if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(coupon) ||
+            !double.IsFinite(yld))
+            return ErrorValue.Num;
+        if (coupon < 0 || yld < 0) return ErrorValue.Num;
+        if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
+        if (sd >= md) return ErrorValue.Num;
+        // Build coupon schedule
+        DateTime pcd = CouponDateBefore(sd, md, frequency);
+        DateTime ncd = CouponDateAfter(sd, md, frequency);
+        double daysInPeriod = (ncd - pcd).TotalDays;
+        double daysToNext = (ncd - sd).TotalDays;
+        double a = daysInPeriod > 0 ? daysToNext / daysInPeriod : 1.0;
+
+        int months = 12 / frequency;
+        var couponDates = new List<DateTime>();
+        DateTime d = ncd;
+        while (d <= md) { couponDates.Add(d); d = d.AddMonths(months); }
+        if (couponDates.Count == 0) couponDates.Add(ncd);
+
+        double c = coupon / frequency * 100;
+        double y = yld / frequency;
+        double price = 0, weightedTime = 0;
+        for (int k = 0; k < couponDates.Count; k++)
+        {
+            double t = k + a;  // periods from settlement
+            double cashflow = c;
+            if (couponDates[k] == md) cashflow += 100;
+            double pv = cashflow / Math.Pow(1 + y, t);
+            price += pv;
+            weightedTime += t / frequency * pv;
+        }
+        if (Math.Abs(price) < 1e-14) return ErrorValue.Num;
+        return NumberResult(weightedTime / price);
+    }
+
+    private static ScalarValue Mduration(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (FirstError(args) is { } e) return e;
+        var basisArg = args.Count > 5 ? args[5] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], basisArg],
+            values => MdurationScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue MdurationScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue couponValue, ScalarValue yieldValue, ScalarValue frequencyValue, ScalarValue basisValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double coupon = ToNumber(couponValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        return MdurationScalar(settlement, maturity, coupon, yieldValue, frequency, basis);
+    }
+
+    private static ScalarValue MdurationScalar(double settlement, double maturity, double coupon, ScalarValue yieldValue, int frequency, int basis)
+    {
+        var dur = DurationScalar(settlement, maturity, coupon, yieldValue, frequency, basis);
+        if (dur is not NumberValue dv) return dur;
+        double yld = ToNumber(yieldValue);
+        if (frequency <= 0) return ErrorValue.Num;
+        return NumberResult(dv.Value / (1 + yld / frequency));
+    }
 }
