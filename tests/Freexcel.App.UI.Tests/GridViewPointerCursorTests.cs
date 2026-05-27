@@ -46,7 +46,26 @@ public sealed class GridViewPointerCursorTests
         rightClickBlock.Should().Contain("var objectHit = HitTestDrawingObject(pos);");
         rightClickBlock.Should().Contain("SelectedObjectId = objectHit.Id;");
         rightClickBlock.Should().Contain("SelectedObjectKind = objectHit.Kind;");
+        rightClickBlock.Should().Contain("InvalidateVisual();");
         rightClickBlock.Should().Contain("ContextMenuRequested?.Invoke(objectHit.Anchor, pos);");
+        rightClickBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal)
+            .Should().BeLessThan(rightClickBlock.IndexOf("ContextMenuRequested?.Invoke(objectHit.Anchor, pos);", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void LeftClickObjectInvalidatesSelectionBeforeCapturingDrag()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var objectClickBlock = inputSource[
+            inputSource.IndexOf("// Check if clicking on a new drawing object", StringComparison.Ordinal)..
+            inputSource.IndexOf("// Clicking empty space deselects", StringComparison.Ordinal)];
+
+        objectClickBlock.Should().Contain("SelectedObjectId = hit.Id;");
+        objectClickBlock.Should().Contain("SelectedObjectKind = hit.Kind;");
+        objectClickBlock.Should().Contain("InvalidateVisual();");
+        objectClickBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal)
+            .Should().BeLessThan(objectClickBlock.IndexOf("CaptureMouse();", StringComparison.Ordinal));
     }
 
     [Fact]

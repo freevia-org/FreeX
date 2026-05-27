@@ -193,6 +193,7 @@ public partial class GridView
             _objectDragCurrentRect = hit.Rect;
             _objectDragStartAnchor = hit.Anchor;
             Cursor = Cursors.SizeAll;
+            InvalidateVisual();
             CaptureMouse();
             e.Handled = true;
             return;
@@ -332,6 +333,7 @@ public partial class GridView
             SelectedObjectKind = objectHit.Kind;
             _selectedObjectId = objectHit.Id;
             _selectedObjectKind = objectHit.Kind;
+            InvalidateVisual();
             ContextMenuRequested?.Invoke(objectHit.Anchor, pos);
             e.Handled = true;
             return;

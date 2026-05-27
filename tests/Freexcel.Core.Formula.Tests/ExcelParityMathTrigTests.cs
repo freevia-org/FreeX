@@ -18,6 +18,13 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=ATAN(1)", 0.7853981633974483)]
     [InlineData("=ATAN2(1,1)", 0.7853981633974483)]
     [InlineData("=CEILING(2.3,0.5)", 2.5)]
+    [InlineData("=CEILING.MATH(4.3)", 5)]
+    [InlineData("=CEILING.MATH(4.3,2)", 6)]
+    [InlineData("=CEILING.MATH(4.3,-2)", 6)]
+    [InlineData("=CEILING.MATH(-4.3,2)", -4)]
+    [InlineData("=CEILING.MATH(-4.3,2,1)", -6)]
+    [InlineData("=CEILING.PRECISE(4.3,2)", 6)]
+    [InlineData("=CEILING.PRECISE(-4.3,2)", -4)]
     [InlineData("=COS(0)", 1)]
     [InlineData("=COT(30)", -0.15611995216165922)]
     [InlineData("=COTH(1)", 1.3130352854993312)]
@@ -31,6 +38,13 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=FACTDOUBLE(6)", 48)]
     [InlineData("=FACTDOUBLE(7)", 105)]
     [InlineData("=FLOOR(2.7,0.5)", 2.5)]
+    [InlineData("=FLOOR.MATH(4.3)", 4)]
+    [InlineData("=FLOOR.MATH(4.3,2)", 4)]
+    [InlineData("=FLOOR.MATH(4.3,-2)", 4)]
+    [InlineData("=FLOOR.MATH(-4.3,2)", -6)]
+    [InlineData("=FLOOR.MATH(-4.3,2,1)", -4)]
+    [InlineData("=FLOOR.PRECISE(4.3,2)", 4)]
+    [InlineData("=FLOOR.PRECISE(-4.3,2)", -6)]
     [InlineData("=GCD(48,18)", 6)]
     [InlineData("=INT(-1.2)", -2)]
     [InlineData("=ISO.CEILING(4.3)", 5)]
@@ -109,8 +123,10 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=ABS(\"x\")")]
     [InlineData("=ACOT(\"x\")")]
     [InlineData("=COMBINA(\"x\",2)")]
+    [InlineData("=CEILING.MATH(\"x\")")]
     [InlineData("=FACT(\"x\")")]
     [InlineData("=FACTDOUBLE(\"x\")")]
+    [InlineData("=FLOOR.MATH(\"x\")")]
     [InlineData("=ISO.CEILING(\"x\")")]
     [InlineData("=PERMUTATIONA(\"x\",2)")]
     [InlineData("=PRODUCT(\"x\")")]
@@ -231,6 +247,24 @@ public sealed class ExcelParityMathTrigTests
         var result = _eval.Evaluate("=ISO.CEILING(A1:A2,B1:B2)", sheet).Should().BeOfType<RangeValue>().Subject;
         result.At(1, 1).Should().Be(new NumberValue(6));
         result.At(2, 1).Should().Be(new NumberValue(-4));
+    }
+
+    [Fact]
+    public void ModernCeilingFloorFunctions_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4.3)),
+            (2, 1, new NumberValue(-4.3)),
+            (1, 2, new NumberValue(2)),
+            (2, 2, new NumberValue(2)));
+
+        var ceiling = _eval.Evaluate("=CEILING.MATH(A1:A2,B1:B2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ceiling.At(1, 1).Should().Be(new NumberValue(6));
+        ceiling.At(2, 1).Should().Be(new NumberValue(-4));
+
+        var floor = _eval.Evaluate("=FLOOR.MATH(A1:A2,B1:B2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        floor.At(1, 1).Should().Be(new NumberValue(4));
+        floor.At(2, 1).Should().Be(new NumberValue(-6));
     }
 
     [Fact]
