@@ -13,7 +13,7 @@ public sealed class FormulaEvaluator
         "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
         "STDEV", "MEDIAN",
         "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "XOR",
-        "VAR", "VAR.S", "VAR.P", "STDEV.P",
+        "VAR", "VAR.S", "VARA", "VAR.P", "VARPA", "STDEV.P", "STDEVA", "STDEVPA",
         "GEOMEAN", "HARMEAN", "AVEDEV",
         "MODE", "MODE.SNGL",
         "CONCATENATE",
@@ -23,8 +23,8 @@ public sealed class FormulaEvaluator
     private static readonly HashSet<string> DirectTextCoercingAggregates = new(StringComparer.OrdinalIgnoreCase)
     {
         "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2",
-        "STDEV", "STDEV.S", "STDEV.P",
-        "VAR", "VAR.S", "VAR.P",
+        "STDEV", "STDEV.S", "STDEV.P", "STDEVA", "STDEVPA",
+        "VAR", "VAR.S", "VAR.P", "VARA", "VARPA",
         "MEDIAN",
         "GEOMEAN", "HARMEAN", "AVEDEV",
         "MODE", "MODE.SNGL",
@@ -35,8 +35,8 @@ public sealed class FormulaEvaluator
     private static readonly HashSet<string> ReferenceProvenanceAggregates = new(StringComparer.OrdinalIgnoreCase)
     {
         "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "AND", "OR", "XOR",
-        "STDEV", "STDEV.S", "STDEV.P",
-        "VAR", "VAR.S", "VAR.P",
+        "STDEV", "STDEV.S", "STDEV.P", "STDEVA", "STDEVPA",
+        "VAR", "VAR.S", "VAR.P", "VARA", "VARPA",
         "MEDIAN",
         "GEOMEAN", "HARMEAN", "AVEDEV",
         "MODE", "MODE.SNGL",

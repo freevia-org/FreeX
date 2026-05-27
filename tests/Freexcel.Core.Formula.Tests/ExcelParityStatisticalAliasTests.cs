@@ -66,6 +66,43 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void VarAAndStdevA_IncludeReferencedLogicalAndTextValuesAsSample()
+    {
+        var sheet = Values(10);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("n/a"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new BoolValue(false));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), BlankValue.Instance);
+
+        Number("=VARA(A1:A5)", sheet).Should().BeApproximately(23.583333333333332, 1e-12);
+        Number("=STDEVA(A1:A5)", sheet).Should().BeApproximately(Math.Sqrt(23.583333333333332), 1e-12);
+    }
+
+    [Fact]
+    public void VarPAAndStdevPA_IncludeReferencedLogicalAndTextValuesAsPopulation()
+    {
+        var sheet = Values(10);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("n/a"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new BoolValue(false));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), BlankValue.Instance);
+
+        Number("=VARPA(A1:A5)", sheet).Should().BeApproximately(17.6875, 1e-12);
+        Number("=STDEVPA(A1:A5)", sheet).Should().BeApproximately(Math.Sqrt(17.6875), 1e-12);
+    }
+
+    [Fact]
+    public void AVarianceFunctions_DirectTextAndEmptySetMatchExcel()
+    {
+        Number("=VARA(\"5\",TRUE,\"\")", Values()).Should().BeApproximately(7, 1e-12);
+        Number("=VARPA(\"5\",TRUE,\"\")", Values()).Should().BeApproximately(14.0 / 3.0, 1e-12);
+
+        _eval.Evaluate("=VARA(\"n/a\",1)", Values()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=STDEVA(A1:A2)", Values()).Should().Be(ErrorValue.DivByZero);
+        _eval.Evaluate("=VARPA(A1:A2)", Values()).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Fact]
     public void ModeSngl_ReturnsFirstLowestMostFrequentValue()
     {
         Number("=MODE.SNGL(A1:A5)", Values(3, 2, 2, 3, 2)).Should().Be(2);
