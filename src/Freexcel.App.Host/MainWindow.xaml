@@ -550,6 +550,9 @@
                                     <Button x:Name="FillColorBtn" Width="28" Height="22"
                                             Style="{StaticResource RibbonIconButton}"
                                             Click="FillColorBtn_Click"
+                                            AutomationProperties.Name="Fill Color"
+                                            AutomationProperties.AutomationId="HomeFillColorButton"
+                                            AutomationProperties.HelpText="Open the fill color picker for selected cells."
                                             local:RibbonTooltip.Title="Fill Color"
                                             local:RibbonTooltip.KeyTip="H"
                                             local:RibbonTooltip.Description="Color the background of the selected cells.">
@@ -566,6 +569,9 @@
                                     <Button x:Name="FontColorBtn" Width="28" Height="22"
                                             Style="{StaticResource RibbonIconButton}"
                                             Click="FontColorBtn_Click"
+                                            AutomationProperties.Name="Font Color"
+                                            AutomationProperties.AutomationId="HomeFontColorButton"
+                                            AutomationProperties.HelpText="Open the font color picker for selected cells."
                                             local:RibbonTooltip.Title="Font Color"
                                             local:RibbonTooltip.KeyTip="FC"
                                             local:RibbonTooltip.Description="Change the color of the text.">
