@@ -4352,11 +4352,19 @@
                                             BorderThickness="0" Padding="0,7"
                                             Click="SsRecentItem_Click"
                                             Cursor="Hand"
-                                            AutomationProperties.Name="{Binding FileName}">
+                                            AutomationProperties.AutomationId="BackstageRecentFileItem"
+                                            AutomationProperties.Name="{Binding OpenAutomationName}"
+                                            AutomationProperties.HelpText="{Binding OpenAutomationHelpText}">
                                         <Button.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="Pin to list" local:RibbonTooltip.KeyTip="P" Click="SsPinItem_Click"/>
-                                                <MenuItem Header="Remove from list" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"/>
+                                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                <MenuItem Header="Pin to list" local:RibbonTooltip.KeyTip="P" Click="SsPinItem_Click"
+                                                          AutomationProperties.AutomationId="BackstageRecentPinMenuItem"
+                                                          AutomationProperties.Name="{Binding PinAutomationName}"
+                                                          AutomationProperties.HelpText="{Binding PinAutomationHelpText}"/>
+                                                <MenuItem Header="Remove from list" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"
+                                                          AutomationProperties.AutomationId="BackstageRecentRemoveMenuItem"
+                                                          AutomationProperties.Name="{Binding RemoveAutomationName}"
+                                                          AutomationProperties.HelpText="{Binding RemoveAutomationHelpText}"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <Button.Template>
@@ -4405,7 +4413,9 @@
                                                     Click="SsPinItem_Click"
                                                     local:RibbonTooltip.Title="Pin File"
                                                     local:RibbonTooltip.Description="Pin or unpin this workbook in the recent files list."
-                                                    AutomationProperties.Name="Pin file"
+                                                    AutomationProperties.AutomationId="BackstageRecentPinButton"
+                                                    AutomationProperties.Name="{Binding PinAutomationName}"
+                                                    AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="Pin to list">
                                                 <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
                                             </Button>
@@ -4426,11 +4436,19 @@
                                             BorderThickness="0" Padding="0,7"
                                             Click="SsRecentItem_Click"
                                             Cursor="Hand"
-                                            AutomationProperties.Name="{Binding FileName}">
+                                            AutomationProperties.AutomationId="BackstagePinnedFileItem"
+                                            AutomationProperties.Name="{Binding OpenAutomationName}"
+                                            AutomationProperties.HelpText="{Binding OpenAutomationHelpText}">
                                         <Button.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="Unpin from list" local:RibbonTooltip.KeyTip="U" Click="SsUnpinItem_Click"/>
-                                                <MenuItem Header="Remove from list" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"/>
+                                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                <MenuItem Header="Unpin from list" local:RibbonTooltip.KeyTip="U" Click="SsUnpinItem_Click"
+                                                          AutomationProperties.AutomationId="BackstagePinnedUnpinMenuItem"
+                                                          AutomationProperties.Name="{Binding PinAutomationName}"
+                                                          AutomationProperties.HelpText="{Binding PinAutomationHelpText}"/>
+                                                <MenuItem Header="Remove from list" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"
+                                                          AutomationProperties.AutomationId="BackstagePinnedRemoveMenuItem"
+                                                          AutomationProperties.Name="{Binding RemoveAutomationName}"
+                                                          AutomationProperties.HelpText="{Binding RemoveAutomationHelpText}"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <Button.Template>
@@ -4479,7 +4497,9 @@
                                                     Click="SsUnpinItem_Click"
                                                     local:RibbonTooltip.Title="Unpin File"
                                                     local:RibbonTooltip.Description="Remove this workbook from the pinned files list."
-                                                    AutomationProperties.Name="Unpin file"
+                                                    AutomationProperties.AutomationId="BackstagePinnedUnpinButton"
+                                                    AutomationProperties.Name="{Binding PinAutomationName}"
+                                                    AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="Unpin from list">
                                                 <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
                                             </Button>
