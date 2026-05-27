@@ -574,6 +574,29 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedDataModelRetentionPackage_LinksWorkbookToModelPart()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-data-model-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        workbookRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/model" &&
+                relationship.Attribute("Target")?.Value == "model/item.data")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()
