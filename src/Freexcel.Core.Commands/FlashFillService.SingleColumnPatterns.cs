@@ -431,6 +431,46 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static Func<string, string?>? TryNameAbbreviations(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (TryNameAbbreviation(examples, 2, tokens => GetFirstInitial(tokens[0]) + ". " + tokens[1], out var firstInitialLast))
+            return firstInitialLast;
+
+        if (TryNameAbbreviation(examples, 2, tokens => tokens[0] + " " + GetFirstInitial(tokens[1]) + ".", out var firstLastInitial))
+            return firstLastInitial;
+
+        if (TryNameAbbreviation(examples, 3, tokens => tokens[0] + " " + GetFirstInitial(tokens[1]) + ". " + tokens[2], out var middleInitial))
+            return middleInitial;
+
+        return null;
+    }
+
+    private static bool TryNameAbbreviation(
+        IReadOnlyList<(string Source, string Expected)> examples,
+        int tokenCount,
+        Func<string[], string> formatter,
+        out Func<string, string?>? pattern)
+    {
+        pattern = null;
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitWhitespaceTokens(source, tokenCount, out var tokens) || formatter(tokens) != expected)
+                return false;
+        }
+
+        pattern = source =>
+            TrySplitWhitespaceTokens(source, tokenCount, out var tokens)
+                ? formatter(tokens)
+                : null;
+        return true;
+    }
+
+    private static bool TrySplitWhitespaceTokens(string source, int tokenCount, out string[] tokens)
+    {
+        tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length == tokenCount && tokens.All(token => token.Length > 0);
+    }
+
     private static string GetFirstInitial(string value) =>
         string.IsNullOrEmpty(value) ? string.Empty : value[0].ToString();
 }
