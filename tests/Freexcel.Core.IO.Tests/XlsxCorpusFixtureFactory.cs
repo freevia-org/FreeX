@@ -1011,6 +1011,12 @@ internal static class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-custom-ribbon-ui-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCustomRibbonUiFixup(archive);
+            return;
+        }
+
         if (string.Equals(id, "generated-slicers-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplySlicerTimelineFloatingDrawingFixup(
@@ -1408,6 +1414,22 @@ internal static class XlsxCorpusFixtureFactory
             "http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary",
             "activeX1.bin");
         ReplacePackageXml(archive, activeXRelsPath, activeXRelsXml);
+    }
+
+    private static void ApplyCustomRibbonUiFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelCustomUi1",
+            "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility",
+            "customUI/customUI.xml");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
     }
 
     private static void ApplyThreadedCommentsFixup(ZipArchive archive)
