@@ -157,6 +157,7 @@ public partial class MainWindow : Window
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
+        SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;
         SheetGrid.SplitDividerMoved += OnSplitDividerMoved;
