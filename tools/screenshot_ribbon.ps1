@@ -12,6 +12,7 @@ public class Win32c {
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
@@ -65,10 +66,36 @@ for ($i = 0; $i -lt 40; $i++) {
 }
 if ($hwnd -eq [IntPtr]::Zero) { Write-Error "No window"; $proc.Kill(); exit 1 }
 
+function Get-WindowTitle($windowHandle) {
+    $title = New-Object System.Text.StringBuilder 512
+    [Win32c]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
+    return $title.ToString()
+}
+
+function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle) {
+    $foreground = [Win32c]::GetForegroundWindow()
+    if ($foreground -eq [IntPtr]::Zero) {
+        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        throw "Blocked: no foreground window before global input."
+    }
+
+    $actualPid = 0
+    [Win32c]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    $title = New-Object System.Text.StringBuilder 512
+    [Win32c]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+    $actualTitle = $title.ToString()
+    if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
+        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid)."
+    }
+}
+
 Write-Host "HWND: $hwnd"
+$expectedTitle = Get-WindowTitle $hwnd
 [Win32c]::ShowWindow($hwnd, 3) | Out-Null
 [Win32c]::SetForegroundWindow($hwnd) | Out-Null
 Start-Sleep -Seconds 3
+Assert-ForegroundWindowOwnership $proc.Id $expectedTitle
 
 $desktop = [System.Windows.Automation.AutomationElement]::RootElement
 $cond    = New-Object System.Windows.Automation.PropertyCondition(
