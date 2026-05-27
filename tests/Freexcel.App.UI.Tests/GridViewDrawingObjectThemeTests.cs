@@ -457,12 +457,52 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void SelectedDrawingObjectAnchor_UsesCurrentSelectedObject()
+    {
+        RunOnStaThread(() =>
+        {
+            var sheetId = SheetId.New();
+            var first = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = new CellAddress(sheetId, 1, 1),
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var selected = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = new CellAddress(sheetId, 3, 4),
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                SelectedObjectId = selected.Id,
+                SelectedObjectKind = ObjectKind.Picture,
+                Pictures = [first, selected]
+            };
+
+            var getSelectedObjectAnchor = typeof(GridView).GetMethod(
+                "GetSelectedObjectAnchor",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            getSelectedObjectAnchor!.Invoke(grid, [])
+                .Should()
+                .Be(selected.Anchor);
+        });
+    }
+
+    [Fact]
     public void GridViewObjectDrag_DelegatesGeometryToPlanner()
     {
         var inputSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Input.cs"));
         var dragSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.ObjectDrag.cs"));
 
         inputSource.Should().Contain("GridObjectDragPlanner.CalculateDragRect(");
+        inputSource.Should().Contain("_objectDragStartAnchor = GetSelectedObjectAnchor() ?? HitTestAnchorCell(pos) ?? default;");
         dragSource.Should().Contain("GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad)");
         dragSource.Should().Contain("GridObjectDragPlanner.HitTestAnchorCell(");
     }
