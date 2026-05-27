@@ -88,6 +88,8 @@ public partial class GridView
                 _autofillTarget = ConstrainAutofillTarget(src, newTarget);
 
             InvalidateVisual();
+            Cursor = Cursors.Cross;
+            e.Handled = true;
             return;
         }
 

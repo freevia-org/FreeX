@@ -93,6 +93,26 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo(["carol"], o => o.WithStrictOrdering());
     }
 
+    [Fact]
+    public void Fill_ExtractFileExtension_ExtractsPartAfterDot()
+    {
+        var result = FlashFillService.Fill(
+            [("report.xlsx", "xlsx"), ("budget.csv", "csv")],
+            ["notes.txt"]);
+
+        result.Should().BeEquivalentTo(["txt"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractFileExtension_ReturnsNullWhenRemainingDotIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [("report.xlsx", "xlsx"), ("budget.csv", "csv")],
+            ["notes"]);
+
+        result.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("North (Retail)", "Retail", "South (Wholesale)", "Wholesale", "East (Online)", "Online")]
     [InlineData("INV [Open]", "Open", "INV [Closed]", "Closed", "INV [Pending]", "Pending")]
