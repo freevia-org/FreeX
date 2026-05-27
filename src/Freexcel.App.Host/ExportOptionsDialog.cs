@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -42,7 +43,10 @@ internal sealed class ExportOptionsDialog : Window
 
         _selectionButton.IsEnabled = hasSelection;
         if (!hasSelection)
+        {
             _selectionButton.ToolTip = "Select a cell range before exporting the selection.";
+            AutomationProperties.SetHelpText(_selectionButton, "Select a cell range before exporting the selection.");
+        }
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = "Publish what", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
@@ -102,6 +106,8 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(_bitmapTextBox);
         _pdfABox.ToolTip = "Freexcel's current PDF exporter cannot write PDF/A conformance metadata.";
         _structureTagsBox.ToolTip = "Freexcel's current PDF exporter cannot write tagged PDF structure trees.";
+        AutomationProperties.SetHelpText(_pdfABox, "Freexcel's current PDF exporter cannot write PDF/A conformance metadata.");
+        AutomationProperties.SetHelpText(_structureTagsBox, "Freexcel's current PDF exporter cannot write tagged PDF structure trees.");
         stack.Children.Add(_pdfABox);
         stack.Children.Add(_structureTagsBox);
         stack.Children.Add(_standardQualityButton);
