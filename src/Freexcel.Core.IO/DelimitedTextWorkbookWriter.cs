@@ -158,7 +158,17 @@ internal static class DelimitedTextWorkbookWriter
 
     private static bool IsCoercionLikeText(string value) =>
         value[0] is '=' or '+' or '-' or '@' ||
+        IsParenthesizedCurrencyText(value) ||
         IsErrorLikeText(value);
+
+    private static bool IsParenthesizedCurrencyText(string value) =>
+        value[0] == '(' &&
+        value.TrimEnd().EndsWith(')') &&
+        double.TryParse(
+            value,
+            NumberStyles.Currency,
+            CultureInfo.GetCultureInfo("en-US"),
+            out _);
 
     private static bool IsErrorLikeText(string value)
     {
