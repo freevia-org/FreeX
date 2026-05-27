@@ -137,7 +137,7 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["PivotTable", "Table"],
+                ["PivotTable", "Recommended", "Table"],
                 "Excel keeps the first Insert groups expanded at normal narrow widths before collapsing gallery-heavy groups");
         });
     }
