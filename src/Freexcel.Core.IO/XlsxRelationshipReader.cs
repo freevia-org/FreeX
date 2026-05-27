@@ -11,7 +11,10 @@ internal static class XlsxRelationshipReader
         Func<string, string> resolveTarget) =>
         relationshipsXml.Root?
             .Elements(packageRelNs + "Relationship")
-            .Where(element => element.Attribute("Id") is not null && element.Attribute("Target") is not null)
+            .Where(element =>
+                element.Attribute("Id") is not null &&
+                element.Attribute("Target") is not null &&
+                !string.Equals(element.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
             .ToDictionary(
                 element => element.Attribute("Id")!.Value,
                 element => resolveTarget(element.Attribute("Target")!.Value),
