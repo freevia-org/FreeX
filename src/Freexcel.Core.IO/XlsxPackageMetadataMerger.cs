@@ -174,9 +174,8 @@ internal static class XlsxPackageMetadataMerger
         IReadOnlySet<string> generatedEntriesBeforeMerge,
         IReadOnlySet<string>? excludedSourceParts)
     {
-        var relationshipType = relationship.Attribute("Type")?.Value;
         if (string.Equals(
-                relationshipType,
+                NormalizeRelationshipType(relationship),
                 "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
                 StringComparison.OrdinalIgnoreCase))
         {
@@ -234,9 +233,12 @@ internal static class XlsxPackageMetadataMerger
 
     private static string RelationshipSignature(XElement relationship) =>
         string.Join("|",
-            relationship.Attribute("Type")?.Value ?? "",
+            NormalizeRelationshipType(relationship),
             NormalizeRelationshipTarget(relationship),
             NormalizeRelationshipTargetMode(relationship));
+
+    private static string NormalizeRelationshipType(XElement relationship) =>
+        relationship.Attribute("Type")?.Value.Trim() ?? "";
 
     private static string NormalizeRelationshipTarget(XElement relationship) =>
         relationship.Attribute("Target")?.Value.Trim() ?? "";
