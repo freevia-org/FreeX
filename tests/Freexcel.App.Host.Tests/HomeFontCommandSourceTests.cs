@@ -81,6 +81,22 @@ public sealed class HomeFontCommandSourceTests
         source.Should().Contain("new StyleDiff(FillColor: null, ClearFill: true)");
     }
 
+    [Fact]
+    public void FontColorButtons_ExposeStableAutomationMetadata()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var fillButton = ExtractButtonElementByClickHandler(xaml, "FillColorBtn_Click");
+        var fontButton = ExtractButtonElementByClickHandler(xaml, "FontColorBtn_Click");
+
+        fillButton.Should().Contain("AutomationProperties.Name=\"Fill Color\"");
+        fillButton.Should().Contain("AutomationProperties.AutomationId=\"HomeFillColorButton\"");
+        fillButton.Should().Contain("AutomationProperties.HelpText=\"Open the fill color picker for selected cells.\"");
+
+        fontButton.Should().Contain("AutomationProperties.Name=\"Font Color\"");
+        fontButton.Should().Contain("AutomationProperties.AutomationId=\"HomeFontColorButton\"");
+        fontButton.Should().Contain("AutomationProperties.HelpText=\"Open the font color picker for selected cells.\"");
+    }
+
     private static string ExtractElementByName(string xaml, string elementName, string name)
     {
         var nameIndex = xaml.IndexOf($"x:Name=\"{name}\"", StringComparison.Ordinal);
