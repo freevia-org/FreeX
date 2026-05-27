@@ -249,6 +249,14 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ZoomDialog_CustomPercentBoxExposesAutomationName()
+    {
+        var source = ReadClassSource("ZoomDialog.cs", "public sealed class ZoomDialog", "public sealed record __NoNextZoomDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_zoomBox, \"Custom zoom percent\");");
+    }
+
+    [Fact]
     public void ZoomDialogOpenedFromKeyboard_FocusesPresetOrCustomZoomChoice()
     {
         var source = ReadRemainingDialogSources();

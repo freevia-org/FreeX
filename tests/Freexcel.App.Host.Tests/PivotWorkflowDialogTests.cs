@@ -1384,6 +1384,15 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotCalculatedDialogs_FieldAndItemListsExposeAutomationNames()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("AutomationProperties.SetName(_fieldList, \"Available fields\");");
+        source.Should().Contain("AutomationProperties.SetName(_itemList, \"Available items\");");
+    }
+
+    [Fact]
     public void PivotCalculatedFieldDialogInvalidRequiredInputs_ShowOwnedWarningAndRefocusBadInput()
     {
         var source = ReadClassSource(

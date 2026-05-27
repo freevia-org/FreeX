@@ -1935,6 +1935,14 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void CreateTableDialog_RangeEditorExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Table range\");");
+    }
+
+    [Fact]
     public void CreateTableDialogOpenedFromKeyboard_FocusesRangeBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
