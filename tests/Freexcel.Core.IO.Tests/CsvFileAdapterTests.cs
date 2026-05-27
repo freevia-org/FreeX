@@ -160,6 +160,23 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_HonorsUtf8ByteOrderMark()
+    {
+        var bytes = Encoding.UTF8.GetPreamble()
+            .Concat(Encoding.UTF8.GetBytes("Name,Amount,Flag\r\nCafe,42,TRUE\r\n"))
+            .ToArray();
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Cafe"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(42));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
     public void Load_AccessibleMemoryStreamWithNonzeroPositionReadsRemainingSliceAndConsumesStream()
     {
         var padding = Encoding.UTF8.GetBytes("outside segment\r\n");
