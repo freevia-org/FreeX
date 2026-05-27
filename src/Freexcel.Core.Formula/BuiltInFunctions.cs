@@ -542,6 +542,7 @@ public static partial class BuiltInFunctions
         ["INTRATE"]   = (Intrate, 4, 5),
         ["RECEIVED"]  = (Received, 4, 5),
         ["ACCRINT"]   = (Accrint, 6, 8),
+        ["ACCRINTM"]  = (Accrintm, 3, 5),
         ["TBILLEQ"]   = (Tbilleq, 3, 3),
         ["TBILLPRICE"]= (Tbillprice, 3, 3),
         ["TBILLYIELD"]= (Tbillyield, 3, 3),
