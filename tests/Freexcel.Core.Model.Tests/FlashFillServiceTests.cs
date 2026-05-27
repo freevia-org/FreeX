@@ -93,6 +93,35 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo(["carol"], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData("North (Retail)", "Retail", "South (Wholesale)", "Wholesale", "East (Online)", "Online")]
+    [InlineData("INV [Open]", "Open", "INV [Closed]", "Closed", "INV [Pending]", "Pending")]
+    [InlineData("Batch {Ready}", "Ready", "Batch {Held}", "Held", "Batch {Review}", "Review")]
+    public void Fill_PairedDelimiterExtraction_ExtractsTextBetweenMatchingDelimiters(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PairedDelimiterExtraction_ReturnsNullWhenRemainingDelimiterIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [("North (Retail)", "Retail"), ("South (Wholesale)", "Wholesale")],
+            ["East Online"]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_EmailDisplayName_ConvertsDottedUserNameToProperName()
     {
