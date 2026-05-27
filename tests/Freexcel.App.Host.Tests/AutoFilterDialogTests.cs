@@ -384,6 +384,25 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_ChecklistSupportsKeyboardToggleAndBoundaryNavigation()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("private readonly ListBox _checklistBox = new();");
+        source.Should().Contain("AutomationProperties.SetName(_checklistBox, \"Filter values\");");
+        source.Should().Contain("_checklistBox.PreviewKeyDown += ChecklistBox_PreviewKeyDown;");
+        source.Should().Contain("private void ChecklistBox_PreviewKeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("Key.Space => ToggleFocusedChecklistItem()");
+        source.Should().Contain("Key.Home => FocusChecklistItem(0)");
+        source.Should().Contain("Key.End => FocusChecklistItem(_items.Count - 1)");
+        source.Should().Contain("private bool ToggleFocusedChecklistItem()");
+        source.Should().Contain("item.IsSelected = !item.IsSelected;");
+        source.Should().Contain("_checklistBox.Items.Refresh();");
+        source.Should().Contain("private bool FocusChecklistItem(int index)");
+        source.Should().Contain("_checklistBox.ScrollIntoView(item);");
+    }
+
+    [Fact]
     public void DataFilterCommands_RouteColorFiltersAndCompositeCriteriaToRealCommands()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
