@@ -468,6 +468,10 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("ConfigureFilterFamilySubmenu(menuPlan);");
         source.Should().Contain("private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)");
         source.Should().Contain("new ContextMenu()");
+        source.Should().Contain("var usedAccessKeys = new HashSet<char>();");
+        source.Should().Contain("Header = AddUniqueAccessKey(child.Header, usedAccessKeys),");
+        source.Should().Contain("private static string AddUniqueAccessKey(string header, HashSet<char> usedAccessKeys)");
+        source.Should().Contain("usedAccessKeys.Add(char.ToUpperInvariant(ch))");
         source.Should().Contain("parentButton.ContextMenu = submenu;");
         source.Should().Contain("menuItem.Click += (_, _) => ApplyFilterFamilyChild(child);");
         source.Should().Contain("private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)");
