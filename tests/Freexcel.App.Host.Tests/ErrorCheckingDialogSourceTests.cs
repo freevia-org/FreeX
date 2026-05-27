@@ -77,6 +77,15 @@ public sealed class ErrorCheckingDialogSourceTests
     }
 
     [Fact]
+    public void ErrorCheckingDialog_LabelsIssueListWithAccessKeyAndAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Issues:\", Target = _listView");
+        source.Should().Contain("AutomationProperties.SetName(_listView, \"Issues\");");
+    }
+
+    [Fact]
     public void ErrorCheckingDialog_UsesExcelLikeErrorHelpAndActionStructure()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));

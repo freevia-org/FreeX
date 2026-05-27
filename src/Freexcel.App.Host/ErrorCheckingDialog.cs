@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Commands;
@@ -122,7 +123,12 @@ public sealed class ErrorCheckingDialog : Window
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
+        var listPanel = new DockPanel();
         _listView = new ListView { ItemsSource = _issues };
+        AutomationProperties.SetName(_listView, "Issues");
+        var listLabel = new Label { Content = "_Issues:", Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(listLabel, Dock.Top);
+        listPanel.Children.Add(listLabel);
         _listView.SelectionChanged += (_, _) => UpdateCommandStates();
         _listView.MouseDoubleClick += ListView_MouseDoubleClick;
         _listView.KeyDown += ListView_KeyDown;
@@ -137,7 +143,8 @@ public sealed class ErrorCheckingDialog : Window
                 new GridViewColumn { Header = "Description", Width = 260, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.Description)) }
             }
         };
-        root.Children.Add(_listView);
+        listPanel.Children.Add(_listView);
+        root.Children.Add(listPanel);
 
         foreach (var issue in issues)
             _issues.Add(issue);
