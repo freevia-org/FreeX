@@ -543,9 +543,11 @@ public sealed class CsvFileAdapterTests
     }
 
     [Theory]
+    [InlineData("0042")]
+    [InlineData("1E3")]
     [InlineData("+42")]
     [InlineData("-42")]
-    public void Save_RoundTripsSignedNumericTextFieldsAsLiteralText(string text)
+    public void Save_RoundTripsNumericTextFieldsAsLiteralText(string text)
     {
         var workbook = new Workbook("Book1");
         var sheet = workbook.AddSheet("Sheet1");

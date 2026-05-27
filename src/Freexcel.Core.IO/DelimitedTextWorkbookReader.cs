@@ -205,7 +205,8 @@ internal static partial class DelimitedTextWorkbookReader
         if (!IsBooleanLikeText(candidate) &&
             !TryParseIsoDateTime(candidate, out _) &&
             !TryParseTime(candidate, out _) &&
-            !TryParseCurrency(candidate, out _))
+            !TryParseCurrency(candidate, out _) &&
+            !double.TryParse(candidate, NumberStyles.Any, CultureInfo.InvariantCulture, out _))
         {
             return false;
         }
