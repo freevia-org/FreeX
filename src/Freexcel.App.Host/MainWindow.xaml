@@ -3618,7 +3618,7 @@
              ROW 4  Sheet tabs
              ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="4" Panel.ZIndex="5" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="{StaticResource FreexcelBorderBrush}"
-                BorderThickness="0" Padding="0" Margin="0,-11,0,0">
+                BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
                   SizeChanged="SheetTabsRowGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
@@ -3653,15 +3653,28 @@
                               SizeChanged="SheetTabsScroller_SizeChanged"
                               Loaded="SheetTabsScroller_Loaded">
                         <ItemsControl x:Name="SheetTabsControl">
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Panel.ZIndex" Value="0"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                            <Setter Property="Panel.ZIndex" Value="5"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                            <Setter Property="Panel.ZIndex" Value="10"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal"/>
+                                    <StackPanel Orientation="Horizontal" Margin="8,0,0,0"/>
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="TabBorder"
-                                            CornerRadius="9,9,6,6" Padding="13,4,13,4"
+                                            CornerRadius="8,8,5,5" Padding="13,3,13,4"
                                             Cursor="Hand"
                                             Focusable="True"
                                             MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
@@ -3672,23 +3685,23 @@
                                             <Style TargetType="Border">
                                                 <Setter Property="Background"       Value="{Binding TabBrush}"/>
                                                 <Setter Property="BorderBrush"      Value="{StaticResource FreexcelBorderStrongBrush}"/>
-                                                <Setter Property="BorderThickness"  Value="1"/>
-                                                <Setter Property="Margin"           Value="-1,-6,0,1"/>
+                                                <Setter Property="BorderThickness"  Value="1,0,1,1"/>
+                                                <Setter Property="Margin"           Value="-8,0,0,1"/>
                                                 <Setter Property="Panel.ZIndex"     Value="0"/>
                                                 <Setter Property="MinHeight"        Value="31"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                                         <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                                                         <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
-                                                        <Setter Property="BorderThickness" Value="2"/>
-                                                        <Setter Property="Margin"          Value="0,-9,0,0"/>
+                                                        <Setter Property="BorderThickness" Value="2,0,2,2"/>
+                                                        <Setter Property="Margin"          Value="-8,-2,0,0"/>
                                                         <Setter Property="Panel.ZIndex"    Value="5"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                         <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                                                         <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
-                                                        <Setter Property="BorderThickness" Value="2"/>
-                                                        <Setter Property="Margin"          Value="0,-11,0,0"/>
+                                                        <Setter Property="BorderThickness" Value="2,0,2,2"/>
+                                                        <Setter Property="Margin"          Value="-8,-3,0,0"/>
                                                         <Setter Property="Panel.ZIndex"    Value="10"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -3756,8 +3769,8 @@
                 </ScrollViewer>
 
                 <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="40" MinHeight="31"
-                        FontSize="13" FontWeight="SemiBold" Margin="-1,-6,0,1" Padding="13,4,13,4"
-                        Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1"
+                        FontSize="13" FontWeight="SemiBold" Margin="-8,0,0,1" Padding="13,3,13,4"
+                        Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1,0,1,1"
                         Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
                         VerticalAlignment="Top" Cursor="Hand"
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
@@ -3773,7 +3786,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="9,9,6,6"
+                                    CornerRadius="8,8,5,5"
                                     Opacity="{TemplateBinding Opacity}"
                                     SnapsToDevicePixels="True">
                                 <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
