@@ -126,7 +126,34 @@ public partial class MainWindow
         FormulaReferenceHighlightPlanner.GetHighlights(
             text,
             _currentSheetId,
-            sheetName => _workbook.GetSheet(sheetName)?.Id);
+            sheetName => _workbook.GetSheet(sheetName)?.Id,
+            ResolveStructuredFormulaReference);
+
+    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector)
+    {
+        var currentSheet = _workbook.GetSheet(_currentSheetId);
+        var currentAddress = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+        var trimmedSelector = selector.Trim();
+
+        if (trimmedSelector.StartsWith('@') && trimmedSelector.Length > 1)
+        {
+            var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
+                _workbook,
+                currentSheet,
+                currentAddress,
+                string.IsNullOrWhiteSpace(tableName) ? null : tableName,
+                trimmedSelector[1..].Trim());
+
+            return address is null ? null : new GridRange(address.Value, address.Value);
+        }
+
+        return StructuredReferenceResolver.Resolve(
+            _workbook,
+            currentSheet,
+            tableName,
+            trimmedSelector,
+            currentAddress);
+    }
 
     private void RefreshFormulaReferenceHighlights()
     {
