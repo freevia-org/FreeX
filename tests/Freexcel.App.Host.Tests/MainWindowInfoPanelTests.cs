@@ -11,6 +11,7 @@ public sealed class MainWindowInfoPanelTests
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var names = document
             .Descendants()
@@ -23,6 +24,11 @@ public sealed class MainWindowInfoPanelTests
             "InfoAccessibilitySummary",
             "InfoFormulaErrorSummary"
         ]);
+
+        document.Descendants(presentation + "TextBlock")
+            .Select(element => element.Attribute("Text")?.Value)
+            .Should()
+            .Contain("Review local file status and unsupported workbook feature warnings.");
     }
 
     [Fact]

@@ -1014,6 +1014,16 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialog_RangeEditorsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_listRangeBox, \"List range\");");
+        source.Should().Contain("AutomationProperties.SetName(_criteriaRangeBox, \"Criteria range\");");
+        source.Should().Contain("AutomationProperties.SetName(_copyToBox, \"Copy to\");");
+    }
+
+    [Fact]
     public void AdvancedFilterDialogOpenedFromKeyboard_FocusesInPlaceAction()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
@@ -1932,6 +1942,14 @@ public sealed class DataToolDialogTests
         source.Should().Contain("RequestRangeSelection");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("Select table range");
+    }
+
+    [Fact]
+    public void CreateTableDialog_RangeEditorExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Table range\");");
     }
 
     [Fact]

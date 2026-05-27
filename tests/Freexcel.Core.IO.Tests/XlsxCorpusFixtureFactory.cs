@@ -1005,6 +1005,12 @@ internal static class XlsxCorpusFixtureFactory
 
     private static void ApplyPackageFixups(string id, ZipArchive archive)
     {
+        if (string.Equals(id, "generated-form-controls-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyFormControlsFixup(archive);
+            return;
+        }
+
         if (string.Equals(id, "generated-slicers-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplySlicerTimelineFloatingDrawingFixup(
@@ -1348,6 +1354,60 @@ internal static class XlsxCorpusFixtureFactory
         var workbookRelsReplacement = archive.CreateEntry("xl/_rels/workbook.xml.rels");
         using var relOutput = workbookRelsReplacement.Open();
         workbookRelsXml.Save(relOutput);
+    }
+
+    private static void ApplyFormControlsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            var controls = worksheetXml.Root?.Element(worksheetNs + "controls");
+            if (controls is null && worksheetXml.Root is not null)
+            {
+                controls = new XElement(worksheetNs + "controls");
+                worksheetXml.Root.Add(controls);
+            }
+
+            if (controls is not null && !controls.Elements(worksheetNs + "control").Any(control =>
+                    string.Equals(control.Attribute(officeRelNs + "id")?.Value, "rIdFreexcelControl1", StringComparison.OrdinalIgnoreCase)))
+            {
+                controls.Add(new XElement(
+                    worksheetNs + "control",
+                    new XAttribute("shapeId", "1026"),
+                    new XAttribute("name", "Freexcel Button"),
+                    new XAttribute(officeRelNs + "id", "rIdFreexcelControl1")));
+            }
+
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdFreexcelControl1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp",
+            "../ctrlProps/ctrlProp1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        var activeXRelsPath = "xl/activeX/_rels/activeX1.xml.rels";
+        var activeXRelsXml = archive.GetEntry(activeXRelsPath) is { } activeXRelsEntry
+            ? LoadPackageXml(activeXRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            activeXRelsXml,
+            "rIdFreexcelActiveXBinary1",
+            "http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary",
+            "activeX1.bin");
+        ReplacePackageXml(archive, activeXRelsPath, activeXRelsXml);
     }
 
     private static void ApplyThreadedCommentsFixup(ZipArchive archive)

@@ -276,6 +276,17 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDataSourceDialog_SourceRangeEditorExposesAutomationName()
+    {
+        var source = ReadClassSource(
+            "PivotTableDataSourceDialog.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+
+        source.Should().Contain("AutomationProperties.SetName(_sourceBox, \"PivotTable source range\");");
+    }
+
+    [Fact]
     public void PivotTableDataSourceDialogOpenedFromKeyboard_FocusesSourceRange()
     {
         var source = ReadClassSource(
@@ -1381,6 +1392,15 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Insert _Field");
         source.Should().Contain("InsertSelectedField");
         source.Should().Contain("InsertFormulaReference");
+    }
+
+    [Fact]
+    public void PivotCalculatedDialogs_FieldAndItemListsExposeAutomationNames()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("AutomationProperties.SetName(_fieldList, \"Available fields\");");
+        source.Should().Contain("AutomationProperties.SetName(_itemList, \"Available items\");");
     }
 
     [Fact]

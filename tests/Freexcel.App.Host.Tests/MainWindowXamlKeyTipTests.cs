@@ -53,6 +53,38 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void TitleBarWindowChrome_ExposesMinimizeMaximizeRestoreAndCloseButtons()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ViewCommands.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var systemButtons = document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute("Click")?.Value is "MinimizeBtn_Click" or "MaxRestoreBtn_Click" or "CloseSysBtn_Click")
+            .Select(button => new
+            {
+                Click = button.Attribute("Click")?.Value,
+                AutomationName = button.Attribute("AutomationProperties.Name")?.Value,
+                IconKind = button.Element(local + "RibbonIcon")?.Attribute("Kind")?.Value
+            })
+            .ToList();
+
+        systemButtons.Should().BeEquivalentTo(
+        [
+            new { Click = "MinimizeBtn_Click", AutomationName = "Minimize", IconKind = "WindowMinimize" },
+            new { Click = "MaxRestoreBtn_Click", AutomationName = "Maximize or Restore", IconKind = "WindowMaximize" },
+            new { Click = "CloseSysBtn_Click", AutomationName = "Close", IconKind = "WindowClose" }
+        ]);
+
+        source.Should().Contain("SystemCommands.MinimizeWindow(this)");
+        source.Should().Contain("SystemCommands.RestoreWindow(this)");
+        source.Should().Contain("SystemCommands.MaximizeWindow(this)");
+        source.Should().Contain("SystemCommands.CloseWindow(this)");
+    }
+
+    [Fact]
     public void EditableFontSizeBox_CommitsTypedKeyboardInputWithEnter()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -1710,23 +1742,30 @@ public sealed class MainWindowXamlKeyTipTests
                 button.Attribute("Click")?.Value is "ShareWorkbookBtn_Click" or "SsShareBtn_Click")
             .ToList();
 
-        shareButtons.Should().NotBeEmpty();
-        shareButtons
+        var shareButtonPlans = shareButtons
             .Select(button => new
             {
                 Content = button.Attribute("Content")?.Value,
+                Click = button.Attribute("Click")?.Value,
+                KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
                 Title = button.Attribute(local + "RibbonTooltip.Title")?.Value,
                 Description = button.Attribute(local + "RibbonTooltip.Description")?.Value
             })
-            .Should()
-            .OnlyContain(button =>
-                button.Content == "Share" &&
-                button.Title == "Share" &&
-                button.Description != null &&
-                button.Description.Contains("Windows Share", StringComparison.Ordinal) &&
-                !ContainsExcludedStatus(button.Content) &&
-                !ContainsExcludedStatus(button.Title) &&
-                !ContainsExcludedStatus(button.Description));
+            .ToList();
+
+        shareButtonPlans.Select(button => button.Click)
+            .Should().BeEquivalentTo(["ShareWorkbookBtn_Click", "SsShareBtn_Click"]);
+        shareButtonPlans.Should().OnlyContain(button =>
+            button.Content == "Share" &&
+            button.KeyTip == "SH" &&
+            button.Title == "Share" &&
+            button.Description == "Save the workbook if needed and open Windows Share for the file." &&
+            !button.Description.Contains("Microsoft 365", StringComparison.OrdinalIgnoreCase) &&
+            !button.Description.Contains("cloud", StringComparison.OrdinalIgnoreCase) &&
+            !button.Description.Contains("coauthor", StringComparison.OrdinalIgnoreCase) &&
+            !ContainsExcludedStatus(button.Content) &&
+            !ContainsExcludedStatus(button.Title) &&
+            !ContainsExcludedStatus(button.Description));
     }
 
     [Fact]
