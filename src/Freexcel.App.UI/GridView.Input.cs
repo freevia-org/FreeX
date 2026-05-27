@@ -191,6 +191,8 @@ public partial class GridView
             var dragKind = HitTestObjectHandle(pos, selRect);
             if (dragKind != ObjectDragKind.None)
             {
+                _selectedObjectId = SelectedObjectId;
+                _selectedObjectKind = SelectedObjectKind;
                 _objectDragKind = dragKind;
                 _objectDragStartPos = pos;
                 _objectDragStartRect = selRect;
