@@ -199,6 +199,34 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void CalculateDragTarget_ReturnsFarthestVisibleCellWhenDraggingAboveOrLeft()
+    {
+        var sheet = SheetId.New();
+        var viewport = CreateViewport();
+        var source = new GridRange(
+            new CellAddress(sheet, 3, 3),
+            new CellAddress(sheet, 4, 4));
+
+        GridAutofillPlanner.CalculateDragTarget(
+                viewport,
+                source,
+                new System.Windows.Point(120, 25),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new CellAddress(default, 1, 4));
+
+        GridAutofillPlanner.CalculateDragTarget(
+                viewport,
+                source,
+                new System.Windows.Point(40, 90),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new CellAddress(default, 4, 1));
+    }
+
+    [Fact]
     public void CalculateDragTarget_ReturnsNullWhenSourceMetricsAreNotVisible()
     {
         var sheet = SheetId.New();
@@ -289,6 +317,45 @@ public sealed class GridViewAutofillTests
                 columnHeaderHeight: 18)
             .Should()
             .BeTrue("the existing hit test includes a 3px pad around the 6px handle");
+    }
+
+    [Fact]
+    public void IsOnHandle_UsesRenderedHandleWhenEndMetricsAreDuplicated()
+    {
+        var sheet = SheetId.New();
+        var selectedRange = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(2, 20, 20),
+                new RowMetric(3, 20, 40),
+                new RowMetric(3, 20, 200)
+            ],
+            [
+                new ColMetric(2, 40, 40),
+                new ColMetric(3, 40, 80),
+                new ColMetric(3, 40, 300)
+            ]);
+
+        GridAutofillPlanner.IsOnHandle(
+                viewport,
+                selectedRange,
+                new System.Windows.Point(30 + 300 + 40, 18 + 200 + 20),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeTrue("the fill handle is rendered from the last visible end row and column metrics");
+
+        GridAutofillPlanner.IsOnHandle(
+                viewport,
+                selectedRange,
+                new System.Windows.Point(30 + 80 + 40, 18 + 40 + 20),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse("the stale duplicate metric should not keep an invisible handle hot");
     }
 
     [Fact]

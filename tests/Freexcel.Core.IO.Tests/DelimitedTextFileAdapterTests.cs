@@ -584,6 +584,32 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsFinalQuotedEmptyFieldWithoutTrailingNewline()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"\""));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue(""));
+    }
+
+    [Fact]
+    public void Load_PreservesQuotedEmptyFieldBetweenPopulatedFields()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("left\t\"\"\tright\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("left"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue(""));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new TextValue("right"));
+    }
+
+    [Fact]
     public void Save_WritesTabDelimitedRowsAndQuotesTabs()
     {
         var workbook = new Workbook("Book1");
@@ -597,6 +623,27 @@ public sealed class DelimitedTextFileAdapterTests
         new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t').Save(workbook, stream);
 
         Encoding.UTF8.GetString(stream.ToArray()).Should().Be("Name\tNote\r\nAlice\t\"a\tb\"\r\n");
+    }
+
+    [Fact]
+    public void Save_RoundTripsQuotedFieldsWithEmbeddedCrLfAndQuotes()
+    {
+        var text = "line 1\r\n\"quoted\"\r\nline 3";
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("tail"));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var loadedSheet = roundTripped.Sheets.Single();
+
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 1)).Should().Be(new TextValue(text));
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 2)).Should().Be(new TextValue("tail"));
     }
 
     [Fact]

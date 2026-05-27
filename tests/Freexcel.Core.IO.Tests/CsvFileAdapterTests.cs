@@ -280,6 +280,28 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsFinalQuotedEmptyFieldWithoutTrailingNewline()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"\""));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue(""));
+    }
+
+    [Fact]
+    public void Load_PreservesQuotedEmptyFieldBetweenPopulatedFields()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("left,\"\",right\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("left"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue(""));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new TextValue("right"));
+    }
+
+    [Fact]
     public void Load_HonorsExcelSeparatorDirective()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=;\r\nName;Amount\r\nAlice;3.5\r\n"));
@@ -551,6 +573,27 @@ public sealed class CsvFileAdapterTests
         new CsvFileAdapter().Save(workbook, stream);
 
         Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"a,b\",\"say \"\"hi\"\"\",\"line\nbreak\",\"carriage\rreturn\"\r\n");
+    }
+
+    [Fact]
+    public void Save_RoundTripsQuotedFieldsWithEmbeddedCrLfAndQuotes()
+    {
+        var text = "line 1\r\n\"quoted\"\r\nline 3";
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("tail"));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var loadedSheet = roundTripped.Sheets.Single();
+
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 1)).Should().Be(new TextValue(text));
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 2)).Should().Be(new TextValue("tail"));
     }
 
     [Fact]

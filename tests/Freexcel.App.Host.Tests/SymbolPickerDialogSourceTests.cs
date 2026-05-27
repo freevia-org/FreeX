@@ -190,6 +190,20 @@ public sealed class SymbolPickerDialogSourceTests
             .Be(new SymbolPickerSelection(symbol, selectedChar, codeText));
     }
 
+    [Fact]
+    public void MainWindow_InsertsSelectedSymbolStringIntoTheActiveCell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+
+        source.Should().Contain("string.IsNullOrEmpty(dlg.SelectedSymbol)");
+        source.Should().Contain("var selectedSymbol = dlg.SelectedSymbol;");
+        source.Should().Contain("var currentText = (currentExisting?.Value ?? \"\") + selectedSymbol;");
+        source.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
+        source.Should().Contain("CreateSingleCellEditCommand(currentAddress, Cell.FromValue(new TextValue(currentText)))");
+        source.Should().NotContain("dlg.SelectedChar == '\\0'");
+        source.Should().NotContain("+ selectedChar");
+    }
+
     private static string ReadSymbolPickerDialogSources() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs")) +
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Layout.cs")) +

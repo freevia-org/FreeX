@@ -226,6 +226,29 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void ZTest_ReturnsOneTailedProbabilityAndLegacyAliasMatches()
+    {
+        var sheet = Values(3, 6, 7, 8, 6, 5, 4, 2, 1, 9);
+
+        Number("=Z.TEST(A1:A10,4)", sheet).Should().BeApproximately(0.09057419685136381, 1e-12);
+        Number("=Z.TEST(A1:A10,4,2)", sheet).Should().BeApproximately(0.04099510503934628, 1e-7);
+        Number("=ZTEST(A1:A10,4,2)", sheet).Should().BeApproximately(Number("=Z.TEST(A1:A10,4,2)", sheet), 1e-12);
+    }
+
+    [Fact]
+    public void ZTest_IgnoresNonnumericRangeValuesAndReturnsExcelErrors()
+    {
+        var sheet = Values(3, 6, 7, 8, 6, 5, 4, 2, 1, 9);
+        sheet.SetCell(new CellAddress(sheet.Id, 11, 1), new TextValue("ignored"));
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new BoolValue(true));
+
+        Number("=Z.TEST(A1:A12,4,2)", sheet).Should().BeApproximately(Number("=Z.TEST(A1:A10,4,2)", sheet), 1e-12);
+        _eval.Evaluate("=Z.TEST(A11:A12,4)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=Z.TEST(A1:A1,4)", sheet).Should().Be(ErrorValue.DivByZero);
+        _eval.Evaluate("=Z.TEST(A1:A10,4,0)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void ModeSngl_ReturnsFirstLowestMostFrequentValue()
     {
         Number("=MODE.SNGL(A1:A5)", Values(3, 2, 2, 3, 2)).Should().Be(2);
@@ -241,6 +264,15 @@ public sealed class ExcelParityStatisticalAliasTests
     public void PercentrankInc_InterpolatesLikeExcelInclusivePercentRank()
     {
         Number("=PERCENTRANK.INC(A1:A4,2.5)", Values(1, 2, 3, 4)).Should().BeApproximately(0.5, 1e-12);
+    }
+
+    [Fact]
+    public void PercentrankExc_InterpolatesLikeExcelExclusivePercentRank()
+    {
+        Number("=PERCENTRANK.EXC(A1:A4,2.5)", Values(1, 2, 3, 4)).Should().BeApproximately(0.5, 1e-12);
+        Number("=PERCENTRANK.EXC(A1:A4,1)", Values(1, 2, 3, 4)).Should().BeApproximately(0.2, 1e-12);
+        Number("=PERCENTRANK.EXC(A1:A9,5.43)", Values(1, 2, 3, 6, 6, 6, 7, 8, 9)).Should().BeApproximately(0.381, 1e-12);
+        _eval.Evaluate("=PERCENTRANK.EXC(A1:A4,0.5)", Values(1, 2, 3, 4)).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
@@ -277,6 +309,18 @@ public sealed class ExcelParityStatisticalAliasTests
     public void QuartileInc_ReturnsExcelInclusiveQuartiles()
     {
         Number("=QUARTILE.INC(A1:A4,1)", Values(1, 2, 3, 4)).Should().BeApproximately(1.75, 1e-12);
+    }
+
+    [Fact]
+    public void QuartileExc_ReturnsExcelExclusiveQuartiles()
+    {
+        Number("=QUARTILE.EXC(A1:A4,1)", Values(1, 2, 3, 4)).Should().BeApproximately(1.25, 1e-12);
+        Number("=QUARTILE.EXC(A1:A4,2)", Values(1, 2, 3, 4)).Should().BeApproximately(2.5, 1e-12);
+        Number("=QUARTILE.EXC(A1:A4,3)", Values(1, 2, 3, 4)).Should().BeApproximately(3.75, 1e-12);
+        Number("=QUARTILE.EXC(A1:A11,1)", Values(6, 7, 15, 36, 39, 40, 41, 42, 43, 47, 49)).Should().Be(15);
+        Number("=QUARTILE.EXC(A1:A11,3)", Values(6, 7, 15, 36, 39, 40, 41, 42, 43, 47, 49)).Should().Be(43);
+        _eval.Evaluate("=QUARTILE.EXC(A1:A4,0)", Values(1, 2, 3, 4)).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=QUARTILE.EXC(A1:A4,4)", Values(1, 2, 3, 4)).Should().Be(ErrorValue.Num);
     }
 
     [Fact]

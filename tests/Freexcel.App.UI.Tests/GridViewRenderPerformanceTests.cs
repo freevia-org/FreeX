@@ -135,6 +135,29 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void OnRender_SkipsHeavyVisualLayersDuringLiveResize()
+    {
+        var properties = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Properties.cs"));
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.RenderDispatch.cs"));
+        var onRender = source[
+            source.IndexOf("protected override void OnRender", StringComparison.Ordinal)..];
+
+        properties.Should().Contain("public static readonly DependencyProperty IsLiveResizingProperty");
+        properties.Should().Contain("FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender)");
+        onRender.Should().Contain("var isLiveResizing = IsLiveResizing;");
+        onRender.Should().Contain("if (!isLiveResizing)");
+        onRender.Should().Contain("RenderCells(dc);");
+        onRender.Should().Contain("RenderSelection(dc);");
+
+        onRender.IndexOf("RenderCells(dc);", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("RenderWorksheetViewOverlay(dc);", StringComparison.Ordinal));
+        onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("RenderFormulaTraceArrows(dc);", StringComparison.Ordinal));
+        onRender.IndexOf("if (ObjectDisplayMode == GridObjectDisplayMode.Placeholders)", StringComparison.Ordinal)
+            .Should().BeGreaterThan(onRender.LastIndexOf("if (!isLiveResizing)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RenderCells_ReusesCellColorBrushesWithinRenderPass()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));

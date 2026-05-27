@@ -126,6 +126,31 @@ public sealed class RibbonTabParityTests
     }
 
     [Fact]
+    public void ArrangeGroups_TreatBringForwardAndSendBackwardAsDistinctRibbonRows()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var drawArrangeGroup = ExtractGroupXaml(ExtractTabXaml(xaml, "Draw", "Page Layout"), "Arrange");
+        var pageLayoutArrangeGroup = ExtractGroupXaml(ExtractTabXaml(xaml, "Page Layout", "Formulas"), "Arrange");
+
+        foreach (var (arrangeGroup, bringForwardKeyTip, sendBackwardKeyTip) in new[]
+        {
+            (drawArrangeGroup, "BF", "SB"),
+            (pageLayoutArrangeGroup, "BF", "SB")
+        })
+        {
+            ExtractTooltipTitles(arrangeGroup).Should().ContainInOrder("Bring Forward", "Send Backward");
+            arrangeGroup.Should().Contain("Click=\"BringForwardBtn_Click\"");
+            arrangeGroup.Should().Contain("Click=\"SendBackwardBtn_Click\"");
+            arrangeGroup.Should().Contain($"local:RibbonTooltip.KeyTip=\"{bringForwardKeyTip}\"");
+            arrangeGroup.Should().Contain($"local:RibbonTooltip.KeyTip=\"{sendBackwardKeyTip}\"");
+        }
+
+        File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"))
+            .Should()
+            .Contain("| Bring Forward/Send Backward | Implemented | |");
+    }
+
+    [Fact]
     public void FormulasTab_UsesExcelLikeDefinedNamesCommandOrder()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
