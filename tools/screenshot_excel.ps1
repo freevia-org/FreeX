@@ -14,6 +14,7 @@ public class Win32e {
     [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
     [DllImport("user32.dll")] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
@@ -95,6 +96,32 @@ if ($appEl -eq $null) { Write-Error "UIA element not found"; exit 1 }
 $captureH = [int]([Math]::Ceiling(300 * $scale))
 Write-Host "Capture height: $captureH physical px (300 logical)"
 
+function Get-WindowTitle($windowHandle) {
+    $title = New-Object System.Text.StringBuilder 512
+    [Win32e]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
+    return $title.ToString()
+}
+
+function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle) {
+    $foreground = [Win32e]::GetForegroundWindow()
+    if ($foreground -eq [IntPtr]::Zero) {
+        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        throw "Blocked: no foreground window before global input."
+    }
+
+    $actualPid = 0
+    [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    $title = New-Object System.Text.StringBuilder 512
+    [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+    $actualTitle = $title.ToString()
+    if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
+        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid)."
+    }
+}
+
+$expectedTitle = Get-WindowTitle $hwnd
+
 function Screenshot-Tab($tabName) {
     $tabCond = New-Object System.Windows.Automation.PropertyCondition(
                    [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
@@ -107,10 +134,15 @@ function Screenshot-Tab($tabName) {
     $cy   = [int]($rect.Top  + $rect.Height / 2)
     [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new($cx, $cy)
     Start-Sleep -Milliseconds 100
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle
     [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
     # Also try a real mouse click via mouse_event
     Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class Clicker { [DllImport("user32.dll")] public static extern void mouse_event(int f,int x,int y,int c,int e); }' -ErrorAction SilentlyContinue
-    try { [Clicker]::mouse_event(2,0,0,0,0); Start-Sleep -Milliseconds 50; [Clicker]::mouse_event(4,0,0,0,0) } catch {}
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle
+    [Clicker]::mouse_event(2,0,0,0,0)
+    Start-Sleep -Milliseconds 50
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle
+    [Clicker]::mouse_event(4,0,0,0,0)
     Start-Sleep -Milliseconds 800
 
     $wrect = New-Object Win32e+RECT

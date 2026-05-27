@@ -135,6 +135,43 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("Continue expanding the source-based machine-readable inventory guard");
     }
 
+    [Theory]
+    [InlineData("screenshot_excel.ps1")]
+    [InlineData("screenshot_ribbon.ps1")]
+    public void ScreenshotScripts_DefineForegroundOwnershipGuard(string scriptName)
+    {
+        var script = ReadScreenshotToolScript(scriptName);
+
+        script.Should().Contain("GetForegroundWindow");
+        script.Should().Contain("function Assert-ForegroundWindowOwnership");
+        script.Should().Contain("GetWindowThreadProcessId($foreground");
+        script.Should().Contain("GetWindowText($foreground");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_ChecksForegroundOwnershipBeforeEveryGlobalInput()
+    {
+        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("tools", "screenshot_excel.ps1"));
+
+        for (var index = 0; index < lines.Length; index++)
+        {
+            if (!GlobalInputCall().IsMatch(lines[index]))
+                continue;
+
+            PreviousExecutableLine(lines, index).Should().Contain(
+                "Assert-ForegroundWindowOwnership",
+                $"global input on line {index + 1} must re-check foreground process and title immediately before sending input");
+        }
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_DoesNotSwallowGlobalInputFailures()
+    {
+        var script = ReadScreenshotToolScript("screenshot_excel.ps1");
+
+        script.Should().NotContain("catch {}", "foreground guard failures must abort and discard invalid screenshots");
+    }
+
     private static IReadOnlyDictionary<string, InventorySnapshotRow> ReadInventorySnapshot()
     {
         var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
@@ -309,6 +346,23 @@ public sealed partial class UiTestCatalogInventoryTests
         return scripts;
     }
 
+    private static string ReadScreenshotToolScript(string scriptName) =>
+        File.ReadAllText(WorkspaceFileLocator.Find("tools", scriptName));
+
+    private static string PreviousExecutableLine(IReadOnlyList<string> lines, int index)
+    {
+        for (var previous = index - 1; previous >= 0; previous--)
+        {
+            var line = lines[previous].Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+                continue;
+
+            return line;
+        }
+
+        return string.Empty;
+    }
+
     private static int ReadUiEvidenceScreenshotCount()
     {
         var artifactDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "ui-test-artifacts", "launch-shell.png"))
@@ -372,6 +426,9 @@ public sealed partial class UiTestCatalogInventoryTests
 
     [GeneratedRegex(@"`tools/(?<script>screenshot_(?:excel|ribbon)\.ps1)`")]
     private static partial Regex ScreenshotToolPath();
+
+    [GeneratedRegex(@"\[System\.Windows\.Forms\.SendKeys\]::SendWait\(|\[Clicker\]::mouse_event\(")]
+    private static partial Regex GlobalInputCall();
 
     private sealed record InventorySnapshotRow(int Count, string Notes);
 
