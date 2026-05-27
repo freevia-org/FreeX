@@ -136,11 +136,13 @@ public sealed class SpreadsheetXmlFileAdapterTests
     {
         var workbook = new Workbook("XmlMergeRoundTrip");
         var sheet = workbook.AddSheet("Merged");
-        var mergeRange = new GridRange(
-            new CellAddress(sheet.Id, 2, 2),
-            new CellAddress(sheet.Id, 3, 4));
-        sheet.SetCell(mergeRange.Start, new TextValue("Merged text"));
-        sheet.AddMergedRegion(mergeRange);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Header"));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 3)));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 4, 4),
+            new CellAddress(sheet.Id, 4, 5)));
 
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
@@ -149,11 +151,10 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
         var loaded = adapter.Load(stream);
 
-        var loadedSheet = loaded.GetSheetAt(0);
-        loadedSheet.GetCell(2, 2)!.Value.Should().Be(new TextValue("Merged text"));
-        loadedSheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
-            new CellAddress(loadedSheet.Id, 2, 2),
-            new CellAddress(loadedSheet.Id, 3, 4)));
+        loaded.GetSheetAt(0).MergedRegions
+            .Select(region => (region.Start.Row, region.Start.Col, region.End.Row, region.End.Col))
+            .Should()
+            .Equal((1u, 1u, 2u, 3u), (4u, 4u, 4u, 5u));
     }
 
     [Fact]
