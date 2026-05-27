@@ -172,6 +172,7 @@ public partial class GridView
                 _objectDragStartPos = pos;
                 _objectDragStartRect = selRect;
                 _objectDragCurrentRect = selRect;
+                _objectDragStartAnchor = GetSelectedObjectAnchor() ?? HitTestAnchorCell(pos) ?? default;
                 Cursor = ObjectDragCursor(dragKind);
                 CaptureMouse();
                 e.Handled = true;

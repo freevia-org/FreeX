@@ -50,6 +50,23 @@ public partial class GridView
         };
     }
 
+    private CellAddress? GetSelectedObjectAnchor()
+    {
+        if (SelectedObjectId == Guid.Empty || SelectedObjectKind == ObjectKind.None)
+            return null;
+
+        return SelectedObjectKind switch
+        {
+            ObjectKind.Picture when Pictures is not null =>
+                TryGetObjectAnchor(Pictures, p => p.Id == SelectedObjectId, p => p.Anchor),
+            ObjectKind.Shape when DrawingShapes is not null =>
+                TryGetObjectAnchor(DrawingShapes, s => s.Id == SelectedObjectId, s => s.Anchor),
+            ObjectKind.TextBox when TextBoxes is not null =>
+                TryGetObjectAnchor(TextBoxes, t => t.Id == SelectedObjectId, t => t.Anchor),
+            _ => null
+        };
+    }
+
     private Rect TryGetObjectRect<T>(IEnumerable<T> items, Func<T, bool> match, Func<T, (CellAddress Anchor, double Width, double Height)> props)
     {
         foreach (var item in items)
@@ -60,6 +77,17 @@ public partial class GridView
                 return rect;
         }
         return Rect.Empty;
+    }
+
+    private static CellAddress? TryGetObjectAnchor<T>(IEnumerable<T> items, Func<T, bool> match, Func<T, CellAddress> anchor)
+    {
+        foreach (var item in items)
+        {
+            if (match(item))
+                return anchor(item);
+        }
+
+        return null;
     }
 
     internal void DrawObjectSelectionHandles(DrawingContext dc, Rect r)
