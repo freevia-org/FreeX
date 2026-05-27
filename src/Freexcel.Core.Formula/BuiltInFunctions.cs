@@ -141,6 +141,9 @@ public static partial class BuiltInFunctions
 
         // Text
         ["TEXTJOIN"]    = (Textjoin, 3, 255),
+        ["TEXTBEFORE"]  = (Textbefore, 2, 6),
+        ["TEXTAFTER"]   = (Textafter, 2, 6),
+        ["TEXTSPLIT"]   = (Textsplit, 2, 6),
 
         // Count
         ["COUNTBLANK"]  = (Countblank, 1, 1),
