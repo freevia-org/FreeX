@@ -459,6 +459,97 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedOfficeAddinsRetentionPackage_LinksTaskpanesAndWebextensionParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-office-addins-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var packageRelsEntry = archive.GetEntry("_rels/.rels");
+        var taskpanesRelsEntry = archive.GetEntry("xl/webextensions/_rels/taskpanes.xml.rels");
+        packageRelsEntry.Should().NotBeNull();
+        taskpanesRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument packageRelsXml;
+        using (var stream = packageRelsEntry!.Open())
+            packageRelsXml = XDocument.Load(stream);
+        XDocument taskpanesRelsXml;
+        using (var stream = taskpanesRelsEntry!.Open())
+            taskpanesRelsXml = XDocument.Load(stream);
+
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes" &&
+                relationship.Attribute("Target")?.Value == "xl/webextensions/taskpanes.xml")
+            .Should().ContainSingle();
+        taskpanesRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/webextension" &&
+                relationship.Attribute("Target")?.Value == "webextension1.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedSmartArtDiagramsRetentionPackage_LinksWorksheetDrawingAndDiagramParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-smartart-diagrams-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        var worksheetRelsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        var drawingRelsEntry = archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels");
+        worksheetEntry.Should().NotBeNull();
+        worksheetRelsEntry.Should().NotBeNull();
+        drawingRelsEntry.Should().NotBeNull();
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+        XDocument worksheetRelsXml;
+        using (var stream = worksheetRelsEntry!.Open())
+            worksheetRelsXml = XDocument.Load(stream);
+        XDocument drawingRelsXml;
+        using (var stream = drawingRelsEntry!.Open())
+            drawingRelsXml = XDocument.Load(stream);
+
+        var drawingRelationshipId = worksheetXml.Root!
+            .Element(sheetNs + "drawing")!
+            .Attribute(relNs + "id")!
+            .Value;
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == drawingRelationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" &&
+                relationship.Attribute("Target")?.Value == "../drawings/drawing1.xml")
+            .Should().ContainSingle();
+        drawingRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" &&
+                relationship.Attribute("Target")?.Value == "../diagrams/data1.xml")
+            .Should().ContainSingle();
+        drawingRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout" &&
+                relationship.Attribute("Target")?.Value == "../diagrams/layout1.xml")
+            .Should().ContainSingle();
+        drawingRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle" &&
+                relationship.Attribute("Target")?.Value == "../diagrams/quickStyle1.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()

@@ -531,7 +531,12 @@ public partial class MainWindow
     private async void OpenButton_Click(object sender, RoutedEventArgs e)
     {
         var filter = FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters);
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = filter,
+            CheckFileExists = true,
+            Multiselect = false
+        };
 
         if (dialog.ShowDialog() == true)
             await OpenFileAsync(dialog.FileName);
@@ -561,7 +566,9 @@ public partial class MainWindow
         {
             Filter = filter,
             FileName = _workbook.Name,
-            DefaultExt = ".xlsx"
+            DefaultExt = ".xlsx",
+            AddExtension = true,
+            OverwritePrompt = true
         };
 
         if (dialog.ShowDialog() == true)

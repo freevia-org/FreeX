@@ -571,6 +571,7 @@ public sealed class CsvFileAdapterTests
     [InlineData("+$42.00")]
     [InlineData("-$42.00")]
     [InlineData("($42.25)")]
+    [InlineData(" ($42.25) ")]
     public void Save_RoundTripsCurrencyTextFieldsAsLiteralText(string text)
     {
         var workbook = new Workbook("Book1");
@@ -594,6 +595,7 @@ public sealed class CsvFileAdapterTests
     [InlineData("12.5%")]
     [InlineData("+12%")]
     [InlineData("-3%")]
+    [InlineData(" 12.5% ")]
     public void Save_RoundTripsPercentageTextFieldsAsLiteralText(string text)
     {
         var workbook = new Workbook("Book1");
@@ -637,6 +639,7 @@ public sealed class CsvFileAdapterTests
     }
 
     [Theory]
+    [InlineData("1/2")]
     [InlineData("2026-05-17")]
     [InlineData("09:30")]
     [InlineData("May 17, 2026")]

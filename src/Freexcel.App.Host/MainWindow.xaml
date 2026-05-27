@@ -3618,7 +3618,7 @@
              ROW 4  Sheet tabs
              ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="4" Panel.ZIndex="5" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="{StaticResource FreexcelBorderBrush}"
-                BorderThickness="0" Padding="0">
+                BorderThickness="0" Padding="0" Margin="0,-11,0,0">
             <Grid x:Name="SheetTabsRowGrid"
                   SizeChanged="SheetTabsRowGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
@@ -3661,7 +3661,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="TabBorder"
-                                            CornerRadius="7,7,5,5" Padding="12,3,12,4"
+                                            CornerRadius="9,9,6,6" Padding="13,4,13,4"
                                             Cursor="Hand"
                                             Focusable="True"
                                             MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
@@ -3673,20 +3673,22 @@
                                                 <Setter Property="Background"       Value="{Binding TabBrush}"/>
                                                 <Setter Property="BorderBrush"      Value="{StaticResource FreexcelBorderStrongBrush}"/>
                                                 <Setter Property="BorderThickness"  Value="1"/>
-                                                <Setter Property="Margin"           Value="-1,-1,0,1"/>
+                                                <Setter Property="Margin"           Value="-1,-6,0,1"/>
                                                 <Setter Property="Panel.ZIndex"     Value="0"/>
-                                                <Setter Property="MinHeight"        Value="28"/>
+                                                <Setter Property="MinHeight"        Value="31"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                                         <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                                                         <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
-                                                        <Setter Property="Margin"          Value="0,-2,0,0"/>
+                                                        <Setter Property="BorderThickness" Value="2"/>
+                                                        <Setter Property="Margin"          Value="0,-9,0,0"/>
                                                         <Setter Property="Panel.ZIndex"    Value="5"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                         <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                                                         <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
-                                                        <Setter Property="Margin"          Value="0,-3,0,0"/>
+                                                        <Setter Property="BorderThickness" Value="2"/>
+                                                        <Setter Property="Margin"          Value="0,-11,0,0"/>
                                                         <Setter Property="Panel.ZIndex"    Value="10"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -3753,10 +3755,10 @@
                         </ItemsControl>
                 </ScrollViewer>
 
-                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="38" MinHeight="28"
-                        FontSize="13" FontWeight="SemiBold" Margin="-1,-1,0,1" Padding="12,3,12,4"
-                        Background="#F8FBF9" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
-                        Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.68"
+                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="40" MinHeight="31"
+                        FontSize="13" FontWeight="SemiBold" Margin="-1,-6,0,1" Padding="13,4,13,4"
+                        Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1"
+                        Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
                         VerticalAlignment="Top" Cursor="Hand"
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         AutomationProperties.Name="Insert Sheet"
@@ -3771,7 +3773,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="7,7,5,5"
+                                    CornerRadius="9,9,6,6"
                                     Opacity="{TemplateBinding Opacity}"
                                     SnapsToDevicePixels="True">
                                 <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -3910,7 +3912,12 @@
                             local:RibbonTooltip.Title="Zoom In"
                             local:RibbonTooltip.KeyTip="SX"/>
                     <TextBlock x:Name="StatusZoomText" Grid.Column="6" Text="100%" Foreground="White" FontSize="12"
-                               VerticalAlignment="Center" Width="38"/>
+                               VerticalAlignment="Center" Width="38" Focusable="True" Cursor="Hand"
+                               ToolTip="Zoom"
+                               AutomationProperties.Name="Zoom percentage"
+                               AutomationProperties.HelpText="Open the Zoom dialog"
+                               MouseLeftButtonUp="StatusZoomText_OpenZoomDialog"
+                               PreviewKeyDown="StatusZoomText_PreviewKeyDown"/>
                 </Grid>
             </Grid>
         </Border>

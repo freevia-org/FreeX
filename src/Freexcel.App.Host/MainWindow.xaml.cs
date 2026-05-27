@@ -93,6 +93,7 @@ public partial class MainWindow : Window
     private System.Windows.Controls.Border? _inlineEditorChrome;
     private System.Windows.Rect? _inlineEditorChromeBaseRect;
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
+    private bool _syncingFormulaEditorText;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private CellAddress? _formulaEditCell;
     private CellAddress? _formulaRangeSelectionAnchor;
@@ -174,6 +175,7 @@ public partial class MainWindow : Window
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
         FormulaBar.TextChanged += (_, _) =>
         {
+            SyncInlineEditorTextFromFormulaBar();
             var formulaBarHasFocus = ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar);
             if (!formulaBarHasFocus && _inlineEditor?.IsVisible != true)
             {

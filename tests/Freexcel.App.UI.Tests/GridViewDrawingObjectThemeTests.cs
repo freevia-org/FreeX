@@ -91,6 +91,80 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void TryCreateDrawingAnchorRect_UsesFirstMatchingAnchorMetrics()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(3, 20, 0),
+                new RowMetric(5, 20, 40),
+                new RowMetric(3, 20, 200)
+            ],
+            [
+                new ColMetric(2, 80, 0),
+                new ColMetric(4, 80, 160),
+                new ColMetric(2, 80, 300)
+            ]);
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 0, 2, 0),
+            new DrawingAnchorPoint(3, 0, 4, 0));
+
+        GridView.TryCreateDrawingAnchorRect(
+                viewport,
+                anchor,
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                out var rect)
+            .Should()
+            .BeTrue();
+        rect.Should().Be(new Rect(30, 18, 160, 40));
+    }
+
+    [Fact]
+    public void TryCreateDrawingAnchorRect_ReturnsFalseForMaxValueAnchorPoint()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0)],
+            [new ColMetric(1, 80, 0)]);
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(uint.MaxValue, 0, 0, 0),
+            new DrawingAnchorPoint(0, 0, 0, 0));
+
+        GridView.TryCreateDrawingAnchorRect(
+                viewport,
+                anchor,
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                out _)
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
+    public void TryCreateDrawingAnchorRect_UsesSinglePassAnchorMetricLookups()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridDrawingObjectPlanner.cs"));
+        var anchorRange = source[
+            source.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)..
+            source.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)];
+        var anchorHelpers = source[
+            source.IndexOf("private static bool TryGetAnchorPoints", StringComparison.Ordinal)..
+            source.IndexOf("private static double EmusToPixels", StringComparison.Ordinal)];
+
+        anchorRange.Should().Contain("TryGetAnchorPoints(viewport, anchor");
+        anchorRange.Should().NotContain("TryGetAnchorPoint(viewport, anchor.From");
+        anchorRange.Should().NotContain("TryGetAnchorPoint(viewport, anchor.To");
+        anchorHelpers.Should().Contain("TryFindAnchorColumns(viewport.ColMetrics");
+        anchorHelpers.Should().Contain("TryFindAnchorRows(viewport.RowMetrics");
+        anchorHelpers.Should().Contain("foreach (var metric in metrics)");
+        anchorHelpers.Should().NotContain("FirstOrDefault");
+        anchorHelpers.Should().NotContain(".Where(");
+        anchorHelpers.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
     public void GridView_ExposesObjectDisplayModeForExcelPlaceholderRendering()
     {
         var source =

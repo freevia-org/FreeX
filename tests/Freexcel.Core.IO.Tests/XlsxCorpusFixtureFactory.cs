@@ -1017,6 +1017,18 @@ internal static class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-office-addins-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyOfficeAddinsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-smartart-diagrams-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySmartArtDiagramsFixup(archive);
+            return;
+        }
+
         if (string.Equals(id, "generated-slicers-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplySlicerTimelineFloatingDrawingFixup(
@@ -1430,6 +1442,125 @@ internal static class XlsxCorpusFixtureFactory
             "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility",
             "customUI/customUI.xml");
         ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+    }
+
+    private static void ApplyOfficeAddinsFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelOfficeAddinTaskpanes1",
+            "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes",
+            "xl/webextensions/taskpanes.xml");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+
+        var taskpanesRelsPath = "xl/webextensions/_rels/taskpanes.xml.rels";
+        var taskpanesRelsXml = archive.GetEntry(taskpanesRelsPath) is { } taskpanesRelsEntry
+            ? LoadPackageXml(taskpanesRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            taskpanesRelsXml,
+            "rIdFreexcelWebextension1",
+            "http://schemas.microsoft.com/office/2011/relationships/webextension",
+            "webextension1.xml");
+        ReplacePackageXml(archive, taskpanesRelsPath, taskpanesRelsXml);
+    }
+
+    private static void ApplySmartArtDiagramsFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/drawings/drawing1.xml",
+                "application/vnd.openxmlformats-officedocument.drawing+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var drawingRelId = "rIdFreexcelSmartArtDrawing1";
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            if (worksheetXml.Root?.Element(worksheetNs + "drawing") is null)
+            {
+                worksheetXml.Root?.Add(new XElement(worksheetNs + "drawing", new XAttribute(officeRelNs + "id", drawingRelId)));
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+            }
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            drawingRelId,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+            "../drawings/drawing1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        ReplacePackageXml(archive, "xl/drawings/drawing1.xml", new XDocument(
+            new XElement(
+                spreadsheetDrawingNs + "wsDr",
+                new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XElement(
+                    spreadsheetDrawingNs + "absoluteAnchor",
+                    new XElement(spreadsheetDrawingNs + "pos", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                    new XElement(spreadsheetDrawingNs + "ext", new XAttribute("cx", "1828800"), new XAttribute("cy", "914400")),
+                    new XElement(
+                        spreadsheetDrawingNs + "graphicFrame",
+                        new XElement(
+                            spreadsheetDrawingNs + "nvGraphicFramePr",
+                            new XElement(
+                                spreadsheetDrawingNs + "cNvPr",
+                                new XAttribute("id", "2"),
+                                new XAttribute("name", "Freexcel SmartArt")),
+                            new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
+                        new XElement(spreadsheetDrawingNs + "xfrm"),
+                        new XElement(
+                            drawingNs + "graphic",
+                            new XElement(
+                                drawingNs + "graphicData",
+                                new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/diagram")))),
+                    new XElement(spreadsheetDrawingNs + "clientData")))));
+
+        var drawingRelsPath = "xl/drawings/_rels/drawing1.xml.rels";
+        var drawingRelsXml = archive.GetEntry(drawingRelsPath) is { } drawingRelsEntry
+            ? LoadPackageXml(drawingRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            drawingRelsXml,
+            "rIdFreexcelDiagramData1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+            "../diagrams/data1.xml");
+        EnsureRelationship(
+            drawingRelsXml,
+            "rIdFreexcelDiagramLayout1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout",
+            "../diagrams/layout1.xml");
+        EnsureRelationship(
+            drawingRelsXml,
+            "rIdFreexcelDiagramQuickStyle1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle",
+            "../diagrams/quickStyle1.xml");
+        ReplacePackageXml(archive, drawingRelsPath, drawingRelsXml);
     }
 
     private static void ApplyThreadedCommentsFixup(ZipArchive archive)

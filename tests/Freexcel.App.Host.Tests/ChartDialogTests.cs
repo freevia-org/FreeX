@@ -219,6 +219,19 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTitlesDialog_EditorsExposeAutomationNames()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[
+            source.IndexOf("public sealed class ChartTitlesDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record ChartStyleDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("AutomationProperties.SetName(_chartTitleBox, \"Chart title\");");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_xAxisTitleBox, \"Primary horizontal axis title\");");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_yAxisTitleBox, \"Primary vertical axis title\");");
+    }
+
+    [Fact]
     public void ChartTitlesDialogOpenedFromKeyboard_FocusesChartTitleBox()
     {
         var source = ReadChartDialogSource();
@@ -381,6 +394,15 @@ public sealed class ChartDialogTests
         dialogSource.Should().Contain("_rangeBox.Focus();");
         dialogSource.Should().Contain("_rangeBox.SelectAll();");
         dialogSource.Should().Contain("Keyboard.Focus(_rangeBox);");
+    }
+
+    [Fact]
+    public void SelectDataSourceDialog_RangeEditorExposesAutomationName()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Chart data range\");");
     }
 
     [Fact]

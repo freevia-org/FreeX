@@ -168,6 +168,17 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void NameDefinitionDialog_EditorsExposeAutomationNames()
+    {
+        var source = ReadNamedRangeDialogSource();
+
+        source.Should().Contain("AutomationProperties.SetName(_nameBox, \"Name\");");
+        source.Should().Contain("AutomationProperties.SetName(_scopeBox, \"Scope\");");
+        source.Should().Contain("AutomationProperties.SetName(_commentBox, \"Comment\");");
+        source.Should().Contain("AutomationProperties.SetName(_refersToBox, \"Refers to\");");
+    }
+
+    [Fact]
     public void NameDefinitionDialogInvalidInputs_StayOpenAndFocusInvalidField()
     {
         var source = ReadNamedRangeDialogSource();

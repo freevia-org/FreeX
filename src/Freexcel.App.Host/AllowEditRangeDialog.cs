@@ -107,6 +107,7 @@ public sealed class AllowEditRangeDialog : Window
         DockPanel.SetDock(rangePicker, Dock.Right);
         rangePanel.Children.Add(rangePicker);
         _rangeBox.Text = defaultRange;
+        System.Windows.Automation.AutomationProperties.SetName(_rangeBox, "Editable range");
         rangePanel.Children.Add(_rangeBox);
         group.Content = rangePanel;
         root.Children.Add(group);
