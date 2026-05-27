@@ -50,6 +50,21 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void SplitPaneScrollbarDragPreservesOrientationCursor()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var dragBlock = source[
+            source.IndexOf("if (_splitPaneScrollbarDragging)", StringComparison.Ordinal)..
+            source.IndexOf("if (_autofillDragging", StringComparison.Ordinal)];
+
+        dragBlock.Should().Contain("_splitPaneScrollbarDragSource?.Orientation == SplitPaneScrollbarOrientation.Horizontal");
+        dragBlock.Should().Contain("? Cursors.SizeWE");
+        dragBlock.Should().Contain("_splitPaneScrollbarDragSource?.Orientation == SplitPaneScrollbarOrientation.Vertical");
+        dragBlock.Should().Contain("? Cursors.SizeNS");
+    }
+
+    [Fact]
     public void MouseLeavePreservesCursorDuringCapturedDrags()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
