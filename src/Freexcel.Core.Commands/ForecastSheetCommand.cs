@@ -25,7 +25,10 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
         if (_forecastPeriods == 0)
             return new CommandOutcome(false, "Forecast periods must be greater than zero.");
 
-        var sourceSheet = ctx.GetSheet(_sourceRange.Start.Sheet);
+        var sourceSheet = ctx.Workbook.GetSheet(_sourceRange.Start.Sheet);
+        if (sourceSheet is null)
+            return new CommandOutcome(false, "Forecast Sheet source range must belong to this workbook.");
+
         var forecastSheet = ctx.Workbook.AddSheet(GetForecastSheetName(ctx.Workbook));
         _addedSheetId = forecastSheet.Id;
 

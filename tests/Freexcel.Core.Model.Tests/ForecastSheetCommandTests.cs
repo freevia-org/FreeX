@@ -49,6 +49,26 @@ public sealed class ForecastSheetCommandTests
         workbook.SheetCount.Should().Be(1);
     }
 
+    [Fact]
+    public void ForecastSheetCommand_RejectsSourceRangeOutsideWorkbook()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sales");
+        var ctx = new SimpleCtx(workbook);
+        var staleSheetId = SheetId.New();
+
+        var command = new ForecastSheetCommand(
+            new GridRange(new CellAddress(staleSheetId, 1, 1), new CellAddress(staleSheetId, 4, 2)),
+            forecastPeriods: 2);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("source range");
+        workbook.SheetCount.Should().Be(1);
+        workbook.GetSheetAt(0).Should().BeSameAs(sheet);
+    }
+
     private sealed class SimpleCtx(Workbook workbook) : ICommandContext
     {
         public Workbook Workbook { get; } = workbook;
