@@ -89,6 +89,7 @@ public partial class App : Application
         services.AddSingleton<IFileAdapter>(_ => new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t'));
         services.AddSingleton<IFileAdapter>(_ => new DelimitedTextFileAdapter(".tsv", "TSV (Tab-separated values)", '\t'));
         services.AddSingleton<IFileAdapter>(_ => new DelimitedTextFileAdapter(".tab", "Tab-delimited text", '\t'));
+        services.AddSingleton<IFileAdapter, SpreadsheetXmlFileAdapter>();
         services.AddSingleton<IFileAdapter, NativeJsonAdapter>();
 
         // Workbook (single workbook for now, will expand later)

@@ -39,6 +39,36 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void PercentOf_ReturnsSubsetPercentOfAllValues()
+    {
+        var sheet = Values(100, 200, 300, 400);
+
+        Number("=PERCENTOF(A1:A2,A1:A4)", sheet).Should().BeApproximately(0.3, 1e-12);
+        Number("=PERCENTOF(150,A1:A4)", sheet).Should().BeApproximately(0.15, 1e-12);
+    }
+
+    [Fact]
+    public void PercentOf_UsesExcelSumRulesForRanges()
+    {
+        var sheet = Values(100, 200, 300);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("ignored"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new BoolValue(true));
+
+        Number("=PERCENTOF(A1:A2,A1:A5)", sheet).Should().BeApproximately(0.5, 1e-12);
+    }
+
+    [Fact]
+    public void PercentOf_ReturnsExcelErrorsForZeroTotalAndInputErrors()
+    {
+        var zeroTotal = Values(0, 0);
+        _eval.Evaluate("=PERCENTOF(A1,A1:A2)", zeroTotal).Should().Be(ErrorValue.DivByZero);
+
+        var errorSheet = Values(1, 2);
+        errorSheet.SetCell(new CellAddress(errorSheet.Id, 3, 1), ErrorValue.NA);
+        _eval.Evaluate("=PERCENTOF(A1:A2,A1:A3)", errorSheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void QuartileInc_ReturnsExcelInclusiveQuartiles()
     {
         Number("=QUARTILE.INC(A1:A4,1)", Values(1, 2, 3, 4)).Should().BeApproximately(1.75, 1e-12);

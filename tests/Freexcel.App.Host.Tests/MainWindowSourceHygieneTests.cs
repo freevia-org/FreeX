@@ -294,6 +294,32 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void GetData_CsvImportFlowGuardsNativeDialogAndRefreshesImportedCells()
+    {
+        var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        dataCommandsSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
+        dataCommandsSource.Should().Contain("new Microsoft.Win32.OpenFileDialog { Filter = filter }");
+        dataCommandsSource.Should().Contain("if (dialog.ShowDialog() != true) return;");
+        dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
+        dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");
+        dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_completed\"");
+        dataCommandsSource.Should().Contain("new ImportSheetCommand(_currentSheetId, destination, imported.Sheets[0])");
+        dataCommandsSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
+        dataCommandsSource.Should().Contain("SetActiveCell(destination);");
+        dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");
+        dataCommandsSource.Should().Contain("RefreshStatusBar();");
+    }
+
+    [Fact]
+    public void RefreshAll_RoutesToCalculateNow()
+    {
+        var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        dataCommandsSource.Should().Contain("private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click(sender, e);");
+    }
+
+    [Fact]
     public void StandaloneAltKeyTips_DoNotRouteAltKeyChords()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));

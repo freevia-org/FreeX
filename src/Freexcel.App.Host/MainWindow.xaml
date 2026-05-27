@@ -3668,7 +3668,7 @@
                             </ItemsControl.ItemContainerStyle>
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="8,0,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Margin="16,0,0,0"/>
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
@@ -3682,16 +3682,16 @@
                                           MouseRightButtonDown="SheetTab_MouseRightButtonDown">
                                         <Grid.Style>
                                             <Style TargetType="Grid">
-                                                <Setter Property="Margin"       Value="-8,0,0,1"/>
+                                                <Setter Property="Margin"       Value="-16,0,0,1"/>
                                                 <Setter Property="Panel.ZIndex" Value="0"/>
                                                 <Setter Property="MinHeight"    Value="27"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                        <Setter Property="Margin"       Value="-8,-2,0,0"/>
+                                                        <Setter Property="Margin"       Value="-16,-2,0,0"/>
                                                         <Setter Property="Panel.ZIndex" Value="5"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                        <Setter Property="Margin"       Value="-8,-3,0,0"/>
+                                                        <Setter Property="Margin"       Value="-16,-3,0,0"/>
                                                         <Setter Property="Panel.ZIndex" Value="10"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -3740,9 +3740,9 @@
                                                 Background="{Binding ElementName=TabBorder, Path=BorderBrush}"
                                                 Panel.ZIndex="3"
                                                 IsHitTestVisible="False"/>
-                                        <Border Height="3"
+                                        <Border Height="4"
                                                 VerticalAlignment="Top"
-                                                Margin="8,-1,8,0"
+                                                Margin="0,-2,0,0"
                                                 Background="{StaticResource FreexcelRibbonSurfaceBrush}"
                                                 Panel.ZIndex="2">
                                             <Border.Style>
@@ -3828,7 +3828,7 @@
                 </ScrollViewer>
 
                 <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="38" MinHeight="27"
-                        FontSize="13" FontWeight="SemiBold" Margin="-8,0,0,1" Padding="12,1,12,3"
+                        FontSize="13" FontWeight="SemiBold" Margin="-16,0,0,1" Padding="12,1,12,3"
                         Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1,0,1,1"
                         Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
                         VerticalAlignment="Top" Cursor="Hand"

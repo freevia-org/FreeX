@@ -23,10 +23,20 @@ internal static class AdvancedFilterDialogPlanner
             error = "Enter a valid list range.";
             return false;
         }
+        if (listRange.RowCount < 2)
+        {
+            error = "List range must include headers and at least one data row.";
+            return false;
+        }
 
         if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, criteriaRangeText, resolveSheetId, out var criteriaRange))
         {
             error = "Enter a valid criteria range.";
+            return false;
+        }
+        if (criteriaRange.RowCount < 2)
+        {
+            error = "Criteria range must include headers and at least one criteria row.";
             return false;
         }
 

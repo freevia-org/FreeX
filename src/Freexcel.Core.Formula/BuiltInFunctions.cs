@@ -144,6 +144,9 @@ public static partial class BuiltInFunctions
         ["TEXTBEFORE"]  = (Textbefore, 2, 6),
         ["TEXTAFTER"]   = (Textafter, 2, 6),
         ["TEXTSPLIT"]   = (Textsplit, 2, 6),
+        ["REGEXTEST"]    = (RegexTest, 2, 3),
+        ["REGEXEXTRACT"] = (RegexExtract, 2, 4),
+        ["REGEXREPLACE"] = (RegexReplace, 3, 5),
 
         // Count
         ["COUNTBLANK"]  = (Countblank, 1, 1),
@@ -214,6 +217,7 @@ public static partial class BuiltInFunctions
         ["AVEDEV"]           = (Avedev, 1, 255),
         ["PERCENTRANK"]      = (PercentrankInc, 2, 3),
         ["PERCENTRANK.INC"]  = (PercentrankInc, 2, 3),
+        ["PERCENTOF"]        = (PercentOf, 2, 2),
         ["MODE"]             = (ModeSngl, 1, 255),
         ["MODE.SNGL"]        = (ModeSngl, 1, 255),
         ["CORREL"]           = (Correl, 2, 2),

@@ -207,6 +207,10 @@ public sealed partial class AdvancedFilterDialog : Window
         {
             target = _criteriaRangeBox;
         }
+        else if (string.Equals(error, "Criteria range must include headers and at least one criteria row.", StringComparison.Ordinal))
+        {
+            target = _criteriaRangeBox;
+        }
         else if (string.Equals(error, "Enter a valid copy-to cell or one-row header range.", StringComparison.Ordinal))
         {
             _copyToAnotherLocationButton.IsChecked = true;

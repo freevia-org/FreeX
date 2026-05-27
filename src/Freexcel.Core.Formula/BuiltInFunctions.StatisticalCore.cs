@@ -31,6 +31,36 @@ public static partial class BuiltInFunctions
         return NumberResult(total);
     }
 
+    private static ScalarValue PercentOf(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var subset = PercentOfSum(args[0]);
+        if (subset.Error is not null) return subset.Error;
+
+        var total = PercentOfSum(args[1]);
+        if (total.Error is not null) return total.Error;
+        if (total.Sum == 0) return ErrorValue.DivByZero;
+
+        return NumberResult(subset.Sum / total.Sum);
+    }
+
+    private static (double Sum, ErrorValue? Error) PercentOfSum(ScalarValue value)
+    {
+        if (value is ErrorValue e) return (0, e);
+        if (value is RangeValue range)
+        {
+            double total = 0;
+            foreach (var cell in range.Flatten())
+            {
+                if (cell is ErrorValue cellError) return (0, cellError);
+                if (TryCellNumber(cell, out var number)) total += number;
+            }
+
+            return (total, null);
+        }
+
+        return (ToNumber(value), null);
+    }
+
     private static ScalarValue Average(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         double total = 0;
