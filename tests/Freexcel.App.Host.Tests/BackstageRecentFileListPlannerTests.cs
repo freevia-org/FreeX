@@ -35,4 +35,25 @@ public sealed class BackstageRecentFileListPlannerTests
 
         plan.RecentItems.Select(item => item.FileName).Should().Equal("Budget.xlsx");
     }
+
+    [Fact]
+    public void Build_RemovesMissingFilesBeforeSplittingRecentAndPinnedItems()
+    {
+        var entries = new[]
+        {
+            new RecentFileEntry { Path = @"C:\Work\MissingPinned.xlsx", LastOpened = DateTime.Now, IsPinned = true },
+            new RecentFileEntry { Path = @"C:\Work\ExistingPinned.xlsx", LastOpened = DateTime.Now, IsPinned = true },
+            new RecentFileEntry { Path = @"C:\Work\MissingRecent.xlsx", LastOpened = DateTime.Now, IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Work\ExistingRecent.xlsx", LastOpened = DateTime.Now, IsPinned = false }
+        };
+
+        var plan = BackstageRecentFileListPlanner.Build(
+            entries,
+            filter: null,
+            pathExists: path => !path.Contains("Missing", StringComparison.OrdinalIgnoreCase));
+
+        plan.AllItems.Select(item => item.FileName).Should().Equal("ExistingPinned.xlsx", "ExistingRecent.xlsx");
+        plan.PinnedItems.Select(item => item.FileName).Should().Equal("ExistingPinned.xlsx");
+        plan.RecentItems.Select(item => item.FileName).Should().Equal("ExistingRecent.xlsx");
+    }
 }
