@@ -28,6 +28,8 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=EVEN(-1.2)", -2)]
     [InlineData("=EXP(1)", 2.718281828459045)]
     [InlineData("=FACT(5)", 120)]
+    [InlineData("=FACTDOUBLE(6)", 48)]
+    [InlineData("=FACTDOUBLE(7)", 105)]
     [InlineData("=FLOOR(2.7,0.5)", 2.5)]
     [InlineData("=GCD(48,18)", 6)]
     [InlineData("=INT(-1.2)", -2)]
@@ -39,7 +41,11 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=MULTINOMIAL(2,3,4)", 1260)]
     [InlineData("=ODD(1.2)", 3)]
     [InlineData("=ODD(-1.2)", -3)]
+    [InlineData("=COMBINA(4,3)", 20)]
+    [InlineData("=COMBINA(10,3)", 220)]
     [InlineData("=PERMUT(5,2)", 20)]
+    [InlineData("=PERMUTATIONA(3,2)", 9)]
+    [InlineData("=PERMUTATIONA(2,2)", 4)]
     [InlineData("=PI()", 3.141592653589793)]
     [InlineData("=POWER(2,3)", 8)]
     [InlineData("=PRODUCT(2,3,4)", 24)]
@@ -68,6 +74,8 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=ASIN(2)")]
     [InlineData("=CEILING(2.3,-1)")]
     [InlineData("=COMBIN(2,5)")]
+    [InlineData("=COMBINA(0,1)")]
+    [InlineData("=FACTDOUBLE(-1)")]
     [InlineData("=FLOOR(2.7,-1)")]
     [InlineData("=GCD(-1,2)")]
     [InlineData("=LCM(-1,2)")]
@@ -93,7 +101,10 @@ public sealed class ExcelParityMathTrigTests
     [Theory]
     [InlineData("=ABS(\"x\")")]
     [InlineData("=ACOT(\"x\")")]
+    [InlineData("=COMBINA(\"x\",2)")]
     [InlineData("=FACT(\"x\")")]
+    [InlineData("=FACTDOUBLE(\"x\")")]
+    [InlineData("=PERMUTATIONA(\"x\",2)")]
     [InlineData("=PRODUCT(\"x\")")]
     [InlineData("=SEC(\"x\")")]
     [InlineData("=SUM(\"x\")")]
@@ -106,6 +117,9 @@ public sealed class ExcelParityMathTrigTests
     public void Combin_TruncatesArgumentsLikeExcel()
     {
         Number("=COMBIN(5.9,2.1)").Should().Be(10);
+        Number("=COMBINA(4.9,3.1)").Should().Be(20);
+        Number("=PERMUTATIONA(3.9,2.1)").Should().Be(9);
+        Number("=FACTDOUBLE(6.9)").Should().Be(48);
     }
 
     [Fact]
@@ -178,6 +192,28 @@ public sealed class ExcelParityMathTrigTests
         var series = _eval.Evaluate("=SERIESSUM(A1:A2,0,1,C1:C2)", sheet).Should().BeOfType<RangeValue>().Subject;
         series.At(1, 1).Should().Be(new NumberValue(7));
         series.At(2, 1).Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
+    public void CombinatoricFunctions_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)),
+            (2, 1, new NumberValue(10)),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(3)));
+
+        var combina = _eval.Evaluate("=COMBINA(A1:A2,B1:B2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        combina.At(1, 1).Should().Be(new NumberValue(20));
+        combina.At(2, 1).Should().Be(new NumberValue(220));
+
+        var permutationA = _eval.Evaluate("=PERMUTATIONA(A1:A2,2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        permutationA.At(1, 1).Should().Be(new NumberValue(16));
+        permutationA.At(2, 1).Should().Be(new NumberValue(100));
+
+        var factDouble = _eval.Evaluate("=FACTDOUBLE(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        factDouble.At(1, 1).Should().Be(new NumberValue(8));
+        factDouble.At(2, 1).Should().Be(new NumberValue(3840));
     }
 
     [Fact]
