@@ -32,10 +32,10 @@ public static class SplitPaneScrollbarLayoutPlanner
 
     public static SplitPaneScrollbarHit? HitTestScrollbar(SplitPaneScrollbar? scrollbar, Point pos)
     {
-        if (scrollbar is null || !scrollbar.Track.Contains(pos))
+        if (scrollbar is null || !ContainsInclusive(scrollbar.Track, pos))
             return null;
 
-        var part = scrollbar.Thumb.Contains(pos)
+        var part = ContainsInclusive(scrollbar.Thumb, pos)
             ? SplitPaneScrollbarPart.Thumb
             : SplitPaneScrollbarPart.Track;
         return new SplitPaneScrollbarHit(part, scrollbar.Orientation, scrollbar.Region);
@@ -45,7 +45,7 @@ public static class SplitPaneScrollbarLayoutPlanner
         SplitPaneScrollbar? scrollbar,
         Point pos)
     {
-        if (scrollbar is null || !scrollbar.Track.Contains(pos))
+        if (scrollbar is null || !ContainsInclusive(scrollbar.Track, pos))
             return null;
 
         var index = IndexFromTrackPosition(scrollbar, TrackPosition(scrollbar.Orientation, pos));
@@ -108,4 +108,10 @@ public static class SplitPaneScrollbarLayoutPlanner
 
     private static double TrackPosition(SplitPaneScrollbarOrientation orientation, Point pos) =>
         orientation == SplitPaneScrollbarOrientation.Horizontal ? pos.X : pos.Y;
+
+    private static bool ContainsInclusive(Rect rect, Point pos) =>
+        pos.X >= rect.Left &&
+        pos.X <= rect.Right &&
+        pos.Y >= rect.Top &&
+        pos.Y <= rect.Bottom;
 }
