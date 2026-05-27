@@ -229,6 +229,26 @@ public sealed class GridViewRenderPerformanceTests
                 (1u, 10u, new Rect(rowHeaderWidth + 144, GridView.ColHeaderHeight, 64, 18)));
     }
 
+    [Fact]
+    public void SplitPaneCellLayoutPlanner_BuildsMetricLookupsAndOccupiedCellsWithoutLinqPipelines()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+        var calculateLayouts = source[
+            source.IndexOf("public static IReadOnlyList<SplitPaneCellLayout> CalculateLayouts", StringComparison.Ordinal)..
+            source.IndexOf("private static bool CanOverflowSplitPaneText", StringComparison.Ordinal)];
+
+        calculateLayouts.Should().Contain("BuildRowLookup(topRows)");
+        calculateLayouts.Should().Contain("BuildRowLookup(bottomLeftRows)");
+        calculateLayouts.Should().Contain("BuildColumnLookup(leftColumns)");
+        calculateLayouts.Should().Contain("BuildColumnLookup(topRightColumns)");
+        calculateLayouts.Should().Contain("foreach (var cell in cells)");
+        calculateLayouts.Should().Contain("occupied.Add((cell.Row, cell.Col))");
+        calculateLayouts.Should().NotContain(".ToDictionary(");
+        calculateLayouts.Should().NotContain(".Where(");
+        calculateLayouts.Should().NotContain(".Select(");
+    }
+
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
