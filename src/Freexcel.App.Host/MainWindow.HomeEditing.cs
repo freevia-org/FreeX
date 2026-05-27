@@ -287,7 +287,9 @@ public partial class MainWindow
                         "Clear All",
                         [
                             new ClearContentsCommand(sheetId, currentRange),
-                            new ApplyStyleCommand(sheetId, currentRange, CellStyleDiffPlanner.ClearFormatsDiff())
+                            new ApplyStyleCommand(sheetId, currentRange, CellStyleDiffPlanner.ClearFormatsDiff()),
+                            new ClearCommentsCommand(sheetId, currentRange),
+                            new ClearHyperlinksCommand(sheetId, currentRange)
                         ]);
                 },
                 out var outcome))
