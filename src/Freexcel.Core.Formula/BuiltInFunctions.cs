@@ -672,19 +672,6 @@ public static partial class BuiltInFunctions
 
 
 
-    private static DateTime OADateToDateTime(ScalarValue v) =>
-        DateTime.FromOADate(ToNumber(v));
-
-
-
-
-
-
-
-
-
-
-
 
     // DATEDIF helpers that can throw ArgumentOutOfRangeException when start is a
     // leap day (Feb 29) and end.Year is not a leap year — catch → #NUM!
@@ -889,8 +876,6 @@ public static partial class BuiltInFunctions
 
     /// <summary>Map DayOfWeek to a Mon=0..Sun=6 index.</summary>
 
-
-    private static int ExcelDowToMonIndex(int serial) => ((serial + 5) % 7 + 7) % 7;
 
 
 
