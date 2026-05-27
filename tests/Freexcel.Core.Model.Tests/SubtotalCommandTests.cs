@@ -202,6 +202,51 @@ public sealed class SubtotalCommandTests
     }
 
     [Fact]
+    public void SubtotalCommand_WithSummaryAboveDataAndPageBreaks_BreaksBeforeLaterGroupTotals()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new SimpleCtx(workbook);
+        sheet.RowPageBreaks.Add(30);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(25));
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 2), new NumberValue(35));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 7, 2));
+
+        var command = new SubtotalCommand(
+            sheet.Id,
+            range,
+            groupByColumnOffset: 0,
+            subtotalColumnOffset: 1,
+            pageBreakBetweenGroups: true,
+            summaryBelowData: false);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetValue(3, 1).Should().Be(new TextValue("East Total"));
+        sheet.GetValue(6, 1).Should().Be(new TextValue("West Total"));
+        sheet.GetValue(9, 1).Should().Be(new TextValue("North Total"));
+        sheet.RowPageBreaks.Should().Contain(6u);
+        sheet.RowPageBreaks.Should().Contain(9u);
+        sheet.RowPageBreaks.Should().Contain(34u);
+
+        command.Revert(context);
+
+        sheet.RowPageBreaks.Should().Equal(30u);
+    }
+
+    [Fact]
     public void SubtotalCommand_CanApplySubtotalToMultipleValueColumns()
     {
         var workbook = new Workbook("test");

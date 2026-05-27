@@ -83,8 +83,7 @@ public sealed class SubtotalCommand : IWorkbookCommand
                     return new CommandOutcome(false, "Could not insert subtotal row.");
             }
 
-            foreach (var rowBreak in plan.PageBreakRows)
-                sheet.RowPageBreaks.Add(rowBreak);
+            AddPlannedPageBreaks(sheet, plan);
 
             if (!ApplyInsertAndEdit(ctx, plan.GrandTotalRow, affected))
                 return new CommandOutcome(false, "Could not insert subtotal row.");
@@ -100,6 +99,8 @@ public sealed class SubtotalCommand : IWorkbookCommand
 
         if (!ApplyInsertAndEdit(ctx, plan.GrandTotalRow, affected))
             return new CommandOutcome(false, "Could not insert subtotal row.");
+
+        AddPlannedPageBreaks(sheet, plan);
 
         return new CommandOutcome(true, AffectedCells: affected);
     }
@@ -155,6 +156,12 @@ public sealed class SubtotalCommand : IWorkbookCommand
         affected.Add(labelAddress);
         affected.AddRange(edits.Skip(1).Select(editItem => editItem.Address));
         return true;
+    }
+
+    private static void AddPlannedPageBreaks(Sheet sheet, SubtotalPlan plan)
+    {
+        foreach (var rowBreak in plan.PageBreakRows)
+            sheet.RowPageBreaks.Add(rowBreak);
     }
 }
 
