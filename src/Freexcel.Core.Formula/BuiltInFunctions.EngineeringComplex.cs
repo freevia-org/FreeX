@@ -208,6 +208,35 @@ public static partial class BuiltInFunctions
         return TextResult(FormatComplex(real, imaginary, suffix));
     }
 
+    private static ScalarValue ImPower(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], ImPowerScalar);
+    }
+
+    private static ScalarValue ImPowerScalar(ScalarValue value, ScalarValue exponentValue)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+        if (exponentValue is ErrorValue error) return error;
+
+        double exponent = ToNumber(exponentValue);
+        if (!double.IsFinite(exponent)) return ErrorValue.Num;
+
+        double modulus = Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary);
+        if (modulus == 0 && exponent <= 0) return ErrorValue.Num;
+
+        double magnitude = Math.Pow(modulus, exponent);
+        double angle = Math.Atan2(parsed.Imaginary, parsed.Real) * exponent;
+        if (!double.IsFinite(magnitude) || !double.IsFinite(angle)) return ErrorValue.Num;
+
+        return TextResult(FormatComplex(
+            magnitude * Math.Cos(angle),
+            magnitude * Math.Sin(angle),
+            parsed.Suffix));
+    }
+
     private static ScalarValue ImDiv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var left = ParseComplexArgument(args[0]);

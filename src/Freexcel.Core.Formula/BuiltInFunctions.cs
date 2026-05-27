@@ -401,6 +401,7 @@ public static partial class BuiltInFunctions
         ["IMLN"]        = (ImLn, 1, 1),
         ["IMLOG10"]     = (ImLog10, 1, 1),
         ["IMLOG2"]      = (ImLog2, 1, 1),
+        ["IMPOWER"]     = (ImPower, 2, 2),
         ["IMPRODUCT"]   = (ImProduct, 1, 255),
         ["IMREAL"]      = (ImReal, 1, 1),
         ["IMSIN"]       = (ImSin, 1, 1),
