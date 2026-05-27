@@ -176,6 +176,21 @@ public sealed class CsvFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
     }
 
+    [Theory]
+    [MemberData(nameof(Utf16BomCsvPayloads))]
+    public void Load_HonorsUtf16ByteOrderMarks(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Caf\u00e9"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(42));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
+    }
+
     [Fact]
     public void Load_AccessibleMemoryStreamWithNonzeroPositionReadsRemainingSliceAndConsumesStream()
     {
@@ -802,6 +817,16 @@ public sealed class CsvFileAdapterTests
         new UTF32Encoding(bigEndian: true, byteOrderMark: true)
             .GetPreamble()
             .Concat(new UTF32Encoding(bigEndian: true, byteOrderMark: true).GetBytes("TRUE,42\r\n"))
+            .ToArray()
+    };
+
+    public static TheoryData<byte[]> Utf16BomCsvPayloads() => new()
+    {
+        Encoding.Unicode.GetPreamble()
+            .Concat(Encoding.Unicode.GetBytes("Name,Amount,Flag\r\nCaf\u00e9,42,TRUE\r\n"))
+            .ToArray(),
+        Encoding.BigEndianUnicode.GetPreamble()
+            .Concat(Encoding.BigEndianUnicode.GetBytes("Name,Amount,Flag\r\nCaf\u00e9,42,TRUE\r\n"))
             .ToArray()
     };
 

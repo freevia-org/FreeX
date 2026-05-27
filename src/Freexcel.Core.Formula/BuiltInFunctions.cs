@@ -504,6 +504,7 @@ public static partial class BuiltInFunctions
         ["LOGINV"]           = (LognormInv, 3, 3),
 
         // ── Phase C: Financial functions ─────────────────────────────────────
+        ["ISPMT"]     = (Ispmt, 4, 4),
         ["IPMT"]      = (Ipmt, 4, 6),
         ["PPMT"]      = (Ppmt, 4, 6),
         ["CUMIPMT"]   = (Cumipmt, 6, 6),
