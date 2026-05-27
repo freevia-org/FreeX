@@ -2788,6 +2788,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Randbetween_SameShapeBottomAndTopRanges_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(5)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(6)));
+
+        var result = _eval.Evaluate("=RANDBETWEEN(A1:A2,B1:B2)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        ((NumberValue)result.At(1, 1)).Value.Should().Be(1);
+        ((NumberValue)result.At(2, 1)).Value.Should().BeGreaterThanOrEqualTo(5).And.BeLessThanOrEqualTo(6);
+    }
+
+    [Fact]
     public void Randbetween_IntegerRangeOverflow_ReturnsNumError()
     {
         _eval.Evaluate("=RANDBETWEEN(-9223372036854775808,9223372036854775807)", MakeSheet()).Should().Be(ErrorValue.Num);
