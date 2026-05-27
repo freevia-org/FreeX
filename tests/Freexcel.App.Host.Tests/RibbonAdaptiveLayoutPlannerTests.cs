@@ -182,6 +182,22 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
+    public void ApplyBreakpointOverrides_RestoresPageSetupAfterPlannerCollapse()
+    {
+        var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange" };
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            900,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
+
+        states[Array.IndexOf(groupNames, "Page Setup")].Should().Be(
+            RibbonAdaptiveGroupState.Full,
+            "Page Layout should preserve direct access to the primary Page Setup commands before utility groups");
+        states[Array.IndexOf(groupNames, "Themes")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Arrange")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
     public void ApplyBreakpointOverrides_KeepsDataSortAndFilterBeforeConnectionsAtMediumWidths()
     {
         var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast", "Outline" };

@@ -53,8 +53,9 @@ public partial class MainWindow
         ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
         SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
 
+        var protectedGroupIndexes = GetRibbonFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth.Value);
         while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
-               CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: availableWidth.Value > 760))
+               CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: availableWidth.Value > 760, protectedGroupIndexes))
         {
             ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
@@ -69,6 +70,25 @@ public partial class MainWindow
 
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
         _ribbonCompact = compacted;
+    }
+
+    private static HashSet<int> GetRibbonFallbackProtectedGroupIndexes(
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        double availableWidth)
+    {
+        var protectedIndexes = new HashSet<int>();
+        if (availableWidth <= 760)
+            return protectedIndexes;
+
+        var groupNames = groups.Select(group => group.Name).ToList();
+        var pageSetupIndex = groupNames.IndexOf("Page Setup");
+        if (groupNames.Contains("Themes", StringComparer.Ordinal) &&
+            pageSetupIndex >= 0)
+        {
+            protectedIndexes.Add(pageSetupIndex);
+        }
+
+        return protectedIndexes;
     }
 
     private static void ApplyRibbonAdaptiveStates(
@@ -106,12 +126,18 @@ public partial class MainWindow
         return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
     }
 
-    private static bool CollapseOneMoreRibbonGroup(RibbonAdaptiveGroupState[] states, bool preserveFirstGroup)
+    private static bool CollapseOneMoreRibbonGroup(
+        RibbonAdaptiveGroupState[] states,
+        bool preserveFirstGroup,
+        IReadOnlySet<int>? protectedGroupIndexes = null)
     {
         var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
         for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
         {
             if (states[i] == RibbonAdaptiveGroupState.Collapsed)
+                continue;
+
+            if (protectedGroupIndexes?.Contains(i) == true)
                 continue;
 
             states[i] = RibbonAdaptiveGroupState.Collapsed;
