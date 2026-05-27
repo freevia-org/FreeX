@@ -153,6 +153,27 @@ public sealed class StatusBarLayoutTests
     }
 
     [Fact]
+    public void StatusZoomPercent_IsKeyboardReachableAfterZoomButtons()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.CycleShellFocus(reverse: true);
+            harness.FocusedElementName.Should().Be("StatusZoomOutButton");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("ZoomSlider");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("StatusZoomInButton");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("StatusZoomText");
+        });
+    }
+
+    [Fact]
     public void ZoomSliderAndButtons_ShareACommonVisualCenter()
     {
         StaTestRunner.Run(() =>

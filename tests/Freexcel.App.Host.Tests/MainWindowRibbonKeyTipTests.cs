@@ -419,6 +419,19 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ZoomCustomDialogCancel_ReturnsFocusToWorksheet()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenCustomZoomDialogAndCancel();
+
+            harness.FocusedElementIsWorksheet.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void ViewShowToggleKeyTips_UpdateSheetAndFormulaBarState()
     {
         RunSta(() =>
@@ -1032,6 +1045,7 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _updateSsRecentList;
         private readonly MethodInfo _refreshSheetProtectionUi;
         private readonly MethodInfo _hideStartScreen;
+        private readonly MethodInfo _zoomCustomMenuItemClick;
         private readonly Type _scopeType;
         private readonly FieldInfo _scopeField;
         private readonly FieldInfo _activeMenuField;
@@ -1061,6 +1075,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetProtectionUi");
             _hideStartScreen = typeof(MainWindow).GetMethod("HideStartScreen", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "HideStartScreen");
+            _zoomCustomMenuItemClick = typeof(MainWindow).GetMethod("ZoomCustomMenuItem_Click", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ZoomCustomMenuItem_Click");
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
             _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -1500,6 +1516,20 @@ public sealed class MainWindowRibbonKeyTipTests
                 "the ribbon keytip sequence {0},{1} should open a menu",
                 tabKeyTip,
                 string.Join(",", commandKeyTips));
+        }
+
+        public void OpenCustomZoomDialogAndCancel()
+        {
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() =>
+                {
+                    var zoomDialog = _window.OwnedWindows.OfType<ZoomDialog>().Single();
+                    zoomDialog.Close();
+                }));
+
+            _zoomCustomMenuItemClick.Invoke(_window, [_window, new RoutedEventArgs()]);
+            PumpDispatcher();
         }
 
         private void ResetUiState()
