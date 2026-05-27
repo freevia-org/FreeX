@@ -6,7 +6,120 @@ namespace Freexcel.Core.Formula;
 
 public static partial class BuiltInFunctions
 {
-    // Phase A1 text functions: UNICHAR, UNICODE, NUMBERVALUE.
+    // Phase A1 text functions: ROMAN, UNICHAR, UNICODE, NUMBERVALUE.
+
+    private static ScalarValue Roman(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args.Count > 1 && args[1] is ErrorValue formError) return formError;
+
+        var formArg = args.Count > 1 ? args[1] : new NumberValue(0);
+        return MapBinaryMathArgs(args[0], formArg, RomanScalarWithForm);
+    }
+
+    private static ScalarValue RomanScalarWithForm(ScalarValue value, ScalarValue formValue)
+    {
+        if (!TryRomanForm(formValue, out int form)) return ErrorValue.Value;
+        return RomanScalar(value, form);
+    }
+
+    private static bool TryRomanForm(ScalarValue value, out int form)
+    {
+        form = 0;
+        if (value is BoolValue b)
+        {
+            form = b.Value ? 0 : 4;
+            return true;
+        }
+
+        var number = ToNumber(value);
+        if (!double.IsFinite(number)) return false;
+        form = (int)Math.Truncate(number);
+        return form is >= 0 and <= 4;
+    }
+
+    private static ScalarValue RomanScalar(ScalarValue value, int form)
+    {
+        if (value is ErrorValue e) return e;
+
+        var number = ToNumber(value);
+        if (!double.IsFinite(number)) return ErrorValue.Value;
+        int n = (int)Math.Truncate(number);
+        if (n < 0 || n > 3999) return ErrorValue.Value;
+        return TextResult(ToRoman(n, form));
+    }
+
+    private static string ToRoman(int number, int form)
+    {
+        if (number == 0) return string.Empty;
+
+        var tokens = RomanTokens(form);
+        var sb = new System.Text.StringBuilder();
+        var remaining = number;
+        foreach (var (value, symbol) in tokens)
+        {
+            while (remaining >= value)
+            {
+                sb.Append(symbol);
+                remaining -= value;
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static (int Value, string Symbol)[] RomanTokens(int form)
+    {
+        var tokens = new List<(int Value, string Symbol)>
+        {
+            (1000, "M"),
+            (900, "CM"),
+            (500, "D"),
+            (400, "CD"),
+            (100, "C"),
+            (90, "XC"),
+            (50, "L"),
+            (40, "XL"),
+            (10, "X"),
+            (9, "IX"),
+            (5, "V"),
+            (4, "IV"),
+            (1, "I")
+        };
+
+        if (form >= 1)
+        {
+            tokens.Add((950, "LM"));
+            tokens.Add((450, "LD"));
+            tokens.Add((95, "VC"));
+            tokens.Add((45, "VL"));
+        }
+
+        if (form >= 2)
+        {
+            tokens.Add((990, "XM"));
+            tokens.Add((490, "XD"));
+            tokens.Add((99, "IC"));
+            tokens.Add((49, "IL"));
+        }
+
+        if (form >= 3)
+        {
+            tokens.Add((995, "VM"));
+            tokens.Add((495, "VD"));
+        }
+
+        if (form >= 4)
+        {
+            tokens.Add((999, "IM"));
+            tokens.Add((499, "ID"));
+        }
+
+        return tokens
+            .OrderByDescending(static token => token.Value)
+            .ThenBy(static token => token.Symbol.Length)
+            .ToArray();
+    }
 
     private static ScalarValue Unichar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {

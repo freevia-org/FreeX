@@ -6,7 +6,7 @@ namespace Freexcel.Core.Formula.Tests;
 
 /// <summary>
 /// Tests for Phase C financial functions:
-/// IPMT, PPMT, CUMIPMT, CUMPRINC, EFFECT, NOMINAL, MIRR, XIRR, XNPV,
+/// ISPMT, IPMT, PPMT, CUMIPMT, CUMPRINC, EFFECT, NOMINAL, MIRR, XIRR, XNPV,
 /// RRI, PDURATION, FVSCHEDULE, DB, DDB, VDB, SYD, AMORDEGRC, AMORLINC,
 /// DOLLARDE, DOLLARFR, DISC, INTRATE, RECEIVED, ACCRINT,
 /// TBILLEQ, TBILLPRICE, TBILLYIELD, COUPDAYBS, COUPDAYS, COUPDAYSNC,
@@ -64,6 +64,31 @@ public class PhaseCFinancialTests
         range.ColCount.Should().Be(1);
         for (int row = 0; row < expected.Length; row++)
             ((NumberValue)range.At(row + 1, 1)).Value.Should().BeApproximately(expected[row], 1e-10);
+    }
+
+    [Fact]
+    public void Ispmt_ReturnsDocumentedEvenPrincipalInterest()
+    {
+        Calc("ISPMT(10%/12,1,3*12,8000000)").Should().BeApproximately(-64814.8148148, 1e-6);
+        Calc("ISPMT(10%,1,3,8000000)").Should().BeApproximately(-533333.333333, 1e-6);
+    }
+
+    [Fact]
+    public void Ispmt_CountsPeriodsFromZeroAndSpillsRangeArguments()
+    {
+        Calc("ISPMT(10%,0,3,8000000)").Should().BeApproximately(-800000, 1e-9);
+        AssertApproxColumn(
+            EvalWithData("ISPMT(10%,A1:A2,3,8000000)", (1, 1, 0.0), (2, 1, 1.0)),
+            Calc("ISPMT(10%,0,3,8000000)"),
+            Calc("ISPMT(10%,1,3,8000000)"));
+    }
+
+    [Fact]
+    public void Ispmt_InvalidPeriodOrNper_ReturnsNumError()
+    {
+        CalcError("ISPMT(10%,-1,3,8000000)").Should().Be("#NUM!");
+        CalcError("ISPMT(10%,4,3,8000000)").Should().Be("#NUM!");
+        CalcError("ISPMT(10%,1,0,8000000)").Should().Be("#NUM!");
     }
 
     [Fact]
