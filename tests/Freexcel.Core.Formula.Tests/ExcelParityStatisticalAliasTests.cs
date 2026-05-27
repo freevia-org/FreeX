@@ -226,6 +226,29 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void ZTest_ReturnsOneTailedProbabilityAndLegacyAliasMatches()
+    {
+        var sheet = Values(3, 6, 7, 8, 6, 5, 4, 2, 1, 9);
+
+        Number("=Z.TEST(A1:A10,4)", sheet).Should().BeApproximately(0.09057419685136381, 1e-12);
+        Number("=Z.TEST(A1:A10,4,2)", sheet).Should().BeApproximately(0.04099510503934628, 1e-7);
+        Number("=ZTEST(A1:A10,4,2)", sheet).Should().BeApproximately(Number("=Z.TEST(A1:A10,4,2)", sheet), 1e-12);
+    }
+
+    [Fact]
+    public void ZTest_IgnoresNonnumericRangeValuesAndReturnsExcelErrors()
+    {
+        var sheet = Values(3, 6, 7, 8, 6, 5, 4, 2, 1, 9);
+        sheet.SetCell(new CellAddress(sheet.Id, 11, 1), new TextValue("ignored"));
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new BoolValue(true));
+
+        Number("=Z.TEST(A1:A12,4,2)", sheet).Should().BeApproximately(Number("=Z.TEST(A1:A10,4,2)", sheet), 1e-12);
+        _eval.Evaluate("=Z.TEST(A11:A12,4)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=Z.TEST(A1:A1,4)", sheet).Should().Be(ErrorValue.DivByZero);
+        _eval.Evaluate("=Z.TEST(A1:A10,4,0)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void ModeSngl_ReturnsFirstLowestMostFrequentValue()
     {
         Number("=MODE.SNGL(A1:A5)", Values(3, 2, 2, 3, 2)).Should().Be(2);
