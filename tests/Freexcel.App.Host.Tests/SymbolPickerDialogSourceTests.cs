@@ -126,12 +126,42 @@ public sealed class SymbolPickerDialogSourceTests
     }
 
     [Fact]
+    public void Dialog_DoesNotLetHiddenSpecialCharactersTabOverrideInitialSymbolSelection()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("ApplySelection(SymbolPickerSelectionPlanner.CreateInitialSelection(GetSymbolsForSubset(SubsetChoices[0])))");
+        source.Should().NotContain("specialList.SelectedIndex = 0;");
+    }
+
+    [Fact]
     public void Dialog_NamesSymbolGridAndSpecialCharacterListForAccessibility()
     {
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("AutomationProperties.SetName(grid, \"Symbols\");");
         source.Should().Contain("AutomationProperties.SetName(specialList, \"Special characters\");");
+    }
+
+    [Fact]
+    public void Dialog_NamesSymbolPickerControlsAndActionsForAccessibility()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("AutomationProperties.SetName(fontBox, \"Symbol font\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(fontBox, \"Choose the font used to preview and insert symbols.\");");
+        source.Should().Contain("AutomationProperties.SetName(subsetBox, \"Symbol subset\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(subsetBox, \"Choose the Unicode subset shown in the symbol grid.\");");
+        source.Should().Contain("AutomationProperties.SetName(selectedCode, \"Character code\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(selectedCode, \"Enter a Unicode hexadecimal character code.\");");
+        source.Should().Contain("AutomationProperties.SetName(preview, \"Selected symbol preview\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(preview, \"Shows the currently selected symbol.\");");
+        source.Should().Contain("AutomationProperties.SetName(codeSelect, \"Go to character code\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(codeSelect, \"Select the symbol for the entered Unicode character code.\");");
+        source.Should().Contain("AutomationProperties.SetName(insert, \"Insert selected symbol\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(insert, \"Insert the selected symbol or special character.\");");
+        source.Should().Contain("AutomationProperties.SetName(cancel, \"Cancel symbol insertion\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(cancel, \"Close the Symbol dialog without inserting a symbol.\");");
     }
 
     [Fact]

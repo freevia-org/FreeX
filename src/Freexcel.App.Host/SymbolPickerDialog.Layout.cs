@@ -35,6 +35,14 @@ public sealed partial class SymbolPickerDialog
 
         var fontBox = new ComboBox { ItemsSource = FontChoices, SelectedIndex = 0, MinWidth = 160 };
         var subsetBox = new ComboBox { ItemsSource = SubsetChoices, SelectedIndex = 0, MinWidth = 160 };
+        AutomationProperties.SetName(fontBox, "Symbol font");
+        AutomationProperties.SetHelpText(fontBox, "Choose the font used to preview and insert symbols.");
+        AutomationProperties.SetName(subsetBox, "Symbol subset");
+        AutomationProperties.SetHelpText(subsetBox, "Choose the Unicode subset shown in the symbol grid.");
+        AutomationProperties.SetName(selectedCode, "Character code");
+        AutomationProperties.SetHelpText(selectedCode, "Enter a Unicode hexadecimal character code.");
+        AutomationProperties.SetName(preview, "Selected symbol preview");
+        AutomationProperties.SetHelpText(preview, "Shows the currently selected symbol.");
         topGrid.Children.Add(new Label { Content = "_Font:", Target = fontBox, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(fontBox, 1);
         topGrid.Children.Add(fontBox);
@@ -180,7 +188,6 @@ public sealed partial class SymbolPickerDialog
                 selectSymbolText(symbol);
         };
         specialList.MouseDoubleClick += (_, _) => acceptSelectedSymbol();
-        specialList.SelectedIndex = 0;
         return specialList;
     }
 
@@ -191,6 +198,8 @@ public sealed partial class SymbolPickerDialog
         codeRow.Children.Add(selectedCode);
         codeRow.Children.Add(new TextBlock { Text = "from: Unicode (hex)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) });
         var codeSelect = new Button { Content = "_Go", Width = 52, Margin = new Thickness(8, 0, 0, 0) };
+        AutomationProperties.SetName(codeSelect, "Go to character code");
+        AutomationProperties.SetHelpText(codeSelect, "Select the symbol for the entered Unicode character code.");
         codeSelect.Click += (_, _) =>
         {
             if (TryParseCharacterCode(selectedCode.Text, out var symbol))
@@ -220,8 +229,12 @@ public sealed partial class SymbolPickerDialog
             Margin = new Thickness(0, 8, 0, 0)
         };
         var insert = new Button { Content = "_Insert", Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        AutomationProperties.SetName(insert, "Insert selected symbol");
+        AutomationProperties.SetHelpText(insert, "Insert the selected symbol or special character.");
         insert.Click += (_, _) => acceptSelectedSymbol();
         var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
+        AutomationProperties.SetName(cancel, "Cancel symbol insertion");
+        AutomationProperties.SetHelpText(cancel, "Close the Symbol dialog without inserting a symbol.");
         btnRow.Children.Add(insert);
         btnRow.Children.Add(cancel);
         return btnRow;
