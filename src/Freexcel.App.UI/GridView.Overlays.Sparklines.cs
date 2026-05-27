@@ -20,8 +20,8 @@ public partial class GridView
             return;
         }
 
-        var rowLookup = Viewport.RowMetrics.ToDictionary(r => r.Row);
-        var colLookup = Viewport.ColMetrics.ToDictionary(c => c.Col);
+        var rowLookup = BuildSparklineRowMetricLookup(Viewport.RowMetrics);
+        var colLookup = BuildSparklineColumnMetricLookup(Viewport.ColMetrics);
 
         foreach (var sparkline in Sparklines)
         {
@@ -46,6 +46,24 @@ public partial class GridView
                 DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, SparklinePositiveBrush, SparklineNegativeBrush);
             dc.Pop();
         }
+    }
+
+    private static Dictionary<uint, RowMetric> BuildSparklineRowMetricLookup(IReadOnlyList<RowMetric> rows)
+    {
+        var lookup = new Dictionary<uint, RowMetric>(rows.Count);
+        foreach (var row in rows)
+            lookup.Add(row.Row, row);
+
+        return lookup;
+    }
+
+    private static Dictionary<uint, ColMetric> BuildSparklineColumnMetricLookup(IReadOnlyList<ColMetric> columns)
+    {
+        var lookup = new Dictionary<uint, ColMetric>(columns.Count);
+        foreach (var column in columns)
+            lookup.Add(column.Col, column);
+
+        return lookup;
     }
 
     private static SolidColorBrush FrozenBrush(Color color)
