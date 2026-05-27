@@ -133,6 +133,9 @@ public partial class GridView
             case GridQuickAnalysisPreviewVisualKind.StackedColumnChart:
                 DrawQuickAnalysisStackedColumnChartPreview(dc, rect.Value);
                 break;
+            case GridQuickAnalysisPreviewVisualKind.PieChart:
+                DrawQuickAnalysisPieChartPreview(dc, rect.Value);
+                break;
         }
     }
 
@@ -295,6 +298,38 @@ public partial class GridView
             var width = chartRect.Width * widths[i];
             dc.DrawRectangle(QuickAnalysisColumnChartPreviewBrush, null, new Rect(chartRect.Left, top, width, barHeight));
         }
+    }
+
+    private static void DrawQuickAnalysisPieChartPreview(DrawingContext dc, Rect previewRect)
+    {
+        var diameter = Math.Max(0, Math.Min(previewRect.Width, previewRect.Height) * 0.55);
+        if (diameter <= 0)
+            return;
+
+        var center = new Point(
+            previewRect.Left + Math.Min(previewRect.Width * 0.52, previewRect.Width - (diameter / 2)),
+            previewRect.Top + previewRect.Height / 2);
+        var radius = diameter / 2;
+        dc.DrawEllipse(QuickAnalysisColumnChartPreviewBrush, null, center, radius, radius);
+
+        var wedge = new StreamGeometry();
+        using (var context = wedge.Open())
+        {
+            context.BeginFigure(center, isFilled: true, isClosed: true);
+            context.LineTo(new Point(center.X, center.Y - radius), isStroked: true, isSmoothJoin: true);
+            context.ArcTo(
+                new Point(center.X + radius * 0.92, center.Y + radius * 0.39),
+                new Size(radius, radius),
+                rotationAngle: 0,
+                isLargeArc: false,
+                SweepDirection.Clockwise,
+                isStroked: true,
+                isSmoothJoin: true);
+        }
+
+        wedge.Freeze();
+        dc.DrawGeometry(QuickAnalysisPieChartAccentBrush, null, wedge);
+        dc.DrawEllipse(null, QuickAnalysisColumnChartAxisPen, center, radius, radius);
     }
 
     private void RenderSelection(DrawingContext dc)
