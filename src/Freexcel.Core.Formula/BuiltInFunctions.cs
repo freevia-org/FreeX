@@ -1072,50 +1072,6 @@ public static partial class BuiltInFunctions
     // IFS(condition1, value1, [condition2, value2, ...])
     // SWITCH(expr, val1, result1, [val2, result2, ...], [default])
     // ═══════════════════════════════════════════════════════════════════
-    // Phase 5 – IS functions
-    // ═══════════════════════════════════════════════════════════════════
-
-    private static ScalarValue Isblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is BlankValue)
-            : new BoolValue(args[0] is BlankValue);
-
-    private static ScalarValue Isnumber(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is NumberValue or DateTimeValue)
-            : new BoolValue(args[0] is NumberValue or DateTimeValue);
-
-    private static ScalarValue Istext(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is TextValue)
-            : new BoolValue(args[0] is TextValue);
-
-    private static ScalarValue Iserror(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is ErrorValue)
-            : new BoolValue(args[0] is ErrorValue);
-
-    private static ScalarValue Isna(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is ErrorValue e2 && e2.Code == "#N/A")
-            : new BoolValue(args[0] is ErrorValue e2 && e2.Code == "#N/A");
-
-    private static ScalarValue Islogical(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is BoolValue)
-            : new BoolValue(args[0] is BoolValue);
-
-    private static RangeValue MapPredicateRange(RangeValue range, Func<ScalarValue, bool> predicate)
-    {
-        var cells = new ScalarValue[range.RowCount, range.ColCount];
-        for (int r = 0; r < range.RowCount; r++)
-            for (int c = 0; c < range.ColCount; c++)
-                cells[r, c] = new BoolValue(predicate(range.Cells[r, c]));
-
-        return new RangeValue(cells);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
     // Phase 5 – Reference helpers: ROW, COLUMN, ROWS, COLUMNS
     // ═══════════════════════════════════════════════════════════════════
 

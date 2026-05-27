@@ -303,7 +303,8 @@ public sealed partial class ViewportService : IViewportService
             cell.Value,
             style.NumberFormat,
             targetWidthCharacters,
-            workbook.IndexedColors);
+            workbook.IndexedColors,
+            workbook.Theme);
         if (TryParseHexColor(result.ColorHex, out var color))
             style.FontColor = color;
 

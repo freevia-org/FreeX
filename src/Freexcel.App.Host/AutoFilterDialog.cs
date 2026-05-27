@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Model;
 
@@ -79,6 +80,7 @@ public sealed partial class AutoFilterDialog : Window
     private readonly Button _textFiltersButton = new() { Content = "_Text Filters", Visibility = Visibility.Collapsed };
     private readonly Button _numberFiltersButton = new() { Content = "_Number Filters", Visibility = Visibility.Collapsed };
     private readonly Button _dateFiltersButton = new() { Content = "_Date Filters", Visibility = Visibility.Collapsed };
+    private readonly ListBox _checklistBox = new();
     private readonly GroupBox _customFilterGroup = new() { Header = "Custom filter", Visibility = Visibility.Collapsed };
     private readonly Label _criteriaSuggestionLabel = new()
     {
@@ -195,14 +197,13 @@ public sealed partial class AutoFilterDialog : Window
         stack.Children.Add(_searchBox);
         stack.Children.Add(_addCurrentSelectionToFilterBox);
 
-        var list = new ListBox
-        {
-            ItemsSource = _items,
-            Height = 180,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-        list.ItemTemplate = CreateItemTemplate();
-        stack.Children.Add(list);
+        _checklistBox.ItemsSource = _items;
+        _checklistBox.Height = 180;
+        _checklistBox.Margin = new Thickness(0, 0, 0, 8);
+        _checklistBox.ItemTemplate = CreateItemTemplate();
+        _checklistBox.PreviewKeyDown += ChecklistBox_PreviewKeyDown;
+        AutomationProperties.SetName(_checklistBox, "Filter values");
+        stack.Children.Add(_checklistBox);
 
         var selectionRow = new StackPanel
         {

@@ -25,9 +25,10 @@ public static partial class NumberFormatter
         double oaDate,
         string[] sections,
         int? targetWidthCharacters,
-        WorkbookIndexedColorPalette? indexedColors)
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme)
     {
-        var parsed = SelectDateTimeSection(oaDate, sections, indexedColors);
+        var parsed = SelectDateTimeSection(oaDate, sections, indexedColors, theme);
         if (parsed.Format == "")
             return new FormatResult("", parsed.ColorHex);
 
@@ -39,9 +40,10 @@ public static partial class NumberFormatter
     private static ParsedSection SelectDateTimeSection(
         double value,
         string[] sections,
-        WorkbookIndexedColorPalette? indexedColors)
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme)
     {
-        var parsedSections = sections.Select(section => ParseSection(section, indexedColors)).ToArray();
+        var parsedSections = sections.Select(section => ParseSection(section, indexedColors, theme)).ToArray();
         if (!parsedSections.Any(section => section.Condition is not null))
             return parsedSections[0];
 

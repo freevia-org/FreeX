@@ -1277,6 +1277,12 @@ internal static class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-unsupported-sheet-types-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyUnsupportedSheetTypesFixup(archive);
+            return;
+        }
+
         if (!string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -1336,6 +1342,104 @@ internal static class XlsxCorpusFixtureFactory
         var workbookRelsReplacement = archive.CreateEntry("xl/_rels/workbook.xml.rels");
         using var relOutput = workbookRelsReplacement.Open();
         workbookRelsXml.Save(relOutput);
+    }
+
+    private static void ApplyUnsupportedSheetTypesFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/chartsheets/sheet1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml");
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/dialogSheets/sheet2.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml");
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/macroSheets/sheet3.xml",
+                "application/vnd.ms-excel.macrosheet+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is not null)
+        {
+            var workbookXml = LoadPackageXml(workbookEntry);
+            var sheets = workbookXml.Root?.Element(workbookNs + "sheets");
+            if (sheets is not null)
+            {
+                EnsureWorkbookSheet(
+                    sheets,
+                    workbookNs,
+                    officeRelNs,
+                    "Freexcel Chart Sheet",
+                    9001,
+                    "rIdFreexcelChartSheet1");
+                EnsureWorkbookSheet(
+                    sheets,
+                    workbookNs,
+                    officeRelNs,
+                    "Freexcel Dialog Sheet",
+                    9002,
+                    "rIdFreexcelDialogSheet1");
+                EnsureWorkbookSheet(
+                    sheets,
+                    workbookNs,
+                    officeRelNs,
+                    "Freexcel Macro Sheet",
+                    9003,
+                    "rIdFreexcelMacroSheet1");
+                ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+            }
+        }
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelChartSheet1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet",
+            "chartsheets/sheet1.xml");
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelDialogSheet1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet",
+            "dialogSheets/sheet2.xml");
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelMacroSheet1",
+            "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet",
+            "macroSheets/sheet3.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    private static void EnsureWorkbookSheet(
+        XElement sheets,
+        XNamespace workbookNs,
+        XNamespace officeRelNs,
+        string name,
+        int sheetId,
+        string relationshipId)
+    {
+        sheets.Elements(workbookNs + "sheet")
+            .Where(sheet => string.Equals(sheet.Attribute("name")?.Value, name, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        sheets.Add(new XElement(
+            workbookNs + "sheet",
+            new XAttribute("name", name),
+            new XAttribute("sheetId", sheetId),
+            new XAttribute(officeRelNs + "id", relationshipId)));
     }
 
     private static void ApplySlicerTimelineFloatingDrawingFixup(

@@ -119,6 +119,11 @@ public static class RibbonAdaptiveLayoutPlanner
 
         if (IsPageLayoutRibbonGroupSet(groupNames))
         {
+            ApplyPriorityState(
+                states,
+                groupNames,
+                ["Page Setup"],
+                RibbonAdaptiveGroupState.Full);
             ApplyPriorityCollapse(
                 states,
                 groupNames,

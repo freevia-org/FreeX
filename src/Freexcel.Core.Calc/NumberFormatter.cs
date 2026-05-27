@@ -29,20 +29,36 @@ public static partial class NumberFormatter
         ScalarValue value,
         string formatString,
         WorkbookIndexedColorPalette indexedColors)
-        => FormatWithColor(value, formatString, (int?)null, indexedColors);
+        => FormatWithColor(value, formatString, (int?)null, indexedColors, null);
 
     public static FormatResult FormatWithColor(
         ScalarValue value,
         string formatString,
         int targetWidthCharacters,
         WorkbookIndexedColorPalette indexedColors)
-        => FormatWithColor(value, formatString, (int?)targetWidthCharacters, indexedColors);
+        => FormatWithColor(value, formatString, (int?)targetWidthCharacters, indexedColors, null);
+
+    public static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        WorkbookIndexedColorPalette indexedColors,
+        WorkbookTheme theme)
+        => FormatWithColor(value, formatString, (int?)null, indexedColors, theme);
+
+    public static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        int targetWidthCharacters,
+        WorkbookIndexedColorPalette indexedColors,
+        WorkbookTheme theme)
+        => FormatWithColor(value, formatString, (int?)targetWidthCharacters, indexedColors, theme);
 
     private static FormatResult FormatWithColor(
         ScalarValue value,
         string formatString,
         int? targetWidthCharacters,
-        WorkbookIndexedColorPalette? indexedColors = null)
+        WorkbookIndexedColorPalette? indexedColors = null,
+        WorkbookTheme? theme = null)
     {
         if (string.IsNullOrEmpty(formatString) || IsGeneralFormat(formatString))
             return new FormatResult(FormatGeneral(value));
@@ -62,9 +78,9 @@ public static partial class NumberFormatter
 
         return value switch
         {
-            NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters, indexedColors),
-            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections, targetWidthCharacters, indexedColors),
-            TextValue t     => FormatTextWithColor(t.Value, sections, indexedColors),
+            NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters, indexedColors, theme),
+            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections, targetWidthCharacters, indexedColors, theme),
+            TextValue t     => FormatTextWithColor(t.Value, sections, indexedColors, theme),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
             ErrorValue e    => new FormatResult(e.Code),
             BlankValue      => new FormatResult(""),
@@ -82,9 +98,10 @@ public static partial class NumberFormatter
         double value,
         string[] sections,
         int? targetWidthCharacters,
-        WorkbookIndexedColorPalette? indexedColors)
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme)
     {
-        var parsedSections = sections.Select(section => ParseSection(section, indexedColors)).ToArray();
+        var parsedSections = sections.Select(section => ParseSection(section, indexedColors, theme)).ToArray();
         bool hasConditions = parsedSections.Any(section => section.Condition is not null);
 
         ParsedSection section;

@@ -93,11 +93,12 @@ public sealed partial class AutoFilterDialog
             _ => _textFiltersButton
         };
         var submenu = new ContextMenu();
+        var usedAccessKeys = new HashSet<char>();
         foreach (var child in family.Children)
         {
             var menuItem = new MenuItem
             {
-                Header = child.Header,
+                Header = AddUniqueAccessKey(child.Header, usedAccessKeys),
                 Tag = child
             };
             menuItem.Click += (_, _) => ApplyFilterFamilyChild(child);
@@ -105,6 +106,23 @@ public sealed partial class AutoFilterDialog
         }
 
         parentButton.ContextMenu = submenu;
+    }
+
+    private static string AddUniqueAccessKey(string header, HashSet<char> usedAccessKeys)
+    {
+        if (string.IsNullOrWhiteSpace(header) || header.Contains('_', StringComparison.Ordinal))
+            return header;
+
+        for (var i = 0; i < header.Length; i++)
+        {
+            var ch = header[i];
+            if (!char.IsLetterOrDigit(ch) || !usedAccessKeys.Add(char.ToUpperInvariant(ch)))
+                continue;
+
+            return string.Concat(header.AsSpan(0, i), "_", header.AsSpan(i));
+        }
+
+        return header;
     }
 
     private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)
@@ -242,6 +260,51 @@ public sealed partial class AutoFilterDialog
 
         FocusColorChoiceButton(targetIndex);
         e.Handled = true;
+    }
+
+    private void ChecklistBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var handled = e.Key switch
+        {
+            Key.Space => ToggleFocusedChecklistItem(),
+            Key.Home => FocusChecklistItem(0),
+            Key.End => FocusChecklistItem(_items.Count - 1),
+            _ => false
+        };
+
+        if (handled)
+            e.Handled = true;
+    }
+
+    private bool ToggleFocusedChecklistItem()
+    {
+        var index = _checklistBox.SelectedIndex >= 0 ? _checklistBox.SelectedIndex : 0;
+        if (index < 0 || index >= _items.Count)
+            return false;
+
+        var item = _items[index];
+        item.IsSelected = !item.IsSelected;
+        _checklistBox.Items.Refresh();
+        FocusChecklistItem(index);
+        return true;
+    }
+
+    private bool FocusChecklistItem(int index)
+    {
+        if (_items.Count == 0)
+            return false;
+
+        var item = _items[Math.Clamp(index, 0, _items.Count - 1)];
+        _checklistBox.SelectedItem = item;
+        _checklistBox.ScrollIntoView(item);
+        _checklistBox.UpdateLayout();
+        if (_checklistBox.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem container)
+        {
+            container.Focus();
+            Keyboard.Focus(container);
+        }
+
+        return true;
     }
 
     private void FocusColorChoiceButton(int index)

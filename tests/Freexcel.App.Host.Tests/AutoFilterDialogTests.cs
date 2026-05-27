@@ -384,6 +384,25 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_ChecklistSupportsKeyboardToggleAndBoundaryNavigation()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("private readonly ListBox _checklistBox = new();");
+        source.Should().Contain("AutomationProperties.SetName(_checklistBox, \"Filter values\");");
+        source.Should().Contain("_checklistBox.PreviewKeyDown += ChecklistBox_PreviewKeyDown;");
+        source.Should().Contain("private void ChecklistBox_PreviewKeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("Key.Space => ToggleFocusedChecklistItem()");
+        source.Should().Contain("Key.Home => FocusChecklistItem(0)");
+        source.Should().Contain("Key.End => FocusChecklistItem(_items.Count - 1)");
+        source.Should().Contain("private bool ToggleFocusedChecklistItem()");
+        source.Should().Contain("item.IsSelected = !item.IsSelected;");
+        source.Should().Contain("_checklistBox.Items.Refresh();");
+        source.Should().Contain("private bool FocusChecklistItem(int index)");
+        source.Should().Contain("_checklistBox.ScrollIntoView(item);");
+    }
+
+    [Fact]
     public void DataFilterCommands_RouteColorFiltersAndCompositeCriteriaToRealCommands()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
@@ -468,6 +487,10 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("ConfigureFilterFamilySubmenu(menuPlan);");
         source.Should().Contain("private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)");
         source.Should().Contain("new ContextMenu()");
+        source.Should().Contain("var usedAccessKeys = new HashSet<char>();");
+        source.Should().Contain("Header = AddUniqueAccessKey(child.Header, usedAccessKeys),");
+        source.Should().Contain("private static string AddUniqueAccessKey(string header, HashSet<char> usedAccessKeys)");
+        source.Should().Contain("usedAccessKeys.Add(char.ToUpperInvariant(ch))");
         source.Should().Contain("parentButton.ContextMenu = submenu;");
         source.Should().Contain("menuItem.Click += (_, _) => ApplyFilterFamilyChild(child);");
         source.Should().Contain("private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)");

@@ -265,6 +265,25 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesLocalPrivatePrivacyMetadataCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var localPrivateRows = manifestRows
+            .Where(row => row.SourceType == "local-private")
+            .ToArray();
+
+        localPrivateRows.Should().HaveCountGreaterThan(0);
+        localPrivateRows.Should().OnlyContain(
+            row =>
+                row.Path.StartsWith("local-private/", StringComparison.Ordinal) &&
+                row.SourceUrl == "user-approved-local" &&
+                row.License == "private-local",
+            "local-private corpus rows should disclose capability coverage without leaking private workbook provenance");
+        report.Should().Contain($"| Local-private privacy metadata coverage | {localPrivateRows.Length}/{localPrivateRows.Length} rows use local-only source markers and private-local license |");
+    }
+
+    [Fact]
     public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
     {
         var manifestRows = ReadManifestRows();
@@ -277,6 +296,22 @@ public class XlsxCorpusScaffoldTests
             .OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings));
         report.Should().Contain("known-gap warning expectations are declared for optional private rows");
         report.Should().Contain($"| Local-private known-gap warning declarations | {localPrivateKnownGapCount}/{localPrivateKnownGapCount} present in manifest for skipped optional private rows |");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesUnsupportedSheetTypeWorkbookReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/unsupported-sheet-types-001.xlsx" &&
+            row.FeatureTags.Contains("chart-sheets", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("dialog-sheets", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("macro-sheets", StringComparison.Ordinal));
+        const string reportLine = "| Unsupported sheet type package references | Chartsheet, dialog sheet, and macro sheet workbook references and relationships are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
     }
 
     [Fact]
