@@ -1374,13 +1374,16 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
         var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFitPlanner.cs"));
+        var dimensionPlanner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RowColumnDimensionPlanner.cs"));
 
         source.Should().Contain("AutoFitPlanner.PlanRowHeights");
         source.Should().Contain("AutoFitPlanner.PlanColumnWidths");
-        source.Should().Contain("new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
-        source.Should().Contain("new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
-        source.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
-        source.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
+        dimensionPlanner.Should().Contain("new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
+        dimensionPlanner.Should().Contain("new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
+        dimensionPlanner.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        dimensionPlanner.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
         source.Should().NotContain("return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
         source.Should().NotContain("return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width)");
         planner.Should().Contain("AutoFitSizingService.EstimateRowHeight");
@@ -2189,19 +2192,19 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         source.Should().Contain("\"Row Height\",");
         source.Should().Contain("\"Column Width\",");
-        source.Should().Contain("var dialog = new RowHeightDialog(GetSelectedRowHeightDialogValue(range)) { Owner = this };");
-        source.Should().Contain("var dialog = new ColumnWidthDialog(GetSelectedColumnWidthDialogValue(range)) { Owner = this };");
-        source.Should().Contain("private double GetSelectedRowHeightDialogValue(GridRange range)");
-        source.Should().Contain("private double GetSelectedColumnWidthDialogValue(GridRange range)");
-        source.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
-        source.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
+        source.Should().Contain("new RowHeightDialog(RowColumnDimensionPlanner.GetRowHeightDialogValue(sheet, range)) { Owner = this };");
+        source.Should().Contain("new ColumnWidthDialog(RowColumnDimensionPlanner.GetColumnWidthDialogValue(sheet, range)) { Owner = this };");
         source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
-        source.Should().Contain("var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);");
-        source.Should().Contain("var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);");
-        source.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, dialog.Result.Height)");
-        source.Should().Contain("new SetColumnWidthCommand(sheetId, startCol, endCol, dialog.Result.Width)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)");
+        source.Should().Contain("RowColumnDimensionPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)");
         source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Row Height\"");
         source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Column Width\"");
+
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RowColumnDimensionPlanner.cs"));
+        plannerSource.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
+        plannerSource.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
+        plannerSource.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, height)");
+        plannerSource.Should().Contain("new SetColumnWidthCommand(sheetId, startCol, endCol, width)");
     }
 
     [Fact]
