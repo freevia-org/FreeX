@@ -1143,6 +1143,21 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void TitleBar_UsesSharedFormatterForDirtyGroupedAndSavedFileState()
+    {
+        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var lifecycleSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookLifecycle.cs"));
+
+        editingSource.Should().Contain("WorkbookTitleFormatter.Format(_workbook.Name, _workbookDirty, IsWorkbookGrouped())");
+        lifecycleSource.Should().Contain("_workbookDirty = true;");
+        lifecycleSource.Should().Contain("_workbookDirty = false;");
+        lifecycleSource.Should().Contain("UpdateTitleBar();");
+        backstageSource.Should().Contain("_workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);");
+        backstageSource.Should().Contain("MarkWorkbookSaved();");
+    }
+
+    [Fact]
     public void KeyboardShortcuts_RegisterExcelNameManagerCommands()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
