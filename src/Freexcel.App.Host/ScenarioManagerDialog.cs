@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Model;
@@ -69,6 +70,7 @@ public sealed partial class ScenarioManagerDialog : Window
         body.Children.Add(left);
 
         left.Children.Add(new Label { Content = "_Scenarios:", Target = _scenarioList, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        AutomationProperties.SetName(_scenarioList, "Scenarios");
         _scenarioList.ItemsSource = BuildScenarioItems(workbook);
         _scenarioList.DisplayMemberPath = nameof(ScenarioManagerItem.Name);
         _scenarioList.SelectionChanged += (_, _) => UpdateSelectionState();

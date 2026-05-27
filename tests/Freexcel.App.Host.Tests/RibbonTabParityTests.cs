@@ -297,12 +297,13 @@ public sealed class RibbonTabParityTests
         ExtractGroupLabels(helpTab).Should().Equal("Help");
         ExtractTooltipTitles(helpGroup).Should().ContainInOrder(
             "Help Online",
-            "Contact Support",
             "Feedback",
             "Copy Diagnostics",
+            "Check for Updates",
+            "About Freexcel",
+            "Contact Support",
             "Show Training",
-            "What's New",
-            "About Freexcel");
+            "What's New");
     }
 
     private static string ExtractTabXaml(string xaml, string header, string nextHeader)
