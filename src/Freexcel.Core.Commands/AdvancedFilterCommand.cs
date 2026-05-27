@@ -34,8 +34,14 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
             _criteriaRange.Start.Sheet != _criteriaRange.End.Sheet)
             return new CommandOutcome(false, "Advanced Filter list and criteria ranges must each stay on one sheet.");
 
-        var sheet = ctx.GetSheet(_listRange.Start.Sheet);
-        var criteriaSheet = ctx.GetSheet(_criteriaRange.Start.Sheet);
+        var sheet = ctx.Workbook.GetSheet(_listRange.Start.Sheet);
+        if (sheet is null)
+            return new CommandOutcome(false, "Advanced Filter list range must belong to this workbook.");
+
+        var criteriaSheet = ctx.Workbook.GetSheet(_criteriaRange.Start.Sheet);
+        if (criteriaSheet is null)
+            return new CommandOutcome(false, "Advanced Filter criteria range must belong to this workbook.");
+
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 

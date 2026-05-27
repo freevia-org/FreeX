@@ -34,6 +34,48 @@ public sealed class AdvancedFilterCommandTests
     }
 
     [Fact]
+    public void AdvancedFilter_RejectsListRangeOutsideWorkbook()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        Set(sheet, 1, 6, "Region");
+        Set(sheet, 2, 6, "East");
+        var staleSheetId = SheetId.New();
+
+        var command = new AdvancedFilterCommand(
+            new GridRange(new CellAddress(staleSheetId, 1, 1), new CellAddress(staleSheetId, 5, 3)),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: null,
+            UniqueRecordsOnly: false);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("list range");
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AdvancedFilter_RejectsCriteriaRangeOutsideWorkbook()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        var staleSheetId = SheetId.New();
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: new GridRange(new CellAddress(staleSheetId, 1, 1), new CellAddress(staleSheetId, 2, 1)),
+            CopyTo: null,
+            UniqueRecordsOnly: false);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("criteria range");
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
     public void AdvancedFilter_InPlace_RejectsProtectedSheetWithoutUseAutoFilterPermission()
     {
         var (wb, sheet, ctx) = Setup();
