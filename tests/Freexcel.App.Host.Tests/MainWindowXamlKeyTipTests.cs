@@ -1458,6 +1458,19 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void NameBox_EscapeCancelsTypedReferenceAndReturnsToGrid()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+
+        source.Should().Contain("if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)");
+        source.Should().Contain("RestoreCellAddressBoxText();");
+        source.Should().Contain("FocusSheetGridIfNeeded();");
+        source.Should().Contain("private void RestoreCellAddressBoxText()");
+        source.Should().Contain("CellAddressBox.Text = SheetGrid.SelectedRange is { } range");
+        source.Should().Contain("? FormatRangeReference(range.Start, range.End)");
+    }
+
+    [Fact]
     public void FormulaBarTextFields_UseReadableExcelScaleSizing()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

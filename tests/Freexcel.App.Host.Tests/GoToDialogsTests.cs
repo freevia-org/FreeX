@@ -190,6 +190,17 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void MainWindow_NameBoxEscapeCancelsTypedReference()
+    {
+        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+
+        editingSource.Should().Contain("if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)");
+        editingSource.Should().Contain("RestoreCellAddressBoxText();");
+        editingSource.Should().Contain("FocusSheetGridIfNeeded();");
+        editingSource.Should().Contain("CellAddressBox.SelectAll();");
+    }
+
+    [Fact]
     public void GetChoices_ExposesExcelGoToSpecialCoreChoices()
     {
         var choices = GoToSpecialDialog.GetChoices();

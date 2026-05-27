@@ -587,6 +587,14 @@ public partial class MainWindow
 
     private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)
+        {
+            RestoreCellAddressBoxText();
+            FocusSheetGridIfNeeded();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)
             return;
 
@@ -608,6 +616,14 @@ public partial class MainWindow
         UpdateViewport();
         RefreshValidationDropdown();
         e.Handled = true;
+    }
+
+    private void RestoreCellAddressBoxText()
+    {
+        CellAddressBox.Text = SheetGrid.SelectedRange is { } range
+            ? FormatRangeReference(range.Start, range.End)
+            : "A1";
+        CellAddressBox.SelectAll();
     }
 
     private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
