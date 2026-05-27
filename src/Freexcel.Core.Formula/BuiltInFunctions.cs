@@ -272,6 +272,7 @@ public static partial class BuiltInFunctions
         ["WRAPCOLS"] = (WrapCols, 2, 3),
         ["EXPAND"]   = (Expand, 2, 4),
         ["UNIQUE"]   = (Unique, 1, 3),
+        ["TRIMRANGE"] = (TrimRange, 1, 3),
 
         // ── Subtotal ─────────────────────────────────────────────────────────
         ["SUBTOTAL"] = (Subtotal, 2, 255),
@@ -474,6 +475,7 @@ public static partial class BuiltInFunctions
         ["BYROW"]     = (ByRowFunc,     2, 2),
         ["BYCOL"]     = (ByColFunc,     2, 2),
         ["MAKEARRAY"] = (MakeArrayFunc, 3, 3),
+        ["ISOMITTED"] = (IsOmitted,     1, 1),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
