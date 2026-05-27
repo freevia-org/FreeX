@@ -7,6 +7,9 @@ public static class XsltWorkbookTransform
 {
     public static MemoryStream TransformToSpreadsheetXml(Stream sourceXml, Stream stylesheet)
     {
+        ArgumentNullException.ThrowIfNull(sourceXml);
+        ArgumentNullException.ThrowIfNull(stylesheet);
+
         var transform = LoadStylesheet(stylesheet);
         using var sourceReader = CreateSecureReader(sourceXml);
 

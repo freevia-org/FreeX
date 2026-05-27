@@ -49,6 +49,48 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetDtd_ReportsStylesheetXmlDiagnostic()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <!DOCTYPE xsl:stylesheet [ <!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini"> ]>
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_NullSource_ThrowsArgumentNullException()
+    {
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(null!, stylesheet);
+
+        act.Should().Throw<ArgumentNullException>()
+            .Where(exception => exception.ParamName == "sourceXml");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_NullStylesheet_ThrowsArgumentNullException()
+    {
+        using var source = StreamFromString("<rows />");
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .Where(exception => exception.ParamName == "stylesheet");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_SourceDtd_ReportsSourceDiagnostic()
     {
         using var source = StreamFromString("""
