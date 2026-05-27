@@ -97,6 +97,9 @@ public sealed class FlashFillServiceTests
     [InlineData("North (Retail)", "Retail", "South (Wholesale)", "Wholesale", "East (Online)", "Online")]
     [InlineData("INV [Open]", "Open", "INV [Closed]", "Closed", "INV [Pending]", "Pending")]
     [InlineData("Batch {Ready}", "Ready", "Batch {Held}", "Held", "Batch {Review}", "Review")]
+    [InlineData("North \"Retail\"", "Retail", "South \"Wholesale\"", "Wholesale", "East \"Online\"", "Online")]
+    [InlineData("North 'Retail'", "Retail", "South 'Wholesale'", "Wholesale", "East 'Online'", "Online")]
+    [InlineData("Dept <Retail>", "Retail", "Dept <Wholesale>", "Wholesale", "Dept <Online>", "Online")]
     public void Fill_PairedDelimiterExtraction_ExtractsTextBetweenMatchingDelimiters(
         string source1,
         string expected1,
