@@ -15,9 +15,9 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("My Add-ins", "My Add-ins", RibbonCommandLayoutKind.Large)]
     [InlineData("3D Map", "3D Map", RibbonCommandLayoutKind.Large)]
     [InlineData("Macros", "Macros", RibbonCommandLayoutKind.Large)]
-    [InlineData("Contact Support", "Contact Support", RibbonCommandLayoutKind.Large)]
-    [InlineData("Show Training", "Show Training", RibbonCommandLayoutKind.Large)]
-    [InlineData("What's New", "What's New", RibbonCommandLayoutKind.Large)]
+    [InlineData("Contact Support", "Contact Support", RibbonCommandLayoutKind.Small)]
+    [InlineData("Show Training", "Show Training", RibbonCommandLayoutKind.Small)]
+    [InlineData("What's New", "What's New", RibbonCommandLayoutKind.Small)]
     public void GetLayoutKind_ClassifiesRibbonCommands(string commandName, string label, RibbonCommandLayoutKind expected)
     {
         RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label).Should().Be(expected);
