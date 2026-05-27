@@ -574,6 +574,15 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void HyperlinkDialog_TextEditorsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_displayBox, \"Text to display\");");
+        source.Should().Contain("AutomationProperties.SetName(_targetBox, \"Address\");");
+    }
+
+    [Fact]
     public void HyperlinkDialog_AcceptWarnsAndRefocusesBlankTarget()
     {
         var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
