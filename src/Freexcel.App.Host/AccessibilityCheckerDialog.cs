@@ -26,10 +26,14 @@ public sealed class AccessibilityCheckerDialog : Window
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
         AutomationProperties.SetName(_messageBox, "Accessibility checker result");
+        AutomationProperties.SetAutomationId(_messageBox, "AccessibilityCheckerResultText");
         AutomationProperties.SetHelpText(_messageBox, "Summarizes the workbook accessibility check when no issues are found.");
         AutomationProperties.SetName(_issueList, "Accessibility issues");
+        AutomationProperties.SetAutomationId(_issueList, "AccessibilityCheckerIssueList");
         AutomationProperties.SetHelpText(_issueList, "Select an accessibility issue and choose Go To to navigate to its workbook location.");
         AutomationProperties.SetName(_goToButton, "Go to selected accessibility issue");
+        AutomationProperties.SetAutomationId(_goToButton, "AccessibilityCheckerGoToButton");
+        AutomationProperties.SetHelpText(_goToButton, "Navigate to the selected accessibility issue.");
         Content = issues.Count == 0
             ? CreateCleanContent(CreateMessage(issues))
             : CreateIssueContent(issues);

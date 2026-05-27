@@ -32,6 +32,7 @@ public sealed class WorkbookStatisticsDialog : Window
             Margin = new Thickness(0, 0, 0, 16)
         };
         AutomationProperties.SetName(statisticsBlock, "Workbook statistics");
+        AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
         AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
         stack.Children.Add(statisticsBlock);
         stack.Children.Add(DialogButtonRowFactory.CreateOkOnly(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
