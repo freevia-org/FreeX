@@ -16,6 +16,8 @@ public sealed class GridViewContextMenuTests
         eventsSource.Should().Contain("HeaderContextMenuRequested");
         inputSource.Should().Contain("HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Column, cm.Col, pos)");
         inputSource.Should().Contain("HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Row, rm.Row, pos)");
+        inputSource.Should().Contain("if (pos.Y <= EffectiveColHeaderHeight && pos.X >= ActualRowHeaderWidth)");
+        inputSource.Should().Contain("if (pos.X <= ActualRowHeaderWidth && pos.Y >= EffectiveColHeaderHeight)");
     }
 
     [Fact]
