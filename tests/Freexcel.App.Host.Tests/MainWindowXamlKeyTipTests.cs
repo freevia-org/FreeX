@@ -2088,6 +2088,53 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void DrawFormatCropGradientEffectsButtons_ExposeAccessibleCommandsAndMenus()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var cropButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute("Click")?.Value == "PictureCropBtn_Click");
+        var gradientButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute("Click")?.Value == "ObjectGradientBtn_Click");
+        var effectsButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute("Click")?.Value == "ObjectEffectsBtn_Click");
+
+        cropButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("C");
+        cropButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
+        gradientButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("G");
+        gradientButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
+        effectsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FX");
+        effectsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");
+
+        var cropMenuItems = cropButton
+            .Descendants(presentation + "MenuItem")
+            .Select(item => new
+            {
+                Header = item.Attribute("Header")?.Value,
+                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                Click = item.Attribute("Click")?.Value,
+                Markup = item.ToString()
+            })
+            .ToList();
+
+        cropMenuItems.Should().Contain(item =>
+            item.Header == "Crop..." &&
+            item.KeyTip == "C" &&
+            item.Click == "PictureCropDialogMenuItem_Click" &&
+            item.Markup.Contains("AutomationProperties.AutomationId=\"DrawCropPictureMenuItem\""));
+        cropMenuItems.Should().Contain(item =>
+            item.Header == "Reset Crop" &&
+            item.KeyTip == "R" &&
+            item.Click == "PictureResetCropMenuItem_Click" &&
+            item.Markup.Contains("AutomationProperties.AutomationId=\"DrawResetPictureCropMenuItem\""));
+    }
+
+    [Fact]
     public void ShareCommandButtons_ArePresentedAsWindowsShareCommands()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

@@ -2680,13 +2680,30 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
 
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Open crop controls for the selected or most recent inserted picture.\"");
         xaml.Should().Contain("Header=\"Crop...\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureMenuItem\"");
         xaml.Should().Contain("Header=\"Reset Crop\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawResetPictureCropMenuItem\"");
         xaml.Should().Contain("Click=\"PictureCropDialogMenuItem_Click\"");
         xaml.Should().Contain("Click=\"PictureResetCropMenuItem_Click\"");
         source.Should().Contain("PictureResetCropMenuItem_Click");
         source.Should().Contain("new SetPictureCropCommand(");
         source.Should().Contain("0, 0, 0, 0");
+    }
+
+    [Fact]
+    public void DrawGradientAndEffectsButtons_ExposeStableAutomationMetadata()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Open gradient fill controls for the selected shape.\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Toggle the selected shape shadow effect.\"");
+        xaml.Should().Contain("Click=\"ObjectGradientBtn_Click\"");
+        xaml.Should().Contain("Click=\"ObjectEffectsBtn_Click\"");
     }
 
     [Fact]
