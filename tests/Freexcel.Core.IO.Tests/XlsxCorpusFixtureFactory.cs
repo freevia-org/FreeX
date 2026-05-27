@@ -1023,6 +1023,12 @@ internal static class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-vba-macros-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyVbaMacrosFixup(archive);
+            return;
+        }
+
         if (string.Equals(id, "generated-smartart-diagrams-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplySmartArtDiagramsFixup(archive);
@@ -1469,6 +1475,22 @@ internal static class XlsxCorpusFixtureFactory
             "http://schemas.microsoft.com/office/2011/relationships/webextension",
             "webextension1.xml");
         ReplacePackageXml(archive, taskpanesRelsPath, taskpanesRelsXml);
+    }
+
+    private static void ApplyVbaMacrosFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelVbaProject1",
+            "http://schemas.microsoft.com/office/2006/relationships/vbaProject",
+            "vbaProject.bin");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
     }
 
     private static void ApplySmartArtDiagramsFixup(ZipArchive archive)

@@ -403,6 +403,20 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesVbaMacrosPackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/vba-macros-001.xlsm" &&
+            row.FeatureTags.Contains("macros", StringComparison.Ordinal));
+        const string reportLine = "| VBA macro package references | Workbook VBA project relationships are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
