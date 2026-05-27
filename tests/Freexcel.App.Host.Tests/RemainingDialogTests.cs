@@ -749,6 +749,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_RangeEditorsExposeAutomationNames()
+    {
+        var source = ReadRemainingDialogSources();
+
+        source.Should().Contain("AutomationProperties.SetName(_dataRangeBox, \"Sparkline data range\");");
+        source.Should().Contain("AutomationProperties.SetName(_locationBox, \"Sparkline location\");");
+    }
+
+    [Fact]
     public void SparklineDialog_UsesExcelWinLossLabel()
     {
         SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.Line).Should().Be("Line");
