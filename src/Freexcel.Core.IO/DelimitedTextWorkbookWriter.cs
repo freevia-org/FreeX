@@ -171,6 +171,7 @@ internal static class DelimitedTextWorkbookWriter
 
     private static bool IsCoercionLikeText(string value) =>
         value[0] is '=' or '+' or '-' or '@' ||
+        IsSeparatorDirectiveLikeText(value) ||
         IsBooleanLikeText(value) ||
         IsDateTimeLikeText(value) ||
         IsUnsignedCurrencyText(value) ||
@@ -184,6 +185,11 @@ internal static class DelimitedTextWorkbookWriter
         IsDateTimeLikeText(value) ||
         IsUnsignedCurrencyText(value) ||
         IsNumericLikeText(value);
+
+    private static bool IsSeparatorDirectiveLikeText(string value) =>
+        value.Length == 5 &&
+        value.StartsWith("sep=", StringComparison.OrdinalIgnoreCase) &&
+        value[4] is not '\r' and not '\n';
 
     private static bool IsBooleanLikeText(string value)
     {
