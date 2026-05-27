@@ -16,11 +16,8 @@ internal static class GridDrawingObjectPlanner
     {
         rect = default;
         if (viewport is null ||
-            !TryGetAnchorPoint(viewport, anchor.From, rowHeaderWidth, columnHeaderHeight, out var topLeft) ||
-            !TryGetAnchorPoint(viewport, anchor.To, rowHeaderWidth, columnHeaderHeight, out var bottomRight))
-        {
+            !TryGetAnchorPoints(viewport, anchor, rowHeaderWidth, columnHeaderHeight, out var topLeft, out var bottomRight))
             return false;
-        }
 
         var width = bottomRight.X - topLeft.X;
         var height = bottomRight.Y - topLeft.Y;
@@ -96,26 +93,95 @@ internal static class GridDrawingObjectPlanner
         return string.IsNullOrWhiteSpace(objectName) ? fallback : objectName.Trim();
     }
 
-    private static bool TryGetAnchorPoint(
+    private static bool TryGetAnchorPoints(
         ViewportModel viewport,
-        DrawingAnchorPoint anchor,
+        DrawingAnchorRange anchor,
         double rowHeaderWidth,
         double columnHeaderHeight,
-        out Point point)
+        out Point topLeft,
+        out Point bottomRight)
     {
-        point = default;
-        if (anchor.Column == uint.MaxValue || anchor.Row == uint.MaxValue)
+        topLeft = default;
+        bottomRight = default;
+        if (anchor.From.Column == uint.MaxValue ||
+            anchor.To.Column == uint.MaxValue ||
+            anchor.From.Row == uint.MaxValue ||
+            anchor.To.Row == uint.MaxValue)
             return false;
 
-        var column = viewport.ColMetrics.FirstOrDefault(metric => metric.Col == anchor.Column + 1);
-        var row = viewport.RowMetrics.FirstOrDefault(metric => metric.Row == anchor.Row + 1);
-        if (column is null || row is null)
+        if (!TryFindAnchorColumns(viewport.ColMetrics, anchor.From.Column + 1, anchor.To.Column + 1, out var fromColumn, out var toColumn) ||
+            !TryFindAnchorRows(viewport.RowMetrics, anchor.From.Row + 1, anchor.To.Row + 1, out var fromRow, out var toRow))
             return false;
 
-        point = new Point(
-            rowHeaderWidth + column.LeftOffset + EmusToPixels(anchor.ColumnOffsetEmu),
-            columnHeaderHeight + row.TopOffset + EmusToPixels(anchor.RowOffsetEmu));
+        topLeft = new Point(
+            rowHeaderWidth + fromColumn.LeftOffset + EmusToPixels(anchor.From.ColumnOffsetEmu),
+            columnHeaderHeight + fromRow.TopOffset + EmusToPixels(anchor.From.RowOffsetEmu));
+        bottomRight = new Point(
+            rowHeaderWidth + toColumn.LeftOffset + EmusToPixels(anchor.To.ColumnOffsetEmu),
+            columnHeaderHeight + toRow.TopOffset + EmusToPixels(anchor.To.RowOffsetEmu));
         return true;
+    }
+
+    private static bool TryFindAnchorColumns(
+        IReadOnlyList<ColMetric> metrics,
+        uint fromColumn,
+        uint toColumn,
+        out ColMetric fromMetric,
+        out ColMetric toMetric)
+    {
+        ColMetric? foundFrom = null;
+        ColMetric? foundTo = null;
+
+        foreach (var metric in metrics)
+        {
+            if (foundFrom is null && metric.Col == fromColumn)
+                foundFrom = metric;
+
+            if (foundTo is null && metric.Col == toColumn)
+                foundTo = metric;
+
+            if (foundFrom is not null && foundTo is not null)
+            {
+                fromMetric = foundFrom;
+                toMetric = foundTo;
+                return true;
+            }
+        }
+
+        fromMetric = null!;
+        toMetric = null!;
+        return false;
+    }
+
+    private static bool TryFindAnchorRows(
+        IReadOnlyList<RowMetric> metrics,
+        uint fromRow,
+        uint toRow,
+        out RowMetric fromMetric,
+        out RowMetric toMetric)
+    {
+        RowMetric? foundFrom = null;
+        RowMetric? foundTo = null;
+
+        foreach (var metric in metrics)
+        {
+            if (foundFrom is null && metric.Row == fromRow)
+                foundFrom = metric;
+
+            if (foundTo is null && metric.Row == toRow)
+                foundTo = metric;
+
+            if (foundFrom is not null && foundTo is not null)
+            {
+                fromMetric = foundFrom;
+                toMetric = foundTo;
+                return true;
+            }
+        }
+
+        fromMetric = null!;
+        toMetric = null!;
+        return false;
     }
 
     private static double EmusToPixels(long emus) => emus / EmusPerPixel;
