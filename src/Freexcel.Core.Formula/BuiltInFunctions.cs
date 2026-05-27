@@ -74,6 +74,7 @@ public static partial class BuiltInFunctions
         ["SEARCH"]      = (Search, 2, 3),
         ["MID"]         = (Mid, 3, 3),
         ["REPT"]        = (Rept, 2, 2),
+        ["ROMAN"]       = (Roman, 1, 2),
         ["VALUE"]       = (ValueFunc, 1, 1),
 
         // ── Phase 4.2: Date & time ───────────────────────────────────────────
