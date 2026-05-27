@@ -204,7 +204,8 @@ internal static partial class DelimitedTextWorkbookReader
         var candidate = field.Value[1..];
         if (!IsBooleanLikeText(candidate) &&
             !TryParseIsoDateTime(candidate, out _) &&
-            !TryParseTime(candidate, out _))
+            !TryParseTime(candidate, out _) &&
+            !TryParseCurrency(candidate, out _))
         {
             return false;
         }
