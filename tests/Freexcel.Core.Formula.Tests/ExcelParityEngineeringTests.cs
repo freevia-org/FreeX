@@ -275,6 +275,27 @@ public sealed class ExcelParityEngineeringTests
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
     }
 
+    [Theory]
+    [InlineData("=IMEXP(0)", "1")]
+    [InlineData("=IMLN(1)", "0")]
+    [InlineData("=IMLOG10(100)", "2")]
+    [InlineData("=IMLOG2(8)", "3")]
+    public void ComplexExponentialAndLogFunctions_ReturnRealIdentities(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void ComplexExponentialAndLogFunctions_ReturnExcelComplexParts()
+    {
+        AssertNumberApproximately(_eval.Evaluate("=IMREAL(IMEXP(\"i\"))", MakeSheet()), Math.Cos(1.0));
+        AssertNumberApproximately(_eval.Evaluate("=IMAGINARY(IMEXP(\"i\"))", MakeSheet()), Math.Sin(1.0));
+        AssertNumberApproximately(_eval.Evaluate("=IMREAL(IMLN(\"1+i\"))", MakeSheet()), Math.Log(Math.Sqrt(2.0)));
+        AssertNumberApproximately(_eval.Evaluate("=IMAGINARY(IMLN(\"1+i\"))", MakeSheet()), Math.PI / 4.0);
+        AssertNumberApproximately(_eval.Evaluate("=IMREAL(IMLOG10(\"1+i\"))", MakeSheet()), Math.Log(Math.Sqrt(2.0)) / Math.Log(10.0));
+        AssertNumberApproximately(_eval.Evaluate("=IMAGINARY(IMLOG2(\"1+i\"))", MakeSheet()), (Math.PI / 4.0) / Math.Log(2.0));
+    }
+
     [Fact]
     public void ComplexFunctions_HandleRangesAndErrors()
     {
@@ -284,6 +305,8 @@ public sealed class ExcelParityEngineeringTests
             (3, 1, ErrorValue.NA));
 
         AssertColumn(_eval.Evaluate("=IMREAL(A1:A2)", sheet), new NumberValue(3), new NumberValue(5));
+        AssertColumn(_eval.Evaluate("=IMLOG10(A1:A2)", sheet), _eval.Evaluate("=IMLOG10(A1)", sheet), _eval.Evaluate("=IMLOG10(A2)", sheet));
+        AssertColumn(_eval.Evaluate("=IMEXP(A1:A3)", sheet), _eval.Evaluate("=IMEXP(A1)", sheet), _eval.Evaluate("=IMEXP(A2)", sheet), ErrorValue.NA);
         _eval.Evaluate("=IMSUM(A1:A2)", sheet).Should().Be(new TextValue("8+2i"));
         _eval.Evaluate("=IMSUM(A1:A3)", sheet).Should().Be(ErrorValue.NA);
     }
@@ -292,6 +315,9 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=COMPLEX(1,2,\"x\")", "#VALUE!")]
     [InlineData("=IMREAL(\"not complex\")", "#NUM!")]
     [InlineData("=IMDIV(\"1+i\",\"0\")", "#NUM!")]
+    [InlineData("=IMLN(\"0\")", "#NUM!")]
+    [InlineData("=IMLOG10(\"0\")", "#NUM!")]
+    [InlineData("=IMLOG2(\"not complex\")", "#NUM!")]
     public void ComplexFunctions_ReturnExcelErrors(string formula, string error)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new ErrorValue(error));
@@ -389,6 +415,10 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=BASE(7,2,NA())")]
     [InlineData("=DECIMAL(NA(),16)")]
     [InlineData("=DECIMAL(\"FF\",NA())")]
+    [InlineData("=IMEXP(NA())")]
+    [InlineData("=IMLN(NA())")]
+    [InlineData("=IMLOG10(NA())")]
+    [InlineData("=IMLOG2(NA())")]
     public void EngineeringFunctions_PropagateExcelErrors(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);

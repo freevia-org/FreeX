@@ -72,7 +72,7 @@ public static class InsertFunctionCatalogPlanner
     private static readonly HashSet<string> FinancialFunctions = ["PMT", "NPV", "IRR", "RATE", "PV", "FV", "IPMT", "PPMT", "NPER", "CUMIPMT", "CUMPRINC", "EFFECT", "NOMINAL", "MIRR", "XIRR", "XNPV", "RRI", "PDURATION", "FVSCHEDULE", "DB", "DDB", "VDB", "SYD", "AMORDEGRC", "AMORLINC", "DOLLARDE", "DOLLARFR", "DISC", "INTRATE", "RECEIVED", "ACCRINT", "ACCRINTM", "TBILLEQ", "TBILLPRICE", "TBILLYIELD", "COUPDAYBS", "COUPDAYS", "COUPDAYSNC", "COUPNCD", "COUPNUM", "COUPPCD", "PRICE", "YIELD", "PRICEDISC", "PRICEMAT", "YIELDDISC", "YIELDMAT", "DURATION", "MDURATION", "ODDFPRICE", "ODDFYIELD", "ODDLPRICE", "ODDLYIELD"];
     private static readonly HashSet<string> InformationFunctions = ["ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISREF", "ISFORMULA", "FORMULATEXT", "NA", "CELL", "INFO", "TYPE", "ERROR.TYPE", "N", "ISEVEN", "ISODD"];
     private static readonly HashSet<string> DatabaseFunctions = ["DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET", "DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP", "DVAR", "DVARP"];
-    private static readonly HashSet<string> EngineeringFunctions = ["CONVERT", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX", "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT"];
+    private static readonly HashSet<string> EngineeringFunctions = ["CONVERT", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX", "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT", "IMEXP", "IMLN", "IMLOG10", "IMLOG2"];
 
     private static readonly Dictionary<string, string> KnownDescriptions = new(StringComparer.OrdinalIgnoreCase)
     {
