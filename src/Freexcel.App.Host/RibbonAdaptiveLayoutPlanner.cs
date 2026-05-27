@@ -129,7 +129,7 @@ public static class RibbonAdaptiveLayoutPlanner
                 states,
                 groupNames,
                 availableWidth <= 1120
-                    ? ["Accessibility", "Notes", "Protect"]
+                    ? ["Notes", "Protect"]
                     : availableWidth <= 1320
                         ? ["Notes", "Protect"]
                         : []);
@@ -141,16 +141,14 @@ public static class RibbonAdaptiveLayoutPlanner
             ApplyPriorityState(
                 states,
                 groupNames,
-                availableWidth > 1800
-                    ? ["Workbook Views", "Show", "Zoom", "Window"]
-                    : ["Workbook Views", "Zoom", "Window"],
+                ["Workbook Views", "Show", "Zoom", "Window"],
                 RibbonAdaptiveGroupState.Full);
             ApplyPriorityCollapse(
                 states,
                 groupNames,
-                availableWidth > 1800
-                    ? ["Macros"]
-                    : ["Show", "Macros"]);
+                availableWidth <= 760
+                    ? ["Show", "Macros"]
+                    : ["Macros"]);
             return true;
         }
 
