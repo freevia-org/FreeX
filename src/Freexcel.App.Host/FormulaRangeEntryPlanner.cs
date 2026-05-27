@@ -74,16 +74,35 @@ public static class FormulaRangeEntryPlanner
         bool useR1C1ReferenceStyle,
         out FormulaRangeEntryEdit edit)
     {
-        var safeCaret = Math.Clamp(caretIndex, 0, text.Length);
-        edit = new FormulaRangeEntryEdit(new ExcelTextEdit(text, safeCaret, 0), safeCaret, 0);
-
-        if (!text.StartsWith("=", StringComparison.Ordinal))
-            return false;
-
         var referenceText = SpreadsheetDisplayFormatter.FormatRangeReference(
             selectedRange.Start,
             selectedRange.End,
             useR1C1ReferenceStyle);
+
+        return TryApplySelectionText(
+            text,
+            caretIndex,
+            selectionLength,
+            previousReferenceStart,
+            previousReferenceLength,
+            referenceText,
+            out edit);
+    }
+
+    public static bool TryApplySelectionText(
+        string text,
+        int caretIndex,
+        int selectionLength,
+        int? previousReferenceStart,
+        int? previousReferenceLength,
+        string selectionText,
+        out FormulaRangeEntryEdit edit)
+    {
+        var safeCaret = Math.Clamp(caretIndex, 0, text.Length);
+        edit = new FormulaRangeEntryEdit(new ExcelTextEdit(text, safeCaret, 0), safeCaret, 0);
+
+        if (!text.StartsWith("=", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(selectionText))
+            return false;
 
         var replacementStart = safeCaret;
         var replacementLength = Math.Clamp(selectionLength, 0, text.Length - replacementStart);
@@ -103,12 +122,12 @@ public static class FormulaRangeEntryPlanner
 
         var updated = text
             .Remove(replacementStart, replacementLength)
-            .Insert(replacementStart, referenceText);
+            .Insert(replacementStart, selectionText);
 
         edit = new FormulaRangeEntryEdit(
-            new ExcelTextEdit(updated, replacementStart + referenceText.Length, 0),
+            new ExcelTextEdit(updated, replacementStart + selectionText.Length, 0),
             replacementStart,
-            referenceText.Length);
+            selectionText.Length);
         return true;
     }
 }

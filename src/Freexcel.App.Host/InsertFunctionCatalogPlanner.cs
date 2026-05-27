@@ -62,7 +62,7 @@ public static class InsertFunctionCatalogPlanner
             : $"{name} function.";
 
     private static readonly HashSet<string> LogicalFunctions = ["IF", "IFS", "AND", "OR", "NOT", "IFERROR", "IFNA", "LET", "LAMBDA"];
-    private static readonly HashSet<string> LookupFunctions = ["VLOOKUP", "HLOOKUP", "XLOOKUP", "INDEX", "MATCH", "XMATCH", "INDIRECT", "OFFSET"];
+    private static readonly HashSet<string> LookupFunctions = ["VLOOKUP", "HLOOKUP", "XLOOKUP", "INDEX", "MATCH", "XMATCH", "INDIRECT", "OFFSET", "GETPIVOTDATA"];
     private static readonly HashSet<string> TextFunctions = ["CONCAT", "TEXTJOIN", "LEFT", "RIGHT", "MID", "LEN", "TRIM", "TEXT", "UPPER", "LOWER", "PROPER", "SUBSTITUTE", "FIND", "SEARCH", "REPT", "VALUE"];
     private static readonly HashSet<string> DateTimeFunctions = ["TODAY", "NOW", "DATE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "WEEKDAY", "EDATE", "DATEDIF", "EOMONTH", "WORKDAY", "NETWORKDAYS"];
     private static readonly HashSet<string> StatisticalFunctions = ["AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "COUNTIF", "COUNTIFS", "AVERAGEIF", "MEDIAN", "STDEV.S", "VAR.S", "RANK.EQ", "PERCENTILE.INC"];
@@ -83,6 +83,7 @@ public static class InsertFunctionCatalogPlanner
         ["INDEX"] = "Returns a value from a range by position.",
         ["MATCH"] = "Returns the relative position of an item.",
         ["XMATCH"] = "Returns the relative position of an item with modern match options.",
+        ["GETPIVOTDATA"] = "Returns data stored in a PivotTable report.",
         ["CONCAT"] = "Joins text values.",
         ["TEXT"] = "Formats a value as text.",
         ["TODAY"] = "Returns the current date.",
