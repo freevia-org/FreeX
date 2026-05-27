@@ -400,6 +400,7 @@ public static partial class BuiltInFunctions
         ["IMPRODUCT"]   = (ImProduct, 1, 255),
         ["IMREAL"]      = (ImReal, 1, 1),
         ["IMSIN"]       = (ImSin, 1, 1),
+        ["IMSQRT"]      = (ImSqrt, 1, 1),
         ["IMSUB"]       = (ImSub, 2, 2),
         ["IMSUM"]       = (ImSum, 1, 255),
         ["BIN2DEC"]     = (Bin2Dec, 1, 1),

@@ -314,6 +314,23 @@ public static partial class BuiltInFunctions
             parsed.Suffix));
     }
 
+    private static ScalarValue ImSqrt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImSqrtScalar);
+        return ImSqrtScalar(args[0]);
+    }
+
+    private static ScalarValue ImSqrtScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        double modulus = Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary);
+        double real = Math.Sqrt((modulus + parsed.Real) / 2.0);
+        double imaginary = Math.CopySign(Math.Sqrt(Math.Max(0.0, (modulus - parsed.Real) / 2.0)), parsed.Imaginary);
+        return TextResult(FormatComplex(real, imaginary, parsed.Suffix));
+    }
+
     private static IEnumerable<ScalarValue> FlattenComplexArguments(IReadOnlyList<ScalarValue> args)
     {
         foreach (var arg in args)
