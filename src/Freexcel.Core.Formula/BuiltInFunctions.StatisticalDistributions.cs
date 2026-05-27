@@ -613,6 +613,38 @@ public static partial class BuiltInFunctions
         return NumberResult(p);
     }
 
+    private static ScalarValue ZTest(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+
+        var (nums, err) = args[0] is RangeValue range
+            ? CollectRangeNumbers(range)
+            : CollectNumbers([args[0]]);
+        if (err is not null) return err;
+        if (nums!.Count == 0) return ErrorValue.NA;
+
+        double hypothesizedMean = ToNumber(args[1]);
+        double sigma;
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            sigma = ToNumber(args[2]);
+            if (sigma <= 0 || !double.IsFinite(sigma)) return ErrorValue.Num;
+        }
+        else
+        {
+            if (nums.Count < 2) return ErrorValue.DivByZero;
+            double sampleMean = nums.Average();
+            double variance = nums.Sum(value => (value - sampleMean) * (value - sampleMean)) / (nums.Count - 1);
+            sigma = Math.Sqrt(variance);
+            if (sigma == 0) return ErrorValue.DivByZero;
+        }
+
+        double z = (nums.Average() - hypothesizedMean) / (sigma / Math.Sqrt(nums.Count));
+        return NumberResult(1.0 - NormSCdf(z));
+    }
+
     // ── B2: F distribution ────────────────────────────────────────────────────
 
     private static ScalarValue FDist(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
