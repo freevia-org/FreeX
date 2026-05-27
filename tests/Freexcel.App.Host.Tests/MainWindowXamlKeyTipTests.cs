@@ -1869,6 +1869,16 @@ public sealed class MainWindowXamlKeyTipTests
 
         missing.Should().BeEmpty("online template discovery depends on an external Microsoft service and should not look like a normal local command");
 
+        var button = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "SsMoreTemplatesBtn_Click");
+
+        button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("MoreTemplatesExcludedButton");
+        button.Attribute("AutomationProperties.Name")?.Value.Should().Be("More templates unavailable");
+        button.Attribute("AutomationProperties.HelpText")?.Value
+            .Should()
+            .Contain("external Microsoft template service");
+
         document
             .Descendants()
             .Any(element => element.Attribute("MouseDown")?.Value == "SsMoreTemplates_MouseDown")
