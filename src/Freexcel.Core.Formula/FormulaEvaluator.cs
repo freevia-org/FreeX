@@ -97,7 +97,7 @@ public sealed class FormulaEvaluator
         "EXACT", "CODE", "CHAR", "LEN", "LEFT", "RIGHT", "MID", "REPLACE",
         "FIND", "SEARCH",
         "TRIM", "UPPER", "LOWER", "PROPER", "CLEAN",
-        "ROMAN",
+        "ARABIC", "ROMAN",
         "TEXT", "VALUE",
         "SUBSTITUTE", "REPT", "CONCATENATE",
         "FIXED", "DOLLAR", "T", "HYPERLINK", "ENCODEURL", "FILTERXML", "BAHTTEXT",
