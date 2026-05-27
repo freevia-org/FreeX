@@ -178,6 +178,31 @@ public sealed class XsltWorkbookTransformTests
             .WithInnerException<XsltException>();
     }
 
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetScript_ReportsDisabledFeatures()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:msxsl="urn:schemas-microsoft-com:xslt"
+                xmlns:user="urn:freexcel-test-script">
+              <msxsl:script language="C#" implements-prefix="user">
+                public string Value() { return "blocked"; }
+              </msxsl:script>
+              <xsl:template match="/">
+                <xsl:value-of select="user:Value()"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access and script are disabled*")
+            .WithInnerException<XsltException>();
+    }
+
     private static MemoryStream IdentityStylesheet() =>
         StreamFromString("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
