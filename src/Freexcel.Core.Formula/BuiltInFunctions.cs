@@ -623,12 +623,6 @@ public static partial class BuiltInFunctions
         return Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor;
     }
 
-    private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        DateTimeValue.FromDateTime(DateTime.Now);
-
-    private static ScalarValue Today(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        DateTimeValue.FromDateTime(DateTime.Today);
-
     private static ScalarValue Rand(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         new NumberValue(Random.Shared.NextDouble());
 
