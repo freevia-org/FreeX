@@ -3172,6 +3172,7 @@
                                                                   Content="Check for Updates" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CheckForUpdatesBtn_Click"
                                                                   AutomationProperties.Name="Check for Updates"
                                                                   AutomationProperties.AutomationId="HelpCheckForUpdatesButton"
+                                                                  AutomationProperties.HelpText="Open the latest Freexcel tester release in a web browser."
                                                                   local:RibbonTooltip.Title="Check for Updates"
                                                                   local:RibbonTooltip.KeyTip="UP"
                                                                   local:RibbonTooltip.Description="Open the latest Freexcel tester release in a web browser."/>
