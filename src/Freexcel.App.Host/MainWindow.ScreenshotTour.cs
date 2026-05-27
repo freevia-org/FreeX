@@ -87,7 +87,7 @@ public partial class MainWindow
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
             var path = Path.Combine(outputDir, $"{label}_{fileName}.png");
-            await using var stream = File.OpenWrite(path);
+            await using var stream = File.Create(path);
             encoder.Save(stream);
         }
     }
