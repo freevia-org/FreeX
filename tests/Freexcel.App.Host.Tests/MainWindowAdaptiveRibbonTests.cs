@@ -177,6 +177,23 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void DataRibbon_KeepsDataToolsAndForecastVisibleAtMediumWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Data", 1120);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Data Tools", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Forecast", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Data Validation", "What-If Analysis", "Forecast Sheet"],
+                "Excel keeps the medium-priority Data Tools and Forecast affordances visible around 1120px");
+        });
+    }
+
+    [Fact]
     public void ViewRibbon_KeepsShowWithZoomAndWindowAtMediumWidths()
     {
         StaTestRunner.Run(() =>

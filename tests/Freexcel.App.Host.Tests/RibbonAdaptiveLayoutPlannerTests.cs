@@ -178,9 +178,12 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
 
-        states[Array.IndexOf(groupNames, "Sort & Filter")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Sort & Filter")].Should().NotBe(RibbonAdaptiveGroupState.Collapsed);
         states[Array.IndexOf(groupNames, "Queries & Connections")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
         states[Array.IndexOf(groupNames, "Data Types")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Data Tools")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Forecast")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Outline")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Fact]
