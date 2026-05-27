@@ -83,6 +83,31 @@ public sealed class InsertFunctionDialogTests
             .Select(argument => argument.Name)
             .Should()
             .Equal("Value", "Format_text");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("FILTER")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Array", "Include", "If_empty");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("DSUM")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Database", "Field", "Criteria");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("CONVERT")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Number", "From_unit", "To_unit");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("MAP")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Array1", "Lambda", "Array2");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("GETPIVOTDATA")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Data_field", "Pivot_table", "Field1", "Item1");
     }
 
     [Fact]

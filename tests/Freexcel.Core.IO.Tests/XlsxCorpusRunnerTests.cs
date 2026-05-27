@@ -4345,7 +4345,13 @@ public class XlsxCorpusRunnerTests
             return;
 
         var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (!tags.Contains("styles") && !tags.Contains("formatting"))
+        if (!tags.Contains("styles") &&
+            !tags.Contains("formatting") &&
+            !tags.Contains("hyperlinks") &&
+            !tags.Contains("merged-cells") &&
+            !tags.Contains("inline-strings") &&
+            !tags.Contains("cell-types") &&
+            !tags.Contains("unsupported-sheet-types"))
             return;
 
         var originalPosition = package.CanSeek ? package.Position : 0;
@@ -4355,7 +4361,32 @@ public class XlsxCorpusRunnerTests
         try
         {
             using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-            archive.GetEntry("xl/styles.xml").Should().NotBeNull(row.Id);
+            if (tags.Contains("styles") || tags.Contains("formatting"))
+                archive.GetEntry("xl/styles.xml").Should().NotBeNull(row.Id);
+
+            if (tags.Contains("hyperlinks"))
+                PublicWorksheetElements(archive, "hyperlink").Should().NotBeEmpty(row.Id);
+
+            if (tags.Contains("merged-cells"))
+                PublicWorksheetElements(archive, "mergeCell").Should().NotBeEmpty(row.Id);
+
+            if (tags.Contains("inline-strings"))
+                PublicWorksheetCells(archive)
+                    .Any(cell =>
+                        string.Equals(cell.Attribute("t")?.Value, "inlineStr", StringComparison.Ordinal) ||
+                        cell.Element(WorksheetNs + "is") is not null)
+                    .Should()
+                    .BeTrue(row.Id);
+
+            if (tags.Contains("cell-types"))
+                PublicWorksheetCells(archive)
+                    .Select(cell => cell.Attribute("t")?.Value ?? "n")
+                    .Distinct(StringComparer.Ordinal)
+                    .Should()
+                    .HaveCountGreaterThanOrEqualTo(3, row.Id);
+
+            if (tags.Contains("unsupported-sheet-types"))
+                archive.Entries.Should().Contain(entry => entry.FullName.StartsWith("xl/chartsheets/", StringComparison.Ordinal), row.Id);
         }
         finally
         {
@@ -4363,6 +4394,27 @@ public class XlsxCorpusRunnerTests
                 package.Position = originalPosition;
         }
     }
+
+    private static IReadOnlyList<XElement> PublicWorksheetElements(ZipArchive archive, string localName)
+    {
+        return PublicWorksheetXmlDocuments(archive)
+            .SelectMany(document => document.Descendants(WorksheetNs + localName))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<XElement> PublicWorksheetCells(ZipArchive archive) =>
+        PublicWorksheetElements(archive, "c");
+
+    private static IReadOnlyList<XDocument> PublicWorksheetXmlDocuments(ZipArchive archive)
+    {
+        return archive.Entries
+            .Where(entry => entry.FullName.StartsWith("xl/worksheets/", StringComparison.Ordinal) &&
+                            entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Select(LoadPackageXml)
+            .ToArray();
+    }
+
+    private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
     private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
         new(

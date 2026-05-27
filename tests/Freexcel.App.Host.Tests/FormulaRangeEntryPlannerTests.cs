@@ -182,6 +182,25 @@ public sealed class FormulaRangeEntryPlannerTests
             .BeFalse();
     }
 
+    [Fact]
+    public void TryApplySelectionText_InsertsGetPivotDataCallAfterFormulaEquals()
+    {
+        FormulaRangeEntryPlanner.TryApplySelectionText(
+                "=",
+                caretIndex: 1,
+                selectionLength: 0,
+                previousReferenceStart: null,
+                previousReferenceLength: null,
+                "GETPIVOTDATA(\"Sum of Amount\",E2,\"Region\",\"West\")",
+                out var edit)
+            .Should()
+            .BeTrue();
+
+        edit.TextEdit.Text.Should().Be("=GETPIVOTDATA(\"Sum of Amount\",E2,\"Region\",\"West\")");
+        edit.ReferenceStart.Should().Be(1);
+        edit.ReferenceLength.Should().Be(48);
+    }
+
     private static GridRange Range(string start, string end) =>
         new(CellAddress.Parse(start, SheetId), CellAddress.Parse(end, SheetId));
 }

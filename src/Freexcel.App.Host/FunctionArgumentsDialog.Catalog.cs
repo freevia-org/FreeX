@@ -197,6 +197,91 @@ public sealed partial class FunctionArgumentsDialog
                 new("Range", "The range to evaluate."),
                 new("Criteria", "The condition that determines which cells are averaged."),
                 new("Average_range", "The cells to average. Omit to average cells in Range.", Optional: true)
+            ],
+            ["FILTER"] =
+            [
+                new("Array", "The range or array to filter."),
+                new("Include", "A Boolean array whose TRUE values are returned."),
+                new("If_empty", "The value returned when no rows or columns match.", Optional: true)
+            ],
+            ["SORTBY"] =
+            [
+                new("Array", "The range or array to sort."),
+                new("By_array1", "The range or array to sort by."),
+                new("Sort_order1", "1 for ascending or -1 for descending.", Optional: true),
+                new("By_array2", "An additional range or array to sort by.", Optional: true)
+            ],
+            ["TAKE"] =
+            [
+                new("Array", "The array from which to take rows or columns."),
+                new("Rows", "The number of rows to take."),
+                new("Columns", "The number of columns to take.", Optional: true)
+            ],
+            ["DROP"] =
+            [
+                new("Array", "The array from which to drop rows or columns."),
+                new("Rows", "The number of rows to drop."),
+                new("Columns", "The number of columns to drop.", Optional: true)
+            ],
+            ["EXPAND"] =
+            [
+                new("Array", "The array to expand."),
+                new("Rows", "The target row count."),
+                new("Columns", "The target column count.", Optional: true),
+                new("Pad_with", "The value used to fill new cells.", Optional: true)
+            ],
+            ["DSUM"] =
+            [
+                new("Database", "The database range including headers."),
+                new("Field", "The field name or index to aggregate."),
+                new("Criteria", "The criteria range including headers.")
+            ],
+            ["DGET"] =
+            [
+                new("Database", "The database range including headers."),
+                new("Field", "The field name or index to return."),
+                new("Criteria", "The criteria range including headers.")
+            ],
+            ["CONVERT"] =
+            [
+                new("Number", "The value to convert."),
+                new("From_unit", "The unit to convert from."),
+                new("To_unit", "The unit to convert to.")
+            ],
+            ["BITAND"] =
+            [
+                new("Number1", "The first nonnegative integer."),
+                new("Number2", "The second nonnegative integer.")
+            ],
+            ["MAP"] =
+            [
+                new("Array1", "The first array to map."),
+                new("Lambda", "The LAMBDA to apply to each value."),
+                new("Array2", "An additional array to map with the same shape.", Optional: true)
+            ],
+            ["REDUCE"] =
+            [
+                new("Initial_value", "The starting accumulator value."),
+                new("Array", "The array to reduce."),
+                new("Lambda", "The LAMBDA that receives accumulator and value.")
+            ],
+            ["MAKEARRAY"] =
+            [
+                new("Rows", "The number of rows in the generated array."),
+                new("Columns", "The number of columns in the generated array."),
+                new("Lambda", "The LAMBDA that receives row and column indexes.")
+            ],
+            ["LAMBDA"] =
+            [
+                new("Parameter_or_calculation", "A parameter name or the calculation returned by the LAMBDA."),
+                new("Calculation", "The calculation returned by the LAMBDA.", Optional: true)
+            ],
+            ["GETPIVOTDATA"] =
+            [
+                new("Data_field", "The PivotTable data-field caption to return."),
+                new("Pivot_table", "A reference to a cell inside the PivotTable."),
+                new("Field1", "A field name used to filter the returned value.", Optional: true),
+                new("Item1", "The item name paired with Field1.", Optional: true)
             ]
         };
 }

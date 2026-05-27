@@ -9,6 +9,8 @@ public sealed record PendingPivotLayoutUpdate(
     string? AvailableFieldsSearchText,
     IReadOnlyList<PivotFieldListItem> Fields);
 
+public sealed record PivotShowDetailsTarget(string PivotTableName, CellAddress PivotCell);
+
 public static class PivotUiPlanner
 {
     public static string FieldCaption(IReadOnlyList<string> headers, int sourceFieldIndex) =>
@@ -71,6 +73,17 @@ public static class PivotUiPlanner
 
         return sheet.PivotTables.FirstOrDefault(pivot =>
             pivot.TargetRange.Contains(range.Start) || pivot.TargetRange.Overlaps(range));
+    }
+
+    public static PivotShowDetailsTarget? ResolveShowDetailsTarget(Sheet? sheet, GridRange? selectedRange)
+    {
+        if (sheet is null || selectedRange is not { } range)
+            return null;
+
+        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot => pivot.TargetRange.Contains(range.Start));
+        return pivotTable is null
+            ? null
+            : new PivotShowDetailsTarget(pivotTable.Name, range.Start);
     }
 
     public static int ChooseDefaultDataField(Sheet sheet, GridRange sourceRange)

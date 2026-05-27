@@ -53,6 +53,8 @@ public static class InsertFunctionCatalogPlanner
         if (DynamicArrayFunctions.Contains(name)) return "Dynamic Array";
         if (FinancialFunctions.Contains(name)) return "Financial";
         if (InformationFunctions.Contains(name)) return "Information";
+        if (DatabaseFunctions.Contains(name)) return "Database";
+        if (EngineeringFunctions.Contains(name)) return "Engineering";
         return "Math & Trig";
     }
 
@@ -61,14 +63,16 @@ public static class InsertFunctionCatalogPlanner
             ? description
             : $"{name} function.";
 
-    private static readonly HashSet<string> LogicalFunctions = ["IF", "IFS", "AND", "OR", "NOT", "IFERROR", "IFNA", "LET", "LAMBDA"];
-    private static readonly HashSet<string> LookupFunctions = ["VLOOKUP", "HLOOKUP", "XLOOKUP", "INDEX", "MATCH", "XMATCH", "INDIRECT", "OFFSET"];
+    private static readonly HashSet<string> LogicalFunctions = ["IF", "IFS", "AND", "OR", "NOT", "XOR", "TRUE", "FALSE", "IFERROR", "IFNA", "LET", "LAMBDA"];
+    private static readonly HashSet<string> LookupFunctions = ["VLOOKUP", "HLOOKUP", "XLOOKUP", "INDEX", "MATCH", "XMATCH", "LOOKUP", "INDIRECT", "OFFSET", "ADDRESS", "TRANSPOSE", "GETPIVOTDATA"];
     private static readonly HashSet<string> TextFunctions = ["CONCAT", "TEXTJOIN", "LEFT", "RIGHT", "MID", "LEN", "TRIM", "TEXT", "UPPER", "LOWER", "PROPER", "SUBSTITUTE", "FIND", "SEARCH", "REPT", "VALUE"];
     private static readonly HashSet<string> DateTimeFunctions = ["TODAY", "NOW", "DATE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "WEEKDAY", "EDATE", "DATEDIF", "EOMONTH", "WORKDAY", "NETWORKDAYS"];
     private static readonly HashSet<string> StatisticalFunctions = ["AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "COUNTIF", "COUNTIFS", "AVERAGEIF", "MEDIAN", "STDEV.S", "VAR.S", "RANK.EQ", "PERCENTILE.INC"];
-    private static readonly HashSet<string> DynamicArrayFunctions = ["FILTER", "SORT", "UNIQUE", "SEQUENCE", "RANDARRAY", "TRANSPOSE", "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL", "MAKEARRAY"];
-    private static readonly HashSet<string> FinancialFunctions = ["PMT", "NPV", "IRR", "RATE", "PV", "FV"];
-    private static readonly HashSet<string> InformationFunctions = ["ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "NA", "CELL", "INFO"];
+    private static readonly HashSet<string> DynamicArrayFunctions = ["FILTER", "SORT", "SORTBY", "UNIQUE", "SEQUENCE", "RANDARRAY", "TAKE", "DROP", "EXPAND", "CHOOSEROWS", "CHOOSECOLS", "VSTACK", "HSTACK", "TOROW", "TOCOL", "WRAPROWS", "WRAPCOLS", "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL", "MAKEARRAY"];
+    private static readonly HashSet<string> FinancialFunctions = ["PMT", "NPV", "IRR", "RATE", "PV", "FV", "IPMT", "PPMT", "NPER", "CUMIPMT", "CUMPRINC", "EFFECT", "NOMINAL", "MIRR", "XIRR", "XNPV", "RRI", "PDURATION", "FVSCHEDULE", "DB", "DDB", "VDB", "SYD", "AMORDEGRC", "AMORLINC", "DOLLARDE", "DOLLARFR", "DISC", "INTRATE", "RECEIVED", "ACCRINT", "TBILLEQ", "TBILLPRICE", "TBILLYIELD", "COUPDAYBS", "COUPDAYS", "COUPDAYSNC", "COUPNCD", "COUPNUM", "COUPPCD", "PRICE", "YIELD", "PRICEDISC", "PRICEMAT", "YIELDDISC", "YIELDMAT", "DURATION", "MDURATION", "ODDFPRICE", "ODDFYIELD", "ODDLPRICE", "ODDLYIELD"];
+    private static readonly HashSet<string> InformationFunctions = ["ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISREF", "ISFORMULA", "FORMULATEXT", "NA", "CELL", "INFO", "TYPE", "ERROR.TYPE", "N", "ISEVEN", "ISODD"];
+    private static readonly HashSet<string> DatabaseFunctions = ["DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET", "DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP", "DVAR", "DVARP"];
+    private static readonly HashSet<string> EngineeringFunctions = ["CONVERT", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX", "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT"];
 
     private static readonly Dictionary<string, string> KnownDescriptions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -83,6 +87,7 @@ public static class InsertFunctionCatalogPlanner
         ["INDEX"] = "Returns a value from a range by position.",
         ["MATCH"] = "Returns the relative position of an item.",
         ["XMATCH"] = "Returns the relative position of an item with modern match options.",
+        ["GETPIVOTDATA"] = "Returns data stored in a PivotTable report.",
         ["CONCAT"] = "Joins text values.",
         ["TEXT"] = "Formats a value as text.",
         ["TODAY"] = "Returns the current date.",
@@ -90,6 +95,13 @@ public static class InsertFunctionCatalogPlanner
         ["ROUND"] = "Rounds a number to a specified number of digits.",
         ["FILTER"] = "Filters a range by included rows or columns.",
         ["SORT"] = "Sorts a range or array.",
-        ["UNIQUE"] = "Returns unique values from a range or array."
+        ["UNIQUE"] = "Returns unique values from a range or array.",
+        ["DSUM"] = "Adds numbers from records that match database criteria.",
+        ["DGET"] = "Returns one database record value that matches criteria.",
+        ["CONVERT"] = "Converts a number from one measurement system to another.",
+        ["BITAND"] = "Returns a bitwise AND of two numbers.",
+        ["MAP"] = "Maps a LAMBDA over one or more arrays.",
+        ["LAMBDA"] = "Creates a reusable custom function.",
+        ["LET"] = "Assigns names to calculation results."
     };
 }
