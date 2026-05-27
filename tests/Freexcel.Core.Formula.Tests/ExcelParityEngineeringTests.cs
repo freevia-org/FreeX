@@ -317,6 +317,17 @@ public sealed class ExcelParityEngineeringTests
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
     }
 
+    [Theory]
+    [InlineData("=IMCOSH(0)", "1")]
+    [InlineData("=IMSINH(0)", "0")]
+    [InlineData("=IMCOSH(\"4+3i\")", "-27.0349456030742+3.85115333481178i")]
+    [InlineData("=IMSINH(\"4+3i\")", "-27.0168132580039+3.85373803791938i")]
+    [InlineData("=IMSINH(\"4+3j\")", "-27.0168132580039+3.85373803791938j")]
+    public void ComplexHyperbolicFunctions_ReturnExcelComplexText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
     [Fact]
     public void ComplexFunctions_HandleRangesAndErrors()
     {
@@ -331,6 +342,8 @@ public sealed class ExcelParityEngineeringTests
         AssertColumn(_eval.Evaluate("=IMCOS(A1:A2)", sheet), _eval.Evaluate("=IMCOS(A1)", sheet), _eval.Evaluate("=IMCOS(A2)", sheet));
         AssertColumn(_eval.Evaluate("=IMSIN(A1:A2)", sheet), _eval.Evaluate("=IMSIN(A1)", sheet), _eval.Evaluate("=IMSIN(A2)", sheet));
         AssertColumn(_eval.Evaluate("=IMSQRT(A1:A2)", sheet), _eval.Evaluate("=IMSQRT(A1)", sheet), _eval.Evaluate("=IMSQRT(A2)", sheet));
+        AssertColumn(_eval.Evaluate("=IMCOSH(A1:A2)", sheet), _eval.Evaluate("=IMCOSH(A1)", sheet), _eval.Evaluate("=IMCOSH(A2)", sheet));
+        AssertColumn(_eval.Evaluate("=IMSINH(A1:A2)", sheet), _eval.Evaluate("=IMSINH(A1)", sheet), _eval.Evaluate("=IMSINH(A2)", sheet));
         _eval.Evaluate("=IMSUM(A1:A2)", sheet).Should().Be(new TextValue("8+2i"));
         _eval.Evaluate("=IMSUM(A1:A3)", sheet).Should().Be(ErrorValue.NA);
     }
@@ -345,6 +358,8 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=IMCOS(\"not complex\")", "#NUM!")]
     [InlineData("=IMSIN(\"not complex\")", "#NUM!")]
     [InlineData("=IMSQRT(\"not complex\")", "#NUM!")]
+    [InlineData("=IMCOSH(\"not complex\")", "#NUM!")]
+    [InlineData("=IMSINH(\"not complex\")", "#NUM!")]
     public void ComplexFunctions_ReturnExcelErrors(string formula, string error)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new ErrorValue(error));
@@ -449,6 +464,8 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=IMCOS(NA())")]
     [InlineData("=IMSIN(NA())")]
     [InlineData("=IMSQRT(NA())")]
+    [InlineData("=IMCOSH(NA())")]
+    [InlineData("=IMSINH(NA())")]
     public void EngineeringFunctions_PropagateExcelErrors(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);
