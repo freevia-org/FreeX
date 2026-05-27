@@ -5986,6 +5986,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Fixed_LeadingOneCellNoCommasRange_BroadcastsAcrossValueArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(9876.54)),
+            (1, 2, new BoolValue(true)));
+
+        AssertTextColumn(_eval.Evaluate("=FIXED(A1:A2,1,B1:B1)", sheet), "1234.6", "9876.5");
+    }
+
+    [Fact]
     public void FixedAndDollar_MismatchedDecimalsArgument_ReturnsValueError()
     {
         var sheet = MakeSheet(
