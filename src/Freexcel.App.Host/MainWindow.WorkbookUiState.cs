@@ -66,17 +66,38 @@ public partial class MainWindow
 
     private void ScheduleViewportResizeRefresh()
     {
-        if (_resizeViewportRefreshPending)
-            return;
+        if (!_resizeViewportRefreshPending)
+            SheetGrid.IsLiveResizing = true;
 
         _resizeViewportRefreshPending = true;
-        Dispatcher.BeginInvoke(
-            () =>
-            {
-                _resizeViewportRefreshPending = false;
-                UpdateViewport();
-            },
-            System.Windows.Threading.DispatcherPriority.Render);
+        _resizeViewportRefreshTimer ??= CreateResizeViewportRefreshTimer();
+        _resizeViewportRefreshTimer.Stop();
+        if (_isInWindowResizeMoveLoop)
+            return;
+
+        _resizeViewportRefreshTimer.Start();
+    }
+
+    private System.Windows.Threading.DispatcherTimer CreateResizeViewportRefreshTimer()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background,
+            Dispatcher)
+        {
+            Interval = System.TimeSpan.FromMilliseconds(ResizeViewportRefreshDelayMilliseconds)
+        };
+
+        timer.Tick += (_, _) => CompleteViewportResizeRefresh();
+
+        return timer;
+    }
+
+    private void CompleteViewportResizeRefresh()
+    {
+        _resizeViewportRefreshTimer?.Stop();
+        _resizeViewportRefreshPending = false;
+        SheetGrid.IsLiveResizing = false;
+        UpdateViewport();
     }
 
     private string FormatCellReference(CellAddress address) =>

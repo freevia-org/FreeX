@@ -34,6 +34,15 @@ public partial class GridView
         set => SetValue(ViewportProperty, value);
     }
 
+    public static readonly DependencyProperty IsLiveResizingProperty =
+        DependencyProperty.Register(nameof(IsLiveResizing), typeof(bool), typeof(GridView),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool IsLiveResizing
+    {
+        get => (bool)GetValue(IsLiveResizingProperty);
+        set => SetValue(IsLiveResizingProperty, value);
+    }
+
     public static readonly DependencyProperty SelectedRangeProperty =
         DependencyProperty.Register(nameof(SelectedRange), typeof(GridRange?), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
