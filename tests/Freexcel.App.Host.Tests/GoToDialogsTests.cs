@@ -176,6 +176,20 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void MainWindow_NameBoxEnterRoutesTypedReferenceThroughGoToParser()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+
+        xaml.Should().Contain("KeyDown=\"CellAddressBox_KeyDown\"");
+        editingSource.Should().Contain("if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)");
+        editingSource.Should().Contain("_workbook.NamedRanges");
+        editingSource.Should().Contain("SetSelectionRange(selectedRange, selectedRange.Start);");
+        editingSource.Should().Contain("UpdateViewport();");
+        editingSource.Should().Contain("RefreshValidationDropdown();");
+    }
+
+    [Fact]
     public void GetChoices_ExposesExcelGoToSpecialCoreChoices()
     {
         var choices = GoToSpecialDialog.GetChoices();

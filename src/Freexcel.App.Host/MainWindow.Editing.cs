@@ -585,6 +585,31 @@ public partial class MainWindow
         }
     }
 
+    private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)
+            return;
+
+        if (!GoToDialog.TryParseReferenceRange(
+                CellAddressBox.Text,
+                _currentSheetId,
+                _workbook.NamedRanges,
+                out var selectedRange))
+        {
+            CellAddressBox.Focus();
+            CellAddressBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        _currentSheetId = selectedRange.Start.Sheet;
+        SetSelectionRange(selectedRange, selectedRange.Start);
+        EnsureCellVisible(selectedRange.Start);
+        UpdateViewport();
+        RefreshValidationDropdown();
+        e.Handled = true;
+    }
+
     private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
     {
         var caretIndex = editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex;

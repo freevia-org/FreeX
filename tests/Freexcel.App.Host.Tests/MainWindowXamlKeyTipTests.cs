@@ -1439,6 +1439,25 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void NameBox_CommitsTypedReferenceWithEnter()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var nameBox = document
+            .Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "CellAddressBox");
+
+        nameBox.Attribute("KeyDown")?.Value.Should().Be("CellAddressBox_KeyDown");
+        source.Should().Contain("private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)");
+        source.Should().Contain("GoToDialog.TryParseReferenceRange(");
+        source.Should().Contain("SetSelectionRange(selectedRange, selectedRange.Start);");
+        source.Should().Contain("CellAddressBox.SelectAll();");
+    }
+
+    [Fact]
     public void FormulaBarTextFields_UseReadableExcelScaleSizing()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
