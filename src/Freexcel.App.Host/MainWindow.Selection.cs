@@ -752,7 +752,8 @@ public partial class MainWindow
 
     private void SheetGrid_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        var hitAddr = HitTestCell(e.GetPosition(SheetGrid));
+        var pos = e.GetPosition(SheetGrid);
+        var hitAddr = HitTestCell(pos);
         if (!_dragSelectActive || e.LeftButton != MouseButtonState.Pressed)
         {
             if (hitAddr.HasValue)
@@ -762,11 +763,27 @@ public partial class MainWindow
             return;
         }
 
+        RequestSelectionDragAutoScroll(pos);
+
         if (_selectionAnchor is not { } anchor) return;
         if (hitAddr.HasValue && GetFormulaRangeEntryEditor() is not null)
             TryApplyFormulaRangeSelection(hitAddr.Value, extendSelection: true);
         else if (hitAddr.HasValue)
             ExtendSelection(anchor, hitAddr.Value);
+    }
+
+    private void RequestSelectionDragAutoScroll(System.Windows.Point pos)
+    {
+        var request = Freexcel.App.UI.GridView.CalculateAutofillEdgeScrollIntent(
+            pos.X,
+            pos.Y,
+            SheetGrid.ActualWidth,
+            SheetGrid.ActualHeight,
+            SheetGrid.ActualRowHeaderWidth,
+            SheetGrid.EffectiveColHeaderHeight);
+
+        if (request.HasAnyDirection)
+            OnAutofillEdgeScrollRequested(request);
     }
 
     private void UpdateCommentPreview(CellAddress address)
