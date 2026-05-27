@@ -191,6 +191,51 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FileNewSaveSaveAsAndClose_RouteThroughDirtyPromptAndOwnedMessages()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var lifecycleSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookLifecycle.cs"));
+        var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+
+        var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
+        newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(\"Save changes before creating a new workbook?\")");
+        newMethod.Should().Contain("CreateNewWorkbook();");
+        newMethod.Should().Contain("HideStartScreen();");
+
+        var saveButtonMethod = ExtractMethodSource(backstageSource, "private async void SaveButton_Click(");
+        saveButtonMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
+        saveButtonMethod.Should().Contain("await SaveWorkbookToTargetAsync(target!)");
+        saveButtonMethod.Should().Contain("await SaveWorkbookWithDialogAsync();");
+
+        var saveAsMethod = ExtractMethodSource(backstageSource, "private async void SaveAsButton_Click(");
+        saveAsMethod.Should().Contain("await SaveWorkbookWithDialogAsync()");
+        saveAsMethod.Should().Contain("HideStartScreen();");
+
+        var saveTargetMethod = ExtractMethodSource(backstageSource, "private async Task<bool> SaveWorkbookToTargetAsync(");
+        saveTargetMethod.Should().Contain("ShowSaveProgress(\"Saving workbook\", \"Saving file (preparing)\", 1);");
+        saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
+        saveTargetMethod.Should().Contain("ShowOwnedMessage($\"Failed to save file:");
+        saveTargetMethod.Should().Contain("finally");
+        saveTargetMethod.Should().Contain("HideSaveProgress();");
+        saveTargetMethod.Should().NotContain("MessageBox.Show(");
+
+        var confirmMethod = ExtractMethodSource(lifecycleSource, "private async Task<bool> ConfirmSaveBeforeDestructiveActionAsync(");
+        confirmMethod.Should().Contain("ShowOwnedMessage(");
+        confirmMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
+        confirmMethod.Should().Contain("return await SaveWorkbookWithDialogAsync();");
+
+        var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
+        closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(\"Save changes before closing this workbook?\")");
+        closingMethod.Should().Contain("_suppressClosePrompt = true;");
+        closingMethod.Should().Contain("Close();");
+
+        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewWorkbook, async (_, _) => await RequestNewWorkbookAsync());");
+        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveWorkbook, SaveButton_Click);");
+        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveAs, async (_, _) => await SaveWorkbookWithDialogAsync());");
+        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CloseWorkbook, (_, _) => Close());");
+    }
+
+    [Fact]
     public void BackstageOpen_FocusesHomeNavigationForKeyboardUsers()
     {
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
