@@ -70,18 +70,6 @@ public sealed partial class SymbolPickerDialog
         return true;
     }
 
-    public static IReadOnlyList<string> PromoteRecentSymbol(IEnumerable<string> currentSymbols, string selectedSymbol, int capacity = 8)
-    {
-        if (string.IsNullOrEmpty(selectedSymbol) || capacity <= 0)
-            return [];
-
-        return currentSymbols
-            .Where(symbol => !string.Equals(symbol, selectedSymbol, StringComparison.Ordinal))
-            .Prepend(selectedSymbol)
-            .Take(capacity)
-            .ToArray();
-    }
-
-    private static string ToCodeText(string value) =>
-        value.EnumerateRunes().FirstOrDefault().Value.ToString("X4");
+    public static IReadOnlyList<string> PromoteRecentSymbol(IEnumerable<string> currentSymbols, string selectedSymbol, int capacity = 8) =>
+        SymbolPickerSelectionPlanner.PromoteRecentSymbol(currentSymbols, selectedSymbol, capacity);
 }

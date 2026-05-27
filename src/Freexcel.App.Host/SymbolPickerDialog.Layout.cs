@@ -13,7 +13,7 @@ public sealed partial class SymbolPickerDialog
     {
         var recentSymbols = CommonSymbols.ToList();
         var outer = new DockPanel { Margin = new Thickness(12) };
-        var selectedCode = new TextBox { Width = 88, Text = ToCodeText(SelectedSymbol) };
+        var selectedCode = new TextBox { Width = 88, Text = SymbolPickerSelectionPlanner.FormatCodeText(SelectedSymbol) };
         var preview = new TextBlock
         {
             FontSize = 32,
@@ -49,16 +49,15 @@ public sealed partial class SymbolPickerDialog
 
         void SelectSymbol(char value)
         {
-            SelectedChar = value;
             SelectSymbolText(value.ToString());
         }
 
         void SelectSymbolText(string value)
         {
-            SelectedSymbol = value;
-            SelectedChar = value.Length == 1 ? value[0] : '\0';
-            preview.Text = value;
-            selectedCode.Text = ToCodeText(value);
+            var selection = SymbolPickerSelectionPlanner.CreateSelection(value);
+            ApplySelection(selection);
+            preview.Text = selection.Symbol;
+            selectedCode.Text = selection.CodeText;
         }
 
         void AcceptSelectedSymbol()
