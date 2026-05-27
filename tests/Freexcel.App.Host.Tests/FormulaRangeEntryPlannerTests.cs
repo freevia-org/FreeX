@@ -143,8 +143,10 @@ public sealed class FormulaRangeEntryPlannerTests
             .Be(CellAddress.Parse("A1", SheetId));
     }
 
-    [Fact]
-    public void GetKeyboardSelectionTarget_UsesCtrlShiftArrowDataBoundary()
+    [Theory]
+    [InlineData(Key.Right, Key.None)]
+    [InlineData(Key.System, Key.Right)]
+    public void GetKeyboardSelectionTarget_UsesCtrlShiftArrowDataBoundary(Key key, Key systemKey)
     {
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Sheet1");
@@ -154,8 +156,8 @@ public sealed class FormulaRangeEntryPlannerTests
         sheet.SetCell(CellAddress.Parse("E2", sheet.Id), Cell.FromValue(new NumberValue(5)));
 
         FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
-                Key.Right,
-                Key.None,
+                key,
+                systemKey,
                 ModifierKeys.Control | ModifierKeys.Shift,
                 CellAddress.Parse("B2", sheet.Id),
                 sheet,
