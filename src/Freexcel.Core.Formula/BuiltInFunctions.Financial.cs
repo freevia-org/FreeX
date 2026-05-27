@@ -336,8 +336,13 @@ public static partial class BuiltInFunctions
         var valRange = args[0] is RangeValue valuesRange
             ? valuesRange
             : SingleCellArray(args[0]);
-        double financeRate  = ToNumber(args[1]);
-        double reinvestRate = ToNumber(args[2]);
+        return MapBinaryMathArgs(args[1], args[2], (financeRateValue, reinvestRateValue) => MirrScalar(valRange, financeRateValue, reinvestRateValue));
+    }
+
+    private static ScalarValue MirrScalar(RangeValue valRange, ScalarValue financeRateValue, ScalarValue reinvestRateValue)
+    {
+        double financeRate  = ToNumber(financeRateValue);
+        double reinvestRate = ToNumber(reinvestRateValue);
         if (!double.IsFinite(financeRate) || !double.IsFinite(reinvestRate)) return ErrorValue.Num;
         var (values, err) = CollectRangeNumbers(valRange);
         if (err is not null) return err;

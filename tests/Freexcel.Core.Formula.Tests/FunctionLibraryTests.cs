@@ -5301,6 +5301,20 @@ public class FunctionLibraryTests
             ((NumberValue)_eval.Evaluate("=XNPV(A2,B1:B3,C1:C3)", sheet)).Value);
     }
 
+    [Fact]
+    public void Mirr_FinanceAndReinvestRateRanges_SpillElementwiseAgainstCashFlowArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-1000)), (2, 1, new NumberValue(400)), (3, 1, new NumberValue(700)),
+            (1, 2, new NumberValue(0.05)), (2, 2, new NumberValue(0.06)),
+            (1, 3, new NumberValue(0.07)), (2, 3, new NumberValue(0.08)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=MIRR(A1:A3,B1:B2,C1:C2)", sheet),
+            ((NumberValue)_eval.Evaluate("=MIRR(A1:A3,B1,C1)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=MIRR(A1:A3,B2,C2)", sheet)).Value);
+    }
+
     [Fact] public void Pmt_TypeError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
