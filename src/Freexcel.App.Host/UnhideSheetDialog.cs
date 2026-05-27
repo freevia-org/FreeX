@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -26,6 +27,7 @@ public sealed class UnhideSheetDialog : Window
         _sheetBox.ItemsSource = names;
         _sheetBox.SelectedItem = selected;
         _sheetBox.SelectionMode = SelectionMode.Single;
+        AutomationProperties.SetName(_sheetBox, "Unhide sheet");
         _sheetBox.MouseDoubleClick += (_, _) => Accept();
 
         var stack = new StackPanel { Margin = new Thickness(16) };
