@@ -66,6 +66,7 @@ public sealed class FormulaEvaluator
         "FILTER", "SORT", "SORTBY", "TAKE", "DROP", "TRANSPOSE",
         "CHOOSEROWS", "CHOOSECOLS", "VSTACK", "HSTACK",
         "TOROW", "TOCOL", "WRAPROWS", "WRAPCOLS", "EXPAND", "UNIQUE",
+        "TRIMRANGE",
         "SUBTOTAL",
         "DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET",
         "DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP",
