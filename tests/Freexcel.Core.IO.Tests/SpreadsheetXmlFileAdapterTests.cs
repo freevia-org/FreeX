@@ -1,5 +1,6 @@
 using System.Text;
 using System.Xml;
+using System.Xml.Linq;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -70,6 +71,89 @@ public sealed class SpreadsheetXmlFileAdapterTests
         loaded.GetSheetAt(0).GetCell(4, 1)!.Value.Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 27, 13, 45, 5)));
         loaded.GetSheetAt(0).GetCell(5, 1)!.FormulaText.Should().Be("SUM(A2:A2)");
         loaded.GetSheetAt(1).GetCell(1, 2)!.Value.Should().Be(new ErrorValue("#VALUE!"));
+    }
+
+    [Fact]
+    public void Load_ReadsSpreadsheetMlMergeAcrossAndMergeDown()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Merged">
+                <ss:Table>
+                  <ss:Row ss:Index="2">
+                    <ss:Cell ss:Index="3" ss:MergeAcross="2" ss:MergeDown="1">
+                      <ss:Data ss:Type="String">Merged heading</ss:Data>
+                    </ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetCell(2, 3)!.Value.Should().Be(new TextValue("Merged heading"));
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 3, 5)));
+    }
+
+    [Fact]
+    public void Save_WritesMergeAcrossAndMergeDownForMergedRegions()
+    {
+        var workbook = new Workbook("XmlMerges");
+        var sheet = workbook.AddSheet("Merged");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Merged heading"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Hidden by merge"));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 3)));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 4, 2),
+            new CellAddress(sheet.Id, 4, 3)));
+
+        using var stream = new MemoryStream();
+        new SpreadsheetXmlFileAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var cells = document.Descendants(ss + "Cell").ToList();
+        var mergedHeadingCell = cells.Single(cell => cell.Element(ss + "Data")?.Value == "Merged heading");
+        mergedHeadingCell.Attribute(ss + "MergeAcross")!.Value.Should().Be("2");
+        mergedHeadingCell.Attribute(ss + "MergeDown")!.Value.Should().Be("1");
+        cells.Select(cell => cell.Element(ss + "Data")?.Value)
+            .Should().NotContain("Hidden by merge");
+
+        var blankMergeAnchor = cells.Single(cell => cell.Attribute(ss + "Index")?.Value == "2" &&
+                                                   cell.Attribute(ss + "MergeAcross")?.Value == "1");
+        blankMergeAnchor.Element(ss + "Data").Should().BeNull();
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsMergedRegions()
+    {
+        var workbook = new Workbook("XmlMergeRoundTrip");
+        var sheet = workbook.AddSheet("Merged");
+        var mergeRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 4));
+        sheet.SetCell(mergeRange.Start, new TextValue("Merged text"));
+        sheet.AddMergedRegion(mergeRange);
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.GetCell(2, 2)!.Value.Should().Be(new TextValue("Merged text"));
+        loadedSheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(loadedSheet.Id, 2, 2),
+            new CellAddress(loadedSheet.Id, 3, 4)));
     }
 
     [Fact]

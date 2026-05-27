@@ -15,6 +15,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static readonly XName SpreadsheetNameAttribute = SpreadsheetNs + "Name";
     private static readonly XName SpreadsheetFormulaAttribute = SpreadsheetNs + "Formula";
     private static readonly XName SpreadsheetTypeAttribute = SpreadsheetNs + "Type";
+    private static readonly XName SpreadsheetMergeAcrossAttribute = SpreadsheetNs + "MergeAcross";
+    private static readonly XName SpreadsheetMergeDownAttribute = SpreadsheetNs + "MergeDown";
 
     public string Extension => ".xml";
     public string FormatName => "XML Spreadsheet 2003";
@@ -113,6 +115,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 if (cell.Value is not BlankValue || cell.FormulaText is not null)
                     sheet.SetCell(new CellAddress(sheet.Id, rowIndex, columnIndex), cell);
 
+                if (TryReadMergeRange(sheet.Id, rowIndex, columnIndex, cellElement, out var mergeRange))
+                    sheet.AddMergedRegion(mergeRange);
+
                 columnIndex++;
             }
 
@@ -186,36 +191,115 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             : fallback;
     }
 
+    private static bool TryReadMergeRange(
+        SheetId sheetId,
+        uint row,
+        uint column,
+        XElement cellElement,
+        out GridRange range)
+    {
+        range = default;
+        var mergeAcross = ReadMergeExtent(cellElement, SpreadsheetMergeAcrossAttribute);
+        var mergeDown = ReadMergeExtent(cellElement, SpreadsheetMergeDownAttribute);
+        if (mergeAcross == 0 && mergeDown == 0)
+            return false;
+
+        if (column > CellAddress.MaxCol - mergeAcross ||
+            row > CellAddress.MaxRow - mergeDown)
+        {
+            return false;
+        }
+
+        range = new GridRange(
+            new CellAddress(sheetId, row, column),
+            new CellAddress(sheetId, row + mergeDown, column + mergeAcross));
+        return true;
+    }
+
+    private static uint ReadMergeExtent(XElement cellElement, XName attributeName)
+    {
+        var text = cellElement.Attribute(attributeName)?.Value;
+        return uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : 0u;
+    }
+
     private static XElement ToWorksheetElement(Sheet sheet) =>
         new(
             SpreadsheetNs + "Worksheet",
             new XAttribute(SpreadsheetNameAttribute, sheet.Name),
             new XElement(
                 SpreadsheetNs + "Table",
-                sheet.EnumerateCells()
-                    .Where(entry => entry.Cell.Value is not BlankValue || entry.Cell.FormulaText is not null)
-                    .OrderBy(entry => entry.Address.Row)
-                    .ThenBy(entry => entry.Address.Col)
-                    .GroupBy(entry => entry.Address.Row)
+                EnumerateXmlCells(sheet)
+                    .GroupBy(entry => entry.Row)
                     .Select(ToRowElement)));
 
-    private static XElement ToRowElement(IGrouping<uint, (CellAddress Address, Cell Cell)> row)
+    private static IEnumerable<SpreadsheetXmlCell> EnumerateXmlCells(Sheet sheet)
+    {
+        var mergeStarts = new Dictionary<(uint Row, uint Col), GridRange>();
+        foreach (var region in sheet.MergedRegions)
+            mergeStarts.TryAdd((region.Start.Row, region.Start.Col), region);
+
+        var emitted = new HashSet<(uint Row, uint Col)>();
+        var cells = new List<SpreadsheetXmlCell>();
+
+        foreach (var (address, cell) in sheet.EnumerateCells()
+                     .OrderBy(entry => entry.Address.Row)
+                     .ThenBy(entry => entry.Address.Col))
+        {
+            if (IsCoveredByMergeNonAnchor(sheet, address))
+                continue;
+
+            mergeStarts.TryGetValue((address.Row, address.Col), out var mergeRange);
+            emitted.Add((address.Row, address.Col));
+            cells.Add(new SpreadsheetXmlCell(address.Row, address.Col, cell, mergeRange));
+        }
+
+        foreach (var mergeRange in sheet.MergedRegions
+                     .Where(region => !emitted.Contains((region.Start.Row, region.Start.Col)))
+                     .OrderBy(region => region.Start.Row)
+                     .ThenBy(region => region.Start.Col))
+        {
+            cells.Add(new SpreadsheetXmlCell(
+                mergeRange.Start.Row,
+                mergeRange.Start.Col,
+                Cell.FromValue(BlankValue.Instance),
+                mergeRange));
+        }
+
+        foreach (var cell in cells.OrderBy(cell => cell.Row).ThenBy(cell => cell.Col))
+            yield return cell;
+    }
+
+    private static bool IsCoveredByMergeNonAnchor(Sheet sheet, CellAddress address) =>
+        sheet.GetMergeRegion(address) is { } mergeRange &&
+        (mergeRange.Start.Row != address.Row || mergeRange.Start.Col != address.Col);
+
+    private static XElement ToRowElement(IGrouping<uint, SpreadsheetXmlCell> row)
     {
         var rowElement = new XElement(SpreadsheetNs + "Row", new XAttribute(SpreadsheetIndexAttribute, row.Key));
-        foreach (var (address, cell) in row)
-            rowElement.Add(ToCellElement(address.Col, cell));
+        foreach (var cell in row.OrderBy(entry => entry.Col))
+            rowElement.Add(ToCellElement(cell));
 
         return rowElement;
     }
 
-    private static XElement ToCellElement(uint column, Cell cell)
+    private static XElement ToCellElement(SpreadsheetXmlCell cell)
     {
-        var element = new XElement(SpreadsheetNs + "Cell", new XAttribute(SpreadsheetIndexAttribute, column));
-        if (cell.FormulaText is { Length: > 0 } formulaText)
+        var element = new XElement(SpreadsheetNs + "Cell", new XAttribute(SpreadsheetIndexAttribute, cell.Col));
+        if (cell.MergeRange is { } mergeRange)
+        {
+            if (mergeRange.ColCount > 1)
+                element.SetAttributeValue(SpreadsheetMergeAcrossAttribute, mergeRange.ColCount - 1);
+            if (mergeRange.RowCount > 1)
+                element.SetAttributeValue(SpreadsheetMergeDownAttribute, mergeRange.RowCount - 1);
+        }
+
+        if (cell.Cell.FormulaText is { Length: > 0 } formulaText)
             element.SetAttributeValue(SpreadsheetFormulaAttribute, formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText : $"={formulaText}");
 
-        if (cell.Value is not BlankValue)
-            element.Add(ToDataElement(cell.Value));
+        if (cell.Cell.Value is not BlankValue)
+            element.Add(ToDataElement(cell.Cell.Value));
 
         return element;
     }
@@ -266,4 +350,6 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
         return sanitized.Length <= 31 ? sanitized : sanitized[..31];
     }
+
+    private readonly record struct SpreadsheetXmlCell(uint Row, uint Col, Cell Cell, GridRange? MergeRange);
 }
