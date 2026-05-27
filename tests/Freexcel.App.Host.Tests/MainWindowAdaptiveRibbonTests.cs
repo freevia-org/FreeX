@@ -210,6 +210,22 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Theory]
+    [InlineData(900)]
+    [InlineData(1100)]
+    public void DataRibbon_DataToolsCommandLabelsDoNotClipAtNormalNarrowWidths(double width)
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Data", width);
+
+            harness.ActiveRibbonGroupClippedCommandLabels("Data Tools").Should().BeEmpty(
+                "Excel keeps the visible Data Tools command labels readable instead of clipping names such as Remove Duplicates");
+        });
+    }
+
     [Fact]
     public void ViewRibbon_KeepsShowWithZoomAndWindowAtMediumWidths()
     {
@@ -774,6 +790,20 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .ToList()
                 : [];
 
+        public IReadOnlyList<string> ActiveRibbonGroupClippedCommandLabels(string groupName) =>
+            FindActiveRibbonGroup(groupName) is { } group
+                ? EnumerateSelfAndVisualDescendants(group)
+                    .Concat(EnumerateLogicalDescendants(group))
+                    .OfType<TextBlock>()
+                    .Distinct()
+                    .Where(textBlock => textBlock.Tag?.ToString() == "RibbonLabel")
+                    .Where(IsEffectivelyVisible)
+                    .Where(IsTextVisuallyClipped)
+                    .Select(textBlock => textBlock.Text)
+                    .Where(text => !string.IsNullOrWhiteSpace(text))
+                    .ToList()
+                : [];
+
         public IReadOnlyList<RibbonIconStackOffsets> VerticallyStackedRibbonIconOffsets =>
             EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
                 .OfType<Panel>()
@@ -1098,6 +1128,13 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             iconSlot = firstChild;
             return true;
+        }
+
+        private static bool IsTextVisuallyClipped(TextBlock textBlock)
+        {
+            textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return textBlock.DesiredSize.Width > textBlock.ActualWidth + 0.5 ||
+                   textBlock.DesiredSize.Height > textBlock.ActualHeight + 0.5;
         }
 
         private static double GetCheckBoxLabelOffset(CheckBox checkBox)
