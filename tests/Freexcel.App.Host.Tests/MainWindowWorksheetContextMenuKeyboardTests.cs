@@ -181,11 +181,33 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         });
     }
 
+    [Fact]
+    public void ReapplyAutoFilter_RerunsRememberedFilterAgainstChangedData()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SeedRegionFilterData();
+            harness.SelectRegionFilterRange();
+            harness.ApplyAllowedValuesFilter("West");
+
+            harness.FilterHiddenRows.Should().Contain(3);
+
+            harness.SetRegionValue(3, "West");
+            harness.ReapplyAutoFilter();
+
+            harness.FilterHiddenRows.Should().BeEmpty();
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
         private readonly MethodInfo _openKeyboardContextMenu;
         private readonly MethodInfo _getWorksheetContextMenuTargetKind;
+        private readonly MethodInfo _applyAutoFilterDialogResult;
+        private readonly MethodInfo _reapplyAutoFilter;
         private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
 
@@ -198,6 +220,12 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             _getWorksheetContextMenuTargetKind = typeof(MainWindow)
                 .GetMethod("GetWorksheetContextMenuTargetKind", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetWorksheetContextMenuTargetKind");
+            _applyAutoFilterDialogResult = typeof(MainWindow)
+                .GetMethod("ApplyAutoFilterDialogResult", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ApplyAutoFilterDialogResult");
+            _reapplyAutoFilter = typeof(MainWindow)
+                .GetMethod("ReapplyAutoFilter", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ReapplyAutoFilter");
             _workbookField = typeof(MainWindow)
                 .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
@@ -216,6 +244,8 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             ActiveContextMenu?.Items.OfType<MenuItem>()
                 .Select(item => item.Header?.ToString() ?? "")
                 .ToList() ?? [];
+
+        public IReadOnlyCollection<uint> FilterHiddenRows => CurrentSheet.FilterHiddenRows;
 
         public void AddPictureAt(uint row, uint col)
         {
@@ -277,6 +307,47 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 new CellAddress(sheet.Id, 1, startCol),
                 new CellAddress(sheet.Id, CellAddress.MaxRow, endCol));
             SheetGrid.SelectedRange = range;
+            PumpDispatcher();
+        }
+
+        public void SeedRegionFilterData()
+        {
+            SetRegionValue(1, "Region");
+            SetRegionValue(2, "West");
+            SetRegionValue(3, "East");
+        }
+
+        public void SetRegionValue(uint row, string value)
+        {
+            CurrentSheet.SetCell(new CellAddress(CurrentSheet.Id, row, 1), new TextValue(value));
+            PumpDispatcher();
+        }
+
+        public void SelectRegionFilterRange()
+        {
+            var sheet = CurrentSheet;
+            SheetGrid.SelectedRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 1));
+            PumpDispatcher();
+        }
+
+        public void ApplyAllowedValuesFilter(params string[] allowedValues)
+        {
+            var range = SheetGrid.SelectedRange ?? throw new InvalidOperationException("Select a filter range first.");
+            var result = AutoFilterDialog.BuildResult(
+                AutoFilterSortDirection.None,
+                allowedValues.Select(value => new AutoFilterDialogItem(value, value, true)),
+                "",
+                "");
+            var applied = (bool)_applyAutoFilterDialogResult.Invoke(_window, [range, 0u, result, "Filter"])!;
+            applied.Should().BeTrue();
+            PumpDispatcher();
+        }
+
+        public void ReapplyAutoFilter()
+        {
+            _reapplyAutoFilter.Invoke(_window, []);
             PumpDispatcher();
         }
 
