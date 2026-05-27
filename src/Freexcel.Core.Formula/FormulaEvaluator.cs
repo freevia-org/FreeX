@@ -59,6 +59,7 @@ public sealed class FormulaEvaluator
         "PERCENTILE", "PERCENTILE.INC", "PERCENTILE.EXC",
         "QUARTILE", "QUARTILE.INC",
         "PERCENTRANK", "PERCENTRANK.INC",
+        "PERCENTOF",
         "LOOKUP",
         "IRR",
         "RANDARRAY",
