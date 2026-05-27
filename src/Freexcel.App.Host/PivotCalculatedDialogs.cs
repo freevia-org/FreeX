@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -54,6 +55,7 @@ public sealed class PivotCalculatedFieldDialog : Window
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Name and formula", formulaPanel));
 
         var fieldsPanel = PivotDialogLayout.CreateGroupPanel();
+        AutomationProperties.SetName(_fieldList, "Available fields");
         PivotDialogLayout.AddLabeledControl(fieldsPanel, "Available _fields", _fieldList);
         var insertFieldButton = new Button
         {
@@ -218,8 +220,10 @@ public sealed class PivotCalculatedItemDialog : Window
         _fieldList.ItemsSource = _fields;
         _fieldList.DisplayMemberPath = nameof(PivotCalculatedItemSourceFieldOption.Name);
         _fieldList.MouseDoubleClick += (_, _) => InsertSelectedField();
+        AutomationProperties.SetName(_fieldList, "Available fields");
         PivotDialogLayout.AddLabeledControl(insertPanel, "Available _fields", _fieldList);
         insertPanel.Children.Add(CreateInsertButton("Insert _Field", InsertSelectedField));
+        AutomationProperties.SetName(_itemList, "Available items");
         PivotDialogLayout.AddLabeledControl(insertPanel, "Available _items", _itemList);
         _itemList.MouseDoubleClick += (_, _) => InsertSelectedItem();
         insertPanel.Children.Add(CreateInsertButton("Insert _Item", InsertSelectedItem));
