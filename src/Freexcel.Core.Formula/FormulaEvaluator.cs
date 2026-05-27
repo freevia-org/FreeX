@@ -115,6 +115,7 @@ public sealed class FormulaEvaluator
         "N", "ERROR.TYPE",
         "COMBIN", "PERMUT",
         "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT",
+        "BASE", "DECIMAL",
         "BIN2DEC", "HEX2DEC", "OCT2DEC",
         "DEC2BIN", "DEC2HEX", "DEC2OCT",
         "BIN2HEX", "BIN2OCT", "HEX2BIN", "HEX2OCT", "OCT2BIN", "OCT2HEX",
