@@ -4157,6 +4157,9 @@
                             local:RibbonTooltip.KeyTip="A"/>
                     <Button x:Name="SsPrintNavBtn" Content="Print" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
+                            AutomationProperties.AutomationId="BackstagePrintButton"
+                            AutomationProperties.Name="Print"
+                            AutomationProperties.HelpText="Open print preview with worksheet settings and native print access."
                             Click="PrintButton_Click"
                             local:RibbonTooltip.Title="Print"
                             local:RibbonTooltip.KeyTip="P"

@@ -2290,6 +2290,24 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstagePrint_OpensPreviewWithSettingsAndNativePrintPath()
+    {
+        var printSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
+        var previewSource =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Layout.cs"));
+
+        printSource.Should().Contain("var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);");
+        printSource.Should().Contain("PrintSettingsPlanner.Build(sheet)");
+        printSource.Should().Contain("new PrintPreviewDialog(");
+        printSource.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
+        previewSource.Should().Contain("Content = \"_Print...\"");
+        previewSource.Should().Contain("ShowNativePrintDialog");
+        previewSource.Should().Contain("PrintDocument(paginator");
+    }
+
+    [Fact]
     public void RemainingStatusWorkflows_OpenNamedDialogsInsteadOfMessageBoxes()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
