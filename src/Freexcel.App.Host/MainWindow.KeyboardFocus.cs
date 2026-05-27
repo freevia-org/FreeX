@@ -102,6 +102,13 @@ public partial class MainWindow
             return false;
         }
 
+        if (e.Key == Key.Escape)
+        {
+            FocusSheetGridIfNeeded();
+            e.Handled = true;
+            return true;
+        }
+
         if (e.Key != Key.Tab)
             return false;
 
