@@ -38,8 +38,11 @@ public sealed class ChartTitlesDialog : Window
         ShowInTaskbar = false;
 
         _chartTitleBox.Text = chartTitle ?? "";
+        AutomationProperties.SetName(_chartTitleBox, "Chart title");
         _xAxisTitleBox.Text = xAxisTitle ?? "";
+        AutomationProperties.SetName(_xAxisTitleBox, "Primary horizontal axis title");
         _yAxisTitleBox.Text = yAxisTitle ?? "";
+        AutomationProperties.SetName(_yAxisTitleBox, "Primary vertical axis title");
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         AddInput(stack, "_Chart title:", _chartTitleBox);
