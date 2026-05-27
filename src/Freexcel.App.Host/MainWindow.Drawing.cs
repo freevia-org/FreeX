@@ -19,7 +19,9 @@ public partial class MainWindow
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Insert Picture",
-            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*"
+            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
         };
         if (dialog.ShowDialog(this) != true) return;
 
@@ -30,7 +32,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not read picture file:\n{ex.Message}",
+            ShowOwnedMessage($"Could not read picture file:\n{ex.Message}",
                 "Insert Picture", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
