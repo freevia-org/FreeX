@@ -111,12 +111,15 @@ public partial class GridView
             var selectedObjectDragKind = ObjectDragKind.None;
             if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
                 selectedObjectDragKind = HitTestObjectHandle(pos, GetSelectedObjectRect());
+            var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None &&
+                HitTestDrawingObject(pos).Id != Guid.Empty;
             var marginGuide = HitTestPageMarginGuide(pos);
             var splitHandle = Viewport is null ? SplitDividerHandle.None : HitTestSplitDividerHandle(Viewport, pos);
             var splitScrollbarHit = Viewport is null
                 ? null
                 : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight), pos);
             Cursor = selectedObjectDragKind != ObjectDragKind.None ? ObjectDragCursor(selectedObjectDragKind)
+                   : hoveringObjectBody ? Cursors.SizeAll
                    : target == ResizeTarget.Column ? Cursors.SizeWE
                    : target == ResizeTarget.Row    ? Cursors.SizeNS
                    : splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll

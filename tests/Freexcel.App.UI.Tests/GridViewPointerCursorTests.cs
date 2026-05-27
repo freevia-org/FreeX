@@ -19,6 +19,20 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void MouseMoveUsesMoveCursorOverUnselectedObjectBody()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var hoverCursorBlock = source[
+            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
+
+        hoverCursorBlock.Should().Contain("var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None");
+        hoverCursorBlock.Should().Contain("HitTestDrawingObject(pos).Id != Guid.Empty");
+        hoverCursorBlock.Should().Contain(": hoveringObjectBody ? Cursors.SizeAll");
+    }
+
+    [Fact]
     public void MouseLeavePreservesCursorDuringCapturedDrags()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
