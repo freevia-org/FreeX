@@ -303,11 +303,12 @@ public sealed class DependencyGraph
         Dictionary<CellAddress, int> inDegree,
         Queue<CellAddress> ready)
     {
-        if (!inDegree.ContainsKey(dep))
+        if (!inDegree.TryGetValue(dep, out var degree))
             return;
 
-        inDegree[dep]--;
-        if (inDegree[dep] == 0)
+        degree--;
+        inDegree[dep] = degree;
+        if (degree == 0)
             ready.Enqueue(dep);
     }
 

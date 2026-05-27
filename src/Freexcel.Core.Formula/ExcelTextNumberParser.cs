@@ -6,6 +6,15 @@ namespace Freexcel.Core.Formula;
 internal static class ExcelTextNumberParser
 {
     private static readonly CultureInfo UsCulture = CultureInfo.GetCultureInfo("en-US");
+    private static readonly Regex FakeLeapDayTextRegex = new(
+        @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$",
+        RegexOptions.IgnoreCase);
+    private static readonly Regex MonthNameRegex = new(
+        @"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)",
+        RegexOptions.IgnoreCase);
+    private static readonly Regex AmPmRegex = new(
+        @"\b(?:am|pm)\b",
+        RegexOptions.IgnoreCase);
 
     public static bool TryParse(string text, out double number)
     {
@@ -39,7 +48,7 @@ internal static class ExcelTextNumberParser
     private static bool TryParseExcelFakeLeapDayText(string text, out double serial)
     {
         serial = 0;
-        var match = Regex.Match(text, @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$", RegexOptions.IgnoreCase);
+        var match = FakeLeapDayTextRegex.Match(text);
         if (!match.Success) return false;
 
         serial = 60;
@@ -56,11 +65,11 @@ internal static class ExcelTextNumberParser
     private static bool IsTimeOnlyText(string text)
     {
         if (text.Contains('/') || text.Contains('-')) return false;
-        if (Regex.IsMatch(text, @"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)", RegexOptions.IgnoreCase))
+        if (MonthNameRegex.IsMatch(text))
             return false;
 
         return text.Contains(':')
-            || Regex.IsMatch(text, @"\b(?:am|pm)\b", RegexOptions.IgnoreCase);
+            || AmPmRegex.IsMatch(text);
     }
 
     private static double DateToSerial(DateTime date) =>

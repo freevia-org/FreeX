@@ -6,6 +6,8 @@ namespace Freexcel.Core.IO;
 
 internal static class XlsxWorksheetCellLayoutReader
 {
+    private static readonly SheetId ParseOnlySheetId = default;
+
     public static IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ReadExplicitStyleOnlyCells(
         XDocument worksheetXml,
         XNamespace worksheetNs)
@@ -23,7 +25,7 @@ internal static class XlsxWorksheetCellLayoutReader
             }
 
             var reference = cell.Attribute("r")?.Value;
-            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, SheetId.New(), out var address))
+            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, ParseOnlySheetId, out var address))
                 continue;
 
             result.Add((address.Row, address.Col, styleIndex));
@@ -48,7 +50,7 @@ internal static class XlsxWorksheetCellLayoutReader
             if (string.IsNullOrWhiteSpace(rawValue))
                 continue;
             var reference = cell.Attribute("r")?.Value;
-            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, SheetId.New(), out var address))
+            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, ParseOnlySheetId, out var address))
                 continue;
 
             result[(address.Row, address.Col)] = MapCachedFormulaError(rawValue);

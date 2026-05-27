@@ -155,9 +155,19 @@ internal static class DelimitedTextWorkbookWriter
         writer.Write('"');
     }
 
-    private static bool ShouldQuoteField(string value, char delimiter, bool isTextValue) =>
-        value.Contains(delimiter) || value.Contains('"') || value.Contains('\n') || value.Contains('\r') ||
-        (isTextValue && IsCoercionLikeText(value));
+    private static bool ShouldQuoteField(string value, char delimiter, bool isTextValue)
+    {
+        if (isTextValue && IsCoercionLikeText(value))
+            return true;
+
+        foreach (var ch in value)
+        {
+            if (ch == delimiter || ch is '"' or '\n' or '\r')
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool IsCoercionLikeText(string value) =>
         value[0] is '=' or '+' or '-' or '@' ||

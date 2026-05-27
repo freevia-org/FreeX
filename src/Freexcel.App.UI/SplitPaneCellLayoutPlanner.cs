@@ -20,18 +20,20 @@ public static class SplitPaneCellLayoutPlanner
         var bottomLeftRowLookup = bottomLeftRows.ToDictionary(row => row.Row);
         var leftColumnLookup = leftColumns.ToDictionary(column => column.Col);
         var topRightColumnLookup = topRightColumns.ToDictionary(column => column.Col);
+        var cells = splitPanes.Cells ?? [];
+        var mergeLookup = MergeRangeIndex.Create(mergedRegions, cells);
         var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
         var horizontalY = dividerLayout.HorizontalY ?? GridView.ColHeaderHeight;
         var verticalX = dividerLayout.VerticalX ?? GridView.CalculateRowHeaderWidth(viewport);
         var layouts = new List<SplitPaneCellLayout>();
         var occupied = new HashSet<(uint Row, uint Col)>(
-            (splitPanes.Cells ?? [])
+            cells
             .Where(cell => !string.IsNullOrEmpty(cell.DisplayText))
             .Select(cell => (cell.Row, cell.Col)));
 
-        foreach (var cell in splitPanes.Cells ?? [])
+        foreach (var cell in cells)
         {
-            var merge = FindMerge(mergedRegions, cell.Row, cell.Col);
+            var merge = mergeLookup.Find(cell.Row, cell.Col);
             if (merge.HasValue && (cell.Row != merge.Value.Start.Row || cell.Col != merge.Value.Start.Col))
                 continue;
 
@@ -47,8 +49,8 @@ public static class SplitPaneCellLayoutPlanner
             if (row is null || column is null)
                 continue;
 
-            var rowMetrics = isTopPane ? topRows : bottomLeftRows;
-            var colMetrics = isLeftPane ? leftColumns : topRightColumns;
+            var rowMetrics = isTopPane ? topRowLookup : bottomLeftRowLookup;
+            var colMetrics = isLeftPane ? leftColumnLookup : topRightColumnLookup;
             var width = column.Width;
             var height = row.Height;
             if (merge.HasValue)
@@ -83,12 +85,12 @@ public static class SplitPaneCellLayoutPlanner
 
     private static double SumEmptyOverflowColumnWidths(
         DisplayCell cell,
-        IReadOnlyList<ColMetric> columns,
+        IReadOnlyDictionary<uint, ColMetric> columns,
         HashSet<(uint Row, uint Col)> occupied)
     {
         double width = 0;
         var nextCol = cell.Col + 1;
-        while (columns.FirstOrDefault(column => column.Col == nextCol) is { } nextMetric &&
+        while (columns.TryGetValue(nextCol, out var nextMetric) &&
                !occupied.Contains((cell.Row, nextCol)))
         {
             width += nextMetric.Width;
@@ -98,44 +100,80 @@ public static class SplitPaneCellLayoutPlanner
         return width;
     }
 
-    private static GridRange? FindMerge(IReadOnlyList<GridRange>? mergedRegions, uint row, uint col)
-    {
-        if (mergedRegions is null)
-            return null;
-
-        foreach (var merge in mergedRegions)
-        {
-            if (row >= merge.Start.Row && row <= merge.End.Row &&
-                col >= merge.Start.Col && col <= merge.End.Col)
-                return merge;
-        }
-
-        return null;
-    }
-
-    private static double SumMergedColumnWidths(GridRange merge, IReadOnlyList<ColMetric> columns, uint anchorCol)
+    private static double SumMergedColumnWidths(GridRange merge, IReadOnlyDictionary<uint, ColMetric> columns, uint anchorCol)
     {
         double width = 0;
-        for (uint col = anchorCol + 1; col <= merge.End.Col; col++)
+        foreach (var metric in columns.Values)
         {
-            var metric = columns.FirstOrDefault(column => column.Col == col);
-            if (metric is not null)
+            if (metric.Col > anchorCol && metric.Col <= merge.End.Col)
                 width += metric.Width;
         }
 
         return width;
     }
 
-    private static double SumMergedRowHeights(GridRange merge, IReadOnlyList<RowMetric> rows, uint anchorRow)
+    private static double SumMergedRowHeights(GridRange merge, IReadOnlyDictionary<uint, RowMetric> rows, uint anchorRow)
     {
         double height = 0;
-        for (uint row = anchorRow + 1; row <= merge.End.Row; row++)
+        foreach (var metric in rows.Values)
         {
-            var metric = rows.FirstOrDefault(metric => metric.Row == row);
-            if (metric is not null)
+            if (metric.Row > anchorRow && metric.Row <= merge.End.Row)
                 height += metric.Height;
         }
 
         return height;
+    }
+
+    private sealed class MergeRangeIndex
+    {
+        private static readonly MergeRangeIndex Empty = new(new Dictionary<uint, List<GridRange>>());
+
+        private readonly IReadOnlyDictionary<uint, List<GridRange>> _mergesByRow;
+
+        private MergeRangeIndex(IReadOnlyDictionary<uint, List<GridRange>> mergesByRow)
+        {
+            _mergesByRow = mergesByRow;
+        }
+
+        public static MergeRangeIndex Create(IReadOnlyList<GridRange>? mergedRegions, IReadOnlyList<DisplayCell> cells)
+        {
+            if (mergedRegions is not { Count: > 0 } || cells.Count == 0)
+                return Empty;
+
+            var queryRows = cells.Select(cell => cell.Row).Distinct().ToArray();
+            var mergesByRow = new Dictionary<uint, List<GridRange>>();
+            foreach (var mergedRegion in mergedRegions)
+            {
+                foreach (var row in queryRows)
+                {
+                    if (row < mergedRegion.Start.Row || row > mergedRegion.End.Row)
+                        continue;
+
+                    if (!mergesByRow.TryGetValue(row, out var rowMerges))
+                    {
+                        rowMerges = [];
+                        mergesByRow[row] = rowMerges;
+                    }
+
+                    rowMerges.Add(mergedRegion);
+                }
+            }
+
+            return new MergeRangeIndex(mergesByRow);
+        }
+
+        public GridRange? Find(uint row, uint col)
+        {
+            if (!_mergesByRow.TryGetValue(row, out var rowMerges))
+                return null;
+
+            foreach (var merge in rowMerges)
+            {
+                if (col >= merge.Start.Col && col <= merge.End.Col)
+                    return merge;
+            }
+
+            return null;
+        }
     }
 }

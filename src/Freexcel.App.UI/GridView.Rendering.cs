@@ -162,6 +162,7 @@ public partial class GridView
         var brushCache = new Dictionary<CellColor, SolidColorBrush>();
         var borderPenCache = new Dictionary<CellBorder, Pen>();
         var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
+        var underlinePenCache = new Dictionary<Brush, Pen>();
 
 
         // Pass 1: backgrounds
@@ -367,8 +368,9 @@ public partial class GridView
             if (style?.DoubleUnderline == true)
             {
                 double uY = textY + text.Height + 1;
-                dc.DrawLine(new Pen(textBrush, 1), new Point(textX, uY), new Point(textX + text.Width, uY));
-                dc.DrawLine(new Pen(textBrush, 1), new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
+                var underlinePen = UnderlinePenForTextBrush(textBrush, underlinePenCache);
+                dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));
+                dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
             }
             dc.Pop();
         }
@@ -386,6 +388,17 @@ public partial class GridView
         }
         geometry.Freeze();
         dc.DrawGeometry(Brushes.Red, null, geometry);
+    }
+
+    private static Pen UnderlinePenForTextBrush(Brush textBrush, Dictionary<Brush, Pen> underlinePenCache)
+    {
+        if (underlinePenCache.TryGetValue(textBrush, out var pen))
+            return pen;
+
+        pen = new Pen(textBrush, 1);
+        pen.Freeze();
+        underlinePenCache[textBrush] = pen;
+        return pen;
     }
 
 }
