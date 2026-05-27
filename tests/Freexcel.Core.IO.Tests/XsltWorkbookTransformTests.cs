@@ -36,6 +36,17 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_Success_ReturnsRewoundOutputStream()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = IdentityStylesheet();
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        transformed.Position.Should().Be(0);
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_MalformedStylesheet_ReportsStylesheetDiagnostic()
     {
         using var source = StreamFromString("<rows />");
