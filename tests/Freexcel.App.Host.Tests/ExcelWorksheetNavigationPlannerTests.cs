@@ -80,6 +80,63 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
             .Be(expected);
     }
 
+    [Theory]
+    [InlineData(Key.Right, ModifierKeys.Control, true)]
+    [InlineData(Key.Right, ModifierKeys.Control | ModifierKeys.Shift, true)]
+    [InlineData(Key.Right, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.Right, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, false)]
+    [InlineData(Key.Right, ModifierKeys.Shift, false)]
+    public void ShouldUseDataBoundary_RequiresExactExcelCtrlArrowModifiers(
+        Key key,
+        ModifierKeys modifiers,
+        bool expected)
+    {
+        ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(key, modifiers, endMode: false)
+            .Should()
+            .Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.Right, ModifierKeys.None, true)]
+    [InlineData(Key.Right, ModifierKeys.Shift, true)]
+    [InlineData(Key.Right, ModifierKeys.Control, false)]
+    [InlineData(Key.Right, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.Right, ModifierKeys.Alt, false)]
+    public void ShouldUseDataBoundary_EndModeAcceptsArrowAndShiftArrowOnly(
+        Key key,
+        ModifierKeys modifiers,
+        bool expected)
+    {
+        ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(key, modifiers, endMode: true)
+            .Should()
+            .Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.Right, Key.None, ModifierKeys.Control, false, true)]
+    [InlineData(Key.Right, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false, true)]
+    [InlineData(Key.Right, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false, false)]
+    [InlineData(Key.Home, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false, true)]
+    [InlineData(Key.Home, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false, false)]
+    [InlineData(Key.PageDown, Key.None, ModifierKeys.Shift, false, true)]
+    [InlineData(Key.PageDown, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false, false)]
+    [InlineData(Key.System, Key.PageDown, ModifierKeys.Alt, false, true)]
+    [InlineData(Key.System, Key.PageDown, ModifierKeys.Alt | ModifierKeys.Shift, false, true)]
+    [InlineData(Key.Tab, Key.None, ModifierKeys.Control, false, false)]
+    [InlineData(Key.Right, Key.None, ModifierKeys.Shift, true, true)]
+    [InlineData(Key.Right, Key.None, ModifierKeys.Control, true, false)]
+    public void ShouldHandleWorksheetNavigationKey_AcceptsOnlyExcelNavigationChords(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        bool endMode,
+        bool expected)
+    {
+        ExcelWorksheetNavigationPlanner.ShouldHandleWorksheetNavigationKey(key, systemKey, modifiers, endMode)
+            .Should()
+            .Be(expected);
+    }
+
     [Fact]
     public void FindVerticalDataBoundary_FromFilledCellStopsBeforeFirstGap()
     {

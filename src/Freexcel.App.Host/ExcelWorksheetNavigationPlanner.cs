@@ -17,7 +17,37 @@ public static class ExcelWorksheetNavigationPlanner
 
     public static bool ShouldUseDataBoundary(Key key, ModifierKeys modifiers, bool endMode) =>
         key is Key.Up or Key.Down or Key.Left or Key.Right &&
-        (endMode || (modifiers & ModifierKeys.Control) != 0);
+        (endMode
+            ? modifiers is ModifierKeys.None or ModifierKeys.Shift
+            : modifiers is ModifierKeys.Control or (ModifierKeys.Control | ModifierKeys.Shift));
+
+    public static bool ShouldHandleWorksheetNavigationKey(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        bool endMode)
+    {
+        var effectiveKey = key == Key.None || key == Key.System ? systemKey : key;
+        return effectiveKey switch
+        {
+            Key.Up or Key.Down or Key.Left or Key.Right =>
+                endMode
+                    ? modifiers is ModifierKeys.None or ModifierKeys.Shift
+                    : modifiers is ModifierKeys.None or ModifierKeys.Shift or ModifierKeys.Control or
+                        (ModifierKeys.Control | ModifierKeys.Shift),
+            Key.Home =>
+                modifiers is ModifierKeys.None or ModifierKeys.Shift or ModifierKeys.Control or
+                    (ModifierKeys.Control | ModifierKeys.Shift),
+            Key.End =>
+                modifiers is ModifierKeys.Control or (ModifierKeys.Control | ModifierKeys.Shift),
+            Key.PageUp or Key.PageDown =>
+                modifiers is ModifierKeys.None or ModifierKeys.Shift or ModifierKeys.Alt or
+                    (ModifierKeys.Alt | ModifierKeys.Shift),
+            Key.Enter or Key.Tab =>
+                modifiers is ModifierKeys.None or ModifierKeys.Shift,
+            _ => false
+        };
+    }
 
     public static CellAddress? GetHorizontalPageTarget(
         Key key,
