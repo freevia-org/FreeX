@@ -25,6 +25,25 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_BuildsResizeLookupsWithoutLinqPipelines()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var setup = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("// Pass 1: backgrounds", StringComparison.Ordinal)];
+
+        setup.Should().Contain("BuildRenderCellStyleLookup(Viewport!.Cells)");
+        setup.Should().Contain("BuildRenderRowMetricLookup(Viewport.RowMetrics)");
+        setup.Should().Contain("BuildRenderColumnMetricLookup(Viewport.ColMetrics)");
+        setup.Should().NotContain(".Where(");
+        setup.Should().NotContain(".ToDictionary(");
+
+        source.Should().Contain("lookup.Add((cell.Row, cell.Col), style)");
+        source.Should().Contain("lookup.Add(row.Row, row)");
+        source.Should().Contain("lookup.Add(column.Col, column)");
+    }
+
+    [Fact]
     public void RenderCells_ReusesPixelsPerDipAcrossFormattedTextCalls()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
