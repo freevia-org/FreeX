@@ -111,6 +111,15 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDialog_RangeEditorsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_sourceRangeBox, \"PivotTable source range\");");
+        source.Should().Contain("AutomationProperties.SetName(_destinationRangeBox, \"PivotTable location\");");
+    }
+
+    [Fact]
     public void PivotTableDialogOpenedFromKeyboard_FocusesSourceRange()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
