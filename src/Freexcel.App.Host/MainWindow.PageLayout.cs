@@ -115,11 +115,23 @@ public partial class MainWindow
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Sheet Background",
-            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*"
+            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
         };
 
         if (dialog.ShowDialog(this) != true)
             return;
+
+        if (!IsSupportedSheetBackgroundFile(dialog.FileName))
+        {
+            ShowOwnedMessage(
+                "Choose a PNG, JPG, JPEG, BMP, or GIF image file.",
+                "Sheet Background",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
 
         byte[] bytes;
         try
@@ -128,12 +140,12 @@ public partial class MainWindow
         }
         catch (IOException ex)
         {
-            MessageBox.Show($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         catch (UnauthorizedAccessException ex)
         {
-            MessageBox.Show($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -147,6 +159,13 @@ public partial class MainWindow
 
         UpdateViewport();
     }
+
+    private static bool IsSupportedSheetBackgroundFile(string fileName) =>
+        Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" => true,
+            _ => false
+        };
 
     private void BackgroundClearMenuItem_Click(object sender, RoutedEventArgs e)
     {

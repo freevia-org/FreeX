@@ -55,7 +55,9 @@ public partial class MainWindow
             Title      = "Export as PDF / XPS",
             Filter     = "PDF files (*.pdf)|*.pdf|XPS files (*.xps)|*.xps",
             DefaultExt = ".pdf",
-            FileName   = _workbook.Name
+            FileName   = _workbook.Name,
+            AddExtension = true,
+            OverwritePrompt = true
         };
         if (saveDlg.ShowDialog() != true) return;
 
@@ -65,8 +67,8 @@ public partial class MainWindow
         var request = ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result);
         if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError))
         {
-            MessageBox.Show(
-                publishOptionsError,
+            ShowOwnedMessage(
+                publishOptionsError ?? "Unsupported export options.",
                 "Export Options",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -104,7 +106,7 @@ public partial class MainWindow
                 includeSelectableText: !options.BitmapTextWhenFontsMayNotBeEmbedded,
                 pdfLanguage: options.PdfLanguage);
 
-            MessageBox.Show(
+            ShowOwnedMessage(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
                 "Export PDF",
                 MessageBoxButton.OK,
@@ -126,7 +128,7 @@ public partial class MainWindow
                 ["scope"] = options.Scope.ToString(),
                 ["reason"] = ex.GetType().Name
             });
-            MessageBox.Show(
+            ShowOwnedMessage(
                 $"Failed to save PDF file:\n{ex.Message}",
                 "Export Error",
                 MessageBoxButton.OK,
@@ -184,7 +186,7 @@ public partial class MainWindow
                 var detail = string.IsNullOrWhiteSpace(optionSummary)
                     ? $"Saved XPS file:\n{xpsPath}"
                     : $"{optionSummary}\n\nSaved XPS file:\n{xpsPath}";
-                MessageBox.Show(
+                ShowOwnedMessage(
                     detail,
                     "Export XPS",
                     MessageBoxButton.OK,
@@ -208,7 +210,7 @@ public partial class MainWindow
                 ["scope"] = options.Scope.ToString(),
                 ["reason"] = ex.GetType().Name
             });
-            MessageBox.Show(
+            ShowOwnedMessage(
                 $"Failed to save XPS file:\n{ex.Message}",
                 "Export Error",
                 MessageBoxButton.OK,

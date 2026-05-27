@@ -3699,11 +3699,11 @@
                                                 <Setter Property="MinHeight"    Value="27"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                        <Setter Property="Margin"       Value="-16,-2,0,0"/>
+                                                        <Setter Property="Margin"       Value="-16,0,0,1"/>
                                                         <Setter Property="Panel.ZIndex" Value="5"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                        <Setter Property="Margin"       Value="-16,-3,0,0"/>
+                                                        <Setter Property="Margin"       Value="-16,0,0,1"/>
                                                         <Setter Property="Panel.ZIndex" Value="10"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -3748,17 +3748,18 @@
                                               Panel.ZIndex="3"
                                               SnapsToDevicePixels="True"
                                               IsHitTestVisible="False"/>
-                                        <Border Height="1.25"
+                                        <Border x:Name="TabBottomOutline"
+                                                Height="1.25"
                                                 VerticalAlignment="Bottom"
-                                                Margin="4,0,4,0"
+                                                Margin="12,0,12,0"
                                                 Background="{Binding ElementName=TabBorder, Path=BorderBrush}"
                                                 Panel.ZIndex="3"
                                                 IsHitTestVisible="False"/>
-                                        <Border Height="8"
+                                        <Border Height="4"
                                                 VerticalAlignment="Top"
-                                                Margin="0,-5,0,0"
+                                                Margin="14,0,14,0"
                                                 Background="{StaticResource FreexcelRibbonSurfaceBrush}"
-                                                Panel.ZIndex="4">
+                                                Panel.ZIndex="5">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -3775,7 +3776,8 @@
                                         </Border>
                                         <Border x:Name="TabBorder"
                                                 CornerRadius="0,0,4,4" Padding="12,1,12,3"
-                                                Margin="8,0,8,0">
+                                                Margin="8,0,8,0"
+                                                Panel.ZIndex="2">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Background"      Value="{Binding TabBrush}"/>
@@ -3824,10 +3826,16 @@
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                             <Setter TargetName="TabLeftOutline" Property="Data" Value="M 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
                                             <Setter TargetName="TabRightOutline" Property="Data" Value="M 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
+                                            <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
                                             <Setter TargetName="TabLeftOutline" Property="Data" Value="M 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
                                             <Setter TargetName="TabRightOutline" Property="Data" Value="M 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
+                                            <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -3835,8 +3843,8 @@
                         </ItemsControl>
                 </ScrollViewer>
 
-                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="38" MinHeight="27"
-                        FontSize="13" FontWeight="SemiBold" Margin="-30,0,0,1" Padding="12,1,12,3"
+                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="86" MinHeight="27"
+                        FontSize="17" FontWeight="SemiBold" Margin="-32,0,0,1" Padding="12,1,12,3"
                         Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1,0,1,1"
                         Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
                         VerticalAlignment="Top" Cursor="Hand"
@@ -3873,7 +3881,7 @@
                                       IsHitTestVisible="False"/>
                                 <Border Height="1.25"
                                         VerticalAlignment="Bottom"
-                                        Margin="4,0,10,0"
+                                        Margin="12,0,12,0"
                                         Background="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
                                         Panel.ZIndex="3"
                                         IsHitTestVisible="False"/>
@@ -3882,10 +3890,11 @@
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="0"
                                         CornerRadius="0,0,4,4"
-                                        Margin="8,0,8,0"
+                                        Margin="16,0,8,0"
                                         SnapsToDevicePixels="True">
                                     <Grid>
-                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    <ContentPresenter Margin="16,0,8,1"
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                                     </Grid>
                                 </Border>

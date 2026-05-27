@@ -298,7 +298,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            MessageBox.Show("Select a range first.", "Data Validation");
+            ShowOwnedMessage("Select a range first.", "Data Validation", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
