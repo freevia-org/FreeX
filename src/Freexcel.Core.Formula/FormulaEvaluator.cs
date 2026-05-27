@@ -114,6 +114,7 @@ public sealed class FormulaEvaluator
         "RANDBETWEEN",
         "N", "ERROR.TYPE",
         "COMBIN", "PERMUT",
+        "ACOT", "ACOTH", "COT", "COTH", "CSC", "CSCH", "SEC", "SECH",
         "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT",
         "BASE", "DECIMAL",
         "BIN2DEC", "HEX2DEC", "OCT2DEC",

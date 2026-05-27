@@ -617,6 +617,33 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageOpenProgressAndUnsupportedWarnings_UseOwnedDialogsAndRecoverOverlay()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
+        var saveWarningMethod = ExtractMethodSource(backstageSource, "private bool ConfirmUnsupportedXlsxFeatureSave()");
+        var openWarningMethod = ExtractMethodSource(backstageSource, "private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()");
+
+        openMethod.Should().Contain("ShowOpenProgress(\"Opening workbook\", \"Loading file (preparing)\", 1);");
+        openMethod.Should().Contain("ShowOpenProgress(update.Title, update.Detail, update.Percent)");
+        openMethod.Should().Contain("ShowOpenProgress(\"Opening workbook\", \"Loading file (done)\", 100);");
+        openMethod.Should().Contain("ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();");
+        openMethod.Should().Contain("ShowOwnedMessage($\"Failed to open file:");
+        openMethod.Should().Contain("finally");
+        openMethod.Should().Contain("HideOpenProgress();");
+        openMethod.Should().Contain("_isOpeningFile = false;");
+        openMethod.Should().NotContain("MessageBox.Show(");
+
+        saveWarningMethod.Should().Contain("DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport)");
+        saveWarningMethod.Should().Contain("ShowOwnedMessage(");
+        saveWarningMethod.Should().NotContain("MessageBox.Show(");
+
+        openWarningMethod.Should().Contain("DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport)");
+        openWarningMethod.Should().Contain("ShowOwnedMessage(");
+        openWarningMethod.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void FormulaCommands_LiveOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;

@@ -1641,6 +1641,39 @@ public sealed class MainWindowXamlKeyTipTests
         helpText!.Value.Should().Be("Filter recent and pinned files");
     }
 
+    [Fact]
+    public void BackstageOpenProgressOverlay_ExposesAccessibleStatusText()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var overlay = document
+            .Descendants(presentation + "Border")
+            .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressOverlay");
+
+        overlay.Attribute("AutomationProperties.Name")?.Value.Should().Be("Opening workbook");
+        overlay.Attribute("AutomationProperties.HelpText")?.Value
+            .Should().Be("Shows workbook open progress and blocks workbook interaction until loading finishes or fails.");
+        overlay.Attribute("Panel.ZIndex")?.Value.Should().Be("260");
+
+        var progressBar = document
+            .Descendants(presentation + "ProgressBar")
+            .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressBar");
+
+        progressBar.Attribute("AutomationProperties.Name")?.Value.Should().Be("Opening Progress");
+        progressBar.Attribute("Minimum")?.Value.Should().Be("0");
+        progressBar.Attribute("Maximum")?.Value.Should().Be("100");
+
+        var progressTexts = document
+            .Descendants(presentation + "TextBlock")
+            .Where(element => element.Attribute(x + "Name")?.Value is "OpenProgressTitle" or "OpenProgressDetail")
+            .Select(element => element.Attribute("AutomationProperties.Name")?.Value)
+            .ToList();
+
+        progressTexts.Should().Equal("Open progress title", "Open progress detail");
+    }
+
     [Theory]
     [InlineData("VerticalScroll", "Vertical Worksheet Scroll Bar", "Scroll worksheet rows")]
     [InlineData("HorizontalScroll", "Horizontal Worksheet Scroll Bar", "Scroll worksheet columns")]
