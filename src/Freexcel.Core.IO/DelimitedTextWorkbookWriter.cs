@@ -187,9 +187,9 @@ internal static class DelimitedTextWorkbookWriter
         IsNumericLikeText(value);
 
     private static bool IsSeparatorDirectiveLikeText(string value) =>
-        value.Length == 5 &&
+        value is { Length: 4 } or { Length: 5 } &&
         value.StartsWith("sep=", StringComparison.OrdinalIgnoreCase) &&
-        value[4] is not '\r' and not '\n';
+        (value.Length == 4 || value[4] is not '\r' and not '\n');
 
     private static bool IsBooleanLikeText(string value)
     {
