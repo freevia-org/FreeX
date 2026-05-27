@@ -19,6 +19,8 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
     [InlineData(Key.System, Key.PageUp, ModifierKeys.Alt, 1u)]
     [InlineData(Key.PageDown, Key.None, ModifierKeys.Alt | ModifierKeys.Shift, 10u)]
     [InlineData(Key.System, Key.PageDown, ModifierKeys.Alt | ModifierKeys.Shift, 10u)]
+    [InlineData(Key.PageUp, Key.None, ModifierKeys.Alt | ModifierKeys.Shift, 1u)]
+    [InlineData(Key.System, Key.PageUp, ModifierKeys.Alt | ModifierKeys.Shift, 1u)]
     public void GetHorizontalPageTarget_MapsExcelAltPageNavigation(
         Key key,
         Key systemKey,
