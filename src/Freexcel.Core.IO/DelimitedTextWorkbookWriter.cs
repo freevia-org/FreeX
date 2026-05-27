@@ -1,0 +1,183 @@
+using System.Globalization;
+using System.Text;
+using Freexcel.Core.Model;
+
+namespace Freexcel.Core.IO;
+
+internal static class DelimitedTextWorkbookWriter
+{
+    private const int DelimiterBufferLength = 256;
+
+    public static void Save(Workbook workbook, Stream stream, char delimiter)
+    {
+        if (workbook.Sheets.Count == 0) return;
+
+        var sheet = workbook.Sheets[0];
+        var rowLookup = new Dictionary<uint, DelimitedTextRowBucket>();
+        var rows = new List<DelimitedTextRowBucket>();
+        var endRow = 0u;
+        var endCol = 0u;
+        foreach (var (address, cell) in sheet.EnumerateCells())
+        {
+            if (!IsValidCellAddress(address.Row, address.Col))
+                continue;
+
+            if (!rowLookup.TryGetValue(address.Row, out var row))
+            {
+                row = new DelimitedTextRowBucket(address.Row);
+                rowLookup[address.Row] = row;
+                rows.Add(row);
+            }
+
+            row.Cells.Add((address.Col, cell));
+            endRow = Math.Max(endRow, address.Row);
+            endCol = Math.Max(endCol, address.Col);
+        }
+
+        if (rows.Count == 0) return;
+
+        rows.Sort(static (left, right) => left.Row.CompareTo(right.Row));
+        foreach (var row in rows)
+            row.Cells.Sort(static (left, right) => left.Col.CompareTo(right.Col));
+
+        using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
+        var nextRow = 1u;
+        foreach (var row in rows)
+        {
+            while (nextRow < row.Row)
+            {
+                WriteBlankRow(writer, delimiter, endCol);
+                nextRow++;
+            }
+
+            WriteRow(writer, delimiter, row.Cells, endCol);
+            nextRow = row.Row + 1;
+        }
+
+        while (nextRow <= endRow)
+        {
+            WriteBlankRow(writer, delimiter, endCol);
+            nextRow++;
+        }
+    }
+
+    private static bool IsValidCellAddress(uint row, uint col) =>
+        row is >= 1 and <= CellAddress.MaxRow &&
+        col is >= 1 and <= CellAddress.MaxCol;
+
+    private sealed class DelimitedTextRowBucket(uint row)
+    {
+        public uint Row { get; } = row;
+
+        public List<(uint Col, Cell Cell)> Cells { get; } = [];
+    }
+
+    private static void WriteRow(TextWriter writer, char delimiter, List<(uint Col, Cell Cell)> cells, uint endCol)
+    {
+        var previousCol = 0u;
+        foreach (var (col, cell) in cells)
+        {
+            WriteDelimiters(writer, delimiter, previousCol == 0 ? col - 1 : col - previousCol);
+            WriteField(writer, delimiter, FormatCell(cell), cell.Value is TextValue);
+            previousCol = col;
+        }
+
+        WriteDelimiters(writer, delimiter, endCol - previousCol);
+        writer.Write("\r\n");
+    }
+
+    private static void WriteBlankRow(TextWriter writer, char delimiter, uint endCol)
+    {
+        if (endCol > 0)
+            WriteDelimiters(writer, delimiter, endCol - 1);
+
+        writer.Write("\r\n");
+    }
+
+    private static void WriteDelimiters(TextWriter writer, char delimiter, uint count)
+    {
+        if (count == 1)
+        {
+            writer.Write(delimiter);
+            return;
+        }
+
+        while (count >= DelimiterBufferLength)
+        {
+            writer.Write(new string(delimiter, DelimiterBufferLength));
+            count -= DelimiterBufferLength;
+        }
+
+        if (count > 0)
+            writer.Write(new string(delimiter, (int)count));
+    }
+
+    private static void WriteField(TextWriter writer, char delimiter, string value, bool isTextValue)
+    {
+        if (value.Length == 0) return;
+        if (!ShouldQuoteField(value, delimiter, isTextValue))
+        {
+            writer.Write(value);
+            return;
+        }
+
+        writer.Write('"');
+        foreach (var ch in value)
+        {
+            if (ch == '"')
+                writer.Write("\"\"");
+            else
+                writer.Write(ch);
+        }
+
+        writer.Write('"');
+    }
+
+    private static bool ShouldQuoteField(string value, char delimiter, bool isTextValue) =>
+        value.Contains(delimiter) || value.Contains('"') || value.Contains('\n') || value.Contains('\r') ||
+        (isTextValue && IsCoercionLikeText(value));
+
+    private static bool IsCoercionLikeText(string value) =>
+        value[0] is '=' or '+' or '-' or '@' ||
+        IsErrorLikeText(value);
+
+    private static bool IsErrorLikeText(string value) =>
+        value.Equals("#DIV/0!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#VALUE!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#REF!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#NAME?", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#NULL!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#N/A", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#NUM!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#CIRCULAR!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#SPILL!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#CALC!", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("#GETTING_DATA", StringComparison.OrdinalIgnoreCase);
+
+    private static string FormatCell(Cell cell) =>
+        cell.FormulaText is { } formulaText
+            ? $"={formulaText}"
+            : FormatValue(cell.Value);
+
+    private static string FormatValue(ScalarValue value) => value switch
+    {
+        NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
+        DateTimeValue dt => FormatDateTimeValue(dt),
+        BoolValue b => b.Value ? "TRUE" : "FALSE",
+        TextValue t => t.Value,
+        ErrorValue e => e.Code,
+        _ => "",
+    };
+
+    private static string FormatDateTimeValue(DateTimeValue value)
+    {
+        var dateTime = value.ToDateTime();
+        var hasFractionalSeconds = dateTime.Ticks % TimeSpan.TicksPerSecond != 0;
+        if (dateTime.Date == new DateTime(1899, 12, 30) && dateTime.TimeOfDay != TimeSpan.Zero)
+            return dateTime.ToString(hasFractionalSeconds ? "HH:mm:ss.FFFFFFF" : "HH:mm:ss", CultureInfo.InvariantCulture);
+
+        return dateTime.TimeOfDay == TimeSpan.Zero
+            ? dateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : dateTime.ToString(hasFractionalSeconds ? "yyyy-MM-dd HH:mm:ss.FFFFFFF" : "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+    }
+}

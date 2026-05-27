@@ -25,9 +25,9 @@ public sealed class AppFileAdapterRegistrationTests
         formats.Should().Contain(format => format.Extension == ".xlsb" && format.CanOpen && !format.CanSave);
         formats.Should().Contain(format => format.Extension == ".xlt" && format.CanOpen && !format.CanSave && format.OpensAsTemplate);
         formats.Should().Contain(format => format.Extension == ".csv" && format.CanOpen && format.CanSave);
-        formats.Should().Contain(format => format.Extension == ".txt" && format.CanOpen && !format.CanSave);
-        formats.Should().Contain(format => format.Extension == ".tsv" && format.CanOpen && !format.CanSave);
-        formats.Should().Contain(format => format.Extension == ".tab" && format.CanOpen && !format.CanSave);
+        formats.Should().Contain(format => format.Extension == ".txt" && format.CanOpen && format.CanSave);
+        formats.Should().Contain(format => format.Extension == ".tsv" && format.CanOpen && format.CanSave);
+        formats.Should().Contain(format => format.Extension == ".tab" && format.CanOpen && format.CanSave);
     }
 
     private static ServiceProvider BuildAppServices()
