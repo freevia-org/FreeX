@@ -250,9 +250,9 @@ public partial class MainWindow
     private void SymbolPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         var dlg = new SymbolPickerDialog { Owner = this };
-        if (dlg.ShowDialog() != true || dlg.SelectedChar == '\0') return;
+        if (dlg.ShowDialog() != true || string.IsNullOrEmpty(dlg.SelectedSymbol)) return;
         if (SheetGrid.SelectedRange is null) return;
-        var selectedChar = dlg.SelectedChar;
+        var selectedSymbol = dlg.SelectedSymbol;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Symbol",
                 SheetGrid.SelectedRange.Value,
@@ -261,7 +261,7 @@ public partial class MainWindow
                     var currentAddress = currentRange.Start;
                     var currentSheet = _workbook.GetSheet(_currentSheetId);
                     var currentExisting = currentSheet?.GetCell(currentAddress)?.Value as TextValue;
-                    var currentText = (currentExisting?.Value ?? "") + selectedChar;
+                    var currentText = (currentExisting?.Value ?? "") + selectedSymbol;
                     return CreateSingleCellEditCommand(currentAddress, Cell.FromValue(new TextValue(currentText)));
                 }))
             return;
