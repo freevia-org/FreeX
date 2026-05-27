@@ -339,6 +339,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void PageBreakDialog_NumberInputsExposeAutomationNames()
+    {
+        var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_rowBreakBox, \"Row page break\");");
+        source.Should().Contain("AutomationProperties.SetName(_columnBreakBox, \"Column page break\");");
+    }
+
+    [Fact]
     public void PageBreakDialogInvalidBreakEntry_ShowsOwnedWarningAndRefocusesEntry()
     {
         var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
