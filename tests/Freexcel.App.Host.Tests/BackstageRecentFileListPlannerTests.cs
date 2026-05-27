@@ -37,6 +37,27 @@ public sealed class BackstageRecentFileListPlannerTests
     }
 
     [Fact]
+    public void Build_SortsRecentAndPinnedItemsNewestFirst()
+    {
+        var now = DateTime.Now;
+        var entries = new[]
+        {
+            new RecentFileEntry { Path = @"C:\Work\OldRecent.xlsx", LastOpened = now.AddDays(-4), IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Work\NewPinned.xlsx", LastOpened = now.AddMinutes(-5), IsPinned = true },
+            new RecentFileEntry { Path = @"C:\Work\NewRecent.xlsx", LastOpened = now.AddMinutes(-10), IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Work\OldPinned.xlsx", LastOpened = now.AddDays(-3), IsPinned = true }
+        };
+
+        var plan = BackstageRecentFileListPlanner.Build(entries, filter: null);
+
+        plan.AllItems.Select(item => item.FileName)
+            .Should()
+            .Equal("NewPinned.xlsx", "NewRecent.xlsx", "OldPinned.xlsx", "OldRecent.xlsx");
+        plan.RecentItems.Select(item => item.FileName).Should().Equal("NewRecent.xlsx", "OldRecent.xlsx");
+        plan.PinnedItems.Select(item => item.FileName).Should().Equal("NewPinned.xlsx", "OldPinned.xlsx");
+    }
+
+    [Fact]
     public void Build_RemovesMissingFilesBeforeSplittingRecentAndPinnedItems()
     {
         var entries = new[]
@@ -52,7 +73,7 @@ public sealed class BackstageRecentFileListPlannerTests
             filter: null,
             pathExists: path => !path.Contains("Missing", StringComparison.OrdinalIgnoreCase));
 
-        plan.AllItems.Select(item => item.FileName).Should().Equal("ExistingPinned.xlsx", "ExistingRecent.xlsx");
+        plan.AllItems.Select(item => item.FileName).Should().Equal("ExistingRecent.xlsx", "ExistingPinned.xlsx");
         plan.PinnedItems.Select(item => item.FileName).Should().Equal("ExistingPinned.xlsx");
         plan.RecentItems.Select(item => item.FileName).Should().Equal("ExistingRecent.xlsx");
     }

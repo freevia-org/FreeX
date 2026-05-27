@@ -19,6 +19,7 @@ public static class BackstageRecentFileListPlanner
 
         var allItems = entries
             .Where(entry => pathExists(entry.Path))
+            .OrderByDescending(entry => entry.LastOpened)
             .Select(entry => new RecentFileViewModel(entry))
             .Where(item => MatchesFilter(item, normalizedFilter))
             .ToList();

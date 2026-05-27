@@ -98,6 +98,9 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("new GoToSpecialDialog { Owner = this }");
         source.Should().Contain("new ClearContentsCommand(sheetId, currentRange)");
         source.Should().Contain("CellStyleDiffPlanner.ClearFormatsDiff()");
+        source.Should().Contain("new ClearCommentsCommand(sheetId, currentRange)");
+        source.Should().Contain("new ClearHyperlinksCommand(sheetId, currentRange)");
+        source.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? [])");
         source.Should().Contain("new ClearCommentsCommand(_currentSheetId, currentRange)");
         source.Should().Contain("new ClearHyperlinksCommand(_currentSheetId, currentRange)");
     }
