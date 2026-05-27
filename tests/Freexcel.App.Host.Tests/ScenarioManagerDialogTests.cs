@@ -277,6 +277,14 @@ public sealed class ScenarioManagerDialogTests
     }
 
     [Fact]
+    public void DialogSource_ScenarioListExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_scenarioList, \"Scenarios\");");
+    }
+
+    [Fact]
     public void DialogSource_FramesAddEditFieldsLikeExcel()
     {
         var source = ReadScenarioManagerDialogSources();

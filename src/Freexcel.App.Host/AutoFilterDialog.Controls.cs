@@ -25,11 +25,18 @@ public sealed partial class AutoFilterDialog
         if (e.Key != Key.F || Keyboard.Modifiers != ModifierKeys.None)
             return;
 
+        if (IsTextInputElement(e.OriginalSource))
+            return;
+
         if (!TryOpenVisibleFilterFamilySubmenu())
             return;
 
         e.Handled = true;
     }
+
+    private static bool IsTextInputElement(object? originalSource) =>
+        originalSource is TextBox ||
+        originalSource is ComboBox { IsEditable: true };
 
     private bool TryOpenVisibleFilterFamilySubmenu()
     {
