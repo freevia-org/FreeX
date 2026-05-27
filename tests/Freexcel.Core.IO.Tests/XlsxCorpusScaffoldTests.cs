@@ -135,6 +135,15 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesPrioritizedFixListMappedToCommandParity()
+    {
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        report.Should().Contain("## Prioritized Fix List");
+        report.Should().Contain("`docs/COMMAND_SURFACE_PARITY.md`");
+    }
+
+    [Fact]
     public void CorpusReport_DoesNotListCompletedLocalPrivateManifestRowsAsOpenGap()
     {
         var manifestRows = ReadManifestRows();
