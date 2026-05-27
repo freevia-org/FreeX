@@ -1,5 +1,6 @@
 using System.Text;
 using System.Xml;
+using System.Xml.Linq;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -70,6 +71,72 @@ public sealed class SpreadsheetXmlFileAdapterTests
         loaded.GetSheetAt(0).GetCell(4, 1)!.Value.Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 27, 13, 45, 5)));
         loaded.GetSheetAt(0).GetCell(5, 1)!.FormulaText.Should().Be("SUM(A2:A2)");
         loaded.GetSheetAt(1).GetCell(1, 2)!.Value.Should().Be(new ErrorValue("#VALUE!"));
+    }
+
+    [Fact]
+    public void Load_ReadsSpreadsheetMlMergedCells()
+    {
+        using var stream = StreamFromString("""
+            <?xml version="1.0"?>
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Merged">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell ss:MergeAcross="2" ss:MergeDown="1"><ss:Data ss:Type="String">Header</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        var region = sheet.MergedRegions.Should().ContainSingle().Subject;
+        region.Start.Row.Should().Be(1);
+        region.Start.Col.Should().Be(1);
+        region.End.Row.Should().Be(2);
+        region.End.Col.Should().Be(3);
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Header"));
+    }
+
+    [Fact]
+    public void Save_WritesSpreadsheetMlMergedCellsIncludingBlankAnchors()
+    {
+        var workbook = new Workbook("XmlMergeRoundTrip");
+        var sheet = workbook.AddSheet("Merged");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Header"));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 3)));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 4, 4),
+            new CellAddress(sheet.Id, 4, 5)));
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var cells = document.Descendants(ss + "Cell").ToArray();
+        var headerCell = cells.Single(cell => cell.Element(ss + "Data")?.Value == "Header");
+        headerCell.Attribute(ss + "MergeAcross")!.Value.Should().Be("2");
+        headerCell.Attribute(ss + "MergeDown")!.Value.Should().Be("1");
+        cells.Any(cell =>
+            cell.Attribute(ss + "Index")?.Value == "4" &&
+            cell.Attribute(ss + "MergeAcross")?.Value == "1" &&
+            cell.Element(ss + "Data") is null)
+            .Should()
+            .BeTrue();
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        loaded.GetSheetAt(0).MergedRegions
+            .Select(region => (region.Start.Row, region.Start.Col, region.End.Row, region.End.Col))
+            .Should()
+            .Equal((1u, 1u, 2u, 3u), (4u, 4u, 4u, 5u));
     }
 
     [Fact]
