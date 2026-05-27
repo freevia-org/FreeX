@@ -133,6 +133,52 @@ public sealed class ExcelParityModernTextTests
         _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
     }
 
+    [Theory]
+    [InlineData("=VALUETOTEXT(TRUE,0)", "TRUE")]
+    [InlineData("=VALUETOTEXT(1234.01234,0)", "1234.01234")]
+    [InlineData("=VALUETOTEXT(\"Hello\",0)", "Hello")]
+    [InlineData("=VALUETOTEXT(TRUE,1)", "TRUE")]
+    [InlineData("=VALUETOTEXT(1234.01234,1)", "1234.01234")]
+    [InlineData("=VALUETOTEXT(\"Hello\",1)", "\"Hello\"")]
+    [InlineData("=VALUETOTEXT(\"He said \"\"hi\"\"\",1)", "\"He said \"\"hi\"\"\"")]
+    public void ValueToText_ReturnsExcelConciseAndStrictText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void ValueToText_FormatsErrorsAndArrayValues()
+    {
+        _eval.Evaluate("=VALUETOTEXT(NA(),0)", Sheet()).Should().Be(new TextValue("#N/A"));
+        _eval.Evaluate("=VALUETOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},1)", Sheet())
+            .Should().Be(new TextValue("{TRUE,#VALUE!;1234,\"Seattle\"}"));
+    }
+
+    [Fact]
+    public void ArrayToText_ReturnsExcelConciseAndStrictArrayText()
+    {
+        var sheet = Sheet(
+            (1, 1, new BoolValue(true)),
+            (1, 2, ErrorValue.Value),
+            (2, 1, new NumberValue(1234.01234)),
+            (2, 2, new TextValue("Seattle")),
+            (3, 1, new TextValue("Hello")),
+            (3, 2, new NumberValue(1123)));
+
+        _eval.Evaluate("=ARRAYTOTEXT(A1:B3,0)", sheet)
+            .Should().Be(new TextValue("TRUE, #VALUE!, 1234.01234, Seattle, Hello, 1123"));
+        _eval.Evaluate("=ARRAYTOTEXT(A1:B3,1)", sheet)
+            .Should().Be(new TextValue("{TRUE,#VALUE!;1234.01234,\"Seattle\";\"Hello\",1123}"));
+    }
+
+    [Theory]
+    [InlineData("=VALUETOTEXT(\"x\",2)")]
+    [InlineData("=ARRAYTOTEXT({1,2},2)")]
+    public void ValueTextFunctions_ReturnValueForUnsupportedFormat(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+    }
+
     private static Sheet Sheet(params (int Row, int Col, ScalarValue Value)[] cells)
     {
         var sheet = new Sheet(SheetId.New(), "S");

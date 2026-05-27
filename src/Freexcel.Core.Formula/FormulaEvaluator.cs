@@ -92,6 +92,7 @@ public sealed class FormulaEvaluator
         "TEXT", "VALUE",
         "SUBSTITUTE", "REPT", "CONCATENATE",
         "FIXED", "DOLLAR", "T", "HYPERLINK", "ENCODEURL", "FILTERXML", "BAHTTEXT",
+        "VALUETOTEXT", "ARRAYTOTEXT",
         "ASC", "DBCS",
         "UNICHAR", "UNICODE", "NUMBERVALUE",
         "ABS", "SQRT", "INT", "SIGN",
