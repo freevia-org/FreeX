@@ -3755,11 +3755,11 @@
                                                 Background="{Binding ElementName=TabBorder, Path=BorderBrush}"
                                                 Panel.ZIndex="3"
                                                 IsHitTestVisible="False"/>
-                                        <Border Height="8"
+                                        <Border Height="4"
                                                 VerticalAlignment="Top"
-                                                Margin="9,-5,9,0"
+                                                Margin="14,0,14,0"
                                                 Background="{StaticResource FreexcelRibbonSurfaceBrush}"
-                                                Panel.ZIndex="4">
+                                                Panel.ZIndex="5">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -3824,11 +3824,15 @@
                                     </Grid>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
+                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
+                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
@@ -3840,7 +3844,7 @@
                 </ScrollViewer>
 
                 <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="86" MinHeight="27"
-                        FontSize="13" FontWeight="SemiBold" Margin="-32,0,0,1" Padding="12,1,12,3"
+                        FontSize="17" FontWeight="SemiBold" Margin="-32,0,0,1" Padding="12,1,12,3"
                         Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1,0,1,1"
                         Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
                         VerticalAlignment="Top" Cursor="Hand"
@@ -3889,7 +3893,8 @@
                                         Margin="16,0,8,0"
                                         SnapsToDevicePixels="True">
                                     <Grid>
-                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    <ContentPresenter Margin="16,0,8,1"
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                                     </Grid>
                                 </Border>

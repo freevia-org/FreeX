@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private const double MaximizedSafeInsetDip = 8.0;
     private const double SheetTabNavScrollAmount = 140.0;
     private const double SheetTabScrollEpsilon = 0.5;
+    private const int ResizeViewportRefreshDelayMilliseconds = 140;
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
@@ -78,6 +79,8 @@ public partial class MainWindow : Window
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
     private bool _resizeViewportRefreshPending;
+    private bool _isInWindowResizeMoveLoop;
+    private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;
     private CellColor _borderPickerColor = CellColor.Black;
     private BorderStyle _borderPickerStyle = BorderStyle.Thin;
     private BorderDrawMode _borderDrawMode;
