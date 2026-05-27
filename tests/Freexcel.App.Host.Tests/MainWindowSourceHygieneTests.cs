@@ -170,6 +170,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageOpenAndSaveDialogs_DeclareNativeDialogGuardrails()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        backstageSource.Should().Contain("new Microsoft.Win32.OpenFileDialog");
+        backstageSource.Should().Contain("Filter = filter");
+        backstageSource.Should().Contain("CheckFileExists = true");
+        backstageSource.Should().Contain("Multiselect = false");
+        backstageSource.Should().Contain("if (dialog.ShowDialog() == true)");
+        backstageSource.Should().Contain("await OpenFileAsync(dialog.FileName);");
+
+        backstageSource.Should().Contain("new Microsoft.Win32.SaveFileDialog");
+        backstageSource.Should().Contain("FileName = _workbook.Name");
+        backstageSource.Should().Contain("DefaultExt = \".xlsx\"");
+        backstageSource.Should().Contain("AddExtension = true");
+        backstageSource.Should().Contain("OverwritePrompt = true");
+        backstageSource.Should().Contain("FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ext, out _)");
+        backstageSource.Should().Contain("return await SaveWorkbookToTargetAsync(new FileSaveTarget(dialog.FileName, adapter));");
+    }
+
+    [Fact]
     public void BackstageOpen_FocusesHomeNavigationForKeyboardUsers()
     {
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
