@@ -1937,23 +1937,38 @@
                                             local:RibbonTooltip.KeyTip="OO"
                                             local:RibbonTooltip.Description="Change the outline color of the selected drawing object."/>
                                     <Button Content="Crop" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
+                                            AutomationProperties.Name="Crop Picture"
+                                            AutomationProperties.AutomationId="DrawCropPictureButton"
+                                            AutomationProperties.HelpText="Open crop controls for the selected or most recent inserted picture."
                                             local:RibbonTooltip.Title="Crop Picture"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge.">
                                         <Button.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="Crop..." local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click"/>
-                                                <MenuItem Header="Reset Crop" local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click"/>
+                                                <MenuItem Header="Crop..."
+                                                          AutomationProperties.Name="Crop Picture"
+                                                          AutomationProperties.AutomationId="DrawCropPictureMenuItem"
+                                                          local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click"/>
+                                                <MenuItem Header="Reset Crop"
+                                                          AutomationProperties.Name="Reset Picture Crop"
+                                                          AutomationProperties.AutomationId="DrawResetPictureCropMenuItem"
+                                                          local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Margin="1,0" VerticalAlignment="Center">
                                     <Button Content="Gradient" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectGradientBtn_Click"
+                                            AutomationProperties.Name="Shape Gradient"
+                                            AutomationProperties.AutomationId="DrawShapeGradientButton"
+                                            AutomationProperties.HelpText="Open gradient fill controls for the selected shape."
                                             local:RibbonTooltip.Title="Shape Gradient"
                                             local:RibbonTooltip.KeyTip="G"
                                             local:RibbonTooltip.Description="Apply a two-color gradient fill to the selected shape."/>
                                     <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectEffectsBtn_Click"
+                                            AutomationProperties.Name="Shape Effects"
+                                            AutomationProperties.AutomationId="DrawShapeEffectsButton"
+                                            AutomationProperties.HelpText="Toggle the selected shape shadow effect."
                                             local:RibbonTooltip.Title="Shape Effects"
                                             local:RibbonTooltip.KeyTip="FX"
                                             local:RibbonTooltip.Description="Toggle a shadow effect on the selected shape."/>
@@ -3890,16 +3905,16 @@
                                       SnapsToDevicePixels="True"
                                       Visibility="Collapsed"
                                       IsHitTestVisible="False"/>
-                                <Path Data="M 12,0 A 8,8 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"
+                                <Path Data="M 4,12 L 4,22 A 4,4 0 0 1 0,26"
                                       HorizontalAlignment="Right"
-                                      Stroke="{StaticResource FreexcelGreenDarkBrush}"
+                                      Stroke="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
                                       StrokeThickness="1.25"
                                       StrokeStartLineCap="Round"
                                       StrokeEndLineCap="Round"
                                       StrokeLineJoin="Round"
+                                      Opacity="0.75"
                                       Panel.ZIndex="3"
                                       SnapsToDevicePixels="True"
-                                      Visibility="Collapsed"
                                       IsHitTestVisible="False"/>
                                 <Border Height="1.25"
                                         VerticalAlignment="Bottom"
