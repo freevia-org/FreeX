@@ -371,7 +371,7 @@ public partial class GridView
             return;
         }
 
-        if (pos.Y < EffectiveColHeaderHeight && pos.X >= ActualRowHeaderWidth)
+        if (pos.Y <= EffectiveColHeaderHeight && pos.X >= ActualRowHeaderWidth)
         {
             foreach (var cm in Viewport.ColMetrics)
             {
@@ -388,7 +388,7 @@ public partial class GridView
             return;
         }
 
-        if (pos.X < ActualRowHeaderWidth && pos.Y >= EffectiveColHeaderHeight)
+        if (pos.X <= ActualRowHeaderWidth && pos.Y >= EffectiveColHeaderHeight)
         {
             foreach (var rm in Viewport.RowMetrics)
             {
