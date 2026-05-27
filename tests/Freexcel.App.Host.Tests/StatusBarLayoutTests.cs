@@ -33,7 +33,8 @@ public sealed class StatusBarLayoutTests
             harness.StatusReadyVisibility.Should().Be(Visibility.Collapsed);
             harness.StatusStatsVisibility.Should().Be(Visibility.Visible);
             harness.StatusText("StatusAvgText").Should().Be("Average: 4");
-            harness.StatusText("StatusCountText").Should().Be("Count: 3");
+            harness.StatusText("StatusCountText").Should().Be("Count: 4");
+            harness.StatusText("StatusNumericalCountText").Should().Be("Numerical Count: 3");
             harness.StatusText("StatusSumText").Should().Be("Sum: 12");
             harness.StatusText("StatusMinText").Should().Be("Min: 2");
             harness.StatusText("StatusMaxText").Should().Be("Max: 6");
@@ -106,6 +107,7 @@ public sealed class StatusBarLayoutTests
                 statsPanel.Visibility = Visibility.Visible;
                 ((TextBlock)window.FindName("StatusAvgText")).Text = "Average: 2";
                 ((TextBlock)window.FindName("StatusCountText")).Text = "Count: 1";
+                ((TextBlock)window.FindName("StatusNumericalCountText")).Text = "Numerical Count: 1";
                 ((TextBlock)window.FindName("StatusSumText")).Text = "Sum: 2";
                 ((TextBlock)window.FindName("StatusMinText")).Text = "Min: 2";
                 ((TextBlock)window.FindName("StatusMaxText")).Text = "Max: 2";

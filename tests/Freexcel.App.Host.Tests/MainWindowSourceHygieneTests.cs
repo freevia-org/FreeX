@@ -1712,6 +1712,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void StatusBarSelectionStatistics_SurfaceSeparatesCountAndNumericalCount()
+    {
+        var gridStatusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.GridStatus.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        xaml.Should().Contain("x:Name=\"StatusStatsPanel\"");
+        xaml.Should().Contain("x:Name=\"StatusCountText\"");
+        xaml.Should().Contain("x:Name=\"StatusNumericalCountText\"");
+        xaml.Should().Contain("x:Name=\"StatusSumText\"");
+        xaml.IndexOf("x:Name=\"StatusCountText\"", StringComparison.Ordinal)
+            .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal));
+        xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
+            .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
+
+        gridStatusSource.Should().Contain("StatusCountText.Text = $\"Count: {stats.Count}\"");
+        gridStatusSource.Should().Contain("StatusNumericalCountText.Text = $\"Numerical Count: {stats.NumericalCount}\"");
+        gridStatusSource.Should().Contain("StatusSumText.Text   = stats.NumericalCount > 0");
+        gridStatusSource.Should().Contain("if (stats.Count == 0)");
+    }
+
+    [Fact]
     public void FocusedPivotFieldListTaskPane_TabTraversalIsNotHijackedByWorksheetMovement()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));

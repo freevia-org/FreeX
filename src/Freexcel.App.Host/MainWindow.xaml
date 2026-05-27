@@ -3858,6 +3858,8 @@
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12"
                                        Margin="0,0,16,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="StatusNumericalCountText" Foreground="White" FontSize="12"
+                                       Margin="0,0,16,0" MaxWidth="160" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="12"
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="12"

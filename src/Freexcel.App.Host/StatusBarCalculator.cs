@@ -7,12 +7,13 @@ namespace Freexcel.App.Host;
 /// <summary>Calculates aggregate statistics for a selection, for the status bar.</summary>
 public static class StatusBarCalculator
 {
-    public record Stats(double Sum, int Count, double? Average, double? Min, double? Max);
+    public record Stats(double Sum, int Count, int NumericalCount, double? Average, double? Min, double? Max);
 
     public static Stats Calculate(Sheet sheet, GridRange range)
     {
         double sum = 0;
         int count = 0;
+        int numericalCount = 0;
         double? min = null, max = null;
 
         // For large ranges (full rows/cols/sheet) iterate only used cells to avoid
@@ -28,17 +29,20 @@ public static class StatusBarCalculator
 
         foreach (var value in source)
         {
+            if (value is not null and not BlankValue)
+                count++;
+
             if (value is NumberValue nv)
             {
                 sum += nv.Value;
-                count++;
+                numericalCount++;
                 min = min is null ? nv.Value : Math.Min(min.Value, nv.Value);
                 max = max is null ? nv.Value : Math.Max(max.Value, nv.Value);
             }
         }
 
-        double? average = count > 0 ? sum / count : null;
-        return new Stats(sum, count, average, min, max);
+        double? average = numericalCount > 0 ? sum / numericalCount : null;
+        return new Stats(sum, count, numericalCount, average, min, max);
     }
 
     public static string FormatNumber(double value)
