@@ -1710,23 +1710,30 @@ public sealed class MainWindowXamlKeyTipTests
                 button.Attribute("Click")?.Value is "ShareWorkbookBtn_Click" or "SsShareBtn_Click")
             .ToList();
 
-        shareButtons.Should().NotBeEmpty();
-        shareButtons
+        var shareButtonPlans = shareButtons
             .Select(button => new
             {
                 Content = button.Attribute("Content")?.Value,
+                Click = button.Attribute("Click")?.Value,
+                KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
                 Title = button.Attribute(local + "RibbonTooltip.Title")?.Value,
                 Description = button.Attribute(local + "RibbonTooltip.Description")?.Value
             })
-            .Should()
-            .OnlyContain(button =>
-                button.Content == "Share" &&
-                button.Title == "Share" &&
-                button.Description != null &&
-                button.Description.Contains("Windows Share", StringComparison.Ordinal) &&
-                !ContainsExcludedStatus(button.Content) &&
-                !ContainsExcludedStatus(button.Title) &&
-                !ContainsExcludedStatus(button.Description));
+            .ToList();
+
+        shareButtonPlans.Select(button => button.Click)
+            .Should().BeEquivalentTo(["ShareWorkbookBtn_Click", "SsShareBtn_Click"]);
+        shareButtonPlans.Should().OnlyContain(button =>
+            button.Content == "Share" &&
+            button.KeyTip == "SH" &&
+            button.Title == "Share" &&
+            button.Description == "Save the workbook if needed and open Windows Share for the file." &&
+            !button.Description.Contains("Microsoft 365", StringComparison.OrdinalIgnoreCase) &&
+            !button.Description.Contains("cloud", StringComparison.OrdinalIgnoreCase) &&
+            !button.Description.Contains("coauthor", StringComparison.OrdinalIgnoreCase) &&
+            !ContainsExcludedStatus(button.Content) &&
+            !ContainsExcludedStatus(button.Title) &&
+            !ContainsExcludedStatus(button.Description));
     }
 
     [Fact]
