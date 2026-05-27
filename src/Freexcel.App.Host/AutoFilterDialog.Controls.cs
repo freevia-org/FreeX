@@ -262,6 +262,51 @@ public sealed partial class AutoFilterDialog
         e.Handled = true;
     }
 
+    private void ChecklistBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var handled = e.Key switch
+        {
+            Key.Space => ToggleFocusedChecklistItem(),
+            Key.Home => FocusChecklistItem(0),
+            Key.End => FocusChecklistItem(_items.Count - 1),
+            _ => false
+        };
+
+        if (handled)
+            e.Handled = true;
+    }
+
+    private bool ToggleFocusedChecklistItem()
+    {
+        var index = _checklistBox.SelectedIndex >= 0 ? _checklistBox.SelectedIndex : 0;
+        if (index < 0 || index >= _items.Count)
+            return false;
+
+        var item = _items[index];
+        item.IsSelected = !item.IsSelected;
+        _checklistBox.Items.Refresh();
+        FocusChecklistItem(index);
+        return true;
+    }
+
+    private bool FocusChecklistItem(int index)
+    {
+        if (_items.Count == 0)
+            return false;
+
+        var item = _items[Math.Clamp(index, 0, _items.Count - 1)];
+        _checklistBox.SelectedItem = item;
+        _checklistBox.ScrollIntoView(item);
+        _checklistBox.UpdateLayout();
+        if (_checklistBox.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem container)
+        {
+            container.Focus();
+            Keyboard.Focus(container);
+        }
+
+        return true;
+    }
+
     private void FocusColorChoiceButton(int index)
     {
         if (_colorChoiceButtons.Count == 0)

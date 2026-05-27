@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 
@@ -26,6 +27,7 @@ public partial class ConditionalFormatDialog
             ItemsSource = ExcelRuleShellTypes,
             SelectedItem = RuleTypeShellLabel(ruleType)
         };
+        AutomationProperties.SetName(ruleTypeList, "Rule type");
         ruleTypeList.SelectionChanged += RuleTypeList_SelectionChanged;
         left.Children.Add(ruleTypeList);
         Grid.SetColumn(left, 0);
