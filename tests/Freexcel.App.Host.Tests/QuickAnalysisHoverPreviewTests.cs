@@ -44,6 +44,8 @@ public sealed class QuickAnalysisHoverPreviewTests
         source.Should().Contain("QuickAnalysisPreviewVisualKind.BarChart => GridQuickAnalysisPreviewVisualKind.BarChart");
         source.Should().Contain("QuickAnalysisPreviewVisualKind.StackedColumnChart => GridQuickAnalysisPreviewVisualKind.StackedColumnChart");
         source.Should().Contain("QuickAnalysisPreviewVisualKind.PieChart => GridQuickAnalysisPreviewVisualKind.PieChart");
+        source.Should().Contain("QuickAnalysisPreviewVisualKind.AreaChart => GridQuickAnalysisPreviewVisualKind.AreaChart");
+        source.Should().Contain("QuickAnalysisPreviewVisualKind.ScatterChart => GridQuickAnalysisPreviewVisualKind.ScatterChart");
     }
 
     [Theory]
@@ -59,6 +61,8 @@ public sealed class QuickAnalysisHoverPreviewTests
     [InlineData(QuickAnalysisPreviewVisualKind.BarChart, GridQuickAnalysisPreviewVisualKind.BarChart)]
     [InlineData(QuickAnalysisPreviewVisualKind.StackedColumnChart, GridQuickAnalysisPreviewVisualKind.StackedColumnChart)]
     [InlineData(QuickAnalysisPreviewVisualKind.PieChart, GridQuickAnalysisPreviewVisualKind.PieChart)]
+    [InlineData(QuickAnalysisPreviewVisualKind.AreaChart, GridQuickAnalysisPreviewVisualKind.AreaChart)]
+    [InlineData(QuickAnalysisPreviewVisualKind.ScatterChart, GridQuickAnalysisPreviewVisualKind.ScatterChart)]
     public void MapQuickAnalysisPreviewVisual_MapsLightweightPreviewFamilies(
         QuickAnalysisPreviewVisualKind hostKind,
         GridQuickAnalysisPreviewVisualKind expectedGridKind)
@@ -66,13 +70,10 @@ public sealed class QuickAnalysisHoverPreviewTests
         MapQuickAnalysisPreviewVisual(hostKind).Should().Be(expectedGridKind);
     }
 
-    [Theory]
-    [InlineData(QuickAnalysisPreviewVisualKind.AreaChart)]
-    [InlineData(QuickAnalysisPreviewVisualKind.ScatterChart)]
-    public void MapQuickAnalysisPreviewVisual_LeavesUnsupportedChartFamiliesWithoutGridVisual(
-        QuickAnalysisPreviewVisualKind hostKind)
+    [Fact]
+    public void MapQuickAnalysisPreviewVisual_LeavesEmptyPreviewWithoutGridVisual()
     {
-        MapQuickAnalysisPreviewVisual(hostKind).Should().Be(GridQuickAnalysisPreviewVisualKind.None);
+        MapQuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.None).Should().Be(GridQuickAnalysisPreviewVisualKind.None);
     }
 
     private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind kind)

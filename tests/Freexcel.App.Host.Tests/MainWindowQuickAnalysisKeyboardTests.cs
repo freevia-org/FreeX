@@ -84,6 +84,24 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.FocusedMenuHeader.Should().Be("Doughnut");
             harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.PieChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Area");
+
+            harness.FocusedMenuHeader.Should().Be("Area");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.AreaChart);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Scatter");
+
+            harness.FocusedMenuHeader.Should().Be("Scatter");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ScatterChart);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Bubble");
+
+            harness.FocusedMenuHeader.Should().Be("Bubble");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ScatterChart);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
         });
     }
 
@@ -105,6 +123,48 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.None);
             harness.QuickAnalysisPreviewRange.Should().BeNull();
             harness.StatusText.Should().Be("Select a range to use Quick Analysis.");
+        });
+    }
+
+    [Fact]
+    public void KeyboardQuickAnalysisMenu_TotalsAndSparklinesPreviewAdjacentColumn()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(1, 1, 3, 2);
+            harness.OpenQuickAnalysisMenu();
+
+            harness.FocusMenuItem("Sum", "Totals");
+
+            harness.FocusedMenuHeader.Should().Be("Sum");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.TotalFormula);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
+
+            harness.FocusMenuItem("Running Total", "Totals");
+
+            harness.FocusedMenuHeader.Should().Be("Running Total");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.TotalFormula);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
+
+            harness.FocusMenuItem("Line", "Sparklines");
+
+            harness.FocusedMenuHeader.Should().Be("Line");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.LineSparkline);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
+
+            harness.FocusMenuItem("Column", "Sparklines");
+
+            harness.FocusedMenuHeader.Should().Be("Column");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ColumnSparkline);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
+
+            harness.FocusMenuItem("Win/Loss", "Sparklines");
+
+            harness.FocusedMenuHeader.Should().Be("Win/Loss");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.WinLossSparkline);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
         });
     }
 
@@ -180,6 +240,31 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             item.Focus();
             Keyboard.Focus(item);
             PumpDispatcher();
+        }
+
+        public void FocusMenuItem(string header, string group)
+        {
+            var menu = ActiveContextMenu
+                ?? throw new InvalidOperationException("Quick Analysis menu is not open.");
+            string? currentGroup = null;
+            foreach (var item in menu.Items.OfType<MenuItem>())
+            {
+                if (!item.IsEnabled)
+                {
+                    currentGroup = item.Header?.ToString();
+                    continue;
+                }
+
+                if (currentGroup == group && item.Header?.ToString() == header)
+                {
+                    item.Focus();
+                    Keyboard.Focus(item);
+                    PumpDispatcher();
+                    return;
+                }
+            }
+
+            throw new InvalidOperationException($"Menu item '{header}' was not found in group '{group}'.");
         }
 
         public static MainWindowHarness Create()
