@@ -15,6 +15,25 @@ public static class GridAutofillPlanner
             : new CellAddress(target.Sheet, source.End.Row, target.Col);
     }
 
+    public static GridRange? CalculateFillRange(GridRange source, CellAddress target)
+    {
+        if (target.Row > source.End.Row)
+        {
+            return new GridRange(
+                new CellAddress(source.Start.Sheet, source.End.Row + 1, source.Start.Col),
+                new CellAddress(source.Start.Sheet, target.Row, source.End.Col));
+        }
+
+        if (target.Col > source.End.Col)
+        {
+            return new GridRange(
+                new CellAddress(source.Start.Sheet, source.Start.Row, source.End.Col + 1),
+                new CellAddress(source.Start.Sheet, source.End.Row, target.Col));
+        }
+
+        return null;
+    }
+
     public static GridAutoScrollRequest CalculateEdgeScrollIntent(
         double pointerX,
         double pointerY,
