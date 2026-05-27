@@ -602,6 +602,8 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Theory]
+    [InlineData("sep=;")]
+    [InlineData("sep=,")]
     [InlineData("0042")]
     [InlineData("$42.00")]
     [InlineData(" ($42.25) ")]

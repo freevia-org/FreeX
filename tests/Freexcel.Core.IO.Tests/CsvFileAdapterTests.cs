@@ -677,6 +677,8 @@ public sealed class CsvFileAdapterTests
     }
 
     [Theory]
+    [InlineData("sep=;")]
+    [InlineData("sep=\t")]
     [InlineData("#N/A")]
     [InlineData("#DIV/0!")]
     [InlineData("#GETTING_DATA")]
