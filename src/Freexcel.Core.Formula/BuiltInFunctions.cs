@@ -326,6 +326,8 @@ public static partial class BuiltInFunctions
         ["CONVERT"]     = (Convert, 3, 3),
         ["COMPLEX"]     = (ComplexFunc, 2, 3),
         ["DELTA"]       = (Delta, 1, 2),
+        ["ERF"]         = (ErfFunc, 1, 2),
+        ["ERFC"]        = (ErfcFunc, 1, 1),
         ["GESTEP"]      = (Gestep, 1, 2),
         ["IMABS"]       = (ImAbs, 1, 1),
         ["IMAGINARY"]   = (Imaginary, 1, 1),
