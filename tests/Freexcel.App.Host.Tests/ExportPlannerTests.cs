@@ -3044,6 +3044,26 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PrintPreviewDialog_ToolbarControlsExposeStableAutomation()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("SetToolbarAutomation(firstButton, \"PrintPreviewFirstPageButton\", \"First page\"");
+        source.Should().Contain("SetToolbarAutomation(previousButton, \"PrintPreviewPreviousPageButton\", \"Previous page\"");
+        source.Should().Contain("SetToolbarAutomation(nextButton, \"PrintPreviewNextPageButton\", \"Next page\"");
+        source.Should().Contain("SetToolbarAutomation(lastButton, \"PrintPreviewLastPageButton\", \"Last page\"");
+        source.Should().Contain("AutomationProperties.SetAutomationId(printButton, \"PrintPreviewPrintButton\")");
+        source.Should().Contain("SetToolbarAutomation(closeButton, \"PrintPreviewCloseButton\", \"Close preview\"");
+        source.Should().Contain("AutomationProperties.SetAutomationId(pageNumberBox, \"PrintPreviewPageNumberBox\")");
+        source.Should().Contain("AutomationProperties.SetAutomationId(pageStatusText, \"PrintPreviewPageStatusText\")");
+        source.Should().Contain("AutomationProperties.SetAutomationId(zoomBox, \"PrintPreviewZoomBox\")");
+        source.Should().Contain("SetToolbarAutomation(marginsButton, \"PrintPreviewMarginsButton\", \"Margins\"");
+        source.Should().Contain("SetToolbarAutomation(pageSetupButton, \"PrintPreviewPageSetupButton\", \"Page Setup\"");
+        source.Should().Contain("AutomationProperties.SetAutomationId(settingsSummaryText, \"PrintPreviewSettingsSummaryText\")");
+        source.Should().Contain("private static void SetToolbarAutomation(Control control, string automationId, string name, string helpText)");
+    }
+
+    [Fact]
     public void PrintPreviewDialog_WiresMarginsAndPageSetupToolbarCallbacks()
     {
         var source = ReadPrintPreviewDialogSources();
