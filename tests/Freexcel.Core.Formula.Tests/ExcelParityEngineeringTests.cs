@@ -125,6 +125,31 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
+    [InlineData("=DELTA(5,4)", 0)]
+    [InlineData("=DELTA(5,5)", 1)]
+    [InlineData("=DELTA(0)", 1)]
+    [InlineData("=GESTEP(5,4)", 1)]
+    [InlineData("=GESTEP(5,5)", 1)]
+    [InlineData("=GESTEP(-1)", 0)]
+    public void EngineeringComparisonFunctions_ReturnExcelResults(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void EngineeringComparisonFunctions_SpillOverRanges()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=DELTA(A1:A2,B1:B2)", sheet), new NumberValue(1), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=GESTEP(A1:A2,2)", sheet), new NumberValue(0), new NumberValue(1));
+    }
+
+    [Theory]
     [InlineData("=COMPLEX(3,4)", "3+4i")]
     [InlineData("=COMPLEX(3,-4,\"j\")", "3-4j")]
     [InlineData("=COMPLEX(0,1)", "i")]
