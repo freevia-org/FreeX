@@ -327,4 +327,5 @@ public sealed class AccessibilityCheckerServiceTests
         issue.Location.Should().Be("B1");
         issue.Message.Should().Be("Table headers should not be blank.");
     }
+
 }

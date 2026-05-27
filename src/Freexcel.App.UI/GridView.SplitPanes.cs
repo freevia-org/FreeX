@@ -328,22 +328,8 @@ public partial class GridView
     public static SplitPaneClipRects CalculateSplitPaneClipRects(
         ViewportModel viewport,
         double actualWidth,
-        double actualHeight)
-    {
-        var layout = CalculateSplitDividerLayout(viewport);
-        var horizontalY = layout.HorizontalY ?? actualHeight;
-        var verticalX = layout.VerticalX ?? actualWidth;
-        var top = ColHeaderHeight;
-        var left = CalculateRowHeaderWidth(viewport);
-        var right = Math.Max(verticalX, actualWidth);
-        var bottom = Math.Max(horizontalY, actualHeight);
-
-        return new SplitPaneClipRects(
-            new Rect(left, top, Math.Max(0, verticalX - left), Math.Max(0, horizontalY - top)),
-            new Rect(verticalX, top, Math.Max(0, right - verticalX), Math.Max(0, horizontalY - top)),
-            new Rect(left, horizontalY, Math.Max(0, verticalX - left), Math.Max(0, bottom - horizontalY)),
-            new Rect(verticalX, horizontalY, Math.Max(0, right - verticalX), Math.Max(0, bottom - horizontalY)));
-    }
+        double actualHeight) =>
+        SplitPaneClipLayoutPlanner.CalculateClipRects(viewport, actualWidth, actualHeight);
 
     private static Rect GetSplitPaneClipRectForCell(
         ViewportModel viewport,
