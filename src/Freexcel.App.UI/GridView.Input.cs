@@ -185,7 +185,7 @@ public partial class GridView
             _objectDragStartPos = pos;
             _objectDragStartRect = hit.Rect;
             _objectDragCurrentRect = hit.Rect;
-            _objectDragStartAnchor = HitTestAnchorCell(pos) ?? default;
+            _objectDragStartAnchor = hit.Anchor;
             Cursor = Cursors.SizeAll;
             CaptureMouse();
             e.Handled = true;
@@ -315,6 +315,18 @@ public partial class GridView
         if (HitTestPivotChartFieldButton(Charts, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } pivotButton)
         {
             PivotChartFieldButtonRequested?.Invoke(pivotButton.Chart, pivotButton.FieldButton, pos);
+            e.Handled = true;
+            return;
+        }
+
+        var objectHit = HitTestDrawingObject(pos);
+        if (objectHit.Id != Guid.Empty)
+        {
+            SelectedObjectId = objectHit.Id;
+            SelectedObjectKind = objectHit.Kind;
+            _selectedObjectId = objectHit.Id;
+            _selectedObjectKind = objectHit.Kind;
+            ContextMenuRequested?.Invoke(objectHit.Anchor, pos);
             e.Handled = true;
             return;
         }
