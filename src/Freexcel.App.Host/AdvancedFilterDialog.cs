@@ -67,6 +67,9 @@ public sealed partial class AdvancedFilterDialog : Window
         ShowInTaskbar = false;
 
         _listRangeBox.Text = defaultListRange;
+        AutomationProperties.SetName(_listRangeBox, "List range");
+        AutomationProperties.SetName(_criteriaRangeBox, "Criteria range");
+        AutomationProperties.SetName(_copyToBox, "Copy to");
         var root = new DockPanel { Margin = new Thickness(12) };
         DockPanel.SetDock(root, Dock.Top);
 
