@@ -1246,6 +1246,26 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void InsertSparkline_UsesDialogLocationForInitialInsertAndOwnedValidationWarnings()
+    {
+        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+        var method = ExtractMethodSource(insertSource, "private void InsertSparkline(");
+
+        method.Should().Contain("new SparklineDialog(");
+        method.Should().Contain("SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange)");
+        method.Should().Contain("SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location)");
+        method.Should().Contain("ShowOwnedMessage(\"Invalid data range.\", \"Insert Sparkline\", MessageBoxButton.OK, MessageBoxImage.Warning)");
+        method.Should().Contain("ShowOwnedMessage(\"Invalid location cell.\", \"Insert Sparkline\", MessageBoxButton.OK, MessageBoxImage.Warning)");
+        method.Should().Contain("var useDialogLocationForInitialInsert = true;");
+        method.Should().Contain("useDialogLocationForInitialInsert");
+        method.Should().Contain("? fallbackLocationRange");
+        method.Should().Contain(": SheetGrid.SelectedRange ?? fallbackLocationRange");
+        method.Should().Contain("var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);");
+        method.Should().Contain("useDialogLocationForInitialInsert = false;");
+        method.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void ShellChromeController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
