@@ -102,7 +102,11 @@ public partial class MainWindow
         var dialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
         dialog.ShowDialog();
         if (dialog.ViewApplied)
+        {
             UpdateViewport();
+            RefreshStatusBar();
+            FocusSheetGridIfNeeded();
+        }
     }
 
     private void ArrangeAllPickerBtn_Click(object sender, RoutedEventArgs e)
