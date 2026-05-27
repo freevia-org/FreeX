@@ -46,7 +46,10 @@ public sealed class GridViewPointerCursorTests
         rightClickBlock.Should().Contain("var objectHit = HitTestDrawingObject(pos);");
         rightClickBlock.Should().Contain("SelectedObjectId = objectHit.Id;");
         rightClickBlock.Should().Contain("SelectedObjectKind = objectHit.Kind;");
+        rightClickBlock.Should().Contain("InvalidateVisual();");
         rightClickBlock.Should().Contain("ContextMenuRequested?.Invoke(objectHit.Anchor, pos);");
+        rightClickBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal)
+            .Should().BeLessThan(rightClickBlock.IndexOf("ContextMenuRequested?.Invoke(objectHit.Anchor, pos);", StringComparison.Ordinal));
     }
 
     [Fact]
