@@ -1017,6 +1017,12 @@ internal static class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-office-addins-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyOfficeAddinsFixup(archive);
+            return;
+        }
+
         if (string.Equals(id, "generated-slicers-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplySlicerTimelineFloatingDrawingFixup(
@@ -1430,6 +1436,33 @@ internal static class XlsxCorpusFixtureFactory
             "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility",
             "customUI/customUI.xml");
         ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+    }
+
+    private static void ApplyOfficeAddinsFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelOfficeAddinTaskpanes1",
+            "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes",
+            "xl/webextensions/taskpanes.xml");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+
+        var taskpanesRelsPath = "xl/webextensions/_rels/taskpanes.xml.rels";
+        var taskpanesRelsXml = archive.GetEntry(taskpanesRelsPath) is { } taskpanesRelsEntry
+            ? LoadPackageXml(taskpanesRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            taskpanesRelsXml,
+            "rIdFreexcelWebextension1",
+            "http://schemas.microsoft.com/office/2011/relationships/webextension",
+            "webextension1.xml");
+        ReplacePackageXml(archive, taskpanesRelsPath, taskpanesRelsXml);
     }
 
     private static void ApplyThreadedCommentsFixup(ZipArchive archive)

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
+using System.IO;
 
 namespace Freexcel.App.UI.Tests;
 
@@ -169,6 +170,55 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void CalculateDragTarget_UsesFirstMatchingSourceMetrics()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(2, 20, 20),
+                new RowMetric(3, 20, 40),
+                new RowMetric(4, 20, 60),
+                new RowMetric(2, 20, 200)
+            ],
+            [
+                new ColMetric(2, 40, 40),
+                new ColMetric(3, 40, 80),
+                new ColMetric(4, 40, 120),
+                new ColMetric(2, 40, 300)
+            ]);
+
+        GridAutofillPlanner.CalculateDragTarget(
+                viewport,
+                source,
+                new System.Windows.Point(170, 100),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new CellAddress(default, 4, 4));
+    }
+
+    [Fact]
+    public void CalculateDragTarget_FindsSourceBoundsWithSingleMetricPasses()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridAutofillPlanner.cs"));
+        var dragTarget = source[
+            source.IndexOf("public static CellAddress? CalculateDragTarget", StringComparison.Ordinal)..
+            source.IndexOf("public static bool IsOnHandle", StringComparison.Ordinal)];
+
+        dragTarget.Should().Contain("TryFindRowEndpoints(viewport.RowMetrics");
+        dragTarget.Should().Contain("TryFindColumnEndpoints(viewport.ColMetrics");
+        dragTarget.Should().Contain("foreach (var metric in metrics)");
+        dragTarget.Should().NotContain("FirstOrDefault");
+        dragTarget.Should().NotContain(".Where(");
+        dragTarget.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
     public void IsOnHandle_ReturnsTrueForHandleCenterAndPaddedBoundary()
     {
         var sheet = SheetId.New();
@@ -253,4 +303,18 @@ public sealed class GridViewAutofillTests
                 new ColMetric(4, 40, 120),
                 new ColMetric(5, 40, 160)
             ]);
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
+    }
 }

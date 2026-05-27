@@ -637,6 +637,7 @@ public sealed class CsvFileAdapterTests
     }
 
     [Theory]
+    [InlineData("1/2")]
     [InlineData("2026-05-17")]
     [InlineData("09:30")]
     [InlineData("May 17, 2026")]
