@@ -40,6 +40,52 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void CalculateFillRange_ReturnsVerticalExtensionBelowSource()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 4));
+
+        GridAutofillPlanner.CalculateFillRange(source, new CellAddress(sheet, 7, 4))
+            .Should()
+            .Be(new GridRange(
+                new CellAddress(sheet, 4, 2),
+                new CellAddress(sheet, 7, 4)));
+    }
+
+    [Fact]
+    public void CalculateFillRange_ReturnsHorizontalExtensionRightOfSource()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 4));
+
+        GridAutofillPlanner.CalculateFillRange(source, new CellAddress(sheet, 3, 8))
+            .Should()
+            .Be(new GridRange(
+                new CellAddress(sheet, 2, 5),
+                new CellAddress(sheet, 3, 8)));
+    }
+
+    [Fact]
+    public void CalculateFillRange_ReturnsNullWhenTargetDoesNotExtendSource()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 4));
+
+        GridAutofillPlanner.CalculateFillRange(source, new CellAddress(sheet, 3, 4))
+            .Should()
+            .BeNull();
+        GridAutofillPlanner.CalculateFillRange(source, new CellAddress(sheet, 2, 3))
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void CalculateAutofillEdgeScrollIntent_RequestsHorizontalScrollNearRightEdge()
     {
         GridView.CalculateAutofillEdgeScrollIntent(
