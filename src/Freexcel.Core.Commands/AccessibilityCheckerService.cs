@@ -134,7 +134,8 @@ public static class AccessibilityCheckerService
 
             var style = workbook.GetStyle(cell.StyleId);
             var background = style.FillColor ?? CellColor.White;
-            if (ContrastRatio(style.FontColor, background) >= 4.5)
+            var minimumContrastRatio = MinimumTextContrastRatio(style);
+            if (ContrastRatio(style.FontColor, background) >= minimumContrastRatio)
                 continue;
 
             issues.Add(new AccessibilityIssue(
@@ -142,7 +143,7 @@ public static class AccessibilityCheckerService
                 sheet.Id,
                 sheet.Name,
                 address.ToA1(),
-                "Cell text should have at least 4.5:1 contrast against its fill."));
+                $"Cell text should have at least {minimumContrastRatio:0.0}:1 contrast against its fill."));
         }
     }
 
@@ -270,6 +271,11 @@ public static class AccessibilityCheckerService
         var darker = Math.Min(firstLuminance, secondLuminance);
         return (lighter + 0.05) / (darker + 0.05);
     }
+
+    private static double MinimumTextContrastRatio(CellStyle style) =>
+        style.FontSize >= 18 || (style.Bold && style.FontSize >= 14)
+            ? 3.0
+            : 4.5;
 
     private static double RelativeLuminance(CellColor color) =>
         0.2126 * LinearRgb(color.R) +

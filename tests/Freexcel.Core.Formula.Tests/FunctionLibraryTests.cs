@@ -4827,6 +4827,20 @@ public class FunctionLibraryTests
             ((NumberValue)_eval.Evaluate("=EXPON.DIST(A2,B1,FALSE)", sheet)).Value);
     }
 
+    [Fact]
+    public void NormSDist_LeadingOneCellCumulativeRange_BroadcastsAcrossZArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-1)),
+            (2, 1, new NumberValue(1)),
+            (1, 2, new BoolValue(true)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=NORM.S.DIST(A1:A2,B1:B1)", sheet),
+            ((NumberValue)_eval.Evaluate("=NORM.S.DIST(A1,B1)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=NORM.S.DIST(A2,B1)", sheet)).Value);
+    }
+
     [Fact] public void Quartile_Q1_Returns25th()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));

@@ -612,6 +612,7 @@ public sealed class CsvFileAdapterTests
     [InlineData("#N/A")]
     [InlineData("#DIV/0!")]
     [InlineData("#GETTING_DATA")]
+    [InlineData(" #N/A ")]
     public void Save_RoundTripsErrorLikeTextFieldsAsLiteralText(string text)
     {
         var workbook = new Workbook("Book1");

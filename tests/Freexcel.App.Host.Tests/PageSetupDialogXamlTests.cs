@@ -1,6 +1,9 @@
 using System.IO;
+using System.Reflection;
+using System.Windows;
 using System.Windows.Controls;
 using System.Xml.Linq;
+using Freexcel.Core.Commands;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -424,6 +427,45 @@ public sealed class PageSetupDialogXamlTests
         builderSource.Should().Contain("new ClearPrintAreaCommand(sheetId)");
     }
 
+    [Fact]
+    public void PageSetupDialogCommand_AppliesCenterOnPageAndPageOrderSelections()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Sheet1");
+            var dialog = new PageSetupDialog(sheet);
+            try
+            {
+                ((CheckBox)dialog.FindName("CenterHorizontallyBox")).IsChecked = true;
+                ((CheckBox)dialog.FindName("CenterVerticallyBox")).IsChecked = true;
+                SelectComboItemByTag((ComboBox)dialog.FindName("PageOrderBox"), "OverThenDown");
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
+                var outcome = PageSetupCommandBuilder.Build(sheet.Id, dialog).Apply(new SimpleCtx(workbook));
+
+                outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+                sheet.CenterHorizontallyOnPage.Should().BeTrue();
+                sheet.CenterVerticallyOnPage.Should().BeTrue();
+                sheet.PageOrder.Should().Be(WorksheetPageOrder.OverThenDown);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void UiTestCatalog_PageSetupRowNoLongerListsCenterAndPageOrderProofAsRemaining()
+    {
+        var catalog = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var pageSetupRow = catalog.Single(line => line.StartsWith("| UI-CMD-PAGE-003 |", StringComparison.Ordinal));
+
+        pageSetupRow.Should().Contain("Center on Page and Page Order dialog choices flow through the command builder into the worksheet model");
+        pageSetupRow.Should().NotContain("Remaining work is Center on Page, Page Order");
+    }
+
     private static string ReadPageSetupDialogSource() =>
         string.Join(
             Environment.NewLine,
@@ -434,4 +476,31 @@ public sealed class PageSetupDialogXamlTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.ValidationFocus.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupRangeSelectionFormatter.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupCommandBuilder.cs")));
+
+    private static void SelectComboItemByTag(ComboBox comboBox, string tag)
+    {
+        comboBox.SelectedItem = comboBox.Items
+            .OfType<ComboBoxItem>()
+            .Single(item => string.Equals(item.Tag as string, tag, StringComparison.Ordinal));
+    }
+
+    private static void InvokePrivateAllowingNonModalDialogResult(PageSetupDialog dialog, string methodName)
+    {
+        var method = typeof(PageSetupDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        try
+        {
+            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
+                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+        }
+    }
+
+    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
+    }
 }

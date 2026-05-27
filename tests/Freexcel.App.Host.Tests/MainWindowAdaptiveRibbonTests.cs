@@ -61,6 +61,23 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void HomeRibbon_KeepsCellsVisibleBeforeEditingAtCommonWideWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(1366);
+
+            harness.CollapsedRibbonGroupNames.Should().NotContain("Cells", harness.DebugRibbonChildren);
+            harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Insert", "Delete", "Format"],
+                "Excel keeps the Cells group visible at common wide widths and collapses Editing first");
+        });
+    }
+
+    [Fact]
     public void FormulasRibbon_KeepsFunctionLibraryExpandedAtNormalWideWidths()
     {
         StaTestRunner.Run(() =>

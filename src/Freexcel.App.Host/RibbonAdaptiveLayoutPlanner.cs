@@ -375,14 +375,6 @@ public static class RibbonAdaptiveLayoutPlanner
         }
 
         if (availableWidth <= 1500 &&
-            TryFindGroupIndex(groupNames, "Cells", out var cellsIndex))
-        {
-            for (var i = cellsIndex; i < states.Length; i++)
-                states[i] = RibbonAdaptiveGroupState.Collapsed;
-            return;
-        }
-
-        if (availableWidth <= 1500 &&
             TryFindGroupIndex(groupNames, "Editing", out var editingIndex))
         {
             for (var i = editingIndex; i < states.Length; i++)

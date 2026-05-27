@@ -10,6 +10,9 @@ public sealed class FileAdapterStabilityTests
     {
         yield return [".xlsx", new XlsxFileAdapter()];
         yield return [".csv", new CsvFileAdapter()];
+        yield return [".txt", new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t')];
+        yield return [".tsv", new DelimitedTextFileAdapter(".tsv", "TSV (Tab-separated values)", '\t')];
+        yield return [".tab", new DelimitedTextFileAdapter(".tab", "Tab-delimited text", '\t')];
         yield return [".fxl", new NativeJsonAdapter()];
     }
 
