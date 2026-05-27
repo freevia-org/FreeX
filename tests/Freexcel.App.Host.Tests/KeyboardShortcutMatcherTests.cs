@@ -239,6 +239,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.A, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.Z, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.Y, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Alt)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Alt | ModifierKeys.Shift)]
     public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
     {
         var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out _);

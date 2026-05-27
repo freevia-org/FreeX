@@ -166,9 +166,6 @@ public static partial class KeyboardShortcutMatcher
         return false;
     }
 
-    private static bool HasControl(ModifierKeys modifiers) =>
-        (modifiers & ModifierKeys.Control) != 0;
-
 }
 
 public enum KeyboardGridShortcut
