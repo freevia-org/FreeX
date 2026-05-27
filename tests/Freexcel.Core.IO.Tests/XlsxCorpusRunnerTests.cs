@@ -314,6 +314,47 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedUnsupportedSheetTypesRetentionPackage_ListsWorkbookSheetReferences()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-unsupported-sheet-types-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        workbookEntry.Should().NotBeNull();
+        workbookRelsEntry.Should().NotBeNull();
+
+        XDocument workbookXml;
+        using (var stream = workbookEntry!.Open())
+            workbookXml = XDocument.Load(stream);
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var sheets = workbookXml.Root!
+            .Element(workbookNs + "sheets")!
+            .Elements(workbookNs + "sheet")
+            .ToArray();
+        sheets.Where(sheet => sheet.Attribute("name")?.Value == "Freexcel Chart Sheet").Should().ContainSingle();
+        sheets.Where(sheet => sheet.Attribute("name")?.Value == "Freexcel Dialog Sheet").Should().ContainSingle();
+        sheets.Where(sheet => sheet.Attribute("name")?.Value == "Freexcel Macro Sheet").Should().ContainSingle();
+
+        var relationshipsById = workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .ToDictionary(relationship => relationship.Attribute("Id")!.Value, relationship => relationship);
+        relationshipsById[sheets.Single(sheet => sheet.Attribute("name")?.Value == "Freexcel Chart Sheet").Attribute(relNs + "id")!.Value]
+            .Attribute("Target")!.Value.Should().Be("chartsheets/sheet1.xml");
+        relationshipsById[sheets.Single(sheet => sheet.Attribute("name")?.Value == "Freexcel Dialog Sheet").Attribute(relNs + "id")!.Value]
+            .Attribute("Target")!.Value.Should().Be("dialogSheets/sheet2.xml");
+        relationshipsById[sheets.Single(sheet => sheet.Attribute("name")?.Value == "Freexcel Macro Sheet").Attribute(relNs + "id")!.Value]
+            .Attribute("Target")!.Value.Should().Be("macroSheets/sheet3.xml");
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()

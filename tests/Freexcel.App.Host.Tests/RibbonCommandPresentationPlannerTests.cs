@@ -105,6 +105,48 @@ public sealed class RibbonCommandPresentationPlannerTests
         RibbonCommandPresentationPlanner.GetIcon(commandName).Accent.Should().Be(expectedAccent);
     }
 
+    [Fact]
+    public void GetIcon_DoesNotContainDuplicateContainsPredicates()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RibbonCommandPresentationPlanner.Icons.cs"));
+        var getIconSource = ExtractMethodSource(source, "public static RibbonCommandIcon GetIcon(");
+        var duplicatePredicates = Regex
+            .Matches(getIconSource, @"name\.Contains\(""(?<predicate>[^""]+)""\)")
+            .Select(match => match.Groups["predicate"].Value)
+            .GroupBy(predicate => predicate, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        duplicatePredicates.Should().BeEmpty("duplicate contains predicates create unreachable icon mapping rules");
+    }
+
+    private static string ExtractMethodSource(string source, string signature)
+    {
+        var signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
+        signatureIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain {signature}");
+
+        var bodyStart = source.IndexOf('{', signatureIndex);
+        bodyStart.Should().BeGreaterThanOrEqualTo(signatureIndex, $"source should contain a body for {signature}");
+
+        var depth = 0;
+        for (var index = bodyStart; index < source.Length; index++)
+        {
+            depth += source[index] switch
+            {
+                '{' => 1,
+                '}' => -1,
+                _ => 0
+            };
+
+            if (depth == 0)
+                return source.Substring(signatureIndex, index - signatureIndex + 1);
+        }
+
+        throw new InvalidOperationException($"Could not find the end of {signature}.");
+    }
+
     [Theory]
     [InlineData("Clipboard", RibbonCommandIconKind.Paste)]
     [InlineData("Font", RibbonCommandIconKind.Font)]
