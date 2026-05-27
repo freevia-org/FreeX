@@ -607,6 +607,11 @@ public sealed class RemainingDialogTests
         remainingSource.Should().Contain("Column _width:");
         remainingSource.Should().Contain("Forecast _periods:");
         remainingSource.Should().Contain("Sheet _name:");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_thresholdBox, \"Conditional format threshold\");");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_heightBox, \"Row height\");");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_widthBox, \"Column width\");");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_periodsBox, \"Forecast periods\");");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_nameBox, \"Sheet name\");");
         objectSource.Should().Contain("Target = box");
         objectSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72)");
     }
