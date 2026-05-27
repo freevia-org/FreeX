@@ -130,6 +130,21 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_ReusesDoubleUnderlinePensWithinRenderPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("var underlinePenCache = new Dictionary<Brush, Pen>();");
+        renderCells.Should().Contain("UnderlinePenForTextBrush(textBrush, underlinePenCache)");
+        source.Should().Contain("private static Pen UnderlinePenForTextBrush");
+        source.Should().Contain("pen.Freeze();");
+        renderCells.Should().NotContain("new Pen(textBrush");
+    }
+
+    [Fact]
     public void ConditionalIconGlyphRenderer_ReusesFrozenBrushesAndPens()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "ConditionalIconGlyphRenderer.cs"));
