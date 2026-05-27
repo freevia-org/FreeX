@@ -418,6 +418,24 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DataFilterCommands_ReapplyUsesRememberedFilterCommandWithoutOpeningDialog()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var homeEditingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeEditing.cs"));
+
+        dataSource.Should().Contain("private GridRange? _lastAutoFilterRange;");
+        dataSource.Should().Contain("private Func<GridRange, IWorkbookCommand>? _lastAutoFilterCommandFactory;");
+        dataSource.Should().Contain("private bool TryExecuteRememberedAutoFilterCommand(");
+        dataSource.Should().Contain("_lastAutoFilterCommandFactory = createCommand;");
+        dataSource.Should().Contain("private void ReapplyAutoFilter()");
+        dataSource.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
+        dataSource.Should().Contain("_lastAutoFilterCommandFactory");
+        dataSource.Should().Contain("private void ClearRememberedAutoFilterCommand()");
+        homeEditingSource.Should().Contain("private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => ReapplyAutoFilter();");
+        homeEditingSource.Should().NotContain("private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => FilterButton_Click(sender, e);");
+    }
+
+    [Fact]
     public void DialogControls_UseTypedCriteriaControlsInsteadOfFocusOnlyFilterButtons()
     {
         var source = ReadAutoFilterDialogSources();
