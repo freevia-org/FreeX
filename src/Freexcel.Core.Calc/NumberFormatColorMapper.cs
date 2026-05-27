@@ -12,6 +12,7 @@ internal static class NumberFormatColorMapper
     private static readonly Regex IndexedColorTokenRegex = new(
         @"^Color\s*(\d+)$",
         RegexOptions.IgnoreCase);
+    private static readonly Regex ColorTokenWhitespaceRegex = new(@"\s+");
 
     public static (string? Color, string Format) ExtractColor(string section)
     {
@@ -141,7 +142,7 @@ internal static class NumberFormatColorMapper
     }
 
     private static string NormalizeToken(string token) =>
-        Regex.Replace(token.Trim(), @"\s+", "").ToUpperInvariant();
+        ColorTokenWhitespaceRegex.Replace(token.Trim(), "").ToUpperInvariant();
 
     private static string ToHex(CellColor color) =>
         string.Create(CultureInfo.InvariantCulture, $"#{color.R:X2}{color.G:X2}{color.B:X2}");
