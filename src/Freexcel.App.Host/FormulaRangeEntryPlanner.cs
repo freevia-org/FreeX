@@ -36,10 +36,11 @@ public static class FormulaRangeEntryPlanner
         if ((modifiers & ~(ModifierKeys.Control | ModifierKeys.Shift)) != 0)
             return null;
 
-        var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(key, modifiers, endMode: false);
+        var effectiveKey = key is Key.None or Key.System ? systemKey : key;
+        var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(effectiveKey, modifiers, endMode: false);
         var ctrlHeld = (modifiers & ModifierKeys.Control) != 0;
 
-        return key switch
+        return effectiveKey switch
         {
             Key.Up => useDataBoundary
                 ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
