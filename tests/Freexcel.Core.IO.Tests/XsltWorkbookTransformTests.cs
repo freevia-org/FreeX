@@ -60,6 +60,19 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_EmptyStylesheet_ReportsStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString(string.Empty);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetDtd_ReportsStylesheetXmlDiagnostic()
     {
         using var source = StreamFromString("<rows />");
