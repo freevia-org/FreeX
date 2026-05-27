@@ -175,11 +175,15 @@ internal static class DelimitedTextWorkbookWriter
         IsDateTimeLikeText(value) ||
         IsUnsignedCurrencyText(value) ||
         IsPercentageText(value) ||
+        IsNumericLikeText(value) ||
         IsParenthesizedCurrencyText(value) ||
         IsErrorLikeText(value);
 
     private static bool ShouldWriteTextMarker(string value) =>
-        IsBooleanLikeText(value) || IsDateTimeLikeText(value) || IsUnsignedCurrencyText(value);
+        IsBooleanLikeText(value) ||
+        IsDateTimeLikeText(value) ||
+        IsUnsignedCurrencyText(value) ||
+        IsNumericLikeText(value);
 
     private static bool IsBooleanLikeText(string value)
     {
@@ -205,6 +209,9 @@ internal static class DelimitedTextWorkbookWriter
                    CultureInfo.GetCultureInfo("en-US"),
                    out _);
     }
+
+    private static bool IsNumericLikeText(string value) =>
+        double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out _);
 
     private static bool IsPercentageText(string value)
     {
