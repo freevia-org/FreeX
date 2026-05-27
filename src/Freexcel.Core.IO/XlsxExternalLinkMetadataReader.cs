@@ -78,13 +78,9 @@ internal static class XlsxExternalLinkMetadataReader
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var relsXml = LoadXml(relsEntry);
-        return relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.ResolveRelationshipTarget(sourcePart, e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        return XlsxRelationshipReader.ReadTargets(
+            relsXml,
+            packageRelNs,
+            target => XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target));
     }
 }

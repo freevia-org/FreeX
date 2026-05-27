@@ -504,7 +504,9 @@ public partial class GridView
 
     protected override void OnMouseLeave(MouseEventArgs e)
     {
-        if (_resizeTarget == ResizeTarget.None &&
+        if (_objectDragKind == ObjectDragKind.None &&
+            !_autofillDragging &&
+            _resizeTarget == ResizeTarget.None &&
             !_marginDragEdge.HasValue &&
             _splitDividerDragHandle == SplitDividerHandle.None &&
             !_splitPaneScrollbarDragging)
