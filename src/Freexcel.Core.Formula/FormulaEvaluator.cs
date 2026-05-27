@@ -12,7 +12,7 @@ public sealed class FormulaEvaluator
     {
         "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
         "STDEV", "MEDIAN",
-        "PRODUCT", "XOR",
+        "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "XOR",
         "VAR", "VAR.S", "VAR.P", "STDEV.P",
         "GEOMEAN", "HARMEAN", "AVEDEV",
         "MODE", "MODE.SNGL",
@@ -22,7 +22,7 @@ public sealed class FormulaEvaluator
 
     private static readonly HashSet<string> DirectTextCoercingAggregates = new(StringComparer.OrdinalIgnoreCase)
     {
-        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "PRODUCT",
+        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2",
         "STDEV", "STDEV.S", "STDEV.P",
         "VAR", "VAR.S", "VAR.P",
         "MEDIAN",
@@ -34,7 +34,7 @@ public sealed class FormulaEvaluator
 
     private static readonly HashSet<string> ReferenceProvenanceAggregates = new(StringComparer.OrdinalIgnoreCase)
     {
-        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "PRODUCT", "AND", "OR", "XOR",
+        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "AND", "OR", "XOR",
         "STDEV", "STDEV.S", "STDEV.P",
         "VAR", "VAR.S", "VAR.P",
         "MEDIAN",
@@ -50,7 +50,7 @@ public sealed class FormulaEvaluator
         "SUMIF", "COUNTIF", "AVERAGEIF",
         "SUMPRODUCT",
         "LARGE", "SMALL", "RANK", "RANK.EQ", "RANK.AVG", "DEVSQ",
-        "MULTINOMIAL", "SERIESSUM",
+        "MULTINOMIAL", "SERIESSUM", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2",
         "MMULT", "MINVERSE", "MDETERM", "MUNIT",
         "SUMIFS", "COUNTIFS", "AVERAGEIFS",
         "XLOOKUP",
