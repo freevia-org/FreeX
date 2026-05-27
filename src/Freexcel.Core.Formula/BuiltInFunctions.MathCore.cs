@@ -168,6 +168,33 @@ public static partial class BuiltInFunctions
         return NumberResult(Math.Ceiling(n / multiple) * multiple);
     }
 
+    private static ScalarValue CeilingPrecise(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        IsoCeiling(args, ctx);
+
+    private static ScalarValue CeilingMath(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        var mode = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(0);
+        return MapTernaryTextArgs(args[0], significance, mode, CeilingMathScalar);
+    }
+
+    private static ScalarValue CeilingMathScalar(ScalarValue value, ScalarValue significanceValue, ScalarValue modeValue)
+    {
+        var n = ToNumber(value);
+        var significance = ToNumber(significanceValue);
+        var mode = ToNumber(modeValue);
+        if (!double.IsFinite(n) || !double.IsFinite(significance) || !double.IsFinite(mode)) return ErrorValue.Num;
+        if (n == 0 || significance == 0) return new NumberValue(0);
+        var multiple = Math.Abs(significance);
+        var rounded = n < 0 && mode != 0
+            ? Math.Floor(n / multiple) * multiple
+            : Math.Ceiling(n / multiple) * multiple;
+        return NumberResult(rounded);
+    }
+
     private static ScalarValue Floor(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
@@ -182,6 +209,48 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
         if (n > 0 && sig < 0) return ErrorValue.Num;
         return NumberResult(Math.Floor(n / sig) * sig);
+    }
+
+    private static ScalarValue FloorPrecise(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], significance, FloorPreciseScalar);
+    }
+
+    private static ScalarValue FloorPreciseScalar(ScalarValue value, ScalarValue significanceValue)
+    {
+        var n = ToNumber(value);
+        var significance = ToNumber(significanceValue);
+        if (!double.IsFinite(n) || !double.IsFinite(significance)) return ErrorValue.Num;
+        if (n == 0 || significance == 0) return new NumberValue(0);
+        var multiple = Math.Abs(significance);
+        return NumberResult(Math.Floor(n / multiple) * multiple);
+    }
+
+    private static ScalarValue FloorMath(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        var mode = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(0);
+        return MapTernaryTextArgs(args[0], significance, mode, FloorMathScalar);
+    }
+
+    private static ScalarValue FloorMathScalar(ScalarValue value, ScalarValue significanceValue, ScalarValue modeValue)
+    {
+        var n = ToNumber(value);
+        var significance = ToNumber(significanceValue);
+        var mode = ToNumber(modeValue);
+        if (!double.IsFinite(n) || !double.IsFinite(significance) || !double.IsFinite(mode)) return ErrorValue.Num;
+        if (n == 0 || significance == 0) return new NumberValue(0);
+        var multiple = Math.Abs(significance);
+        var rounded = n < 0 && mode != 0
+            ? Math.Truncate(n / multiple) * multiple
+            : Math.Floor(n / multiple) * multiple;
+        return NumberResult(rounded);
     }
 
     private static ScalarValue Rand(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
