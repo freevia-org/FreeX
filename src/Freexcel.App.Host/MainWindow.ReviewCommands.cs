@@ -18,10 +18,10 @@ public partial class MainWindow
 
         while (true)
         {
-            var issues = SpellCheckService.FindIssues(_workbook, _currentSheetId)
-                .Where(issue => !ignoredWords.Contains(issue.Word))
-                .Where(issue => !ignoredIssues.Contains((issue.Address, issue.Word)))
-                .ToList();
+            var issues = SpellCheckWorkflowPlanner.FilterIssues(
+                SpellCheckService.FindIssues(_workbook, _currentSheetId),
+                ignoredWords,
+                ignoredIssues);
             if (issues.Count == 0)
             {
                 MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -53,7 +53,7 @@ public partial class MainWindow
 
             if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
             {
-                var edits = BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement);
+                var edits = SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, issue.Word, replacement);
                 if (edits.Count > 0 && !TryExecuteSpellCheckEdits(edits))
                     return;
 
@@ -62,29 +62,13 @@ public partial class MainWindow
                 continue;
             }
 
-            var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
-            if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
+            if (!TryExecuteSpellCheckEdits([SpellCheckWorkflowPlanner.BuildReplacementEdit(issue, replacement)]))
                 return;
 
             UpdateViewport();
             RefreshStatusBar();
         }
     }
-
-    private static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildSpellCheckReplaceAllEdits(
-        IReadOnlyList<SpellingIssue> issues,
-        string word,
-        string replacement) =>
-        issues
-            .Where(issue => string.Equals(issue.Word, word, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(issue => issue.Address)
-            .Select(group =>
-            {
-                var issue = group.First();
-                var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
-                return (issue.Address, Cell.FromValue(new TextValue(corrected)));
-            })
-            .ToList();
 
     private bool TryExecuteSpellCheckEdits(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits) =>
         TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Spell Check");

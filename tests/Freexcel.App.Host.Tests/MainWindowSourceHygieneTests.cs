@@ -2075,14 +2075,18 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("SpellCheckDialogAction.Ignore");
         source.Should().Contain("SpellCheckDialogAction.Add");
         source.Should().Contain("while (true)");
-        source.Should().Contain("ignoredWords.Contains(issue.Word)");
-        source.Should().Contain("ignoredIssues.Contains((issue.Address, issue.Word))");
-        source.Should().Contain("BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement)");
-        source.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, issue.Word, replacement)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementEdit(issue, replacement)");
         source.Should().NotContain("BuildSpellCheckEdits");
         source.Should().Contain("TryExecuteSpellCheckEdits");
         source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
+
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckWorkflowPlanner.cs"));
+        plannerSource.Should().Contain("ignoredWords.Contains(issue.Word)");
+        plannerSource.Should().Contain("ignoredIssues.Contains((issue.Address, issue.Word))");
+        plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
     }
 
     [Fact]
