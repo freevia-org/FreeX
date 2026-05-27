@@ -95,6 +95,40 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
     }
 
     [Fact]
+    public void MouseWorksheetHeaderContextMenu_RightClickInsideSelectedRowsPreservesSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectWholeRows(3, 6);
+            var expectedRange = harness.SelectedRange;
+
+            harness.OpenMouseHeaderContextMenu(Freexcel.App.UI.GridHeaderContextMenuTarget.Row, 5);
+
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.OpenMenuHeaders.Should().Contain("Row _Height...");
+            harness.OpenMenuHeaders.Should().NotContain("Column _Width...");
+        });
+    }
+
+    [Fact]
+    public void MouseWorksheetHeaderContextMenu_RightClickInsideSelectedColumnsPreservesSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectWholeColumns(2, 5);
+            var expectedRange = harness.SelectedRange;
+
+            harness.OpenMouseHeaderContextMenu(Freexcel.App.UI.GridHeaderContextMenuTarget.Column, 4);
+
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.OpenMenuHeaders.Should().Contain("Column _Width...");
+            harness.OpenMenuHeaders.Should().NotContain("Row _Height...");
+        });
+    }
+
+    [Fact]
     public void KeyboardWorksheetContextMenu_WithWholeRowSelectionShowsRowScopedCommands()
     {
         StaTestRunner.Run(() =>
