@@ -254,7 +254,7 @@ internal static class DelimitedTextWorkbookWriter
     }
 
     private static bool IsParenthesizedCurrencyText(string value) =>
-        value[0] == '(' &&
+        value.TrimStart().StartsWith('(') &&
         value.TrimEnd().EndsWith(')') &&
         double.TryParse(
             value,

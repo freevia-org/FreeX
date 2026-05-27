@@ -178,19 +178,21 @@ internal static partial class DelimitedTextWorkbookReader
             return false;
 
         var trimmed = field.Value.Trim();
-        if (trimmed.Length > 0 && trimmed[0] == '#' && TryReadError(trimmed, out _))
+        if (trimmed.Length == 0)
+            return false;
+
+        if (trimmed[0] == '#' && TryReadError(trimmed, out _))
             return true;
 
-        return field.Value[0] switch
+        return trimmed[0] switch
         {
             '=' or '@' => true,
-            '#' => TryReadError(field.Value, out _),
-            >= '0' and <= '9' => TryParsePercentage(field.Value, out _),
+            >= '0' and <= '9' => TryParsePercentage(trimmed, out _),
             '+' or '-' =>
-                double.TryParse(field.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out _) ||
-                TryParsePercentage(field.Value, out _) ||
-                TryParseCurrency(field.Value, out _),
-            '(' => TryParseCurrency(field.Value, out _),
+                double.TryParse(trimmed, NumberStyles.Any, CultureInfo.InvariantCulture, out _) ||
+                TryParsePercentage(trimmed, out _) ||
+                TryParseCurrency(trimmed, out _),
+            '(' => TryParseCurrency(trimmed, out _),
             _ => false
         };
     }
