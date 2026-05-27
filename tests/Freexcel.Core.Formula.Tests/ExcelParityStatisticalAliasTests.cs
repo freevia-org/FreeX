@@ -21,6 +21,51 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void AverageA_IncludesReferencedTextAndLogicalValues()
+    {
+        var sheet = Values(10, 7, 9, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Not available"));
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 1), BlankValue.Instance);
+
+        Number("=AVERAGEA(A1:A5)", sheet).Should().BeApproximately(5.6, 1e-12);
+        Number("=AVERAGEA(A1:A4,A7)", sheet).Should().BeApproximately(7, 1e-12);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 1), new BoolValue(true));
+        Number("=AVERAGEA(A1:A6)", sheet).Should().BeApproximately(29.0 / 6.0, 1e-12);
+    }
+
+    [Fact]
+    public void AverageA_DirectTextMatchesExcelCoercion()
+    {
+        Number("=AVERAGEA(\"5\",TRUE,\"\")", Values()).Should().BeApproximately(2, 1e-12);
+        _eval.Evaluate("=AVERAGEA(\"Not available\")", Values()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=AVERAGEA(A1:A2)", Values()).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Fact]
+    public void MaxAAndMinA_IncludeReferencedLogicalAndTextValues()
+    {
+        var sheet = Values(0, 0.2, 0.5, 0.4);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new BoolValue(true));
+        Number("=MAXA(A1:A5)", sheet).Should().Be(1);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new BoolValue(false));
+        Number("=MINA(A1:A5)", sheet).Should().Be(0);
+
+        var negativeText = Values(-5, -2);
+        negativeText.SetCell(new CellAddress(negativeText.Id, 3, 1), new TextValue("n/a"));
+        Number("=MAXA(A1:A3)", negativeText).Should().Be(0);
+        Number("=MINA(A1:A3)", negativeText).Should().Be(-5);
+    }
+
+    [Fact]
+    public void MaxAAndMinA_DirectInvalidTextReturnsValueError()
+    {
+        _eval.Evaluate("=MAXA(\"n/a\")", Values()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MINA(\"n/a\")", Values()).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void ModeSngl_ReturnsFirstLowestMostFrequentValue()
     {
         Number("=MODE.SNGL(A1:A5)", Values(3, 2, 2, 3, 2)).Should().Be(2);
