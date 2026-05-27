@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -37,6 +38,7 @@ public sealed class AddWatchDialog : Window
         _rangeBox.Text = selectedRangeText;
         _rangeBox.IsReadOnly = true;
         _rangeBox.Margin = new Thickness(0, 0, 0, 8);
+        AutomationProperties.SetName(_rangeBox, "Selected range");
         body.Children.Add(new Label
         {
             Content = "Selected _range:",
