@@ -373,6 +373,36 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesPowerQueryPackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/power-query-001.xlsx" &&
+            row.FeatureTags.Contains("power-query", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("connections", StringComparison.Ordinal));
+        const string reportLine = "| Power Query package references | Worksheet query table relationships are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesSmartArtPackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/smartart-diagrams-001.xlsx" &&
+            row.FeatureTags.Contains("smartart", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("diagrams", StringComparison.Ordinal));
+        const string reportLine = "| SmartArt diagram package references | Worksheet drawing relationships and drawing diagram relationships are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
