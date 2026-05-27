@@ -3309,7 +3309,7 @@
                     <Border x:Name="GridBottomRuleSpacer"
                             DockPanel.Dock="Left"
                             Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"/>
-                    <Border BorderBrush="{StaticResource FreexcelBorderStrongBrush}"
+                    <Border BorderBrush="{StaticResource FreexcelGreenBrush}"
                             BorderThickness="0,0,0,1"/>
                 </DockPanel>
                 <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
@@ -3659,6 +3659,7 @@
                 <!-- Sheet tabs in a clipped, scrollbar-free viewport -->
                 <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="2"
                               Margin="0,0,0,0"
+                              Panel.ZIndex="2"
                               HorizontalScrollBarVisibility="Hidden"
                               VerticalScrollBarVisibility="Disabled"
                               ScrollChanged="SheetTabsScroller_ScrollChanged"
@@ -3748,7 +3749,7 @@
                                               IsHitTestVisible="False"/>
                                         <Border Height="1.25"
                                                 VerticalAlignment="Bottom"
-                                                Margin="12,0,12,0"
+                                                Margin="10,0,10,0"
                                                 Background="{Binding ElementName=TabBorder, Path=BorderBrush}"
                                                 Panel.ZIndex="3"
                                                 IsHitTestVisible="False"/>
@@ -3756,7 +3757,7 @@
                                                 VerticalAlignment="Top"
                                                 Margin="0,-2,0,0"
                                                 Background="{StaticResource FreexcelRibbonSurfaceBrush}"
-                                                Panel.ZIndex="2">
+                                                Panel.ZIndex="4">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -3840,10 +3841,11 @@
                 </ScrollViewer>
 
                 <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="38" MinHeight="27"
-                        FontSize="13" FontWeight="SemiBold" Margin="-16,0,0,1" Padding="12,1,12,3"
+                        FontSize="13" FontWeight="SemiBold" Margin="-22,0,0,1" Padding="12,1,12,3"
                         Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1,0,1,1"
                         Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
                         VerticalAlignment="Top" Cursor="Hand"
+                        Panel.ZIndex="0"
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         AutomationProperties.Name="Insert Sheet"
                         AutomationProperties.HelpText="Add a new sheet to the workbook."
@@ -3875,7 +3877,7 @@
                                       IsHitTestVisible="False"/>
                                 <Border Height="1.25"
                                         VerticalAlignment="Bottom"
-                                        Margin="12,0,12,0"
+                                        Margin="10,0,10,0"
                                         Background="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
                                         Panel.ZIndex="3"
                                         IsHitTestVisible="False"/>

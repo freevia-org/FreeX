@@ -113,7 +113,7 @@ public sealed class FormulaEvaluator
         "SQRTPI", "SERIESSUM",
         "RANDBETWEEN",
         "N", "ERROR.TYPE",
-        "COMBIN", "PERMUT",
+        "COMBIN", "COMBINA", "FACTDOUBLE", "PERMUT", "PERMUTATIONA",
         "ACOT", "ACOTH", "COT", "COTH", "CSC", "CSCH", "SEC", "SECH",
         "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT",
         "BASE", "DECIMAL",

@@ -81,6 +81,26 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderHeaders_AvoidsPerHeaderLinqSelectionScans()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.Headers.cs"));
+        var renderHeaders = source[
+            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("internal static string FormatColumnHeader", StringComparison.Ordinal)];
+        var renderFreezeDivider = source[
+            source.IndexOf("private void RenderFreezeDivider(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)];
+
+        renderHeaders.Should().Contain("IsColumnHeaderSelected(col.Col, selectedRanges, selRange)");
+        renderHeaders.Should().Contain("IsRowHeaderSelected(row.Row, selectedRanges, selRange)");
+        renderHeaders.Should().Contain("foreach (var range in selectedRanges)");
+        renderHeaders.Should().NotContain(".Any(");
+        renderFreezeDivider.Should().Contain("FindRowMetric(Viewport.RowMetrics, fp.Rows)");
+        renderFreezeDivider.Should().Contain("FindColMetric(Viewport.ColMetrics, fp.Cols)");
+        renderFreezeDivider.Should().NotContain("FirstOrDefault");
+    }
+
+    [Fact]
     public void FormatColumnHeader_UsesA1NamesOrR1C1Numbers()
     {
         var formatColumnHeader = typeof(GridView).GetMethod(
