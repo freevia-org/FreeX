@@ -248,8 +248,16 @@ public static partial class BuiltInFunctions
         ["MODE"]             = (ModeSngl, 1, 255),
         ["MODE.SNGL"]        = (ModeSngl, 1, 255),
         ["CORREL"]           = (Correl, 2, 2),
+        ["COVAR"]            = (CovarianceP, 2, 2),
+        ["COVARIANCE.P"]     = (CovarianceP, 2, 2),
+        ["COVARIANCE.S"]     = (CovarianceS, 2, 2),
         ["FORECAST"]         = (Forecast, 3, 3),
         ["FORECAST.LINEAR"]  = (Forecast, 3, 3),
+        ["INTERCEPT"]        = (Intercept, 2, 2),
+        ["PEARSON"]          = (Pearson, 2, 2),
+        ["RSQ"]              = (Rsq, 2, 2),
+        ["SLOPE"]            = (Slope, 2, 2),
+        ["STEYX"]            = (Steyx, 2, 2),
 
         // ── Phase 4a: Financial ──────────────────────────────────────────────
         ["PMT"]  = (Pmt, 3, 5),

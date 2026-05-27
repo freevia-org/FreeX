@@ -52,8 +52,8 @@ public static class GridObjectDragPlanner
             return ObjectDragKind.None;
 
         var pad = handleHitPadding + handleSize / 2;
-        var nearRight = Math.Abs(position.X - objectRect.Right) < pad;
-        var nearBottom = Math.Abs(position.Y - objectRect.Bottom) < pad;
+        var nearRight = Math.Abs(position.X - objectRect.Right) <= pad;
+        var nearBottom = Math.Abs(position.Y - objectRect.Bottom) <= pad;
         var inVertical = position.Y >= objectRect.Top - pad && position.Y <= objectRect.Bottom + pad;
         var inHorizontal = position.X >= objectRect.Left - pad && position.X <= objectRect.Right + pad;
 

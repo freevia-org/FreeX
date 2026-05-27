@@ -103,6 +103,48 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void RegressionAndCovarianceFunctions_ReturnExcelResults()
+    {
+        var sheet = RegressionValues();
+
+        Number("=COVAR(B1:B3,A1:A3)", sheet).Should().BeApproximately(1, 1e-12);
+        Number("=COVARIANCE.P(B1:B3,A1:A3)", sheet).Should().BeApproximately(1, 1e-12);
+        Number("=COVARIANCE.S(B1:B3,A1:A3)", sheet).Should().BeApproximately(1.5, 1e-12);
+        Number("=PEARSON(B1:B3,A1:A3)", sheet).Should().BeApproximately(0.9819805060619657, 1e-12);
+        Number("=RSQ(B1:B3,A1:A3)", sheet).Should().BeApproximately(27.0 / 28.0, 1e-12);
+        Number("=SLOPE(A1:A3,B1:B3)", sheet).Should().BeApproximately(1.5, 1e-12);
+        Number("=INTERCEPT(A1:A3,B1:B3)", sheet).Should().BeApproximately(2.0 / 3.0, 1e-12);
+        Number("=STEYX(A1:A3,B1:B3)", sheet).Should().BeApproximately(Math.Sqrt(1.0 / 6.0), 1e-12);
+    }
+
+    [Fact]
+    public void RegressionAndCovarianceFunctions_IgnoreNonnumericReferencedPairs()
+    {
+        var sheet = RegressionValues();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("ignored"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new BoolValue(true));
+
+        Number("=SLOPE(A1:A5,B1:B5)", sheet).Should().BeApproximately(1.5, 1e-12);
+        Number("=COVARIANCE.P(B1:B5,A1:A5)", sheet).Should().BeApproximately(1, 1e-12);
+    }
+
+    [Fact]
+    public void RegressionAndCovarianceFunctions_ReturnExcelErrors()
+    {
+        var sheet = RegressionValues();
+        _eval.Evaluate("=SLOPE(A1:A3,B1:B2)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=STEYX(A1:A2,B1:B2)", sheet).Should().Be(ErrorValue.DivByZero);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2));
+        _eval.Evaluate("=INTERCEPT(A1:A3,B1:B3)", sheet).Should().Be(ErrorValue.DivByZero);
+        _eval.Evaluate("=PEARSON(A1:A3,B1:B3)", sheet).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Fact]
     public void ModeSngl_ReturnsFirstLowestMostFrequentValue()
     {
         Number("=MODE.SNGL(A1:A5)", Values(3, 2, 2, 3, 2)).Should().Be(2);
@@ -196,6 +238,18 @@ public sealed class ExcelParityStatisticalAliasTests
         var sheet = new Sheet(SheetId.New(), "S");
         for (var i = 0; i < values.Length; i++)
             sheet.SetCell(new CellAddress(sheet.Id, (uint)i + 1, 1), new NumberValue(values[i]));
+        return sheet;
+    }
+
+    private static Sheet RegressionValues()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(3));
         return sheet;
     }
 }

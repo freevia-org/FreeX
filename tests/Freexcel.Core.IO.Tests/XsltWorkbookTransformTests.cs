@@ -117,6 +117,19 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetFailure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("<xsl:stylesheet");
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_SourceDtd_ReportsSourceDiagnostic()
     {
         using var source = StreamFromString("""
