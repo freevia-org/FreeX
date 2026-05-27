@@ -4041,7 +4041,9 @@
                 Grid.Row="1" Grid.RowSpan="5"
                 Panel.ZIndex="260"
                 Background="#80FFFFFF"
-                Visibility="Collapsed">
+                Visibility="Collapsed"
+                AutomationProperties.Name="Opening workbook"
+                AutomationProperties.HelpText="Shows workbook open progress and blocks workbook interaction until loading finishes or fails.">
             <Border Width="360" Padding="22" Background="White"
                     BorderBrush="#D0D0D0" BorderThickness="1"
                     HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -4049,7 +4051,8 @@
                     <TextBlock x:Name="OpenProgressTitle"
                                Text="Opening workbook"
                                FontSize="16" Foreground="#1F1F1F"
-                               Margin="0,0,0,10"/>
+                               Margin="0,0,0,10"
+                               AutomationProperties.Name="Open progress title"/>
                     <ProgressBar x:Name="OpenProgressBar"
                                  Height="5"
                                  Minimum="0"
@@ -4060,7 +4063,8 @@
                     <TextBlock x:Name="OpenProgressDetail"
                                Text="Reading file..."
                                FontSize="12" Foreground="#666"
-                               Margin="0,10,0,0"/>
+                               Margin="0,10,0,0"
+                               AutomationProperties.Name="Open progress detail"/>
                 </StackPanel>
             </Border>
         </Border>
