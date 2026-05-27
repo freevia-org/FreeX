@@ -127,6 +127,13 @@ public partial class GridView : FrameworkElement
     private static readonly Brush FormulaTraceArrowBrush = MakeBrush(0, 102, 204);
     private static readonly Pen FormulaTraceArrowPen = MakeFormulaTraceArrowPen();
 
+    // Per-frame render caches: allocated once and cleared at the start of each render pass
+    // to avoid GC pressure from fresh Dictionary allocations on every frame.
+    private readonly Dictionary<CellColor, SolidColorBrush> _brushCache = new();
+    private readonly Dictionary<CellBorder, Pen> _borderPenCache = new();
+    private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();
+    private readonly Dictionary<Brush, Pen> _underlinePenCache = new();
+
     private static double ToDisplayFontSize(double pointSize) =>
         Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));
 

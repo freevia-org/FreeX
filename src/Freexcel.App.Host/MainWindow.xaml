@@ -3739,7 +3739,7 @@
 
                 <Border Grid.Column="2" Grid.ColumnSpan="5"
                         BorderBrush="{StaticResource FreexcelGreenBrush}"
-                        BorderThickness="0,1,0,0"
+                        BorderThickness="0"
                         VerticalAlignment="Top"
                         Panel.ZIndex="0"
                         IsHitTestVisible="False"/>
@@ -3832,6 +3832,7 @@
                                               StrokeLineJoin="Round"
                                               Panel.ZIndex="3"
                                               SnapsToDevicePixels="True"
+                                              Visibility="Collapsed"
                                               IsHitTestVisible="False"/>
                                         <Path x:Name="TabRightOutline"
                                               Data="M 12,0 A 8,8 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"
@@ -3843,6 +3844,7 @@
                                               StrokeLineJoin="Round"
                                               Panel.ZIndex="3"
                                               SnapsToDevicePixels="True"
+                                              Visibility="Collapsed"
                                               IsHitTestVisible="False"/>
                                         <Border x:Name="TabBottomOutline"
                                                 Height="1.25"
@@ -3850,16 +3852,19 @@
                                                 Margin="12,0,12,0"
                                                 Background="{Binding ElementName=TabBorder, Path=BorderBrush}"
                                                 Panel.ZIndex="3"
-                                                IsHitTestVisible="False"/>
-                                        <Canvas x:Name="ActiveConnectedOutline"
-                                                Panel.ZIndex="4"
                                                 Visibility="Collapsed"
+                                                IsHitTestVisible="False"/>
+                                        <Canvas x:Name="TabOutlineCanvas"
+                                                Height="26"
+                                                VerticalAlignment="Top"
+                                                Panel.ZIndex="4"
                                                 IsHitTestVisible="False">
-                                            <Path Data="M 0,0 A 8,8 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26 L 88,26 A 4,4 0 0 0 92,22 L 92,8 A 8,8 0 0 1 100,0"
+                                            <Path x:Name="TabOutline"
+                                                  Data="M 8,7 L 8,22 A 4,4 0 0 0 12,26 L 88,26 A 4,4 0 0 0 92,22 L 92,7"
                                                   Width="{Binding ActualWidth, ElementName=TabChrome}"
                                                   Height="26"
                                                   Stretch="Fill"
-                                                  Stroke="{StaticResource FreexcelGreenBrush}"
+                                                  Stroke="{Binding ElementName=TabBorder, Path=BorderBrush}"
                                                   StrokeThickness="1.25"
                                                   StrokeStartLineCap="Round"
                                                   StrokeEndLineCap="Round"
@@ -3876,14 +3881,6 @@
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
                                         </Border>
@@ -3937,16 +3934,10 @@
                                     </Grid>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Visibility" Value="Collapsed"/>
-                                            <Setter TargetName="TabRightOutline" Property="Visibility" Value="Collapsed"/>
-                                            <Setter TargetName="TabBottomOutline" Property="Visibility" Value="Collapsed"/>
-                                            <Setter TargetName="ActiveConnectedOutline" Property="Visibility" Value="Visible"/>
+                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Visibility" Value="Collapsed"/>
-                                            <Setter TargetName="TabRightOutline" Property="Visibility" Value="Collapsed"/>
-                                            <Setter TargetName="TabBottomOutline" Property="Visibility" Value="Collapsed"/>
-                                            <Setter TargetName="ActiveConnectedOutline" Property="Visibility" Value="Visible"/>
+                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -3969,7 +3960,7 @@
                         local:RibbonTooltip.Description="Add a new sheet to the workbook.">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid Opacity="{TemplateBinding Opacity}">
+                            <Grid x:Name="GhostTabRoot" Opacity="{TemplateBinding Opacity}">
                                 <Path Data="M 0,0 A 8,8 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26"
                                       Stroke="{StaticResource FreexcelGreenBrush}"
                                       StrokeThickness="1.25"
@@ -3990,12 +3981,30 @@
                                       Opacity="0.75"
                                       Panel.ZIndex="3"
                                       SnapsToDevicePixels="True"
+                                      Visibility="Collapsed"
                                       IsHitTestVisible="False"/>
+                                <Canvas Height="26"
+                                        VerticalAlignment="Top"
+                                        Panel.ZIndex="3"
+                                        IsHitTestVisible="False">
+                                    <Path Data="M 92,12 L 92,22 A 4,4 0 0 1 88,26 L 12,26"
+                                          Width="{Binding ActualWidth, ElementName=GhostTabRoot}"
+                                          Height="26"
+                                          Stretch="Fill"
+                                          Stroke="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
+                                          StrokeThickness="1.25"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round"
+                                          Opacity="0.9"
+                                          SnapsToDevicePixels="True"/>
+                                </Canvas>
                                 <Border Height="1.25"
                                         VerticalAlignment="Bottom"
                                         Margin="12,0,12,0"
                                         Background="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
                                         Panel.ZIndex="3"
+                                        Visibility="Collapsed"
                                         IsHitTestVisible="False"/>
                                 <Border x:Name="GhostTabChrome"
                                         Background="{TemplateBinding Background}"

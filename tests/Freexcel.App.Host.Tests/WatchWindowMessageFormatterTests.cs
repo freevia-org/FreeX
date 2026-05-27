@@ -30,10 +30,14 @@ public sealed class WatchWindowMessageFormatterTests
 
         source.Should().Contain("Content = \"_Add Watch\"");
         source.Should().Contain("IsEnabled = _addWatch is not null");
+        source.Should().Contain("AutomationProperties.SetAutomationId(add, \"WatchWindowAddButton\");");
         source.Should().Contain("AddWatchDialog");
         source.Should().Contain("Content = \"_Refresh\"");
+        source.Should().Contain("AutomationProperties.SetAutomationId(refresh, \"WatchWindowRefreshButton\");");
         source.Should().Contain("Content = \"_Delete Watch\"");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_deleteButton, \"WatchWindowDeleteButton\");");
         source.Should().Contain("Content = \"_Close\"");
+        source.Should().Contain("AutomationProperties.SetAutomationId(close, \"WatchWindowCloseButton\");");
         source.Should().Contain("Content = \"_Close\", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
     }
 
@@ -131,5 +135,19 @@ public sealed class WatchWindowMessageFormatterTests
 
         source.Should().Contain("new Label { Content = \"_Watches:\", Target = _listView");
         source.Should().Contain("AutomationProperties.SetName(_listView, \"Watches\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_listView, \"WatchWindowList\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_listView, \"Lists watched cells with their workbook, sheet, address, value, and formula.\");");
+    }
+
+    [Fact]
+    public void WatchWindowDialog_RefreshPreservesSelectedWatchRows()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+
+        source.Should().Contain("_listView.SelectedItems");
+        source.Should().Contain(".Select(row => row.Address)");
+        source.Should().Contain("RestoreSelection(selectedAddresses);");
+        source.Should().Contain("private void RestoreSelection(IReadOnlySet<CellAddress> selectedAddresses)");
+        source.Should().Contain("_listView.SelectedItems.Add(row);");
     }
 }
