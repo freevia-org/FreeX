@@ -81,7 +81,7 @@ public static partial class KeyboardShortcutMatcher
     public static bool TryGetCommandShortcut(Key key, Key systemKey, ModifierKeys modifiers, out KeyboardCommandShortcut shortcut)
     {
         shortcut = default;
-        var effectiveKey = key == Key.None ? systemKey : key;
+        var effectiveKey = key is Key.None or Key.System ? systemKey : key;
         foreach (var rule in CommandShortcutRules)
         {
             if (!rule.Matches(effectiveKey, modifiers))

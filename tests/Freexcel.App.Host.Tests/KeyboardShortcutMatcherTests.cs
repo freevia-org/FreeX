@@ -233,6 +233,27 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.System, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
+    [InlineData(Key.System, Key.F1, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.System, Key.Add, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.System, Key.Down, ModifierKeys.Alt, KeyboardCommandShortcut.OpenActiveDropdown)]
+    [InlineData(Key.System, Key.Right, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.GroupSelection)]
+    [InlineData(Key.System, Key.Left, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.UngroupSelection)]
+    [InlineData(Key.System, Key.Oem1, ModifierKeys.Alt, KeyboardCommandShortcut.SelectVisibleCellsOnly)]
+    public void TryGetCommandShortcut_MapsSystemKeyAltCommandShortcuts(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        KeyboardCommandShortcut expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out var shortcut);
+
+        result.Should().BeTrue();
+        shortcut.Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
