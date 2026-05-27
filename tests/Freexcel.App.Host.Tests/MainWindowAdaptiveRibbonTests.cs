@@ -466,6 +466,28 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Theory]
+    [InlineData(750)]
+    [InlineData(900)]
+    [InlineData(1100)]
+    public void HelpRibbon_DoesNotClipAtExcelWidths(double width)
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Help", width);
+
+            harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                0.5,
+                $"Help at {width}px should fit without exposing hidden horizontal scroll; {harness.DebugActiveRibbonChildren}");
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Help Online", "Feedback", "Copy Diagnostics", "Check for Updates", "About Freexcel"],
+                "the enabled Help commands should remain directly usable at common Excel widths");
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Help", harness.DebugActiveRibbonChildren);
+        });
+    }
+
+    [Theory]
     [InlineData(900)]
     [InlineData(1120)]
     [InlineData(1280)]
