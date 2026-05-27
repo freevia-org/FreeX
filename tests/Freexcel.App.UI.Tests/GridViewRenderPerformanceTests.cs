@@ -145,6 +145,19 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void CalculateSplitDividerLayout_AvoidsLinqMetricScans()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.SplitPanes.cs"));
+        var calculateLayout = source[
+            source.IndexOf("public static SplitDividerLayout CalculateSplitDividerLayout", StringComparison.Ordinal)..
+            source.IndexOf("public static SplitPaneScrollbarChrome CalculateSplitPaneScrollbarChrome", StringComparison.Ordinal)];
+
+        calculateLayout.Should().Contain("FindRowMetric(viewport.RowMetrics, splitRow)");
+        calculateLayout.Should().Contain("FindColMetric(viewport.ColMetrics, splitColumn)");
+        calculateLayout.Should().NotContain("FirstOrDefault");
+    }
+
+    [Fact]
     public void SplitPaneCellLayoutPlanner_BoundsTallMergeWorkToVisibleCells()
     {
         var sheetId = SheetId.New();
