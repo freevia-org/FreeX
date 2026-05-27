@@ -80,4 +80,31 @@ public sealed class XlsxRelationshipReaderTests
         targets.Should().ContainSingle();
         targets.Should().ContainKey("rIdImage").WhoseValue.Should().Be("xl/media/image%E0%A4%A.png");
     }
+
+    [Fact]
+    public void ReadTargets_KeepsEncodedPathSeparatorsAsLiteralPathText()
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = new XDocument(new XElement(
+            relationshipNs + "Relationships",
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdForwardSlash"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                new XAttribute("Target", "../media/image%2F1.png")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdBackSlash"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                new XAttribute("Target", "../media/image%5C1.png"))));
+
+        var targets = XlsxRelationshipReader.ReadTargets(
+            relationshipsXml,
+            relationshipNs,
+            target => XlsxPackagePath.ResolveRelationshipTarget("xl/drawings/drawing1.xml", target));
+
+        targets.Should().HaveCount(2);
+        targets.Should().ContainKey("rIdForwardSlash").WhoseValue.Should().Be("xl/media/image%2F1.png");
+        targets.Should().ContainKey("rIdBackSlash").WhoseValue.Should().Be("xl/media/image%5C1.png");
+    }
 }
