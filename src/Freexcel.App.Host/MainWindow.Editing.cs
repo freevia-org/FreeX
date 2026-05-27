@@ -88,7 +88,7 @@ public partial class MainWindow
             _inlineEditor.LostFocus  += InlineEditor_LostFocus;
             _inlineEditor.TextChanged += (_, _) =>
             {
-                FormulaBar.Text = _inlineEditor.Text;
+                SyncFormulaBarTextFromInlineEditor();
                 if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(_inlineEditor.Text))
                     _formulaRangeEntryMode = true;
                 RefreshInlineEditorTextSurface();
@@ -148,6 +148,41 @@ public partial class MainWindow
         _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
         _inlineEditor.SelectionLength = 0;
         SetStatusBarModeText("Edit");
+    }
+
+    private void SyncFormulaBarTextFromInlineEditor()
+    {
+        if (_inlineEditor is null || _syncingFormulaEditorText || FormulaBar.Text == _inlineEditor.Text)
+            return;
+
+        try
+        {
+            _syncingFormulaEditorText = true;
+            FormulaBar.Text = _inlineEditor.Text;
+        }
+        finally
+        {
+            _syncingFormulaEditorText = false;
+        }
+    }
+
+    private void SyncInlineEditorTextFromFormulaBar()
+    {
+        if (_inlineEditor?.IsVisible != true || _syncingFormulaEditorText || _inlineEditor.Text == FormulaBar.Text)
+            return;
+
+        try
+        {
+            _syncingFormulaEditorText = true;
+            _inlineEditor.Text = FormulaBar.Text;
+        }
+        finally
+        {
+            _syncingFormulaEditorText = false;
+        }
+
+        RefreshInlineEditorTextSurface();
+        RefreshInlineEditorChromeBorder();
     }
 
     private void RefreshInlineEditorTextSurface()
