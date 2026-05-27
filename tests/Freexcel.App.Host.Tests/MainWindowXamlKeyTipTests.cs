@@ -2088,6 +2088,68 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void PageLayoutThemeCommands_ExposeStableAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        AssertThemeButton(document, local, presentation, "Themes", "PageLayoutThemesButton", "Open workbook theme presets and customization.");
+        AssertThemeButton(document, local, presentation, "Theme Colors", "PageLayoutThemeColorsButton", "Open workbook theme color presets and customization.");
+        AssertThemeButton(document, local, presentation, "Theme Fonts", "PageLayoutThemeFontsButton", "Open workbook theme font presets and customization.");
+        AssertThemeButton(document, local, presentation, "Theme Effects", "PageLayoutThemeEffectsButton", "Open workbook theme effect presets and customization.");
+
+        var expectedMenuItems = new (string Header, string AutomationName, string AutomationId)[]
+        {
+            ("Office", "Office theme", "PageLayoutThemeOfficeMenuItem"),
+            ("Freexcel Colorful", "Freexcel Colorful theme", "PageLayoutThemeColorfulMenuItem"),
+            ("Grayscale", "Grayscale theme", "PageLayoutThemeGrayscaleMenuItem"),
+            ("Customize...", "Customize theme", "PageLayoutThemeCustomizeMenuItem"),
+            ("Office", "Office theme colors", "PageLayoutThemeColorsOfficeMenuItem"),
+            ("Freexcel Colorful", "Freexcel Colorful theme colors", "PageLayoutThemeColorsColorfulMenuItem"),
+            ("Grayscale", "Grayscale theme colors", "PageLayoutThemeColorsGrayscaleMenuItem"),
+            ("Customize Colors...", "Customize theme colors", "PageLayoutThemeColorsCustomizeMenuItem"),
+            ("Office", "Office theme fonts", "PageLayoutThemeFontsOfficeMenuItem"),
+            ("Arial", "Arial theme fonts", "PageLayoutThemeFontsArialMenuItem"),
+            ("Times New Roman", "Times New Roman theme fonts", "PageLayoutThemeFontsTimesMenuItem"),
+            ("Customize Fonts...", "Customize theme fonts", "PageLayoutThemeFontsCustomizeMenuItem"),
+            ("Office", "Office theme effects", "PageLayoutThemeEffectsOfficeMenuItem"),
+            ("Subtle", "Subtle theme effects", "PageLayoutThemeEffectsSubtleMenuItem"),
+            ("Refined", "Refined theme effects", "PageLayoutThemeEffectsRefinedMenuItem"),
+            ("Customize Effects...", "Customize theme effects", "PageLayoutThemeEffectsCustomizeMenuItem")
+        };
+
+        foreach (var expected in expectedMenuItems)
+        {
+            var menuItem = document
+                .Descendants(presentation + "MenuItem")
+                .Single(item =>
+                    item.Attribute("Header")?.Value == expected.Header &&
+                    item.Attribute("AutomationProperties.AutomationId")?.Value == expected.AutomationId);
+
+            menuItem.Attribute("AutomationProperties.Name")?.Value.Should().Be(expected.AutomationName);
+            menuItem.Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
+        }
+
+        static void AssertThemeButton(
+            XDocument document,
+            XNamespace local,
+            XNamespace presentation,
+            string tooltipTitle,
+            string automationId,
+            string helpText)
+        {
+            var button = document
+                .Descendants(presentation + "Button")
+                .Single(element => element.Attribute(local + "RibbonTooltip.Title")?.Value == tooltipTitle);
+
+            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(tooltipTitle);
+            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
+            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+        }
+    }
+
+    [Fact]
     public void DrawFormatCropGradientEffectsButtons_ExposeAccessibleCommandsAndMenus()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
