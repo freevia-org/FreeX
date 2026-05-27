@@ -638,6 +638,7 @@ public sealed class MainWindowXamlKeyTipTests
             ["SsAccountBtn_Click"] = "BackstageAccountButton",
             ["SsOptionsBtn_Click"] = "BackstageOptionsButton",
             ["HelpOnlineBtn_Click"] = "HelpOnlineButton",
+            ["CheckForUpdatesBtn_Click"] = "HelpCheckForUpdatesButton",
             ["SendFeedbackBtn_Click"] = "HelpFeedbackButton",
             ["AboutBtn_Click"] = "HelpAboutFreexcelButton",
         };
@@ -675,11 +676,19 @@ public sealed class MainWindowXamlKeyTipTests
         var feedback = document
             .Descendants()
             .Single(element => element.Attribute(x + "Name")?.Value == "HelpFeedbackButton");
+        var updates = document
+            .Descendants()
+            .Single(element => element.Attribute(x + "Name")?.Value == "HelpCheckForUpdatesButton");
 
         helpOnline.Attribute("Click")?.Value.Should().Be("HelpOnlineBtn_Click");
         helpOnline.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpOnlineButton\"");
         helpOnline.ToString().Should().Contain("AutomationProperties.HelpText=\"Open the Freexcel help documentation in a web browser.");
         helpOnline.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("HO");
+
+        updates.Attribute("Click")?.Value.Should().Be("CheckForUpdatesBtn_Click");
+        updates.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpCheckForUpdatesButton\"");
+        updates.ToString().Should().Contain("AutomationProperties.HelpText=\"Open the latest Freexcel tester release in a web browser.");
+        updates.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("UP");
 
         feedback.Attribute("Click")?.Value.Should().Be("SendFeedbackBtn_Click");
         feedback.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpFeedbackButton\"");
