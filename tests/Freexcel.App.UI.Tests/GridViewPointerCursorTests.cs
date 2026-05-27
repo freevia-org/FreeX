@@ -121,9 +121,10 @@ public sealed class GridViewPointerCursorTests
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var mouseUpBlock = source[
-            source.IndexOf("if (_splitPaneScrollbarDragging)", source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal), StringComparison.Ordinal)..
-            source.IndexOf("if (_autofillDragging)", StringComparison.Ordinal)];
+            source.IndexOf("if (_splitPaneScrollbarDragging)", mouseUpStart, StringComparison.Ordinal)..
+            source.IndexOf("if (_autofillDragging)", mouseUpStart, StringComparison.Ordinal)];
 
         mouseUpBlock.Should().Contain("_splitPaneScrollbarDragSource is not null");
         mouseUpBlock.Should().Contain("CalculateSplitPaneScrollbarThumbDragTarget(");
@@ -142,6 +143,20 @@ public sealed class GridViewPointerCursorTests
 
         dragBlock.Should().Contain("Cursor = Cursors.Cross;");
         dragBlock.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
+    public void AutofillDragMouseMoveKeepsCaptureWhenViewportDisappears()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var resizeStart = source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal);
+        var fallbackStart = source.LastIndexOf("if (_autofillDragging)", resizeStart, StringComparison.Ordinal);
+        var dragFallback = source[fallbackStart..resizeStart];
+
+        dragFallback.Should().Contain("Cursor = Cursors.Cross;");
+        dragFallback.Should().Contain("e.Handled = true;");
+        dragFallback.Should().Contain("return;");
     }
 
     [Fact]
