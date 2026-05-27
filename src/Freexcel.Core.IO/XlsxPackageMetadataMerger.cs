@@ -240,8 +240,11 @@ internal static class XlsxPackageMetadataMerger
     private static string NormalizeRelationshipType(XElement relationship) =>
         relationship.Attribute("Type")?.Value.Trim() ?? "";
 
-    private static string NormalizeRelationshipTarget(XElement relationship) =>
-        relationship.Attribute("Target")?.Value.Trim() ?? "";
+    private static string NormalizeRelationshipTarget(XElement relationship)
+    {
+        var target = relationship.Attribute("Target")?.Value.Trim() ?? "";
+        return IsExternalRelationship(relationship) ? target : target.Replace('\\', '/');
+    }
 
     private static string NormalizeRelationshipTargetMode(XElement relationship) =>
         relationship.Attribute("TargetMode")?.Value.Trim() ?? "";
