@@ -39,12 +39,16 @@ internal sealed class NameDefinitionDialog : Window
         ShowInTaskbar = false;
 
         _nameBox.Text = initial.Name;
+        AutomationProperties.SetName(_nameBox, "Name");
         foreach (var scope in _scopeOptions)
             _scopeBox.Items.Add(scope);
         _scopeBox.SelectedItem = _scopeOptions.FirstOrDefault(scope =>
             string.Equals(scope, initial.Scope, StringComparison.OrdinalIgnoreCase)) ?? _scopeOptions[0];
+        AutomationProperties.SetName(_scopeBox, "Scope");
         _commentBox.Text = initial.Comment;
+        AutomationProperties.SetName(_commentBox, "Comment");
         _refersToBox.Text = initial.RefersTo;
+        AutomationProperties.SetName(_refersToBox, "Refers to");
         _rangePickerButton.ToolTip = "Collapse dialog and select the referenced range from the worksheet";
         AutomationProperties.SetName(_rangePickerButton, "Select referenced range");
         AutomationProperties.SetHelpText(_rangePickerButton, "Collapse dialog and select the referenced range from the worksheet.");
