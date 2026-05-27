@@ -601,6 +601,7 @@ public partial class MainWindow
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
             await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
             _currentFilePath = target.Path;
+            _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
             _recentFiles.AddOrUpdate(target.Path);
             MarkWorkbookSaved();
             UpdateTitleBar();
