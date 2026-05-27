@@ -128,6 +128,34 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_UsesCurrentInputStreamPositions()
+    {
+        using var source = PositionedStreamFromString("ignored", "<rows><row name=\"Bravo\" /></rows>");
+        using var stylesheet = PositionedStreamFromString("ignored", """
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Data">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("Bravo");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_Failure_LeavesInputStreamsOpen()
     {
         using var source = StreamFromString("<rows>");
@@ -234,6 +262,19 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_TransformFailure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = TerminatingMessageStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetInclude_ReportsDisabledExternalAccess()
     {
         using var source = StreamFromString("<rows />");
@@ -307,6 +348,24 @@ public sealed class XsltWorkbookTransformTests
             </xsl:stylesheet>
             """);
 
+    private static MemoryStream TerminatingMessageStylesheet() =>
+        StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:message terminate="yes">stop</xsl:message>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
     private static MemoryStream StreamFromString(string value) =>
         new(Encoding.UTF8.GetBytes(value));
+
+    private static MemoryStream PositionedStreamFromString(string prefix, string value)
+    {
+        var prefixBytes = Encoding.UTF8.GetBytes(prefix);
+        var valueBytes = Encoding.UTF8.GetBytes(value);
+        var stream = new MemoryStream(prefixBytes.Concat(valueBytes).ToArray());
+        stream.Position = prefixBytes.Length;
+        return stream;
+    }
 }

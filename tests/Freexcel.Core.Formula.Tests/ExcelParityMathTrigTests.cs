@@ -11,12 +11,15 @@ public sealed class ExcelParityMathTrigTests
     [Theory]
     [InlineData("=ABS(-2.5)", 2.5)]
     [InlineData("=ACOS(0.5)", 1.0471975511965979)]
+    [InlineData("=ACOSH(10)", 2.993222846126381)]
     [InlineData("=ACOT(1)", 0.7853981633974483)]
     [InlineData("=ACOT(-1)", 2.356194490192345)]
     [InlineData("=ACOTH(2)", 0.5493061443340548)]
     [InlineData("=ASIN(0.5)", 0.5235987755982989)]
+    [InlineData("=ASINH(-2.5)", -1.6472311463710958)]
     [InlineData("=ATAN(1)", 0.7853981633974483)]
     [InlineData("=ATAN2(1,1)", 0.7853981633974483)]
+    [InlineData("=ATANH(-0.1)", -0.10033534773107558)]
     [InlineData("=CEILING(2.3,0.5)", 2.5)]
     [InlineData("=CEILING.MATH(4.3)", 5)]
     [InlineData("=CEILING.MATH(4.3,2)", 6)]
@@ -26,6 +29,7 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=CEILING.PRECISE(4.3,2)", 6)]
     [InlineData("=CEILING.PRECISE(-4.3,2)", -4)]
     [InlineData("=COS(0)", 1)]
+    [InlineData("=COSH(4)", 27.308232836016487)]
     [InlineData("=COT(30)", -0.15611995216165922)]
     [InlineData("=COTH(1)", 1.3130352854993312)]
     [InlineData("=CSC(15)", 1.5377805615408537)]
@@ -82,6 +86,7 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=SECH(0)", 1)]
     [InlineData("=SIGN(-10)", -1)]
     [InlineData("=SIN(PI()/2)", 1)]
+    [InlineData("=SINH(1)", 1.1752011936438014)]
     [InlineData("=SQRT(9)", 3)]
     [InlineData("=SQRTPI(2)", 2.5066282746310002)]
     [InlineData("=SUM(1,2,3)", 6)]
@@ -90,6 +95,7 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=SUMX2PY2(3,4)", 25)]
     [InlineData("=SUMXMY2(3,4)", 1)]
     [InlineData("=TAN(0)", 0)]
+    [InlineData("=TANH(0.5)", 0.46211715726000974)]
     [InlineData("=TRUNC(-2.349,2)", -2.34)]
     public void MathTrigScalarFunctions_MatchExcelCanonicalResults(string formula, double expected)
     {
@@ -98,11 +104,15 @@ public sealed class ExcelParityMathTrigTests
 
     [Theory]
     [InlineData("=ACOS(2)")]
+    [InlineData("=ACOSH(0.999999)")]
     [InlineData("=ACOTH(1)")]
     [InlineData("=ASIN(2)")]
+    [InlineData("=ATANH(1)")]
+    [InlineData("=ATANH(-1)")]
     [InlineData("=CEILING(2.3,-1)")]
     [InlineData("=COMBIN(2,5)")]
     [InlineData("=COMBINA(0,1)")]
+    [InlineData("=COSH(1000)")]
     [InlineData("=FACTDOUBLE(-1)")]
     [InlineData("=FLOOR(2.7,-1)")]
     [InlineData("=GCD(-1,2)")]
@@ -130,9 +140,13 @@ public sealed class ExcelParityMathTrigTests
 
     [Theory]
     [InlineData("=ABS(\"x\")")]
+    [InlineData("=ACOSH(\"x\")")]
     [InlineData("=ACOT(\"x\")")]
+    [InlineData("=ASINH(\"x\")")]
+    [InlineData("=ATANH(\"x\")")]
     [InlineData("=COMBINA(\"x\",2)")]
     [InlineData("=CEILING.MATH(\"x\")")]
+    [InlineData("=COSH(\"x\")")]
     [InlineData("=FACT(\"x\")")]
     [InlineData("=FACTDOUBLE(\"x\")")]
     [InlineData("=FLOOR.MATH(\"x\")")]
@@ -141,6 +155,8 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=PERMUTATIONA(\"x\",2)")]
     [InlineData("=PRODUCT(\"x\")")]
     [InlineData("=SEC(\"x\")")]
+    [InlineData("=SINH(\"x\")")]
+    [InlineData("=TANH(\"x\")")]
     [InlineData("=SUM(\"x\")")]
     [InlineData("=SUMXMY2(\"x\",1)")]
     public void MathTrigInvalidDirectText_ReturnsValueError(string formula)
@@ -333,6 +349,39 @@ public sealed class ExcelParityMathTrigTests
         var log10 = _eval.Evaluate("=LOG10(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
         ((NumberValue)log10.At(1, 1)).Value.Should().BeApproximately(0, 1e-12);
         ((NumberValue)log10.At(2, 1)).Value.Should().BeApproximately(Math.Log10(2), 1e-12);
+    }
+
+    [Fact]
+    public void HyperbolicTrigFunctions_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0)),
+            (2, 1, new NumberValue(1)),
+            (3, 1, new NumberValue(2)));
+
+        var sinh = _eval.Evaluate("=SINH(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)sinh.At(1, 1)).Value.Should().BeApproximately(0, 1e-12);
+        ((NumberValue)sinh.At(2, 1)).Value.Should().BeApproximately(Math.Sinh(1), 1e-12);
+
+        var cosh = _eval.Evaluate("=COSH(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)cosh.At(1, 1)).Value.Should().BeApproximately(1, 1e-12);
+        ((NumberValue)cosh.At(2, 1)).Value.Should().BeApproximately(Math.Cosh(1), 1e-12);
+
+        var tanh = _eval.Evaluate("=TANH(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)tanh.At(1, 1)).Value.Should().BeApproximately(0, 1e-12);
+        ((NumberValue)tanh.At(2, 1)).Value.Should().BeApproximately(Math.Tanh(1), 1e-12);
+
+        var acosh = _eval.Evaluate("=ACOSH(A2:A3)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)acosh.At(1, 1)).Value.Should().BeApproximately(0, 1e-12);
+        ((NumberValue)acosh.At(2, 1)).Value.Should().BeApproximately(Math.Acosh(2), 1e-12);
+
+        var asinh = _eval.Evaluate("=ASINH(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)asinh.At(1, 1)).Value.Should().BeApproximately(0, 1e-12);
+        ((NumberValue)asinh.At(2, 1)).Value.Should().BeApproximately(Math.Asinh(1), 1e-12);
+
+        var atanh = _eval.Evaluate("=ATANH(A1:A2/2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)atanh.At(1, 1)).Value.Should().BeApproximately(0, 1e-12);
+        ((NumberValue)atanh.At(2, 1)).Value.Should().BeApproximately(Math.Atanh(0.5), 1e-12);
     }
 
     [Fact]
