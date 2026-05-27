@@ -367,6 +367,27 @@ public partial class MainWindow
         ApplyChartLayoutDialogResult("Format Pie/Doughnut", chart, dialog.Result.ToOptions());
     }
 
+    private void ChartStockFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Stock Chart",
+                "Insert or select a stock chart before changing stock options.",
+                out var chart))
+            return;
+
+        if (chart.Type != ChartType.Stock)
+        {
+            MessageBox.Show(this, "Stock format options only apply to stock charts.", "Format Stock Chart", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ChartStockFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Stock Chart", chart, dialog.Result.ToOptions());
+    }
+
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
     {
         ShowChartDataLabelsDialog();

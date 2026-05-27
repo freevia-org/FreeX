@@ -1377,6 +1377,9 @@
                                     <Button Content="Pie Format"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieFormatBtn_Click"
                                             local:RibbonTooltip.Title="Format Pie/Doughnut" local:RibbonTooltip.KeyTip="PI"
                                             local:RibbonTooltip.Description="Set first slice angle, exploded slice, and doughnut hole size."/>
+                                    <Button Content="Stock Fmt"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStockFormatBtn_Click"
+                                            local:RibbonTooltip.Title="Format Stock Chart" local:RibbonTooltip.KeyTip="NF"
+                                            local:RibbonTooltip.Description="Set up/down bar colors and high-low line style for stock charts."/>
                                 </StackPanel>
                                 <StackPanel>
                                     <Button Content="Explode"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartExplodedSliceBtn_Click"
