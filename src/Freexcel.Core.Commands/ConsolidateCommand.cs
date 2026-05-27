@@ -49,6 +49,10 @@ public sealed class ConsolidateCommand : IWorkbookCommand
     {
         if (_sourceRanges.Count == 0)
             return new CommandOutcome(false, "At least one source range is required.");
+        if (ctx.Workbook.GetSheet(_destination.Sheet) is null)
+            return new CommandOutcome(false, "Consolidate destination must belong to this workbook.");
+        if (_sourceRanges.Any(range => ctx.Workbook.GetSheet(range.Start.Sheet) is null))
+            return new CommandOutcome(false, "Consolidate source ranges must belong to this workbook.");
 
         var rowCount = _sourceRanges[0].RowCount;
         var colCount = _sourceRanges[0].ColCount;
