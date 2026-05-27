@@ -2119,7 +2119,9 @@ public sealed class FormulaEvaluator
         if (argNodes.Count != lambda.Parameters.Count) return ErrorValue.Value;
         var args = new ScalarValue[argNodes.Count];
         for (int i = 0; i < argNodes.Count; i++)
-            args[i] = EvaluateArrayOperand(argNodes[i], context);
+            args[i] = argNodes[i] is OmittedArgumentNode
+                ? OmittedLambdaArgumentValue.Instance
+                : EvaluateArrayOperand(argNodes[i], context);
         return context.InvokeLambda(lambda, args);
     }
 
@@ -2299,3 +2301,7 @@ public sealed record LambdaValue(IReadOnlyList<string> Parameters, FormulaNode B
 
 internal sealed record DirectTextLiteralValue(string Value) : ScalarValue;
 internal sealed record ReferencedScalarValue(ScalarValue Value) : ScalarValue;
+internal sealed record OmittedLambdaArgumentValue : ScalarValue
+{
+    public static readonly OmittedLambdaArgumentValue Instance = new();
+}
