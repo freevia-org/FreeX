@@ -2,6 +2,13 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+trap {
+    if ($proc -and -not $proc.HasExited) {
+        $proc.Kill()
+    }
+
+    throw $_
+}
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -48,6 +55,13 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $outDir = Join-Path $PSScriptRoot "screenshots"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Get-ChildItem $outDir -Filter "*.png" | Remove-Item -Force
+$tabNames = @("Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help")
+$script:capturedFiles = @()
+$captureLimitations = @(
+    "Ribbon tab captures cover the top window band only.",
+    "Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.",
+    "Global input is blocked unless the expected process and window title own the foreground window."
+)
 
 # Get screen DPI to calculate physical pixels for a 300px logical capture
 $dpi   = [Win32c]::GetScreenDpi()
@@ -107,6 +121,30 @@ if ($appEl -eq $null) { Write-Error "UIA element not found"; $proc.Kill(); exit 
 $captureH = [int]([Math]::Ceiling(300 * $scale))
 Write-Host "Capture height: $captureH physical px (300 logical)"
 
+function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $files) {
+    $manifestPath = Join-Path $scriptOutDir "screenshot_manifest.json"
+    [pscustomobject]@{
+        Tool = $toolName
+        OutputDirectory = $scriptOutDir
+        OutputNaming = "ribbon_<RibbonTab>.png"
+        CatalogEvidenceTarget = "docs/UI_TEST_CATALOG.md"
+        WindowBounds = [pscustomobject]@{
+            Left = $windowRect.Left
+            Top = $windowRect.Top
+            Right = $windowRect.Right
+            Bottom = $windowRect.Bottom
+            Width = $windowRect.Right - $windowRect.Left
+            Height = $windowRect.Bottom - $windowRect.Top
+        }
+        CaptureLogicalHeight = $captureLogicalHeight
+        CapturePhysicalHeight = $capturePhysicalHeight
+        Tabs = $tabNames
+        Limitations = $captureLimitations
+        Captures = $files
+    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    Write-Host "Saved $manifestPath"
+}
+
 function Screenshot-Tab($tabName) {
     $nameCond = New-Object System.Windows.Automation.PropertyCondition(
                     [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
@@ -134,18 +172,23 @@ function Screenshot-Tab($tabName) {
     $path = "$outDir\ribbon_$safe.png"
     $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
+    $script:capturedFiles += [pscustomobject]@{
+        Tab = $tabName
+        FileName = Split-Path -Leaf $path
+        Path = $path
+        Width = $w
+        Height = $captureH
+    }
     Write-Host "Saved $path ($w x $captureH)"
 }
 
-Screenshot-Tab "Home"
-Screenshot-Tab "Insert"
-Screenshot-Tab "Draw"
-Screenshot-Tab "Page Layout"
-Screenshot-Tab "Formulas"
-Screenshot-Tab "Data"
-Screenshot-Tab "Review"
-Screenshot-Tab "View"
-Screenshot-Tab "Help"
+foreach ($tabName in $tabNames) {
+    Screenshot-Tab $tabName
+}
+
+$finalRect = New-Object Win32c+RECT
+[Win32c]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
+Write-ScreenshotEvidenceManifest "screenshot_ribbon.ps1" $outDir $finalRect 300 $captureH $script:capturedFiles
 
 $proc.Kill()
 Write-Host "Done."

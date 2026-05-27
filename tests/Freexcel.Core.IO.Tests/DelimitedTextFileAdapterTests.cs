@@ -92,6 +92,37 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsBigEndianUtf16TextExportWithBom()
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        var bytes = Encoding.BigEndianUnicode.GetPreamble()
+            .Concat(Encoding.BigEndianUnicode.GetBytes("Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n"))
+            .ToArray();
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Caf\u00e9"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(42));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void Load_FallsBackToWindows1252ForTextExportsWhenUtf8DecodingFails()
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        using var stream = new MemoryStream([0x43, 0x61, 0x66, 0xE9, 0x09, 0x34, 0x32, 0x0D, 0x0A]);
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Caf\u00e9"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
     public void Load_HonorsExcelSeparatorDirectiveForTextFiles()
     {
         var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
@@ -119,6 +150,22 @@ public sealed class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("Amount"));
         sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Alice"));
         sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(3.5));
+    }
+
+    [Fact]
+    public void Load_KeepsQuotedSeparatorDirectiveAsLiteralText()
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"sep=;\"\r\nName\tAmount\r\nAlice\t3.5\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("sep=;"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new TextValue("Amount"));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 1)).Should().Be(new TextValue("Alice"));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 2)).Should().Be(new NumberValue(3.5));
     }
 
     [Fact]
@@ -554,7 +601,29 @@ public sealed class DelimitedTextFileAdapterTests
         cell.Value.Should().Be(new TextValue("=A1*2"));
     }
 
+    [Fact]
+    public void Save_RoundTripsSeparatorDirectivePrefixTextBeforeBlankCell()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sep="));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(""));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.Value.Should().Be(new TextValue("sep="));
+    }
+
     [Theory]
+    [InlineData("sep=;")]
+    [InlineData("sep=,")]
     [InlineData("0042")]
     [InlineData("$42.00")]
     [InlineData(" ($42.25) ")]

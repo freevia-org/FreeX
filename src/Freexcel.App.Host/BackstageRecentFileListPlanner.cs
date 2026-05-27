@@ -42,6 +42,12 @@ public sealed class RecentFileViewModel
     public string Directory { get; }
     public string LastOpenedText { get; }
     public bool IsPinned { get; }
+    public string OpenAutomationName { get; }
+    public string OpenAutomationHelpText { get; }
+    public string PinAutomationName { get; }
+    public string PinAutomationHelpText { get; }
+    public string RemoveAutomationName { get; }
+    public string RemoveAutomationHelpText { get; }
 
     public RecentFileViewModel(RecentFileEntry entry)
     {
@@ -50,6 +56,14 @@ public sealed class RecentFileViewModel
         Directory = System.IO.Path.GetDirectoryName(entry.Path) ?? "";
         LastOpenedText = FormatDate(entry.LastOpened);
         IsPinned = entry.IsPinned;
+        OpenAutomationName = IsPinned ? $"Open pinned file {FileName}" : $"Open recent file {FileName}";
+        OpenAutomationHelpText = $"Open {Path}";
+        PinAutomationName = IsPinned ? $"Unpin {FileName}" : $"Pin {FileName}";
+        PinAutomationHelpText = IsPinned
+            ? "Remove this workbook from the pinned files list."
+            : "Keep this workbook in the pinned files list.";
+        RemoveAutomationName = $"Remove {FileName} from recent files";
+        RemoveAutomationHelpText = "Remove this workbook from the recent files list without deleting it.";
     }
 
     private static string FormatDate(DateTime dt)

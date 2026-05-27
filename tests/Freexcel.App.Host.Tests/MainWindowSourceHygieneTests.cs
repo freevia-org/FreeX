@@ -191,6 +191,51 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FileNewSaveSaveAsAndClose_RouteThroughDirtyPromptAndOwnedMessages()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var lifecycleSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookLifecycle.cs"));
+        var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+
+        var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
+        newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(\"Save changes before creating a new workbook?\")");
+        newMethod.Should().Contain("CreateNewWorkbook();");
+        newMethod.Should().Contain("HideStartScreen();");
+
+        var saveButtonMethod = ExtractMethodSource(backstageSource, "private async void SaveButton_Click(");
+        saveButtonMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
+        saveButtonMethod.Should().Contain("await SaveWorkbookToTargetAsync(target!)");
+        saveButtonMethod.Should().Contain("await SaveWorkbookWithDialogAsync();");
+
+        var saveAsMethod = ExtractMethodSource(backstageSource, "private async void SaveAsButton_Click(");
+        saveAsMethod.Should().Contain("await SaveWorkbookWithDialogAsync()");
+        saveAsMethod.Should().Contain("HideStartScreen();");
+
+        var saveTargetMethod = ExtractMethodSource(backstageSource, "private async Task<bool> SaveWorkbookToTargetAsync(");
+        saveTargetMethod.Should().Contain("ShowSaveProgress(\"Saving workbook\", \"Saving file (preparing)\", 1);");
+        saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
+        saveTargetMethod.Should().Contain("ShowOwnedMessage($\"Failed to save file:");
+        saveTargetMethod.Should().Contain("finally");
+        saveTargetMethod.Should().Contain("HideSaveProgress();");
+        saveTargetMethod.Should().NotContain("MessageBox.Show(");
+
+        var confirmMethod = ExtractMethodSource(lifecycleSource, "private async Task<bool> ConfirmSaveBeforeDestructiveActionAsync(");
+        confirmMethod.Should().Contain("ShowOwnedMessage(");
+        confirmMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
+        confirmMethod.Should().Contain("return await SaveWorkbookWithDialogAsync();");
+
+        var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
+        closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(\"Save changes before closing this workbook?\")");
+        closingMethod.Should().Contain("_suppressClosePrompt = true;");
+        closingMethod.Should().Contain("Close();");
+
+        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewWorkbook, async (_, _) => await RequestNewWorkbookAsync());");
+        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveWorkbook, SaveButton_Click);");
+        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveAs, async (_, _) => await SaveWorkbookWithDialogAsync());");
+        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CloseWorkbook, (_, _) => Close());");
+    }
+
+    [Fact]
     public void BackstageOpen_FocusesHomeNavigationForKeyboardUsers()
     {
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
@@ -584,6 +629,20 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void HelpExternalLinks_RouteThroughGuardedOwnedMessageHelper()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("private void OpenExternalHelpLink(string url, string title)");
+        source.Should().Contain("UseShellExecute = true");
+        source.Should().Contain("catch (Exception ex)");
+        source.Should().Contain("ShowOwnedMessage(");
+        source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, \"Help Online\")");
+        source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, \"Check for Updates\")");
+        source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), \"Feedback\")");
+    }
+
+    [Fact]
     public void ShareWorkbookWorkflow_RoutesUnsavedAndSavedFilesThroughPlannerAndShareService()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -600,6 +659,33 @@ public sealed class MainWindowSourceHygieneTests
 
         reviewSource.Should().Contain("private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();");
         backstageSource.Should().Contain("await ShareWorkbookAsync();");
+    }
+
+    [Fact]
+    public void BackstageOpenProgressAndUnsupportedWarnings_UseOwnedDialogsAndRecoverOverlay()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
+        var saveWarningMethod = ExtractMethodSource(backstageSource, "private bool ConfirmUnsupportedXlsxFeatureSave()");
+        var openWarningMethod = ExtractMethodSource(backstageSource, "private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()");
+
+        openMethod.Should().Contain("ShowOpenProgress(\"Opening workbook\", \"Loading file (preparing)\", 1);");
+        openMethod.Should().Contain("ShowOpenProgress(update.Title, update.Detail, update.Percent)");
+        openMethod.Should().Contain("ShowOpenProgress(\"Opening workbook\", \"Loading file (done)\", 100);");
+        openMethod.Should().Contain("ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();");
+        openMethod.Should().Contain("ShowOwnedMessage($\"Failed to open file:");
+        openMethod.Should().Contain("finally");
+        openMethod.Should().Contain("HideOpenProgress();");
+        openMethod.Should().Contain("_isOpeningFile = false;");
+        openMethod.Should().NotContain("MessageBox.Show(");
+
+        saveWarningMethod.Should().Contain("DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport)");
+        saveWarningMethod.Should().Contain("ShowOwnedMessage(");
+        saveWarningMethod.Should().NotContain("MessageBox.Show(");
+
+        openWarningMethod.Should().Contain("DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport)");
+        openWarningMethod.Should().Contain("ShowOwnedMessage(");
+        openWarningMethod.Should().NotContain("MessageBox.Show(");
     }
 
     [Fact]
@@ -1155,6 +1241,22 @@ public sealed class MainWindowSourceHygieneTests
         lifecycleSource.Should().Contain("UpdateTitleBar();");
         backstageSource.Should().Contain("_workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);");
         backstageSource.Should().Contain("MarkWorkbookSaved();");
+    }
+
+    [Fact]
+    public void OnlineTemplatesExcludedCommand_UsesOwnedMessageRoute()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var methodStart = backstageSource.IndexOf("private void SsMoreTemplatesBtn_Click", StringComparison.Ordinal);
+        var nextMethodStart = backstageSource.IndexOf("private void SsOptionsBtn_Click", methodStart, StringComparison.Ordinal);
+
+        methodStart.Should().BeGreaterThanOrEqualTo(0);
+        nextMethodStart.Should().BeGreaterThan(methodStart);
+
+        var method = backstageSource[methodStart..nextMethodStart];
+        method.Should().Contain("DeferredCommandMessages.OnlineTemplatesExcluded()");
+        method.Should().Contain("ShowOwnedMessage(");
+        method.Should().NotContain("MessageBox.Show(");
     }
 
     [Fact]
@@ -2271,6 +2373,24 @@ public sealed class MainWindowSourceHygieneTests
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
         xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
         xaml.Should().Contain("local:RibbonTooltip.Description=\"Open the print preview and native print dialog for the rendered worksheet.\"");
+    }
+
+    [Fact]
+    public void BackstagePrint_OpensPreviewWithSettingsAndNativePrintPath()
+    {
+        var printSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
+        var previewSource =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Layout.cs"));
+
+        printSource.Should().Contain("var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);");
+        printSource.Should().Contain("PrintSettingsPlanner.Build(sheet)");
+        printSource.Should().Contain("new PrintPreviewDialog(");
+        printSource.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
+        previewSource.Should().Contain("Content = \"_Print...\"");
+        previewSource.Should().Contain("ShowNativePrintDialog");
+        previewSource.Should().Contain("PrintDocument(paginator");
     }
 
     [Fact]

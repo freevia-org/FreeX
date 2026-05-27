@@ -284,6 +284,59 @@ public static partial class BuiltInFunctions
     private static ScalarValue Oct2Hex(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         BaseToBase(args, 8, 10, 536870912L, 1073741824L, 16, upper: true);
 
+    private static ScalarValue BaseFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var minLength = args.Count > 2 ? args[2] : new BlankValue();
+        if (minLength is ErrorValue e2) return e2;
+        return MapTernaryTextArgs(args[0], args[1], minLength, BaseScalar);
+    }
+
+    private static ScalarValue BaseScalar(ScalarValue numberValue, ScalarValue radixValue, ScalarValue minLengthValue)
+    {
+        if (numberValue is ErrorValue e0) return e0;
+        if (radixValue is ErrorValue e1) return e1;
+        if (minLengthValue is ErrorValue e2) return e2;
+
+        if (!TryGetEngineeringInteger(numberValue, out var number)) return ErrorValue.Num;
+        if (!TryGetEngineeringInteger(radixValue, out var radix)) return ErrorValue.Num;
+        if (number < 0 || number >= TwoToThe53 || radix is < 2 or > 36) return ErrorValue.Num;
+
+        var converted = FormatUnsignedBase(number, (int)radix);
+        if (minLengthValue is BlankValue) return new TextValue(converted);
+        if (!TryGetEngineeringInteger(minLengthValue, out var minLength) || minLength < 0 || minLength > 255) return ErrorValue.Num;
+        return new TextValue(converted.PadLeft((int)Math.Max(minLength, converted.Length), '0'));
+    }
+
+    private static ScalarValue DecimalFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], DecimalScalar);
+    }
+
+    private static ScalarValue DecimalScalar(ScalarValue textValue, ScalarValue radixValue)
+    {
+        if (textValue is ErrorValue e0) return e0;
+        if (radixValue is ErrorValue e1) return e1;
+        if (!TryGetEngineeringInteger(radixValue, out var radix) || radix is < 2 or > 36) return ErrorValue.Num;
+
+        var text = ToText(textValue).Trim();
+        if (text.Length == 0 || text.Length > 255) return ErrorValue.Num;
+
+        double result = 0;
+        foreach (var ch in text)
+        {
+            var digit = Base36DigitValue(ch);
+            if (digit < 0 || digit >= radix) return ErrorValue.Num;
+            result = result * radix + digit;
+            if (result >= TwoToThe53) return ErrorValue.Num;
+        }
+
+        return new NumberValue(result);
+    }
+
     private static ScalarValue BaseToDecimal(ScalarValue arg, int fromBase, int maxDigits, long signThreshold, long modulus)
     {
         if (arg is ErrorValue error) return error;
@@ -377,6 +430,33 @@ public static partial class BuiltInFunctions
         if (text.Length == maxDigits && value >= signThreshold) value -= modulus;
         return true;
     }
+
+    private const long TwoToThe53 = 9007199254740992L;
+
+    private static string FormatUnsignedBase(long value, int radix)
+    {
+        const string digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        if (value == 0) return "0";
+
+        Span<char> buffer = stackalloc char[64];
+        var index = buffer.Length;
+        var current = value;
+        while (current > 0)
+        {
+            buffer[--index] = digits[(int)(current % radix)];
+            current /= radix;
+        }
+
+        return new string(buffer[index..]);
+    }
+
+    private static int Base36DigitValue(char ch) => ch switch
+    {
+        >= '0' and <= '9' => ch - '0',
+        >= 'A' and <= 'Z' => ch - 'A' + 10,
+        >= 'a' and <= 'z' => ch - 'a' + 10,
+        _ => -1
+    };
 
     private static long NegativeModulusForBase(int toBase) => toBase switch
     {

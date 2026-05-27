@@ -299,6 +299,20 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_KeepsQuotedSeparatorDirectiveAsLiteralText()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"sep=;\"\r\nName,Amount\r\nAlice,3.5\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("sep=;"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new TextValue("Amount"));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 1)).Should().Be(new TextValue("Alice"));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 2)).Should().Be(new NumberValue(3.5));
+    }
+
+    [Fact]
     public void Load_ImportsExcelStyleFormulaFieldsAsFormulas()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2,=A1*2\r\n"));
@@ -542,6 +556,26 @@ public sealed class CsvFileAdapterTests
         cell.Value.Should().Be(new TextValue("=A1*2"));
     }
 
+    [Fact]
+    public void Save_RoundTripsSeparatorDirectivePrefixTextBeforeBlankCell()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sep="));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(""));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.Value.Should().Be(new TextValue("sep="));
+    }
+
     [Theory]
     [InlineData("0042")]
     [InlineData("1E3")]
@@ -663,6 +697,8 @@ public sealed class CsvFileAdapterTests
     }
 
     [Theory]
+    [InlineData("sep=;")]
+    [InlineData("sep=\t")]
     [InlineData("#N/A")]
     [InlineData("#DIV/0!")]
     [InlineData("#GETTING_DATA")]

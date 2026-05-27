@@ -81,6 +81,26 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderHeaders_AvoidsPerHeaderLinqSelectionScans()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.Headers.cs"));
+        var renderHeaders = source[
+            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("internal static string FormatColumnHeader", StringComparison.Ordinal)];
+        var renderFreezeDivider = source[
+            source.IndexOf("private void RenderFreezeDivider(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)];
+
+        renderHeaders.Should().Contain("IsColumnHeaderSelected(col.Col, selectedRanges, selRange)");
+        renderHeaders.Should().Contain("IsRowHeaderSelected(row.Row, selectedRanges, selRange)");
+        renderHeaders.Should().Contain("foreach (var range in selectedRanges)");
+        renderHeaders.Should().NotContain(".Any(");
+        renderFreezeDivider.Should().Contain("FindRowMetric(Viewport.RowMetrics, fp.Rows)");
+        renderFreezeDivider.Should().Contain("FindColMetric(Viewport.ColMetrics, fp.Cols)");
+        renderFreezeDivider.Should().NotContain("FirstOrDefault");
+    }
+
+    [Fact]
     public void FormatColumnHeader_UsesA1NamesOrR1C1Numbers()
     {
         var formatColumnHeader = typeof(GridView).GetMethod(
@@ -265,11 +285,34 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("BuildRowLookup(bottomLeftRows)");
         calculateLayouts.Should().Contain("BuildColumnLookup(leftColumns)");
         calculateLayouts.Should().Contain("BuildColumnLookup(topRightColumns)");
+        calculateLayouts.Should().Contain("ResolveSplitPaneRegion(isTopPane, isLeftPane)");
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
         calculateLayouts.Should().Contain("occupied.Add((cell.Row, cell.Col))");
         calculateLayouts.Should().NotContain(".ToDictionary(");
         calculateLayouts.Should().NotContain(".Where(");
         calculateLayouts.Should().NotContain(".Select(");
+    }
+
+    [Fact]
+    public void RenderSplitPaneCells_UsesPrecomputedLayoutRegionForClipping()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var splitPanes = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.SplitPanes.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private GridRange? FindMerge", StringComparison.Ordinal)];
+        var setup = renderSplitPaneCells[..renderSplitPaneCells.IndexOf("foreach (var layout in CalculateSplitPaneCellLayouts", StringComparison.Ordinal)];
+        var loop = renderSplitPaneCells[
+            renderSplitPaneCells.IndexOf("foreach (var layout in CalculateSplitPaneCellLayouts", StringComparison.Ordinal)..];
+
+        setup.Should().Contain("var topLeftClip = FrozenClipGeometry(clips.TopLeft)");
+        setup.Should().Contain("var bottomRightClip = FrozenClipGeometry(clips.BottomRight)");
+        loop.Should().Contain("GetSplitPaneClipGeometryForRegion(");
+        loop.Should().Contain("layout.Region");
+        loop.Should().NotContain("new RectangleGeometry(clipRect)");
+        loop.Should().NotContain("GetSplitPaneClipRectForCell");
+        rendering.Should().Contain("geometry.Freeze();");
+        splitPanes.Should().Contain("public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
