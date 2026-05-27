@@ -333,6 +333,14 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_FilterValueChecklistExposesAutomationName()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("AutomationProperties.SetName(_checklistBox, \"Filter values\");");
+    }
+
+    [Fact]
     public void DialogOpenedFromKeyboard_FocusesFirstSortCommand()
     {
         var source = ReadAutoFilterDialogSources();
