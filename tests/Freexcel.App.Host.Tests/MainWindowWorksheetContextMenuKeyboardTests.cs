@@ -201,6 +201,25 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         });
     }
 
+    [Fact]
+    public void ClearAutoFilter_RemovesFilterHiddenRowsAfterFiltering()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SeedRegionFilterData();
+            harness.SelectRegionFilterRange();
+            harness.ApplyAllowedValuesFilter("West");
+
+            harness.FilterHiddenRows.Should().Contain(3);
+
+            harness.ClearAutoFilter();
+
+            harness.FilterHiddenRows.Should().BeEmpty();
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -208,6 +227,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         private readonly MethodInfo _getWorksheetContextMenuTargetKind;
         private readonly MethodInfo _applyAutoFilterDialogResult;
         private readonly MethodInfo _reapplyAutoFilter;
+        private readonly MethodInfo _clearFilterButtonClick;
         private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
 
@@ -226,6 +246,9 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             _reapplyAutoFilter = typeof(MainWindow)
                 .GetMethod("ReapplyAutoFilter", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ReapplyAutoFilter");
+            _clearFilterButtonClick = typeof(MainWindow)
+                .GetMethod("ClearFilterButton_Click", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ClearFilterButton_Click");
             _workbookField = typeof(MainWindow)
                 .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
@@ -348,6 +371,12 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         public void ReapplyAutoFilter()
         {
             _reapplyAutoFilter.Invoke(_window, []);
+            PumpDispatcher();
+        }
+
+        public void ClearAutoFilter()
+        {
+            _clearFilterButtonClick.Invoke(_window, [_window, new RoutedEventArgs()]);
             PumpDispatcher();
         }
 
