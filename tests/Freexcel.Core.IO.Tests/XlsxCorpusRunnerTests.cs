@@ -4349,6 +4349,8 @@ public class XlsxCorpusRunnerTests
             !tags.Contains("formatting") &&
             !tags.Contains("hyperlinks") &&
             !tags.Contains("merged-cells") &&
+            !tags.Contains("inline-strings") &&
+            !tags.Contains("cell-types") &&
             !tags.Contains("unsupported-sheet-types"))
             return;
 
@@ -4368,6 +4370,21 @@ public class XlsxCorpusRunnerTests
             if (tags.Contains("merged-cells"))
                 PublicWorksheetElements(archive, "mergeCell").Should().NotBeEmpty(row.Id);
 
+            if (tags.Contains("inline-strings"))
+                PublicWorksheetCells(archive)
+                    .Any(cell =>
+                        string.Equals(cell.Attribute("t")?.Value, "inlineStr", StringComparison.Ordinal) ||
+                        cell.Element(WorksheetNs + "is") is not null)
+                    .Should()
+                    .BeTrue(row.Id);
+
+            if (tags.Contains("cell-types"))
+                PublicWorksheetCells(archive)
+                    .Select(cell => cell.Attribute("t")?.Value ?? "n")
+                    .Distinct(StringComparer.Ordinal)
+                    .Should()
+                    .HaveCountGreaterThanOrEqualTo(3, row.Id);
+
             if (tags.Contains("unsupported-sheet-types"))
                 archive.Entries.Should().Contain(entry => entry.FullName.StartsWith("xl/chartsheets/", StringComparison.Ordinal), row.Id);
         }
@@ -4380,14 +4397,24 @@ public class XlsxCorpusRunnerTests
 
     private static IReadOnlyList<XElement> PublicWorksheetElements(ZipArchive archive, string localName)
     {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return PublicWorksheetXmlDocuments(archive)
+            .SelectMany(document => document.Descendants(WorksheetNs + localName))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<XElement> PublicWorksheetCells(ZipArchive archive) =>
+        PublicWorksheetElements(archive, "c");
+
+    private static IReadOnlyList<XDocument> PublicWorksheetXmlDocuments(ZipArchive archive)
+    {
         return archive.Entries
             .Where(entry => entry.FullName.StartsWith("xl/worksheets/", StringComparison.Ordinal) &&
                             entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
             .Select(LoadPackageXml)
-            .SelectMany(document => document.Descendants(worksheetNs + localName))
             .ToArray();
     }
+
+    private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
     private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
         new(
