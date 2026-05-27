@@ -144,7 +144,9 @@ public static partial class BuiltInFunctions
         ["ISNUMBER"]    = (Isnumber, 1, 1),
         ["ISTEXT"]      = (Istext, 1, 1),
         ["ISERROR"]     = (Iserror, 1, 1),
+        ["ISERR"]       = (Iserr, 1, 1),
         ["ISNA"]        = (Isna, 1, 1),
+        ["ISNONTEXT"]   = (Isnontext, 1, 1),
         ["ISLOGICAL"]   = (Islogical, 1, 1),
 
         // Reference helpers
@@ -228,6 +230,8 @@ public static partial class BuiltInFunctions
         ["YEARFRAC"]     = (Yearfrac, 2, 3),
 
         // ── Phase 4a: Statistical ────────────────────────────────────────────
+        ["FISHER"]           = (Fisher, 1, 1),
+        ["FISHERINV"]        = (FisherInv, 1, 1),
         ["VAR"]              = (VarS, 1, 255),
         ["VAR.S"]            = (VarS, 1, 255),
         ["VARA"]             = (VarA, 1, 255),

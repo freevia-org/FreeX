@@ -596,6 +596,20 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_PreservesQuotedEmptyFieldBetweenPopulatedFields()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("left\t\"\"\tright\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("left"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue(""));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new TextValue("right"));
+    }
+
+    [Fact]
     public void Save_WritesTabDelimitedRowsAndQuotesTabs()
     {
         var workbook = new Workbook("Book1");

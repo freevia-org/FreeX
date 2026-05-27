@@ -61,6 +61,36 @@ public static partial class BuiltInFunctions
         return (ToNumber(value), null);
     }
 
+    private static ScalarValue Fisher(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, FisherScalar);
+        return FisherScalar(args[0]);
+    }
+
+    private static ScalarValue FisherScalar(ScalarValue value)
+    {
+        double x = ToNumber(value);
+        if (!double.IsFinite(x)) return ErrorValue.Num;
+        if (x <= -1 || x >= 1) return ErrorValue.Num;
+        return NumberResult(0.5 * Math.Log((1 + x) / (1 - x)));
+    }
+
+    private static ScalarValue FisherInv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, FisherInvScalar);
+        return FisherInvScalar(args[0]);
+    }
+
+    private static ScalarValue FisherInvScalar(ScalarValue value)
+    {
+        double y = ToNumber(value);
+        if (!double.IsFinite(y)) return ErrorValue.Num;
+        double exp = Math.Exp(2 * y);
+        return NumberResult((exp - 1) / (exp + 1));
+    }
+
     private static ScalarValue Average(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         double total = 0;

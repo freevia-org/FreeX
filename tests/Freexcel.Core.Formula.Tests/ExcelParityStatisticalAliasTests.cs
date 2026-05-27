@@ -15,6 +15,38 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void FisherAndFisherInv_ReturnDocumentedTransformResults()
+    {
+        Number("=FISHER(0.75)", Values()).Should().BeApproximately(0.9729550745276566, 1e-12);
+        Number("=FISHERINV(0.972955)", Values()).Should().BeApproximately(0.75, 1e-7);
+        Number("=FISHERINV(FISHER(0.25))", Values()).Should().BeApproximately(0.25, 1e-12);
+    }
+
+    [Fact]
+    public void FisherAndFisherInv_RangesSpillElementwise()
+    {
+        var sheet = Values(0, 0.75);
+
+        var fisher = _eval.Evaluate("=FISHER(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        fisher.At(1, 1).Should().Be(new NumberValue(0));
+        ((NumberValue)fisher.At(2, 1)).Value.Should().BeApproximately(0.9729550745276566, 1e-12);
+
+        var inverse = _eval.Evaluate("=FISHERINV(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        inverse.At(1, 1).Should().Be(new NumberValue(0));
+        ((NumberValue)inverse.At(2, 1)).Value.Should().BeApproximately(0.6351489523872873, 1e-12);
+    }
+
+    [Theory]
+    [InlineData("=FISHER(-1)")]
+    [InlineData("=FISHER(1)")]
+    [InlineData("=FISHER(\"1E309\")")]
+    [InlineData("=FISHERINV(\"1E309\")")]
+    public void FisherAndFisherInv_ReturnNumForExcelDomainErrors(string formula)
+    {
+        _eval.Evaluate(formula, Values()).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void GammalnPrecise_MatchesGammalnForPositiveInputs()
     {
         Number("=GAMMALN.PRECISE(4)", Values()).Should().BeApproximately(Math.Log(6), 1e-12);
