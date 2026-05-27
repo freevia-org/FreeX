@@ -413,6 +413,34 @@ public static partial class BuiltInFunctions
         return NumberResult(NormSInv(prob));
     }
 
+    private static ScalarValue Phi(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, PhiScalar);
+        return PhiScalar(args[0]);
+    }
+
+    private static ScalarValue PhiScalar(ScalarValue xValue)
+    {
+        double x = ToNumber(xValue);
+        if (!double.IsFinite(x)) return ErrorValue.Num;
+        return NumberResult(NormSPdf(x));
+    }
+
+    private static ScalarValue Gauss(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, GaussScalar);
+        return GaussScalar(args[0]);
+    }
+
+    private static ScalarValue GaussScalar(ScalarValue zValue)
+    {
+        double z = ToNumber(zValue);
+        if (!double.IsFinite(z)) return ErrorValue.Num;
+        return NumberResult(NormSCdf(z) - 0.5);
+    }
+
     private static ScalarValue Standardize(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
