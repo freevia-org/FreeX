@@ -4813,6 +4813,20 @@ public class FunctionLibraryTests
         AssertColumn(_eval.Evaluate("=PERCENTILE.EXC(A1:A4,B1:B2)", sheet), new NumberValue(2), new NumberValue(3));
     }
 
+    [Fact]
+    public void ExponDist_LeadingOneCellLambdaRange_BroadcastsAcrossXArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (1, 2, new NumberValue(0.5)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=EXPON.DIST(A1:A2,B1:B1,FALSE)", sheet),
+            ((NumberValue)_eval.Evaluate("=EXPON.DIST(A1,B1,FALSE)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=EXPON.DIST(A2,B1,FALSE)", sheet)).Value);
+    }
+
     [Fact] public void Quartile_Q1_Returns25th()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));
