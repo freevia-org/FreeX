@@ -136,6 +136,12 @@ public partial class GridView
             case GridQuickAnalysisPreviewVisualKind.PieChart:
                 DrawQuickAnalysisPieChartPreview(dc, rect.Value);
                 break;
+            case GridQuickAnalysisPreviewVisualKind.AreaChart:
+                DrawQuickAnalysisAreaChartPreview(dc, rect.Value);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.ScatterChart:
+                DrawQuickAnalysisScatterChartPreview(dc, rect.Value);
+                break;
         }
     }
 
@@ -330,6 +336,65 @@ public partial class GridView
         wedge.Freeze();
         dc.DrawGeometry(QuickAnalysisPieChartAccentBrush, null, wedge);
         dc.DrawEllipse(null, QuickAnalysisColumnChartAxisPen, center, radius, radius);
+    }
+
+    private static void DrawQuickAnalysisAreaChartPreview(DrawingContext dc, Rect previewRect)
+    {
+        var chartRect = new Rect(
+            previewRect.Left + Math.Min(12, previewRect.Width * 0.12),
+            previewRect.Top + Math.Min(10, previewRect.Height * 0.18),
+            Math.Max(0, previewRect.Width * 0.72),
+            Math.Max(0, previewRect.Height * 0.58));
+        if (chartRect.Width <= 0 || chartRect.Height <= 0)
+            return;
+
+        var baseline = chartRect.Bottom;
+        dc.DrawLine(QuickAnalysisColumnChartAxisPen, new Point(chartRect.Left, baseline), new Point(chartRect.Right, baseline));
+
+        var points = new[]
+        {
+            new Point(chartRect.Left, chartRect.Top + chartRect.Height * 0.78),
+            new Point(chartRect.Left + chartRect.Width * 0.28, chartRect.Top + chartRect.Height * 0.36),
+            new Point(chartRect.Left + chartRect.Width * 0.62, chartRect.Top + chartRect.Height * 0.52),
+            new Point(chartRect.Right, chartRect.Top + chartRect.Height * 0.2)
+        };
+
+        var area = new StreamGeometry();
+        using (var context = area.Open())
+        {
+            context.BeginFigure(new Point(points[0].X, baseline), isFilled: true, isClosed: true);
+            foreach (var point in points)
+                context.LineTo(point, isStroked: true, isSmoothJoin: true);
+            context.LineTo(new Point(points[^1].X, baseline), isStroked: true, isSmoothJoin: true);
+        }
+
+        area.Freeze();
+        dc.DrawGeometry(QuickAnalysisAreaChartPreviewBrush, QuickAnalysisPreviewPen, area);
+    }
+
+    private static void DrawQuickAnalysisScatterChartPreview(DrawingContext dc, Rect previewRect)
+    {
+        var chartRect = new Rect(
+            previewRect.Left + Math.Min(12, previewRect.Width * 0.12),
+            previewRect.Top + Math.Min(10, previewRect.Height * 0.18),
+            Math.Max(0, previewRect.Width * 0.72),
+            Math.Max(0, previewRect.Height * 0.58));
+        if (chartRect.Width <= 0 || chartRect.Height <= 0)
+            return;
+
+        dc.DrawLine(QuickAnalysisColumnChartAxisPen, new Point(chartRect.Left, chartRect.Bottom), new Point(chartRect.Right, chartRect.Bottom));
+        dc.DrawLine(QuickAnalysisColumnChartAxisPen, new Point(chartRect.Left, chartRect.Top), new Point(chartRect.Left, chartRect.Bottom));
+
+        var points = new[]
+        {
+            new Point(chartRect.Left + chartRect.Width * 0.18, chartRect.Top + chartRect.Height * 0.72),
+            new Point(chartRect.Left + chartRect.Width * 0.35, chartRect.Top + chartRect.Height * 0.42),
+            new Point(chartRect.Left + chartRect.Width * 0.55, chartRect.Top + chartRect.Height * 0.62),
+            new Point(chartRect.Left + chartRect.Width * 0.78, chartRect.Top + chartRect.Height * 0.28)
+        };
+
+        foreach (var point in points)
+            dc.DrawEllipse(QuickAnalysisScatterChartPreviewBrush, null, point, 3, 3);
     }
 
     private void RenderSelection(DrawingContext dc)
