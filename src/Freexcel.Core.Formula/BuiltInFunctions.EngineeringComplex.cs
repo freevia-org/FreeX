@@ -6,6 +6,42 @@ namespace Freexcel.Core.Formula;
 
 public static partial class BuiltInFunctions
 {
+    private static ScalarValue Delta(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var second = args.Count > 1 ? args[1] : new NumberValue(0);
+        if (args[0] is ErrorValue e0) return e0;
+        if (second is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], second, DeltaScalar);
+    }
+
+    private static ScalarValue DeltaScalar(ScalarValue left, ScalarValue right)
+    {
+        if (left is ErrorValue e0) return e0;
+        if (right is ErrorValue e1) return e1;
+        var leftNumber = ToNumber(left);
+        var rightNumber = ToNumber(right);
+        if (!double.IsFinite(leftNumber) || !double.IsFinite(rightNumber)) return ErrorValue.Num;
+        return new NumberValue(leftNumber == rightNumber ? 1 : 0);
+    }
+
+    private static ScalarValue Gestep(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var step = args.Count > 1 ? args[1] : new NumberValue(0);
+        if (args[0] is ErrorValue e0) return e0;
+        if (step is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], step, GestepScalar);
+    }
+
+    private static ScalarValue GestepScalar(ScalarValue value, ScalarValue step)
+    {
+        if (value is ErrorValue e0) return e0;
+        if (step is ErrorValue e1) return e1;
+        var valueNumber = ToNumber(value);
+        var stepNumber = ToNumber(step);
+        if (!double.IsFinite(valueNumber) || !double.IsFinite(stepNumber)) return ErrorValue.Num;
+        return new NumberValue(valueNumber >= stepNumber ? 1 : 0);
+    }
+
     private static ScalarValue ComplexFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
