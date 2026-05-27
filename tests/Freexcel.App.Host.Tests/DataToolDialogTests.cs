@@ -1787,6 +1787,15 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void DataTableDialog_CellInputEditorsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_rowInputBox, \"Row input cell\");");
+        source.Should().Contain("AutomationProperties.SetName(_columnInputBox, \"Column input cell\");");
+    }
+
+    [Fact]
     public void DataTableDialogOpenedFromKeyboard_FocusesRowInputCell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
