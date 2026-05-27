@@ -109,4 +109,30 @@ public static partial class BuiltInFunctions
         double dcf = DayCountFraction(sd, sett, basis);
         return NumberResult(par * rate * dcf);
     }
+
+    private static ScalarValue Accrintm(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (FirstError(args) is { } e) return e;
+        var parArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        var basisArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], parArg, basisArg], values => AccrintmScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue AccrintmScalar(ScalarValue issueValue, ScalarValue settlementValue, ScalarValue rateValue, ScalarValue parValue, ScalarValue basisValue)
+    {
+        double issue = ToNumber(issueValue);
+        double settlement = ToNumber(settlementValue);
+        double rate = ToNumber(rateValue);
+        double par = parValue is BlankValue ? 1000.0 : ToNumber(parValue);
+        if (!double.IsFinite(issue) || !double.IsFinite(settlement) ||
+            !double.IsFinite(rate) || !double.IsFinite(par))
+            return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        if (rate <= 0 || par <= 0) return ErrorValue.Num;
+        if (!TryGetFinancialDate(issue, out DateTime issueDate) ||
+            !TryGetFinancialDate(settlement, out DateTime settlementDate)) return ErrorValue.Num;
+        if (issueDate >= settlementDate) return ErrorValue.Num;
+        double dcf = DayCountFraction(issueDate, settlementDate, basis);
+        return NumberResult(par * rate * dcf);
+    }
 }
