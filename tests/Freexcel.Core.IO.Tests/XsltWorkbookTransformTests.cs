@@ -234,6 +234,19 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_TransformFailure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = TerminatingMessageStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetInclude_ReportsDisabledExternalAccess()
     {
         using var source = StreamFromString("<rows />");
@@ -303,6 +316,15 @@ public sealed class XsltWorkbookTransformTests
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
                 <xsl:copy-of select="."/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+    private static MemoryStream TerminatingMessageStylesheet() =>
+        StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:message terminate="yes">stop</xsl:message>
               </xsl:template>
             </xsl:stylesheet>
             """);
