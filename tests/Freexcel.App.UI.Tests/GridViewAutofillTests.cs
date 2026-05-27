@@ -41,6 +41,23 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void ConstrainAutofillTarget_SupportsDraggingAboveOrLeftOfSource()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(
+            new CellAddress(sheet, 4, 4),
+            new CellAddress(sheet, 6, 6));
+
+        GridView.ConstrainAutofillTarget(source, new CellAddress(sheet, 1, 5))
+            .Should()
+            .Be(new CellAddress(sheet, 1, 6));
+
+        GridView.ConstrainAutofillTarget(source, new CellAddress(sheet, 5, 1))
+            .Should()
+            .Be(new CellAddress(sheet, 6, 1));
+    }
+
+    [Fact]
     public void CalculateFillRange_ReturnsVerticalExtensionBelowSource()
     {
         var sheet = SheetId.New();
@@ -68,6 +85,36 @@ public sealed class GridViewAutofillTests
             .Be(new GridRange(
                 new CellAddress(sheet, 2, 5),
                 new CellAddress(sheet, 3, 8)));
+    }
+
+    [Fact]
+    public void CalculateFillRange_ReturnsVerticalExtensionAboveSource()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(
+            new CellAddress(sheet, 4, 2),
+            new CellAddress(sheet, 6, 4));
+
+        GridAutofillPlanner.CalculateFillRange(source, new CellAddress(sheet, 2, 4))
+            .Should()
+            .Be(new GridRange(
+                new CellAddress(sheet, 2, 2),
+                new CellAddress(sheet, 3, 4)));
+    }
+
+    [Fact]
+    public void CalculateFillRange_ReturnsHorizontalExtensionLeftOfSource()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(
+            new CellAddress(sheet, 2, 4),
+            new CellAddress(sheet, 3, 6));
+
+        GridAutofillPlanner.CalculateFillRange(source, new CellAddress(sheet, 3, 2))
+            .Should()
+            .Be(new GridRange(
+                new CellAddress(sheet, 2, 2),
+                new CellAddress(sheet, 3, 3)));
     }
 
     [Fact]
@@ -284,6 +331,18 @@ public sealed class GridViewAutofillTests
                 columnHeaderHeight: 18)
             .Should()
             .BeFalse();
+    }
+
+    [Fact]
+    public void GridViewMouseMove_UsesCrossCursorOverAutofillHandle()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var cursorAssignment = source[
+            source.IndexOf("Cursor = target == ResizeTarget.Column", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
+
+        cursorAssignment.Should().Contain("IsOnAutofillHandle(pos) ? Cursors.Cross");
     }
 
     private static ViewportModel CreateViewport() =>

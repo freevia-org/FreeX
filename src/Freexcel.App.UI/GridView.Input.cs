@@ -122,6 +122,7 @@ public partial class GridView
                    : splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Vertical ? Cursors.SizeNS
                    : marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
                    : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
+                   : IsOnAutofillHandle(pos) ? Cursors.Cross
                    : null;
         }
     }
