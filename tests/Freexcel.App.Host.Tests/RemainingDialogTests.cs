@@ -502,6 +502,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void WorkbookStatisticsDialog_StatisticsSummaryExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(statisticsBlock, \"Workbook statistics\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(statisticsBlock, \"Summarizes sheet, cell, formula, comment, and object counts for the workbook.\");");
+    }
+
+    [Fact]
     public void AccessibilityCheckerDialog_CreateMessage_ReportsCleanAndIssueStates()
     {
         AccessibilityCheckerDialog.CreateMessage([])
@@ -552,6 +561,18 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
         source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_ResultControlsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_messageBox, \"Accessibility checker result\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_messageBox, \"Summarizes the workbook accessibility check when no issues are found.\");");
+        source.Should().Contain("AutomationProperties.SetName(_issueList, \"Accessibility issues\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_issueList, \"Select an accessibility issue and choose Go To to navigate to its workbook location.\");");
+        source.Should().Contain("AutomationProperties.SetName(_goToButton, \"Go to selected accessibility issue\");");
     }
 
     [Fact]
