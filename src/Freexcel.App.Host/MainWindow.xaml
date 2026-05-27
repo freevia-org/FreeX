@@ -3146,14 +3146,22 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Vertical">
-                                    <Button Content="Help Online" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HelpOnlineBtn_Click"
-                                            local:RibbonTooltip.Title="Help Online"
-                                            local:RibbonTooltip.KeyTip="HO"
-                                            local:RibbonTooltip.Description="Open the Freexcel help documentation in a web browser."/>
-                                    <Button Content="Feedback" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
-                                            local:RibbonTooltip.Title="Feedback"
-                                            local:RibbonTooltip.KeyTip="FE"
-                                            local:RibbonTooltip.Description="Open a prefilled GitHub issue with safe app diagnostics."/>
+                                    <local:AutomationInvokeButton x:Name="HelpOnlineButton"
+                                                                  Content="Help Online" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HelpOnlineBtn_Click"
+                                                                  AutomationProperties.Name="Help Online"
+                                                                  AutomationProperties.AutomationId="HelpOnlineButton"
+                                                                  AutomationProperties.HelpText="Open the Freexcel help documentation in a web browser."
+                                                                  local:RibbonTooltip.Title="Help Online"
+                                                                  local:RibbonTooltip.KeyTip="HO"
+                                                                  local:RibbonTooltip.Description="Open the Freexcel help documentation in a web browser."/>
+                                    <local:AutomationInvokeButton x:Name="HelpFeedbackButton"
+                                                                  Content="Feedback" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
+                                                                  AutomationProperties.Name="Feedback"
+                                                                  AutomationProperties.AutomationId="HelpFeedbackButton"
+                                                                  AutomationProperties.HelpText="Open a prefilled GitHub issue with safe app diagnostics."
+                                                                  local:RibbonTooltip.Title="Feedback"
+                                                                  local:RibbonTooltip.KeyTip="FE"
+                                                                  local:RibbonTooltip.Description="Open a prefilled GitHub issue with safe app diagnostics."/>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
                                     <Button Content="Copy Diagnostics" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CopyDiagnosticsBtn_Click"
@@ -4033,7 +4041,9 @@
                 Grid.Row="1" Grid.RowSpan="5"
                 Panel.ZIndex="260"
                 Background="#80FFFFFF"
-                Visibility="Collapsed">
+                Visibility="Collapsed"
+                AutomationProperties.Name="Opening workbook"
+                AutomationProperties.HelpText="Shows workbook open progress and blocks workbook interaction until loading finishes or fails.">
             <Border Width="360" Padding="22" Background="White"
                     BorderBrush="#D0D0D0" BorderThickness="1"
                     HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -4041,7 +4051,8 @@
                     <TextBlock x:Name="OpenProgressTitle"
                                Text="Opening workbook"
                                FontSize="16" Foreground="#1F1F1F"
-                               Margin="0,0,0,10"/>
+                               Margin="0,0,0,10"
+                               AutomationProperties.Name="Open progress title"/>
                     <ProgressBar x:Name="OpenProgressBar"
                                  Height="5"
                                  Minimum="0"
@@ -4052,7 +4063,8 @@
                     <TextBlock x:Name="OpenProgressDetail"
                                Text="Reading file..."
                                FontSize="12" Foreground="#666"
-                               Margin="0,10,0,0"/>
+                               Margin="0,10,0,0"
+                               AutomationProperties.Name="Open progress detail"/>
                 </StackPanel>
             </Border>
         </Border>
@@ -4157,6 +4169,9 @@
                             local:RibbonTooltip.KeyTip="A"/>
                     <Button x:Name="SsPrintNavBtn" Content="Print" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
+                            AutomationProperties.AutomationId="BackstagePrintButton"
+                            AutomationProperties.Name="Print"
+                            AutomationProperties.HelpText="Open print preview with worksheet settings and native print access."
                             Click="PrintButton_Click"
                             local:RibbonTooltip.Title="Print"
                             local:RibbonTooltip.KeyTip="P"
@@ -4201,6 +4216,9 @@
                                     Background="Transparent" BorderThickness="0" Padding="0"
                                     FontSize="12" Foreground="#217346"
                                     VerticalAlignment="Center" Cursor="Hand"
+                                    AutomationProperties.AutomationId="MoreTemplatesExcludedButton"
+                                    AutomationProperties.Name="More templates unavailable"
+                                    AutomationProperties.HelpText="Online template discovery depends on an external Microsoft template service and is excluded."
                                     Click="SsMoreTemplatesBtn_Click"
                                     local:RibbonTooltip.Title="More Templates Excluded"
                                     local:RibbonTooltip.KeyTip="MT"
@@ -4338,11 +4356,19 @@
                                             BorderThickness="0" Padding="0,7"
                                             Click="SsRecentItem_Click"
                                             Cursor="Hand"
-                                            AutomationProperties.Name="{Binding FileName}">
+                                            AutomationProperties.AutomationId="BackstageRecentFileItem"
+                                            AutomationProperties.Name="{Binding OpenAutomationName}"
+                                            AutomationProperties.HelpText="{Binding OpenAutomationHelpText}">
                                         <Button.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="Pin to list" local:RibbonTooltip.KeyTip="P" Click="SsPinItem_Click"/>
-                                                <MenuItem Header="Remove from list" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"/>
+                                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                <MenuItem Header="Pin to list" local:RibbonTooltip.KeyTip="P" Click="SsPinItem_Click"
+                                                          AutomationProperties.AutomationId="BackstageRecentPinMenuItem"
+                                                          AutomationProperties.Name="{Binding PinAutomationName}"
+                                                          AutomationProperties.HelpText="{Binding PinAutomationHelpText}"/>
+                                                <MenuItem Header="Remove from list" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"
+                                                          AutomationProperties.AutomationId="BackstageRecentRemoveMenuItem"
+                                                          AutomationProperties.Name="{Binding RemoveAutomationName}"
+                                                          AutomationProperties.HelpText="{Binding RemoveAutomationHelpText}"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <Button.Template>
@@ -4391,7 +4417,9 @@
                                                     Click="SsPinItem_Click"
                                                     local:RibbonTooltip.Title="Pin File"
                                                     local:RibbonTooltip.Description="Pin or unpin this workbook in the recent files list."
-                                                    AutomationProperties.Name="Pin file"
+                                                    AutomationProperties.AutomationId="BackstageRecentPinButton"
+                                                    AutomationProperties.Name="{Binding PinAutomationName}"
+                                                    AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="Pin to list">
                                                 <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
                                             </Button>
@@ -4412,11 +4440,19 @@
                                             BorderThickness="0" Padding="0,7"
                                             Click="SsRecentItem_Click"
                                             Cursor="Hand"
-                                            AutomationProperties.Name="{Binding FileName}">
+                                            AutomationProperties.AutomationId="BackstagePinnedFileItem"
+                                            AutomationProperties.Name="{Binding OpenAutomationName}"
+                                            AutomationProperties.HelpText="{Binding OpenAutomationHelpText}">
                                         <Button.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="Unpin from list" local:RibbonTooltip.KeyTip="U" Click="SsUnpinItem_Click"/>
-                                                <MenuItem Header="Remove from list" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"/>
+                                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                <MenuItem Header="Unpin from list" local:RibbonTooltip.KeyTip="U" Click="SsUnpinItem_Click"
+                                                          AutomationProperties.AutomationId="BackstagePinnedUnpinMenuItem"
+                                                          AutomationProperties.Name="{Binding PinAutomationName}"
+                                                          AutomationProperties.HelpText="{Binding PinAutomationHelpText}"/>
+                                                <MenuItem Header="Remove from list" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"
+                                                          AutomationProperties.AutomationId="BackstagePinnedRemoveMenuItem"
+                                                          AutomationProperties.Name="{Binding RemoveAutomationName}"
+                                                          AutomationProperties.HelpText="{Binding RemoveAutomationHelpText}"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <Button.Template>
@@ -4465,7 +4501,9 @@
                                                     Click="SsUnpinItem_Click"
                                                     local:RibbonTooltip.Title="Unpin File"
                                                     local:RibbonTooltip.Description="Remove this workbook from the pinned files list."
-                                                    AutomationProperties.Name="Unpin file"
+                                                    AutomationProperties.AutomationId="BackstagePinnedUnpinButton"
+                                                    AutomationProperties.Name="{Binding PinAutomationName}"
+                                                    AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="Unpin from list">
                                                 <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
                                             </Button>

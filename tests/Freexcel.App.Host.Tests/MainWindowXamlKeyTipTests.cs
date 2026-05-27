@@ -400,6 +400,27 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstagePrintButton_ExposesPreviewAndNativePrintMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var printButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == "SsPrintNavBtn");
+
+        printButton.Attribute("Click")?.Value.Should().Be("PrintButton_Click");
+        printButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("P");
+        printButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("BackstagePrintButton");
+        printButton.Attribute("AutomationProperties.Name")?.Value.Should().Be("Print");
+        printButton.Attribute("AutomationProperties.HelpText")?.Value
+            .Should()
+            .Contain("native print access");
+    }
+
+    [Fact]
     public void BackstageInfoVersion_MatchesAboutDialogVersion()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -479,6 +500,48 @@ public sealed class MainWindowXamlKeyTipTests
 
         visibleButtons.Should().Contain("SsPinItem_Click", "pinning should not be hidden behind a context menu");
         visibleButtons.Should().Contain("SsUnpinItem_Click", "pinned files need a visible unpin affordance");
+    }
+
+    [Fact]
+    public void BackstageRecentAndPinnedItems_ExposeStableUiAutomationAndContextKeyTips()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var buttons = document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute("Click")?.Value is "SsRecentItem_Click" or "SsPinItem_Click" or "SsUnpinItem_Click")
+            .Select(button => button.ToString())
+            .ToList();
+
+        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstageRecentFileItem\""));
+        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstagePinnedFileItem\""));
+        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstageRecentPinButton\""));
+        buttons.Should().Contain(markup => markup.Contains("AutomationProperties.AutomationId=\"BackstagePinnedUnpinButton\""));
+        buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.Name="));
+        buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.HelpText="));
+
+        var contextMenuItems = document
+            .Descendants(presentation + "MenuItem")
+            .Where(item => item.Attribute("Click")?.Value is "SsPinItem_Click" or "SsUnpinItem_Click" or "SsRemoveRecentItem_Click")
+            .Select(item => new
+            {
+                Header = item.Attribute("Header")?.Value,
+                Click = item.Attribute("Click")?.Value,
+                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                AutomationId = item.Attribute("AutomationProperties.AutomationId")?.Value,
+                AutomationName = item.Attribute("AutomationProperties.Name")?.Value,
+                AutomationHelpText = item.Attribute("AutomationProperties.HelpText")?.Value
+            })
+            .ToList();
+
+        contextMenuItems.Should().Contain(item => item.Header == "Pin to list" && item.KeyTip == "P");
+        contextMenuItems.Should().Contain(item => item.Header == "Unpin from list" && item.KeyTip == "U");
+        contextMenuItems.Should().Contain(item => item.Header == "Remove from list" && item.KeyTip == "R");
+        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationId));
+        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationName));
+        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationHelpText));
     }
 
     [Fact]
@@ -574,6 +637,8 @@ public sealed class MainWindowXamlKeyTipTests
             ["InsertFunctionBtn_Click"] = "FormulasInsertFunctionButton",
             ["SsAccountBtn_Click"] = "BackstageAccountButton",
             ["SsOptionsBtn_Click"] = "BackstageOptionsButton",
+            ["HelpOnlineBtn_Click"] = "HelpOnlineButton",
+            ["SendFeedbackBtn_Click"] = "HelpFeedbackButton",
             ["AboutBtn_Click"] = "HelpAboutFreexcelButton",
         };
 
@@ -595,6 +660,31 @@ public sealed class MainWindowXamlKeyTipTests
 
         foreach (var automationId in expected.Values)
             automationInvokeButtonMarkup.Should().Contain(element => element.Contains($"AutomationProperties.AutomationId=\"{automationId}\""));
+    }
+
+    [Fact]
+    public void HelpExternalEntryPoints_ExposeStableAutomationAndHonestHelpText()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var helpOnline = document
+            .Descendants()
+            .Single(element => element.Attribute(x + "Name")?.Value == "HelpOnlineButton");
+        var feedback = document
+            .Descendants()
+            .Single(element => element.Attribute(x + "Name")?.Value == "HelpFeedbackButton");
+
+        helpOnline.Attribute("Click")?.Value.Should().Be("HelpOnlineBtn_Click");
+        helpOnline.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpOnlineButton\"");
+        helpOnline.ToString().Should().Contain("AutomationProperties.HelpText=\"Open the Freexcel help documentation in a web browser.");
+        helpOnline.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("HO");
+
+        feedback.Attribute("Click")?.Value.Should().Be("SendFeedbackBtn_Click");
+        feedback.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpFeedbackButton\"");
+        feedback.ToString().Should().Contain("AutomationProperties.HelpText=\"Open a prefilled GitHub issue with safe app diagnostics.");
+        feedback.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FE");
     }
 
     [Fact]
@@ -1551,6 +1641,39 @@ public sealed class MainWindowXamlKeyTipTests
         helpText!.Value.Should().Be("Filter recent and pinned files");
     }
 
+    [Fact]
+    public void BackstageOpenProgressOverlay_ExposesAccessibleStatusText()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var overlay = document
+            .Descendants(presentation + "Border")
+            .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressOverlay");
+
+        overlay.Attribute("AutomationProperties.Name")?.Value.Should().Be("Opening workbook");
+        overlay.Attribute("AutomationProperties.HelpText")?.Value
+            .Should().Be("Shows workbook open progress and blocks workbook interaction until loading finishes or fails.");
+        overlay.Attribute("Panel.ZIndex")?.Value.Should().Be("260");
+
+        var progressBar = document
+            .Descendants(presentation + "ProgressBar")
+            .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressBar");
+
+        progressBar.Attribute("AutomationProperties.Name")?.Value.Should().Be("Opening Progress");
+        progressBar.Attribute("Minimum")?.Value.Should().Be("0");
+        progressBar.Attribute("Maximum")?.Value.Should().Be("100");
+
+        var progressTexts = document
+            .Descendants(presentation + "TextBlock")
+            .Where(element => element.Attribute(x + "Name")?.Value is "OpenProgressTitle" or "OpenProgressDetail")
+            .Select(element => element.Attribute("AutomationProperties.Name")?.Value)
+            .ToList();
+
+        progressTexts.Should().Equal("Open progress title", "Open progress detail");
+    }
+
     [Theory]
     [InlineData("VerticalScroll", "Vertical Worksheet Scroll Bar", "Scroll worksheet rows")]
     [InlineData("HorizontalScroll", "Horizontal Worksheet Scroll Bar", "Scroll worksheet columns")]
@@ -1868,6 +1991,16 @@ public sealed class MainWindowXamlKeyTipTests
             .ToList();
 
         missing.Should().BeEmpty("online template discovery depends on an external Microsoft service and should not look like a normal local command");
+
+        var button = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "SsMoreTemplatesBtn_Click");
+
+        button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("MoreTemplatesExcludedButton");
+        button.Attribute("AutomationProperties.Name")?.Value.Should().Be("More templates unavailable");
+        button.Attribute("AutomationProperties.HelpText")?.Value
+            .Should()
+            .Contain("external Microsoft template service");
 
         document
             .Descendants()

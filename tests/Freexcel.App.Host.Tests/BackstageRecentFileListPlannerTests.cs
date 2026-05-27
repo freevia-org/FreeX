@@ -56,4 +56,29 @@ public sealed class BackstageRecentFileListPlannerTests
         plan.PinnedItems.Select(item => item.FileName).Should().Equal("ExistingPinned.xlsx");
         plan.RecentItems.Select(item => item.FileName).Should().Equal("ExistingRecent.xlsx");
     }
+
+    [Fact]
+    public void Build_ProvidesUiAutomationTextForRecentPinnedAndRemoveCommands()
+    {
+        var entries = new[]
+        {
+            new RecentFileEntry { Path = @"C:\Work\Budget.xlsx", LastOpened = DateTime.Now, IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Work\Forecast.xlsx", LastOpened = DateTime.Now, IsPinned = true }
+        };
+
+        var plan = BackstageRecentFileListPlanner.Build(entries, filter: null);
+
+        var recent = plan.RecentItems.Single();
+        recent.OpenAutomationName.Should().Be("Open recent file Budget.xlsx");
+        recent.OpenAutomationHelpText.Should().Be(@"Open C:\Work\Budget.xlsx");
+        recent.PinAutomationName.Should().Be("Pin Budget.xlsx");
+        recent.PinAutomationHelpText.Should().Be("Keep this workbook in the pinned files list.");
+        recent.RemoveAutomationName.Should().Be("Remove Budget.xlsx from recent files");
+        recent.RemoveAutomationHelpText.Should().Be("Remove this workbook from the recent files list without deleting it.");
+
+        var pinned = plan.PinnedItems.Single();
+        pinned.OpenAutomationName.Should().Be("Open pinned file Forecast.xlsx");
+        pinned.PinAutomationName.Should().Be("Unpin Forecast.xlsx");
+        pinned.PinAutomationHelpText.Should().Be("Remove this workbook from the pinned files list.");
+    }
 }

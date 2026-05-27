@@ -143,6 +143,9 @@ public static class XlsxPackagePath
     {
         try
         {
+            if (IsEncodedDotControlSegment(segment))
+                return segment;
+
             var separatorEscapeIndex = IndexOfEncodedPathSeparator(segment, 0);
             if (separatorEscapeIndex >= 0)
                 return UnescapePathSegmentPreservingEncodedSeparators(segment, separatorEscapeIndex);
@@ -154,6 +157,18 @@ public static class XlsxPackagePath
             return segment;
         }
     }
+
+    private static bool IsEncodedDotControlSegment(string segment)
+    {
+        if (!segment.Contains('%', StringComparison.Ordinal))
+            return false;
+
+        var unescaped = Uri.UnescapeDataString(segment);
+        return unescaped is "." or ".." && segment.All(IsDotControlSegmentCharacter);
+    }
+
+    private static bool IsDotControlSegmentCharacter(char value) =>
+        value is '.' or '%' or '2' or 'E' or 'e';
 
     private static string UnescapePathSegmentPreservingEncodedSeparators(string segment, int firstSeparatorEscapeIndex)
     {
