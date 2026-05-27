@@ -32,11 +32,47 @@ public sealed class MainWindowFormulaBarSyncTests
         });
     }
 
+    [Fact]
+    public void InlineEditorTextChange_RefreshesFormulaBar()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+
+            harness.SetInlineEditorText("typed inline");
+
+            harness.FormulaBarText.Should().Be("typed inline");
+        });
+    }
+
+    [Fact]
+    public void FormulaBarTextChange_WhileInlineEditorVisible_RefreshesInlineEditor()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+
+            harness.SetFormulaBarText("typed in formula bar");
+
+            harness.InlineEditorText.Should().Be("typed in formula bar");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
         private readonly FieldInfo _workbookField;
+        private readonly FieldInfo _inlineEditorField;
         private readonly MethodInfo _setActiveCell;
+        private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _executeClearSelection;
 
         private MainWindowHarness(MainWindow window)
@@ -45,15 +81,23 @@ public sealed class MainWindowFormulaBarSyncTests
             _workbookField = typeof(MainWindow)
                 .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
+            _inlineEditorField = typeof(MainWindow)
+                .GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
             _setActiveCell = typeof(MainWindow)
                 .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
+            _showInlineEditor = typeof(MainWindow)
+                .GetMethod("ShowInlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ShowInlineEditor");
             _executeClearSelection = typeof(MainWindow)
                 .GetMethod("ExecuteClearSelection", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteClearSelection");
         }
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
+
+        public string? InlineEditorText => InlineEditor?.Text;
 
         public void SetCellText(uint row, uint col, string text)
         {
@@ -73,6 +117,26 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             var sheet = Workbook.Sheets[0];
             _setActiveCell.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            PumpDispatcher();
+        }
+
+        public void ShowInlineEditor(uint row, uint col)
+        {
+            var sheet = Workbook.Sheets[0];
+            _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            PumpDispatcher();
+        }
+
+        public void SetFormulaBarText(string text)
+        {
+            ((TextBox)_window.FindName("FormulaBar")).Text = text;
+            PumpDispatcher();
+        }
+
+        public void SetInlineEditorText(string text)
+        {
+            var inlineEditor = InlineEditor ?? throw new InvalidOperationException("Inline editor is not visible.");
+            inlineEditor.Text = text;
             PumpDispatcher();
         }
 
@@ -112,6 +176,8 @@ public sealed class MainWindowFormulaBarSyncTests
         private Workbook Workbook =>
             (Workbook)(_workbookField.GetValue(_window)
                 ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+
+        private TextBox? InlineEditor => (TextBox?)_inlineEditorField.GetValue(_window);
 
         public void Dispose()
         {
