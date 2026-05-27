@@ -33,6 +33,23 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void RightClickObjectRoutesContextMenuToObjectAnchor()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var objectDragSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.ObjectDrag.cs"));
+        var rightClickBlock = inputSource[
+            inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..];
+
+        objectDragSource.Should().Contain("Rect Rect, CellAddress Anchor");
+        rightClickBlock.Should().Contain("var objectHit = HitTestDrawingObject(pos);");
+        rightClickBlock.Should().Contain("SelectedObjectId = objectHit.Id;");
+        rightClickBlock.Should().Contain("SelectedObjectKind = objectHit.Kind;");
+        rightClickBlock.Should().Contain("ContextMenuRequested?.Invoke(objectHit.Anchor, pos);");
+    }
+
+    [Fact]
     public void MouseLeavePreservesCursorDuringCapturedDrags()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
