@@ -291,6 +291,7 @@ public partial class MainWindow
             HideStartScreen();
             ShowOpenProgress("Opening workbook", "Loading file (done)", 100);
             ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();
+            ShowXlsxLoadWarningsIfNeeded(result.LoadWarnings);
             RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
@@ -677,5 +678,20 @@ public partial class MainWindow
             message.Title,
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
+    }
+
+    private void ShowXlsxLoadWarningsIfNeeded(IReadOnlyList<string>? warnings)
+    {
+        if (warnings is not { Count: > 0 })
+            return;
+
+        const int maxShown = 10;
+        var lines = warnings.Take(maxShown).ToList();
+        var body = "Some features could not be loaded from the file and may be missing:\n\n"
+            + string.Join("\n", lines.Select(w => $"• {w}"));
+        if (warnings.Count > maxShown)
+            body += $"\n\n…and {warnings.Count - maxShown} more.";
+
+        ShowOwnedMessage(body, "File Opened with Warnings", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }
