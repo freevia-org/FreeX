@@ -76,6 +76,8 @@ internal static partial class DelimitedTextWorkbookReader
         delimiter = default;
 
         if (fields.Count == 2 &&
+            !fields[0].WasQuoted &&
+            !fields[1].WasQuoted &&
             string.Equals(fields[0].Value, "sep=", StringComparison.OrdinalIgnoreCase) &&
             fields[1].Value.Length == 0)
         {
@@ -83,7 +85,7 @@ internal static partial class DelimitedTextWorkbookReader
             return true;
         }
 
-        if (fields.Count != 1)
+        if (fields.Count != 1 || fields[0].WasQuoted)
             return false;
 
         var directive = fields[0].Value;
