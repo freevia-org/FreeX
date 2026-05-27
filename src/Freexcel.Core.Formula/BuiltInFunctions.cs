@@ -623,9 +623,6 @@ public static partial class BuiltInFunctions
         return Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor;
     }
 
-    private static ScalarValue Rand(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new NumberValue(Random.Shared.NextDouble());
-
     // ═══════════════════════════════════════════════════════════════════
     // Phase 4.2  –  Error handling
     // ═══════════════════════════════════════════════════════════════════

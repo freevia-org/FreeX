@@ -166,6 +166,9 @@ public static partial class BuiltInFunctions
         return NumberResult(Math.Floor(n / sig) * sig);
     }
 
+    private static ScalarValue Rand(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new NumberValue(Random.Shared.NextDouble());
+
     private static ScalarValue Randbetween(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;

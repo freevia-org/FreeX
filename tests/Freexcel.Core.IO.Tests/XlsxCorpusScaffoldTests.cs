@@ -358,6 +358,21 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesOfficeAddinsPackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/office-addins-001.xlsx" &&
+            row.FeatureTags.Contains("office-addins", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("webextensions", StringComparison.Ordinal));
+        const string reportLine = "| Office add-in package references | Package-root task pane relationships and task pane webextension relationships are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
