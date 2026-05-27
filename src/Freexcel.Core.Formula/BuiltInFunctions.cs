@@ -91,6 +91,7 @@ public static partial class BuiltInFunctions
         ["SQRT"]        = (Sqrt, 1, 1),
         ["INT"]         = (IntFunc, 1, 1),
         ["CEILING"]     = (Ceiling, 2, 2),
+        ["ISO.CEILING"] = (IsoCeiling, 1, 2),
         ["FLOOR"]       = (Floor, 2, 2),
         ["RANDBETWEEN"] = (Randbetween, 2, 2),
         ["SIGN"]        = (Sign, 1, 1),

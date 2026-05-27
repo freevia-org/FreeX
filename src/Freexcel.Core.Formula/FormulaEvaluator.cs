@@ -110,7 +110,7 @@ public sealed class FormulaEvaluator
         "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "EDATE", "EOMONTH", "DATEDIF",
         "DATEVALUE", "TIMEVALUE",
         "DAYS", "DAYS360", "YEARFRAC",
-        "SQRTPI", "SERIESSUM",
+        "ISO.CEILING", "SQRTPI", "SERIESSUM",
         "RANDBETWEEN",
         "N", "ERROR.TYPE",
         "COMBIN", "COMBINA", "FACTDOUBLE", "PERMUT", "PERMUTATIONA",

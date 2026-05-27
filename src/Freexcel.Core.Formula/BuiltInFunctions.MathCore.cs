@@ -150,6 +150,24 @@ public static partial class BuiltInFunctions
         return NumberResult(Math.Ceiling(n / sig) * sig);
     }
 
+    private static ScalarValue IsoCeiling(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], significance, IsoCeilingScalar);
+    }
+
+    private static ScalarValue IsoCeilingScalar(ScalarValue value, ScalarValue significanceValue)
+    {
+        var n = ToNumber(value);
+        var significance = ToNumber(significanceValue);
+        if (!double.IsFinite(n) || !double.IsFinite(significance)) return ErrorValue.Num;
+        if (n == 0 || significance == 0) return new NumberValue(0);
+        var multiple = Math.Abs(significance);
+        return NumberResult(Math.Ceiling(n / multiple) * multiple);
+    }
+
     private static ScalarValue Floor(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;

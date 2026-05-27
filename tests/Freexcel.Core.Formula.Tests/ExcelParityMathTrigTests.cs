@@ -33,6 +33,13 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=FLOOR(2.7,0.5)", 2.5)]
     [InlineData("=GCD(48,18)", 6)]
     [InlineData("=INT(-1.2)", -2)]
+    [InlineData("=ISO.CEILING(4.3)", 5)]
+    [InlineData("=ISO.CEILING(-4.3)", -4)]
+    [InlineData("=ISO.CEILING(4.3,2)", 6)]
+    [InlineData("=ISO.CEILING(4.3,-2)", 6)]
+    [InlineData("=ISO.CEILING(-4.3,2)", -4)]
+    [InlineData("=ISO.CEILING(-4.3,-2)", -4)]
+    [InlineData("=ISO.CEILING(4.3,0)", 0)]
     [InlineData("=LCM(4,6)", 12)]
     [InlineData("=LN(EXP(1))", 1)]
     [InlineData("=LOG(100,10)", 2)]
@@ -104,6 +111,7 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=COMBINA(\"x\",2)")]
     [InlineData("=FACT(\"x\")")]
     [InlineData("=FACTDOUBLE(\"x\")")]
+    [InlineData("=ISO.CEILING(\"x\")")]
     [InlineData("=PERMUTATIONA(\"x\",2)")]
     [InlineData("=PRODUCT(\"x\")")]
     [InlineData("=SEC(\"x\")")]
@@ -209,6 +217,20 @@ public sealed class ExcelParityMathTrigTests
         var series = _eval.Evaluate("=SERIESSUM(A1:A2,0,1,C1:C2)", sheet).Should().BeOfType<RangeValue>().Subject;
         series.At(1, 1).Should().Be(new NumberValue(7));
         series.At(2, 1).Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
+    public void IsoCeiling_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4.3)),
+            (2, 1, new NumberValue(-4.3)),
+            (1, 2, new NumberValue(2)),
+            (2, 2, new NumberValue(-2)));
+
+        var result = _eval.Evaluate("=ISO.CEILING(A1:A2,B1:B2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.At(1, 1).Should().Be(new NumberValue(6));
+        result.At(2, 1).Should().Be(new NumberValue(-4));
     }
 
     [Fact]
