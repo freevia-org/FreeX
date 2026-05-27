@@ -15,12 +15,21 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
     private const string NumberStoredAsTextCode = "NumberStoredAsText";
     private const string FormulaRefersToBlankCellsCode = "FormulaRefersToBlankCells";
 
+    private static readonly JsonSerializerOptions LoadOptions = new()
+    {
+        // Default options — defined as a static field so the reflection cache is shared
+        // across all load calls rather than being rebuilt on every invocation.
+    };
+
+    /// <summary>Exposed for unit tests to verify the static instance is reused.</summary>
+    internal static JsonSerializerOptions LoadOptionsForTest => LoadOptions;
+
     public string Extension => ".fxl";
     public string FormatName => "Freexcel Workbook";
 
     public Workbook Load(Stream stream)
     {
-        var dto = JsonSerializer.Deserialize<WorkbookDto>(stream)
+        var dto = JsonSerializer.Deserialize<WorkbookDto>(stream, LoadOptions)
             ?? throw new InvalidDataException("Invalid Freexcel file");
 
         ValidateSchemaHeader(dto);
