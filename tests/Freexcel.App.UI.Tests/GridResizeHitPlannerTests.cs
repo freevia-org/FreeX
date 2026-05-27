@@ -34,6 +34,28 @@ public sealed class GridResizeHitPlannerTests
     }
 
     [Fact]
+    public void HitTest_IncludesHeaderBoundaryForResizeEdges()
+    {
+        GridResizeHitPlanner.HitTest(
+                CreateViewport(),
+                new Point(30 + 40, 18),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                hitZone: 4)
+            .Should()
+            .Be(new GridResizeHit(GridResizeHitTarget.Column, 1, 40));
+
+        GridResizeHitPlanner.HitTest(
+                CreateViewport(),
+                new Point(30, 18 + 20),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                hitZone: 4)
+            .Should()
+            .Be(new GridResizeHit(GridResizeHitTarget.Row, 1, 20));
+    }
+
+    [Fact]
     public void HitTest_ReturnsNoneAwayFromHeadersOrWhenViewportIsMissing()
     {
         GridResizeHitPlanner.HitTest(

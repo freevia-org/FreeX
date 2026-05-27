@@ -10,10 +10,10 @@ public sealed class FormulaEvaluator
 {
     private static readonly HashSet<string> AggregateFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
+        "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
         "STDEV", "MEDIAN",
-        "PRODUCT", "XOR",
-        "VAR", "VAR.S", "VAR.P", "STDEV.P",
+        "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "XOR",
+        "VAR", "VAR.S", "VARA", "VARP", "VAR.P", "VARPA", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
         "GEOMEAN", "HARMEAN", "AVEDEV",
         "MODE", "MODE.SNGL",
         "CONCATENATE",
@@ -22,11 +22,12 @@ public sealed class FormulaEvaluator
 
     private static readonly HashSet<string> DirectTextCoercingAggregates = new(StringComparer.OrdinalIgnoreCase)
     {
-        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "PRODUCT",
-        "STDEV", "STDEV.S", "STDEV.P",
-        "VAR", "VAR.S", "VAR.P",
+        "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2",
+        "STDEV", "STDEV.S", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
+        "VAR", "VAR.S", "VAR.P", "VARP", "VARA", "VARPA",
         "MEDIAN",
         "GEOMEAN", "HARMEAN", "AVEDEV",
+        "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
         "MODE", "MODE.SNGL",
         "NPV",
         "GCD", "LCM"
@@ -34,11 +35,12 @@ public sealed class FormulaEvaluator
 
     private static readonly HashSet<string> ReferenceProvenanceAggregates = new(StringComparer.OrdinalIgnoreCase)
     {
-        "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "PRODUCT", "AND", "OR", "XOR",
-        "STDEV", "STDEV.S", "STDEV.P",
-        "VAR", "VAR.S", "VAR.P",
+        "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "AND", "OR", "XOR",
+        "STDEV", "STDEV.S", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
+        "VAR", "VAR.S", "VAR.P", "VARP", "VARA", "VARPA",
         "MEDIAN",
         "GEOMEAN", "HARMEAN", "AVEDEV",
+        "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
         "MODE", "MODE.SNGL",
         "NPV",
         "GCD", "LCM"
@@ -50,12 +52,14 @@ public sealed class FormulaEvaluator
         "SUMIF", "COUNTIF", "AVERAGEIF",
         "SUMPRODUCT",
         "LARGE", "SMALL", "RANK", "RANK.EQ", "RANK.AVG", "DEVSQ",
-        "MULTINOMIAL", "SERIESSUM",
+        "MULTINOMIAL", "SERIESSUM", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2",
         "MMULT", "MINVERSE", "MDETERM", "MUNIT",
         "SUMIFS", "COUNTIFS", "AVERAGEIFS",
         "XLOOKUP",
         "WORKDAY", "NETWORKDAYS", "WORKDAY.INTL", "NETWORKDAYS.INTL",
-        "CORREL", "FORECAST", "FORECAST.LINEAR",
+        "CORREL", "COVAR", "COVARIANCE.P", "COVARIANCE.S",
+        "FORECAST", "FORECAST.LINEAR",
+        "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
         "PERCENTILE", "PERCENTILE.INC", "PERCENTILE.EXC",
         "QUARTILE", "QUARTILE.INC",
         "PERCENTRANK", "PERCENTRANK.INC",
@@ -73,7 +77,7 @@ public sealed class FormulaEvaluator
         "DVAR", "DVARP",
         "ROW", "COLUMN", "ROWS", "COLUMNS", "COUNTBLANK",
         "AGGREGATE", "CELL", "GETPIVOTDATA",
-        "T.TEST", "F.TEST", "CHISQ.TEST",
+        "TTEST", "T.TEST", "FTEST", "F.TEST", "CHITEST", "CHISQ.TEST",
         "FREQUENCY",
         "MIRR", "XIRR", "XNPV", "FVSCHEDULE",
         "PMT", "PV", "FV", "NPER", "RATE", "IPMT", "PPMT",
@@ -110,7 +114,7 @@ public sealed class FormulaEvaluator
         "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "EDATE", "EOMONTH", "DATEDIF",
         "DATEVALUE", "TIMEVALUE",
         "DAYS", "DAYS360", "YEARFRAC",
-        "SQRTPI", "SERIESSUM",
+        "CEILING.MATH", "CEILING.PRECISE", "FLOOR.MATH", "FLOOR.PRECISE", "ISO.CEILING", "SQRTPI", "SERIESSUM",
         "RANDBETWEEN",
         "N", "ERROR.TYPE",
         "COMBIN", "COMBINA", "FACTDOUBLE", "PERMUT", "PERMUTATIONA",
@@ -122,15 +126,15 @@ public sealed class FormulaEvaluator
         "BIN2HEX", "BIN2OCT", "HEX2BIN", "HEX2OCT", "OCT2BIN", "OCT2HEX",
         "COMPLEX", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE", "GESTEP", "IMABS", "IMAGINARY", "IMCONJUGATE", "IMDIV", "IMPRODUCT", "IMREAL", "IMSUB", "IMSUM",
         "CONVERT",
-        "NORM.DIST", "NORM.INV", "NORM.S.DIST", "NORM.S.INV", "STANDARDIZE",
-        "GAMMA", "GAMMALN", "GAMMALN.PRECISE", "GAMMA.DIST", "GAMMA.INV",
-        "LOGNORM.DIST", "LOGNORM.INV",
-        "BETA.DIST", "BETA.INV",
-        "EXPON.DIST", "WEIBULL.DIST", "POISSON.DIST",
-        "T.DIST", "T.DIST.RT", "T.DIST.2T", "T.INV", "T.INV.2T",
-        "F.DIST", "F.DIST.RT", "F.INV", "F.INV.RT",
-        "CHISQ.DIST", "CHISQ.DIST.RT", "CHISQ.INV", "CHISQ.INV.RT",
-        "BINOM.DIST", "BINOM.DIST.RANGE", "BINOM.INV", "NEGBINOM.DIST", "HYPERGEOM.DIST",
+        "NORMDIST", "NORM.DIST", "NORMINV", "NORM.INV", "NORMSDIST", "NORM.S.DIST", "NORMSINV", "NORM.S.INV", "STANDARDIZE",
+        "GAMMA", "GAMMALN", "GAMMALN.PRECISE", "GAMMADIST", "GAMMA.DIST", "GAMMAINV", "GAMMA.INV",
+        "LOGNORM.DIST", "LOGNORMDIST", "LOGNORM.INV", "LOGINV",
+        "BETA.DIST", "BETADIST", "BETA.INV", "BETAINV",
+        "EXPONDIST", "EXPON.DIST", "WEIBULL", "WEIBULL.DIST", "POISSON", "POISSON.DIST",
+        "TDIST", "T.DIST", "T.DIST.RT", "T.DIST.2T", "TINV", "T.INV", "T.INV.2T",
+        "FDIST", "F.DIST", "F.DIST.RT", "FINV", "F.INV", "F.INV.RT",
+        "CHIDIST", "CHISQ.DIST", "CHISQ.DIST.RT", "CHIINV", "CHISQ.INV", "CHISQ.INV.RT",
+        "BINOMDIST", "BINOM.DIST", "BINOM.DIST.RANGE", "CRITBINOM", "BINOM.INV", "NEGBINOMDIST", "NEGBINOM.DIST", "HYPGEOMDIST", "HYPERGEOM.DIST",
         "CONFIDENCE", "CONFIDENCE.NORM", "CONFIDENCE.T"
     };
 

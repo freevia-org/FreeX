@@ -93,6 +93,24 @@ public static partial class BuiltInFunctions
         return count == 0 ? ErrorValue.DivByZero : NumberResult(total / count);
     }
 
+    private static ScalarValue AverageA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double total = 0;
+        int count = 0;
+        foreach (var arg in args)
+        {
+            var (values, error) = CollectAValues(arg);
+            if (error is not null) return error;
+            foreach (var value in values)
+            {
+                total += value;
+                count++;
+            }
+        }
+
+        return count == 0 ? ErrorValue.DivByZero : NumberResult(total / count);
+    }
+
     private static ScalarValue Min(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         double? min = null;
@@ -119,6 +137,20 @@ public static partial class BuiltInFunctions
             var val = ToNumber(arg);
             if (min is null || val < min) min = val;
         }
+        return min.HasValue ? NumberResult(min.Value) : new NumberValue(0);
+    }
+
+    private static ScalarValue MinA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double? min = null;
+        foreach (var arg in args)
+        {
+            var (values, error) = CollectAValues(arg);
+            if (error is not null) return error;
+            foreach (var value in values)
+                if (min is null || value < min) min = value;
+        }
+
         return min.HasValue ? NumberResult(min.Value) : new NumberValue(0);
     }
 
@@ -149,6 +181,74 @@ public static partial class BuiltInFunctions
             if (max is null || val > max) max = val;
         }
         return max.HasValue ? NumberResult(max.Value) : new NumberValue(0);
+    }
+
+    private static ScalarValue MaxA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double? max = null;
+        foreach (var arg in args)
+        {
+            var (values, error) = CollectAValues(arg);
+            if (error is not null) return error;
+            foreach (var value in values)
+                if (max is null || value > max) max = value;
+        }
+
+        return max.HasValue ? NumberResult(max.Value) : new NumberValue(0);
+    }
+
+    private static (IReadOnlyList<double> Values, ErrorValue? Error) CollectAValues(ScalarValue value)
+    {
+        var values = new List<double>();
+        var error = AddAValues(value, values, directText: value is DirectTextLiteralValue);
+        return (values, error);
+    }
+
+    private static ErrorValue? AddAValues(ScalarValue value, List<double> values, bool directText)
+    {
+        switch (value)
+        {
+            case ErrorValue e:
+                return e;
+            case ReferencedScalarValue referenced:
+                return AddAValues(referenced.Value, values, directText: false);
+            case RangeValue range:
+                foreach (var cell in range.Flatten())
+                {
+                    var error = AddAValues(cell, values, directText: false);
+                    if (error is not null) return error;
+                }
+                return null;
+            case BlankValue:
+                return null;
+            case NumberValue n:
+                values.Add(n.Value);
+                return null;
+            case DateTimeValue d:
+                values.Add(d.Value);
+                return null;
+            case BoolValue b:
+                values.Add(b.Value ? 1.0 : 0.0);
+                return null;
+            case DirectTextLiteralValue t:
+                if (ExcelTextNumberParser.TryParse(t.Value, out var directParsed))
+                    values.Add(directParsed);
+                else if (t.Value.Length == 0 || !directText)
+                    values.Add(0.0);
+                else
+                    return ErrorValue.Value;
+                return null;
+            case TextValue t:
+                if (ExcelTextNumberParser.TryParse(t.Value, out var textParsed))
+                    values.Add(textParsed);
+                else if (t.Value.Length == 0 || !directText)
+                    values.Add(0.0);
+                else
+                    return ErrorValue.Value;
+                return null;
+            default:
+                return ErrorValue.Value;
+        }
     }
 
     private static ScalarValue Count(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -275,6 +375,18 @@ public static partial class BuiltInFunctions
         return NumberResult(Math.Sqrt(variance));
     }
 
+    private static ScalarValue StdevA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var r = VarA(args, ctx);
+        return r is NumberValue nv ? NumberResult(Math.Sqrt(nv.Value)) : r;
+    }
+
+    private static ScalarValue StdevPA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var r = VarPA(args, ctx);
+        return r is NumberValue nv ? NumberResult(Math.Sqrt(nv.Value)) : r;
+    }
+
     private static ScalarValue Median(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var (numsOrNull, err) = CollectNumbers(args);
@@ -314,9 +426,27 @@ public static partial class BuiltInFunctions
         return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
     }
 
+    private static ScalarValue VarA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var (list, err) = CollectAValues(args);
+        if (err is not null) return err;
+        if (list!.Count < 2) return ErrorValue.DivByZero;
+        double mean = list.Average();
+        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
+    }
+
     private static ScalarValue VarP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var (list, err) = CollectNumbers(args);
+        if (err is not null) return err;
+        if (list!.Count == 0) return ErrorValue.DivByZero;
+        double mean = list.Average();
+        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / list.Count);
+    }
+
+    private static ScalarValue VarPA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var (list, err) = CollectAValues(args);
         if (err is not null) return err;
         if (list!.Count == 0) return ErrorValue.DivByZero;
         double mean = list.Average();
@@ -327,6 +457,19 @@ public static partial class BuiltInFunctions
     {
         var r = VarP(args, ctx);
         return r is NumberValue nv ? NumberResult(Math.Sqrt(nv.Value)) : r;
+    }
+
+    private static (List<double>? Nums, ErrorValue? Error) CollectAValues(IReadOnlyList<ScalarValue> args, int start = 0)
+    {
+        var list = new List<double>();
+        for (var i = start; i < args.Count; i++)
+        {
+            var (values, error) = CollectAValues(args[i]);
+            if (error is not null) return (null, error);
+            list.AddRange(values);
+        }
+
+        return (list, null);
     }
 
     private static (List<double>? Nums, ErrorValue? Error) CollectNumbers(IReadOnlyList<ScalarValue> args, int start = 0)
@@ -660,78 +803,115 @@ public static partial class BuiltInFunctions
     private static ScalarValue Correl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        var rv1 = args[0] is RangeValue range1
-            ? range1
-            : SingleCellArray(args[0]);
         if (args[1] is ErrorValue e1) return e1;
-        var rv2 = args[1] is RangeValue range2
-            ? range2
-            : SingleCellArray(args[1]);
-        var (xs, ys, pairErr) = CollectPairedRangeNumbers(rv1, rv2);
+        var (xs, ys, pairErr) = CollectPairedNumbers(args[0], args[1]);
         if (pairErr is not null) return pairErr;
-        int n = xs.Count;
-        if (n < 2) return ErrorValue.DivByZero;
-        double xMean = xs.Average();
-        double yMean = ys.Average();
-        double cov = 0, varX = 0, varY = 0;
-        for (int i = 0; i < n; i++)
-        {
-            double dx = xs[i] - xMean, dy = ys[i] - yMean;
-            cov  += dx * dy;
-            varX += dx * dx;
-            varY += dy * dy;
-        }
-        if (varX == 0 || varY == 0) return ErrorValue.DivByZero;
-        return NumberResult(cov / Math.Sqrt(varX * varY));
+        return Correlation(xs, ys);
+    }
+
+    private static ScalarValue Pearson(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        Correl(args, ctx);
+
+    private static ScalarValue Rsq(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var correlation = Correl(args, ctx);
+        return correlation is NumberValue nv ? NumberResult(nv.Value * nv.Value) : correlation;
+    }
+
+    private static ScalarValue CovarianceP(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        Covariance(args, sample: false);
+
+    private static ScalarValue CovarianceS(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        Covariance(args, sample: true);
+
+    private static ScalarValue Covariance(IReadOnlyList<ScalarValue> args, bool sample)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var (xs, ys, pairErr) = CollectPairedNumbers(args[0], args[1]);
+        if (pairErr is not null) return pairErr;
+        var stats = RegressionStats(xs, ys);
+        if (stats.Error is not null) return stats.Error;
+        if (sample && stats.Count < 2) return ErrorValue.DivByZero;
+        return NumberResult(stats.Sxy / (sample ? stats.Count - 1 : stats.Count));
     }
 
     private static ScalarValue Forecast(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue e1) return e1;
-        var knownY = args[1] is RangeValue knownYRange
-            ? knownYRange
-            : SingleCellArray(args[1]);
         if (args[2] is ErrorValue e2) return e2;
-        var knownX = args[2] is RangeValue knownXRange
-            ? knownXRange
-            : SingleCellArray(args[2]);
         double x    = ToNumber(args[0]);
         if (!double.IsFinite(x)) return ErrorValue.Num;
-        var (ys, xs, pairErr) = CollectPairedRangeNumbers(knownY, knownX);
+        var (ys, xs, pairErr) = CollectPairedNumbers(args[1], args[2]);
         if (pairErr is not null) return pairErr;
-        int n = xs.Count;
-        if (n < 2) return ErrorValue.DivByZero;
-        double xMean = xs.Average();
-        double yMean = ys.Average();
-        double sXX = 0, sXY = 0;
-        for (int i = 0; i < n; i++)
+        var fit = LinearFit(ys, xs);
+        if (fit.Error is not null) return fit.Error;
+        return NumberResult(fit.Intercept + fit.Slope * x);
+    }
+
+    private static ScalarValue Slope(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var (ys, xs, pairErr) = CollectPairedNumbers(args[0], args[1]);
+        if (pairErr is not null) return pairErr;
+        var fit = LinearFit(ys, xs);
+        return fit.Error is not null ? fit.Error : NumberResult(fit.Slope);
+    }
+
+    private static ScalarValue Intercept(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var (ys, xs, pairErr) = CollectPairedNumbers(args[0], args[1]);
+        if (pairErr is not null) return pairErr;
+        var fit = LinearFit(ys, xs);
+        return fit.Error is not null ? fit.Error : NumberResult(fit.Intercept);
+    }
+
+    private static ScalarValue Steyx(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var (ys, xs, pairErr) = CollectPairedNumbers(args[0], args[1]);
+        if (pairErr is not null) return pairErr;
+        var fit = LinearFit(ys, xs);
+        if (fit.Error is not null) return fit.Error;
+        if (xs.Count < 3) return ErrorValue.DivByZero;
+
+        double residualSumSquares = 0.0;
+        for (var i = 0; i < xs.Count; i++)
         {
-            double dx = xs[i] - xMean;
-            sXX += dx * dx;
-            sXY += dx * (ys[i] - yMean);
+            var predicted = fit.Intercept + fit.Slope * xs[i];
+            var residual = ys[i] - predicted;
+            residualSumSquares += residual * residual;
         }
-        if (sXX == 0) return ErrorValue.DivByZero;
-        double b = sXY / sXX;
-        double a = yMean - b * xMean;
-        return NumberResult(a + b * x);
+
+        return NumberResult(Math.Sqrt(residualSumSquares / (xs.Count - 2)));
     }
 
     private static (List<double> Left, List<double> Right, ErrorValue? Error) CollectPairedRangeNumbers(RangeValue left, RangeValue right)
     {
-        if (left.RowCount * left.ColCount != right.RowCount * right.ColCount)
+        return CollectPairedNumbers(left, right);
+    }
+
+    private static (List<double> Left, List<double> Right, ErrorValue? Error) CollectPairedNumbers(ScalarValue left, ScalarValue right)
+    {
+        var leftSource = BuildPairedSource(left);
+        if (leftSource.Error is not null) return ([], [], leftSource.Error);
+        var rightSource = BuildPairedSource(right);
+        if (rightSource.Error is not null) return ([], [], rightSource.Error);
+
+        if (leftSource.Count != rightSource.Count)
             return ([], [], ErrorValue.NA);
 
         var leftValues = new List<double>();
         var rightValues = new List<double>();
-        for (int i = 0; i < left.RowCount * left.ColCount; i++)
+        for (int i = 0; i < leftSource.Count; i++)
         {
-            var leftCell = left.Cells[i / left.ColCount, i % left.ColCount];
-            var rightCell = right.Cells[i / right.ColCount, i % right.ColCount];
-            if (leftCell is ErrorValue leftError) return ([], [], leftError);
-            if (rightCell is ErrorValue rightError) return ([], [], rightError);
-            if (TryCellNumber(leftCell, out double leftNumber) &&
-                TryCellNumber(rightCell, out double rightNumber))
+            if (leftSource.Values[i] is double leftNumber &&
+                rightSource.Values[i] is double rightNumber)
             {
                 leftValues.Add(leftNumber);
                 rightValues.Add(rightNumber);
@@ -739,6 +919,66 @@ public static partial class BuiltInFunctions
         }
 
         return (leftValues, rightValues, null);
+    }
+
+    private static (int Count, List<double?> Values, ErrorValue? Error) BuildPairedSource(ScalarValue value)
+    {
+        if (value is ErrorValue error) return (0, [], error);
+        if (value is RangeValue range)
+        {
+            var values = new List<double?>(range.RowCount * range.ColCount);
+            for (var r = 0; r < range.RowCount; r++)
+            {
+                for (var c = 0; c < range.ColCount; c++)
+                {
+                    var cell = range.Cells[r, c];
+                    if (cell is ErrorValue cellError) return (0, [], cellError);
+                    values.Add(TryCellNumber(cell, out var number) ? number : null);
+                }
+            }
+
+            return (values.Count, values, null);
+        }
+
+        return (1, [ToNumber(value)], null);
+    }
+
+    private static ScalarValue Correlation(List<double> xs, List<double> ys)
+    {
+        var stats = RegressionStats(xs, ys);
+        if (stats.Error is not null) return stats.Error;
+        if (stats.Count < 2) return ErrorValue.DivByZero;
+        if (stats.Sxx == 0 || stats.Syy == 0) return ErrorValue.DivByZero;
+        return NumberResult(stats.Sxy / Math.Sqrt(stats.Sxx * stats.Syy));
+    }
+
+    private static (int Count, double Sxx, double Sxy, double Syy, ErrorValue? Error) RegressionStats(List<double> xs, List<double> ys)
+    {
+        var n = xs.Count;
+        if (n == 0) return (0, 0, 0, 0, ErrorValue.DivByZero);
+        var xMean = xs.Average();
+        var yMean = ys.Average();
+        double sxx = 0, sxy = 0, syy = 0;
+        for (var i = 0; i < n; i++)
+        {
+            var dx = xs[i] - xMean;
+            var dy = ys[i] - yMean;
+            sxx += dx * dx;
+            sxy += dx * dy;
+            syy += dy * dy;
+        }
+
+        return (n, sxx, sxy, syy, null);
+    }
+
+    private static (double Slope, double Intercept, ErrorValue? Error) LinearFit(List<double> ys, List<double> xs)
+    {
+        var stats = RegressionStats(xs, ys);
+        if (stats.Error is not null) return (0, 0, stats.Error);
+        if (stats.Count < 2 || stats.Sxx == 0) return (0, 0, ErrorValue.DivByZero);
+        var slope = stats.Sxy / stats.Sxx;
+        var intercept = ys.Average() - slope * xs.Average();
+        return (slope, intercept, null);
     }
 
     private static ScalarValue RankEq(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>

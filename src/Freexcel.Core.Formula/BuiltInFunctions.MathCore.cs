@@ -150,6 +150,51 @@ public static partial class BuiltInFunctions
         return NumberResult(Math.Ceiling(n / sig) * sig);
     }
 
+    private static ScalarValue IsoCeiling(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], significance, IsoCeilingScalar);
+    }
+
+    private static ScalarValue IsoCeilingScalar(ScalarValue value, ScalarValue significanceValue)
+    {
+        var n = ToNumber(value);
+        var significance = ToNumber(significanceValue);
+        if (!double.IsFinite(n) || !double.IsFinite(significance)) return ErrorValue.Num;
+        if (n == 0 || significance == 0) return new NumberValue(0);
+        var multiple = Math.Abs(significance);
+        return NumberResult(Math.Ceiling(n / multiple) * multiple);
+    }
+
+    private static ScalarValue CeilingPrecise(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        IsoCeiling(args, ctx);
+
+    private static ScalarValue CeilingMath(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        var mode = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(0);
+        return MapTernaryTextArgs(args[0], significance, mode, CeilingMathScalar);
+    }
+
+    private static ScalarValue CeilingMathScalar(ScalarValue value, ScalarValue significanceValue, ScalarValue modeValue)
+    {
+        var n = ToNumber(value);
+        var significance = ToNumber(significanceValue);
+        var mode = ToNumber(modeValue);
+        if (!double.IsFinite(n) || !double.IsFinite(significance) || !double.IsFinite(mode)) return ErrorValue.Num;
+        if (n == 0 || significance == 0) return new NumberValue(0);
+        var multiple = Math.Abs(significance);
+        var rounded = n < 0 && mode != 0
+            ? Math.Floor(n / multiple) * multiple
+            : Math.Ceiling(n / multiple) * multiple;
+        return NumberResult(rounded);
+    }
+
     private static ScalarValue Floor(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
@@ -164,6 +209,48 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
         if (n > 0 && sig < 0) return ErrorValue.Num;
         return NumberResult(Math.Floor(n / sig) * sig);
+    }
+
+    private static ScalarValue FloorPrecise(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], significance, FloorPreciseScalar);
+    }
+
+    private static ScalarValue FloorPreciseScalar(ScalarValue value, ScalarValue significanceValue)
+    {
+        var n = ToNumber(value);
+        var significance = ToNumber(significanceValue);
+        if (!double.IsFinite(n) || !double.IsFinite(significance)) return ErrorValue.Num;
+        if (n == 0 || significance == 0) return new NumberValue(0);
+        var multiple = Math.Abs(significance);
+        return NumberResult(Math.Floor(n / multiple) * multiple);
+    }
+
+    private static ScalarValue FloorMath(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        var mode = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(0);
+        return MapTernaryTextArgs(args[0], significance, mode, FloorMathScalar);
+    }
+
+    private static ScalarValue FloorMathScalar(ScalarValue value, ScalarValue significanceValue, ScalarValue modeValue)
+    {
+        var n = ToNumber(value);
+        var significance = ToNumber(significanceValue);
+        var mode = ToNumber(modeValue);
+        if (!double.IsFinite(n) || !double.IsFinite(significance) || !double.IsFinite(mode)) return ErrorValue.Num;
+        if (n == 0 || significance == 0) return new NumberValue(0);
+        var multiple = Math.Abs(significance);
+        var rounded = n < 0 && mode != 0
+            ? Math.Truncate(n / multiple) * multiple
+            : Math.Floor(n / multiple) * multiple;
+        return NumberResult(rounded);
     }
 
     private static ScalarValue Rand(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
@@ -681,6 +768,90 @@ public static partial class BuiltInFunctions
             else if (a is NumberValue or BoolValue or DateTimeValue) result *= ToNumber(a);
         }
         return NumberResult(result);
+    }
+
+    private static ScalarValue SumSq(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double total = 0;
+        foreach (var arg in args)
+        {
+            if (arg is ErrorValue e) return e;
+            foreach (var value in FlattenMathArguments(arg))
+            {
+                if (value is ErrorValue cellError) return cellError;
+                if (!TryMathAggregateNumber(value, out var number)) continue;
+                total += number * number;
+                if (!double.IsFinite(total)) return ErrorValue.Num;
+            }
+        }
+
+        return NumberResult(total);
+    }
+
+    private static ScalarValue SumX2My2(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        SumXPair(args[0], args[1], (x, y) => x * x - y * y);
+
+    private static ScalarValue SumX2Py2(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        SumXPair(args[0], args[1], (x, y) => x * x + y * y);
+
+    private static ScalarValue SumXMy2(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        SumXPair(args[0], args[1], (x, y) =>
+        {
+            var difference = x - y;
+            return difference * difference;
+        });
+
+    private static ScalarValue SumXPair(ScalarValue first, ScalarValue second, Func<double, double, double> map)
+    {
+        if (first is ErrorValue e0) return e0;
+        if (second is ErrorValue e1) return e1;
+        var firstRange = first is RangeValue range0 ? range0 : SingleCellArray(first);
+        var secondRange = second is RangeValue range1 ? range1 : SingleCellArray(second);
+        if (firstRange.RowCount != secondRange.RowCount || firstRange.ColCount != secondRange.ColCount)
+            return ErrorValue.NA;
+
+        double total = 0;
+        for (var row = 0; row < firstRange.RowCount; row++)
+            for (var col = 0; col < firstRange.ColCount; col++)
+            {
+                var left = firstRange.Cells[row, col];
+                var right = secondRange.Cells[row, col];
+                if (left is ErrorValue leftError) return leftError;
+                if (right is ErrorValue rightError) return rightError;
+                if (!TryMathAggregateNumber(left, out var x) || !TryMathAggregateNumber(right, out var y))
+                    return ErrorValue.Value;
+                total += map(x, y);
+                if (!double.IsFinite(total)) return ErrorValue.Num;
+            }
+
+        return NumberResult(total);
+    }
+
+    private static IEnumerable<ScalarValue> FlattenMathArguments(ScalarValue value)
+    {
+        if (value is RangeValue range)
+        {
+            foreach (var cell in range.Flatten())
+                yield return cell;
+        }
+        else
+        {
+            yield return value;
+        }
+    }
+
+    private static bool TryMathAggregateNumber(ScalarValue value, out double number)
+    {
+        number = 0;
+        if (TryCellNumber(value, out number)) return double.IsFinite(number);
+        if (value is BoolValue b)
+        {
+            number = b.Value ? 1 : 0;
+            return true;
+        }
+        if (value is DirectTextLiteralValue direct && TryDirectTextNumber(direct, out number))
+            return double.IsFinite(number);
+        return false;
     }
 
     private static ScalarValue Quotient(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

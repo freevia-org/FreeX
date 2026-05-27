@@ -71,14 +71,16 @@ internal static class XlsxPackageMetadataMerger
         var existingOverrides = targetRoot
             .Elements(contentTypeNs + "Override")
             .Select(element => element.Attribute("PartName")?.Value)
+            .OfType<string>()
             .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(NormalizeContentTypePartName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceOverride in sourceRoot.Elements(contentTypeNs + "Override"))
         {
             var partName = sourceOverride.Attribute("PartName")?.Value;
             if (IsExcludedSourcePart(partName, excludedSourceParts))
                 continue;
-            if (!string.IsNullOrWhiteSpace(partName) && existingOverrides.Add(partName))
+            if (!string.IsNullOrWhiteSpace(partName) && existingOverrides.Add(NormalizeContentTypePartName(partName)))
                 targetRoot.Add(new XElement(sourceOverride));
         }
 
@@ -156,6 +158,9 @@ internal static class XlsxPackageMetadataMerger
     private static bool IsPackageMetadataEntry(string entryName) =>
         string.Equals(entryName, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
         entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeContentTypePartName(string value) =>
+        XlsxPackagePath.NormalizeZipPath(value.Replace('\\', '/').TrimStart('/'));
 
     private static bool ShouldPreserveRelationship(
         string relationshipPartPath,

@@ -1707,6 +1707,52 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Theory]
+    [InlineData("SortAscButton_Click", "SortAscending")]
+    [InlineData("SortDescButton_Click", "SortDescending")]
+    [InlineData("FilterButton_Click", "Filter")]
+    [InlineData("ClearFilterButton_Click", "Clear")]
+    [InlineData("AdvancedFilterBtn_Click", "Filter")]
+    public void DataSortFilterCommands_UseVectorRibbonIconsInsteadOfTextPlaceholders(
+        string clickHandler,
+        string expectedIconKind)
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var button = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == clickHandler);
+
+        button
+            .Descendants(local + "RibbonIcon")
+            .Single()
+            .Attribute("Kind")?.Value
+            .Should().Be(expectedIconKind);
+
+        button
+            .Descendants(presentation + "TextBlock")
+            .Where(element => element.Attribute("Tag")?.Value == "RibbonIcon")
+            .Should()
+            .BeEmpty("ribbon visuals should use vector icon controls instead of text placeholders");
+    }
+
+    [Fact]
+    public void MainRibbon_DoesNotUseTextBlockIconPlaceholders()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var placeholders = document
+            .Descendants(presentation + "TextBlock")
+            .Where(element => element.Attribute("Tag")?.Value == "RibbonIcon")
+            .Select(element => element.Attribute("Text")?.Value ?? "<unnamed>")
+            .ToList();
+
+        placeholders.Should().BeEmpty("the ribbon screenshot sweep should render actual SVG/vector icons, not text stand-ins");
+    }
+
+    [Theory]
     [InlineData("VerticalScroll", "Vertical Worksheet Scroll Bar", "Scroll worksheet rows")]
     [InlineData("HorizontalScroll", "Horizontal Worksheet Scroll Bar", "Scroll worksheet columns")]
     public void WorksheetScrollBars_HaveAccessibleNamesAndHelpText(

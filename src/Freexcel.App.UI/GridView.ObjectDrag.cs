@@ -50,6 +50,23 @@ public partial class GridView
         };
     }
 
+    private CellAddress? GetSelectedObjectAnchor()
+    {
+        if (SelectedObjectId == Guid.Empty || SelectedObjectKind == ObjectKind.None)
+            return null;
+
+        return SelectedObjectKind switch
+        {
+            ObjectKind.Picture when Pictures is not null =>
+                TryGetObjectAnchor(Pictures, p => p.Id == SelectedObjectId, p => p.Anchor),
+            ObjectKind.Shape when DrawingShapes is not null =>
+                TryGetObjectAnchor(DrawingShapes, s => s.Id == SelectedObjectId, s => s.Anchor),
+            ObjectKind.TextBox when TextBoxes is not null =>
+                TryGetObjectAnchor(TextBoxes, t => t.Id == SelectedObjectId, t => t.Anchor),
+            _ => null
+        };
+    }
+
     private Rect TryGetObjectRect<T>(IEnumerable<T> items, Func<T, bool> match, Func<T, (CellAddress Anchor, double Width, double Height)> props)
     {
         foreach (var item in items)
@@ -60,6 +77,17 @@ public partial class GridView
                 return rect;
         }
         return Rect.Empty;
+    }
+
+    private static CellAddress? TryGetObjectAnchor<T>(IEnumerable<T> items, Func<T, bool> match, Func<T, CellAddress> anchor)
+    {
+        foreach (var item in items)
+        {
+            if (match(item))
+                return anchor(item);
+        }
+
+        return null;
     }
 
     internal void DrawObjectSelectionHandles(DrawingContext dc, Rect r)
@@ -134,19 +162,25 @@ public partial class GridView
 
         if (TextBoxes is not null)
             foreach (var t in TextBoxes.Reverse())
-                if (t.IsVisible && TryCreateAnchoredObjectRect(t.Anchor, t.Width, t.Height, 8, 8, out var r) && r.Contains(pos))
+                if (t.IsVisible && TryCreateAnchoredObjectRect(t.Anchor, t.Width, t.Height, 8, 8, out var r) && ContainsInclusive(r, pos))
                     return (t.Id, ObjectKind.TextBox, r, t.Anchor);
 
         if (Pictures is not null)
             foreach (var p in Pictures.Reverse())
-                if (p.IsVisible && TryCreateAnchoredObjectRect(p.Anchor, p.Width, p.Height, 24, 18, out var r) && r.Contains(pos))
+                if (p.IsVisible && TryCreateAnchoredObjectRect(p.Anchor, p.Width, p.Height, 24, 18, out var r) && ContainsInclusive(r, pos))
                     return (p.Id, ObjectKind.Picture, r, p.Anchor);
 
         if (DrawingShapes is not null)
             foreach (var s in DrawingShapes.Reverse())
-                if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && r.Contains(pos))
+                if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && ContainsInclusive(r, pos))
                     return (s.Id, ObjectKind.Shape, r, s.Anchor);
 
         return default;
     }
+
+    private static bool ContainsInclusive(Rect rect, Point pos) =>
+        pos.X >= rect.Left &&
+        pos.X <= rect.Right &&
+        pos.Y >= rect.Top &&
+        pos.Y <= rect.Bottom;
 }

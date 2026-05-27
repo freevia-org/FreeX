@@ -623,7 +623,7 @@ public partial class MainWindow
                 ["format"] = target.Adapter.FormatName,
                 ["reason"] = ex.GetType().Name
             });
-            MessageBox.Show($"Failed to save file:\n{ex.Message}", "Save Error",
+            ShowOwnedMessage($"Failed to save file:\n{ex.Message}", "Save Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }

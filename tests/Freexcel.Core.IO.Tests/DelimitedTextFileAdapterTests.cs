@@ -74,6 +74,24 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsUtf8BomTextExport()
+    {
+        var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
+        var bytes = Encoding.UTF8.GetPreamble()
+            .Concat(Encoding.UTF8.GetBytes("Name\tAmount\tFlag\r\nCafe\t42\tTRUE\r\n"))
+            .ToArray();
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Cafe"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(42));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
     public void Load_ReadsExcelUnicodeTextExportWithUtf16Bom()
     {
         var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
@@ -599,6 +617,26 @@ public sealed class DelimitedTextFileAdapterTests
         cell.Should().NotBeNull();
         cell!.FormulaText.Should().BeNull();
         cell.Value.Should().Be(new TextValue("=A1*2"));
+    }
+
+    [Fact]
+    public void Save_RoundTripsSeparatorDirectivePrefixTextBeforeBlankCell()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sep="));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(""));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.Value.Should().Be(new TextValue("sep="));
     }
 
     [Theory]
