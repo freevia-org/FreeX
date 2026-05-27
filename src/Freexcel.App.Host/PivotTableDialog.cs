@@ -73,6 +73,7 @@ public sealed class PivotTableDialog : Window
         _selectTableRangeButton.Margin = new Thickness(0, 0, 0, 6);
         stack.Children.Add(_selectTableRangeButton);
         _sourceRangeBox.Text = Result.SourceRangeText;
+        AutomationProperties.SetName(_sourceRangeBox, "PivotTable source range");
         AddLabeledReferenceEditor(
             stack,
             "Table/_Range:",
@@ -90,6 +91,7 @@ public sealed class PivotTableDialog : Window
         stack.Children.Add(_existingWorksheetButton);
 
         _destinationRangeBox.Text = destinationText;
+        AutomationProperties.SetName(_destinationRangeBox, "PivotTable location");
         AddLabeledReferenceEditor(
             stack,
             "_Location:",

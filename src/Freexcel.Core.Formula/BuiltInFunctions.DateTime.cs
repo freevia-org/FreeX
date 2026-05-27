@@ -18,6 +18,12 @@ public static partial class BuiltInFunctions
         @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$",
         RegexOptions.IgnoreCase);
 
+    private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        DateTimeValue.FromDateTime(DateTime.Now);
+
+    private static ScalarValue Today(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        DateTimeValue.FromDateTime(DateTime.Today);
+
     private static ScalarValue Date(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;

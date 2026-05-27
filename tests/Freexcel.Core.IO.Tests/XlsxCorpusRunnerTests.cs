@@ -459,6 +459,39 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedOfficeAddinsRetentionPackage_LinksTaskpanesAndWebextensionParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-office-addins-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var packageRelsEntry = archive.GetEntry("_rels/.rels");
+        var taskpanesRelsEntry = archive.GetEntry("xl/webextensions/_rels/taskpanes.xml.rels");
+        packageRelsEntry.Should().NotBeNull();
+        taskpanesRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument packageRelsXml;
+        using (var stream = packageRelsEntry!.Open())
+            packageRelsXml = XDocument.Load(stream);
+        XDocument taskpanesRelsXml;
+        using (var stream = taskpanesRelsEntry!.Open())
+            taskpanesRelsXml = XDocument.Load(stream);
+
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes" &&
+                relationship.Attribute("Target")?.Value == "xl/webextensions/taskpanes.xml")
+            .Should().ContainSingle();
+        taskpanesRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/webextension" &&
+                relationship.Attribute("Target")?.Value == "webextension1.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()
