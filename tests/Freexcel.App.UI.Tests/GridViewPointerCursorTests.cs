@@ -160,6 +160,22 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void ResizeDragMouseMoveKeepsCaptureWhenMetricDisappears()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var resizeBlock = source[
+            source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
+            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)];
+
+        resizeBlock.Should().Contain("if (col is null)");
+        resizeBlock.Should().Contain("Cursor = Cursors.SizeWE;");
+        resizeBlock.Should().Contain("if (row is null)");
+        resizeBlock.Should().Contain("Cursor = Cursors.SizeNS;");
+        resizeBlock.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
     public void AutofillMouseUpInvalidatesAfterClearingPreview()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
