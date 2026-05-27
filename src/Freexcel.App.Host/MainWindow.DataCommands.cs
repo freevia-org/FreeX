@@ -234,7 +234,7 @@ public partial class MainWindow
                 }))
             return;
 
-        MessageBox.Show($"Removed {command?.RemovedRowCount ?? 0} duplicate rows.", "Remove Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
+        ShowOwnedMessage($"Removed {command?.RemovedRowCount ?? 0} duplicate rows.", "Remove Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
         UpdateViewport();
     }
 

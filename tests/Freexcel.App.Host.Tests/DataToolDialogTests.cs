@@ -2294,6 +2294,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("RefreshColumnLabels");
         source.Should().Contain("HasHeaders");
         mainWindowSource.Should().Contain("RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders)");
+        mainWindowSource.Should().Contain("ShowOwnedMessage($\"Removed {command?.RemovedRowCount ?? 0} duplicate rows.\"");
     }
 
     [Fact]
@@ -2317,6 +2318,15 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_boxes.FirstOrDefault()");
         source.Should().Contain("firstColumnBox.Focus();");
         source.Should().Contain("Keyboard.Focus(firstColumnBox);");
+    }
+
+    [Fact]
+    public void DataValidationNoSelectionWarning_UsesOwnedMessage()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
+
+        source.Should().Contain("ShowOwnedMessage(\"Select a range first.\", \"Data Validation\", MessageBoxButton.OK, MessageBoxImage.Information);");
+        source.Should().NotContain("MessageBox.Show(\"Select a range first.\", \"Data Validation\")");
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
