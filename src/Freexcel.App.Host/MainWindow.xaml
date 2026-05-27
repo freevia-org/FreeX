@@ -3774,9 +3774,9 @@
                                                 Panel.ZIndex="3"
                                                 IsHitTestVisible="False"/>
                                         <Border x:Name="ActiveTabTopCutout"
-                                                Height="3"
+                                                Height="2.25"
                                                 VerticalAlignment="Top"
-                                                Margin="4,0,4,0"
+                                                Margin="2,0,2,0"
                                                 Background="{StaticResource FreexcelRibbonSurfaceBrush}"
                                                 Panel.ZIndex="6"
                                                 IsHitTestVisible="False">
@@ -3844,15 +3844,11 @@
                                     </Grid>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 4,1 A 6,6 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
-                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 8,1 A 6,6 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 4,1 A 6,6 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
-                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 8,1 A 6,6 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
                                             <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                             <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
@@ -3891,7 +3887,7 @@
                                       IsHitTestVisible="False"/>
                                 <Path Data="M 12,0 A 8,8 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"
                                       HorizontalAlignment="Right"
-                                      Stroke="{StaticResource FreexcelGreenBrush}"
+                                      Stroke="{StaticResource FreexcelGreenDarkBrush}"
                                       StrokeThickness="1.25"
                                       StrokeStartLineCap="Round"
                                       StrokeEndLineCap="Round"
