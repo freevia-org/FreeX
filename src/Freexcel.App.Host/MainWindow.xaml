@@ -3238,7 +3238,8 @@
                          BorderBrush="#C0C0C0" Padding="5,3"
                          AutomationProperties.Name="Name Box"
                          AutomationProperties.AutomationId="CellAddressBox"
-                         AutomationProperties.HelpText="Go to a cell or named range"/>
+                         AutomationProperties.HelpText="Go to a cell or named range"
+                         KeyDown="CellAddressBox_KeyDown"/>
 
                 <!-- fx button opens Insert Function dialog -->
                 <Button Grid.Column="1" Content=" fx " FontWeight="Bold" Foreground="#444"

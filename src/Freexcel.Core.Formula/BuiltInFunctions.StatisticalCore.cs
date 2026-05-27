@@ -689,6 +689,26 @@ public static partial class BuiltInFunctions
         return NumberResult(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
     }
 
+    private static ScalarValue QuartileExc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        var rv = args[0] is RangeValue range
+            ? range
+            : SingleCellArray(args[0]);
+        if (args[1] is ErrorValue e) return e;
+        if (args[1] is RangeValue quartRange) return MapUnaryTextRange(quartRange, quartValue => QuartileExcScalar(rv, quartValue));
+        return QuartileExcScalar(rv, args[1]);
+    }
+
+    private static ScalarValue QuartileExcScalar(RangeValue rv, ScalarValue quartValue)
+    {
+        double rawQuart = ToNumber(quartValue);
+        if (!double.IsFinite(rawQuart)) return ErrorValue.Num;
+        int quart = (int)rawQuart;
+        if (quart < 1 || quart > 3) return ErrorValue.Num;
+        return PercentileExcScalar(rv, new NumberValue(quart / 4.0));
+    }
+
     private static ScalarValue Geomean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var (nums, err) = CollectNumbers(args);
@@ -795,6 +815,54 @@ public static partial class BuiltInFunctions
             double upper = sorted[lo + 1];
             double frac = upper > lower ? (x - lower) / (upper - lower) : 0.0;
             pctRank = ((double)lo + frac) / (n - 1);
+        }
+
+        return NumberResult(Math.Floor(pctRank * factor) / factor);
+    }
+
+    private static ScalarValue PercentrankExc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        var rv = args[0] is RangeValue range
+            ? range
+            : SingleCellArray(args[0]);
+        if (args[1] is ErrorValue e) return e;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var sigArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapBinaryMathArgs(args[1], sigArg, (xValue, sigValue) => PercentrankExcScalar(rv, xValue, sigValue));
+    }
+
+    private static ScalarValue PercentrankExcScalar(RangeValue rv, ScalarValue xValue, ScalarValue sigValue)
+    {
+        double x = ToNumber(xValue);
+        if (!double.IsFinite(x)) return ErrorValue.Num;
+        double rawSig = sigValue is not BlankValue ? ToNumber(sigValue) : 3;
+        if (!double.IsFinite(rawSig) || rawSig > int.MaxValue) return ErrorValue.Num;
+        int sig = (int)rawSig;
+        if (sig < 1) return ErrorValue.Num;
+        var (nums, err) = CollectRangeNumbers(rv);
+        if (err is not null) return err;
+        var sorted = nums!.OrderBy(v => v).ToList();
+        int n = sorted.Count;
+        if (n == 0 || x < sorted[0] || x > sorted[^1]) return ErrorValue.NA;
+        double factor = Math.Pow(10, sig);
+        if (!double.IsFinite(factor)) return ErrorValue.Num;
+
+        int below = sorted.Count(v => v < x);
+        int equal = sorted.Count(v => v == x);
+        double pctRank;
+        if (equal > 0)
+        {
+            pctRank = (below + 1.0) / (n + 1.0);
+        }
+        else
+        {
+            int lo = below - 1;
+            if (lo < 0 || lo >= n - 1) return ErrorValue.NA;
+            double lower = sorted[lo];
+            double upper = sorted[lo + 1];
+            double frac = upper > lower ? (x - lower) / (upper - lower) : 0.0;
+            pctRank = (lo + 1.0 + frac) / (n + 1.0);
         }
 
         return NumberResult(Math.Floor(pctRank * factor) / factor);

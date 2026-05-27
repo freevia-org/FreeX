@@ -290,7 +290,8 @@ public partial class MainWindow
             return;
         }
 
-        if (e.Key == Key.F4 && _inlineEditor is not null)
+        if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(e.Key, Keyboard.Modifiers, e.SystemKey) &&
+            _inlineEditor is not null)
         {
             if (TryCycleFormulaReference(_inlineEditor))
             {
@@ -359,7 +360,8 @@ public partial class MainWindow
             formulaRangeEntryActive: formulaRangeEntryActive,
             inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow,
             moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-            enterDirection: _options.AfterEnterDirection);
+            enterDirection: _options.AfterEnterDirection,
+            systemKey: e.SystemKey);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -487,7 +489,10 @@ public partial class MainWindow
                 ClearFormulaReferenceEntrySpan();
             e.Handled = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
         }
-        else if (e.Key == Key.F4)
+        else if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
+                     e.Key,
+                     e.KeyboardDevice.Modifiers,
+                     e.SystemKey))
         {
             if (TryCycleFormulaReference(FormulaBar))
                 e.Handled = true;
@@ -544,7 +549,8 @@ public partial class MainWindow
                 allowFormulaBarNavigationKeys: !formulaTextActive,
                 formulaRangeEntryActive: formulaRangeEntryActive,
                 moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-                enterDirection: _options.AfterEnterDirection);
+                enterDirection: _options.AfterEnterDirection,
+                systemKey: e.SystemKey);
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {
@@ -577,6 +583,47 @@ public partial class MainWindow
                 e.Handled = true;
             }
         }
+    }
+
+    private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)
+        {
+            RestoreCellAddressBoxText();
+            FocusSheetGridIfNeeded();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)
+            return;
+
+        if (!GoToDialog.TryParseReferenceRange(
+                CellAddressBox.Text,
+                _currentSheetId,
+                _workbook.NamedRanges,
+                out var selectedRange))
+        {
+            CellAddressBox.Focus();
+            CellAddressBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        _currentSheetId = selectedRange.Start.Sheet;
+        SetSelectionRange(selectedRange, selectedRange.Start);
+        EnsureCellVisible(selectedRange.Start);
+        UpdateViewport();
+        RefreshValidationDropdown();
+        e.Handled = true;
+    }
+
+    private void RestoreCellAddressBoxText()
+    {
+        CellAddressBox.Text = SheetGrid.SelectedRange is { } range
+            ? FormatRangeReference(range.Start, range.End)
+            : "A1";
+        CellAddressBox.SelectAll();
     }
 
     private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)

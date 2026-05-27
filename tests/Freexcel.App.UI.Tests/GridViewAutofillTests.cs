@@ -320,6 +320,45 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void IsOnHandle_UsesRenderedHandleWhenEndMetricsAreDuplicated()
+    {
+        var sheet = SheetId.New();
+        var selectedRange = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(2, 20, 20),
+                new RowMetric(3, 20, 40),
+                new RowMetric(3, 20, 200)
+            ],
+            [
+                new ColMetric(2, 40, 40),
+                new ColMetric(3, 40, 80),
+                new ColMetric(3, 40, 300)
+            ]);
+
+        GridAutofillPlanner.IsOnHandle(
+                viewport,
+                selectedRange,
+                new System.Windows.Point(30 + 300 + 40, 18 + 200 + 20),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeTrue("the fill handle is rendered from the last visible end row and column metrics");
+
+        GridAutofillPlanner.IsOnHandle(
+                viewport,
+                selectedRange,
+                new System.Windows.Point(30 + 80 + 40, 18 + 40 + 20),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse("the stale duplicate metric should not keep an invisible handle hot");
+    }
+
+    [Fact]
     public void IsOnHandle_ReturnsFalseAwayFromHandleOrWhenMetricsAreMissing()
     {
         var sheet = SheetId.New();
