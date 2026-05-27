@@ -162,7 +162,7 @@ internal static class XlsxPackageMetadataMerger
         entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeContentTypePartName(string value) =>
-        XlsxPackagePath.NormalizeZipPath(value.Replace('\\', '/').TrimStart('/'));
+        XlsxPackagePath.NormalizeZipPath(value.Trim().Replace('\\', '/').TrimStart('/'));
 
     private static string NormalizeContentTypeExtension(string value) =>
         value.Trim().TrimStart('.');
