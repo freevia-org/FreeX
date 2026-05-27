@@ -93,6 +93,13 @@ public partial class GridView
             return;
         }
 
+        if (_autofillDragging)
+        {
+            Cursor = Cursors.Cross;
+            e.Handled = true;
+            return;
+        }
+
         if (_resizeTarget == ResizeTarget.Column)
         {
             var col = Viewport!.ColMetrics.FirstOrDefault(c => c.Col == _resizeIndex);
