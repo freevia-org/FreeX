@@ -7,8 +7,12 @@ public static class GridAutofillPlanner
 {
     public static CellAddress ConstrainTarget(GridRange source, CellAddress target)
     {
-        var verticalDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
-        var horizontalDistance = target.Col > source.End.Col ? target.Col - source.End.Col : 0;
+        var upwardDistance = target.Row < source.Start.Row ? source.Start.Row - target.Row : 0;
+        var downwardDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
+        var leftwardDistance = target.Col < source.Start.Col ? source.Start.Col - target.Col : 0;
+        var rightwardDistance = target.Col > source.End.Col ? target.Col - source.End.Col : 0;
+        var verticalDistance = Math.Max(upwardDistance, downwardDistance);
+        var horizontalDistance = Math.Max(leftwardDistance, rightwardDistance);
 
         return verticalDistance >= horizontalDistance
             ? new CellAddress(target.Sheet, target.Row, source.End.Col)
@@ -24,11 +28,25 @@ public static class GridAutofillPlanner
                 new CellAddress(source.Start.Sheet, target.Row, source.End.Col));
         }
 
+        if (target.Row < source.Start.Row)
+        {
+            return new GridRange(
+                new CellAddress(source.Start.Sheet, target.Row, source.Start.Col),
+                new CellAddress(source.Start.Sheet, source.Start.Row - 1, source.End.Col));
+        }
+
         if (target.Col > source.End.Col)
         {
             return new GridRange(
                 new CellAddress(source.Start.Sheet, source.Start.Row, source.End.Col + 1),
                 new CellAddress(source.Start.Sheet, source.End.Row, target.Col));
+        }
+
+        if (target.Col < source.Start.Col)
+        {
+            return new GridRange(
+                new CellAddress(source.Start.Sheet, source.Start.Row, target.Col),
+                new CellAddress(source.Start.Sheet, source.End.Row, source.Start.Col - 1));
         }
 
         return null;

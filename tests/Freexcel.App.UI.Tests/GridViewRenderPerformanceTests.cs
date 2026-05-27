@@ -102,10 +102,14 @@ public sealed class GridViewRenderPerformanceTests
 
         renderSparklines.Should().Contain("Sparklines is not { Count: > 0 }");
         renderSparklines.Should().Contain("SparklineValues is not { Count: > 0 }");
-        renderSparklines.IndexOf("Sparklines is not { Count: > 0 }", StringComparison.Ordinal)
-            .Should().BeLessThan(renderSparklines.IndexOf("ToDictionary", StringComparison.Ordinal));
+        renderSparklines.Should().Contain("BuildSparklineRowMetricLookup(Viewport.RowMetrics)");
+        renderSparklines.Should().Contain("BuildSparklineColumnMetricLookup(Viewport.ColMetrics)");
         source.Should().Contain("private static readonly SolidColorBrush SparklinePositiveBrush");
         source.Should().Contain("private static readonly Pen SparklineLinePen");
+        source.Should().Contain("lookup.Add(row.Row, row)");
+        source.Should().Contain("lookup.Add(column.Col, column)");
+        renderSparklines.Should().NotContain(".ToDictionary(");
+        renderSparklines.Should().NotContain(".Select(");
         renderSparklines.Should().NotContain("new SolidColorBrush");
         renderSparklines.Should().NotContain("new Pen");
     }

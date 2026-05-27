@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Freexcel.App.UI;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -13,7 +14,7 @@ public partial class MainWindow
     private void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point gridPos)
     {
         var actualAddr = new CellAddress(_currentSheetId, clickedCell.Row, clickedCell.Col);
-        if (SheetGrid.SelectedRange is null)
+        if (SheetGrid.SelectedRange is not { } selectedRange || !selectedRange.Contains(actualAddr))
             SetActiveCell(actualAddr);
 
         var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);
@@ -43,6 +44,39 @@ public partial class MainWindow
         SheetGrid.ContextMenu = menu;
         PositionWorksheetContextMenu(menu, gridPos);
         menu.IsOpen = true;
+    }
+
+    private void OnGridHeaderContextMenuRequested(GridHeaderContextMenuTarget target, uint index, System.Windows.Point gridPos)
+    {
+        var address = target == GridHeaderContextMenuTarget.Row
+            ? new CellAddress(_currentSheetId, index, 1)
+            : new CellAddress(_currentSheetId, 1, index);
+
+        if (target == GridHeaderContextMenuTarget.Row && !ShouldPreserveHeaderContextSelection(target, index))
+            SelectRow(index);
+        else if (target == GridHeaderContextMenuTarget.Column && !ShouldPreserveHeaderContextSelection(target, index))
+            SelectColumn(index);
+
+        OnGridContextMenuRequested(address, gridPos);
+    }
+
+    private bool ShouldPreserveHeaderContextSelection(GridHeaderContextMenuTarget target, uint index)
+    {
+        if (SheetGrid.SelectedRange is not { } selectedRange)
+            return false;
+
+        return target switch
+        {
+            GridHeaderContextMenuTarget.Row =>
+                SelectionRangeService.IsWholeRowSelection(selectedRange) &&
+                index >= selectedRange.Start.Row &&
+                index <= selectedRange.End.Row,
+            GridHeaderContextMenuTarget.Column =>
+                SelectionRangeService.IsWholeColumnSelection(selectedRange) &&
+                index >= selectedRange.Start.Col &&
+                index <= selectedRange.End.Col,
+            _ => false
+        };
     }
 
     private static void WorksheetContextMenu_Opened(object sender, RoutedEventArgs e)

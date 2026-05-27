@@ -2808,6 +2808,46 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void PublicCorpusRows_WithPackageTagAssertions_RetainPackageStructuresAfterModelEdit()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Where(row => row.ExpectedStatus == "public-pass")
+            .Where(HasExpectedPublicPackageTags)
+            .ToArray();
+
+        rows.Should().NotBeEmpty("public package-tag rows prove package-only structures are retained after ordinary model edits");
+
+        var adapter = new XlsxFileAdapter();
+        var inspectedRows = 0;
+        foreach (var row in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            AssertExpectedPublicPackageTags(row, source);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 18, 1), new TextValue("freexcel-public-package-tag-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Length.Should().BeGreaterThan(0, row.Id);
+            AssertPackageHealth(saved, row.Id);
+            saved.Position = 0;
+            AssertExpectedPublicPackageTags(row, saved);
+            inspectedRows++;
+        }
+
+        inspectedRows.Should().Be(rows.Length, "all public package-tag rows are redistributed in the checked-in corpus");
+    }
+
+    [Fact]
     public void RegressionFormulaCachedRows_OpenSaveReloadPreservesFormulaCells()
     {
         var workspace = FindWorkspaceRoot();
@@ -4345,13 +4385,7 @@ public class XlsxCorpusRunnerTests
             return;
 
         var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (!tags.Contains("styles") &&
-            !tags.Contains("formatting") &&
-            !tags.Contains("hyperlinks") &&
-            !tags.Contains("merged-cells") &&
-            !tags.Contains("inline-strings") &&
-            !tags.Contains("cell-types") &&
-            !tags.Contains("unsupported-sheet-types"))
+        if (!HasExpectedPublicPackageTags(row))
             return;
 
         var originalPosition = package.CanSeek ? package.Position : 0;
@@ -4385,6 +4419,11 @@ public class XlsxCorpusRunnerTests
                     .Should()
                     .HaveCountGreaterThanOrEqualTo(3, row.Id);
 
+            if (tags.Contains("sheet-names") && tags.Contains("boundary"))
+                PublicWorkbookSheetNames(archive)
+                    .Should()
+                    .Contain(name => name.Length == 31, row.Id);
+
             if (tags.Contains("unsupported-sheet-types"))
                 archive.Entries.Should().Contain(entry => entry.FullName.StartsWith("xl/chartsheets/", StringComparison.Ordinal), row.Id);
         }
@@ -4414,7 +4453,35 @@ public class XlsxCorpusRunnerTests
             .ToArray();
     }
 
+    private static IReadOnlyList<string> PublicWorkbookSheetNames(ZipArchive archive)
+    {
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        workbookEntry.Should().NotBeNull("public workbook packages should contain workbook.xml");
+
+        return LoadPackageXml(workbookEntry!)
+            .Descendants(WorksheetNs + "sheet")
+            .Select(sheet => sheet.Attribute("name")?.Value ?? "")
+            .Where(name => name.Length > 0)
+            .ToArray();
+    }
+
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    private static bool HasExpectedPublicPackageTags(ManifestRow row)
+    {
+        if (row.SourceType != "public")
+            return false;
+
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return tags.Contains("styles") ||
+               tags.Contains("formatting") ||
+               tags.Contains("hyperlinks") ||
+               tags.Contains("merged-cells") ||
+               tags.Contains("inline-strings") ||
+               tags.Contains("cell-types") ||
+               (tags.Contains("sheet-names") && tags.Contains("boundary")) ||
+               tags.Contains("unsupported-sheet-types");
+    }
 
     private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
         new(

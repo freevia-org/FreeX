@@ -2,17 +2,27 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.UI;
 
+public enum GridHeaderContextMenuTarget
+{
+    Row,
+    Column
+}
+
 public partial class GridView
 {
     /// <summary>Fired while the user drags a column border (real-time).</summary>
     public event Action<uint, double>? ColumnResizing;
     /// <summary>Fired when the user releases after resizing a column.</summary>
     public event Action<uint, double>? ColumnResized;
+    /// <summary>Fired when the user double-clicks a column border to AutoFit.</summary>
+    public event Action<uint>? ColumnAutoFitRequested;
 
     /// <summary>Fired while the user drags a row border (real-time).</summary>
     public event Action<uint, double>? RowResizing;
     /// <summary>Fired when the user releases after resizing a row.</summary>
     public event Action<uint, double>? RowResized;
+    /// <summary>Fired when the user double-clicks a row border to AutoFit.</summary>
+    public event Action<uint>? RowAutoFitRequested;
 
     /// <summary>Fired when the user drags the autofill handle and releases.</summary>
     public event Action<GridRange, GridRange>? AutofillRequested;
@@ -22,6 +32,9 @@ public partial class GridView
 
     /// <summary>Fired on right mouse button down with the clicked cell address.</summary>
     public event Action<CellAddress, System.Windows.Point>? ContextMenuRequested;
+
+    /// <summary>Fired on right mouse button down over a row or column header.</summary>
+    public event Action<GridHeaderContextMenuTarget, uint, System.Windows.Point>? HeaderContextMenuRequested;
 
     /// <summary>Fired when the user activates a rendered PivotChart field button.</summary>
     public event Action<ChartModel, string, System.Windows.Point>? PivotChartFieldButtonRequested;

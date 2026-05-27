@@ -77,6 +77,7 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
+    private bool _resizeViewportRefreshPending;
     private CellColor _borderPickerColor = CellColor.Black;
     private BorderStyle _borderPickerStyle = BorderStyle.Thin;
     private BorderDrawMode _borderDrawMode;
@@ -152,11 +153,14 @@ public partial class MainWindow : Window
         SheetGrid.MouseDown += SheetGrid_MouseDown;
         SheetGrid.ColumnResized  += OnColumnResized;
         SheetGrid.RowResized     += OnRowResized;
+        SheetGrid.ColumnAutoFitRequested += OnColumnAutoFitRequested;
+        SheetGrid.RowAutoFitRequested += OnRowAutoFitRequested;
         SheetGrid.ColumnResizing += OnColumnResizing;
         SheetGrid.RowResizing    += OnRowResizing;
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
+        SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;
         SheetGrid.SplitDividerMoved += OnSplitDividerMoved;

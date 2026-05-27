@@ -122,6 +122,7 @@ public partial class GridView
                    : splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Vertical ? Cursors.SizeNS
                    : marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
                    : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
+                   : IsOnAutofillHandle(pos) ? Cursors.Cross
                    : null;
         }
     }
@@ -263,6 +264,17 @@ public partial class GridView
         var (target, index, size) = HitTestResize(pos);
         if (target != ResizeTarget.None)
         {
+            if (e.ClickCount >= 2)
+            {
+                if (target == ResizeTarget.Column)
+                    ColumnAutoFitRequested?.Invoke(index);
+                else
+                    RowAutoFitRequested?.Invoke(index);
+
+                e.Handled = true;
+                return;
+            }
+
             _resizeTarget    = target;
             _resizeIndex     = index;
             _resizeSizeStart = size;
@@ -297,6 +309,40 @@ public partial class GridView
         {
             PivotChartFieldButtonRequested?.Invoke(pivotButton.Chart, pivotButton.FieldButton, pos);
             e.Handled = true;
+            return;
+        }
+
+        if (pos.Y < EffectiveColHeaderHeight && pos.X >= ActualRowHeaderWidth)
+        {
+            foreach (var cm in Viewport.ColMetrics)
+            {
+                double left = cm.LeftOffset + ActualRowHeaderWidth;
+                if (pos.X >= left && pos.X < left + cm.Width)
+                {
+                    HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Column, cm.Col, pos);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            base.OnMouseRightButtonDown(e);
+            return;
+        }
+
+        if (pos.X < ActualRowHeaderWidth && pos.Y >= EffectiveColHeaderHeight)
+        {
+            foreach (var rm in Viewport.RowMetrics)
+            {
+                double top = rm.TopOffset + EffectiveColHeaderHeight;
+                if (pos.Y >= top && pos.Y < top + rm.Height)
+                {
+                    HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Row, rm.Row, pos);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            base.OnMouseRightButtonDown(e);
             return;
         }
 
