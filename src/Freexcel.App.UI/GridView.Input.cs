@@ -108,12 +108,19 @@ public partial class GridView
         else
         {
             var (target, _, _) = HitTestResize(pos);
+            var selectedObjectDragKind = ObjectDragKind.None;
+            if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
+                selectedObjectDragKind = HitTestObjectHandle(pos, GetSelectedObjectRect());
+            var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None &&
+                HitTestDrawingObject(pos).Id != Guid.Empty;
             var marginGuide = HitTestPageMarginGuide(pos);
             var splitHandle = Viewport is null ? SplitDividerHandle.None : HitTestSplitDividerHandle(Viewport, pos);
             var splitScrollbarHit = Viewport is null
                 ? null
                 : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight), pos);
-            Cursor = target == ResizeTarget.Column ? Cursors.SizeWE
+            Cursor = selectedObjectDragKind != ObjectDragKind.None ? ObjectDragCursor(selectedObjectDragKind)
+                   : hoveringObjectBody ? Cursors.SizeAll
+                   : target == ResizeTarget.Column ? Cursors.SizeWE
                    : target == ResizeTarget.Row    ? Cursors.SizeNS
                    : splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll
                    : splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE
@@ -178,7 +185,7 @@ public partial class GridView
             _objectDragStartPos = pos;
             _objectDragStartRect = hit.Rect;
             _objectDragCurrentRect = hit.Rect;
-            _objectDragStartAnchor = HitTestAnchorCell(pos) ?? default;
+            _objectDragStartAnchor = hit.Anchor;
             Cursor = Cursors.SizeAll;
             CaptureMouse();
             e.Handled = true;
@@ -308,6 +315,18 @@ public partial class GridView
         if (HitTestPivotChartFieldButton(Charts, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } pivotButton)
         {
             PivotChartFieldButtonRequested?.Invoke(pivotButton.Chart, pivotButton.FieldButton, pos);
+            e.Handled = true;
+            return;
+        }
+
+        var objectHit = HitTestDrawingObject(pos);
+        if (objectHit.Id != Guid.Empty)
+        {
+            SelectedObjectId = objectHit.Id;
+            SelectedObjectKind = objectHit.Kind;
+            _selectedObjectId = objectHit.Id;
+            _selectedObjectKind = objectHit.Kind;
+            ContextMenuRequested?.Invoke(objectHit.Anchor, pos);
             e.Handled = true;
             return;
         }

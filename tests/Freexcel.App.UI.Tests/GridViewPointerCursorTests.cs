@@ -6,6 +6,50 @@ namespace Freexcel.App.UI.Tests;
 public sealed class GridViewPointerCursorTests
 {
     [Fact]
+    public void MouseMoveUsesObjectDragCursorOverSelectedObject()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var hoverCursorBlock = source[
+            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
+
+        hoverCursorBlock.Should().Contain("selectedObjectDragKind = HitTestObjectHandle(pos, GetSelectedObjectRect());");
+        hoverCursorBlock.Should().Contain("Cursor = selectedObjectDragKind != ObjectDragKind.None ? ObjectDragCursor(selectedObjectDragKind)");
+    }
+
+    [Fact]
+    public void MouseMoveUsesMoveCursorOverUnselectedObjectBody()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var hoverCursorBlock = source[
+            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
+
+        hoverCursorBlock.Should().Contain("var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None");
+        hoverCursorBlock.Should().Contain("HitTestDrawingObject(pos).Id != Guid.Empty");
+        hoverCursorBlock.Should().Contain(": hoveringObjectBody ? Cursors.SizeAll");
+    }
+
+    [Fact]
+    public void RightClickObjectRoutesContextMenuToObjectAnchor()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var objectDragSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.ObjectDrag.cs"));
+        var rightClickBlock = inputSource[
+            inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..];
+
+        objectDragSource.Should().Contain("Rect Rect, CellAddress Anchor");
+        rightClickBlock.Should().Contain("var objectHit = HitTestDrawingObject(pos);");
+        rightClickBlock.Should().Contain("SelectedObjectId = objectHit.Id;");
+        rightClickBlock.Should().Contain("SelectedObjectKind = objectHit.Kind;");
+        rightClickBlock.Should().Contain("ContextMenuRequested?.Invoke(objectHit.Anchor, pos);");
+    }
+
+    [Fact]
     public void MouseLeavePreservesCursorDuringCapturedDrags()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

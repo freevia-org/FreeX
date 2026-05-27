@@ -6,6 +6,7 @@ public static partial class FlashFillService
 {
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', '-', '_', '@', '/', '\\'];
+    private static readonly string[] LabelValueSeparators = [":", "=", " - "];
     private static readonly (char Open, char Close)[] PairedDelimiters =
         [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ('\'', '\''), ('<', '>')];
 
@@ -330,6 +331,58 @@ public static partial class FlashFillService
             removed = removed.Replace("  ", " ", StringComparison.Ordinal);
 
         return removed.Length > 0 && !string.Equals(removed, source, StringComparison.Ordinal);
+    }
+
+    private static Func<string, string?>? TryLabelValueExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var separator in LabelValueSeparators)
+        {
+            if (!examples.All(e => TryExtractLabelValue(e.Source, separator, out var extracted) && extracted == e.Expected))
+                continue;
+
+            return source => TryExtractLabelValue(source, separator, out var extracted)
+                ? extracted
+                : null;
+        }
+
+        return null;
+    }
+
+    private static bool TryExtractLabelValue(string source, string separator, out string extracted)
+    {
+        extracted = string.Empty;
+        var separatorIndex = source.IndexOf(separator, StringComparison.Ordinal);
+        if (separatorIndex < 0)
+            return false;
+
+        extracted = source[(separatorIndex + separator.Length)..].Trim();
+        return extracted.Length > 0;
+    }
+
+    private static Func<string, string?>? TryLabelQualifierRemoval(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var separator in LabelValueSeparators)
+        {
+            if (!examples.All(e => TryRemoveLabelValue(e.Source, separator, out var removed) && removed == e.Expected))
+                continue;
+
+            return source => TryRemoveLabelValue(source, separator, out var removed)
+                ? removed
+                : null;
+        }
+
+        return null;
+    }
+
+    private static bool TryRemoveLabelValue(string source, string separator, out string removed)
+    {
+        removed = string.Empty;
+        var separatorIndex = source.IndexOf(separator, StringComparison.Ordinal);
+        if (separatorIndex <= 0)
+            return false;
+
+        removed = source[..separatorIndex].Trim();
+        return removed.Length > 0;
     }
 
     private static bool TrySplitWhitespaceTokens(string source, out string[] tokens)
