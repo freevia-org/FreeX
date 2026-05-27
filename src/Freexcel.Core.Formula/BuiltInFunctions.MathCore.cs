@@ -308,6 +308,20 @@ public static partial class BuiltInFunctions
         return NumberResult(Math.Log(n) / Math.Log(base_));
     }
 
+    private static ScalarValue Log10(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, Log10Scalar);
+        return Log10Scalar(args[0]);
+    }
+
+    private static ScalarValue Log10Scalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
+        if (!double.IsFinite(n) || n <= 0) return ErrorValue.Num;
+        return NumberResult(Math.Log10(n));
+    }
+
     private static ScalarValue Ln(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;

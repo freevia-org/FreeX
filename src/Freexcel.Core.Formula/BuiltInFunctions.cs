@@ -105,6 +105,7 @@ public static partial class BuiltInFunctions
         ["RANDBETWEEN"] = (Randbetween, 2, 2),
         ["SIGN"]        = (Sign, 1, 1),
         ["LOG"]         = (Log, 1, 2),
+        ["LOG10"]       = (Log10, 1, 1),
         ["LN"]          = (Ln, 1, 1),
         ["EXP"]         = (Exp, 1, 1),
         ["PI"]          = (Pi, 0, 0),
