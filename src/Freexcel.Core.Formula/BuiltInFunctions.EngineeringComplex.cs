@@ -223,6 +223,63 @@ public static partial class BuiltInFunctions
         return TextResult(FormatComplex(real, imaginary, left.Suffix));
     }
 
+    private static ScalarValue ImExp(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImExpScalar);
+        return ImExpScalar(args[0]);
+    }
+
+    private static ScalarValue ImExpScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        double magnitude = Math.Exp(parsed.Real);
+        return TextResult(FormatComplex(
+            magnitude * Math.Cos(parsed.Imaginary),
+            magnitude * Math.Sin(parsed.Imaginary),
+            parsed.Suffix));
+    }
+
+    private static ScalarValue ImLn(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImLnScalar);
+        return ImLnScalar(args[0]);
+    }
+
+    private static ScalarValue ImLnScalar(ScalarValue value) =>
+        ImLogScalar(value, 1.0);
+
+    private static ScalarValue ImLog10(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImLog10Scalar);
+        return ImLog10Scalar(args[0]);
+    }
+
+    private static ScalarValue ImLog10Scalar(ScalarValue value) =>
+        ImLogScalar(value, Math.Log(10.0));
+
+    private static ScalarValue ImLog2(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImLog2Scalar);
+        return ImLog2Scalar(args[0]);
+    }
+
+    private static ScalarValue ImLog2Scalar(ScalarValue value) =>
+        ImLogScalar(value, Math.Log(2.0));
+
+    private static ScalarValue ImLogScalar(ScalarValue value, double divisor)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+
+        double modulus = Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary);
+        if (modulus == 0) return ErrorValue.Num;
+
+        double angle = Math.Atan2(parsed.Imaginary, parsed.Real);
+        return TextResult(FormatComplex(Math.Log(modulus) / divisor, angle / divisor, parsed.Suffix));
+    }
+
     private static IEnumerable<ScalarValue> FlattenComplexArguments(IReadOnlyList<ScalarValue> args)
     {
         foreach (var arg in args)
