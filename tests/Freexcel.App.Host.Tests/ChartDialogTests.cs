@@ -1315,6 +1315,58 @@ public sealed class ChartDialogTests
         result.ToOptions().DoughnutHoleSize.Should().BeApproximately(0.7, 0.0001);
     }
 
+    [Fact]
+    public void ChartStockFormatDialogResult_ClampsUpDownBarGapWidthTo0To500()
+    {
+        ChartStockFormatDialogResult.CreateResult(-5, null, null, null, null, null, 1.0).UpDownBarGapWidth.Should().Be(0);
+        ChartStockFormatDialogResult.CreateResult(600, null, null, null, null, null, 1.0).UpDownBarGapWidth.Should().Be(500);
+        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 1.0).UpDownBarGapWidth.Should().Be(150);
+    }
+
+    [Fact]
+    public void ChartStockFormatDialogResult_ClampsHighLowLineThicknessTo05To10()
+    {
+        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 0.1).HighLowLineThickness.Should().BeApproximately(0.5, 0.001);
+        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 20.0).HighLowLineThickness.Should().BeApproximately(10.0, 0.001);
+        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 1.5).HighLowLineThickness.Should().BeApproximately(1.5, 0.001);
+    }
+
+    [Fact]
+    public void ChartStockFormatDialogResult_LoadsFromChart()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            UpDownBarGapWidth = 200,
+            UpBarFillColor = new CellColor(0, 128, 0),
+            DownBarFillColor = new CellColor(255, 0, 0),
+            HighLowLineColor = new CellColor(100, 100, 100),
+            HighLowLineThickness = 2.0
+        };
+        var result = ChartStockFormatDialogResult.FromChart(chart);
+        result.UpDownBarGapWidth.Should().Be(200);
+        result.UpBarFillColor.Should().Be(new CellColor(0, 128, 0));
+        result.DownBarFillColor.Should().Be(new CellColor(255, 0, 0));
+        result.HighLowLineColor.Should().Be(new CellColor(100, 100, 100));
+        result.HighLowLineThickness.Should().BeApproximately(2.0, 0.001);
+    }
+
+    [Fact]
+    public void ChartStockFormatDialogResult_MapsToLayoutOptions()
+    {
+        var result = ChartStockFormatDialogResult.CreateResult(
+            150, new CellColor(0, 200, 0), new CellColor(0, 100, 0),
+            new CellColor(200, 0, 0), new CellColor(100, 0, 0),
+            new CellColor(80, 80, 80), 1.5);
+        result.ToOptions().UpDownBarGapWidth.Should().Be(150);
+        result.ToOptions().UpBarFillColor.Should().Be(new CellColor(0, 200, 0));
+        result.ToOptions().UpBarBorderColor.Should().Be(new CellColor(0, 100, 0));
+        result.ToOptions().DownBarFillColor.Should().Be(new CellColor(200, 0, 0));
+        result.ToOptions().DownBarBorderColor.Should().Be(new CellColor(100, 0, 0));
+        result.ToOptions().HighLowLineColor.Should().Be(new CellColor(80, 80, 80));
+        result.ToOptions().HighLowLineThickness.Should().BeApproximately(1.5, 0.001);
+    }
+
     private static string ReadChartDialogSource() =>
         string.Join(Environment.NewLine, new[]
         {
