@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Printing;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
@@ -9,6 +10,7 @@ using FluentAssertions;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
 using PdfSharp.Pdf;
+using PdfSharp.Pdf.Advanced;
 using PdfSharp.Pdf.IO;
 
 namespace Freexcel.App.Host.Tests;
@@ -998,6 +1000,183 @@ public class ExportPlannerTests
             {
                 File.Delete(path);
             }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesLinkAnnotationsForPrintedWorksheetHyperlinks()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Hyperlink annotation export");
+            var sheet = workbook.AddSheet("Sheet1");
+            var webAddress = new CellAddress(sheet.Id, 1, 1);
+            var mailAddress = new CellAddress(sheet.Id, 2, 1);
+            var bareMailAddress = new CellAddress(sheet.Id, 3, 1);
+            var fileAddress = new CellAddress(sheet.Id, 4, 1);
+            var uncAddress = new CellAddress(sheet.Id, 5, 1);
+            sheet.SetCell(webAddress, new TextValue("Docs"));
+            sheet.SetCell(mailAddress, new TextValue("Mail"));
+            sheet.SetCell(bareMailAddress, new TextValue("Bare mail"));
+            sheet.SetCell(fileAddress, new TextValue("File"));
+            sheet.SetCell(uncAddress, new TextValue("Share"));
+            sheet.Hyperlinks[webAddress] = "https://example.com/freexcel";
+            sheet.Hyperlinks[mailAddress] = "mailto:review@example.com";
+            sheet.Hyperlinks[bareMailAddress] = "bare@example.com";
+            sheet.HyperlinkMetadata[bareMailAddress] = new HyperlinkMetadata(
+                HyperlinkTargetKind.EmailAddress);
+            sheet.Hyperlinks[fileAddress] = @"C:\Reports\Book 1.xlsx";
+            sheet.Hyperlinks[uncAddress] = @"\\server\share\book.xlsx";
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: false);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                ReadLinkAnnotationUris(pdf.Pages[0])
+                    .Should()
+                    .BeEquivalentTo(
+                        "https://example.com/freexcel",
+                        "mailto:review@example.com",
+                        "mailto:bare@example.com",
+                        "file:///C:/Reports/Book 1.xlsx",
+                        "file://server/share/book.xlsx");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_FiltersLinkAnnotationsToRequestedPageRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Hyperlink page range export");
+            var sheet = workbook.AddSheet("Sheet1");
+            var firstPageAddress = new CellAddress(sheet.Id, 1, 1);
+            var secondPageAddress = new CellAddress(sheet.Id, 1, 25);
+            sheet.SetCell(firstPageAddress, new TextValue("First"));
+            sheet.SetCell(secondPageAddress, new TextValue("Second"));
+            sheet.Hyperlinks[firstPageAddress] = "https://example.com/first";
+            sheet.Hyperlinks[secondPageAddress] = "https://example.com/second";
+            sheet.PrintArea = new GridRange(firstPageAddress, secondPageAddress);
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2));
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.PageCount.Should().Be(1);
+                ReadLinkAnnotationUris(pdf.Pages[0])
+                    .Should()
+                    .Equal("https://example.com/second");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesLinkAnnotationRectInPdfCoordinates()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = new FixedDocument();
+            var page = new FixedPage { Width = 200, Height = 100 };
+            page.Children.Add(new VisualHost
+            {
+                LinkOverlays =
+                [
+                    new PdfLinkOverlay(
+                        "https://example.com/rect",
+                        HyperlinkTargetKind.ExistingFileOrWebPage,
+                        X: 96,
+                        Y: 24,
+                        Width: 48,
+                        Height: 12)
+                ]
+            });
+            var content = new PageContent();
+            ((System.Windows.Markup.IAddChild)content).AddChild(page);
+            document.Pages.Add(content);
+            document.DocumentPaginator.PageSize = new Size(200, 100);
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                var rect = ReadLinkAnnotationRects(pdf.Pages[0]).Should().ContainSingle().Subject;
+                rect.Should().Equal(72, 48, 108, 57);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfLinkOverlayExtractor_IncludesRenderTranslationTransformsButNotLayoutTranslation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var page = new FixedPage { Width = 180, Height = 120 };
+            var container = new Canvas
+            {
+                LayoutTransform = new TranslateTransform(100, 200),
+                RenderTransform = new TranslateTransform(3, 4)
+            };
+            Canvas.SetLeft(container, 10);
+            Canvas.SetTop(container, 20);
+
+            var linkTransform = new TransformGroup();
+            linkTransform.Children.Add(new TranslateTransform(7, 8));
+            linkTransform.Children.Add(new MatrixTransform(new Matrix(1, 0, 0, 1, 11, 13)));
+            var panel = new Canvas
+            {
+                Margin = new System.Windows.Thickness(5, 6, 0, 0),
+                RenderTransform = linkTransform
+            };
+            var host = new VisualHost
+            {
+                LinkOverlays =
+                [
+                    new PdfLinkOverlay(
+                        "https://example.com/translated",
+                        HyperlinkTargetKind.ExistingFileOrWebPage,
+                        X: 2,
+                        Y: 3,
+                        Width: 20,
+                        Height: 10)
+                ]
+            };
+
+            panel.Children.Add(host);
+            container.Children.Add(panel);
+            page.Children.Add(container);
+
+            var overlay = PdfLinkOverlayExtractor.Extract(page).Should().ContainSingle().Subject;
+            overlay.Target.Should().Be("https://example.com/translated");
+            overlay.X.Should().Be(38);
+            overlay.Y.Should().Be(54);
+            overlay.Width.Should().Be(20);
+            overlay.Height.Should().Be(10);
         });
     }
 
@@ -2009,6 +2188,64 @@ public class ExportPlannerTests
 
     private static FixedDocument CreateOnePageDocument()
         => CreateDocument(pageCount: 1);
+
+    private static IReadOnlyList<string> ReadLinkAnnotationUris(PdfPage page)
+    {
+        var annotations = page.Elements.GetArray("/Annots");
+        if (annotations is null)
+            return [];
+
+        var uris = new List<string>();
+        foreach (var item in annotations.Elements)
+        {
+            var annotation = ResolveDictionary(item);
+            if (annotation is null || annotation.Elements.GetName("/Subtype") != "/Link")
+                continue;
+
+            var action = annotation.Elements.GetDictionary("/A");
+            action.Should().NotBeNull();
+            action!.Elements.GetName("/S").Should().Be("/URI");
+            uris.Add(action.Elements.GetString("/URI"));
+        }
+
+        return uris;
+    }
+
+    private static IReadOnlyList<double[]> ReadLinkAnnotationRects(PdfPage page)
+    {
+        var annotations = page.Elements.GetArray("/Annots");
+        if (annotations is null)
+            return [];
+
+        var rects = new List<double[]>();
+        foreach (var item in annotations.Elements)
+        {
+            var annotation = ResolveDictionary(item);
+            if (annotation is null || annotation.Elements.GetName("/Subtype") != "/Link")
+                continue;
+
+            var rect = annotation.Elements.GetArray("/Rect");
+            rect.Should().NotBeNull();
+            rects.Add([
+                rect!.Elements.GetReal(0),
+                rect.Elements.GetReal(1),
+                rect.Elements.GetReal(2),
+                rect.Elements.GetReal(3)
+            ]);
+        }
+
+        return rects;
+    }
+
+    private static PdfDictionary? ResolveDictionary(PdfItem item)
+    {
+        return item switch
+        {
+            PdfDictionary dictionary => dictionary,
+            PdfReference reference => reference.Value as PdfDictionary,
+            _ => null
+        };
+    }
 
     private static FixedDocument CreateNestedTextDocument()
     {
