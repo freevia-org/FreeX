@@ -20,6 +20,8 @@ public partial class GridView
         RenderGridLines(dc);
         RenderCells(dc);
         RenderSplitPaneCells(dc);
+        if (isLiveResizing)
+            RenderLiveResizeContinuation(dc);
         if (!isLiveResizing)
         {
             RenderWorksheetViewOverlay(dc);

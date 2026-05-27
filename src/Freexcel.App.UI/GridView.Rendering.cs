@@ -33,6 +33,155 @@ public partial class GridView
         // Grid lines are drawn as cell/header rectangle borders.
     }
 
+    private void RenderLiveResizeContinuation(DrawingContext dc)
+    {
+        if (Viewport is null)
+            return;
+
+        var rowHeaderWidth = ActualRowHeaderWidth;
+        var columnHeaderHeight = EffectiveColHeaderHeight;
+        var gridLeft = rowHeaderWidth;
+        var gridTop = columnHeaderHeight;
+        var gridRight = Viewport.ColMetrics.Count > 0
+            ? rowHeaderWidth + Viewport.ColMetrics[^1].LeftOffset + Viewport.ColMetrics[^1].Width
+            : gridLeft;
+        var gridBottom = Viewport.RowMetrics.Count > 0
+            ? columnHeaderHeight + Viewport.RowMetrics[^1].TopOffset + Viewport.RowMetrics[^1].Height
+            : gridTop;
+
+        if (ActualWidth > gridRight)
+            RenderLiveResizeColumnContinuation(dc, gridRight, gridTop);
+
+        if (ActualHeight > gridBottom)
+            RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom);
+
+        if (ActualWidth > gridRight && ActualHeight > gridBottom)
+        {
+            DrawLiveResizeHorizontalGridLines(dc, gridRight, ActualWidth, gridBottom);
+            DrawLiveResizeVerticalGridLines(dc, gridRight, ActualHeight);
+        }
+    }
+
+    private void RenderLiveResizeColumnContinuation(
+        DrawingContext dc,
+        double startX,
+        double gridTop)
+    {
+        if (startX >= ActualWidth)
+            return;
+
+        var columnWidth = Viewport!.ColMetrics.Count > 0
+            ? Math.Max(1, Viewport.ColMetrics[^1].Width)
+            : 64;
+        var lastColumn = Viewport.ColMetrics.Count > 0 ? Viewport.ColMetrics[^1].Col : 0;
+        var height = Math.Max(0, ActualHeight - gridTop);
+        if (height > 0)
+            dc.DrawRectangle(Brushes.White, null, new Rect(startX, gridTop, ActualWidth - startX, height));
+
+        for (var x = startX; x < ActualWidth; x += columnWidth)
+        {
+            var width = Math.Min(columnWidth, ActualWidth - x);
+            if (EffectiveColHeaderHeight > 0)
+            {
+                var headerRect = new Rect(x, 0, width, EffectiveColHeaderHeight);
+                dc.DrawRectangle(HeaderBackgroundBrush, GridPen, headerRect);
+                DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect);
+            }
+
+            if (height > 0)
+                dc.DrawLine(GridPen, new Point(x, gridTop), new Point(x, ActualHeight));
+        }
+
+        if (height > 0)
+            dc.DrawLine(GridPen, new Point(ActualWidth, gridTop), new Point(ActualWidth, ActualHeight));
+
+        DrawLiveResizeHorizontalGridLines(dc, startX, ActualWidth, gridTop);
+    }
+
+    private void RenderLiveResizeRowContinuation(
+        DrawingContext dc,
+        double gridLeft,
+        double gridRight,
+        double startY)
+    {
+        if (startY >= ActualHeight)
+            return;
+
+        var rowHeight = Viewport!.RowMetrics.Count > 0
+            ? Math.Max(1, Viewport.RowMetrics[^1].Height)
+            : 20;
+        var lastRow = Viewport.RowMetrics.Count > 0 ? Viewport.RowMetrics[^1].Row : 0;
+        var width = Math.Max(0, gridRight - gridLeft);
+        if (width > 0)
+            dc.DrawRectangle(Brushes.White, null, new Rect(gridLeft, startY, width, ActualHeight - startY));
+
+        for (var y = startY; y < ActualHeight; y += rowHeight)
+        {
+            var height = Math.Min(rowHeight, ActualHeight - y);
+            if (ActualRowHeaderWidth > 0)
+            {
+                var headerRect = new Rect(0, y, ActualRowHeaderWidth, height);
+                dc.DrawRectangle(HeaderBackgroundBrush, GridPen, headerRect);
+                DrawLiveResizeHeaderText(dc, (++lastRow).ToString(CultureInfo.InvariantCulture), headerRect);
+            }
+
+            if (width > 0)
+                dc.DrawLine(GridPen, new Point(gridLeft, y), new Point(gridRight, y));
+        }
+
+        if (width > 0)
+            dc.DrawLine(GridPen, new Point(gridLeft, ActualHeight), new Point(gridRight, ActualHeight));
+
+        DrawLiveResizeVerticalGridLines(dc, gridLeft, ActualHeight);
+    }
+
+    private void DrawLiveResizeHorizontalGridLines(DrawingContext dc, double startX, double endX, double startY)
+    {
+        if (endX <= startX || startY >= ActualHeight)
+            return;
+
+        var rowHeight = Viewport!.RowMetrics.Count > 0
+            ? Math.Max(1, Viewport.RowMetrics[^1].Height)
+            : 20;
+        for (var y = startY; y < ActualHeight; y += rowHeight)
+            dc.DrawLine(GridPen, new Point(startX, y), new Point(endX, y));
+
+        dc.DrawLine(GridPen, new Point(startX, ActualHeight), new Point(endX, ActualHeight));
+    }
+
+    private void DrawLiveResizeVerticalGridLines(DrawingContext dc, double startX, double endY)
+    {
+        if (startX >= ActualWidth || endY <= EffectiveColHeaderHeight)
+            return;
+
+        var columnWidth = Viewport!.ColMetrics.Count > 0
+            ? Math.Max(1, Viewport.ColMetrics[^1].Width)
+            : 64;
+        for (var x = startX; x < ActualWidth; x += columnWidth)
+            dc.DrawLine(GridPen, new Point(x, EffectiveColHeaderHeight), new Point(x, endY));
+
+        dc.DrawLine(GridPen, new Point(ActualWidth, EffectiveColHeaderHeight), new Point(ActualWidth, endY));
+    }
+
+    private static void DrawLiveResizeHeaderText(DrawingContext dc, string text, Rect rect)
+    {
+        if (string.IsNullOrWhiteSpace(text) || rect.Width <= 4 || rect.Height <= 4)
+            return;
+
+        var formatted = new FormattedText(
+            text,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            DefaultTypeface,
+            11,
+            TextBrush,
+            1);
+
+        dc.DrawText(formatted, new Point(
+            rect.Left + Math.Max(2, (rect.Width - formatted.Width) / 2),
+            rect.Top + Math.Max(1, (rect.Height - formatted.Height) / 2)));
+    }
+
     private void RenderSplitPaneCells(DrawingContext dc)
     {
         if (Viewport?.SplitPanes?.Cells is not { Count: > 0 }) return;
