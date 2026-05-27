@@ -339,7 +339,7 @@ public sealed class GridViewAutofillTests
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "Freexcel.App.UI", "GridView.Input.cs"));
         var cursorAssignment = source[
-            source.IndexOf("Cursor = target == ResizeTarget.Column", StringComparison.Ordinal)..
+            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
             source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
 
         cursorAssignment.Should().Contain("IsOnAutofillHandle(pos) ? Cursors.Cross");
