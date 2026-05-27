@@ -857,6 +857,7 @@ public sealed class MainWindowSourceHygieneTests
         editingSource.Should().Contain("private bool TryCreateCellFromEntryText(");
         editingSource.Should().Contain("private bool CommitPreparedEdits(");
         editingSource.Should().Contain("ExcelEditKeyPlanner");
+        editingSource.Should().Contain("FormulaRangeEntryPlanner.GetKeyboardSelectionTarget");
         editingSource.Should().Contain("CellEntryParser");
         formulaReferenceSource.Should().Contain("private bool TryApplyFormulaRangeSelection(");
         formulaReferenceSource.Should().Contain("FormulaRangeEntryPlanner");

@@ -291,12 +291,35 @@ public partial class MainWindow
         var current = formulaRangeEntryActive
             ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
             : selectedRange.Value.Start;
+        var modifiers = Keyboard.Modifiers;
+        var pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+        var colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
+
+        if (formulaRangeEntryActive &&
+            FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                e.Key,
+                e.SystemKey,
+                modifiers,
+                current,
+                _workbook.GetSheet(_currentSheetId),
+                pageSize,
+                colPageSize) is { } formulaReferenceShortcutTarget)
+        {
+            if (TryApplyFormulaRangeSelection(
+                    formulaReferenceShortcutTarget,
+                    extendSelection: modifiers.HasFlag(ModifierKeys.Shift)))
+            {
+                EnsureCellVisible(formulaReferenceShortcutTarget);
+                e.Handled = true;
+            }
+            return;
+        }
 
         var intent = ExcelEditKeyPlanner.GetIntent(
             e.Key,
-            Keyboard.Modifiers,
+            modifiers,
             current,
-            pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
+            pageSize: pageSize,
             allowFormulaBarNavigationKeys: false,
             formulaRangeEntryActive: formulaRangeEntryActive,
             inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow,
@@ -456,9 +479,31 @@ public partial class MainWindow
                 ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange, _selectionCursor)
                 : selectedRange.Start;
             int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+            int colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
+            var modifiers = e.KeyboardDevice.Modifiers;
+            if (formulaRangeEntryActive &&
+                FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                    e.Key,
+                    e.SystemKey,
+                    modifiers,
+                    current,
+                    _workbook.GetSheet(_currentSheetId),
+                    pageSize,
+                    colPageSize) is { } formulaReferenceShortcutTarget)
+            {
+                if (TryApplyFormulaRangeSelection(
+                        formulaReferenceShortcutTarget,
+                        extendSelection: modifiers.HasFlag(ModifierKeys.Shift)))
+                {
+                    EnsureCellVisible(formulaReferenceShortcutTarget);
+                    e.Handled = true;
+                }
+                return;
+            }
+
             var intent = ExcelEditKeyPlanner.GetIntent(
                 e.Key,
-                e.KeyboardDevice.Modifiers,
+                modifiers,
                 current,
                 pageSize,
                 allowFormulaBarNavigationKeys: !formulaTextActive,

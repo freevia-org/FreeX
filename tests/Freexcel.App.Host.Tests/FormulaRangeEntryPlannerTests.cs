@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -140,6 +141,28 @@ public sealed class FormulaRangeEntryPlannerTests
         FormulaRangeEntryPlanner.GetKeyboardCursor(Range("A1", "B1"), selectionCursor: null)
             .Should()
             .Be(CellAddress.Parse("A1", SheetId));
+    }
+
+    [Fact]
+    public void GetKeyboardSelectionTarget_UsesCtrlShiftArrowDataBoundary()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(CellAddress.Parse("B2", sheet.Id), Cell.FromValue(new NumberValue(1)));
+        sheet.SetCell(CellAddress.Parse("C2", sheet.Id), Cell.FromValue(new NumberValue(3)));
+        sheet.SetCell(CellAddress.Parse("D2", sheet.Id), Cell.FromValue(new NumberValue(4)));
+        sheet.SetCell(CellAddress.Parse("E2", sheet.Id), Cell.FromValue(new NumberValue(5)));
+
+        FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                Key.Right,
+                Key.None,
+                ModifierKeys.Control | ModifierKeys.Shift,
+                CellAddress.Parse("B2", sheet.Id),
+                sheet,
+                rowPageSize: 20,
+                colPageSize: 10)
+            .Should()
+            .Be(CellAddress.Parse("E2", sheet.Id));
     }
 
     [Fact]

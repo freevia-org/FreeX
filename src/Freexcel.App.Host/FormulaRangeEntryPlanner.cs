@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -13,6 +14,54 @@ public static class FormulaRangeEntryPlanner
         => selectionCursor is { } cursor && cursor.Sheet == selectedRange.Start.Sheet
             ? cursor
             : selectedRange.Start;
+
+    public static CellAddress? GetKeyboardSelectionTarget(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        CellAddress current,
+        Sheet? sheet,
+        int rowPageSize,
+        int colPageSize)
+    {
+        var horizontalPageTarget = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
+            key,
+            systemKey,
+            modifiers,
+            current,
+            colPageSize);
+        if (horizontalPageTarget is { })
+            return horizontalPageTarget;
+
+        if ((modifiers & ~(ModifierKeys.Control | ModifierKeys.Shift)) != 0)
+            return null;
+
+        var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(key, modifiers, endMode: false);
+        var ctrlHeld = (modifiers & ModifierKeys.Control) != 0;
+
+        return key switch
+        {
+            Key.Up => useDataBoundary
+                ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
+                : new CellAddress(current.Sheet, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
+            Key.Down => useDataBoundary
+                ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, +1)
+                : new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col),
+            Key.Left => useDataBoundary
+                ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1)
+                : new CellAddress(current.Sheet, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
+            Key.Right => useDataBoundary
+                ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, +1)
+                : new CellAddress(current.Sheet, current.Row, Math.Min(current.Col + 1, CellAddress.MaxCol)),
+            Key.Home => new CellAddress(current.Sheet, ctrlHeld ? 1u : current.Row, 1u),
+            Key.End => ctrlHeld
+                ? ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, current.Sheet)
+                : null,
+            Key.PageUp => new CellAddress(current.Sheet, (uint)Math.Max(1, (int)current.Row - rowPageSize), current.Col),
+            Key.PageDown => new CellAddress(current.Sheet, Math.Min(CellAddress.MaxRow, current.Row + (uint)rowPageSize), current.Col),
+            _ => null
+        };
+    }
 
     public static bool TryApplyRangeSelection(
         string text,
