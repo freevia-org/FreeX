@@ -273,6 +273,34 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ZoomDialogOpenedWithCustomPercent_FocusesAndSelectsCustomPercent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ZoomDialog(125);
+            try
+            {
+                dialog.Show();
+                PumpDispatcher();
+
+                var customButton = GetField<RadioButton>(dialog, "_customZoomButton");
+                var zoomBox = GetField<TextBox>(dialog, "_zoomBox");
+
+                customButton.IsChecked.Should().BeTrue();
+                Keyboard.FocusedElement.Should().BeSameAs(zoomBox);
+                zoomBox.Text.Should().Be("125");
+                zoomBox.SelectionStart.Should().Be(0);
+                zoomBox.SelectionLength.Should().Be(zoomBox.Text.Length);
+            }
+            finally
+            {
+                dialog.Close();
+                PumpDispatcher();
+            }
+        });
+    }
+
+    [Fact]
     public void ZoomDialog_InvalidCustomInput_ShowsParserErrorAndRefocusesEntry()
     {
         var source = ReadRemainingDialogSources();
@@ -1182,4 +1210,14 @@ public sealed class RemainingDialogTests
         var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(instance).Should().BeOfType<T>().Subject;
-    }}
+    }
+
+    private static void PumpDispatcher()
+    {
+        var frame = new DispatcherFrame();
+        Dispatcher.CurrentDispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
+    }
+}
