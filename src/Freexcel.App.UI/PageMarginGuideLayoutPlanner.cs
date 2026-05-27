@@ -14,49 +14,92 @@ public static class PageMarginGuideLayoutPlanner
         WorksheetPageOrientation orientation,
         WorksheetPageMargins margins)
     {
-        var top = FindRowTop(viewport, printArea.Start.Row, columnHeaderHeight);
-        var bottom = FindRowBottom(viewport, printArea.End.Row, columnHeaderHeight);
-        var left = FindColumnLeft(viewport, printArea.Start.Col, rowHeaderWidth);
-        var right = FindColumnRight(viewport, printArea.End.Col, rowHeaderWidth);
-        if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue)
+        if (!TryFindRowMetrics(viewport.RowMetrics, printArea.Start.Row, printArea.End.Row, out var topRow, out var bottomRow) ||
+            !TryFindColumnMetrics(viewport.ColMetrics, printArea.Start.Col, printArea.End.Col, out var leftColumn, out var rightColumn))
             return null;
 
         var guide = WorksheetPageLayout.GetMarginGuideFractions(paperSize, orientation, margins);
-        var width = right.Value - left.Value;
-        var height = bottom.Value - top.Value;
+        var top = topRow.TopOffset + columnHeaderHeight;
+        var bottom = bottomRow.TopOffset + bottomRow.Height + columnHeaderHeight;
+        var left = leftColumn.LeftOffset + rowHeaderWidth;
+        var right = rightColumn.LeftOffset + rightColumn.Width + rowHeaderWidth;
+        var width = right - left;
+        var height = bottom - top;
         if (width <= 0 || height <= 0)
             return null;
 
         return new PageMarginGuideLayout(
-            top.Value,
-            left.Value,
-            bottom.Value,
-            right.Value,
-            left.Value + width * guide.Left,
-            left.Value + width * guide.Right,
-            top.Value + height * guide.Top,
-            top.Value + height * guide.Bottom);
+            top,
+            left,
+            bottom,
+            right,
+            left + width * guide.Left,
+            left + width * guide.Right,
+            top + height * guide.Top,
+            top + height * guide.Bottom);
     }
 
-    private static double? FindRowTop(ViewportModel viewport, uint row, double columnHeaderHeight) =>
-        viewport.RowMetrics.FirstOrDefault(metric => metric.Row == row) is { } metric
-            ? metric.TopOffset + columnHeaderHeight
-            : null;
+    private static bool TryFindRowMetrics(
+        IReadOnlyList<RowMetric> metrics,
+        uint topRow,
+        uint bottomRow,
+        out RowMetric topMetric,
+        out RowMetric bottomMetric)
+    {
+        RowMetric? foundTop = null;
+        RowMetric? foundBottom = null;
 
-    private static double? FindRowBottom(ViewportModel viewport, uint row, double columnHeaderHeight) =>
-        viewport.RowMetrics.FirstOrDefault(metric => metric.Row == row) is { } metric
-            ? metric.TopOffset + metric.Height + columnHeaderHeight
-            : null;
+        foreach (var metric in metrics)
+        {
+            if (foundTop is null && metric.Row == topRow)
+                foundTop = metric;
 
-    private static double? FindColumnLeft(ViewportModel viewport, uint column, double rowHeaderWidth) =>
-        viewport.ColMetrics.FirstOrDefault(metric => metric.Col == column) is { } metric
-            ? metric.LeftOffset + rowHeaderWidth
-            : null;
+            if (foundBottom is null && metric.Row == bottomRow)
+                foundBottom = metric;
 
-    private static double? FindColumnRight(ViewportModel viewport, uint column, double rowHeaderWidth) =>
-        viewport.ColMetrics.FirstOrDefault(metric => metric.Col == column) is { } metric
-            ? metric.LeftOffset + metric.Width + rowHeaderWidth
-            : null;
+            if (foundTop is not null && foundBottom is not null)
+            {
+                topMetric = foundTop;
+                bottomMetric = foundBottom;
+                return true;
+            }
+        }
+
+        topMetric = null!;
+        bottomMetric = null!;
+        return false;
+    }
+
+    private static bool TryFindColumnMetrics(
+        IReadOnlyList<ColMetric> metrics,
+        uint leftColumn,
+        uint rightColumn,
+        out ColMetric leftMetric,
+        out ColMetric rightMetric)
+    {
+        ColMetric? foundLeft = null;
+        ColMetric? foundRight = null;
+
+        foreach (var metric in metrics)
+        {
+            if (foundLeft is null && metric.Col == leftColumn)
+                foundLeft = metric;
+
+            if (foundRight is null && metric.Col == rightColumn)
+                foundRight = metric;
+
+            if (foundLeft is not null && foundRight is not null)
+            {
+                leftMetric = foundLeft;
+                rightMetric = foundRight;
+                return true;
+            }
+        }
+
+        leftMetric = null!;
+        rightMetric = null!;
+        return false;
+    }
 
     public static WorksheetPageMarginEdge? HitTestGuide(
         PageMarginGuideLayout guide,
