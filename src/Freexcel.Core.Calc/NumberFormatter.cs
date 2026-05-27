@@ -6,6 +6,10 @@ namespace Freexcel.Core.Calc;
 
 public static partial class NumberFormatter
 {
+    private static readonly Regex NumericElapsedTokenRegex = new(@"\[([hH])\]|\[([mM])\]|\[([sS])\]");
+    private static readonly Regex NumericBracketDirectiveRegex = new(@"\[[^\]]*\]");
+    private static readonly Regex NumericQuotedTextRegex = new("\"[^\"]*\"");
+
     // Returned alongside display text so the grid can apply conditional colors.
     public sealed record FormatResult(string Text, string? ColorHex = null);
 
@@ -132,14 +136,14 @@ public static partial class NumberFormatter
 
         // Elapsed-time brackets: [h], [m], [s] represent total elapsed hours/minutes/seconds
         // and must be handled before the generic bracket-stripping pass.
-        var elapsedMatch = Regex.Match(format, @"\[([hH])\]|\[([mM])\]|\[([sS])\]");
+        var elapsedMatch = NumericElapsedTokenRegex.Match(format);
         if (elapsedMatch.Success)
         {
             return FormatElapsedTime(value, RemoveSpacingAndFillDirectives(format), elapsedMatch);
         }
 
         // Remove any remaining bracket content (conditions, locale, etc.)
-        format = Regex.Replace(format, @"\[[^\]]*\]", "");
+        format = NumericBracketDirectiveRegex.Replace(format, "");
         format = PreserveAccountingFillSpace(format);
         format = RemoveSpacingAndFillDirectives(format);
         (format, value) = ApplyTrailingCommaScaling(format, value);
@@ -178,7 +182,7 @@ public static partial class NumberFormatter
             return FormatScientific(value, format, numberFormat);
 
         // Accounting / text literals — strip quoted strings to expose the numeric pattern
-        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
+        var stripped = NumericQuotedTextRegex.Replace(format, "");
         var prefix = "";
         var suffix = "";
 
