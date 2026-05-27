@@ -185,9 +185,14 @@ public sealed class GridViewSelectionLayoutTests
         dataBars.Should().Contain("var numericCells = new List<(DisplayCell Cell, double Value)>();");
         dataBars.Should().Contain("numericCells.Add((cell, value));");
         dataBars.Should().Contain("foreach (var (cell, value) in numericCells)");
+        dataBars.Should().Contain("BuildRowMetricLookup(viewport.RowMetrics)");
+        dataBars.Should().Contain("BuildColMetricLookup(viewport.ColMetrics)");
         dataBars.Should().NotContain(".Where(");
         dataBars.Should().NotContain(".Select(");
         dataBars.Should().NotContain(".DefaultIfEmpty(");
+        dataBars.Should().NotContain(".ToDictionary(");
+        source.Should().Contain("new Dictionary<uint, RowMetric>(metrics.Count)");
+        source.Should().Contain("new Dictionary<uint, ColMetric>(metrics.Count)");
     }
 
     [Fact]

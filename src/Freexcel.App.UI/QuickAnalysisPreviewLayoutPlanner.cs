@@ -37,8 +37,8 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         if (numericCells.Count == 0)
             return [];
 
-        var rows = viewport.RowMetrics.ToDictionary(row => row.Row);
-        var cols = viewport.ColMetrics.ToDictionary(col => col.Col);
+        var rows = BuildRowMetricLookup(viewport.RowMetrics);
+        var cols = BuildColMetricLookup(viewport.ColMetrics);
         var rects = new List<Rect>();
         foreach (var (cell, value) in numericCells)
         {
@@ -127,6 +127,24 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         }
 
         return null;
+    }
+
+    private static Dictionary<uint, RowMetric> BuildRowMetricLookup(IReadOnlyList<RowMetric> metrics)
+    {
+        var lookup = new Dictionary<uint, RowMetric>(metrics.Count);
+        foreach (var metric in metrics)
+            lookup[metric.Row] = metric;
+
+        return lookup;
+    }
+
+    private static Dictionary<uint, ColMetric> BuildColMetricLookup(IReadOnlyList<ColMetric> metrics)
+    {
+        var lookup = new Dictionary<uint, ColMetric>(metrics.Count);
+        foreach (var metric in metrics)
+            lookup[metric.Col] = metric;
+
+        return lookup;
     }
 
     private static bool TryGetPreviewNumber(DisplayCell cell, out double value)
