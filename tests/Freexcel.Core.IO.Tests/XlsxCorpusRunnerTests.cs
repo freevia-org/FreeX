@@ -388,6 +388,55 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedFormControlsRetentionPackage_LinksWorksheetControlAndActiveXParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-form-controls-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        var worksheetRelsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        var activeXRelsEntry = archive.GetEntry("xl/activeX/_rels/activeX1.xml.rels");
+        worksheetEntry.Should().NotBeNull();
+        worksheetRelsEntry.Should().NotBeNull();
+        activeXRelsEntry.Should().NotBeNull();
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+        XDocument worksheetRelsXml;
+        using (var stream = worksheetRelsEntry!.Open())
+            worksheetRelsXml = XDocument.Load(stream);
+        XDocument activeXRelsXml;
+        using (var stream = activeXRelsEntry!.Open())
+            activeXRelsXml = XDocument.Load(stream);
+
+        var control = worksheetXml.Root!
+            .Element(sheetNs + "controls")!
+            .Elements(sheetNs + "control")
+            .Should().ContainSingle().Subject;
+        var controlRelationshipId = control.Attribute(relNs + "id")!.Value;
+        control.Attribute("name")!.Value.Should().Be("Freexcel Button");
+
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == controlRelationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp" &&
+                relationship.Attribute("Target")?.Value == "../ctrlProps/ctrlProp1.xml")
+            .Should().ContainSingle();
+        activeXRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary" &&
+                relationship.Attribute("Target")?.Value == "activeX1.bin")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()
