@@ -191,6 +191,29 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
+    public void CalculateQuickAnalysisCellAndSparklinePreviews_AvoidFilteredMetricLists()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "QuickAnalysisPreviewLayoutPlanner.cs"));
+        var cellPreview = source[
+            source.IndexOf("public static IReadOnlyList<Rect> CalculateCellPreviewRects", StringComparison.Ordinal)..
+            source.IndexOf("public static IReadOnlyList<Rect> CalculateSparklinePreviewRects", StringComparison.Ordinal)];
+        var sparklinePreview = source[
+            source.IndexOf("public static IReadOnlyList<Rect> CalculateSparklinePreviewRects", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryGetPreviewNumber", StringComparison.Ordinal)];
+
+        cellPreview.Should().Contain("foreach (var row in viewport.RowMetrics)");
+        cellPreview.Should().Contain("foreach (var col in viewport.ColMetrics)");
+        cellPreview.Should().NotContain(".Where(");
+        cellPreview.Should().NotContain(".ToList()");
+        sparklinePreview.Should().Contain("FirstVisibleColumnInRange(viewport.ColMetrics, range)");
+        sparklinePreview.Should().Contain("foreach (var row in viewport.RowMetrics)");
+        sparklinePreview.Should().NotContain("FirstOrDefault");
+        sparklinePreview.Should().NotContain(".Where(");
+        sparklinePreview.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
     public void CalculateQuickAnalysisCellPreviewRects_ReturnsInsetCellsForColorScalePreview()
     {
         var sheetId = SheetId.New();
