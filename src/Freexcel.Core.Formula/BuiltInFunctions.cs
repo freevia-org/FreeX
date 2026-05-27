@@ -231,8 +231,10 @@ public static partial class BuiltInFunctions
         ["VAR"]              = (VarS, 1, 255),
         ["VAR.S"]            = (VarS, 1, 255),
         ["VARA"]             = (VarA, 1, 255),
+        ["VARP"]             = (VarP, 1, 255),
         ["VAR.P"]            = (VarP, 1, 255),
         ["VARPA"]            = (VarPA, 1, 255),
+        ["STDEVP"]           = (StdevP, 1, 255),
         ["STDEV.P"]          = (StdevP, 1, 255),
         ["PERCENTILE"]       = (PercentileInc, 2, 2),
         ["PERCENTILE.INC"]   = (PercentileInc, 2, 2),
@@ -410,9 +412,13 @@ public static partial class BuiltInFunctions
         ["DVARP"]    = (DVarP, 3, 3),
 
         // ── Phase B1: Normal distribution ───────────────────────────────────
+        ["NORMDIST"]     = (NormDist, 4, 4),
         ["NORM.DIST"]    = (NormDist, 4, 4),
+        ["NORMINV"]      = (NormInv, 3, 3),
         ["NORM.INV"]     = (NormInv, 3, 3),
+        ["NORMSDIST"]    = (NormSDistCompat, 1, 1),
         ["NORM.S.DIST"]  = (NormSDist, 2, 2),
+        ["NORMSINV"]     = (NormSInvFunc, 1, 1),
         ["NORM.S.INV"]   = (NormSInvFunc, 1, 1),
         ["STANDARDIZE"]  = (Standardize, 3, 3),
 
@@ -460,9 +466,13 @@ public static partial class BuiltInFunctions
         ["GAMMALN.PRECISE"]  = (GammaLnFunc, 1, 1),
         ["GAMMA"]            = (GammaFunc, 1, 1),
         ["BETA.DIST"]        = (BetaDist, 4, 6),
+        ["BETADIST"]         = (BetaDistCompat, 3, 5),
         ["BETA.INV"]         = (BetaInvFunc, 3, 5),
+        ["BETAINV"]          = (BetaInvFunc, 3, 5),
         ["LOGNORM.DIST"]     = (LognormDist, 4, 4),
+        ["LOGNORMDIST"]      = (LognormDistCompat, 3, 3),
         ["LOGNORM.INV"]      = (LognormInv, 3, 3),
+        ["LOGINV"]           = (LognormInv, 3, 3),
 
         // ── Phase C: Financial functions ─────────────────────────────────────
         ["IPMT"]      = (Ipmt, 4, 6),

@@ -145,6 +145,45 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void LegacyVarianceAndNormalAliases_MatchModernFunctions()
+    {
+        var values = Values(1, 2, 3);
+        Number("=VARP(A1:A3)", values).Should().BeApproximately(Number("=VAR.P(A1:A3)", values), 1e-12);
+        Number("=STDEVP(A1:A3)", values).Should().BeApproximately(Number("=STDEV.P(A1:A3)", values), 1e-12);
+
+        var probabilities = Values(0.5, 0.8413447460685429);
+        Number("=NORMDIST(1,0,1,TRUE)", values).Should().BeApproximately(Number("=NORM.DIST(1,0,1,TRUE)", values), 1e-12);
+        Number("=NORMINV(0.8413447460685429,0,1)", values).Should().BeApproximately(Number("=NORM.INV(0.8413447460685429,0,1)", values), 1e-12);
+        Number("=NORMSDIST(1)", values).Should().BeApproximately(Number("=NORM.S.DIST(1,TRUE)", values), 1e-12);
+        Number("=NORMSINV(0.8413447460685429)", values).Should().BeApproximately(Number("=NORM.S.INV(0.8413447460685429)", values), 1e-12);
+
+        var spilled = _eval.Evaluate("=NORMSINV(A1:A2)", probabilities).Should().BeOfType<RangeValue>().Subject;
+        spilled.At(1, 1).Should().BeOfType<NumberValue>().Subject.Value.Should().BeApproximately(0, 1e-8);
+        spilled.At(2, 1).Should().BeOfType<NumberValue>().Subject.Value.Should().BeApproximately(1, 1e-6);
+    }
+
+    [Fact]
+    public void LegacyBetaAndLognormalAliases_MatchModernFunctions()
+    {
+        var sheet = Values();
+        Number("=BETADIST(0.5,2,3)", sheet).Should().BeApproximately(Number("=BETA.DIST(0.5,2,3,TRUE)", sheet), 1e-12);
+        Number("=BETADIST(2,2,3,1,3)", sheet).Should().BeApproximately(Number("=BETA.DIST(2,2,3,TRUE,1,3)", sheet), 1e-12);
+        Number("=BETAINV(0.6875,2,3)", sheet).Should().BeApproximately(Number("=BETA.INV(0.6875,2,3)", sheet), 1e-10);
+        Number("=LOGNORMDIST(EXP(1),0,1)", sheet).Should().BeApproximately(Number("=LOGNORM.DIST(EXP(1),0,1,TRUE)", sheet), 1e-12);
+        Number("=LOGINV(0.8413447460685429,0,1)", sheet).Should().BeApproximately(Number("=LOGNORM.INV(0.8413447460685429,0,1)", sheet), 1e-12);
+    }
+
+    [Fact]
+    public void LegacyDistributionAliases_ReturnExcelErrors()
+    {
+        var sheet = Values();
+        _eval.Evaluate("=NORMDIST(1,0,0,TRUE)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=NORMSINV(0)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=BETADIST(2,2,3)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=LOGNORMDIST(0,0,1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void ModeSngl_ReturnsFirstLowestMostFrequentValue()
     {
         Number("=MODE.SNGL(A1:A5)", Values(3, 2, 2, 3, 2)).Should().Be(2);
