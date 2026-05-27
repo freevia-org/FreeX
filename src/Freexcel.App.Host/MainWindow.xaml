@@ -1997,52 +1997,112 @@
                                 <Button Content="Themes" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeBtn_Click"
                                         local:RibbonTooltip.Title="Themes"
                                         local:RibbonTooltip.KeyTip="TH"
-                                        local:RibbonTooltip.Description="Change the workbook theme colors and fonts.">
+                                        local:RibbonTooltip.Description="Change the workbook theme colors and fonts."
+                                        AutomationProperties.Name="Themes"
+                                        AutomationProperties.AutomationId="PageLayoutThemesButton"
+                                        AutomationProperties.HelpText="Open workbook theme presets and customization.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeOfficeMenuItem_Click"/>
-                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorfulMenuItem_Click"/>
-                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeGrayscaleMenuItem_Click"/>
-                                            <MenuItem Header="Customize..." local:RibbonTooltip.KeyTip="U" Click="ThemeCustomizeMenuItem_Click"/>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeOfficeMenuItem_Click"
+                                                      AutomationProperties.Name="Office theme"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeOfficeMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Office workbook theme."/>
+                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorfulMenuItem_Click"
+                                                      AutomationProperties.Name="Freexcel Colorful theme"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorfulMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Freexcel Colorful workbook theme."/>
+                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeGrayscaleMenuItem_Click"
+                                                      AutomationProperties.Name="Grayscale theme"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeGrayscaleMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Grayscale workbook theme."/>
+                                            <MenuItem Header="Customize..." local:RibbonTooltip.KeyTip="U" Click="ThemeCustomizeMenuItem_Click"
+                                                      AutomationProperties.Name="Customize theme"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeCustomizeMenuItem"
+                                                      AutomationProperties.HelpText="Open the Customize Theme dialog."/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Colors" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeColorsBtn_Click"
                                         local:RibbonTooltip.Title="Theme Colors"
                                         local:RibbonTooltip.KeyTip="TC"
-                                        local:RibbonTooltip.Description="Change the workbook theme color palette.">
+                                        local:RibbonTooltip.Description="Change the workbook theme color palette."
+                                        AutomationProperties.Name="Theme Colors"
+                                        AutomationProperties.AutomationId="PageLayoutThemeColorsButton"
+                                        AutomationProperties.HelpText="Open workbook theme color presets and customization.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeColorsOfficeMenuItem_Click"/>
-                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorsColorfulMenuItem_Click"/>
-                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeColorsGrayscaleMenuItem_Click"/>
-                                            <MenuItem Header="Customize Colors..." local:RibbonTooltip.KeyTip="U" Click="ThemeColorsCustomizeMenuItem_Click"/>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeColorsOfficeMenuItem_Click"
+                                                      AutomationProperties.Name="Office theme colors"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorsOfficeMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Office theme color palette."/>
+                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorsColorfulMenuItem_Click"
+                                                      AutomationProperties.Name="Freexcel Colorful theme colors"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorsColorfulMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Freexcel Colorful theme color palette."/>
+                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeColorsGrayscaleMenuItem_Click"
+                                                      AutomationProperties.Name="Grayscale theme colors"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorsGrayscaleMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Grayscale theme color palette."/>
+                                            <MenuItem Header="Customize Colors..." local:RibbonTooltip.KeyTip="U" Click="ThemeColorsCustomizeMenuItem_Click"
+                                                      AutomationProperties.Name="Customize theme colors"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorsCustomizeMenuItem"
+                                                      AutomationProperties.HelpText="Open the Customize Theme dialog for colors."/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Fonts" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeFontsBtn_Click"
                                         local:RibbonTooltip.Title="Theme Fonts"
                                         local:RibbonTooltip.KeyTip="TF"
-                                        local:RibbonTooltip.Description="Change the workbook theme heading and body fonts.">
+                                        local:RibbonTooltip.Description="Change the workbook theme heading and body fonts."
+                                        AutomationProperties.Name="Theme Fonts"
+                                        AutomationProperties.AutomationId="PageLayoutThemeFontsButton"
+                                        AutomationProperties.HelpText="Open workbook theme font presets and customization.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeFontsOfficeMenuItem_Click"/>
-                                            <MenuItem Header="Arial" local:RibbonTooltip.KeyTip="A" Click="ThemeFontsArialMenuItem_Click"/>
-                                            <MenuItem Header="Times New Roman" local:RibbonTooltip.KeyTip="T" Click="ThemeFontsTimesMenuItem_Click"/>
-                                            <MenuItem Header="Customize Fonts..." local:RibbonTooltip.KeyTip="U" Click="ThemeFontsCustomizeMenuItem_Click"/>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeFontsOfficeMenuItem_Click"
+                                                      AutomationProperties.Name="Office theme fonts"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeFontsOfficeMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Office theme fonts."/>
+                                            <MenuItem Header="Arial" local:RibbonTooltip.KeyTip="A" Click="ThemeFontsArialMenuItem_Click"
+                                                      AutomationProperties.Name="Arial theme fonts"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeFontsArialMenuItem"
+                                                      AutomationProperties.HelpText="Apply Arial as the heading and body theme font."/>
+                                            <MenuItem Header="Times New Roman" local:RibbonTooltip.KeyTip="T" Click="ThemeFontsTimesMenuItem_Click"
+                                                      AutomationProperties.Name="Times New Roman theme fonts"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeFontsTimesMenuItem"
+                                                      AutomationProperties.HelpText="Apply Times New Roman as the heading and body theme font."/>
+                                            <MenuItem Header="Customize Fonts..." local:RibbonTooltip.KeyTip="U" Click="ThemeFontsCustomizeMenuItem_Click"
+                                                      AutomationProperties.Name="Customize theme fonts"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeFontsCustomizeMenuItem"
+                                                      AutomationProperties.HelpText="Open the Customize Theme dialog for fonts."/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeEffectsBtn_Click"
                                         local:RibbonTooltip.Title="Theme Effects"
                                         local:RibbonTooltip.KeyTip="TE"
-                                        local:RibbonTooltip.Description="Change the workbook theme effect set name.">
+                                        local:RibbonTooltip.Description="Change the workbook theme effect set name."
+                                        AutomationProperties.Name="Theme Effects"
+                                        AutomationProperties.AutomationId="PageLayoutThemeEffectsButton"
+                                        AutomationProperties.HelpText="Open workbook theme effect presets and customization.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeEffectsOfficeMenuItem_Click"/>
-                                            <MenuItem Header="Subtle" local:RibbonTooltip.KeyTip="S" Click="ThemeEffectsSubtleMenuItem_Click"/>
-                                            <MenuItem Header="Refined" local:RibbonTooltip.KeyTip="R" Click="ThemeEffectsRefinedMenuItem_Click"/>
-                                            <MenuItem Header="Customize Effects..." local:RibbonTooltip.KeyTip="U" Click="ThemeEffectsCustomizeMenuItem_Click"/>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeEffectsOfficeMenuItem_Click"
+                                                      AutomationProperties.Name="Office theme effects"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeEffectsOfficeMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Office theme effects."/>
+                                            <MenuItem Header="Subtle" local:RibbonTooltip.KeyTip="S" Click="ThemeEffectsSubtleMenuItem_Click"
+                                                      AutomationProperties.Name="Subtle theme effects"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeEffectsSubtleMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Subtle theme effects."/>
+                                            <MenuItem Header="Refined" local:RibbonTooltip.KeyTip="R" Click="ThemeEffectsRefinedMenuItem_Click"
+                                                      AutomationProperties.Name="Refined theme effects"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeEffectsRefinedMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Refined theme effects."/>
+                                            <MenuItem Header="Customize Effects..." local:RibbonTooltip.KeyTip="U" Click="ThemeEffectsCustomizeMenuItem_Click"
+                                                      AutomationProperties.Name="Customize theme effects"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeEffectsCustomizeMenuItem"
+                                                      AutomationProperties.HelpText="Open the Customize Theme dialog for effects."/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
