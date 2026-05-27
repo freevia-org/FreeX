@@ -309,7 +309,9 @@ public class XlsxCorpusScaffoldTests
             row.FeatureTags.Contains("chart-sheets", StringComparison.Ordinal) &&
             row.FeatureTags.Contains("dialog-sheets", StringComparison.Ordinal) &&
             row.FeatureTags.Contains("macro-sheets", StringComparison.Ordinal));
-        report.Should().Contain("| Unsupported sheet type package references | Chartsheet, dialog sheet, and macro sheet workbook references and relationships are exercised by generated known-gap retention coverage |");
+        const string reportLine = "| Unsupported sheet type package references | Chartsheet, dialog sheet, and macro sheet workbook references and relationships are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
     }
 
     [Fact]
