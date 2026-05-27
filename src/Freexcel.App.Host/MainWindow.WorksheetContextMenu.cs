@@ -13,7 +13,7 @@ public partial class MainWindow
     private void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point gridPos)
     {
         var actualAddr = new CellAddress(_currentSheetId, clickedCell.Row, clickedCell.Col);
-        if (SheetGrid.SelectedRange is null)
+        if (SheetGrid.SelectedRange is not { } selectedRange || !selectedRange.Contains(actualAddr))
             SetActiveCell(actualAddr);
 
         var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);
