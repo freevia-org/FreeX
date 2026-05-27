@@ -992,6 +992,31 @@ public sealed class DataToolDialogTests
         error.Should().Be("Criteria range must include headers and at least one criteria row.");
     }
 
+    [Theory]
+    [InlineData("", "F1:G2", "Enter a valid list range.")]
+    [InlineData("   ", "F1:G2", "Enter a valid list range.")]
+    [InlineData("A1:C5", "", "Enter a valid criteria range.")]
+    [InlineData("A1:C5", "   ", "Enter a valid criteria range.")]
+    public void AdvancedFilterDialog_RejectsMissingRequiredRanges(
+        string listRangeText,
+        string criteriaRangeText,
+        string expectedError)
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: listRangeText,
+            criteriaRangeText: criteriaRangeText,
+            copyToCellText: "",
+            uniqueRecordsOnly: false,
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be(expectedError);
+    }
+
     [Fact]
     public void AdvancedFilterDialog_ParsesSheetQualifiedListAndCriteriaRanges()
     {
@@ -1070,7 +1095,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("new GroupBox { Header = \"Action\"");
         source.Should().NotContain("Text = \"Action\"");
         source.Should().Contain("AddReferenceRow(rangesGrid, 0, \"_List range:\", _listRangeBox");
-        source.Should().Contain("AddReferenceRow(rangesGrid, 1, \"_Criteria range:\", _criteriaRangeBox");
+        source.Should().Contain("AddReferenceRow(rangesGrid, 1, \"Criteria _range:\", _criteriaRangeBox");
         source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
@@ -1083,6 +1108,61 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Header = \"Action\"");
         source.Should().Contain("Criteria should include column labels");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_UsesUniqueAccessKeysForActionAndRangeControls()
+    {
+        var accessKeyLabels = new[]
+        {
+            "_Filter the list, in-place",
+            "_Copy to another location",
+            "_List range:",
+            "Criteria _range:",
+            "Copy _to:",
+            "_Unique records only"
+        };
+
+        accessKeyLabels
+            .GroupBy(GetAccessKey)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key}: {string.Join(", ", group)}")
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_DefaultsToNoRiskInPlaceModeWithBlankCriteria()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AdvancedFilterDialog(SheetId.New(), "A1:C12");
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                var radioButtons = FindVisualChildren<RadioButton>(dialog).ToList();
+                var uniqueRecordsOnly = FindVisualChildren<CheckBox>(dialog)
+                    .Single(checkBox => Equals(checkBox.Content, "_Unique records only"));
+                var copyToPicker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == "Select copy-to cell");
+
+                radioButtons.Single(button => Equals(button.Content, "_Filter the list, in-place"))
+                    .IsChecked.Should().BeTrue();
+                radioButtons.Single(button => Equals(button.Content, "_Copy to another location"))
+                    .IsChecked.Should().BeFalse();
+                textBoxes[0].Text.Should().Be("A1:C12");
+                textBoxes[1].Text.Should().BeEmpty();
+                textBoxes[2].Text.Should().BeEmpty();
+                textBoxes[2].IsEnabled.Should().BeFalse();
+                copyToPicker.IsEnabled.Should().BeFalse();
+                uniqueRecordsOnly.IsChecked.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
