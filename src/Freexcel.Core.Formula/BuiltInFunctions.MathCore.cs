@@ -270,6 +270,28 @@ public static partial class BuiltInFunctions
         return new NumberValue(result);
     }
 
+    private static ScalarValue FactDouble(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, FactDoubleScalar);
+        return FactDoubleScalar(args[0]);
+    }
+
+    private static ScalarValue FactDoubleScalar(ScalarValue value)
+    {
+        var raw = ToNumber(value);
+        if (!double.IsFinite(raw) || raw < 0 || raw > int.MaxValue) return ErrorValue.Num;
+        var n = (int)Math.Truncate(raw);
+        double result = 1;
+        for (var i = n; i > 1; i -= 2)
+        {
+            result *= i;
+            if (!double.IsFinite(result)) return ErrorValue.Num;
+        }
+
+        return new NumberValue(result);
+    }
+
     // CHOOSE(index, val1, val2, ...)
     private static ScalarValue Choose(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -419,6 +441,100 @@ public static partial class BuiltInFunctions
         return TrigScalar(args[0], Math.Tan);
     }
 
+    private static ScalarValue Sec(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, SecScalar);
+        return SecScalar(args[0]);
+    }
+
+    private static ScalarValue SecScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
+        if (!double.IsFinite(n) || Math.Abs(n) >= TrigInputLimit) return ErrorValue.Num;
+        var denominator = Math.Cos(n);
+        if (denominator == 0) return ErrorValue.DivByZero;
+        return NumberResult(1.0 / denominator);
+    }
+
+    private static ScalarValue Csc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, CscScalar);
+        return CscScalar(args[0]);
+    }
+
+    private static ScalarValue CscScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
+        if (!double.IsFinite(n) || Math.Abs(n) >= TrigInputLimit) return ErrorValue.Num;
+        var denominator = Math.Sin(n);
+        if (denominator == 0) return ErrorValue.DivByZero;
+        return NumberResult(1.0 / denominator);
+    }
+
+    private static ScalarValue Cot(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, CotScalar);
+        return CotScalar(args[0]);
+    }
+
+    private static ScalarValue CotScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
+        if (!double.IsFinite(n) || Math.Abs(n) >= TrigInputLimit) return ErrorValue.Num;
+        var denominator = Math.Tan(n);
+        if (denominator == 0) return ErrorValue.DivByZero;
+        return NumberResult(1.0 / denominator);
+    }
+
+    private static ScalarValue Sech(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, SechScalar);
+        return SechScalar(args[0]);
+    }
+
+    private static ScalarValue SechScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        return NumberResult(1.0 / Math.Cosh(n));
+    }
+
+    private static ScalarValue Csch(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, CschScalar);
+        return CschScalar(args[0]);
+    }
+
+    private static ScalarValue CschScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        var denominator = Math.Sinh(n);
+        if (denominator == 0) return ErrorValue.DivByZero;
+        return NumberResult(1.0 / denominator);
+    }
+
+    private static ScalarValue Coth(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, CothScalar);
+        return CothScalar(args[0]);
+    }
+
+    private static ScalarValue CothScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        var denominator = Math.Tanh(n);
+        if (denominator == 0) return ErrorValue.DivByZero;
+        return NumberResult(1.0 / denominator);
+    }
+
     private static ScalarValue TrigScalar(ScalarValue value, Func<double, double> func)
     {
         var n = ToNumber(value);
@@ -468,6 +584,36 @@ public static partial class BuiltInFunctions
         return new NumberValue(Math.Atan(n));
     }
 
+    private static ScalarValue Acot(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, AcotScalar);
+        return AcotScalar(args[0]);
+    }
+
+    private static ScalarValue AcotScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (n == 0) return new NumberValue(Math.PI / 2.0);
+        var result = Math.Atan(1.0 / n);
+        return new NumberValue(n < 0 ? result + Math.PI : result);
+    }
+
+    private static ScalarValue Acoth(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, AcothScalar);
+        return AcothScalar(args[0]);
+    }
+
+    private static ScalarValue AcothScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
+        if (!double.IsFinite(n) || Math.Abs(n) <= 1) return ErrorValue.Num;
+        return NumberResult(0.5 * Math.Log((n + 1.0) / (n - 1.0)));
+    }
+
     private static ScalarValue Atan2Func(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
@@ -483,6 +629,8 @@ public static partial class BuiltInFunctions
         if (x == 0 && y == 0) return ErrorValue.DivByZero;
         return new NumberValue(Math.Atan2(y, x));
     }
+
+    private const double TrigInputLimit = 134217728.0;
 
     private static ScalarValue Degrees(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -649,6 +797,25 @@ public static partial class BuiltInFunctions
         return NumberResult(Math.Round(result));
     }
 
+    private static ScalarValue Combina(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], CombinaScalar);
+    }
+
+    private static ScalarValue CombinaScalar(ScalarValue numberValue, ScalarValue chosenValue)
+    {
+        double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
+        if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
+        if (dn < 0 || dn > 1029 || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
+        int n = (int)Math.Truncate(dn);
+        int k = (int)Math.Truncate(dk);
+        if (n == 0 && k > 0) return ErrorValue.Num;
+        if (k > 0 && n > 1029 - k + 1) return ErrorValue.Num;
+        return CombinPositiveIntegers(n + k - 1, k);
+    }
+
     private static ScalarValue Permut(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
@@ -667,6 +834,34 @@ public static partial class BuiltInFunctions
         for (int i = 0; i < k; i++)
             result *= (n - i);
         return NumberResult(result);
+    }
+
+    private static ScalarValue PermutationA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], PermutationAScalar);
+    }
+
+    private static ScalarValue PermutationAScalar(ScalarValue numberValue, ScalarValue chosenValue)
+    {
+        double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
+        if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
+        if (dn < 0 || dk < 0 || dn > int.MaxValue || dk > int.MaxValue) return ErrorValue.Num;
+        int n = (int)Math.Truncate(dn);
+        int k = (int)Math.Truncate(dk);
+        if (n == 0 && k > 0) return ErrorValue.Num;
+        return NumberResult(Math.Pow(n, k));
+    }
+
+    private static ScalarValue CombinPositiveIntegers(int n, int k)
+    {
+        if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
+        if (k > n - k) k = n - k;
+        double result = 1;
+        for (int i = 0; i < k; i++)
+            result = result * (n - i) / (i + 1);
+        return NumberResult(Math.Round(result));
     }
 
     private static ScalarValue Odd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

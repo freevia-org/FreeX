@@ -377,7 +377,8 @@ public sealed class ScenarioManagerDialogTests
         handlerSource.Should().Contain("ranges.SelectMany(range => range.AllCells()).Distinct().ToList()");
         handlerSource.Should().Contain("if (workbook.CalculationMode == WorkbookCalculationMode.Automatic)");
         handlerSource.Should().Contain("_recalcEngine.Recalculate(workbook, changedCells)");
-        handlerSource.Should().Contain("new SaveScenarioCommand(name, changes, comment, hidden, locked)");
+        handlerSource.Should().Contain("dialog.SelectedAction == ScenarioManagerAction.Edit ? dialog.SelectedScenarioName : null");
+        handlerSource.Should().Contain("new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName)");
         handlerSource.Should().Contain("TryParseScenarioChangingCells");
     }
 

@@ -556,6 +556,26 @@ public sealed class CsvFileAdapterTests
         cell.Value.Should().Be(new TextValue("=A1*2"));
     }
 
+    [Fact]
+    public void Save_RoundTripsSeparatorDirectivePrefixTextBeforeBlankCell()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sep="));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(""));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.Value.Should().Be(new TextValue("sep="));
+    }
+
     [Theory]
     [InlineData("0042")]
     [InlineData("1E3")]
@@ -677,6 +697,8 @@ public sealed class CsvFileAdapterTests
     }
 
     [Theory]
+    [InlineData("sep=;")]
+    [InlineData("sep=\t")]
     [InlineData("#N/A")]
     [InlineData("#DIV/0!")]
     [InlineData("#GETTING_DATA")]

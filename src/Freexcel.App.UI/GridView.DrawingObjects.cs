@@ -42,15 +42,9 @@ public partial class GridView
         foreach (var textBox in TextBoxes)
         {
             if (!textBox.IsVisible) continue;
-            var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == textBox.Anchor.Row);
-            var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == textBox.Anchor.Col);
-            if (row is null || col is null) continue;
+            if (!TryCreateAnchoredObjectRect(textBox.Anchor, textBox.Width, textBox.Height, 24, 18, out var rect))
+                continue;
 
-            var rect = new Rect(
-                col.LeftOffset + ActualRowHeaderWidth,
-                row.TopOffset + EffectiveColHeaderHeight,
-                Math.Max(24, textBox.Width),
-                Math.Max(18, textBox.Height));
             var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
             var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
             DrawTextBoxThemeEffect(dc, rect, WorkbookTheme);
@@ -86,15 +80,8 @@ public partial class GridView
         foreach (var shape in DrawingShapes)
         {
             if (!shape.IsVisible) continue;
-            var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == shape.Anchor.Row);
-            var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == shape.Anchor.Col);
-            if (row is null || col is null) continue;
-
-            var rect = new Rect(
-                col.LeftOffset + ActualRowHeaderWidth,
-                row.TopOffset + EffectiveColHeaderHeight,
-                Math.Max(8, shape.Width),
-                Math.Max(8, shape.Height));
+            if (!TryCreateAnchoredObjectRect(shape.Anchor, shape.Width, shape.Height, 8, 8, out var rect))
+                continue;
 
             var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
             var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);

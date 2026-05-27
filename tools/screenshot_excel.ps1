@@ -2,6 +2,13 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+trap {
+    if ($wpid -is [int] -and $wpid -gt 0) {
+        Get-Process -Id $wpid -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+
+    throw $_
+}
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -51,6 +58,13 @@ public class Win32e {
 $outDir = Join-Path $PSScriptRoot "screenshots_excel"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Get-ChildItem $outDir -Filter "*.png" | Remove-Item -Force
+$tabNames = @("Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help")
+$script:capturedFiles = @()
+$captureLimitations = @(
+    "Ribbon tab captures cover the top window band only.",
+    "Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.",
+    "Global input is blocked unless the expected process and window title own the foreground window."
+)
 
 $dpi   = [Win32e]::GetScreenDpi()
 $scale = $dpi / 96.0
@@ -122,6 +136,30 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle) {
 
 $expectedTitle = Get-WindowTitle $hwnd
 
+function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $files) {
+    $manifestPath = Join-Path $scriptOutDir "screenshot_manifest.json"
+    [pscustomobject]@{
+        Tool = $toolName
+        OutputDirectory = $scriptOutDir
+        OutputNaming = "excel_<RibbonTab>.png"
+        CatalogEvidenceTarget = "docs/UI_TEST_CATALOG.md"
+        WindowBounds = [pscustomobject]@{
+            Left = $windowRect.Left
+            Top = $windowRect.Top
+            Right = $windowRect.Right
+            Bottom = $windowRect.Bottom
+            Width = $windowRect.Right - $windowRect.Left
+            Height = $windowRect.Bottom - $windowRect.Top
+        }
+        CaptureLogicalHeight = $captureLogicalHeight
+        CapturePhysicalHeight = $capturePhysicalHeight
+        Tabs = $tabNames
+        Limitations = $captureLimitations
+        Captures = $files
+    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    Write-Host "Saved $manifestPath"
+}
+
 function Screenshot-Tab($tabName) {
     $tabCond = New-Object System.Windows.Automation.PropertyCondition(
                    [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
@@ -158,18 +196,23 @@ function Screenshot-Tab($tabName) {
     $path = "$outDir\excel_$safe.png"
     $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
+    $script:capturedFiles += [pscustomobject]@{
+        Tab = $tabName
+        FileName = Split-Path -Leaf $path
+        Path = $path
+        Width = $w
+        Height = $captureH
+    }
     Write-Host "Saved $path ($w x $captureH)"
 }
 
-Screenshot-Tab "Home"
-Screenshot-Tab "Insert"
-Screenshot-Tab "Draw"
-Screenshot-Tab "Page Layout"
-Screenshot-Tab "Formulas"
-Screenshot-Tab "Data"
-Screenshot-Tab "Review"
-Screenshot-Tab "View"
-Screenshot-Tab "Help"
+foreach ($tabName in $tabNames) {
+    Screenshot-Tab $tabName
+}
+
+$finalRect = New-Object Win32e+RECT
+[Win32e]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
+Write-ScreenshotEvidenceManifest "screenshot_excel.ps1" $outDir $finalRect 300 $captureH $script:capturedFiles
 
 # Close Excel gracefully
 $xlProc = Get-Process -Id $wpid -ErrorAction SilentlyContinue

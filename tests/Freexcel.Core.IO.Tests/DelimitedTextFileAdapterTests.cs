@@ -601,7 +601,29 @@ public sealed class DelimitedTextFileAdapterTests
         cell.Value.Should().Be(new TextValue("=A1*2"));
     }
 
+    [Fact]
+    public void Save_RoundTripsSeparatorDirectivePrefixTextBeforeBlankCell()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sep="));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(""));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.Value.Should().Be(new TextValue("sep="));
+    }
+
     [Theory]
+    [InlineData("sep=;")]
+    [InlineData("sep=,")]
     [InlineData("0042")]
     [InlineData("$42.00")]
     [InlineData(" ($42.25) ")]
