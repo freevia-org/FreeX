@@ -25,6 +25,16 @@ public sealed class FormulaDialogAccessKeyTests
     }
 
     [Fact]
+    public void CreateNamesFromSelectionDialog_ExposesNamedOptionsGroupHelpText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateNamesFromSelectionDialog.cs"));
+
+        source.Should().Contain("using System.Windows.Automation;");
+        source.Should().Contain("AutomationProperties.SetName(group, \"Create names from selected labels\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(group, \"Choose which row or column labels Excel uses to create named ranges.\");");
+    }
+
+    [Fact]
     public void CreateNamesFromSelectionDialogOpenedFromKeyboard_FocusesTopRowChoice()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateNamesFromSelectionDialog.cs"));

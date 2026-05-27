@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -61,6 +62,7 @@ public sealed class InsertFunctionDialog : Window
         searchPanel.Children.Add(_categoryBox);
 
         _listBox = new ListBox();
+        AutomationProperties.SetName(_listBox, "Functions");
         var listLabel = new Label { Content = "Select a _function:", Target = _listBox, Padding = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(listLabel, Dock.Top);
 
