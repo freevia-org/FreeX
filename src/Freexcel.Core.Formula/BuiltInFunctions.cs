@@ -323,8 +323,10 @@ public static partial class BuiltInFunctions
         ["GETPIVOTDATA"] = (GetPivotData, 2, 255),
 
         // ── Phase A2: CONVERT ───────────────────────────────────────────────
+        ["BASE"]        = (BaseFunc, 2, 3),
         ["CONVERT"]     = (Convert, 3, 3),
         ["COMPLEX"]     = (ComplexFunc, 2, 3),
+        ["DECIMAL"]     = (DecimalFunc, 2, 2),
         ["DELTA"]       = (Delta, 1, 2),
         ["ERF"]         = (ErfFunc, 1, 2),
         ["ERF.PRECISE"] = (ErfFunc, 1, 1),
