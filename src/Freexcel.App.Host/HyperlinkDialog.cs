@@ -61,7 +61,9 @@ public sealed class HyperlinkDialog : Window
 
         var grid = DialogGrid(3);
         AddTextRow(grid, 0, "Text to _display:", _displayBox, displayText);
+        AutomationProperties.SetName(_displayBox, "Text to display");
         AddTextRow(grid, 1, "_Address:", _targetBox, target);
+        AutomationProperties.SetName(_targetBox, "Address");
         _screenTipButton.Click += ScreenTipButton_Click;
         _bookmarkButton.Click += BookmarkButton_Click;
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
