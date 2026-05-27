@@ -72,6 +72,26 @@ public sealed class RowColumnDimensionPlannerTests
         sheet.ColumnWidths[5].Should().Be(18);
     }
 
+    [Fact]
+    public void CreateHiddenCommands_ApplyToSelectionSpans()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new SimpleCommandContext(workbook);
+
+        RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheet.Id, Range(sheet.Id, 2, 4, 3, 6), hidden: true)
+            .Apply(context)
+            .Success.Should()
+            .BeTrue();
+        RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheet.Id, Range(sheet.Id, 2, 4, 3, 6), hidden: true)
+            .Apply(context)
+            .Success.Should()
+            .BeTrue();
+
+        sheet.HiddenRows.Should().Contain([2u, 3u]);
+        sheet.HiddenCols.Should().Contain([4u, 5u, 6u]);
+    }
+
     private static GridRange Range(SheetId sheetId, uint row1, uint col1, uint row2, uint col2) =>
         new(new CellAddress(sheetId, row1, col1), new CellAddress(sheetId, row2, col2));
 

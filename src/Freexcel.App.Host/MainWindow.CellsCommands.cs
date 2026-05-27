@@ -528,8 +528,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);
-                    return new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden);
+                    return RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden);
                 }))
             return;
 
@@ -544,8 +543,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);
-                    return new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden);
+                    return RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden);
                 }))
             return;
 
