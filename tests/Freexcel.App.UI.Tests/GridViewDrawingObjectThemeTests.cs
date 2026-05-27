@@ -433,6 +433,28 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void GridObjectDragPlanner_IncludesResizeHandleHitZoneBoundary()
+    {
+        var start = new Rect(10, 20, 80, 40);
+        const double handleSize = 8;
+        const double hitPadding = 4;
+        const double pad = handleSize / 2 + hitPadding;
+
+        GridObjectDragPlanner.HitTestHandle(
+                new Point(start.Right + pad, start.Bottom),
+                start,
+                handleSize,
+                hitPadding)
+            .Should().Be(ObjectDragKind.ResizeSE);
+        GridObjectDragPlanner.HitTestHandle(
+                new Point(start.Right, start.Bottom + pad),
+                start,
+                handleSize,
+                hitPadding)
+            .Should().Be(ObjectDragKind.ResizeSE);
+    }
+
+    [Fact]
     public void GridObjectDragPlanner_HitTestsAnchorCellFromViewportMetrics()
     {
         var viewport = new ViewportModel(
