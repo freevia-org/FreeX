@@ -3791,6 +3791,18 @@
                                                 Background="{Binding ElementName=TabBorder, Path=BorderBrush}"
                                                 Panel.ZIndex="3"
                                                 IsHitTestVisible="False"/>
+                                        <Path x:Name="ActiveConnectedOutline"
+                                              Data="M 0,0 A 8,8 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26 L 88,26 A 4,4 0 0 0 92,22 L 92,8 A 8,8 0 0 1 100,0"
+                                              Stretch="Fill"
+                                              Stroke="{StaticResource FreexcelGreenBrush}"
+                                              StrokeThickness="1.25"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              StrokeLineJoin="Round"
+                                              Panel.ZIndex="4"
+                                              SnapsToDevicePixels="True"
+                                              Visibility="Collapsed"
+                                              IsHitTestVisible="False"/>
                                         <Border x:Name="ActiveTabTopCutout"
                                                 Height="2.25"
                                                 VerticalAlignment="Top"
@@ -3862,16 +3874,16 @@
                                     </Grid>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabBottomOutline" Property="Margin" Value="11,0,11,0"/>
+                                            <Setter TargetName="TabLeftOutline" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="TabRightOutline" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="TabBottomOutline" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="ActiveConnectedOutline" Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabBottomOutline" Property="Margin" Value="11,0,11,0"/>
+                                            <Setter TargetName="TabLeftOutline" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="TabRightOutline" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="TabBottomOutline" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="ActiveConnectedOutline" Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>

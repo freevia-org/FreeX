@@ -44,8 +44,25 @@ public partial class MainWindow
         if (RibbonTabs.ActualWidth > 0)
             availableWidth = Math.Min(availableWidth.Value, Math.Max(0, RibbonTabs.ActualWidth - 12));
 
-        var fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
-        var adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
+        var cacheKey = CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups);
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups;
+        double fixedChromeWidth;
+        if (string.Equals(_ribbonAdaptiveMeasurementCacheKey, cacheKey, StringComparison.Ordinal) &&
+            _ribbonAdaptiveGroupCache is not null)
+        {
+            adaptiveGroups = _ribbonAdaptiveGroupCache;
+            fixedChromeWidth = _ribbonAdaptiveFixedChromeWidthCache;
+        }
+        else
+        {
+            fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
+            adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
+            _ribbonAdaptiveMeasurementCacheKey = cacheKey;
+            _ribbonAdaptiveGroupCache = adaptiveGroups;
+            _ribbonAdaptiveFixedChromeWidthCache = fixedChromeWidth;
+        }
+
+        UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);
         var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups, fixedChromeWidth).ToArray();
         plannedStates = RibbonAdaptiveLayoutPlanner
             .ApplyBreakpointOverrides(availableWidth.Value, adaptiveGroups.Select(group => group.Name).ToList(), plannedStates)
@@ -216,6 +233,51 @@ public partial class MainWindow
         }
 
         return fixedWidth;
+    }
+
+    private static string CreateRibbonAdaptiveMeasurementCacheKey(StackPanel activePanel, IReadOnlyList<FrameworkElement> groups)
+    {
+        var tabName = FindVisualAncestor<TabItem>(activePanel)?.Header?.ToString() ?? "";
+        return string.Join(
+            "|",
+            tabName,
+            groups.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            string.Join(";", groups.Select(group => $"{GetRibbonGroupName(group)}:{group.GetHashCode():X}")));
+    }
+
+    private void UpdateRibbonResizeThresholdCache(
+        string cacheKey,
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        double fixedChromeWidth)
+    {
+        if (string.Equals(_ribbonResizeThresholdCacheKey, cacheKey, StringComparison.Ordinal) &&
+            _ribbonResizeThresholds.Count > 0)
+        {
+            return;
+        }
+
+        var groupNames = adaptiveGroups.Select(group => group.Name).ToList();
+        var thresholds = new List<double> { 700, 760, 920, 1120, 1320 };
+        RibbonAdaptiveGroupState[]? previousStates = null;
+        for (var width = 480.0; width <= 2200.0; width += 8.0)
+        {
+            var states = RibbonAdaptiveLayoutPlanner.Plan(width, adaptiveGroups, fixedChromeWidth).ToArray();
+            states = RibbonAdaptiveLayoutPlanner
+                .ApplyBreakpointOverrides(width, groupNames, states)
+                .ToArray();
+
+            if (previousStates is not null && !states.SequenceEqual(previousStates))
+                thresholds.Add(width);
+
+            previousStates = states;
+        }
+
+        _ribbonResizeThresholdCacheKey = cacheKey;
+        _ribbonResizeThresholds = thresholds
+            .Where(width => width > 0)
+            .Distinct()
+            .OrderBy(width => width)
+            .ToList();
     }
 
     private static List<Button> InsertRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)

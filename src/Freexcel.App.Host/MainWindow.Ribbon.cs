@@ -75,14 +75,29 @@ public partial class MainWindow
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
+        _ribbonResizeNormalizationRequired = true;
         NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true);
     }
 
+    private void NormalizeRibbonSurfaceAfterResize()
+    {
+        if (!ShouldNormalizeRibbonSurfaceForResize())
+            return;
+
+        NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: false, scheduleFallback: !_isInWindowResizeMoveLoop);
+    }
+
     private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab = false)
+        => NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab, scheduleFallback: true);
+
+    private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab, bool scheduleFallback)
     {
         if (prepareSelectedTab)
             PrepareSelectedRibbonTabForImmediateCompaction();
         NormalizeRibbonSurface(forceCompact: true);
+        if (!scheduleFallback)
+            return;
+
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
@@ -91,6 +106,60 @@ public partial class MainWindow
                 NormalizeRibbonSurface(forceCompact: true);
             }),
             DispatcherPriority.Send);
+    }
+
+    private bool ShouldNormalizeRibbonSurfaceForResize()
+    {
+        var width = GetCurrentRibbonResizeWidth();
+        if (width <= 0 || double.IsNaN(width))
+            return true;
+
+        if (double.IsNaN(_lastRibbonResizeWidth))
+        {
+            _lastRibbonResizeWidth = width;
+            return true;
+        }
+
+        if (_ribbonResizeNormalizationRequired)
+        {
+            _ribbonResizeNormalizationRequired = false;
+            _lastRibbonResizeWidth = width;
+            return true;
+        }
+
+        var previousWidth = _lastRibbonResizeWidth;
+        _lastRibbonResizeWidth = width;
+        if (_ribbonResizeThresholds.Count == 0)
+            return true;
+
+        foreach (var threshold in _ribbonResizeThresholds)
+        {
+            if ((previousWidth < threshold && width >= threshold) ||
+                (previousWidth >= threshold && width < threshold))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private double GetCurrentRibbonResizeWidth()
+    {
+        if (RibbonTabs is null)
+            return 0;
+
+        if (GetActiveRibbonPanel() is { } activePanel &&
+            FindVisualAncestor<ScrollViewer>(activePanel) is { } scrollViewer)
+        {
+            var width = scrollViewer.ActualWidth > 0 ? scrollViewer.ActualWidth : scrollViewer.ViewportWidth;
+            if (width > 0)
+                return RibbonTabs.ActualWidth > 0
+                    ? Math.Min(width, Math.Max(0, RibbonTabs.ActualWidth - 12))
+                    : width;
+        }
+
+        return RibbonTabs.ActualWidth;
     }
 
     private void PrepareSelectedRibbonTabForImmediateCompaction()
@@ -359,9 +428,8 @@ public partial class MainWindow
             return false;
 
         var label = commandName;
-        var layoutKind = !hadUnreplacedIcon &&
-                         hadRibbonCommandLabel &&
-                         commandButton.Height is > 0 and <= 34
+        var layoutKind = commandButton.Height is > 0 and <= 34 &&
+                         (hadUnreplacedIcon || hadRibbonCommandLabel)
             ? RibbonCommandLayoutKind.Small
             : RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
         ApplyRibbonCommandSize(commandButton, layoutKind);
