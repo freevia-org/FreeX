@@ -81,16 +81,16 @@ public partial class GridView
         {
             var rect = new Rect(chart.Left + rowHeaderWidth, chart.Top + columnHeaderHeight, chart.Width, chart.Height);
             var topButton = new Rect(rect.Left + 6, rect.Top + 6, Math.Min(150, Math.Max(80, rect.Width - 12)), 24);
-            if (chart.ShowPivotChartReportFilterButtons && topButton.Contains(pos))
+            if (chart.ShowPivotChartReportFilterButtons && ContainsInclusive(topButton, pos))
                 return (chart, string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName!);
 
             var bottomTop = rect.Bottom - 36;
             var axisButton = new Rect(rect.Left + 6, bottomTop, 118, 24);
-            if (chart.ShowPivotChartAxisFieldButtons && axisButton.Contains(pos))
+            if (chart.ShowPivotChartAxisFieldButtons && ContainsInclusive(axisButton, pos))
                 return (chart, "Axis Fields");
 
             var valuesButton = new Rect(rect.Right - 120, bottomTop, 104, 24);
-            if (chart.ShowPivotChartValueFieldButtons && valuesButton.Contains(pos))
+            if (chart.ShowPivotChartValueFieldButtons && ContainsInclusive(valuesButton, pos))
                 return (chart, "Values");
         }
 
