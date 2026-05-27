@@ -58,6 +58,7 @@ public sealed partial class ConsolidateDialog : Window
         ShowInTaskbar = false;
 
         _referenceBox.Text = defaultSource;
+        AutomationProperties.SetName(_referenceBox, "Reference");
         foreach (var sourceRange in SplitSourceRangeText(defaultSource))
             _referencesList.Items.Add(sourceRange);
         AutomationProperties.SetName(_referencesList, "All references");
@@ -65,6 +66,7 @@ public sealed partial class ConsolidateDialog : Window
         _referencesList.KeyDown += ReferencesList_KeyDown;
 
         _destinationBox.Text = defaultDestination;
+        AutomationProperties.SetName(_destinationBox, "Destination cell");
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new Label { Content = "_Function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
         foreach (var function in Enum.GetValues<ConsolidateFunction>())

@@ -1375,6 +1375,15 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_RangeEditorsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_referenceBox, \"Reference\");");
+        source.Should().Contain("AutomationProperties.SetName(_destinationBox, \"Destination cell\");");
+    }
+
+    [Fact]
     public void ConsolidateDialogOpenedFromKeyboard_FocusesFunctionChoice()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
