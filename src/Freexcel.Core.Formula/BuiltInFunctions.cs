@@ -74,6 +74,7 @@ public static partial class BuiltInFunctions
         ["SEARCH"]      = (Search, 2, 3),
         ["MID"]         = (Mid, 3, 3),
         ["REPT"]        = (Rept, 2, 2),
+        ["ROMAN"]       = (Roman, 1, 2),
         ["VALUE"]       = (ValueFunc, 1, 1),
 
         // ── Phase 4.2: Date & time ───────────────────────────────────────────
@@ -230,6 +231,9 @@ public static partial class BuiltInFunctions
         ["YEARFRAC"]     = (Yearfrac, 2, 3),
 
         // ── Phase 4a: Statistical ────────────────────────────────────────────
+        ["FISHER"]           = (Fisher, 1, 1),
+        ["FISHERINV"]        = (FisherInv, 1, 1),
+        ["PROB"]             = (Prob, 3, 4),
         ["VAR"]              = (VarS, 1, 255),
         ["VAR.S"]            = (VarS, 1, 255),
         ["VARA"]             = (VarA, 1, 255),
@@ -501,6 +505,7 @@ public static partial class BuiltInFunctions
         ["LOGINV"]           = (LognormInv, 3, 3),
 
         // ── Phase C: Financial functions ─────────────────────────────────────
+        ["ISPMT"]     = (Ispmt, 4, 4),
         ["IPMT"]      = (Ipmt, 4, 6),
         ["PPMT"]      = (Ppmt, 4, 6),
         ["CUMIPMT"]   = (Cumipmt, 6, 6),

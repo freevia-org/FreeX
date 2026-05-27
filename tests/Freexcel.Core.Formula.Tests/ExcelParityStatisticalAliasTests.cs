@@ -15,6 +15,83 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void FisherAndFisherInv_ReturnDocumentedTransformResults()
+    {
+        Number("=FISHER(0.75)", Values()).Should().BeApproximately(0.9729550745276566, 1e-12);
+        Number("=FISHERINV(0.972955)", Values()).Should().BeApproximately(0.75, 1e-7);
+        Number("=FISHERINV(FISHER(0.25))", Values()).Should().BeApproximately(0.25, 1e-12);
+    }
+
+    [Fact]
+    public void FisherAndFisherInv_RangesSpillElementwise()
+    {
+        var sheet = Values(0, 0.75);
+
+        var fisher = _eval.Evaluate("=FISHER(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        fisher.At(1, 1).Should().Be(new NumberValue(0));
+        ((NumberValue)fisher.At(2, 1)).Value.Should().BeApproximately(0.9729550745276566, 1e-12);
+
+        var inverse = _eval.Evaluate("=FISHERINV(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        inverse.At(1, 1).Should().Be(new NumberValue(0));
+        ((NumberValue)inverse.At(2, 1)).Value.Should().BeApproximately(0.6351489523872873, 1e-12);
+    }
+
+    [Theory]
+    [InlineData("=FISHER(-1)")]
+    [InlineData("=FISHER(1)")]
+    [InlineData("=FISHER(\"1E309\")")]
+    [InlineData("=FISHERINV(\"1E309\")")]
+    public void FisherAndFisherInv_ReturnNumForExcelDomainErrors(string formula)
+    {
+        _eval.Evaluate(formula, Values()).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Prob_ReturnsDocumentedProbabilityResults()
+    {
+        var sheet = Values(0, 1, 2, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(0.2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(0.3));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(0.1));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(0.4));
+
+        Number("=PROB(A1:A4,B1:B4,2)", sheet).Should().BeApproximately(0.1, 1e-12);
+        Number("=PROB(A1:A4,B1:B4,1,3)", sheet).Should().BeApproximately(0.8, 1e-12);
+    }
+
+    [Fact]
+    public void Prob_LimitRangeArgumentsSpillElementwise()
+    {
+        var sheet = Values(0, 1, 2, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(0.2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(0.3));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(0.1));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(0.4));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(2));
+
+        var result = _eval.Evaluate("=PROB(A1:A4,B1:B4,C1:C2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.At(1, 1).Should().Be(new NumberValue(0.3));
+        result.At(2, 1).Should().Be(new NumberValue(0.1));
+    }
+
+    [Fact]
+    public void Prob_ReturnsDocumentedErrorsForInvalidRangesAndProbabilities()
+    {
+        var sheet = Values(0, 1, 2, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(0.2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(0.3));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(0.1));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(0.5));
+
+        _eval.Evaluate("=PROB(A1:A4,B1:B4,1,3)", sheet).Should().Be(ErrorValue.Num);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(0.4));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(0));
+        _eval.Evaluate("=PROB(A1:A4,B1:B4,1,3)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=PROB(A1:A4,B1:B3,1,3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void GammalnPrecise_MatchesGammalnForPositiveInputs()
     {
         Number("=GAMMALN.PRECISE(4)", Values()).Should().BeApproximately(Math.Log(6), 1e-12);

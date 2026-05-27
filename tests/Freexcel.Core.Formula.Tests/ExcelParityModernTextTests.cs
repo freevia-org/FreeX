@@ -134,6 +134,52 @@ public sealed class ExcelParityModernTextTests
     }
 
     [Theory]
+    [InlineData("=ROMAN(499)", "CDXCIX")]
+    [InlineData("=ROMAN(499,0)", "CDXCIX")]
+    [InlineData("=ROMAN(499,1)", "LDVLIV")]
+    [InlineData("=ROMAN(499,2)", "XDIX")]
+    [InlineData("=ROMAN(499,3)", "VDIV")]
+    [InlineData("=ROMAN(499,4)", "ID")]
+    [InlineData("=ROMAN(1999,0)", "MCMXCIX")]
+    [InlineData("=ROMAN(1999,1)", "MLMVLIV")]
+    [InlineData("=ROMAN(1999,2)", "MXMIX")]
+    [InlineData("=ROMAN(1999,3)", "MVMIV")]
+    [InlineData("=ROMAN(1999,4)", "MIM")]
+    [InlineData("=ROMAN(0)", "")]
+    [InlineData("=ROMAN(12.9)", "XII")]
+    [InlineData("=ROMAN(499,TRUE)", "CDXCIX")]
+    [InlineData("=ROMAN(499,FALSE)", "ID")]
+    public void Roman_ReturnsExcelRomanText(string formula, string expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=ROMAN(-1)")]
+    [InlineData("=ROMAN(4000)")]
+    [InlineData("=ROMAN(\"text\")")]
+    [InlineData("=ROMAN(10,-1)")]
+    [InlineData("=ROMAN(10,5)")]
+    [InlineData("=ROMAN(10,\"text\")")]
+    public void Roman_ReturnsValueForExcelArgumentDomainErrors(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Roman_SpillsOverNumberRanges()
+    {
+        var sheet = Sheet(
+            (1, 1, new NumberValue(49)),
+            (2, 1, new NumberValue(99)));
+
+        AssertColumn(
+            _eval.Evaluate("=ROMAN(A1:A2,2)", sheet),
+            new TextValue("IL"),
+            new TextValue("IC"));
+    }
+
+    [Theory]
     [InlineData("=VALUETOTEXT(TRUE,0)", "TRUE")]
     [InlineData("=VALUETOTEXT(1234.01234,0)", "1234.01234")]
     [InlineData("=VALUETOTEXT(\"Hello\",0)", "Hello")]
