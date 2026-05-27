@@ -59,6 +59,12 @@ public sealed class KeyboardShortcutMatcherTests
                     Chord = chord,
                     Matches = GetShortcutFamilyMatches(Key.None, chord.Key, chord.Modifiers).ToList()
                 }))
+            .Concat(EnumeratePhysicalChords()
+                .Select(chord => new
+                {
+                    Chord = chord,
+                    Matches = GetShortcutFamilyMatches(Key.System, chord.Key, chord.Modifiers).ToList()
+                }))
             .Where(result => result.Matches.Count > 1)
             .Select(result => $"{result.Chord.Modifiers}+{result.Chord.Key}: {string.Join(", ", result.Matches)}")
             .ToList();
@@ -348,7 +354,7 @@ public sealed class KeyboardShortcutMatcherTests
 
     private static IEnumerable<string> GetShortcutFamilyMatches(Key key, Key systemKey, ModifierKeys modifiers)
     {
-        var effectiveKey = key == Key.None ? systemKey : key;
+        var effectiveKey = key is Key.None or Key.System ? systemKey : key;
 
         if (KeyboardShortcutMatcher.IsCtrlPlus(key, systemKey, modifiers))
             yield return "Insert cells";
