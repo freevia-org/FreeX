@@ -640,6 +640,12 @@ public partial class MainWindow
         var contentTag = (button.Content as FrameworkElement)?.Tag?.ToString() ?? "";
         bool isSmallOrMedium = contentTag is "RibbonCommandContent:S" or "RibbonCommandContent:M";
 
+        if (button.Content is Grid smallGrid &&
+            string.Equals(contentTag, "RibbonCommandContent:S", StringComparison.Ordinal))
+        {
+            ApplySmallButtonCompactLayout(smallGrid, button, level);
+        }
+
         if (!isSmallOrMedium)
         {
             button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
@@ -658,6 +664,30 @@ public partial class MainWindow
             string.Equals(largeStack.Tag?.ToString(), "RibbonCommandContent:L", StringComparison.Ordinal))
         {
             ApplyLargeButtonCompactLayout(largeStack, button, level);
+        }
+    }
+
+    private static void ApplySmallButtonCompactLayout(
+        Grid contentGrid,
+        ButtonBase button,
+        RibbonCompactLevel level)
+    {
+        if (contentGrid.ColumnDefinitions.Count >= 2)
+        {
+            contentGrid.ColumnDefinitions[1].Width = level == RibbonCompactLevel.IconOnly
+                ? new GridLength(0)
+                : new GridLength(5);
+        }
+
+        if (level == RibbonCompactLevel.IconOnly)
+        {
+            contentGrid.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+        }
+        else
+        {
+            contentGrid.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
         }
     }
 

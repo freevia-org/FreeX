@@ -129,6 +129,44 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void IconOnlySmallRibbonCommandsCenterIconAndRemoveLabelSpacer()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var createContent = typeof(MainWindow)
+                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
+            var content = (Grid)createContent.Invoke(null, ["Text to Columns", "Text to Columns", RibbonCommandLayoutKind.Small])!;
+            var button = new Button
+            {
+                Content = content,
+                Tag = "RibbonCompact:150:24",
+                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left
+            };
+
+            var compactLevel = typeof(MainWindow).GetNestedType("RibbonCompactLevel", BindingFlags.NonPublic)
+                ?? throw new MissingMemberException(nameof(MainWindow), "RibbonCompactLevel");
+            var iconOnly = Enum.Parse(compactLevel, "IconOnly");
+            var full = Enum.Parse(compactLevel, "Full");
+            var setCompact = typeof(MainWindow)
+                .GetMethod("SetRibbonButtonCompact", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SetRibbonButtonCompact");
+
+            setCompact.Invoke(null, [button, iconOnly]);
+
+            button.HorizontalContentAlignment.Should().Be(System.Windows.HorizontalAlignment.Center);
+            content.HorizontalAlignment.Should().Be(System.Windows.HorizontalAlignment.Center);
+            content.ColumnDefinitions[1].Width.Value.Should().Be(0);
+
+            setCompact.Invoke(null, [button, full]);
+
+            button.HorizontalContentAlignment.Should().Be(System.Windows.HorizontalAlignment.Left);
+            content.HorizontalAlignment.Should().Be(System.Windows.HorizontalAlignment.Left);
+            content.ColumnDefinitions[1].Width.Value.Should().Be(5);
+        });
+    }
+
+    [Fact]
     public void InsertRibbon_HidesChartFormattingCommands()
     {
         StaTestRunner.Run(() =>
