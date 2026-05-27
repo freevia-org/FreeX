@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -67,6 +68,7 @@ public sealed partial class SelectionPaneDialog : Window
         ShowInTaskbar = false;
 
         _list.Margin = new Thickness(0, 0, 0, 10);
+        AutomationProperties.SetName(_list, "Objects");
         _list.AllowDrop = true;
         _list.PreviewMouseLeftButtonDown += List_PreviewMouseLeftButtonDown;
         _list.MouseMove += List_MouseMove;
