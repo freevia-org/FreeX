@@ -6,6 +6,23 @@ public static partial class BuiltInFunctions
 {
     // -- Loan payment breakdown helpers -----------------------------------
 
+    private static double CalcPmt(double rate, double nper, double pv, double fv, int type)
+    {
+        if (Math.Abs(rate) < 1e-14) return -(pv + fv) / nper;
+        double r1 = Math.Pow(1 + rate, nper);
+        return -(pv * r1 + fv) * rate / ((1 + rate * type) * (r1 - 1));
+    }
+
+    private static double CalcIpmt(double rate, double per, double nper, double pv, double fv, int type)
+    {
+        double pmt = CalcPmt(rate, nper, pv, fv, type);
+        if (Math.Abs(rate) < 1e-14) return 0.0;
+        double pvAtPer = pv * Math.Pow(1 + rate, per - 1)
+                       + pmt * (1 + rate * type) * (Math.Pow(1 + rate, per - 1) - 1) / rate;
+        // Interest payment matches PMT sign convention: negative = outflow (borrower)
+        return type == 0 ? -(pvAtPer * rate) : -((pvAtPer - pmt) * rate);
+    }
+
     private static ScalarValue Ipmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
