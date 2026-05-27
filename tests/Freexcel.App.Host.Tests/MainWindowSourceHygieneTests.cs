@@ -487,6 +487,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void DrawingCommands_UseOwnedNoTargetMessages()
+    {
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
+
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Picture Size\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Rotate Picture\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Crop Picture\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"Only inserted image pictures can be cropped.\", \"Crop Picture\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Reset Crop\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"Only inserted image pictures can be cropped.\", \"Reset Crop\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing shapes are available on this sheet.\",");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing object found on this sheet.\", \"Object Size\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing object found on this sheet.\", \"Rotate Object\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing object found on this sheet.\",");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing shape found on this sheet.\", \"Shape Gradient\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing shape found on this sheet.\", \"Shape Effects\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No objects are available on this sheet.\", \"Selection Pane\"");
+        drawingSource.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void PrintAndExportController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
