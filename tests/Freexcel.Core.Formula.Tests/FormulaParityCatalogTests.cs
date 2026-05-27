@@ -59,7 +59,7 @@ public sealed class FormulaParityCatalogTests
         var inScopeCount = ReadDocumentedFunctions()
             .Count(entry => !entry.Status.StartsWith("Excluded", StringComparison.OrdinalIgnoreCase));
 
-        inScopeCount.Should().Be(448);
+        inScopeCount.Should().Be(449);
     }
 
     private static IReadOnlyList<(string Name, string Status)> ReadDocumentedFunctions()
