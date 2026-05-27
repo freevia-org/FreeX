@@ -465,6 +465,23 @@ public static partial class BuiltInFunctions
         return MapBinaryMathArgs(args[0], args[1], TDistRtScalar);
     }
 
+    private static ScalarValue TDistCompat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
+        return MapTernaryTextArgs(args[0], args[1], args[2], (xValue, dfValue, tailsValue) =>
+        {
+            var tails = (int)Math.Truncate(ToNumber(tailsValue));
+            return tails switch
+            {
+                1 => TDistRtScalar(xValue, dfValue),
+                2 => TDist2TScalar(xValue, dfValue),
+                _ => ErrorValue.Num
+            };
+        });
+    }
+
     private static ScalarValue TDistRtScalar(ScalarValue xValue, ScalarValue dfValue)
     {
         double df = Math.Truncate(ToNumber(dfValue));
@@ -1055,6 +1072,14 @@ public static partial class BuiltInFunctions
         return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], NegbinomDistScalar);
     }
 
+    private static ScalarValue NegbinomDistCompat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
+        return MapTernaryTextArgs(args[0], args[1], args[2], (failures, successes, probability) => NegbinomDistScalar(failures, successes, probability, new BoolValue(false)));
+    }
+
     private static ScalarValue NegbinomDistScalar(ScalarValue failuresValue, ScalarValue successesValue, ScalarValue probabilityValue, ScalarValue cumulativeValue)
     {
         int r = (int)Math.Truncate(ToNumber(successesValue));
@@ -1116,6 +1141,12 @@ public static partial class BuiltInFunctions
         if (args[3] is ErrorValue e3) return e3;
         if (args[4] is ErrorValue e4) return e4;
         return MapScalarArgs(args, values => HypergeomDistScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue HypergeomDistCompat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (FirstError(args) is { } e) return e;
+        return MapScalarArgs(args, values => HypergeomDistScalar(values[0], values[1], values[2], values[3], new BoolValue(false)));
     }
 
     private static ScalarValue HypergeomDistScalar(ScalarValue sampleSuccessesValue, ScalarValue sampleSizeValue, ScalarValue populationSuccessesValue, ScalarValue populationSizeValue, ScalarValue cumulativeValue)
