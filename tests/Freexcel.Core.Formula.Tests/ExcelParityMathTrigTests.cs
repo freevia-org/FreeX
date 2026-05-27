@@ -11,11 +11,18 @@ public sealed class ExcelParityMathTrigTests
     [Theory]
     [InlineData("=ABS(-2.5)", 2.5)]
     [InlineData("=ACOS(0.5)", 1.0471975511965979)]
+    [InlineData("=ACOT(1)", 0.7853981633974483)]
+    [InlineData("=ACOT(-1)", 2.356194490192345)]
+    [InlineData("=ACOTH(2)", 0.5493061443340548)]
     [InlineData("=ASIN(0.5)", 0.5235987755982989)]
     [InlineData("=ATAN(1)", 0.7853981633974483)]
     [InlineData("=ATAN2(1,1)", 0.7853981633974483)]
     [InlineData("=CEILING(2.3,0.5)", 2.5)]
     [InlineData("=COS(0)", 1)]
+    [InlineData("=COT(30)", -0.15611995216165922)]
+    [InlineData("=COTH(1)", 1.3130352854993312)]
+    [InlineData("=CSC(15)", 1.5377805615408537)]
+    [InlineData("=CSCH(1)", 0.8509181282393216)]
     [InlineData("=DEGREES(PI())", 180)]
     [InlineData("=EVEN(1.2)", 2)]
     [InlineData("=EVEN(-1.2)", -2)]
@@ -41,6 +48,8 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=ROUND(2.345,2)", 2.35)]
     [InlineData("=ROUNDDOWN(-2.349,2)", -2.34)]
     [InlineData("=ROUNDUP(-2.341,2)", -2.35)]
+    [InlineData("=SEC(45)", 1.9035944074044246)]
+    [InlineData("=SECH(0)", 1)]
     [InlineData("=SIGN(-10)", -1)]
     [InlineData("=SIN(PI()/2)", 1)]
     [InlineData("=SQRT(9)", 3)]
@@ -55,6 +64,7 @@ public sealed class ExcelParityMathTrigTests
 
     [Theory]
     [InlineData("=ACOS(2)")]
+    [InlineData("=ACOTH(1)")]
     [InlineData("=ASIN(2)")]
     [InlineData("=CEILING(2.3,-1)")]
     [InlineData("=COMBIN(2,5)")]
@@ -63,6 +73,7 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=LCM(-1,2)")]
     [InlineData("=LOG(-1)")]
     [InlineData("=MROUND(5,-2)")]
+    [InlineData("=SEC(134217728)")]
     [InlineData("=SQRT(-1)")]
     public void MathTrigDomainErrors_ReturnExcelNum(string formula)
     {
@@ -70,9 +81,21 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Theory]
+    [InlineData("=COT(0)")]
+    [InlineData("=COTH(0)")]
+    [InlineData("=CSC(0)")]
+    [InlineData("=CSCH(0)")]
+    public void ReciprocalTrigZeroDenominator_ReturnsDivByZero(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Theory]
     [InlineData("=ABS(\"x\")")]
+    [InlineData("=ACOT(\"x\")")]
     [InlineData("=FACT(\"x\")")]
     [InlineData("=PRODUCT(\"x\")")]
+    [InlineData("=SEC(\"x\")")]
     [InlineData("=SUM(\"x\")")]
     public void MathTrigInvalidDirectText_ReturnsValueError(string formula)
     {
@@ -155,6 +178,22 @@ public sealed class ExcelParityMathTrigTests
         var series = _eval.Evaluate("=SERIESSUM(A1:A2,0,1,C1:C2)", sheet).Should().BeOfType<RangeValue>().Subject;
         series.At(1, 1).Should().Be(new NumberValue(7));
         series.At(2, 1).Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
+    public void ReciprocalTrigFunctions_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)));
+
+        var sec = _eval.Evaluate("=SEC(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)sec.At(1, 1)).Value.Should().BeApproximately(1.0 / Math.Cos(1), 1e-10);
+        ((NumberValue)sec.At(2, 1)).Value.Should().BeApproximately(1.0 / Math.Cos(2), 1e-10);
+
+        var acot = _eval.Evaluate("=ACOT(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)acot.At(1, 1)).Value.Should().BeApproximately(Math.PI / 4.0, 1e-10);
+        ((NumberValue)acot.At(2, 1)).Value.Should().BeApproximately(Math.Atan(0.5), 1e-10);
     }
 
     [Fact]
