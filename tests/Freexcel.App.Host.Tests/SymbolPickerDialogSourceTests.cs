@@ -46,7 +46,8 @@ public sealed class SymbolPickerDialogSourceTests
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("void SelectSymbol(char value)");
-        source.Should().Contain("SelectedChar = value");
+        source.Should().Contain("SymbolPickerSelectionPlanner.CreateSelection(value)");
+        source.Should().Contain("ApplySelection(selection)");
         source.Should().Contain("insert.Click += (_, _) =>");
         source.Should().Contain("DialogResult = true");
         source.Should().NotContain("SelectedChar = c;\r\n                    DialogResult = true");
@@ -168,8 +169,20 @@ public sealed class SymbolPickerDialogSourceTests
             .Should().Equal(["\u20ac", "\u03c0", "\u00a3"]);
     }
 
+    [Theory]
+    [InlineData("\u03c0", '\u03c0', "03C0")]
+    [InlineData("\ud83d\ude00", '\0', "1F600")]
+    [InlineData("", '\0', "")]
+    public void SelectionPlanner_FormatsSelectedSymbolState(string symbol, char selectedChar, string codeText)
+    {
+        SymbolPickerSelectionPlanner.CreateSelection(symbol)
+            .Should()
+            .Be(new SymbolPickerSelection(symbol, selectedChar, codeText));
+    }
+
     private static string ReadSymbolPickerDialogSources() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs")) +
         File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Layout.cs")) +
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Catalog.cs"));
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Catalog.cs")) +
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerSelectionPlanner.cs"));
 }

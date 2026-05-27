@@ -19,8 +19,13 @@ public sealed partial class SymbolPickerDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        SelectedChar = GetSymbolsForSubset(SubsetChoices[0])[0];
-        SelectedSymbol = SelectedChar.ToString();
+        ApplySelection(SymbolPickerSelectionPlanner.CreateInitialSelection(GetSymbolsForSubset(SubsetChoices[0])));
         Content = CreateDialogContent();
+    }
+
+    private void ApplySelection(SymbolPickerSelection selection)
+    {
+        SelectedSymbol = selection.Symbol;
+        SelectedChar = selection.SelectedChar;
     }
 }
