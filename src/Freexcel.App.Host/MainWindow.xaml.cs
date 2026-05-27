@@ -85,6 +85,7 @@ public partial class MainWindow : Window
     private IReadOnlyList<double> _ribbonResizeThresholds = [];
     private double _lastRibbonResizeWidth = double.NaN;
     private bool _ribbonResizeNormalizationRequired = true;
+    private string? _lastRibbonAdaptiveAppliedStateKey;
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;
