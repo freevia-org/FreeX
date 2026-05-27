@@ -1277,6 +1277,12 @@ internal static class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-threaded-comments-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyThreadedCommentsFixup(archive);
+            return;
+        }
+
         if (string.Equals(id, "generated-unsupported-sheet-types-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyUnsupportedSheetTypesFixup(archive);
@@ -1342,6 +1348,33 @@ internal static class XlsxCorpusFixtureFactory
         var workbookRelsReplacement = archive.CreateEntry("xl/_rels/workbook.xml.rels");
         using var relOutput = workbookRelsReplacement.Open();
         workbookRelsXml.Save(relOutput);
+    }
+
+    private static void ApplyThreadedCommentsFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdFreexcelThreadedComments1",
+            "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment",
+            "../threadedComments/threadedComment1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelPersons1",
+            "http://schemas.microsoft.com/office/2017/10/relationships/person",
+            "persons/person.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
     }
 
     private static void ApplyUnsupportedSheetTypesFixup(ZipArchive archive)
