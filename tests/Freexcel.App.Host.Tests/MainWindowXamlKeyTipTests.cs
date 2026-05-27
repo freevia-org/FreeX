@@ -1892,13 +1892,16 @@ public sealed class MainWindowXamlKeyTipTests
             source.IndexOf("private bool TryShowPivotTableDetails", StringComparison.Ordinal)..
             source.IndexOf("private void RefreshPivotFieldListPane", StringComparison.Ordinal)];
 
-        handlerSource.Should().Contain("new DrillDownPivotTableCommand(_currentSheetId, pivotTable.Name, selected.Value)");
+        handlerSource.Should().Contain("PivotUiPlanner.ResolveShowDetailsTarget(sheet, SheetGrid.SelectedRange)");
+        handlerSource.Should().Contain("new DrillDownPivotTableCommand(_currentSheetId, target.PivotTableName, target.PivotCell)");
         handlerSource.Should().Contain("\"Show PivotTable Details\"");
-        handlerSource.Should().Contain("var detailSheet = _workbook.Sheets.LastOrDefault();");
-        handlerSource.Should().Contain("_currentSheetId = detailSheet.Id;");
+        handlerSource.Should().Contain("out var outcome");
+        handlerSource.Should().Contain("outcome.AffectedCells?.FirstOrDefault()");
+        handlerSource.Should().Contain("_currentSheetId = detailAnchor.Sheet;");
         handlerSource.Should().Contain("RefreshSheetTabs();");
         handlerSource.Should().Contain("UpdateViewport();");
         handlerSource.Should().NotContain("new AddSheetCommand");
+        handlerSource.Should().NotContain("_workbook.Sheets.LastOrDefault()");
         handlerSource.Should().NotContain("PivotTableRefreshService.Refresh");
     }
 
