@@ -1134,11 +1134,32 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void Accrintm_KnownMaturityAccrual_MatchesExcelBasisRules()
+    {
+        Calc("ACCRINTM(39539,39614,0.1,1000,3)").Should().BeApproximately(20.54794521, 1e-8);
+        Calc("ACCRINTM(39539,39614,0.1,,3)").Should().BeApproximately(20.54794521, 1e-8);
+        Calc("ACCRINTM(43831,44197,0.05,1000)").Should().BeApproximately(50.0, 1e-10);
+        Calc("ACCRINTM(43831,44197,0.05)").Should().BeApproximately(50.0, 1e-10);
+        Calc("ACCRINTM(43831,44197,0.05,1000,3)").Should().BeApproximately(50.13698630136986, 1e-10);
+    }
+
+    [Fact]
+    public void Accrintm_InvalidInputs_ReturnExcelErrors()
+    {
+        CalcError("ACCRINTM(44197,43831,0.05,1000)").Should().Be("#NUM!");
+        CalcError("ACCRINTM(43831,44197,0,1000)").Should().Be("#NUM!");
+        CalcError("ACCRINTM(43831,44197,0.05,0)").Should().Be("#NUM!");
+        CalcError("ACCRINTM(43831,44197,0.05,1000,5)").Should().Be("#NUM!");
+        CalcError("ACCRINTM(-1,44197,0.05,1000)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void OddCouponAndAccrualFunctions_RangeValueArgument_SpillElementwise()
     {
         var rates = new[] { (1, 1, 0.05), (2, 1, 0.06) };
 
         AssertApproxColumn(EvalWithData("ACCRINT(43831,43831,44197,A1:A2,1000,2)", rates), Calc("ACCRINT(43831,43831,44197,0.05,1000,2)"), Calc("ACCRINT(43831,43831,44197,0.06,1000,2)"));
+        AssertApproxColumn(EvalWithData("ACCRINTM(43831,44197,A1:A2,1000)", rates), Calc("ACCRINTM(43831,44197,0.05,1000)"), Calc("ACCRINTM(43831,44197,0.06,1000)"));
         AssertApproxColumn(EvalWithData("ODDFPRICE(43900,44562,43831,44197,0.05,A1:A2,100,2)", rates), Calc("ODDFPRICE(43900,44562,43831,44197,0.05,0.05,100,2)"), Calc("ODDFPRICE(43900,44562,43831,44197,0.05,0.06,100,2)"));
         AssertApproxColumn(EvalWithData("ODDFYIELD(43900,44562,43831,44197,0.05,A1:A2,100,2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("ODDFYIELD(43900,44562,43831,44197,0.05,99,100,2)"), Calc("ODDFYIELD(43900,44562,43831,44197,0.05,101,100,2)"));
         AssertApproxColumn(EvalWithData("ODDLPRICE(43900,44197,43831,0.05,A1:A2,100,2)", rates), Calc("ODDLPRICE(43900,44197,43831,0.05,0.05,100,2)"), Calc("ODDLPRICE(43900,44197,43831,0.05,0.06,100,2)"));
@@ -1191,6 +1212,26 @@ public class PhaseCFinancialTests
             Calc("ACCRINT(43862,43862,44228,0.06,1200,4,1)"));
 
         EvalWithData("ACCRINT(A1:A2,B1:C1,44197,0.05,1000,2,0)", cells).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Accrintm_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 43831.0), (2, 1, 43862.0),
+            (1, 2, 44197.0), (2, 2, 44228.0),
+            (1, 3, 0.05), (2, 3, 0.06),
+            (1, 4, 1000.0), (2, 4, 1200.0),
+            (1, 5, 0.0), (2, 5, 3.0)
+        };
+
+        AssertApproxColumn(
+            EvalWithData("ACCRINTM(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2)", cells),
+            Calc("ACCRINTM(43831,44197,0.05,1000,0)"),
+            Calc("ACCRINTM(43862,44228,0.06,1200,3)"));
+
+        EvalWithData("ACCRINTM(A1:A2,B1:C1,0.05,1000)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
