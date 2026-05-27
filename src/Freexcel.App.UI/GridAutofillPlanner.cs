@@ -206,8 +206,20 @@ public static class GridAutofillPlanner
             return false;
 
         var range = selectedRange.Value;
-        var endRow = viewport.RowMetrics.FirstOrDefault(r => r.Row == range.End.Row);
-        var endColumn = viewport.ColMetrics.FirstOrDefault(c => c.Col == range.End.Col);
+        RowMetric? endRow = null;
+        foreach (var row in viewport.RowMetrics)
+        {
+            if (row.Row == range.End.Row)
+                endRow = row;
+        }
+
+        ColMetric? endColumn = null;
+        foreach (var column in viewport.ColMetrics)
+        {
+            if (column.Col == range.End.Col)
+                endColumn = column;
+        }
+
         if (endRow is null || endColumn is null)
             return false;
 
