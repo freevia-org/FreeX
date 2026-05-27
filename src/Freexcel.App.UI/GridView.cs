@@ -29,7 +29,9 @@ public enum GridQuickAnalysisPreviewVisualKind
     LineChart,
     BarChart,
     StackedColumnChart,
-    PieChart
+    PieChart,
+    AreaChart,
+    ScatterChart
 }
 
 /// <summary>
@@ -107,6 +109,8 @@ public partial class GridView : FrameworkElement
     private static readonly Brush QuickAnalysisWinLossNegativeBrush = MakeBrushAlpha(180, 192, 80, 77);
     private static readonly Brush QuickAnalysisColumnChartPreviewBrush = MakeBrushAlpha(170, 68, 114, 196);
     private static readonly Brush QuickAnalysisPieChartAccentBrush = MakeBrushAlpha(176, 237, 125, 49);
+    private static readonly Brush QuickAnalysisAreaChartPreviewBrush = MakeBrushAlpha(96, 68, 114, 196);
+    private static readonly Brush QuickAnalysisScatterChartPreviewBrush = MakeBrushAlpha(190, 112, 173, 71);
     private static readonly Pen QuickAnalysisColumnChartAxisPen = new(MakeBrush(89, 89, 89), 1);
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
     private static readonly Pen FreezePen = MakeFreezePen();

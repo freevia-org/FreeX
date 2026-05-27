@@ -348,6 +348,8 @@ public partial class MainWindow
             QuickAnalysisPreviewVisualKind.BarChart => GridQuickAnalysisPreviewVisualKind.BarChart,
             QuickAnalysisPreviewVisualKind.StackedColumnChart => GridQuickAnalysisPreviewVisualKind.StackedColumnChart,
             QuickAnalysisPreviewVisualKind.PieChart => GridQuickAnalysisPreviewVisualKind.PieChart,
+            QuickAnalysisPreviewVisualKind.AreaChart => GridQuickAnalysisPreviewVisualKind.AreaChart,
+            QuickAnalysisPreviewVisualKind.ScatterChart => GridQuickAnalysisPreviewVisualKind.ScatterChart,
             _ => GridQuickAnalysisPreviewVisualKind.None
         };
 }
