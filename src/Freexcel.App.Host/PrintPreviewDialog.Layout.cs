@@ -108,6 +108,7 @@ public sealed partial class PrintPreviewDialog : Window
             Command = NavigationCommands.FirstPage,
             CommandTarget = viewer
         };
+        SetToolbarAutomation(firstButton, "PrintPreviewFirstPageButton", "First page", "Go to the first preview page.");
         var previousButton = new Button
         {
             Content = "_Previous Page",
@@ -115,6 +116,7 @@ public sealed partial class PrintPreviewDialog : Window
             Command = NavigationCommands.PreviousPage,
             CommandTarget = viewer
         };
+        SetToolbarAutomation(previousButton, "PrintPreviewPreviousPageButton", "Previous page", "Go to the previous preview page.");
         var nextButton = new Button
         {
             Content = "_Next Page",
@@ -122,6 +124,7 @@ public sealed partial class PrintPreviewDialog : Window
             Command = NavigationCommands.NextPage,
             CommandTarget = viewer
         };
+        SetToolbarAutomation(nextButton, "PrintPreviewNextPageButton", "Next page", "Go to the next preview page.");
         var lastButton = new Button
         {
             Content = "_Last Page",
@@ -129,6 +132,7 @@ public sealed partial class PrintPreviewDialog : Window
             Command = NavigationCommands.LastPage,
             CommandTarget = viewer
         };
+        SetToolbarAutomation(lastButton, "PrintPreviewLastPageButton", "Last page", "Go to the last preview page.");
         var printButton = new Button
         {
             Content = "_Print...",
@@ -142,8 +146,10 @@ public sealed partial class PrintPreviewDialog : Window
             IsCancel = true,
             ToolTip = "Return to the workbook."
         };
+        AutomationProperties.SetAutomationId(printButton, "PrintPreviewPrintButton");
         AutomationProperties.SetName(printButton, "Print");
         AutomationProperties.SetHelpText(printButton, "Opens the Windows print dialog and applies the selected printer and copies when possible.");
+        SetToolbarAutomation(closeButton, "PrintPreviewCloseButton", "Close preview", "Return to the workbook.");
         printButton.Click += (_, _) =>
         {
             if (!TryParseCopyCount(copiesBox.Text, out var copies))
@@ -320,6 +326,12 @@ public sealed partial class PrintPreviewDialog : Window
                 e.Handled = true;
             }));
         pageNumberBox.InputBindings.Add(new KeyBinding(NavigationCommands.GoToPage, new KeyGesture(Key.Enter)));
+        AutomationProperties.SetAutomationId(pageNumberBox, "PrintPreviewPageNumberBox");
+        AutomationProperties.SetName(pageNumberBox, "Page number");
+        AutomationProperties.SetHelpText(pageNumberBox, "Enter a preview page number and press Enter.");
+        AutomationProperties.SetAutomationId(pageStatusText, "PrintPreviewPageStatusText");
+        AutomationProperties.SetName(pageStatusText, "Page status");
+        AutomationProperties.SetHelpText(pageStatusText, "Shows the current preview page and total page count.");
         toolbar.Items.Add(pageNumberBox);
         toolbar.Items.Add(pageStatusText);
         toolbar.Items.Add(new Separator());
@@ -328,6 +340,9 @@ public sealed partial class PrintPreviewDialog : Window
             Width = 82,
             SelectedIndex = 2
         };
+        AutomationProperties.SetAutomationId(zoomBox, "PrintPreviewZoomBox");
+        AutomationProperties.SetName(zoomBox, "Zoom");
+        AutomationProperties.SetHelpText(zoomBox, "Select a print preview zoom level.");
         toolbar.Items.Add(new Label
         {
             Content = "_Zoom:",
@@ -375,6 +390,7 @@ public sealed partial class PrintPreviewDialog : Window
             Padding = new Thickness(10, 4, 10, 4),
             ToolTip = "Review worksheet margin settings before printing."
         };
+        SetToolbarAutomation(marginsButton, "PrintPreviewMarginsButton", "Margins", "Review worksheet margin settings before printing.");
         marginsButton.Click += (_, _) =>
         {
             showMargins?.Invoke();
@@ -387,6 +403,7 @@ public sealed partial class PrintPreviewDialog : Window
             Padding = new Thickness(10, 4, 10, 4),
             ToolTip = "Use Page Layout settings to change paper, orientation, margins, and scaling."
         };
+        SetToolbarAutomation(pageSetupButton, "PrintPreviewPageSetupButton", "Page Setup", "Open Page Setup options for paper, orientation, margins, and scaling.");
         pageSetupButton.Click += (_, _) =>
         {
             showPageSetup?.Invoke();
@@ -404,6 +421,9 @@ public sealed partial class PrintPreviewDialog : Window
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 620
         };
+        AutomationProperties.SetAutomationId(settingsSummaryText, "PrintPreviewSettingsSummaryText");
+        AutomationProperties.SetName(settingsSummaryText, "Print settings summary");
+        AutomationProperties.SetHelpText(settingsSummaryText, "Summarizes the active print scope and page setup options.");
         toolbar.Items.Add(settingsSummaryText);
 
         // Left settings panel
@@ -435,5 +455,12 @@ public sealed partial class PrintPreviewDialog : Window
 
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget(printButton);
+    }
+
+    private static void SetToolbarAutomation(Control control, string automationId, string name, string helpText)
+    {
+        AutomationProperties.SetAutomationId(control, automationId);
+        AutomationProperties.SetName(control, name);
+        AutomationProperties.SetHelpText(control, helpText);
     }
 }
