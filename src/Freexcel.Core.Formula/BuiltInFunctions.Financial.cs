@@ -371,7 +371,16 @@ public static partial class BuiltInFunctions
         var dateRange = args[1] is RangeValue datesRange
             ? datesRange
             : SingleCellArray(args[1]);
-        double guess = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0.1;
+        var guessArg = args.Count > 2 ? args[2] : new NumberValue(0.1);
+        if (guessArg is RangeValue guessRange)
+            return MapUnaryTextRange(guessRange, guessValue => XirrScalar(valRange, dateRange, guessValue));
+        return XirrScalar(valRange, dateRange, guessArg);
+    }
+
+    private static ScalarValue XirrScalar(RangeValue valRange, RangeValue dateRange, ScalarValue guessValue)
+    {
+        if (guessValue is ErrorValue guessError) return guessError;
+        double guess = guessValue is not BlankValue ? ToNumber(guessValue) : 0.1;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);
         if (ve is not null) return ve;
@@ -486,10 +495,18 @@ public static partial class BuiltInFunctions
     private static ScalarValue Fvschedule(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double principal = ToNumber(args[0]);
         var schedRange = args[1] is RangeValue scheduleRange
             ? scheduleRange
             : SingleCellArray(args[1]);
+        if (args[0] is RangeValue principalRange)
+            return MapUnaryTextRange(principalRange, principalValue => FvscheduleScalar(principalValue, schedRange));
+        return FvscheduleScalar(args[0], schedRange);
+    }
+
+    private static ScalarValue FvscheduleScalar(ScalarValue principalValue, RangeValue schedRange)
+    {
+        if (principalValue is ErrorValue principalError) return principalError;
+        double principal = ToNumber(principalValue);
         if (!double.IsFinite(principal)) return ErrorValue.Num;
         var (rates, re) = CollectRangeNumbers(schedRange);
         if (re is not null) return re;
