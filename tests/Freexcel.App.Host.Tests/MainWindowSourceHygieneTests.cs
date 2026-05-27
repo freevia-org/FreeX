@@ -1746,6 +1746,9 @@ public sealed class MainWindowSourceHygieneTests
         insertSource.Should().Contain("new SetHyperlinkCommand(");
         insertSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan");
         insertSource.Should().Contain("TryNavigateToWorkbookReference(plan.Target)");
+        insertSource.Should().Contain("ShowOwnedMessage(\"The hyperlink target could not be found.\"");
+        insertSource.Should().Contain("ShowOwnedMessage(\"The hyperlink target could not be opened.\"");
+        ExtractMethodSource(insertSource, "private bool TryOpenHyperlink(").Should().NotContain("MessageBox.Show(");
         selectionSource.Should().Contain("(Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryOpenHyperlink(newAddr)");
     }
 

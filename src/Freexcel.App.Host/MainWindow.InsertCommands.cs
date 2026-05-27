@@ -136,7 +136,7 @@ public partial class MainWindow
             if (TryNavigateToWorkbookReference(plan.Target))
                 return true;
 
-            MessageBox.Show("The hyperlink target could not be found.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage("The hyperlink target could not be found.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
             return true;
         }
 
@@ -146,7 +146,7 @@ public partial class MainWindow
         }
         catch
         {
-            MessageBox.Show("The hyperlink target could not be opened.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage("The hyperlink target could not be opened.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         return true;
