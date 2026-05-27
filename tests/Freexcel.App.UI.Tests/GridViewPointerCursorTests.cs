@@ -53,6 +53,38 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void LeftClickObjectInvalidatesSelectionBeforeCapturingDrag()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var objectClickBlock = inputSource[
+            inputSource.IndexOf("// Check if clicking on a new drawing object", StringComparison.Ordinal)..
+            inputSource.IndexOf("// Clicking empty space deselects", StringComparison.Ordinal)];
+
+        objectClickBlock.Should().Contain("SelectedObjectId = hit.Id;");
+        objectClickBlock.Should().Contain("SelectedObjectKind = hit.Kind;");
+        objectClickBlock.Should().Contain("InvalidateVisual();");
+        objectClickBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal)
+            .Should().BeLessThan(objectClickBlock.IndexOf("CaptureMouse();", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SelectedObjectDragStartInvalidatesPreviewBeforeCapturingMouse()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var selectedObjectDragBlock = inputSource[
+            inputSource.IndexOf("// Check if clicking on an already-selected object's handles", StringComparison.Ordinal)..
+            inputSource.IndexOf("// Check if clicking on a new drawing object", StringComparison.Ordinal)];
+
+        selectedObjectDragBlock.Should().Contain("_objectDragKind = dragKind;");
+        selectedObjectDragBlock.Should().Contain("_objectDragCurrentRect = selRect;");
+        selectedObjectDragBlock.Should().Contain("InvalidateVisual();");
+        selectedObjectDragBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal)
+            .Should().BeLessThan(selectedObjectDragBlock.IndexOf("CaptureMouse();", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneScrollbarDragPreservesOrientationCursor()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

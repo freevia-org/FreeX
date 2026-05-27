@@ -82,6 +82,10 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=SQRT(9)", 3)]
     [InlineData("=SQRTPI(2)", 2.5066282746310002)]
     [InlineData("=SUM(1,2,3)", 6)]
+    [InlineData("=SUMSQ(3,4)", 25)]
+    [InlineData("=SUMX2MY2(3,4)", -7)]
+    [InlineData("=SUMX2PY2(3,4)", 25)]
+    [InlineData("=SUMXMY2(3,4)", 1)]
     [InlineData("=TAN(0)", 0)]
     [InlineData("=TRUNC(-2.349,2)", -2.34)]
     public void MathTrigScalarFunctions_MatchExcelCanonicalResults(string formula, double expected)
@@ -132,6 +136,7 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=PRODUCT(\"x\")")]
     [InlineData("=SEC(\"x\")")]
     [InlineData("=SUM(\"x\")")]
+    [InlineData("=SUMXMY2(\"x\",1)")]
     public void MathTrigInvalidDirectText_ReturnsValueError(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
@@ -214,9 +219,24 @@ public sealed class ExcelParityMathTrigTests
         Number("=SERIESSUM(2,0,1,A1:A3)", sheet).Should().Be(17);
         Number("=SUMIF(C1:C3,\"A\",B1:B3)", sheet).Should().Be(40);
         Number("=SUMIFS(B1:B3,C1:C3,\"A\",A1:A3,\">1\")", sheet).Should().Be(30);
+        Number("=SUMSQ(A1:A3)", sheet).Should().Be(14);
+        Number("=SUMXMY2(A1:A3,B1:B3)", sheet).Should().Be(1134);
         Number("=SUMPRODUCT(A1:A3,B1:B3)", sheet).Should().Be(140);
         Number("=SUBTOTAL(9,B1:B3)", sheet).Should().Be(60);
         Number("=AGGREGATE(9,4,B1:B3)", sheet).Should().Be(60);
+    }
+
+    [Fact]
+    public void SumXFunctions_ReturnNAForShapeMismatchAndPropagateErrors()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (1, 2, new NumberValue(3)),
+            (2, 2, ErrorValue.NA));
+
+        _eval.Evaluate("=SUMXMY2(A1:A2,B1:B1)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=SUMXMY2(A1:A2,B1:B2)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]

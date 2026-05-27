@@ -770,6 +770,90 @@ public static partial class BuiltInFunctions
         return NumberResult(result);
     }
 
+    private static ScalarValue SumSq(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double total = 0;
+        foreach (var arg in args)
+        {
+            if (arg is ErrorValue e) return e;
+            foreach (var value in FlattenMathArguments(arg))
+            {
+                if (value is ErrorValue cellError) return cellError;
+                if (!TryMathAggregateNumber(value, out var number)) continue;
+                total += number * number;
+                if (!double.IsFinite(total)) return ErrorValue.Num;
+            }
+        }
+
+        return NumberResult(total);
+    }
+
+    private static ScalarValue SumX2My2(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        SumXPair(args[0], args[1], (x, y) => x * x - y * y);
+
+    private static ScalarValue SumX2Py2(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        SumXPair(args[0], args[1], (x, y) => x * x + y * y);
+
+    private static ScalarValue SumXMy2(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        SumXPair(args[0], args[1], (x, y) =>
+        {
+            var difference = x - y;
+            return difference * difference;
+        });
+
+    private static ScalarValue SumXPair(ScalarValue first, ScalarValue second, Func<double, double, double> map)
+    {
+        if (first is ErrorValue e0) return e0;
+        if (second is ErrorValue e1) return e1;
+        var firstRange = first is RangeValue range0 ? range0 : SingleCellArray(first);
+        var secondRange = second is RangeValue range1 ? range1 : SingleCellArray(second);
+        if (firstRange.RowCount != secondRange.RowCount || firstRange.ColCount != secondRange.ColCount)
+            return ErrorValue.NA;
+
+        double total = 0;
+        for (var row = 0; row < firstRange.RowCount; row++)
+            for (var col = 0; col < firstRange.ColCount; col++)
+            {
+                var left = firstRange.Cells[row, col];
+                var right = secondRange.Cells[row, col];
+                if (left is ErrorValue leftError) return leftError;
+                if (right is ErrorValue rightError) return rightError;
+                if (!TryMathAggregateNumber(left, out var x) || !TryMathAggregateNumber(right, out var y))
+                    return ErrorValue.Value;
+                total += map(x, y);
+                if (!double.IsFinite(total)) return ErrorValue.Num;
+            }
+
+        return NumberResult(total);
+    }
+
+    private static IEnumerable<ScalarValue> FlattenMathArguments(ScalarValue value)
+    {
+        if (value is RangeValue range)
+        {
+            foreach (var cell in range.Flatten())
+                yield return cell;
+        }
+        else
+        {
+            yield return value;
+        }
+    }
+
+    private static bool TryMathAggregateNumber(ScalarValue value, out double number)
+    {
+        number = 0;
+        if (TryCellNumber(value, out number)) return double.IsFinite(number);
+        if (value is BoolValue b)
+        {
+            number = b.Value ? 1 : 0;
+            return true;
+        }
+        if (value is DirectTextLiteralValue direct && TryDirectTextNumber(direct, out number))
+            return double.IsFinite(number);
+        return false;
+    }
+
     private static ScalarValue Quotient(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
