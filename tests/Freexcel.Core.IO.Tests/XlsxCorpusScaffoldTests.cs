@@ -233,6 +233,19 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesPublicUnsupportedTagWarningDetectionCount()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var publicUnsupportedTagCount = manifestRows
+            .Where(row => row.SourceType == "public" && ExpectedWarningsFor(row).Count > 0)
+            .Count();
+
+        publicUnsupportedTagCount.Should().BeGreaterThan(0);
+        report.Should().Contain($"| Public unsupported-tag warning detection | {publicUnsupportedTagCount}/{publicUnsupportedTagCount} exercised by corpus runner |");
+    }
+
+    [Fact]
     public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
     {
         var manifestRows = ReadManifestRows();
