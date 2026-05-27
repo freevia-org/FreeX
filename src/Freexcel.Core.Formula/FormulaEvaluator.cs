@@ -81,7 +81,7 @@ public sealed class FormulaEvaluator
         "TTEST", "T.TEST", "ZTEST", "Z.TEST", "FTEST", "F.TEST", "CHITEST", "CHISQ.TEST",
         "FREQUENCY",
         "MIRR", "XIRR", "XNPV", "FVSCHEDULE",
-        "PMT", "PV", "FV", "NPER", "RATE", "IPMT", "PPMT",
+        "PMT", "PV", "FV", "NPER", "RATE", "ISPMT", "IPMT", "PPMT",
         "CUMIPMT", "CUMPRINC",
         "EFFECT", "NOMINAL", "RRI", "PDURATION",
         "SLN", "SYD", "DB", "DDB", "VDB", "AMORDEGRC", "AMORLINC",
