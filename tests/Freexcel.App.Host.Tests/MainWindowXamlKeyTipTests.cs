@@ -1050,10 +1050,42 @@ public sealed class MainWindowXamlKeyTipTests
 
         source.Should().Contain("ApplyCellStylePreset(CellStylePreset preset)");
         source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
-        source.Should().Contain("CellStyleInputMenuItem_Click");
-        source.Should().Contain("=> ApplyCellStylePreset(CellStylePreset.Input);");
+        var menuItemsByHeader = cellStylesMenu
+            .Elements(presentation + "MenuItem")
+            .ToDictionary(
+                item => item.Attribute("Header")?.Value ?? string.Empty,
+                item => item.Attribute("Click")?.Value ?? string.Empty);
+
+        foreach (var preset in Enum.GetValues<CellStylePreset>())
+        {
+            var header = CellStylePresetHeader(preset);
+            var clickHandler = menuItemsByHeader[header];
+
+            clickHandler.Should().NotBeNullOrWhiteSpace($"{preset} must have a Cell Styles menu route");
+            source.Should().Contain($"private void {clickHandler}(object sender, RoutedEventArgs e)");
+            source.Should().Contain($"=> ApplyCellStylePreset(CellStylePreset.{preset});");
+        }
+
         source.Should().NotContain("CellStyleGoodMenuItem_Click(object sender, RoutedEventArgs e)\r\n        => ApplyStyleDiff(new StyleDiff");
     }
+
+    private static string CellStylePresetHeader(CellStylePreset preset) =>
+        preset switch
+        {
+            CellStylePreset.CheckCell => "Check Cell",
+            CellStylePreset.LinkedCell => "Linked Cell",
+            CellStylePreset.ExplanatoryText => "Explanatory Text",
+            CellStylePreset.Heading1 => "Heading 1",
+            CellStylePreset.Heading2 => "Heading 2",
+            CellStylePreset.WarningText => "Warning Text",
+            CellStylePreset.Accent1_20 => "20% - Accent 1",
+            CellStylePreset.Accent2_20 => "20% - Accent 2",
+            CellStylePreset.Accent3_20 => "20% - Accent 3",
+            CellStylePreset.Accent4_20 => "20% - Accent 4",
+            CellStylePreset.Accent5_20 => "20% - Accent 5",
+            CellStylePreset.Accent6_20 => "20% - Accent 6",
+            _ => preset.ToString()
+        };
 
     [Fact]
     public void ConditionalFormattingIconSets_ExposeGroupedPresetGalleryAndMoreRules()
