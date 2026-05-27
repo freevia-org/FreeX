@@ -193,6 +193,7 @@ public partial class GridView
             _objectDragCurrentRect = hit.Rect;
             _objectDragStartAnchor = hit.Anchor;
             Cursor = Cursors.SizeAll;
+            InvalidateVisual();
             CaptureMouse();
             e.Handled = true;
             return;
