@@ -59,7 +59,7 @@ public static class ExcelWorksheetNavigationPlanner
         if (modifiers is not ModifierKeys.Alt and not (ModifierKeys.Alt | ModifierKeys.Shift))
             return null;
 
-        var effectiveKey = key == Key.None ? systemKey : key;
+        var effectiveKey = key is Key.None or Key.System ? systemKey : key;
         return effectiveKey switch
         {
             Key.PageDown => new CellAddress(
