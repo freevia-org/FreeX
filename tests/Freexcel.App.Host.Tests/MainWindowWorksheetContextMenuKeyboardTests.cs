@@ -356,6 +356,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             _openKeyboardContextMenu.Invoke(_window, null);
             PumpDispatcher();
             PumpDispatcher();
+            PumpDispatcher();
         }
 
         public string ContextMenuTargetKind(uint row, uint col)
@@ -412,10 +413,12 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         {
             get
             {
-                if (Keyboard.FocusedElement is not MenuItem menuItem)
-                    return null;
+                if (Keyboard.FocusedElement is MenuItem menuItem)
+                    return ItemsControl.ItemsControlFromItemContainer(menuItem) as ContextMenu;
 
-                return ItemsControl.ItemsControlFromItemContainer(menuItem) as ContextMenu;
+                return SheetGrid.ContextMenu?.IsOpen == true
+                    ? SheetGrid.ContextMenu
+                    : null;
             }
         }
 

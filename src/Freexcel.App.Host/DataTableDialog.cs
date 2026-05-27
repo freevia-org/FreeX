@@ -56,6 +56,8 @@ public sealed class DataTableDialog : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+        AutomationProperties.SetName(_rowInputBox, "Row input cell");
+        AutomationProperties.SetName(_columnInputBox, "Column input cell");
 
         var root = new StackPanel { Margin = new Thickness(12) };
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };

@@ -199,11 +199,16 @@ public partial class MainWindow
         if (SheetTabsRowGrid.ActualWidth <= 0)
             return;
 
+        var rowHeaderWidth = SheetGrid.ActualRowHeaderWidth;
+        SheetTabsLeadingSpacer.Width = rowHeaderWidth;
+        GridBottomRuleSpacer.Width = rowHeaderWidth;
+
         var tabContentWidth = Math.Max(SheetTabsControl.ActualWidth, SheetTabsControl.DesiredSize.Width);
         if (tabContentWidth <= 0)
             return;
 
         var fixedWidth = SheetNavLeftBtn.ActualWidth +
+                         SheetTabsLeadingSpacer.ActualWidth +
                          AddSheetButton.ActualWidth +
                          SheetNavRightBtn.ActualWidth;
         var available = Math.Max(80, SheetTabsRowGrid.ActualWidth - fixedWidth);
