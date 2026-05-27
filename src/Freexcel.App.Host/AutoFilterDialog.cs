@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Model;
 
@@ -201,6 +202,7 @@ public sealed partial class AutoFilterDialog : Window
             Height = 180,
             Margin = new Thickness(0, 0, 0, 8)
         };
+        AutomationProperties.SetName(list, "Filter values");
         list.ItemTemplate = CreateItemTemplate();
         stack.Children.Add(list);
 
