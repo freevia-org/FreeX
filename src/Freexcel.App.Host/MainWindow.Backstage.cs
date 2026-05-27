@@ -404,7 +404,7 @@ public partial class MainWindow
     private void SsMoreTemplatesBtn_Click(object sender, RoutedEventArgs e)
     {
         var message = DeferredCommandMessages.OnlineTemplatesExcluded();
-        MessageBox.Show(
+        ShowOwnedMessage(
             message.Body,
             message.Title,
             MessageBoxButton.OK,

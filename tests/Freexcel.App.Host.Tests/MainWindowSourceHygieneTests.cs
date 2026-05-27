@@ -1158,6 +1158,22 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void OnlineTemplatesExcludedCommand_UsesOwnedMessageRoute()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var methodStart = backstageSource.IndexOf("private void SsMoreTemplatesBtn_Click", StringComparison.Ordinal);
+        var nextMethodStart = backstageSource.IndexOf("private void SsOptionsBtn_Click", methodStart, StringComparison.Ordinal);
+
+        methodStart.Should().BeGreaterThanOrEqualTo(0);
+        nextMethodStart.Should().BeGreaterThan(methodStart);
+
+        var method = backstageSource[methodStart..nextMethodStart];
+        method.Should().Contain("DeferredCommandMessages.OnlineTemplatesExcluded()");
+        method.Should().Contain("ShowOwnedMessage(");
+        method.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void KeyboardShortcuts_RegisterExcelNameManagerCommands()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
