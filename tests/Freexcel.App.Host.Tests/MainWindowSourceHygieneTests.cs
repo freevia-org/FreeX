@@ -2360,6 +2360,36 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ExportPdfXpsSaveDialog_DeclaresNativeGuardrailsAndOwnedMessages()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
+        var exportMethod = ExtractMethodSource(source, "private void ExportPdfButton_Click(");
+        var exportPdfMethod = ExtractMethodSource(source, "private bool ExportAsPdf(");
+        var exportXpsMethod = ExtractMethodSource(source, "private bool ExportAsXps(");
+
+        exportMethod.Should().Contain("new Microsoft.Win32.SaveFileDialog");
+        exportMethod.Should().Contain("Title      = \"Export as PDF / XPS\"");
+        exportMethod.Should().Contain("Filter     = \"PDF files (*.pdf)|*.pdf|XPS files (*.xps)|*.xps\"");
+        exportMethod.Should().Contain("DefaultExt = \".pdf\"");
+        exportMethod.Should().Contain("AddExtension = true");
+        exportMethod.Should().Contain("OverwritePrompt = true");
+        exportMethod.Should().Contain("var selectedFormat = saveDlg.FilterIndex == 2");
+        exportMethod.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
+        exportMethod.Should().Contain("ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError)");
+        exportMethod.Should().Contain("ShowOwnedMessage(");
+        exportMethod.Should().Contain("OpenExportedFile(request.ActualPath)");
+        exportMethod.Should().NotContain("MessageBox.Show(");
+
+        exportPdfMethod.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
+        exportPdfMethod.Should().Contain("ShowOwnedMessage(");
+        exportPdfMethod.Should().NotContain("MessageBox.Show(");
+
+        exportXpsMethod.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options))");
+        exportXpsMethod.Should().Contain("ShowOwnedMessage(");
+        exportXpsMethod.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void CtrlP_RoutesThroughBackstagePrintEntryPoint()
     {
         var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
