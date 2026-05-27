@@ -870,6 +870,14 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void UnhideSheetDialog_SheetListExposesAutomationName()
+    {
+        var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_sheetBox, \"Unhide sheet\");");
+    }
+
+    [Fact]
     public void UnhideSheetDialog_UsesNonEditableSelectionList()
     {
         var source = ReadRemainingDialogSources();
