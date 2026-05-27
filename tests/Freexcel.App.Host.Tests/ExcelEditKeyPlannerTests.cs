@@ -229,4 +229,19 @@ public sealed class ExcelEditKeyPlannerTests
         intent.Action.Should().Be(ExcelEditKeyAction.CommitSelection);
         intent.Target.Should().BeNull();
     }
+
+    [Fact]
+    public void GetIntent_MapsSystemCtrlEnterToCommitSelection()
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.System,
+            ModifierKeys.Control,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            systemKey: Key.Enter);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.CommitSelection);
+        intent.Target.Should().BeNull();
+    }
 }
