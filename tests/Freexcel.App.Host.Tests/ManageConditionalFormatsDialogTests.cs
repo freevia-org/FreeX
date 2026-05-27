@@ -284,6 +284,15 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void RulesList_IsLabeledAndNamedForAccessibility()
+    {
+        var source = ReadManageConditionalFormatsDialogSource();
+
+        source.Should().Contain("new Label { Content = \"_Rules:\", Target = _listView");
+        source.Should().Contain("AutomationProperties.SetName(_listView, \"Conditional formatting rules\");");
+    }
+
+    [Fact]
     public void ScopeSelector_DefaultsToCurrentSelectionWhenSelectionIsProvided()
     {
         StaTestRunner.Run(() =>
