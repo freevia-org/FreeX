@@ -126,6 +126,22 @@ public class PhaseDLambdaTests
     }
 
     [Fact]
+    public void IsOmitted_DetectsMissingLambdaArgument()
+    {
+        Assert.Equal(
+            new TextValue("Missing second argument"),
+            Eval("=LET(f, LAMBDA(x,y, IF(ISOMITTED(y), \"Missing second argument\", x+y)), f(1,))"));
+    }
+
+    [Fact]
+    public void IsOmitted_ReturnsFalseForProvidedBlankAndRegularValues()
+    {
+        Assert.Equal(new BoolValue(false), Eval("=LET(f, LAMBDA(x, ISOMITTED(x)), f(\"\"))"));
+        Assert.Equal(new BoolValue(false), Eval("=LET(f, LAMBDA(x, ISOMITTED(x)), f(A20))"));
+        Assert.Equal(new BoolValue(false), Eval("=ISOMITTED(\"\")"));
+    }
+
+    [Fact]
     public void Lambda_NestedLet_InnerShadowsOuter()
     {
         // outer x=10; inner LET rebinds x=3 → 3*2=6

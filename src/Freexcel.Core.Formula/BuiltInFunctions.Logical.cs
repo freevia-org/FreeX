@@ -138,4 +138,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue FalseFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         new BoolValue(false);
+
+    private static ScalarValue IsOmitted(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(args[0] is OmittedLambdaArgumentValue);
 }

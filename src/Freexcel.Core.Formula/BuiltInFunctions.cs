@@ -475,6 +475,7 @@ public static partial class BuiltInFunctions
         ["BYROW"]     = (ByRowFunc,     2, 2),
         ["BYCOL"]     = (ByColFunc,     2, 2),
         ["MAKEARRAY"] = (MakeArrayFunc, 3, 3),
+        ["ISOMITTED"] = (IsOmitted,     1, 1),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
