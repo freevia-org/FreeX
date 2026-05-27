@@ -107,6 +107,18 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
+    public void ApplyBreakpointOverrides_KeepsHomeCellsBeforeEditingAtWideWidths()
+    {
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1366,
+            ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing"],
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 7).ToArray());
+
+        states[5].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[6].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
     public void ApplyBreakpointOverrides_KeepsFormulasFunctionLibraryExpandedAtNormalWideWidths()
     {
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
