@@ -77,6 +77,9 @@ public sealed partial class PrintPreviewDialog
     internal static Duplexing ResolvePrintTicketDuplexing(PrintPreviewSidesMode mode) =>
         PrintPreviewToolbarPlanner.ResolvePrintTicketDuplexing(mode);
 
+    internal static PrintPreviewNavigationState CreateNavigationState(int currentPage, int totalPages) =>
+        PrintPreviewToolbarPlanner.CreateNavigationState(currentPage, totalPages);
+
     private static PrintPreviewSidesMode ResolveSelectedSidesMode(ComboBox sidesBox) =>
         PrintPreviewToolbarPlanner.ResolveSelectedSidesMode(sidesBox.SelectedIndex);
 
@@ -170,7 +173,7 @@ public sealed partial class PrintPreviewDialog
 
         viewer.GoToPage(pageNumber);
         pageNumberBox.Text = pageNumber.ToString(CultureInfo.InvariantCulture);
-        pageStatusText.Text = $"Page {pageNumber} of {totalPages}";
+        pageStatusText.Text = CreateNavigationState(pageNumber, totalPages).StatusText;
     }
 
     private static void FocusInitialKeyboardTarget(Button printButton)
