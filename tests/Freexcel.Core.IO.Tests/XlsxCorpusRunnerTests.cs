@@ -437,6 +437,28 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedCustomRibbonUiRetentionPackage_LinksPackageRootToCustomUiPart()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-custom-ribbon-ui-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var packageRelsEntry = archive.GetEntry("_rels/.rels");
+        packageRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument packageRelsXml;
+        using (var stream = packageRelsEntry!.Open())
+            packageRelsXml = XDocument.Load(stream);
+
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility" &&
+                relationship.Attribute("Target")?.Value == "customUI/customUI.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()
