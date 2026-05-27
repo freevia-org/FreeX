@@ -184,7 +184,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
-    public void ApplyBreakpointOverrides_KeepsReviewCommentsBeforeAccessibilityAtMediumWidths()
+    public void ApplyBreakpointOverrides_KeepsReviewAccessibilityVisibleAtMediumWidths()
     {
         var groupNames = new[] { "Proofing", "Accessibility", "Comments", "Notes", "Protect" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
@@ -194,11 +194,13 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
 
         states[Array.IndexOf(groupNames, "Proofing")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Comments")].Should().Be(RibbonAdaptiveGroupState.Full);
-        states[Array.IndexOf(groupNames, "Accessibility")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Accessibility")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Notes")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Protect")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Fact]
-    public void ApplyBreakpointOverrides_RestoresViewPriorityGroupsAfterPlannerCollapse()
+    public void ApplyBreakpointOverrides_RestoresViewShowWithPriorityGroupsAfterPlannerCollapse()
     {
         var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
@@ -207,7 +209,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
 
         states[Array.IndexOf(groupNames, "Workbook Views")].Should().Be(RibbonAdaptiveGroupState.Full);
-        states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Zoom")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Window")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Macros")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
@@ -230,7 +232,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
-    public void ApplyBreakpointOverrides_PrioritizesViewZoomAndWindowBeforeShowAtMediumWidths()
+    public void ApplyBreakpointOverrides_KeepsViewShowWithZoomAndWindowAtMediumWidths()
     {
         var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
@@ -239,7 +241,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
 
         states[Array.IndexOf(groupNames, "Workbook Views")].Should().Be(RibbonAdaptiveGroupState.Full);
-        states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Zoom")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Window")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Macros")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
