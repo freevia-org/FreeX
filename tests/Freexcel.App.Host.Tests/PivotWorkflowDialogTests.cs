@@ -276,6 +276,17 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDataSourceDialog_SourceRangeEditorExposesAutomationName()
+    {
+        var source = ReadClassSource(
+            "PivotTableDataSourceDialog.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+
+        source.Should().Contain("AutomationProperties.SetName(_sourceBox, \"PivotTable source range\");");
+    }
+
+    [Fact]
     public void PivotTableDataSourceDialogOpenedFromKeyboard_FocusesSourceRange()
     {
         var source = ReadClassSource(

@@ -53,6 +53,38 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void TitleBarWindowChrome_ExposesMinimizeMaximizeRestoreAndCloseButtons()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ViewCommands.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var systemButtons = document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute("Click")?.Value is "MinimizeBtn_Click" or "MaxRestoreBtn_Click" or "CloseSysBtn_Click")
+            .Select(button => new
+            {
+                Click = button.Attribute("Click")?.Value,
+                AutomationName = button.Attribute("AutomationProperties.Name")?.Value,
+                IconKind = button.Element(local + "RibbonIcon")?.Attribute("Kind")?.Value
+            })
+            .ToList();
+
+        systemButtons.Should().BeEquivalentTo(
+        [
+            new { Click = "MinimizeBtn_Click", AutomationName = "Minimize", IconKind = "WindowMinimize" },
+            new { Click = "MaxRestoreBtn_Click", AutomationName = "Maximize or Restore", IconKind = "WindowMaximize" },
+            new { Click = "CloseSysBtn_Click", AutomationName = "Close", IconKind = "WindowClose" }
+        ]);
+
+        source.Should().Contain("SystemCommands.MinimizeWindow(this)");
+        source.Should().Contain("SystemCommands.RestoreWindow(this)");
+        source.Should().Contain("SystemCommands.MaximizeWindow(this)");
+        source.Should().Contain("SystemCommands.CloseWindow(this)");
+    }
+
+    [Fact]
     public void EditableFontSizeBox_CommitsTypedKeyboardInputWithEnter()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

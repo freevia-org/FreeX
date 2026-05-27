@@ -140,8 +140,11 @@ internal static class DelimitedTextWorkbookWriter
             return;
         }
 
+        var fieldValue = isTextValue && IsBooleanLikeText(value)
+            ? $"'{value}"
+            : value;
         writer.Write('"');
-        foreach (var ch in value)
+        foreach (var ch in fieldValue)
         {
             if (ch == '"')
                 writer.Write("\"\"");
@@ -158,9 +161,17 @@ internal static class DelimitedTextWorkbookWriter
 
     private static bool IsCoercionLikeText(string value) =>
         value[0] is '=' or '+' or '-' or '@' ||
+        IsBooleanLikeText(value) ||
         IsPercentageText(value) ||
         IsParenthesizedCurrencyText(value) ||
         IsErrorLikeText(value);
+
+    private static bool IsBooleanLikeText(string value)
+    {
+        var trimmed = value.Trim();
+        return string.Equals(trimmed, "TRUE", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmed, "FALSE", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool IsPercentageText(string value)
     {
