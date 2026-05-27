@@ -47,6 +47,51 @@ public sealed class ExcelParityStatisticalAliasTests
     }
 
     [Fact]
+    public void Prob_ReturnsDocumentedProbabilityResults()
+    {
+        var sheet = Values(0, 1, 2, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(0.2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(0.3));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(0.1));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(0.4));
+
+        Number("=PROB(A1:A4,B1:B4,2)", sheet).Should().BeApproximately(0.1, 1e-12);
+        Number("=PROB(A1:A4,B1:B4,1,3)", sheet).Should().BeApproximately(0.8, 1e-12);
+    }
+
+    [Fact]
+    public void Prob_LimitRangeArgumentsSpillElementwise()
+    {
+        var sheet = Values(0, 1, 2, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(0.2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(0.3));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(0.1));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(0.4));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(2));
+
+        var result = _eval.Evaluate("=PROB(A1:A4,B1:B4,C1:C2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.At(1, 1).Should().Be(new NumberValue(0.3));
+        result.At(2, 1).Should().Be(new NumberValue(0.1));
+    }
+
+    [Fact]
+    public void Prob_ReturnsDocumentedErrorsForInvalidRangesAndProbabilities()
+    {
+        var sheet = Values(0, 1, 2, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(0.2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(0.3));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(0.1));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(0.5));
+
+        _eval.Evaluate("=PROB(A1:A4,B1:B4,1,3)", sheet).Should().Be(ErrorValue.Num);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(0.4));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(0));
+        _eval.Evaluate("=PROB(A1:A4,B1:B4,1,3)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=PROB(A1:A4,B1:B3,1,3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void GammalnPrecise_MatchesGammalnForPositiveInputs()
     {
         Number("=GAMMALN.PRECISE(4)", Values()).Should().BeApproximately(Math.Log(6), 1e-12);
