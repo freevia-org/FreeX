@@ -565,10 +565,11 @@ public sealed class CsvFileAdapterTests
     }
 
     [Theory]
+    [InlineData("$42.00")]
     [InlineData("+$42.00")]
     [InlineData("-$42.00")]
     [InlineData("($42.25)")]
-    public void Save_RoundTripsSignedCurrencyTextFieldsAsLiteralText(string text)
+    public void Save_RoundTripsCurrencyTextFieldsAsLiteralText(string text)
     {
         var workbook = new Workbook("Book1");
         var sheet = workbook.AddSheet("Sheet1");
