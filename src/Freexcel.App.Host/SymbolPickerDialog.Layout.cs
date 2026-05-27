@@ -1,3 +1,4 @@
+using System.Text;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -79,6 +80,7 @@ public sealed partial class SymbolPickerDialog
                 Tag = value,
                 FontFamily = preview.FontFamily
             };
+            AutomationProperties.SetName(button, CreateSymbolAutomationName(value));
             button.Click += (s, _) =>
             {
                 if (s is Button { Tag: string symbol })
@@ -169,6 +171,7 @@ public sealed partial class SymbolPickerDialog
                 Tag = special.Symbol,
                 FontSize = 14
             };
+            AutomationProperties.SetName(item, $"{special.Name}, {CreateSymbolAutomationName(special.Symbol)}");
             specialList.Items.Add(item);
         }
         specialList.SelectionChanged += (_, _) =>
@@ -239,5 +242,16 @@ public sealed partial class SymbolPickerDialog
         selectedCode.Focus();
         selectedCode.SelectAll();
         Keyboard.Focus(selectedCode);
+    }
+
+    private static string CreateSymbolAutomationName(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return "Symbol";
+
+        var rune = value.EnumerateRunes().FirstOrDefault();
+        return rune == default
+            ? "Symbol"
+            : $"Symbol U+{rune.Value:X4}";
     }
 }

@@ -134,6 +134,16 @@ public sealed class SymbolPickerDialogSourceTests
         source.Should().Contain("AutomationProperties.SetName(specialList, \"Special characters\");");
     }
 
+    [Fact]
+    public void Dialog_NamesSymbolButtonsAndSpecialCharacterItemsForAccessibility()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("AutomationProperties.SetName(button, CreateSymbolAutomationName(value));");
+        source.Should().Contain("private static string CreateSymbolAutomationName(string value)");
+        source.Should().Contain("AutomationProperties.SetName(item, $\"{special.Name}, {CreateSymbolAutomationName(special.Symbol)}\");");
+    }
+
     [Theory]
     [InlineData("03C0", "\u03c0")]
     [InlineData("U+2192", "\u2192")]
