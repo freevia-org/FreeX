@@ -165,12 +165,14 @@ public class XlsxCorpusScaffoldTests
     {
         var manifestRows = ReadManifestRows();
         var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+        var localPrivateKnownGapCount = manifestRows.Count(row => row.SourceType == "local-private" && row.ExpectedStatus == "supported-known-gap");
 
         manifestRows
             .Where(row => row.SourceType == "local-private" && row.ExpectedStatus == "supported-known-gap")
             .Should()
             .OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings));
         report.Should().Contain("known-gap warning expectations are declared for optional private rows");
+        report.Should().Contain($"| Local-private known-gap warning declarations | {localPrivateKnownGapCount}/{localPrivateKnownGapCount} present in manifest for skipped optional private rows |");
     }
 
     [Fact]
