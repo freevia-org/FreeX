@@ -94,11 +94,38 @@ public sealed partial class DocumentationIndexTests
         var report = File.ReadAllText(newestStatusReport);
         using var progressDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(repositoryRoot, "release", "progress.json")));
         var overallCompletion = progressDocument.RootElement.GetProperty("overallCompletion").GetInt32();
+        var expectedReleaseStream = GetExpectedTesterReleaseStream(overallCompletion);
 
         report.Should().Contain("[release/progress.json](../release/progress.json)");
         report.Should().Contain($"overallCompletion: {overallCompletion}");
         report.Should().Contain($"Overall completion estimate is now **{overallCompletion}%**");
-        report.Should().Contain("`v0.7.<run>` stream");
+        report.Should().Contain($"`{expectedReleaseStream}` stream");
+    }
+
+    [Fact]
+    public void ReleaseFacingDocs_UseTesterReleaseStreamFromProgressMetadata()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var repositoryRoot = Directory.GetParent(docsDirectory)!.FullName;
+        using var progressDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(repositoryRoot, "release", "progress.json")));
+        var expectedReleaseStream = GetExpectedTesterReleaseStream(progressDocument.RootElement.GetProperty("overallCompletion").GetInt32());
+
+        var releaseFacingDocs = new[]
+        {
+            "OUTSTANDING_BUILD.md",
+            "TEST_DISTRIBUTION_PLAN.md",
+            Path.GetFileName(Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md").Order(StringComparer.Ordinal).Last())
+        };
+
+        foreach (var doc in releaseFacingDocs)
+        {
+            var source = File.ReadAllText(Path.Combine(docsDirectory, doc));
+
+            source.Should().Contain(
+                expectedReleaseStream,
+                "{0} should describe the same tester stream that release/progress.json drives",
+                doc);
+        }
     }
 
     [Fact]
@@ -344,6 +371,17 @@ public sealed partial class DocumentationIndexTests
 
     private static string ToPlatformPath(string path) =>
         path.Replace('/', Path.DirectorySeparatorChar);
+
+    private static string GetExpectedTesterReleaseStream(int overallCompletion)
+    {
+        var minor = overallCompletion >= 99 ? 9
+            : overallCompletion >= 96 ? 8
+            : overallCompletion >= 93 ? 7
+            : overallCompletion >= 90 ? 6
+            : 5;
+
+        return $"v0.{minor}.<run>";
+    }
 
     private static IReadOnlyList<string> ReadNumberedBoldItems(IReadOnlyList<string> lines, string sectionHeading)
     {

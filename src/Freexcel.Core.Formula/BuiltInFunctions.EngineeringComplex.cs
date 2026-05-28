@@ -148,6 +148,21 @@ public static partial class BuiltInFunctions
             : NumberResult(Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary));
     }
 
+    private static ScalarValue ImArgument(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImArgumentScalar);
+        return ImArgumentScalar(args[0]);
+    }
+
+    private static ScalarValue ImArgumentScalar(ScalarValue value)
+    {
+        var parsed = ParseComplexArgument(value);
+        if (parsed.Error is not null) return parsed.Error;
+        if (parsed.Real == 0 && parsed.Imaginary == 0) return ErrorValue.DivByZero;
+
+        return NumberResult(Math.Atan2(parsed.Imaginary, parsed.Real));
+    }
+
     private static ScalarValue ImConjugate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is RangeValue range) return MapUnaryTextRange(range, ImConjugateScalar);
