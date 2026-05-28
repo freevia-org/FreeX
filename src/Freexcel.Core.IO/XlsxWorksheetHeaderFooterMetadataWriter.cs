@@ -36,7 +36,8 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
                 root.Add(headerFooter);
             }
 
-            foreach (var attribute in sheet.HeaderFooterMetadata!.NativeAttributes)
+            var (hhAttrs, hhChildren) = XmlNativeBagSerializer.Deserialize(sheet.HeaderFooterMetadata!.Get("headerFooter"));
+            foreach (var attribute in hhAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledHeaderFooterAttribute(attribute.Key))
                     continue;
@@ -44,7 +45,7 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
                 TrySetNativeAttribute(headerFooter, attribute.Key, attribute.Value);
             }
 
-            foreach (var childXml in sheet.HeaderFooterMetadata.NativeChildXmls)
+            foreach (var childXml in hhChildren)
             {
                 if (string.IsNullOrWhiteSpace(childXml))
                     continue;

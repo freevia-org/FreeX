@@ -54,7 +54,7 @@ public static partial class FlashFillService
             bool allMatch = true;
             foreach (var (source, expected) in examples)
             {
-                var parts = source.Split(delimiter);
+                var parts = source.Split(delimiter, StringSplitOptions.TrimEntries);
                 if (parts.Length < 2)
                 {
                     allMatch = false;
@@ -92,7 +92,7 @@ public static partial class FlashFillService
                 var d = delimiter;
                 return s =>
                 {
-                    var parts = s.Split(d);
+                    var parts = s.Split(d, StringSplitOptions.TrimEntries);
                     if (idx < parts.Length)
                         return parts[idx];
 

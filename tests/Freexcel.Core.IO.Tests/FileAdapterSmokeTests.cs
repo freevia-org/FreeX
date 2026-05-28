@@ -162,14 +162,9 @@ public partial class FileAdapterSmokeTests
     {
         var workbook = new Workbook("WorkbookPropertiesNativeJson")
         {
-            Properties = new WorkbookPropertiesModel
-            {
-                NativeAttributes = new Dictionary<string, string> { ["defaultThemeVersion"] = "166925" },
-                NativeChildXmls =
-                [
-                    "<fx:workbookPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"
-                ]
-            }
+            Properties = MakeBag("workbookPr",
+                new Dictionary<string, string> { ["defaultThemeVersion"] = "166925" },
+                ["<fx:workbookPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"])
         };
 
         using var stream = new MemoryStream();
@@ -1700,18 +1695,13 @@ public partial class FileAdapterSmokeTests
         sheet.ShowRulers = false;
         sheet.ZoomPercent = 125;
         sheet.ShowFormulas = true;
-        sheet.PrimaryViewMetadata = new WorksheetPrimaryViewMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        sheet.PrimaryViewMetadata = MakeBag("sheetView",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["rightToLeft"] = "1",
                 ["showZeros"] = "0"
             },
-            NativeChildXmls =
-            [
-                "<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topRight\" />"
-            ]
-        };
+            ["<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topRight\" />"]);
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -2045,24 +2035,17 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("PageLayoutTest");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
-        sheet.DimensionMetadata = new WorksheetDimensionMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        sheet.DimensionMetadata = MakeBag("dimension",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["nativeDimensionAttr"] = "kept"
-            }
-        };
-        sheet.SheetPropertiesMetadata = new WorksheetSheetPropertiesMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            });
+        sheet.SheetPropertiesMetadata = MakeBag("sheetPr",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["filterMode"] = "1"
             },
-            NativeChildXmls =
-            [
-                "<fx:sheetPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"json\" />"
-            ]
-        };
+            ["<fx:sheetPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"json\" />"]);
         sheet.PrintArea = new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 8, 4));
@@ -2071,58 +2054,38 @@ public partial class FileAdapterSmokeTests
         sheet.PageMargins = new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1);
         sheet.HeaderMargin = 0.35;
         sheet.FooterMargin = 0.45;
-        sheet.PageMarginsMetadata = new WorksheetPageMarginsMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        sheet.PageMarginsMetadata = MakeBag("pageMargins",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["customAttr"] = "page-margins-native"
             },
-            NativeChildXmls =
-            [
-                "<fx:nativePageMarginsChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
-            ]
-        };
+            ["<fx:nativePageMarginsChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"]);
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
-        sheet.SheetFormatMetadata = new WorksheetSheetFormatMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        sheet.SheetFormatMetadata = MakeBag("sheetFormatPr",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["zeroHeight"] = "1",
                 ["thickTop"] = "1",
                 ["customSheetFormatAttr"] = "kept"
             },
-            NativeChildXmls =
-            [
-                "<fx:nativeSheetFormatChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
-            ]
-        };
-        sheet.PrintOptionsMetadata = new WorksheetPrintOptionsMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            ["<fx:nativeSheetFormatChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"]);
+        sheet.PrintOptionsMetadata = MakeBag("printOptions",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["gridLinesSet"] = "1",
                 ["customAttr"] = "print-native"
             },
-            NativeChildXmls =
-            [
-                "<fx:nativePrintOptionsChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
-            ]
-        };
+            ["<fx:nativePrintOptionsChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"]);
         sheet.PrintTitleRows = new WorksheetRepeatRange(1, 2);
         sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
         sheet.PageHeader = new WorksheetHeaderFooter("Left header", "Center header", "Right header");
-        sheet.HeaderFooterMetadata = new WorksheetHeaderFooterMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        sheet.HeaderFooterMetadata = MakeBag("headerFooter",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["nativeHeaderFooterAttr"] = "kept"
             },
-            NativeChildXmls =
-            [
-                "<fx:nativeHeaderFooterChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
-            ]
-        };
+            ["<fx:nativeHeaderFooterChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"]);
         sheet.PageFooter = new WorksheetHeaderFooter("Left footer", "Page &[Page]", "Right footer");
         sheet.FirstPageHeader = new WorksheetHeaderFooter("First header left", "First header center", "First header right");
         sheet.FirstPageFooter = new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right");
@@ -2142,17 +2105,12 @@ public partial class FileAdapterSmokeTests
         sheet.PrintErrorValue = WorksheetPrintErrorValue.Blank;
         sheet.PrintComments = WorksheetPrintComments.AtEnd;
         sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, 2);
-        sheet.PageSetupMetadata = new WorksheetPageSetupMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        sheet.PageSetupMetadata = MakeBag("pageSetup",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["customAttr"] = "page-setup-native"
             },
-            NativeChildXmls =
-            [
-                "<fx:nativePageSetupChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
-            ]
-        };
+            ["<fx:nativePageSetupChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"]);
         sheet.RowPageBreaks.Add(20);
         sheet.ColumnPageBreaks.Add(5);
         sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
@@ -4248,14 +4206,14 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.ProtectionMetadata.Should().NotBeNull();
-        loadedSheet.ProtectionMetadata!.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("algorithmName", "SHA-512"));
-        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("hashValue", "abc123"));
-        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("saltValue", "salt123"));
-        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("spinCount", "100000"));
-        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("objects", "1"));
-        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("scenarios", "1"));
-        loadedSheet.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
-        loadedSheet.ProtectionMetadata.NativeAttributes["invalid protection attr"] = "skip";
+        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "algorithmName").Should().Be("SHA-512");
+        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "hashValue").Should().Be("abc123");
+        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "saltValue").Should().Be("salt123");
+        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "spinCount").Should().Be("100000");
+        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "objects").Should().Be("1");
+        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "scenarios").Should().Be("1");
+        BagChildren(loadedSheet.ProtectionMetadata, "sheetProtection").Should().HaveCount(2);
+        AddBagAttr(loadedSheet.ProtectionMetadata!, "sheetProtection", "invalid protection attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -4465,12 +4423,12 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         loaded.ProtectionMetadata.Should().NotBeNull();
-        loaded.ProtectionMetadata!.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("algorithmName", "SHA-512"));
-        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("hashValue", "def456"));
-        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("saltValue", "salt456"));
-        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("spinCount", "100000"));
-        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("lockWindows", "1"));
-        loaded.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
+        BagAttr(loaded.ProtectionMetadata, "workbookProtection", "algorithmName").Should().Be("SHA-512");
+        BagAttr(loaded.ProtectionMetadata, "workbookProtection", "hashValue").Should().Be("def456");
+        BagAttr(loaded.ProtectionMetadata, "workbookProtection", "saltValue").Should().Be("salt456");
+        BagAttr(loaded.ProtectionMetadata, "workbookProtection", "spinCount").Should().Be("100000");
+        BagAttr(loaded.ProtectionMetadata, "workbookProtection", "lockWindows").Should().Be("1");
+        BagChildren(loaded.ProtectionMetadata, "workbookProtection").Should().HaveCount(2);
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -4510,8 +4468,8 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         loaded.IsStructureProtected.Should().BeFalse();
         loaded.ProtectionMetadata.Should().NotBeNull();
-        loaded.ProtectionMetadata!.NativeAttributes.Should().Contain("lockRevision", "1");
-        loaded.ProtectionMetadata.NativeAttributes.Should().Contain("revisionsPassword", "9AFB");
+        BagAttr(loaded.ProtectionMetadata, "workbookProtection", "lockRevision").Should().Be("1");
+        BagAttr(loaded.ProtectionMetadata, "workbookProtection", "revisionsPassword").Should().Be("9AFB");
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -5990,9 +5948,8 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("ProtectionNativeTest");
         workbook.IsStructureProtected = true;
         workbook.StructureProtectionPassword = "workbook-secret";
-        workbook.ProtectionMetadata = new WorkbookProtectionMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        workbook.ProtectionMetadata = MakeBag("workbookProtection",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["algorithmName"] = "SHA-512",
                 ["hashValue"] = "def456",
@@ -6000,20 +5957,15 @@ public partial class FileAdapterSmokeTests
                 ["spinCount"] = "100000",
                 ["lockWindows"] = "1"
             },
-            NativeChildXmls =
-            [
-                "<fx:workbookProtectionNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"
-            ]
-        };
+            ["<fx:workbookProtectionNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"]);
         var sheet = workbook.AddSheet("S1");
         sheet.IsProtected = true;
         sheet.ProtectionPassword = "sheet-secret";
         sheet.ProtectionPermissions.Clear();
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.SelectUnlockedCells);
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
-        sheet.ProtectionMetadata = new WorksheetProtectionMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        sheet.ProtectionMetadata = MakeBag("sheetProtection",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["algorithmName"] = "SHA-512",
                 ["hashValue"] = "abc123",
@@ -6021,11 +5973,7 @@ public partial class FileAdapterSmokeTests
                 ["spinCount"] = "100000",
                 ["objects"] = "1"
             },
-            NativeChildXmls =
-            [
-                "<fx:sheetProtectionNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"
-            ]
-        };
+            ["<fx:sheetProtectionNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"]);
         sheet.AllowEditRanges.Add(new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 3, 3)));
@@ -12639,14 +12587,6 @@ public partial class FileAdapterSmokeTests
     {
         var workbook = new Workbook("WorkbookInvalidNativeAttributeTest")
         {
-            Properties = new WorkbookPropertiesModel
-            {
-                NativeAttributes = new Dictionary<string, string>
-                {
-                    ["validWorkbookPrAttr"] = "keep",
-                    ["invalid workbookPr attr"] = "skip"
-                }
-            },
             FileVersion = new WorkbookFileVersionModel
             {
                 AppName = "xl",
@@ -12701,16 +12641,18 @@ public partial class FileAdapterSmokeTests
                         }
                     }
                 ]
-            },
-            ProtectionMetadata = new WorkbookProtectionMetadataModel
-            {
-                NativeAttributes = new Dictionary<string, string>
-                {
-                    ["validWorkbookProtectionAttr"] = "keep",
-                    ["invalid workbookProtection attr"] = "skip"
-                }
             }
         };
+        workbook.Properties = MakeBag("workbookPr", new Dictionary<string, string>
+        {
+            ["validWorkbookPrAttr"] = "keep",
+            ["invalid workbookPr attr"] = "skip"
+        });
+        workbook.ProtectionMetadata = MakeBag("workbookProtection", new Dictionary<string, string>
+        {
+            ["validWorkbookProtectionAttr"] = "keep",
+            ["invalid workbookProtection attr"] = "skip"
+        });
         workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
         {
             NativeAttributes = new Dictionary<string, string>
@@ -13328,10 +13270,10 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         loaded.Uses1904DateSystem.Should().BeTrue();
         loaded.Properties.Should().NotBeNull();
-        loaded.Properties!.NativeAttributes.Should().Contain("defaultThemeVersion", "166925");
-        loaded.Properties.NativeChildXmls.Should().HaveCount(2);
-        loaded.Properties.NativeChildXmls[0].Should().Contain("id=\"first\"");
-        loaded.Properties.NativeChildXmls[1].Should().Contain("id=\"second\"");
+        BagAttr(loaded.Properties, "workbookPr", "defaultThemeVersion").Should().Be("166925");
+        BagChildren(loaded.Properties, "workbookPr").Should().HaveCount(2);
+        BagChildren(loaded.Properties, "workbookPr")[0].Should().Contain("id=\"first\"");
+        BagChildren(loaded.Properties, "workbookPr")[1].Should().Contain("id=\"second\"");
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -13949,10 +13891,10 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.PrimaryViewMetadata.Should().NotBeNull();
-        loadedSheet.PrimaryViewMetadata!.NativeAttributes.Should().Contain("showZeros", "0");
-        loadedSheet.PrimaryViewMetadata.NativeAttributes.Should().Contain("rightToLeft", "1");
-        loadedSheet.PrimaryViewMetadata.NativeChildXmls.Should().Contain(xml => xml.Contains("pivotSelection", StringComparison.Ordinal));
-        loadedSheet.PrimaryViewMetadata.NativeAttributes["invalid primaryView attr"] = "skip";
+        BagAttr(loadedSheet.PrimaryViewMetadata, "sheetView", "showZeros").Should().Be("0");
+        BagAttr(loadedSheet.PrimaryViewMetadata, "sheetView", "rightToLeft").Should().Be("1");
+        BagChildren(loadedSheet.PrimaryViewMetadata, "sheetView").Should().Contain(xml => xml.Contains("pivotSelection", StringComparison.Ordinal));
+        AddBagAttr(loadedSheet.PrimaryViewMetadata!, "sheetView", "invalid primaryView attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -13983,19 +13925,14 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("PrimaryViewMetadataSaveTest");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("View metadata"));
-        sheet.PrimaryViewMetadata = new WorksheetPrimaryViewMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        sheet.PrimaryViewMetadata = MakeBag("sheetView",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["rightToLeft"] = "1",
                 ["showZeros"] = "0",
                 ["zoomScale"] = "42"
             },
-            NativeChildXmls =
-            [
-                "<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topRight\" />"
-            ]
-        };
+            ["<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topRight\" />"]);
 
         var saved = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, saved);
@@ -14148,12 +14085,12 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.SheetFormatMetadata.Should().NotBeNull();
-        loadedSheet.SheetFormatMetadata!.NativeAttributes.Should().Contain("baseColWidth", "12");
-        loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("zeroHeight", "1");
-        loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("thickTop", "1");
-        loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("outlineLevelRow", "3");
-        loadedSheet.SheetFormatMetadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativeSheetFormatChild", StringComparison.Ordinal));
-        loadedSheet.SheetFormatMetadata.NativeAttributes["invalid sheetFormat attr"] = "skip";
+        BagAttr(loadedSheet.SheetFormatMetadata, "sheetFormatPr", "baseColWidth").Should().Be("12");
+        BagAttr(loadedSheet.SheetFormatMetadata, "sheetFormatPr", "zeroHeight").Should().Be("1");
+        BagAttr(loadedSheet.SheetFormatMetadata, "sheetFormatPr", "thickTop").Should().Be("1");
+        BagAttr(loadedSheet.SheetFormatMetadata, "sheetFormatPr", "outlineLevelRow").Should().Be("3");
+        BagChildren(loadedSheet.SheetFormatMetadata, "sheetFormatPr").Should().ContainSingle(xml => xml.Contains("nativeSheetFormatChild", StringComparison.Ordinal));
+        AddBagAttr(loadedSheet.SheetFormatMetadata!, "sheetFormatPr", "invalid sheetFormat attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14419,9 +14356,9 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.PrintOptionsMetadata.Should().NotBeNull();
-        loadedSheet.PrintOptionsMetadata!.NativeAttributes.Should().Contain("gridLinesSet", "1");
-        loadedSheet.PrintOptionsMetadata.NativeAttributes.Should().Contain("customAttr", "print-native");
-        loadedSheet.PrintOptionsMetadata.NativeAttributes["invalid printOptions attr"] = "skip";
+        BagAttr(loadedSheet.PrintOptionsMetadata, "printOptions", "gridLinesSet").Should().Be("1");
+        BagAttr(loadedSheet.PrintOptionsMetadata, "printOptions", "customAttr").Should().Be("print-native");
+        AddBagAttr(loadedSheet.PrintOptionsMetadata!, "printOptions", "invalid printOptions attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14458,9 +14395,9 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.PageSetupMetadata.Should().NotBeNull();
-        loadedSheet.PageSetupMetadata!.NativeAttributes.Should().Contain("customAttr", "page-setup-native");
-        loadedSheet.PageSetupMetadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativePageSetupChild", StringComparison.Ordinal));
-        loadedSheet.PageSetupMetadata.NativeAttributes["invalid pageSetup attr"] = "skip";
+        BagAttr(loadedSheet.PageSetupMetadata, "pageSetup", "customAttr").Should().Be("page-setup-native");
+        BagChildren(loadedSheet.PageSetupMetadata, "pageSetup").Should().ContainSingle(xml => xml.Contains("nativePageSetupChild", StringComparison.Ordinal));
+        AddBagAttr(loadedSheet.PageSetupMetadata!, "pageSetup", "invalid pageSetup attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14608,8 +14545,8 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.PageMarginsMetadata.Should().NotBeNull();
-        loadedSheet.PageMarginsMetadata!.NativeAttributes.Should().Contain("customAttr", "page-margins-native");
-        loadedSheet.PageMarginsMetadata.NativeAttributes["invalid pageMargins attr"] = "skip";
+        BagAttr(loadedSheet.PageMarginsMetadata, "pageMargins", "customAttr").Should().Be("page-margins-native");
+        AddBagAttr(loadedSheet.PageMarginsMetadata!, "pageMargins", "invalid pageMargins attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14649,8 +14586,8 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.HeaderFooterMetadata.Should().NotBeNull();
-        loadedSheet.HeaderFooterMetadata!.NativeAttributes.Should().Contain("nativeHeaderFooterAttr", "kept");
-        loadedSheet.HeaderFooterMetadata.NativeAttributes["invalid headerFooter attr"] = "skip";
+        BagAttr(loadedSheet.HeaderFooterMetadata, "headerFooter", "nativeHeaderFooterAttr").Should().Be("kept");
+        AddBagAttr(loadedSheet.HeaderFooterMetadata!, "headerFooter", "invalid headerFooter attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14688,8 +14625,8 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.DimensionMetadata.Should().NotBeNull();
-        loadedSheet.DimensionMetadata!.NativeAttributes.Should().Contain("nativeDimensionAttr", "kept");
-        loadedSheet.DimensionMetadata.NativeAttributes["invalid dimension attr"] = "skip";
+        BagAttr(loadedSheet.DimensionMetadata, "dimension", "nativeDimensionAttr").Should().Be("kept");
+        AddBagAttr(loadedSheet.DimensionMetadata!, "dimension", "invalid dimension attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -15445,9 +15382,9 @@ public partial class FileAdapterSmokeTests
         loadedSheet.FitToPage.Should().BeTrue();
         loadedSheet.AutoPageBreaks.Should().BeFalse();
         loadedSheet.SheetPropertiesMetadata.Should().NotBeNull();
-        loadedSheet.SheetPropertiesMetadata!.NativeAttributes.Should().Contain("filterMode", "1");
-        loadedSheet.SheetPropertiesMetadata.NativeChildXmls.Should().HaveCount(2);
-        loadedSheet.SheetPropertiesMetadata.NativeAttributes["invalid sheetPr attr"] = "skip";
+        BagAttr(loadedSheet.SheetPropertiesMetadata, "sheetPr", "filterMode").Should().Be("1");
+        BagChildren(loadedSheet.SheetPropertiesMetadata, "sheetPr").Should().HaveCount(2);
+        AddBagAttr(loadedSheet.SheetPropertiesMetadata!, "sheetPr", "invalid sheetPr attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -15479,18 +15416,13 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("SheetPropertiesMetadataSaveTest");
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sheet properties"));
-        sheet.SheetPropertiesMetadata = new WorksheetSheetPropertiesMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        sheet.SheetPropertiesMetadata = MakeBag("sheetPr",
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["filterMode"] = "1",
                 ["codeName"] = "IgnoredModeledCodeName"
             },
-            NativeChildXmls =
-            [
-                "<fx:sheetPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"authored\" />"
-            ]
-        };
+            ["<fx:sheetPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"authored\" />"]);
 
         var saved = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, saved);
@@ -16766,13 +16698,10 @@ public partial class FileAdapterSmokeTests
             .Which.Should().BeEquivalentTo(new WorksheetCustomProperty(
                 "FreexcelNativeProperty",
                 1,
-                new WorksheetCustomPropertyMetadataModel
+                MakeBag("customPr", new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    NativeAttributes =
-                    {
-                        ["unsupportedAttr"] = "kept"
-                    }
-                }));
+                    ["unsupportedAttr"] = "kept"
+                })));
     }
 
     [Fact]
@@ -16783,17 +16712,12 @@ public partial class FileAdapterSmokeTests
         sheet.CustomProperties.Add(new WorksheetCustomProperty(
             "FreexcelModeledProperty",
             7,
-            new WorksheetCustomPropertyMetadataModel
-            {
-                NativeAttributes =
+            MakeBag("customPr",
+                new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["unsupportedAttr"] = "kept"
                 },
-                NativeChildXmls =
-                [
-                    "<fx:customPrChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
-                ]
-            }));
+                ["<fx:customPrChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"])));
 
         var stream = new MemoryStream();
         new NativeJsonAdapter().Save(workbook, stream);
@@ -16814,18 +16738,13 @@ public partial class FileAdapterSmokeTests
         sheet.CustomProperties.Add(new WorksheetCustomProperty(
             "FreexcelModeledProperty",
             7,
-            new WorksheetCustomPropertyMetadataModel
-            {
-                NativeAttributes =
+            MakeBag("customPr",
+                new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["unsupportedAttr"] = "kept",
                     ["invalid customPr attr"] = "skip"
                 },
-                NativeChildXmls =
-                [
-                    "<fx:customPrChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
-                ]
-            }));
+                ["<fx:customPrChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"])));
 
         var saved = new MemoryStream();
         var save = () => new XlsxFileAdapter().Save(workbook, saved);
@@ -24048,5 +23967,78 @@ public partial class FileAdapterSmokeTests
         var sheet2 = wb2.Sheets[0];
         sheet2.GetValue(new CellAddress(sheet2.Id, 1, 1)).Should().Be(new TextValue("a\nb"));
         sheet2.GetValue(new CellAddress(sheet2.Id, 1, 2)).Should().Be(new TextValue("c"));
+    }
+
+    // ── NativeXmlPreserveBag test helpers ────────────────────────────────────
+
+    private static NativeXmlPreserveBag MakeBag(
+        string key,
+        Dictionary<string, string>? attrs = null,
+        IReadOnlyList<string>? children = null)
+    {
+        var wrapper = new XElement("e");
+        foreach (var (name, value) in attrs ?? [])
+        {
+            try { wrapper.SetAttributeValue(XName.Get(name), value); } catch { }
+        }
+        foreach (var childXml in children ?? [])
+        {
+            try { wrapper.Add(XElement.Parse(childXml, System.Xml.Linq.LoadOptions.PreserveWhitespace)); } catch { }
+        }
+        if (!wrapper.Attributes().Any() && !wrapper.HasElements)
+            return new NativeXmlPreserveBag();
+        var bag = new NativeXmlPreserveBag();
+        bag.Set(key, wrapper.ToString(System.Xml.Linq.SaveOptions.DisableFormatting));
+        return bag;
+    }
+
+    /// <summary>Gets the value of a named attribute from a NativeXmlPreserveBag entry, or null if absent.</summary>
+    private static string? BagAttr(NativeXmlPreserveBag? bag, string key, string attrName)
+    {
+        if (bag is null) return null;
+        var xml = bag.Get(key);
+        if (xml is null) return null;
+        try { return XElement.Parse(xml).Attribute(attrName)?.Value; } catch { return null; }
+    }
+
+    /// <summary>Returns child XML strings from a NativeXmlPreserveBag entry.</summary>
+    private static IReadOnlyList<string> BagChildren(NativeXmlPreserveBag? bag, string key)
+    {
+        if (bag is null) return [];
+        var xml = bag.Get(key);
+        if (xml is null) return [];
+        try
+        {
+            return XElement.Parse(xml).Elements()
+                .Select(e => e.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+                .ToList();
+        }
+        catch { return []; }
+    }
+
+    /// <summary>Adds an attribute to the NativeXmlPreserveBag entry for the given key.
+    /// If the attribute name is not a valid XML name (e.g. contains spaces), the call is silently ignored —
+    /// the bag uses XML serialization internally and cannot store invalid attribute names, which means
+    /// writers will never encounter them and don't need to filter them.</summary>
+    private static void AddBagAttr(NativeXmlPreserveBag bag, string key, string attrName, string attrValue)
+    {
+        var xml = bag.Get(key);
+        XElement wrapper;
+        if (xml is null)
+        {
+            wrapper = new XElement("e");
+        }
+        else
+        {
+            try { wrapper = XElement.Parse(xml); } catch { return; }
+        }
+
+        try
+        {
+            wrapper.SetAttributeValue(attrName, attrValue);
+            bag.Set(key, wrapper.ToString(System.Xml.Linq.SaveOptions.DisableFormatting));
+        }
+        catch (System.Xml.XmlException) { /* invalid attribute name — silently ignore */ }
+        catch (ArgumentException) { /* invalid attribute name — silently ignore */ }
     }
 }

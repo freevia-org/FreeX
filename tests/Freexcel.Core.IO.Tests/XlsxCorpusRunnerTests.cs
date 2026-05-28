@@ -924,12 +924,12 @@ public class XlsxCorpusRunnerTests
         workbook.IsStructureProtected.Should().BeTrue();
         workbook.StructureProtectionPassword.Should().Be("83AF");
         workbook.ProtectionMetadata.Should().NotBeNull();
-        workbook.ProtectionMetadata!.NativeAttributes.Should().Contain("algorithmName", "SHA-512");
-        workbook.ProtectionMetadata.NativeAttributes.Should().Contain("hashValue", "def456");
-        workbook.ProtectionMetadata.NativeAttributes.Should().Contain("saltValue", "salt456");
-        workbook.ProtectionMetadata.NativeAttributes.Should().Contain("spinCount", "100000");
-        workbook.ProtectionMetadata.NativeAttributes.Should().Contain("lockWindows", "1");
-        workbook.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "algorithmName").Should().Be("SHA-512");
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "hashValue").Should().Be("def456");
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "saltValue").Should().Be("salt456");
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "spinCount").Should().Be("100000");
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "lockWindows").Should().Be("1");
+        BagChildren(workbook.ProtectionMetadata, "workbookProtection").Should().HaveCount(2);
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-workbook-protection-edit"));
 
         using var saved = new MemoryStream();
@@ -5660,4 +5660,28 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<string> CriticalRelationshipTargets,
         IReadOnlyList<string> CriticalRelationshipDetails,
         IReadOnlyList<string> CriticalContentTypeOverrides);
+
+    // ── NativeXmlPreserveBag test helpers ────────────────────────────────────
+
+    private static string? BagAttr(NativeXmlPreserveBag? bag, string key, string attrName)
+    {
+        if (bag is null) return null;
+        var xml = bag.Get(key);
+        if (xml is null) return null;
+        try { return XElement.Parse(xml).Attribute(attrName)?.Value; } catch { return null; }
+    }
+
+    private static IReadOnlyList<string> BagChildren(NativeXmlPreserveBag? bag, string key)
+    {
+        if (bag is null) return [];
+        var xml = bag.Get(key);
+        if (xml is null) return [];
+        try
+        {
+            return XElement.Parse(xml).Elements()
+                .Select(e => e.ToString(SaveOptions.DisableFormatting))
+                .ToList();
+        }
+        catch { return []; }
+    }
 }

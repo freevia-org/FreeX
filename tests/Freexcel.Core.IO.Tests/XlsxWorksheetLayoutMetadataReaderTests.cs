@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using FluentAssertions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO.Tests;
 
@@ -13,8 +14,8 @@ public sealed class XlsxWorksheetLayoutMetadataReaderTests
         var metadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetDimensionMetadata(dimension);
 
         metadata.Should().NotBeNull();
-        metadata!.NativeAttributes.Should().ContainSingle()
-            .Which.Should().Be(new KeyValuePair<string, string>("customAttr", "kept"));
+        BagAttr(metadata, "dimension", "customAttr").Should().Be("kept");
+        BagAttr(metadata, "dimension", "ref").Should().BeNull("ref is modeled separately");
     }
 
     [Fact]
@@ -30,10 +31,10 @@ public sealed class XlsxWorksheetLayoutMetadataReaderTests
         var metadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetSheetPropertiesMetadata(sheetProperties);
 
         metadata.Should().NotBeNull();
-        metadata!.NativeAttributes.Should().Contain("customAttr", "kept");
-        metadata.NativeAttributes.Should().NotContainKey("codeName");
-        metadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativeChild", StringComparison.Ordinal));
-        metadata.NativeChildXmls.Should().NotContain(xml => xml.Contains("outlinePr", StringComparison.Ordinal));
+        BagAttr(metadata, "sheetPr", "customAttr").Should().Be("kept");
+        BagAttr(metadata, "sheetPr", "codeName").Should().BeNull("codeName is modeled separately");
+        BagChildren(metadata, "sheetPr").Should().ContainSingle(xml => xml.Contains("nativeChild", StringComparison.Ordinal));
+        BagChildren(metadata, "sheetPr").Should().NotContain(xml => xml.Contains("outlinePr", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -50,11 +51,11 @@ public sealed class XlsxWorksheetLayoutMetadataReaderTests
         var metadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetPrimaryViewMetadata(sheetView);
 
         metadata.Should().NotBeNull();
-        metadata!.NativeAttributes.Should().Contain("showZeros", "0");
-        metadata.NativeAttributes.Should().NotContainKey("workbookViewId");
-        metadata.NativeAttributes.Should().NotContainKey("view");
-        metadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("pivotSelection", StringComparison.Ordinal));
-        metadata.NativeChildXmls.Should().NotContain(xml => xml.Contains("<pane", StringComparison.Ordinal));
+        BagAttr(metadata, "sheetView", "showZeros").Should().Be("0");
+        BagAttr(metadata, "sheetView", "workbookViewId").Should().BeNull("workbookViewId is modeled separately");
+        BagAttr(metadata, "sheetView", "view").Should().BeNull("view is modeled separately");
+        BagChildren(metadata, "sheetView").Should().ContainSingle(xml => xml.Contains("pivotSelection", StringComparison.Ordinal));
+        BagChildren(metadata, "sheetView").Should().NotContain(xml => xml.Contains("<pane", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -69,9 +70,33 @@ public sealed class XlsxWorksheetLayoutMetadataReaderTests
         var metadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetProtectionMetadata(protection);
 
         metadata.Should().NotBeNull();
-        metadata!.NativeAttributes.Should().Contain("algorithmName", "SHA-512");
-        metadata.NativeAttributes.Should().NotContainKey("sheet");
-        metadata.NativeAttributes.Should().NotContainKey("password");
-        metadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("extLst", StringComparison.Ordinal));
+        BagAttr(metadata, "sheetProtection", "algorithmName").Should().Be("SHA-512");
+        BagAttr(metadata, "sheetProtection", "sheet").Should().BeNull("sheet is modeled separately");
+        BagAttr(metadata, "sheetProtection", "password").Should().BeNull("password is modeled separately");
+        BagChildren(metadata, "sheetProtection").Should().ContainSingle(xml => xml.Contains("extLst", StringComparison.Ordinal));
+    }
+
+    // ── NativeXmlPreserveBag test helpers ────────────────────────────────────
+
+    private static string? BagAttr(NativeXmlPreserveBag? bag, string key, string attrName)
+    {
+        if (bag is null) return null;
+        var xml = bag.Get(key);
+        if (xml is null) return null;
+        try { return XElement.Parse(xml).Attribute(attrName)?.Value; } catch { return null; }
+    }
+
+    private static IReadOnlyList<string> BagChildren(NativeXmlPreserveBag? bag, string key)
+    {
+        if (bag is null) return [];
+        var xml = bag.Get(key);
+        if (xml is null) return [];
+        try
+        {
+            return XElement.Parse(xml).Elements()
+                .Select(e => e.ToString(SaveOptions.DisableFormatting))
+                .ToList();
+        }
+        catch { return []; }
     }
 }

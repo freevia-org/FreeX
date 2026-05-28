@@ -4,171 +4,116 @@ namespace Freexcel.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
-    private static WorkbookPropertiesModel? ToWorkbookProperties(WorkbookPropertiesDto? dto)
-    {
-        if (dto is null)
-            return null;
+    // ── NativeXmlPreserveBag helpers ──────────────────────────────────────────────
 
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+    private static NativeXmlPreserveBag? ToNativeBag(
+        Dictionary<string, string>? rawAttributes,
+        List<string>? rawChildren,
+        string key)
+    {
+        var nativeAttributes = CleanNativeAttributes(rawAttributes);
+        var nativeChildXmls = (rawChildren ?? [])
             .Where(xml => !string.IsNullOrWhiteSpace(xml))
             .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+
+        var serialized = XmlNativeBagSerializer.Serialize(nativeAttributes, nativeChildXmls);
+        if (serialized is null)
             return null;
 
-        return new WorkbookPropertiesModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+        var bag = new NativeXmlPreserveBag();
+        bag.Set(key, serialized);
+        return bag;
     }
 
-    private static WorkbookProtectionMetadataModel? ToWorkbookProtectionMetadata(WorkbookProtectionMetadataDto? dto)
+    private static (Dictionary<string, string> Attributes, List<string> Children) FromNativeBag(
+        NativeXmlPreserveBag? bag,
+        string key)
     {
-        if (dto is null)
-            return null;
+        if (bag is null)
+            return (new Dictionary<string, string>(StringComparer.Ordinal), []);
 
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorkbookProtectionMetadataModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+        var (attrs, children) = XmlNativeBagSerializer.Deserialize(bag.Get(key));
+        return (CleanNativeAttributesForSave(attrs), children.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToList());
     }
 
-    private static WorksheetProtectionMetadataModel? ToWorksheetProtectionMetadata(WorksheetProtectionMetadataDto? dto)
+    // ── Worksheet metadata ────────────────────────────────────────────────────────
+
+    private static NativeXmlPreserveBag? ToWorksheetProtectionMetadata(WorksheetProtectionMetadataDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "sheetProtection");
+
+    private static WorksheetProtectionMetadataDto? FromWorksheetProtectionMetadata(NativeXmlPreserveBag? bag)
     {
-        if (dto is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetProtectionMetadataModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+        var (attrs, children) = FromNativeBag(bag, "sheetProtection");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorksheetProtectionMetadataDto { NativeAttributes = attrs, NativeChildXmls = children };
     }
 
-    private static WorksheetPageSetupMetadataModel? ToWorksheetPageSetupMetadata(WorksheetPageSetupMetadataDto? dto)
+    private static NativeXmlPreserveBag? ToWorksheetPageSetupMetadata(WorksheetPageSetupMetadataDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "pageSetup");
+
+    private static WorksheetPageSetupMetadataDto? FromWorksheetPageSetupMetadata(NativeXmlPreserveBag? bag)
     {
-        if (dto is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetPageSetupMetadataModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+        var (attrs, children) = FromNativeBag(bag, "pageSetup");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorksheetPageSetupMetadataDto { NativeAttributes = attrs, NativeChildXmls = children };
     }
 
-    private static WorksheetPrintOptionsMetadataModel? ToWorksheetPrintOptionsMetadata(WorksheetPrintOptionsMetadataDto? dto)
+    private static NativeXmlPreserveBag? ToWorksheetPrintOptionsMetadata(WorksheetPrintOptionsMetadataDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "printOptions");
+
+    private static WorksheetPrintOptionsMetadataDto? FromWorksheetPrintOptionsMetadata(NativeXmlPreserveBag? bag)
     {
-        if (dto is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetPrintOptionsMetadataModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+        var (attrs, children) = FromNativeBag(bag, "printOptions");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorksheetPrintOptionsMetadataDto { NativeAttributes = attrs, NativeChildXmls = children };
     }
 
-    private static WorksheetSheetFormatMetadataModel? ToWorksheetSheetFormatMetadata(WorksheetSheetFormatMetadataDto? dto)
+    private static NativeXmlPreserveBag? ToWorksheetSheetFormatMetadata(WorksheetSheetFormatMetadataDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "sheetFormatPr");
+
+    private static WorksheetSheetFormatMetadataDto? FromWorksheetSheetFormatMetadata(NativeXmlPreserveBag? bag)
     {
-        if (dto is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetSheetFormatMetadataModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+        var (attrs, children) = FromNativeBag(bag, "sheetFormatPr");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorksheetSheetFormatMetadataDto { NativeAttributes = attrs, NativeChildXmls = children };
     }
 
-    private static WorksheetDimensionMetadataModel? ToWorksheetDimensionMetadata(WorksheetDimensionMetadataDto? dto)
+    private static NativeXmlPreserveBag? ToWorksheetDimensionMetadata(WorksheetDimensionMetadataDto? dto)
     {
-        if (dto is null)
-            return null;
-
+        if (dto is null) return null;
         var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        if (nativeAttributes.Count == 0)
-            return null;
-
-        return new WorksheetDimensionMetadataModel
-        {
-            NativeAttributes = nativeAttributes
-        };
+        var serialized = XmlNativeBagSerializer.Serialize(nativeAttributes);
+        if (serialized is null) return null;
+        var bag = new NativeXmlPreserveBag();
+        bag.Set("dimension", serialized);
+        return bag;
     }
 
-    private static WorksheetSheetPropertiesMetadataModel? ToWorksheetSheetPropertiesMetadata(WorksheetSheetPropertiesMetadataDto? dto)
+    private static WorksheetDimensionMetadataDto? FromWorksheetDimensionMetadata(NativeXmlPreserveBag? bag)
     {
-        if (dto is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetSheetPropertiesMetadataModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+        var (attrs, _) = FromNativeBag(bag, "dimension");
+        if (attrs.Count == 0) return null;
+        return new WorksheetDimensionMetadataDto { NativeAttributes = attrs };
     }
 
-    private static WorksheetPrimaryViewMetadataModel? ToWorksheetPrimaryViewMetadata(WorksheetPrimaryViewMetadataDto? dto)
+    private static NativeXmlPreserveBag? ToWorksheetSheetPropertiesMetadata(WorksheetSheetPropertiesMetadataDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "sheetPr");
+
+    private static WorksheetSheetPropertiesMetadataDto? FromWorksheetSheetPropertiesMetadata(NativeXmlPreserveBag? bag)
     {
-        if (dto is null)
-            return null;
+        var (attrs, children) = FromNativeBag(bag, "sheetPr");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorksheetSheetPropertiesMetadataDto { NativeAttributes = attrs, NativeChildXmls = children };
+    }
 
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
+    private static NativeXmlPreserveBag? ToWorksheetPrimaryViewMetadata(WorksheetPrimaryViewMetadataDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "sheetView");
 
-        return new WorksheetPrimaryViewMetadataModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+    private static WorksheetPrimaryViewMetadataDto? FromWorksheetPrimaryViewMetadata(NativeXmlPreserveBag? bag)
+    {
+        var (attrs, children) = FromNativeBag(bag, "sheetView");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorksheetPrimaryViewMetadataDto { NativeAttributes = attrs, NativeChildXmls = children };
     }
 
     private static WorksheetPageBreaksMetadataModel? ToWorksheetPageBreaksMetadata(WorksheetPageBreaksMetadataDto? dto)
@@ -192,211 +137,6 @@ public sealed partial class NativeJsonAdapter
         {
             NativeAttributes = nativeAttributes,
             BreakNativeAttributes = breakNativeAttributes
-        };
-    }
-
-    private static WorksheetPageMarginsMetadataModel? ToWorksheetPageMarginsMetadata(WorksheetPageMarginsMetadataDto? dto)
-    {
-        if (dto is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetPageMarginsMetadataModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
-    }
-
-    private static WorksheetHeaderFooterMetadataModel? ToWorksheetHeaderFooterMetadata(WorksheetHeaderFooterMetadataDto? dto)
-    {
-        if (dto is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var nativeChildXmls = (dto.NativeChildXmls ?? [])
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetHeaderFooterMetadataModel
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
-    }
-
-    private static WorkbookPropertiesDto? FromWorkbookProperties(WorkbookPropertiesModel? model)
-    {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorkbookPropertiesDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
-    }
-
-    private static WorkbookProtectionMetadataDto? FromWorkbookProtectionMetadata(WorkbookProtectionMetadataModel? model)
-    {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorkbookProtectionMetadataDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
-    }
-
-    private static WorksheetProtectionMetadataDto? FromWorksheetProtectionMetadata(WorksheetProtectionMetadataModel? model)
-    {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetProtectionMetadataDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
-    }
-
-    private static WorksheetPageSetupMetadataDto? FromWorksheetPageSetupMetadata(WorksheetPageSetupMetadataModel? model)
-    {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetPageSetupMetadataDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
-    }
-
-    private static WorksheetPrintOptionsMetadataDto? FromWorksheetPrintOptionsMetadata(WorksheetPrintOptionsMetadataModel? model)
-    {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetPrintOptionsMetadataDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
-    }
-
-    private static WorksheetSheetFormatMetadataDto? FromWorksheetSheetFormatMetadata(WorksheetSheetFormatMetadataModel? model)
-    {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetSheetFormatMetadataDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
-    }
-
-    private static WorksheetDimensionMetadataDto? FromWorksheetDimensionMetadata(WorksheetDimensionMetadataModel? model)
-    {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        if (nativeAttributes.Count == 0)
-            return null;
-
-        return new WorksheetDimensionMetadataDto
-        {
-            NativeAttributes = nativeAttributes
-        };
-    }
-
-    private static WorksheetSheetPropertiesMetadataDto? FromWorksheetSheetPropertiesMetadata(WorksheetSheetPropertiesMetadataModel? model)
-    {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetSheetPropertiesMetadataDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
-    }
-
-    private static WorksheetPrimaryViewMetadataDto? FromWorksheetPrimaryViewMetadata(WorksheetPrimaryViewMetadataModel? model)
-    {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetPrimaryViewMetadataDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
         };
     }
 
@@ -424,42 +164,45 @@ public sealed partial class NativeJsonAdapter
         };
     }
 
-    private static WorksheetPageMarginsMetadataDto? FromWorksheetPageMarginsMetadata(WorksheetPageMarginsMetadataModel? model)
+    private static NativeXmlPreserveBag? ToWorksheetPageMarginsMetadata(WorksheetPageMarginsMetadataDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "pageMargins");
+
+    private static WorksheetPageMarginsMetadataDto? FromWorksheetPageMarginsMetadata(NativeXmlPreserveBag? bag)
     {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetPageMarginsMetadataDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+        var (attrs, children) = FromNativeBag(bag, "pageMargins");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorksheetPageMarginsMetadataDto { NativeAttributes = attrs, NativeChildXmls = children };
     }
 
-    private static WorksheetHeaderFooterMetadataDto? FromWorksheetHeaderFooterMetadata(WorksheetHeaderFooterMetadataModel? model)
+    private static NativeXmlPreserveBag? ToWorksheetHeaderFooterMetadata(WorksheetHeaderFooterMetadataDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "headerFooter");
+
+    private static WorksheetHeaderFooterMetadataDto? FromWorksheetHeaderFooterMetadata(NativeXmlPreserveBag? bag)
     {
-        if (model is null)
-            return null;
-
-        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var nativeChildXmls = model.NativeChildXmls
-            .Where(xml => !string.IsNullOrWhiteSpace(xml))
-            .ToList();
-        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
-            return null;
-
-        return new WorksheetHeaderFooterMetadataDto
-        {
-            NativeAttributes = nativeAttributes,
-            NativeChildXmls = nativeChildXmls
-        };
+        var (attrs, children) = FromNativeBag(bag, "headerFooter");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorksheetHeaderFooterMetadataDto { NativeAttributes = attrs, NativeChildXmls = children };
     }
 
+    // ── Workbook metadata ─────────────────────────────────────────────────────────
+
+    private static NativeXmlPreserveBag? ToWorkbookProperties(WorkbookPropertiesDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "workbookPr");
+
+    private static WorkbookPropertiesDto? FromWorkbookProperties(NativeXmlPreserveBag? bag)
+    {
+        var (attrs, children) = FromNativeBag(bag, "workbookPr");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorkbookPropertiesDto { NativeAttributes = attrs, NativeChildXmls = children };
+    }
+
+    private static NativeXmlPreserveBag? ToWorkbookProtectionMetadata(WorkbookProtectionMetadataDto? dto)
+        => dto is null ? null : ToNativeBag(dto.NativeAttributes, dto.NativeChildXmls, "workbookProtection");
+
+    private static WorkbookProtectionMetadataDto? FromWorkbookProtectionMetadata(NativeXmlPreserveBag? bag)
+    {
+        var (attrs, children) = FromNativeBag(bag, "workbookProtection");
+        if (attrs.Count == 0 && children.Count == 0) return null;
+        return new WorkbookProtectionMetadataDto { NativeAttributes = attrs, NativeChildXmls = children };
+    }
 }

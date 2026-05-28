@@ -70,7 +70,7 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
-    public static WorkbookProtectionMetadataModel? LoadProtectionMetadata(Stream xlsxStream)
+    public static NativeXmlPreserveBag? LoadProtectionMetadata(Stream xlsxStream)
     {
         try
         {
@@ -85,12 +85,7 @@ internal static class XlsxWorkbookMetadataReader
             if (protection is null)
                 return null;
 
-            var model = new WorkbookProtectionMetadataModel
-            {
-                NativeChildXmls = protection.Elements()
-                    .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                    .ToList()
-            };
+            var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var attribute in protection.Attributes())
             {
                 if (attribute.IsNamespaceDeclaration ||
@@ -100,12 +95,20 @@ internal static class XlsxWorkbookMetadataReader
                     continue;
                 }
 
-                model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+                attrs[attribute.Name.ToString()] = attribute.Value;
             }
 
-            return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-                ? null
-                : model;
+            var children = protection.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList();
+
+            var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
+            if (serialized is null)
+                return null;
+
+            var bag = new NativeXmlPreserveBag();
+            bag.Set("workbookProtection", serialized);
+            return bag;
         }
         catch
         {
@@ -134,7 +137,7 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
-    public static WorkbookPropertiesModel? LoadWorkbookProperties(Stream xlsxStream)
+    public static NativeXmlPreserveBag? LoadWorkbookProperties(Stream xlsxStream)
     {
         try
         {
@@ -149,12 +152,7 @@ internal static class XlsxWorkbookMetadataReader
             if (workbookProperties is null)
                 return null;
 
-            var model = new WorkbookPropertiesModel
-            {
-                NativeChildXmls = workbookProperties.Elements()
-                    .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                    .ToList()
-            };
+            var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var attribute in workbookProperties.Attributes())
             {
                 if (attribute.IsNamespaceDeclaration ||
@@ -163,12 +161,20 @@ internal static class XlsxWorkbookMetadataReader
                     continue;
                 }
 
-                model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+                attrs[attribute.Name.ToString()] = attribute.Value;
             }
 
-            return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
-                ? null
-                : model;
+            var children = workbookProperties.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList();
+
+            var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
+            if (serialized is null)
+                return null;
+
+            var bag = new NativeXmlPreserveBag();
+            bag.Set("workbookPr", serialized);
+            return bag;
         }
         catch
         {

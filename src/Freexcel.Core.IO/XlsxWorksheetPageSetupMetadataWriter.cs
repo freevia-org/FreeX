@@ -80,48 +80,20 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         return changed;
     }
 
-    private static bool ApplyNativePageSetupMetadata(XElement pageSetup, WorksheetPageSetupMetadataModel? metadata)
+    private static bool ApplyNativePageSetupMetadata(XElement pageSetup, NativeXmlPreserveBag? metadata)
     {
         if (metadata is null)
             return false;
 
-        var changed = false;
-        foreach (var attribute in metadata.NativeAttributes)
-        {
-            if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPageSetupAttribute(attribute.Key))
-                continue;
-
-            changed |= TrySetNativeAttributeIfDifferent(pageSetup, attribute.Key, attribute.Value);
-        }
-
-        if (metadata.NativeChildXmls.Count > 0)
-        {
-            pageSetup.Elements().Remove();
-            changed = true;
-            foreach (var childXml in metadata.NativeChildXmls)
-            {
-                if (string.IsNullOrWhiteSpace(childXml))
-                    continue;
-
-                try
-                {
-                    pageSetup.Add(XElement.Parse(childXml));
-                }
-                catch
-                {
-                    // Skip malformed native payloads in authored native JSON files.
-                }
-            }
-        }
-
-        return changed;
+        return XmlNativeBagSerializer.ApplyToElement(pageSetup, metadata.Get("pageSetup"), ModeledPageSetupAttributes);
     }
 
-    private static bool IsModeledPageSetupAttribute(string name) =>
-        name is "paperSize" or "scale" or "firstPageNumber" or "fitToWidth" or "fitToHeight" or
-            "pageOrder" or "orientation" or "usePrinterDefaults" or "blackAndWhite" or "draft" or
-            "cellComments" or "useFirstPageNumber" or "errors" or "horizontalDpi" or "verticalDpi" or
-            "copies";
+    private static readonly IReadOnlyCollection<string> ModeledPageSetupAttributes =
+    [
+        "paperSize", "scale", "firstPageNumber", "fitToWidth", "fitToHeight",
+        "pageOrder", "orientation", "usePrinterDefaults", "blackAndWhite", "draft",
+        "cellComments", "useFirstPageNumber", "errors", "horizontalDpi", "verticalDpi", "copies"
+    ];
 
     private static bool ApplyPageSetupProperties(XElement root, XNamespace workbookNs, Sheet sheet)
     {

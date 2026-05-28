@@ -31,7 +31,7 @@ public sealed class NativeJsonSchemaTests
         mapperSource.Should().NotContain("private static WorkbookFileSharingModel? ToWorkbookFileSharing");
         workbookFileMetadataSource.Should().Contain("private static WorkbookFileSharingModel? ToWorkbookFileSharing");
         workbookFileMetadataSource.Should().Contain("private static WorkbookFileSharingDto? FromWorkbookFileSharing");
-        mapperSource.Should().Contain("private static WorksheetPageSetupMetadataModel? ToWorksheetPageSetupMetadata");
+        mapperSource.Should().Contain("private static NativeXmlPreserveBag? ToWorksheetPageSetupMetadata");
         mapperSource.Should().Contain("private static WorksheetPageSetupMetadataDto? FromWorksheetPageSetupMetadata");
         mapperSource.Should().NotContain("private static WorkbookSmartTagMetadataModel? ToWorkbookSmartTags");
         mapperSource.Should().NotContain("private static WorkbookFunctionGroupsModel? ToWorkbookFunctionGroups");

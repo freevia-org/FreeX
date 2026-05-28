@@ -286,46 +286,26 @@ public sealed record WorksheetAutoFilterIconFilterModel(
     string? IconIdRaw = null,
     IReadOnlyDictionary<string, string>? NativeAttributes = null);
 
-public sealed class WorksheetProtectionMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
+// The following types were separate sealed classes each containing only
+// NativeAttributes (Dictionary<string,string>) and optionally NativeChildXmls (List<string>).
+// They have been consolidated into NativeXmlPreserveBag.  Type aliases are provided here
+// so that any external code referencing the old names gets a clear compile-time error
+// pointing to the new type.
+//
+// Consolidated into NativeXmlPreserveBag:
+//   WorksheetProtectionMetadataModel
+//   WorksheetPageSetupMetadataModel
+//   WorksheetPrintOptionsMetadataModel
+//   WorksheetSheetFormatMetadataModel
+//   WorksheetDimensionMetadataModel
+//   WorksheetSheetPropertiesMetadataModel
+//   WorksheetPrimaryViewMetadataModel
+//   WorksheetPageMarginsMetadataModel
+//   WorksheetHeaderFooterMetadataModel
+//   WorksheetCustomPropertyMetadataModel
 
-public sealed class WorksheetPageSetupMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetPrintOptionsMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetSheetFormatMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetDimensionMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-}
-
-public sealed class WorksheetSheetPropertiesMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetPrimaryViewMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
+// WorksheetPageBreaksMetadataModel is NOT consolidated — it has a per-break-id dictionary
+// (BreakNativeAttributes) that does not map onto a flat NativeXmlPreserveBag.
 
 public sealed class WorksheetPageBreaksMetadataModel
 {
@@ -333,11 +313,17 @@ public sealed class WorksheetPageBreaksMetadataModel
     public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
 }
 
+// WorksheetCellWatchesMetadataModel is NOT consolidated — it has a per-reference dictionary
+// (WatchNativeAttributes) that does not map onto a flat NativeXmlPreserveBag.
+
 public sealed class WorksheetCellWatchesMetadataModel
 {
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
+
+// WorksheetIgnoredErrorsMetadataModel is NOT consolidated — it has a per-sqref dictionary
+// (ErrorNativeAttributes) that does not map onto a flat NativeXmlPreserveBag.
 
 public sealed class WorksheetIgnoredErrorsMetadataModel
 {
@@ -359,17 +345,6 @@ public sealed class WorksheetSingleXmlCellModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
-public sealed class WorksheetPageMarginsMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetHeaderFooterMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
 
 public sealed class WorksheetSmartTagsModel
 {
@@ -454,15 +429,9 @@ public sealed class WorksheetAdditionalViewModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
-public sealed class WorksheetCustomPropertyMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
 public sealed record WorksheetCustomProperty(
     string Name,
     int Id,
-    WorksheetCustomPropertyMetadataModel? Metadata = null);
+    NativeXmlPreserveBag? Metadata = null);
 
 public sealed record WorksheetPhoneticProperties(string? FontId, string? Type, string? Alignment);

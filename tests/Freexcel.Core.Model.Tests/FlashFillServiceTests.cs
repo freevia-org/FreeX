@@ -143,6 +143,24 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo(["Online"], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData("Smith, John", "John", "Doe, Jane", "Jane", "Brown, Bob", "Bob")]
+    [InlineData("SKU-001; Retail; West", "Retail", "SKU-002; Wholesale; East", "Wholesale", "SKU-003; Online; North", "Online")]
+    public void Fill_ExtractDelimitedToken_TrimsTokenEdges(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
     [Fact]
     public void Fill_ExtractSemicolonDelimitedToken_ReturnsNullWhenRemainingDelimiterIsMissing()
     {

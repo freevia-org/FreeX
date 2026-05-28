@@ -35,7 +35,8 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
                 InsertPrintOptions(root, worksheetNs, printOptions);
             }
 
-            foreach (var attribute in sheet.PrintOptionsMetadata!.NativeAttributes)
+            var (poAttrs, poChildren) = XmlNativeBagSerializer.Deserialize(sheet.PrintOptionsMetadata!.Get("printOptions"));
+            foreach (var attribute in poAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrintOptionsAttribute(attribute.Key))
                     continue;
@@ -43,10 +44,10 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
                 XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(printOptions, attribute.Key, attribute.Value);
             }
 
-            if (sheet.PrintOptionsMetadata.NativeChildXmls.Count > 0)
+            if (poChildren.Count > 0)
             {
                 printOptions.Elements().Remove();
-                foreach (var childXml in sheet.PrintOptionsMetadata.NativeChildXmls)
+                foreach (var childXml in poChildren)
                 {
                     if (string.IsNullOrWhiteSpace(childXml))
                         continue;

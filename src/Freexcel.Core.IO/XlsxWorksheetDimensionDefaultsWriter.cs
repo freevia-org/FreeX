@@ -72,47 +72,18 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
         }
     }
 
+    private static readonly IReadOnlyCollection<string> ModeledSheetFormatAttributes =
+        ["defaultColWidth", "defaultRowHeight"];
+
     private static bool ApplyNativeSheetFormatMetadata(
         XElement sheetFormat,
-        WorksheetSheetFormatMetadataModel? metadata)
+        NativeXmlPreserveBag? metadata)
     {
         if (metadata is null)
             return false;
 
-        var changed = false;
-        foreach (var attribute in metadata.NativeAttributes)
-        {
-            if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetFormatAttribute(attribute.Key))
-                continue;
-
-            changed |= TrySetNativeAttributeIfDifferent(sheetFormat, attribute.Key, attribute.Value);
-        }
-
-        if (metadata.NativeChildXmls.Count > 0)
-        {
-            sheetFormat.Elements().Remove();
-            changed = true;
-            foreach (var childXml in metadata.NativeChildXmls)
-            {
-                if (string.IsNullOrWhiteSpace(childXml))
-                    continue;
-
-                try
-                {
-                    sheetFormat.Add(XElement.Parse(childXml));
-                }
-                catch
-                {
-                    // Skip malformed native payloads in authored native JSON files.
-                }
-            }
-        }
-
-        return changed;
+        return XmlNativeBagSerializer.ApplyToElement(sheetFormat, metadata.Get("sheetFormatPr"), ModeledSheetFormatAttributes);
     }
-
-    private static bool IsModeledSheetFormatAttribute(string name) =>
-        name is "defaultColWidth" or "defaultRowHeight";
 
     private static bool IsNonDefaultColumnWidth(double value) =>
         double.IsFinite(value) && value > 0 && Math.Abs(value - 8.43) >= 0.01;

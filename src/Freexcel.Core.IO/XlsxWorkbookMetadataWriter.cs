@@ -32,32 +32,7 @@ internal static class XlsxWorkbookMetadataWriter
 
         if (workbook.Properties is not null)
         {
-            foreach (var attribute in workbook.Properties.NativeAttributes)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                    string.Equals(attribute.Key, "date1904", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(workbookProperties, attribute.Key, attribute.Value);
-            }
-
-            workbookProperties.Elements().Remove();
-            foreach (var childXml in workbook.Properties.NativeChildXmls)
-            {
-                if (string.IsNullOrWhiteSpace(childXml))
-                    continue;
-
-                try
-                {
-                    workbookProperties.Add(XElement.Parse(childXml));
-                }
-                catch
-                {
-                    // Skip malformed native payloads in authored native JSON files.
-                }
-            }
+            XmlNativeBagSerializer.ApplyToElement(workbookProperties, workbook.Properties.Get("workbookPr"), ["date1904"]);
         }
 
         workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
@@ -396,32 +371,8 @@ internal static class XlsxWorkbookMetadataWriter
         var protection = new XElement(workbookNs + "workbookProtection");
         if (workbook.ProtectionMetadata is not null)
         {
-            foreach (var attribute in workbook.ProtectionMetadata.NativeAttributes)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                    string.Equals(attribute.Key, "lockStructure", StringComparison.Ordinal) ||
-                    string.Equals(attribute.Key, "workbookPassword", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
-            }
-
-            foreach (var childXml in workbook.ProtectionMetadata.NativeChildXmls)
-            {
-                if (string.IsNullOrWhiteSpace(childXml))
-                    continue;
-
-                try
-                {
-                    protection.Add(XElement.Parse(childXml));
-                }
-                catch
-                {
-                    // Skip malformed native payloads in authored native JSON files.
-                }
-            }
+            XmlNativeBagSerializer.ApplyToElement(protection, workbook.ProtectionMetadata.Get("workbookProtection"),
+                ["lockStructure", "workbookPassword"]);
         }
 
         if (workbook.IsStructureProtected)
