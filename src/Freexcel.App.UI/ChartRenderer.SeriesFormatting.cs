@@ -9,6 +9,11 @@ namespace Freexcel.App.UI;
 
 public static partial class ChartRenderer
 {
+    private const string PieAnnotationXAxisKey = "PieAnnotationX";
+    private const string PieAnnotationYAxisKey = "PieAnnotationY";
+
+    private sealed record PieDataLabelPoint(string CategoryName, double Value);
+
     private static double ColumnBarHalfWidth(ChartModel chart) =>
         chart.BarGapWidth is int gapWidth
             ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.49)
@@ -95,6 +100,101 @@ public static partial class ChartRenderer
         var oxyColor = OxyColor.FromRgb(color.R, color.G, color.B);
         series.TextColor = oxyColor;
         series.InsideLabelColor = oxyColor;
+    }
+
+    private static bool ShouldUseNativePieLabels(ChartModel chart) =>
+        chart.ShowDataLabels
+            && chart.DataLabelFillColor is null
+            && chart.DataLabelFillThemeColor is null
+            && chart.DataLabelBorderColor is null
+            && chart.DataLabelBorderThemeColor is null
+            && chart.DataLabelBorderThickness <= 0
+            && !chart.ShowDataLabelCallouts
+            && Math.Abs(chart.DataLabelAngle) <= 0.5;
+
+    private static void AddPieDataLabelAnnotations(
+        PlotModel model,
+        ChartModel chart,
+        WorkbookTheme theme,
+        string seriesName,
+        IReadOnlyList<PieDataLabelPoint> points)
+    {
+        if (ShouldUseNativePieLabels(chart) || !chart.ShowDataLabels || points.Count == 0)
+            return;
+
+        var total = points.Sum(point => Math.Max(0, point.Value));
+        if (total <= 0)
+            return;
+
+        AddPieAnnotationAxes(model);
+
+        var textColor = chart.ResolveDataLabelTextColor(theme);
+        var borderColor = chart.ResolveDataLabelBorderColor(theme);
+        var fillColor = chart.ResolveDataLabelFillColor(theme);
+        var accumulatedAngle = chart.FirstSliceAngle;
+        foreach (var point in points)
+        {
+            var sweep = Math.Max(0, point.Value) / total * 360.0;
+            var midAngle = accumulatedAngle + sweep / 2.0;
+            accumulatedAngle += sweep;
+
+            var value = ChartDataLabelFormatter.ShouldRenderPercentageLabels(chart)
+                ? point.Value / total
+                : point.Value;
+            var position = GetPieDataLabelPosition(chart.DataLabelPosition, midAngle);
+            model.Annotations.Add(new TextAnnotation
+            {
+                XAxisKey = PieAnnotationXAxisKey,
+                YAxisKey = PieAnnotationYAxisKey,
+                Text = ChartDataLabelFormatter.FormatDataLabel(chart, seriesName, point.CategoryName, value),
+                TextPosition = position,
+                TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
+                TextVerticalAlignment = OxyPlot.VerticalAlignment.Middle,
+                TextColor = ToOxyColor(textColor) ?? OxyColors.Automatic,
+                FontSize = chart.DataLabelFontSize,
+                Stroke = ToOxyColor(borderColor) ?? (chart.ShowDataLabelCallouts ? OxyColors.Gray : OxyColors.Transparent),
+                StrokeThickness = chart.DataLabelBorderThickness > 0 ? chart.DataLabelBorderThickness : chart.ShowDataLabelCallouts ? 1 : 0,
+                Background = ToOxyColor(fillColor) ?? (chart.ShowDataLabelCallouts ? OxyColor.FromAColor(235, OxyColors.White) : OxyColors.Transparent),
+                TextRotation = chart.DataLabelAngle,
+                Padding = new OxyThickness(chart.ShowDataLabelCallouts ? 4 : 2)
+            });
+        }
+    }
+
+    private static void AddPieAnnotationAxes(PlotModel model)
+    {
+        if (model.Axes.Any(axis => axis.Key == PieAnnotationXAxisKey))
+            return;
+
+        model.Axes.Add(new LinearAxis
+        {
+            Key = PieAnnotationXAxisKey,
+            Position = AxisPosition.Bottom,
+            IsAxisVisible = false,
+            Minimum = -1.3,
+            Maximum = 1.3
+        });
+        model.Axes.Add(new LinearAxis
+        {
+            Key = PieAnnotationYAxisKey,
+            Position = AxisPosition.Left,
+            IsAxisVisible = false,
+            Minimum = -1.3,
+            Maximum = 1.3
+        });
+    }
+
+    private static DataPoint GetPieDataLabelPosition(ChartDataLabelPosition labelPosition, double angle)
+    {
+        var radius = labelPosition switch
+        {
+            ChartDataLabelPosition.Center => 0.48,
+            ChartDataLabelPosition.InsideEnd => 0.78,
+            ChartDataLabelPosition.OutsideEnd => 1.12,
+            _ => 0.78
+        };
+        var radians = Math.PI * angle / 180.0;
+        return new DataPoint(Math.Cos(radians) * radius, Math.Sin(radians) * radius);
     }
 
     private static void ApplyAreaFormat(AreaSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
