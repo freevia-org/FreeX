@@ -180,6 +180,30 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void CalculateAutofillEdgeScrollIntent_ChoosesNearestEdgeWhenHotZonesOverlap()
+    {
+        GridAutofillPlanner.CalculateEdgeScrollIntent(
+                pointerX: 54,
+                pointerY: 30,
+                width: 80,
+                height: 48,
+                rowHeaderWidth: 48,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new GridAutoScrollRequest(-1, -1));
+
+        GridAutofillPlanner.CalculateEdgeScrollIntent(
+                pointerX: 76,
+                pointerY: 46,
+                width: 80,
+                height: 48,
+                rowHeaderWidth: 48,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new GridAutoScrollRequest(1, 1));
+    }
+
+    [Fact]
     public void CalculateDragTarget_ReturnsFarthestVisibleCellWithinSourceAndPointerBounds()
     {
         var sheet = SheetId.New();

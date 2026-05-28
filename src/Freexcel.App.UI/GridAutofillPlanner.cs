@@ -64,18 +64,31 @@ public static class GridAutofillPlanner
         if (width <= 0 || height <= 0)
             return new GridAutoScrollRequest(0, 0);
 
-        var horizontal = pointerX >= width - edgeThreshold
-            ? 1
-            : pointerX <= rowHeaderWidth + edgeThreshold
-                ? -1
-                : 0;
-        var vertical = pointerY >= height - edgeThreshold
-            ? 1
-            : pointerY <= columnHeaderHeight + edgeThreshold
-                ? -1
-                : 0;
+        var horizontal = CalculateAxisEdgeDirection(pointerX, rowHeaderWidth, width, edgeThreshold);
+        var vertical = CalculateAxisEdgeDirection(pointerY, columnHeaderHeight, height, edgeThreshold);
 
         return new GridAutoScrollRequest(horizontal, vertical);
+    }
+
+    private static int CalculateAxisEdgeDirection(
+        double pointer,
+        double contentStart,
+        double contentEnd,
+        double edgeThreshold)
+    {
+        var contentSpan = contentEnd - contentStart;
+        if (contentSpan <= 0)
+            return 0;
+
+        var threshold = Math.Min(Math.Max(0, edgeThreshold), contentSpan / 2);
+        var distanceFromStart = pointer - contentStart;
+        var distanceFromEnd = contentEnd - pointer;
+
+        if (distanceFromStart <= threshold && distanceFromStart <= distanceFromEnd)
+            return -1;
+        if (distanceFromEnd <= threshold)
+            return 1;
+        return 0;
     }
 
     public static CellAddress? CalculateDragTarget(
