@@ -24,4 +24,21 @@ public sealed class KeyboardCommandDispatcher
         handler(sender, args);
         return true;
     }
+
+    public void EnsureRegistered(IEnumerable<KeyboardCommandShortcut> requiredShortcuts)
+    {
+        ArgumentNullException.ThrowIfNull(requiredShortcuts);
+
+        var missingShortcuts = requiredShortcuts
+            .Where(shortcut => !_handlers.ContainsKey(shortcut))
+            .Distinct()
+            .Order()
+            .ToArray();
+
+        if (missingShortcuts.Length == 0)
+            return;
+
+        throw new InvalidOperationException(
+            $"Keyboard command routes are missing for: {string.Join(", ", missingShortcuts)}.");
+    }
 }

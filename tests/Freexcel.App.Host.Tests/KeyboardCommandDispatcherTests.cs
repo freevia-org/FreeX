@@ -63,4 +63,37 @@ public sealed class KeyboardCommandDispatcherTests
                 KeyboardCommandShortcut.OpenWorkbook
             ]);
     }
+
+    [Fact]
+    public void EnsureRegistered_AllowsCompleteRequiredShortcutSet()
+    {
+        var dispatcher = new KeyboardCommandDispatcher();
+        dispatcher.Register(KeyboardCommandShortcut.SaveWorkbook, (_, _) => { });
+        dispatcher.Register(KeyboardCommandShortcut.OpenWorkbook, (_, _) => { });
+
+        var act = () => dispatcher.EnsureRegistered(
+            [
+                KeyboardCommandShortcut.OpenWorkbook,
+                KeyboardCommandShortcut.SaveWorkbook
+            ]);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void EnsureRegistered_ReportsMissingShortcutRoutes()
+    {
+        var dispatcher = new KeyboardCommandDispatcher();
+        dispatcher.Register(KeyboardCommandShortcut.SaveWorkbook, (_, _) => { });
+
+        var act = () => dispatcher.EnsureRegistered(
+            [
+                KeyboardCommandShortcut.SaveWorkbook,
+                KeyboardCommandShortcut.OpenWorkbook,
+                KeyboardCommandShortcut.InsertFunction
+            ]);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*OpenWorkbook*InsertFunction*");
+    }
 }

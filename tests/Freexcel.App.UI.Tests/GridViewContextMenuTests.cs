@@ -21,6 +21,20 @@ public sealed class GridViewContextMenuTests
     }
 
     [Fact]
+    public void GridViewRightClick_RoutesCellContextMenuThroughSplitAwareViewportHitTesting()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var rightClickBlock = inputSource[
+            inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..];
+
+        rightClickBlock.Should().Contain("HitTestViewportCell(Viewport, default, pos)");
+        rightClickBlock.Should().Contain("ContextMenuRequested?.Invoke(contextCell, pos);");
+        rightClickBlock.Should().NotContain("foreach (var rm in Viewport.RowMetrics)");
+        rightClickBlock.Should().NotContain("foreach (var cm in Viewport.ColMetrics)");
+    }
+
+    [Fact]
     public void GridViewDoubleClickResizeBorder_RoutesToAutoFitEventsBeforeDragResize()
     {
         var inputSource = File.ReadAllText(FindWorkspaceFile(

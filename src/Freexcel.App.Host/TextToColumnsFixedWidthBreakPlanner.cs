@@ -41,12 +41,7 @@ internal static class TextToColumnsFixedWidthBreakPlanner
     }
 
     public static IReadOnlyList<int> ParseBreakPositions(string? text) =>
-        ParseParts(text)
-            .Select(part => int.TryParse(part, out var position) ? position : 0)
-            .Where(position => position > 0)
-            .Distinct()
-            .Order()
-            .ToList();
+        NormalizeBreakPositions(ParsePositiveBreakPositions(text));
 
     public static bool TryParseBreakPositions(string? text, int maxLength, out IReadOnlyList<int> positions)
     {
@@ -55,18 +50,33 @@ internal static class TextToColumnsFixedWidthBreakPlanner
         if (parts.Length == 0 || maxLength <= 1)
             return false;
 
-        var parsedPositions = new List<int>();
+        var validPositions = new List<int>();
         foreach (var part in parts)
         {
-            if (!int.TryParse(part, out var position) || position <= 0 || position >= maxLength)
+            if (!TryParseBreakPosition(part, maxLength, out var position))
                 return false;
 
-            parsedPositions.Add(position);
+            validPositions.Add(position);
         }
 
-        positions = NormalizeBreakPositions(parsedPositions);
+        positions = NormalizeBreakPositions(validPositions);
         return positions.Count > 0;
     }
+
+    private static IEnumerable<int> ParsePositiveBreakPositions(string? text)
+    {
+        foreach (var part in ParseParts(text))
+        {
+            if (TryParsePositiveBreakPosition(part, out var position))
+                yield return position;
+        }
+    }
+
+    private static bool TryParseBreakPosition(string part, int maxLength, out int position) =>
+        TryParsePositiveBreakPosition(part, out position) && position < maxLength;
+
+    private static bool TryParsePositiveBreakPosition(string part, out int position) =>
+        int.TryParse(part, out position) && position > 0;
 
     private static IReadOnlyList<int> NormalizeBreakPositions(IEnumerable<int> breakPositions) =>
         breakPositions
