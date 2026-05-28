@@ -97,7 +97,7 @@ public static partial class BuiltInFunctions
             case "color":
                 return new NumberValue(CellNegativeSectionUsesColor(style?.NumberFormat) ? 1 : 0);
             case "parentheses":
-                return new NumberValue(CellNegativeSectionUsesParentheses(style?.NumberFormat) ? 1 : 0);
+                return new NumberValue(CellPositiveOrAllSectionUsesParentheses(style?.NumberFormat) ? 1 : 0);
             case "prefix":
                 return new TextValue(CellPrefixCode(style));
             default:
@@ -138,6 +138,9 @@ public static partial class BuiltInFunctions
         var normalized = NormalizeCellNumberFormat(numberFormat);
         if (normalized.Length == 0 || normalized == "general")
             return "G";
+
+        if (normalized.Length >= 2 && normalized[0] == '(' && normalized[^1] == ')')
+            normalized = normalized[1..^1];
 
         return normalized switch
         {
