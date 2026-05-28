@@ -3735,20 +3735,12 @@
                         BorderThickness="0,0,0,1"
                         IsHitTestVisible="False"/>
 
-                <Path x:Name="SheetTabsGridRule"
-                      Grid.Column="2"
-                      Grid.ColumnSpan="5"
-                      Stroke="{StaticResource FreexcelGreenBrush}"
-                      StrokeThickness="1.25"
-                      StrokeStartLineCap="Flat"
-                      StrokeEndLineCap="Flat"
-                      StrokeLineJoin="Round"
-                      Height="27"
-                      HorizontalAlignment="Stretch"
-                      VerticalAlignment="Top"
-                      Panel.ZIndex="5"
-                      SnapsToDevicePixels="True"
-                      IsHitTestVisible="False"/>
+                <Border Grid.Column="2" Grid.ColumnSpan="5"
+                        BorderBrush="{StaticResource FreexcelGreenBrush}"
+                        BorderThickness="0"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="0"
+                        IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavLeftBtn" Grid.Column="1" Content="&lt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
@@ -3952,8 +3944,8 @@
                 </ScrollViewer>
 
                 <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="86" MinHeight="27"
-                        FontSize="17" FontWeight="SemiBold" Margin="-40,0,0,1" Padding="12,1,12,3"
-                        Background="#F1F8F4" BorderBrush="#94C6AA" BorderThickness="1,0,1,1"
+                        FontSize="17" FontWeight="SemiBold" Margin="-32,0,0,1" Padding="12,1,12,3"
+                        Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1,0,1,1"
                         Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
                         VerticalAlignment="Top" Cursor="Hand"
                         Panel.ZIndex="0"
@@ -3993,7 +3985,7 @@
                                         VerticalAlignment="Top"
                                         Panel.ZIndex="3"
                                         IsHitTestVisible="False">
-                                    <Path Data="M 92,8 L 92,22 C 92,24 90,26 88,26 L 0,26"
+                                    <Path Data="M 92,8 L 92,22 C 92,24 90,26 88,26 L 12,26"
                                           Width="{Binding ActualWidth, ElementName=GhostTabRoot}"
                                           Height="26"
                                           Stretch="Fill"
@@ -4002,7 +3994,7 @@
                                           StrokeStartLineCap="Round"
                                           StrokeEndLineCap="Round"
                                           StrokeLineJoin="Round"
-                                          Opacity="1"
+                                          Opacity="0.9"
                                           SnapsToDevicePixels="True"/>
                                 </Canvas>
                                 <Border Height="1.25"
@@ -4017,10 +4009,10 @@
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="0"
                                         CornerRadius="0,0,4,4"
-                                        Margin="8,0,8,0"
+                                        Margin="16,0,8,0"
                                         SnapsToDevicePixels="True">
                                     <Grid>
-                                    <ContentPresenter Margin="40,0,8,1"
+                                    <ContentPresenter Margin="16,0,8,1"
                                                       HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                                     </Grid>
@@ -4041,6 +4033,13 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
+
+                <Border Grid.Column="3"
+                        BorderBrush="{StaticResource FreexcelGreenBrush}"
+                        BorderThickness="0,1,0,0"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="6"
+                        IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="5" Content="&gt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
