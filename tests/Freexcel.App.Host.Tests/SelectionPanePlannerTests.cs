@@ -403,9 +403,7 @@ public sealed class SelectionPanePlannerTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_searchBox.Focus();");
-        source.Should().Contain("_searchBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_searchBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_searchBox);");
     }
 
     [Fact]
@@ -431,9 +429,7 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("if (e.Key == Key.Space)");
         source.Should().Contain("ToggleSelectedVisibility();");
         source.Should().Contain("private void FocusRenameBox()");
-        source.Should().Contain("_renameBox.Focus();");
-        source.Should().Contain("_renameBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_renameBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_renameBox);");
     }
 
     [Fact]

@@ -186,9 +186,7 @@ public sealed partial class SelectionPaneDialog
 
     private void FocusRenameBox()
     {
-        _renameBox.Focus();
-        _renameBox.SelectAll();
-        Keyboard.Focus(_renameBox);
+        DialogFocus.FocusAndSelect(_renameBox);
     }
 
     private void UpdateMoveButtons()
