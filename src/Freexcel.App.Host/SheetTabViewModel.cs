@@ -43,5 +43,8 @@ public sealed class SheetTabViewModel(SheetId id, string name, CellColor? tabCol
         }
     }
 
+    public bool IsLeftSideCoveredByActive { get; init; }
+    public bool IsRightSideCoveredByActive { get; init; }
+
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }

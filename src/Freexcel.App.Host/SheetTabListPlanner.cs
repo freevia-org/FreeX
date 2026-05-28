@@ -27,16 +27,20 @@ public static class SheetTabListPlanner
         var visibleIds = visibleSheets.Select(sheet => sheet.Id).ToHashSet();
         groupedSheetIds.RemoveWhere(id => !visibleIds.Contains(id));
 
+        var activeVisibleIndex = visibleSheets.FindIndex(sheet => sheet.Id == currentSheetId);
         var tabs = new List<SheetTabViewModel>();
-        foreach (var sheet in visibleSheets)
+        for (var index = 0; index < visibleSheets.Count; index++)
         {
+            var sheet = visibleSheets[index];
             if (groupedSheetIds.Count == 0 && sheet.Id == currentSheetId)
                 groupedSheetIds.Add(sheet.Id);
 
             tabs.Add(new SheetTabViewModel(sheet.Id, sheet.Name, sheet.TabColor)
             {
                 IsActive = sheet.Id == currentSheetId,
-                IsGrouped = groupedSheetIds.Contains(sheet.Id)
+                IsGrouped = groupedSheetIds.Contains(sheet.Id),
+                IsLeftSideCoveredByActive = activeVisibleIndex >= 0 && index == activeVisibleIndex + 1,
+                IsRightSideCoveredByActive = activeVisibleIndex >= 0 && index == activeVisibleIndex - 1
             });
         }
 

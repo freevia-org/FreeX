@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
@@ -90,5 +92,140 @@ public partial class MainWindow
             await using var stream = File.Create(path);
             encoder.Save(stream);
         }
+    }
+
+    // Activated by FREEXCEL_SHEET_TAB_TOUR=1 env var. Output lands in <repo-root>/screenshots/sheet-tabs-tour/.
+    private void TryStartSheetTabVisualTour()
+    {
+        if (Environment.GetEnvironmentVariable("FREEXCEL_SHEET_TAB_TOUR") != "1")
+            return;
+
+        var outputDir = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots", "sheet-tabs-tour"));
+        Directory.CreateDirectory(outputDir);
+        _ = RunSheetTabVisualTourAsync(outputDir);
+    }
+
+    private async Task RunSheetTabVisualTourAsync(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
+            File.Delete(file);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 760;
+        await Task.Delay(700);
+
+        await CaptureSheetTabsAsync(outputDir, "single-sheet");
+
+        while (_workbook.Sheets.Count < 6)
+            _workbook.AddSheet(SheetTabListPlanner.GenerateUniqueSheetName(_workbook));
+        _currentSheetId = _workbook.Sheets[5].Id;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        RefreshSheetTabs();
+        await Task.Delay(300);
+        await CaptureSheetTabsAsync(outputDir, "six-sheets-active-06");
+
+        PrepareSheetTabVisualTourWorkbook();
+        await Task.Delay(400);
+
+        var visibleSheets = _workbook.Sheets.Where(sheet => !sheet.IsHidden).Take(20).ToList();
+        for (var index = 0; index < visibleSheets.Count; index++)
+            await CaptureSheetTabStateAsync(outputDir, visibleSheets, index, $"active-{index + 1:00}-{visibleSheets[index].Name}");
+
+        _currentSheetId = visibleSheets[2].Id;
+        _groupedSheetIds.Clear();
+        foreach (var sheet in visibleSheets.Skip(1).Take(4))
+            _groupedSheetIds.Add(sheet.Id);
+        _sheetGroupAnchor = visibleSheets[1].Id;
+        RefreshSheetTabs();
+        await Task.Delay(300);
+        await CaptureSheetTabsAsync(outputDir, "grouped-sheets-2-through-5");
+
+        _currentSheetId = visibleSheets[11].Id;
+        _groupedSheetIds.Clear();
+        foreach (var sheet in visibleSheets.Skip(9).Take(4))
+            _groupedSheetIds.Add(sheet.Id);
+        _sheetGroupAnchor = visibleSheets[9].Id;
+        RefreshSheetTabs();
+        await Task.Delay(300);
+        await CaptureSheetTabsAsync(outputDir, "grouped-sheets-10-through-13");
+
+        Width = 900;
+        await Task.Delay(450);
+        await CaptureSheetTabStateAsync(outputDir, visibleSheets, 0, "narrow-active-01");
+        await CaptureSheetTabStateAsync(outputDir, visibleSheets, 7, "narrow-active-08");
+        await CaptureSheetTabStateAsync(outputDir, visibleSheets, 15, "narrow-active-16");
+        await CaptureSheetTabStateAsync(outputDir, visibleSheets, 19, "narrow-active-20");
+
+        Application.Current.Shutdown();
+    }
+
+    private async Task CaptureSheetTabStateAsync(
+        string outputDir,
+        IReadOnlyList<Sheet> visibleSheets,
+        int activeIndex,
+        string fileName)
+    {
+        var sheet = visibleSheets[activeIndex];
+        _currentSheetId = sheet.Id;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(sheet.Id);
+        _sheetGroupAnchor = sheet.Id;
+        RefreshSheetTabs();
+        await Task.Delay(260);
+        await CaptureSheetTabsAsync(outputDir, fileName);
+    }
+
+    private void PrepareSheetTabVisualTourWorkbook()
+    {
+        while (_workbook.Sheets.Count < 20)
+            _workbook.AddSheet(SheetTabListPlanner.GenerateUniqueSheetName(_workbook));
+
+        var colors = new CellColor?[]
+        {
+            null,
+            new(232, 121, 65),
+            new(83, 141, 213),
+            new(112, 173, 71),
+            new(165, 105, 189),
+            null,
+            new(243, 156, 18),
+            new(75, 172, 198)
+        };
+
+        for (var index = 0; index < colors.Length && index < _workbook.Sheets.Count; index++)
+            _workbook.Sheets[index].TabColor = colors[index];
+    }
+
+    private async Task CaptureSheetTabsAsync(string outputDir, string fileName)
+    {
+        UpdateLayout();
+        SheetTabsRowGrid.UpdateLayout();
+        BringCurrentSheetTabIntoView();
+        UpdateSheetTabNavigation();
+        UpdateLayout();
+        SheetTabsRowGrid.UpdateLayout();
+        BringCurrentSheetTabIntoView();
+        UpdateSheetTabNavigation();
+        UpdateLayout();
+        SheetTabsRowGrid.UpdateLayout();
+
+        var source = PresentationSource.FromVisual(SheetTabsRowGrid);
+        var dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
+        var dpiY = source?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
+        int pw = Math.Max(1, (int)(SheetTabsRowGrid.ActualWidth * dpiX));
+        int ph = Math.Max(1, (int)(SheetTabsRowGrid.ActualHeight * dpiY));
+
+        var rtb = new RenderTargetBitmap(pw, ph, 96 * dpiX, 96 * dpiY, PixelFormats.Pbgra32);
+        rtb.Render(SheetTabsRowGrid);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(rtb));
+        var path = Path.Combine(outputDir, $"{fileName}.png");
+        await using var stream = File.Create(path);
+        encoder.Save(stream);
     }
 }
