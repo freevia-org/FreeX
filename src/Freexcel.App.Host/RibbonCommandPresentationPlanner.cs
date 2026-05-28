@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Freexcel.App.Host;
 
 public static partial class RibbonCommandPresentationPlanner
@@ -72,16 +70,7 @@ public static partial class RibbonCommandPresentationPlanner
 
     public static bool TryParseCompactWidths(string tag, out double fullWidth, out double compactWidth)
     {
-        fullWidth = 0;
-        compactWidth = 0;
-        const string prefix = "RibbonCompact:";
-        if (!tag.StartsWith(prefix, StringComparison.Ordinal))
-            return false;
-
-        var parts = tag[prefix.Length..].Split(':');
-        return parts.Length == 2 &&
-               double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out fullWidth) &&
-               double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out compactWidth);
+        return RibbonMetadata.TryParseCompactTag(tag, out fullWidth, out compactWidth);
     }
 
     private static bool IsInsertChartType(string name) =>

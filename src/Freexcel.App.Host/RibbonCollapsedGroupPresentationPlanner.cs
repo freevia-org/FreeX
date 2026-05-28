@@ -4,6 +4,8 @@ namespace Freexcel.App.Host;
 
 internal static class RibbonCollapsedGroupPresentationPlanner
 {
+    public static IReadOnlyList<double> BreakpointThresholds { get; } = [760, 920];
+
     public static RibbonCollapsedGroupFootprint CreateFootprint(double availableWidth)
     {
         var compact = availableWidth <= 920;

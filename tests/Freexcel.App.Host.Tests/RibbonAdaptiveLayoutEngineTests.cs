@@ -44,7 +44,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
-    public void BuildResizeThresholds_ReturnsStableSortedBreakpointsForResizeGate()
+    public void BuildResizeThresholds_ReturnsProfileSpecificSortedBreakpointsForResizeGate()
     {
         var groups = new[]
         {
@@ -57,7 +57,25 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         var thresholds = RibbonAdaptiveLayoutEngine.BuildResizeThresholds(groups, fixedChromeWidth: 36);
 
         thresholds.Should().BeInAscendingOrder();
-        thresholds.Should().Contain([700, 760, 900, 920, 1120, 1300, 1320, 1500]);
+        thresholds.Should().Contain([700, 760, 900, 920, 1300, 1500]);
+        thresholds.Should().NotContain(1120, "Home does not change adaptive state at 1120 once profile rules remove redundant breakpoint bands");
+        thresholds.Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void BuildResizeThresholds_KeepsGenericFallbackBreakpointsForUnknownTabs()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Review", 120, 86, 62, 50),
+            new RibbonAdaptiveGroup("Comments", 140, 100, 70, 52),
+            new RibbonAdaptiveGroup("Protect", 150, 110, 76, 54)
+        };
+
+        var thresholds = RibbonAdaptiveLayoutEngine.BuildResizeThresholds(groups, fixedChromeWidth: 24);
+
+        thresholds.Should().Contain([700, 760, 920, 1120, 1320]);
+        thresholds.Should().BeInAscendingOrder();
         thresholds.Should().OnlyHaveUniqueItems();
     }
 
