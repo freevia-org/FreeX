@@ -48,9 +48,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("if (!TryCreateResult(_thresholdBox.Text, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter a threshold value.\");");
         source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
-        source.Should().Contain("_thresholdBox.Focus();");
-        source.Should().Contain("_thresholdBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_thresholdBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_thresholdBox);");
     }
 
     [Fact]
@@ -60,9 +58,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_thresholdBox.Focus();");
-        source.Should().Contain("_thresholdBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_thresholdBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_thresholdBox);");
     }
 
     [Fact]
@@ -98,9 +94,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_heightBox.Focus();");
-        source.Should().Contain("_heightBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_heightBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
     }
 
     [Theory]
@@ -146,9 +140,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_widthBox.Focus();");
-        source.Should().Contain("_widthBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_widthBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_widthBox);");
     }
 
     [Theory]
@@ -826,6 +818,7 @@ public sealed class RemainingDialogTests
         rowSource.Should().Contain("MessageBoxImage.Warning");
         rowSource.Should().Contain("FocusInvalidHeightInput();");
         rowSource.Should().Contain("private void FocusInvalidHeightInput()");
+        rowSource.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
 
         columnSource.Should().Contain("MessageBox.Show(");
         columnSource.Should().Contain("this,");
@@ -833,6 +826,7 @@ public sealed class RemainingDialogTests
         columnSource.Should().Contain("MessageBoxImage.Warning");
         columnSource.Should().Contain("FocusInvalidWidthInput();");
         columnSource.Should().Contain("private void FocusInvalidWidthInput()");
+        columnSource.Should().Contain("DialogFocus.FocusAndSelect(_widthBox);");
     }
 
     [Fact]
