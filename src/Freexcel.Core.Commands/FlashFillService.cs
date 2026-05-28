@@ -72,6 +72,7 @@ public static partial class FlashFillService
             s => s[0] + " " + s[1],
             s => s[1] + ", " + s[0],
             s => s[0] + "." + s[1],
+            s => (s[0] + "." + s[1]).ToLowerInvariant(),
             s => GetFirstInitial(s[0]) + GetFirstInitial(s[1]),
             s => GetFirstInitial(s[0]) + ". " + s[1],
             s => (GetFirstInitial(s[0]) + s[1]).ToLowerInvariant(),
