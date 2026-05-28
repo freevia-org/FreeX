@@ -790,9 +790,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_periodsBox.Focus();");
-        source.Should().Contain("_periodsBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_periodsBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_periodsBox);");
     }
 
     [Fact]
@@ -817,6 +815,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInvalidPeriodsInput();");
         source.Should().Contain("private void FocusInvalidPeriodsInput()");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_periodsBox);");
     }
 
     [Fact]

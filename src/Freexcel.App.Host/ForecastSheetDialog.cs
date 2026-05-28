@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -36,9 +35,7 @@ public sealed class ForecastSheetDialog : Window
 
     private void FocusInvalidPeriodsInput()
     {
-        _periodsBox.Focus();
-        _periodsBox.SelectAll();
-        Keyboard.Focus(_periodsBox);
+        DialogFocus.FocusAndSelect(_periodsBox);
     }
 
     public static bool TryCreateResult(string input, out ForecastSheetDialogResult result, out string? error)
