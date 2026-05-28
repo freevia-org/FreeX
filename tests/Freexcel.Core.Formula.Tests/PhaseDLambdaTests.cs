@@ -98,6 +98,23 @@ public class PhaseDLambdaTests
         Assert.Equal(8.0, Num(Eval("=LET(_total.1, 5, _total.1+3)")));
     }
 
+    [Theory]
+    [InlineData("=LET(unused, 1/0, 42)", "#DIV/0!")]
+    [InlineData("=LET(unused, NA(), 42)", "#N/A")]
+    [InlineData("=LET(unused, MissingFunction(), 42)", "#NAME?")]
+    public void Let_UnusedBindingErrors_PropagateBeforeCalculation(string formula, string expectedError)
+    {
+        Assert.Equal(new ErrorValue(expectedError), Eval(formula));
+    }
+
+    [Theory]
+    [InlineData("=LET(c, 1/0, 42)")]
+    [InlineData("=LET(r1c1, NA(), 42)")]
+    public void Let_InvalidName_ReturnsValueBeforeEvaluatingBinding(string formula)
+    {
+        Assert.Equal(ErrorValue.Value, Eval(formula));
+    }
+
     // ── LAMBDA ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -159,6 +176,14 @@ public class PhaseDLambdaTests
     [InlineData("=LET(f, LAMBDA(x, x, x), f(1, 2))")]
     [InlineData("=LET(f, LAMBDA(rate, RATE, rate), f(1, 2))")]
     public void Lambda_DuplicateParameterNames_ReturnValueError(string formula)
+    {
+        Assert.Equal(ErrorValue.Value, Eval(formula));
+    }
+
+    [Theory]
+    [InlineData("=LET(f, LAMBDA(c, c), 42)")]
+    [InlineData("=LET(f, LAMBDA(x, x, x), 42)")]
+    public void Let_UnusedInvalidLambdaBinding_ReturnsValueError(string formula)
     {
         Assert.Equal(ErrorValue.Value, Eval(formula));
     }
