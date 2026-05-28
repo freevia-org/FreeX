@@ -64,14 +64,18 @@ public partial class MainWindow
             plannedStates = correctedStates.ToArray();
 
         var appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
-        if (!force && string.Equals(_lastRibbonAdaptiveAppliedStateKey, appliedStateKey, StringComparison.Ordinal))
+        if (!force &&
+            !_ribbonAdaptiveStateDiffInvalidated &&
+            string.Equals(_lastRibbonAdaptiveAppliedStateKey, appliedStateKey, StringComparison.Ordinal))
+        {
             return;
+        }
 
         ApplyRibbonAdaptiveStates(
             groups,
             collapsedButtons,
             plannedStates,
-            force ? null : _lastRibbonAdaptiveAppliedStates);
+            _ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates);
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         var requiresMeasuredCorrection = correctedStates is null || layout.RequiresMeasuredCorrection;
         if (requiresMeasuredCorrection)
@@ -87,6 +91,7 @@ public partial class MainWindow
             _ribbonCorrectedStateCache[correctionCacheKey] = plannedStates.ToArray();
         _lastRibbonAdaptiveAppliedStateKey = appliedStateKey;
         _lastRibbonAdaptiveAppliedStates = plannedStates.ToArray();
+        _ribbonAdaptiveStateDiffInvalidated = false;
 
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
         _ribbonCompact = compacted;

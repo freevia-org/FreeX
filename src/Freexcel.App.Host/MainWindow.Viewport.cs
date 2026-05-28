@@ -426,6 +426,7 @@ public partial class MainWindow
             LeftCol: leftCol,
             AvailableHeight: (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel,
             AvailableWidth: CalculateViewportAvailableWidth(SheetGrid.ActualWidth, rowHeaderWidth, _zoomLevel),
+            IncludeObjects: _options.ObjectsDisplay == FreexcelObjectDisplay.All,
             SplitPaneOffsets: GetSplitPaneViewportOffsets(sheet, topRow, leftCol));
 
         return _viewportService.GetViewport(_workbook, _currentSheetId, request);

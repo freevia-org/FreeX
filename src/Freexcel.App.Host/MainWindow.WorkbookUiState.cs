@@ -60,7 +60,8 @@ public partial class MainWindow
 
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        NormalizeRibbonSurfaceAfterResize();
+        if (e.WidthChanged)
+            NormalizeRibbonSurfaceAfterResize();
         ScheduleViewportResizeRefresh();
     }
 
