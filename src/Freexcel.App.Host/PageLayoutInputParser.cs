@@ -260,7 +260,8 @@ public static class PageLayoutInputParser
         if (IsAutoInput(trimmed))
             return true;
 
-        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
+        var dpiText = TrimDpiSuffix(trimmed);
+        if (int.TryParse(dpiText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
         {
             printQualityDpi = value;
             return true;
@@ -268,6 +269,11 @@ public static class PageLayoutInputParser
 
         return false;
     }
+
+    private static string TrimDpiSuffix(string value) =>
+        value.EndsWith("dpi", StringComparison.OrdinalIgnoreCase)
+            ? value[..^3].TrimEnd()
+            : value;
 
     private static bool IsClearInput(string normalized) =>
         normalized.Equals("none", StringComparison.OrdinalIgnoreCase) ||
