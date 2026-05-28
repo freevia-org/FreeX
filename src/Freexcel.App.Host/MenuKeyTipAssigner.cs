@@ -15,7 +15,7 @@ public static class MenuKeyTipAssigner
             if (string.IsNullOrWhiteSpace(existing))
                 continue;
 
-            if (IsAvailable(existing, used))
+            if (IsTypeableKeyTip(existing) && IsAvailable(existing, used))
             {
                 RibbonTooltip.SetKeyTip(item, existing);
                 used.Add(existing);
@@ -80,4 +80,7 @@ public static class MenuKeyTipAssigner
         character is >= '0' and <= '9' or
             >= 'A' and <= 'Z' or
             >= 'a' and <= 'z';
+
+    private static bool IsTypeableKeyTip(string keyTip) =>
+        keyTip.All(IsTypeableKeyTipCharacter);
 }
