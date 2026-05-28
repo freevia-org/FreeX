@@ -33,6 +33,28 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void DragSelectionMouseMoveCancelsWhenLeftButtonIsReleased()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseMove = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseMove", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RequestSelectionDragAutoScroll", StringComparison.Ordinal)];
+
+        mouseMove.Should().Contain("if (!_dragSelectActive)");
+        mouseMove.Should().Contain("if (e.LeftButton != MouseButtonState.Pressed)");
+        mouseMove.Should().Contain("_formatPainterTargetSelectionActive = false;");
+        mouseMove.Should().Contain("_dragSelectActive = false;");
+        mouseMove.Should().Contain("_dragSelectAddsAdditionalRange = false;");
+        mouseMove.Should().Contain("SheetGrid.ReleaseMouseCapture();");
+        mouseMove.Should().Contain("CompleteDragSelectionStatusRefresh();");
+        mouseMove.IndexOf("if (e.LeftButton != MouseButtonState.Pressed)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void CtrlMouseSelectionAddsNonContiguousRangesWithoutBreakingHyperlinkOpen()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
@@ -58,6 +80,23 @@ public sealed class MainWindowMouseSelectionSourceTests
         mouseMove.Should().Contain("else if (hitAddr.HasValue && _dragSelectAddsAdditionalRange)");
         mouseMove.Should().Contain("AddOrMoveAdditionalSelection(hitAddr.Value, extendSelection: true);");
         mouseUp.Should().Contain("_dragSelectAddsAdditionalRange = false;");
+    }
+
+    [Fact]
+    public void MouseDownSelectionIgnoresNonLeftButtonsBeforeHitTesting()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseDown = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
+
+        mouseDown.Should().Contain("if (e.ChangedButton != MouseButton.Left)");
+        mouseDown.Should().Contain("return;");
+        mouseDown.IndexOf("if (e.ChangedButton != MouseButton.Left)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseDown.IndexOf("var pos = e.GetPosition(SheetGrid);", StringComparison.Ordinal));
     }
 
     [Fact]
