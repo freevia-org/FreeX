@@ -273,6 +273,29 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void ChartTypeSupport_ReturnsNoSeriesWhenOnlyCategoryOrXAxisColumnIsAvailable()
+    {
+        var sheetId = SheetId.New();
+        var column = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 1))
+        };
+        var scatter = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 1))
+        };
+
+        ChartTypeSupport.GetDataSeriesCount(column).Should().Be(0);
+        ChartTypeSupport.GetYAxisValueColumns(column).Should().BeEmpty();
+        ChartTypeSupport.GetDataSeriesCount(scatter).Should().Be(0);
+        ChartTypeSupport.GetYAxisValueColumns(scatter).Should().BeEmpty();
+    }
+
+    [Fact]
     public void ChartTypeSupport_SelectsBarXAxisValueColumnsFromSeriesData()
     {
         var sheetId = SheetId.New();
