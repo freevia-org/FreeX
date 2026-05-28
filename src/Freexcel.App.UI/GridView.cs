@@ -131,6 +131,7 @@ public partial class GridView : FrameworkElement
     // to avoid GC pressure from fresh Dictionary allocations on every frame.
     private readonly Dictionary<CellColor, SolidColorBrush> _brushCache = new();
     private readonly Dictionary<CellBorder, Pen> _borderPenCache = new();
+    private readonly Dictionary<CellColor, Pen> _fillPatternPenCache = new();
     private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();
     private readonly Dictionary<Brush, Pen> _underlinePenCache = new();
 
