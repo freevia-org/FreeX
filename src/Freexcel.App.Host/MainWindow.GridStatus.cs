@@ -84,7 +84,7 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        var (startCol, endCol) = _columnResizeSnapshot is { } snap
+        var (startCol, endCol) = _columnResizeSnapshot is { } snap && snap.SheetId == sheet.Id
             ? (snap.StartCol, snap.EndCol)
             : GetSelectedColRange(col);
         _columnResizeSnapshot = null;
@@ -131,7 +131,7 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        var (startRow, endRow) = _rowResizeSnapshot is { } snap
+        var (startRow, endRow) = _rowResizeSnapshot is { } snap && snap.SheetId == sheet.Id
             ? (snap.StartRow, snap.EndRow)
             : GetSelectedRowRange(row);
         _rowResizeSnapshot = null;
@@ -157,6 +157,12 @@ public partial class MainWindow
             return;
 
         _columnResizeSnapshot = new ColumnResizeSnapshot(sheet.Id, startCol, endCol);
+    }
+
+    private void OnResizeCanceled()
+    {
+        _columnResizeSnapshot = null;
+        _rowResizeSnapshot = null;
     }
 
     private void CaptureRowResizeSnapshot(Sheet sheet, uint startRow, uint endRow)

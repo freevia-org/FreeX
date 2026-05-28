@@ -111,6 +111,26 @@ public sealed class MainWindowMouseResizeTests
     }
 
     [Fact]
+    public void CanceledColumnResizePreview_DoesNotReuseStaleSelectionRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRange(1, 2, 1, 4);
+            harness.PreviewColumnResize(3, 160);
+            harness.CancelResizePreview();
+
+            harness.SelectRange(1, 6, 1, 6);
+            harness.CommitColumnResize(6, 120);
+
+            harness.CurrentSheet.ColumnWidths.ContainsKey(2).Should().BeFalse();
+            harness.CurrentSheet.ColumnWidths.ContainsKey(3).Should().BeFalse();
+            harness.CurrentSheet.ColumnWidths.ContainsKey(4).Should().BeFalse();
+            harness.CurrentSheet.ColumnWidths[6].Should().BeApproximately(15, 0.0001);
+        });
+    }
+
+    [Fact]
     public void DragRowResize_UsesPreviewSelectionRangeAtCommit()
     {
         StaTestRunner.Run(() =>
@@ -129,6 +149,26 @@ public sealed class MainWindowMouseResizeTests
         });
     }
 
+    [Fact]
+    public void CanceledRowResizePreview_DoesNotReuseStaleSelectionRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRange(2, 1, 4, 1);
+            harness.PreviewRowResize(3, 36);
+            harness.CancelResizePreview();
+
+            harness.SelectRange(6, 1, 6, 1);
+            harness.CommitRowResize(6, 28);
+
+            harness.CurrentSheet.RowHeights.ContainsKey(2).Should().BeFalse();
+            harness.CurrentSheet.RowHeights.ContainsKey(3).Should().BeFalse();
+            harness.CurrentSheet.RowHeights.ContainsKey(4).Should().BeFalse();
+            harness.CurrentSheet.RowHeights[6].Should().BeApproximately(28, 0.0001);
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -139,6 +179,7 @@ public sealed class MainWindowMouseResizeTests
         private readonly MethodInfo _onRowResizing;
         private readonly MethodInfo _onRowResized;
         private readonly MethodInfo _onRowAutoFitRequested;
+        private readonly MethodInfo _onResizeCanceled;
         private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
 
@@ -164,6 +205,9 @@ public sealed class MainWindowMouseResizeTests
             _onRowAutoFitRequested = typeof(MainWindow)
                 .GetMethod("OnRowAutoFitRequested", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "OnRowAutoFitRequested");
+            _onResizeCanceled = typeof(MainWindow)
+                .GetMethod("OnResizeCanceled", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "OnResizeCanceled");
             _workbookField = typeof(MainWindow)
                 .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
@@ -210,6 +254,12 @@ public sealed class MainWindowMouseResizeTests
         public void CommitColumnResize(uint col, double width)
         {
             _onColumnResized.Invoke(_window, [col, width]);
+            PumpDispatcher();
+        }
+
+        public void CancelResizePreview()
+        {
+            _onResizeCanceled.Invoke(_window, []);
             PumpDispatcher();
         }
 

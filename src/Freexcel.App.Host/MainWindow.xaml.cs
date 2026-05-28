@@ -179,6 +179,7 @@ public partial class MainWindow : Window
         SheetGrid.RowAutoFitRequested += OnRowAutoFitRequested;
         SheetGrid.ColumnResizing += OnColumnResizing;
         SheetGrid.RowResizing    += OnRowResizing;
+        SheetGrid.ResizeCanceled += OnResizeCanceled;
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
