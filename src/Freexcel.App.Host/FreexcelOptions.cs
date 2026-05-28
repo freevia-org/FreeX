@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Freexcel.App.Host;
 
@@ -20,6 +21,11 @@ public enum FreexcelObjectDisplay
 
 public sealed class FreexcelOptions
 {
+    private static readonly JsonSerializerOptions StoreJsonOptions = new()
+    {
+        WriteIndented = true
+    };
+
     // General — new workbooks
     public string DefaultFontName  { get; set; } = "Calibri";
     public int    DefaultFontSize  { get; set; } = 11;
@@ -49,32 +55,63 @@ public sealed class FreexcelOptions
     // Export
     public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;
 
+    [JsonIgnore]
+    public string? LastPersistenceError { get; private set; }
+
     private static readonly string StorePath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "Freexcel", "options.json");
 
-    public static FreexcelOptions Load()
+    public static FreexcelOptions Load() => LoadFromPath(StorePath);
+
+    internal static FreexcelOptions LoadFromPath(string storePath)
     {
         try
         {
-            if (File.Exists(StorePath))
+            if (File.Exists(storePath))
             {
-                var json = File.ReadAllText(StorePath);
+                var json = File.ReadAllText(storePath);
                 return JsonSerializer.Deserialize<FreexcelOptions>(json) ?? new();
             }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[FreexcelOptions] Failed to load: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            return new FreexcelOptions
+            {
+                LastPersistenceError = $"Failed to load options from '{storePath}': {ex.Message}"
+            };
+        }
+
         return new FreexcelOptions();
     }
 
-    public void Save()
+    public void Save() => SaveToPath(StorePath);
+
+    internal bool SaveToPath(string storePath)
     {
+        string? tempPath = null;
         try
         {
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(StorePath)!);
-            File.WriteAllText(StorePath, JsonSerializer.Serialize(this,
-                new JsonSerializerOptions { WriteIndented = true }));
+            var directory = System.IO.Path.GetDirectoryName(storePath)!;
+            Directory.CreateDirectory(directory);
+
+            tempPath = System.IO.Path.Combine(
+                directory,
+                $".{System.IO.Path.GetFileName(storePath)}.{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(tempPath, JsonSerializer.Serialize(this, StoreJsonOptions));
+            File.Move(tempPath, storePath, overwrite: true);
+            LastPersistenceError = null;
+            return true;
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[FreexcelOptions] Failed to save: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            LastPersistenceError = $"Failed to save options to '{storePath}': {ex.Message}";
+            return false;
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
     }
 }
