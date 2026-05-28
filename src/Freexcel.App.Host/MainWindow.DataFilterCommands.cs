@@ -176,74 +176,25 @@ public partial class MainWindow
             return true;
         }
 
-        if (!string.IsNullOrWhiteSpace(filterText) &&
-            (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase)))
+        if (!string.IsNullOrWhiteSpace(filterText))
         {
-            if (!FilterInputParser.TryParseTopBottom(value, out var count, out var top, out var percent, out var error))
-            {
-                MessageBox.Show(error ?? "Enter top:n, bottom:n, toppercent:n, or bottompercent:n.",
-                    title, MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
-            }
-
-            if (!TryExecuteRememberedAutoFilterCommand(
-                    "Filter",
-                    range,
-                    currentRange => percent
-                        ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset, count, top)
-                        : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset, count, top)))
-                return false;
-            return true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(filterText) &&
-            FilterInputParser.TryParseAverage(value, out var aboveAverage))
-        {
-            if (!TryExecuteRememberedAutoFilterCommand(
-                    "Filter",
-                    range,
-                    currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset, aboveAverage)))
-                return false;
-            return true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(filterText) &&
-            (filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
-             filterText.Equals("nonblank", StringComparison.OrdinalIgnoreCase) ||
-             filterText.Equals("non-blank", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("date=", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("date>", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("date<", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("datebetween:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("contains:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("notcontains:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("begins:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("and:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("or:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
-             filterText.StartsWith('>') ||
-             filterText.StartsWith('<') ||
-             filterText.StartsWith('=')))
-        {
-            if (!FilterInputParser.TryParseCriterion(value, out var criterion, out var error) || criterion is null)
+            var parsed = FilterPromptPlanner.TryPlan(value, out var plan, out var error);
+            if (!parsed)
             {
                 MessageBox.Show(error ?? "Enter a supported filter criterion.",
                     title, MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
 
-            if (!TryExecuteRememberedAutoFilterCommand(
-                    "Filter",
-                    range,
-                    currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset, criterion)))
-                return false;
-            return true;
+            if (plan is not null && plan.Kind != FilterPromptPlanKind.AllowedValues)
+            {
+                if (!TryExecuteRememberedAutoFilterCommand(
+                        "Filter",
+                        range,
+                        currentRange => plan.CreateCommand(_currentSheetId, currentRange, filterColOffset)))
+                    return false;
+                return true;
+            }
         }
 
         if (string.IsNullOrWhiteSpace(filterText) && result.SelectedValues.Count == 0)
