@@ -1,6 +1,6 @@
 using System.IO.Compression;
-using System.Xml.Linq;
 using System.Xml;
+using System.Xml.Linq;
 
 namespace Freexcel.Core.IO;
 
@@ -140,38 +140,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
     }
 
-    private static bool HasUnsupportedConditionalFormattingBlocks(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries
-                     .Where(entry =>
-                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
-        {
-            using var stream = worksheetEntry.Open();
-            using var reader = XmlReader.Create(stream, new XmlReaderSettings
-            {
-                DtdProcessing = DtdProcessing.Prohibit,
-                IgnoreComments = true,
-                IgnoreProcessingInstructions = true,
-                IgnoreWhitespace = true,
-            });
-
-            while (reader.Read())
-            {
-                if (reader.NodeType != XmlNodeType.Element ||
-                    !string.Equals(reader.LocalName, "cfRule", StringComparison.Ordinal) ||
-                    !string.Equals(reader.NamespaceURI, "http://schemas.openxmlformats.org/spreadsheetml/2006/main", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (!IsSupportedConditionalFormatRuleType(reader.GetAttribute("type")))
-                    return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool HasUnsupportedConditionalFormattingBlocks(ZipArchive archive) =>
+        XlsxConditionalFormatRuleSupport.HasUnsupportedRuleInWorksheets(archive, allowBlankType: false);
 
     private static bool HasWorksheetDynamicFilters(ZipArchive archive) =>
         archive.Entries
@@ -206,9 +176,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         foreach (var worksheetEntry in archive.Entries
-                     .Where(entry =>
-                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                     .Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry)
                      .ToList())
         {
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
@@ -243,7 +211,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
             var unsupportedBlocks = root
                 .Elements(worksheetNs + "conditionalFormatting")
-                .Where(block => ConditionalFormattingHasUnsupportedRule(block, worksheetNs))
+                .Where(block => XlsxConditionalFormatRuleSupport.ConditionalFormattingHasUnsupportedRule(block, worksheetNs, allowBlankType: false))
                 .ToList();
             if (unsupportedBlocks.Count == 0)
                 continue;
@@ -253,27 +221,4 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
     }
 
-    private static bool ConditionalFormattingHasUnsupportedRule(XElement block, XNamespace worksheetNs) =>
-        block.Elements(worksheetNs + "cfRule")
-            .Any(rule => !IsSupportedConditionalFormatRuleType(rule.Attribute("type")?.Value));
-
-    private static bool IsSupportedConditionalFormatRuleType(string? type) =>
-        string.Equals(type, "cellIs", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "colorScale", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "aboveAverage", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "top10", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "uniqueValues", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "duplicateValues", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "containsText", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "notContainsText", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "beginsWith", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "endsWith", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "timePeriod", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "containsBlanks", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "notContainsBlanks", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "containsErrors", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "notContainsErrors", StringComparison.OrdinalIgnoreCase);
 }
