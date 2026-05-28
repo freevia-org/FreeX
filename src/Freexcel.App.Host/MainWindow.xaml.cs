@@ -87,6 +87,13 @@ public partial class MainWindow : Window
     private double _lastRibbonResizeWidth = double.NaN;
     private bool _ribbonResizeNormalizationRequired = true;
     private string? _lastRibbonAdaptiveAppliedStateKey;
+    private string? _ribbonAdaptiveControlCacheKey;
+    private StackPanel? _ribbonAdaptiveControlCachePanel;
+    private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;
+    private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;
+    private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
+    private string? _lastRibbonCollapsedFootprintMode;
+    private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;

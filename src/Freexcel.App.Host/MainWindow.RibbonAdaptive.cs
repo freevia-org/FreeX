@@ -20,16 +20,18 @@ public partial class MainWindow
         if (activePanel is null)
             return;
 
-        var groups = GetRibbonAdaptiveGroups(activePanel);
+        var groups = GetCachedRibbonAdaptiveGroups(activePanel);
         if (groups.Count == 0)
             return;
 
-        var collapsedButtons = EnsureRibbonCollapsedGroupButtons(activePanel, groups);
+        var controlCacheKey = _ribbonAdaptiveControlCacheKey ??
+            CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups);
+        var collapsedButtons = GetCachedRibbonCollapsedGroupButtons(activePanel, groups, controlCacheKey);
         var availableWidth = GetRibbonAvailableWidth(activePanel);
         if (availableWidth <= 0)
             return;
 
-        var cacheKey = CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups);
+        var cacheKey = controlCacheKey;
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups;
         double fixedChromeWidth;
         if (string.Equals(_ribbonAdaptiveMeasurementCacheKey, cacheKey, StringComparison.Ordinal) &&
@@ -43,12 +45,14 @@ public partial class MainWindow
             ApplyRibbonAdaptiveStates(
                 groups,
                 collapsedButtons,
-                Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groups.Count).ToArray());
+                Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groups.Count).ToArray(),
+                previousStates: null);
             fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
             adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
             _ribbonAdaptiveMeasurementCacheKey = cacheKey;
             _ribbonAdaptiveGroupCache = adaptiveGroups;
             _ribbonAdaptiveFixedChromeWidthCache = fixedChromeWidth;
+            _ribbonCorrectedStateCache.Clear();
         }
 
         UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);
@@ -61,17 +65,35 @@ public partial class MainWindow
         FitRibbonAdaptiveStatesToWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth);
         ExpandRibbonAdaptiveStatesIntoAvailableWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth);
 
+        var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStates);
+        if (_ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates))
+            plannedStates = correctedStates.ToArray();
+
         var appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
         if (!force && string.Equals(_lastRibbonAdaptiveAppliedStateKey, appliedStateKey, StringComparison.Ordinal))
             return;
 
-        ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
-        SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
-        ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
-        ApplyRibbonMeasuredExpansionFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
+        ApplyRibbonAdaptiveStates(
+            groups,
+            collapsedButtons,
+            plannedStates,
+            force ? null : _lastRibbonAdaptiveAppliedStates);
+        SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
+        var requiresMeasuredCorrection = correctedStates is null ||
+            IsRibbonGroupSet(groupNames, "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools");
+        if (requiresMeasuredCorrection)
+        {
+            ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
+            ApplyRibbonMeasuredExpansionFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
+        }
+
         ApplyRibbonRuntimeVisibilityOverrides(groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
-        SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
+        SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
+        appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
+        if (correctedStates is null)
+            _ribbonCorrectedStateCache[correctionCacheKey] = plannedStates.ToArray();
         _lastRibbonAdaptiveAppliedStateKey = appliedStateKey;
+        _lastRibbonAdaptiveAppliedStates = plannedStates.ToArray();
 
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
         _ribbonCompact = compacted;
@@ -82,6 +104,48 @@ public partial class MainWindow
             .OfType<FrameworkElement>()
             .Where(e => e is not System.Windows.Shapes.Rectangle && !IsRibbonCollapsedGroupButton(e))
             .ToList();
+
+    private IReadOnlyList<FrameworkElement> GetCachedRibbonAdaptiveGroups(StackPanel activePanel)
+    {
+        if (ReferenceEquals(_ribbonAdaptiveControlCachePanel, activePanel) &&
+            _ribbonAdaptiveGroupControlCache is not null)
+        {
+            return _ribbonAdaptiveGroupControlCache;
+        }
+
+        var groups = GetRibbonAdaptiveGroups(activePanel);
+        _ribbonAdaptiveControlCachePanel = activePanel;
+        _ribbonAdaptiveGroupControlCache = groups;
+        _ribbonAdaptiveControlCacheKey = null;
+        _ribbonAdaptiveCollapsedButtonCache = null;
+        _lastRibbonAdaptiveAppliedStateKey = null;
+        _lastRibbonAdaptiveAppliedStates = null;
+        _lastRibbonCollapsedFootprintMode = null;
+        _ribbonCorrectedStateCache.Clear();
+        return groups;
+    }
+
+    private IReadOnlyList<Button> GetCachedRibbonCollapsedGroupButtons(
+        StackPanel activePanel,
+        IReadOnlyList<FrameworkElement> groups,
+        string controlCacheKey)
+    {
+        if (ReferenceEquals(_ribbonAdaptiveControlCachePanel, activePanel) &&
+            string.Equals(_ribbonAdaptiveControlCacheKey, controlCacheKey, StringComparison.Ordinal) &&
+            _ribbonAdaptiveCollapsedButtonCache is not null)
+        {
+            return _ribbonAdaptiveCollapsedButtonCache;
+        }
+
+        var collapsedButtons = EnsureRibbonCollapsedGroupButtons(activePanel, groups);
+        _ribbonAdaptiveControlCachePanel = activePanel;
+        _ribbonAdaptiveControlCacheKey = controlCacheKey;
+        _ribbonAdaptiveCollapsedButtonCache = collapsedButtons;
+        _lastRibbonAdaptiveAppliedStateKey = null;
+        _lastRibbonAdaptiveAppliedStates = null;
+        _lastRibbonCollapsedFootprintMode = null;
+        return collapsedButtons;
+    }
 
     private double GetRibbonAvailableWidth(StackPanel activePanel)
     {
@@ -263,14 +327,14 @@ public partial class MainWindow
         while (RibbonRowOverflowsMeasured(activePanel, availableWidth) &&
                CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
         {
-            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
 
         while (RibbonRowOverflowsMeasured(activePanel, availableWidth) &&
                CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: false))
         {
-            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
     }
@@ -290,13 +354,13 @@ public partial class MainWindow
                 continue;
 
             plannedStates[index] = expandedState;
-            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
             if (!RibbonRowOverflowsMeasured(activePanel, availableWidth))
                 continue;
 
             plannedStates[index] = currentState;
-            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
     }
@@ -339,13 +403,24 @@ public partial class MainWindow
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroupState> states)
     {
-        var footprintMode = availableWidth <= 760 ? "captionless" : availableWidth <= 920 ? "compact" : "normal";
+        var footprintMode = GetCollapsedRibbonFootprintMode(availableWidth);
         return string.Join(
             "|",
             measurementCacheKey,
+            Math.Round(availableWidth, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
             footprintMode,
             string.Join(",", states.Select(state => ((int)state).ToString(System.Globalization.CultureInfo.InvariantCulture))));
     }
+
+    private static string CreateRibbonCorrectionCacheKey(
+        string measurementCacheKey,
+        double availableWidth,
+        IReadOnlyList<RibbonAdaptiveGroupState> states) =>
+        string.Join(
+            "|",
+            measurementCacheKey,
+            Math.Round(availableWidth, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            string.Join(",", states.Select(state => ((int)state).ToString(System.Globalization.CultureInfo.InvariantCulture))));
 
     private static HashSet<int> GetRibbonFallbackProtectedGroupIndexes(
         IReadOnlyList<RibbonAdaptiveGroup> groups,
@@ -400,10 +475,18 @@ public partial class MainWindow
     private static void ApplyRibbonAdaptiveStates(
         IReadOnlyList<FrameworkElement> groups,
         IReadOnlyList<Button> collapsedButtons,
-        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates)
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,
+        IReadOnlyList<RibbonAdaptiveGroupState>? previousStates)
     {
         for (var i = 0; i < groups.Count; i++)
         {
+            if (previousStates is not null &&
+                i < previousStates.Count &&
+                previousStates[i] == plannedStates[i])
+            {
+                continue;
+            }
+
             collapsedButtons[i].Visibility = Visibility.Collapsed;
             groups[i].Visibility = Visibility.Visible;
 
@@ -479,6 +562,19 @@ public partial class MainWindow
         }
     }
 
+    private void SetCollapsedRibbonButtonFootprintIfNeeded(IReadOnlyList<Button> collapsedButtons, double availableWidth)
+    {
+        var footprintMode = GetCollapsedRibbonFootprintMode(availableWidth);
+        if (string.Equals(_lastRibbonCollapsedFootprintMode, footprintMode, StringComparison.Ordinal))
+            return;
+
+        SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
+        _lastRibbonCollapsedFootprintMode = footprintMode;
+    }
+
+    private static string GetCollapsedRibbonFootprintMode(double availableWidth) =>
+        availableWidth <= 760 ? "captionless" : availableWidth <= 920 ? "compact" : "normal";
+
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
     {
         var name = GetRibbonGroupName(group);
@@ -540,19 +636,18 @@ public partial class MainWindow
         }
 
         var groupNames = adaptiveGroups.Select(group => group.Name).ToList();
-        var thresholds = new List<double> { 700, 760, 920, 1120, 1320 };
-        RibbonAdaptiveGroupState[]? previousStates = null;
-        for (var width = 480.0; width <= 2200.0; width += 8.0)
+        var thresholds = new SortedSet<double> { 700, 760, 900, 920, 1120, 1300, 1320, 1500 };
+        foreach (var width in EnumerateRibbonAdaptiveThresholdCandidates(adaptiveGroups, fixedChromeWidth))
         {
             var states = RibbonAdaptiveLayoutPlanner.Plan(width, adaptiveGroups, fixedChromeWidth).ToArray();
             states = RibbonAdaptiveLayoutPlanner
                 .ApplyBreakpointOverrides(width, groupNames, states)
                 .ToArray();
+            ApplyRibbonRuntimePriorityStates(states, groupNames, width);
+            FitRibbonAdaptiveStatesToWidth(states, adaptiveGroups, fixedChromeWidth, width);
+            ExpandRibbonAdaptiveStatesIntoAvailableWidth(states, adaptiveGroups, fixedChromeWidth, width);
 
-            if (previousStates is not null && !states.SequenceEqual(previousStates))
-                thresholds.Add(width);
-
-            previousStates = states;
+            thresholds.Add(MeasureRibbonAdaptiveStates(adaptiveGroups, states, fixedChromeWidth, width));
         }
 
         _ribbonResizeThresholdCacheKey = cacheKey;
@@ -561,6 +656,32 @@ public partial class MainWindow
             .Distinct()
             .OrderBy(width => width)
             .ToList();
+    }
+
+    private static IEnumerable<double> EnumerateRibbonAdaptiveThresholdCandidates(
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        double fixedChromeWidth)
+    {
+        if (adaptiveGroups.Count == 0)
+            yield break;
+
+        var states = Enumerable
+            .Repeat(RibbonAdaptiveGroupState.Full, adaptiveGroups.Count)
+            .ToArray();
+        yield return MeasureRibbonAdaptiveStates(adaptiveGroups, states, fixedChromeWidth, double.PositiveInfinity);
+
+        for (var i = adaptiveGroups.Count - 1; i >= 0; i--)
+        {
+            states[i] = RibbonAdaptiveGroupState.SmallWithLabels;
+            yield return MeasureRibbonAdaptiveStates(adaptiveGroups, states, fixedChromeWidth, double.PositiveInfinity);
+
+            states[i] = RibbonAdaptiveGroupState.IconOnly;
+            yield return MeasureRibbonAdaptiveStates(adaptiveGroups, states, fixedChromeWidth, double.PositiveInfinity);
+
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
+            yield return MeasureRibbonAdaptiveStates(adaptiveGroups, states, fixedChromeWidth, 1200);
+            yield return MeasureRibbonAdaptiveStates(adaptiveGroups, states, fixedChromeWidth, 800);
+        }
     }
 
     private static List<Button> EnsureRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)
