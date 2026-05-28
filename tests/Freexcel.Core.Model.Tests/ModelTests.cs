@@ -265,6 +265,25 @@ public class SheetTests
     }
 
     [Fact]
+    public void GetUsedRange_KeepsCachedBoundsAfterInteriorCellsChange()
+    {
+        var sheet = new Sheet(SheetId.New(), "Test");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("start"));
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 20), new TextValue("interior"));
+        sheet.SetCell(new CellAddress(sheet.Id, 20, 30), new TextValue("end"));
+        sheet.GetUsedRange().Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 20, 30)));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 20), new TextValue("updated"));
+        sheet.ClearCell(new CellAddress(sheet.Id, 10, 20));
+
+        sheet.GetUsedRange().Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 20, 30)));
+    }
+
+    [Fact]
     public void GetUsedRange_RepeatedCallsReuseCachedBounds()
     {
         var sheet = new Sheet(SheetId.New(), "Large");
@@ -295,6 +314,45 @@ public class SheetTests
             new CellAddress(sheet.Id, 200, 100)));
         Console.WriteLine(
             $"GetUsedRange cached repeated {repetitions}x over {sheet.CellCount:N0} cells: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(1_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
+    }
+
+    [Fact]
+    public void GetUsedRange_InterleavedInteriorWritesReuseCachedBounds()
+    {
+        var sheet = new Sheet(SheetId.New(), "Large");
+        for (uint row = 1; row <= 200; row++)
+        {
+            for (uint col = 1; col <= 100; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row + col));
+        }
+
+        var expected = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 200, 100));
+        sheet.GetUsedRange().Should().Be(expected);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 10_000;
+        var replacement = new NumberValue(123);
+        var address = new CellAddress(sheet.Id, 100, 50);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        GridRange? range = null;
+        for (var i = 0; i < repetitions; i++)
+        {
+            sheet.SetCell(address, replacement);
+            range = sheet.GetUsedRange();
+        }
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        range.Should().Be(expected);
+        Console.WriteLine(
+            $"GetUsedRange interleaved interior writes {repetitions}x over {sheet.CellCount:N0} cells: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
         allocated.Should().BeLessThan(1_000);
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
     }
