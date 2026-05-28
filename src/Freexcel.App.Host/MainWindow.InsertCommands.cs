@@ -155,6 +155,12 @@ public partial class MainWindow
             return true;
         }
 
+        if (!HyperlinkNavigationPlanner.IsAllowedScheme(plan.Target))
+        {
+            ShowOwnedMessage("This hyperlink type is not supported for security reasons.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return true;
+        }
+
         try
         {
             Process.Start(new ProcessStartInfo(plan.Target) { UseShellExecute = true });
