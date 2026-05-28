@@ -1135,7 +1135,7 @@ public sealed class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void OnRowResized(");
         mainSource.Should().NotContain("private void OnPageMarginsChanged(");
         mainSource.Should().NotContain("private void CaptureColumnResizeSnapshot(");
-        mainSource.Should().NotContain("private void RestoreRowResizeSnapshot(");
+        mainSource.Should().NotContain("private void CaptureRowResizeSnapshot(");
 
         gridSource.Should().Contain("private void RefreshStatusBar(");
         gridSource.Should().Contain("private void OnColumnResizing(");
@@ -1144,7 +1144,7 @@ public sealed class MainWindowSourceHygieneTests
         gridSource.Should().Contain("private void OnRowResized(");
         gridSource.Should().Contain("private void OnPageMarginsChanged(");
         gridSource.Should().Contain("private void CaptureColumnResizeSnapshot(");
-        gridSource.Should().Contain("private void RestoreRowResizeSnapshot(");
+        gridSource.Should().Contain("private void CaptureRowResizeSnapshot(");
         gridSource.Should().Contain("StatusBarCalculator");
     }
 

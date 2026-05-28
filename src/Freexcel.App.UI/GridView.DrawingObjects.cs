@@ -26,7 +26,7 @@ public partial class GridView
         foreach (var chart in Charts)
         {
             if (!chart.IsVisible) continue;
-            var img = ChartRenderer.Render(chart, Viewport, WorkbookTheme);
+            var img = GetCachedChartImage(chart, Viewport, WorkbookTheme);
             if (img == null) continue;
             var rect = new Rect(
                 chart.Left + ActualRowHeaderWidth, chart.Top + EffectiveColHeaderHeight,

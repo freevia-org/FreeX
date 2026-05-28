@@ -52,11 +52,9 @@ public partial class GridView
             var rect = new Rect(col.LeftOffset + ActualRowHeaderWidth, 0, col.Width, EffectiveColHeaderHeight);
             dc.DrawRectangle(bg, GridPen, rect);
 
-            var text = new FormattedText(
+            var text = GetDefaultFormattedText(
                 FormatColumnHeader(col.Col, UseR1C1ReferenceStyle),
-                CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                DefaultTypeface, 11, TextBrush,
+                11,
                 pixelsPerDip);
 
             dc.DrawText(text, new Point(
@@ -72,11 +70,9 @@ public partial class GridView
             var rect = new Rect(0, row.TopOffset + EffectiveColHeaderHeight, ActualRowHeaderWidth, row.Height);
             dc.DrawRectangle(bg, GridPen, rect);
 
-            var text = new FormattedText(
-                row.Row.ToString(),
-                CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                DefaultTypeface, 11, TextBrush,
+            var text = GetDefaultFormattedText(
+                row.Row.ToString(CultureInfo.InvariantCulture),
+                11,
                 pixelsPerDip);
 
             dc.DrawText(text, new Point(
