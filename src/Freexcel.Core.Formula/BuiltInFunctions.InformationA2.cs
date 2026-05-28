@@ -405,7 +405,7 @@ public static partial class BuiltInFunctions
             case "numfile":
                 return new NumberValue(ctx.CurrentWorkbook?.SheetCount ?? 1);
             case "origin":
-                return new TextValue("$A:$A1");
+                return new TextValue("$A:$A$1");
             case "osversion":
                 return new TextValue("Windows (32-bit) NT 10.00");
             case "recalc":

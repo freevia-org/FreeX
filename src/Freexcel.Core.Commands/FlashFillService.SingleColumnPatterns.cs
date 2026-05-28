@@ -496,6 +496,11 @@ public static partial class FlashFillService
             {
                 return s => TryGetDelimitedInitials(s, delimiter, out var initials) ? initials : null;
             }
+
+            if (examples.All(e => TryGetDelimitedUpperInitials(e.Source, delimiter, out var initials) && initials == e.Expected))
+            {
+                return s => TryGetDelimitedUpperInitials(s, delimiter, out var initials) ? initials : null;
+            }
         }
 
         return null;
@@ -633,6 +638,19 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static bool TryGetDelimitedUpperInitials(string source, char delimiter, out string initials)
+    {
+        var parts = source.Split(delimiter, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+        {
+            initials = string.Empty;
+            return false;
+        }
+
+        initials = string.Concat(parts.Select(GetUpperInitial));
+        return true;
+    }
+
     private static Func<string, string?>? TryNameAbbreviations(IReadOnlyList<(string Source, string Expected)> examples)
     {
         if (TryNameAbbreviation(examples, 2, tokens => GetFirstInitial(tokens[0]) + ". " + tokens[1], out var firstInitialLast))
@@ -640,6 +658,9 @@ public static partial class FlashFillService
 
         if (TryNameAbbreviation(examples, 2, tokens => GetFirstInitial(tokens[0]) + ". " + GetFirstInitial(tokens[1]) + ".", out var twoPartInitials))
             return twoPartInitials;
+
+        if (TryNameAbbreviation(examples, 2, tokens => GetUpperInitial(tokens[0]) + ". " + GetUpperInitial(tokens[1]) + ".", out var twoPartUpperInitials))
+            return twoPartUpperInitials;
 
         if (TryNameAbbreviation(examples, 2, tokens => tokens[0] + " " + GetFirstInitial(tokens[1]) + ".", out var firstLastInitial))
             return firstLastInitial;
@@ -673,6 +694,9 @@ public static partial class FlashFillService
 
         if (TryNameAbbreviation(examples, 3, tokens => GetFirstInitial(tokens[0]) + ". " + GetFirstInitial(tokens[1]) + ". " + GetFirstInitial(tokens[2]) + ".", out var threePartInitials))
             return threePartInitials;
+
+        if (TryNameAbbreviation(examples, 3, tokens => GetUpperInitial(tokens[0]) + ". " + GetUpperInitial(tokens[1]) + ". " + GetUpperInitial(tokens[2]) + ".", out var threePartUpperInitials))
+            return threePartUpperInitials;
 
         if (TryNameAbbreviation(examples, 3, tokens => tokens[0] + " " + GetFirstInitial(tokens[1]) + ".", out var firstMiddleInitialOnly))
             return firstMiddleInitialOnly;
@@ -720,4 +744,7 @@ public static partial class FlashFillService
 
     private static string GetFirstInitial(string value) =>
         string.IsNullOrEmpty(value) ? string.Empty : value[0].ToString();
+
+    private static string GetUpperInitial(string value) =>
+        string.IsNullOrEmpty(value) ? string.Empty : char.ToUpperInvariant(value[0]).ToString();
 }
