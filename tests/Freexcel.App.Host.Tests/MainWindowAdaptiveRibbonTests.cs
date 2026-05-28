@@ -342,15 +342,44 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void RibbonStaticNormalization_DoesNotRecreateCommandContentAfterTabIsPrepared()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 1100);
+                var before = harness.VisibleRibbonButtonContentIdentityHashCodes;
+
+                before.Should().NotBeEmpty($"{tab} should expose normalized ribbon command content");
+
+                harness.NormalizeRibbonSurface();
+
+                harness.VisibleRibbonButtonContentIdentityHashCodes.Should().Equal(
+                    before,
+                    $"{tab} static ribbon normalization should be a one-shot pass; resize and tab fallback compaction should reuse command content");
+            }
+        });
+    }
+
+    [Fact]
     public void RibbonTabSelection_SchedulesFallbackCompactionBeforeRender()
     {
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
+        var fields = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         var method = source.Substring(
             source.IndexOf("private void NormalizeRibbonSurfaceAfterTabSelection", StringComparison.Ordinal),
             source.IndexOf("private void ConfigureInsertRibbonSurface", StringComparison.Ordinal) -
             source.IndexOf("private void NormalizeRibbonSurfaceAfterTabSelection", StringComparison.Ordinal));
 
+        fields.Should().Contain("private readonly HashSet<TabItem> _normalizedRibbonStaticTabs = [];");
+        source.Should().Contain("NormalizeStaticRibbonSurfaceForSelectedTabOnce();");
+        source.Should().Contain("_normalizedRibbonStaticTabs.Add(tabItem)");
+        source.Should().Contain("EnumerateRibbonStaticDescendants(root)");
+        source.Should().Contain("NormalizeRibbonGroupMetadata(root);");
         method.Should().Contain("DispatcherPriority.Send");
         method.Should().NotContain("DispatcherPriority.Loaded");
     }
@@ -493,8 +522,9 @@ public sealed class MainWindowAdaptiveRibbonTests
             adaptiveSource.IndexOf("private void SetCollapsedRibbonButtonFootprintIfNeeded", StringComparison.Ordinal) -
             adaptiveSource.IndexOf("private static void SetCollapsedRibbonButtonFootprint", StringComparison.Ordinal));
 
-        ribbonSource.Should().Contain("NormalizeRibbonGroupMetadata();");
-        ribbonSource.Should().Contain("EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>()");
+        ribbonSource.Should().Contain("NormalizeRibbonGroupMetadata(root);");
+        ribbonSource.Should().Contain("EnumerateRibbonStaticDescendants(root).OfType<ButtonBase>()");
+        ribbonSource.Should().NotContain("EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>()");
         ribbonSource.Should().NotContain("EnumerateVisualDescendants(this).OfType<ButtonBase>()");
         adaptiveSource.Should().Contain("RibbonMetadata.IsRibbonGroup(e)");
         adaptiveSource.Should().NotContain("System.Windows.Shapes.Rectangle");
@@ -956,6 +986,7 @@ public sealed class MainWindowAdaptiveRibbonTests
 
         private readonly MainWindow _window;
         private readonly MethodInfo _updateRibbonCompactMode;
+        private readonly MethodInfo _normalizeRibbonSurface;
 
         private MainWindowHarness(MainWindow window)
         {
@@ -963,6 +994,9 @@ public sealed class MainWindowAdaptiveRibbonTests
             _updateRibbonCompactMode = typeof(MainWindow)
                 .GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
+            _normalizeRibbonSurface = typeof(MainWindow)
+                .GetMethod("NormalizeRibbonSurface", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "NormalizeRibbonSurface");
         }
 
         public IReadOnlyList<string> CollapsedRibbonGroupNames =>
@@ -1147,6 +1181,19 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Where(IsEffectivelyVisible)
                     .Select(GetButtonLabel)
                     .Where(label => !string.IsNullOrWhiteSpace(label)))
+            .ToList();
+
+        public IReadOnlyList<int> VisibleRibbonButtonContentIdentityHashCodes =>
+            (SelectedRibbonTab is null
+                ? []
+                : EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                    .Concat(EnumerateLogicalDescendants(SelectedRibbonContentRoot))
+                    .OfType<Button>()
+                    .Distinct()
+                    .Where(IsEffectivelyVisible)
+                    .Select(button => button.Content)
+                    .Where(content => content is not null)
+                    .Select(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode))
             .ToList();
 
         public IReadOnlyList<int> VisibleRibbonTabHeaderRows =>
@@ -1353,6 +1400,13 @@ public sealed class MainWindowAdaptiveRibbonTests
             PumpDispatcher();
             PumpDispatcher();
             _updateRibbonCompactMode.Invoke(_window, [true]);
+            PumpDispatcher();
+        }
+
+        public void NormalizeRibbonSurface()
+        {
+            _normalizeRibbonSurface.Invoke(_window, [true]);
+            _window.UpdateLayout();
             PumpDispatcher();
         }
 

@@ -1433,7 +1433,7 @@ public sealed class MainWindowSourceHygieneTests
         iconResources.Should().Contain("FreexcelRibbonSmallLabel");
 
         source.Should().Contain("CreateRibbonCommandContent(commandName, label, layoutKind)");
-        source.Should().Contain("NormalizeExistingRibbonIconText();");
+        source.Should().Contain("NormalizeExistingRibbonIconText(root);");
         source.Should().Contain("GetRibbonIconAccentBrushes");
         source.Should().Contain("RibbonIconFactory.CreateCommandIcon(commandName, icon, iconSize, glyphBrush)");
         source.Should().Contain("ReplaceRibbonGlyphIcons(button.Content, button, tall)");
