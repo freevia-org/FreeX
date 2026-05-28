@@ -151,7 +151,6 @@ public sealed class DependencyGraph
     public RecalcPlan GetRecalcOrder(IEnumerable<CellAddress> changedCells)
     {
         var toRecalc = new HashSet<CellAddress>();
-        var cycles = new List<CellAddress>();
 
         // BFS to find all transitive dependents
         var queue = new Queue<CellAddress>(changedCells);
@@ -162,7 +161,7 @@ public sealed class DependencyGraph
         }
 
         // Topological sort via Kahn's algorithm
-        var inDegree = new Dictionary<CellAddress, int>();
+        var inDegree = new Dictionary<CellAddress, int>(toRecalc.Count);
         foreach (var cell in toRecalc)
             inDegree[cell] = 0;
 
@@ -171,7 +170,7 @@ public sealed class DependencyGraph
             inDegree[cell] = CountPrecedentsWithin(cell, toRecalc);
         }
 
-        var sorted = new List<CellAddress>();
+        var sorted = new List<CellAddress>(toRecalc.Count);
         var ready = new Queue<CellAddress>();
 
         foreach (var (cell, degree) in inDegree)
@@ -189,13 +188,17 @@ public sealed class DependencyGraph
         }
 
         // Any remaining cells with in-degree > 0 are part of cycles
+        List<CellAddress>? cycles = null;
         foreach (var (cell, degree) in inDegree)
         {
             if (degree > 0)
+            {
+                cycles ??= [];
                 cycles.Add(cell);
+            }
         }
 
-        return new RecalcPlan(sorted, cycles);
+        return new RecalcPlan(sorted, cycles ?? []);
     }
 
     private void EnqueueUnvisitedDependents(
@@ -332,29 +335,39 @@ public sealed class DependencyGraph
 
     private int CountPrecedentsWithin(CellAddress cell, HashSet<CellAddress> candidates)
     {
-        HashSet<CellAddress>? counted = null;
         var count = 0;
 
         if (_precedents.TryGetValue(cell, out var exactPrecs))
         {
             foreach (var prec in exactPrecs)
             {
-                if (candidates.Contains(prec) && AddUnique(prec))
+                if (candidates.Contains(prec))
                     count++;
             }
         }
 
-        if (_rangePrecedents.TryGetValue(cell, out var ranges))
+        if (!_rangePrecedents.TryGetValue(cell, out var ranges))
+            return count;
+
+        HashSet<CellAddress>? counted = null;
+        if (count > 0 && exactPrecs is not null)
         {
-            foreach (var candidate in candidates)
+            counted = new HashSet<CellAddress>(count);
+            foreach (var prec in exactPrecs)
             {
-                foreach (var range in ranges)
+                if (candidates.Contains(prec))
+                    counted.Add(prec);
+            }
+        }
+
+        foreach (var candidate in candidates)
+        {
+            foreach (var range in ranges)
+            {
+                if (range.Contains(candidate) && AddUnique(candidate))
                 {
-                    if (range.Contains(candidate) && AddUnique(candidate))
-                    {
-                        count++;
-                        break;
-                    }
+                    count++;
+                    break;
                 }
             }
         }
