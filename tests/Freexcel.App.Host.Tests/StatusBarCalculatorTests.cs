@@ -106,8 +106,17 @@ public sealed class StatusBarCalculatorTests
             "sheet.CellCount < totalCells",
             "status calculations should choose the cheaper scan direction for both sparse whole-column and dense bounded selections");
         source.Should().Contain(
-            "foreach (var address in scanRange.AllCells())",
-            "small status-bar selections should clip to the used range before enumerating addresses");
+            "sheet.GetOccupiedCells()",
+            "sparse status-bar selections should enumerate occupied coordinates without constructing address objects");
+        source.Should().Contain(
+            "sheet.GetValue(row, col)",
+            "small status-bar selections should clip to the used range and scan by primitive coordinates");
+        source.Should().NotContain(
+            "scanRange.AllCells()",
+            "status-bar hot paths should avoid iterator and CellAddress allocation");
+        source.Should().NotContain(
+            "sheet.EnumerateCells()",
+            "status-bar hot paths should avoid address tuple allocation while scanning occupied cells");
     }
 
     [Fact]
@@ -221,5 +230,35 @@ public sealed class StatusBarCalculatorTests
         stats.Count.Should().Be(20_000);
         stats.NumericalCount.Should().Be(20_000);
         stats.Sum.Should().Be(200_010_000d);
+    }
+
+    [Fact]
+    public void Benchmark_BoundedStatusSelection_AvoidsAddressIteratorAllocation()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 1_000; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(row)));
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1_000, 1));
+
+        StatusBarCalculator.Calculate(sheet, range);
+
+        const int iterations = 500;
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        StatusBarCalculator.Stats stats = null!;
+        for (var i = 0; i < iterations; i++)
+            stats = StatusBarCalculator.Calculate(sheet, range);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Bounded status allocation: {allocated:N0} bytes for {iterations:N0} runs, " +
+            $"{allocated / iterations:N0} bytes/run");
+
+        stats.Sum.Should().Be(500_500d);
+        (allocated / iterations).Should().BeLessThan(
+            128,
+            "bounded status scans should allocate only the returned Stats object, not range iterators");
     }
 }
