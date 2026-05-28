@@ -10,10 +10,22 @@ public sealed class WpfTextContentExtractorTests
     [Theory]
     [InlineData("_Publish PDF", "Publish PDF")]
     [InlineData("Save __As", "Save _As")]
+    [InlineData("Save ___As", "Save _As")]
+    [InlineData("____", "__")]
     [InlineData("", "")]
     public void NormalizeAccessText_RemovesMnemonicsAndKeepsEscapedUnderscores(string text, string expected)
     {
         WpfTextContentExtractor.NormalizeAccessText(text).Should().Be(expected);
+    }
+
+    [Fact]
+    public void NormalizeAccessText_ReturnsSameStringWhenTextHasNoMnemonicMarker()
+    {
+        const string text = "Publish PDF";
+
+        WpfTextContentExtractor.NormalizeAccessText(text)
+            .Should()
+            .BeSameAs(text);
     }
 
     [Fact]

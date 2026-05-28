@@ -52,6 +52,7 @@ public static partial class BuiltInFunctions
         }
 
         var underlying = sheet?.GetCell(row, col);
+        var style = ResolveCellStyle(ctx, sheet, underlying, row, col);
 
         switch (infoType)
         {
@@ -74,11 +75,8 @@ public static partial class BuiltInFunctions
             {
                 if (sheet is null) return new NumberValue(0);
                 bool locked = true; // default style is locked
-                if (underlying is not null && ctx.CurrentWorkbook is not null)
-                {
-                    var style = ctx.CurrentWorkbook.GetStyle(underlying.StyleId);
+                if (style is not null)
                     locked = style.Locked;
-                }
                 return new NumberValue(sheet.IsProtected && locked ? 1 : 0);
             }
             case "width":
@@ -93,11 +91,7 @@ public static partial class BuiltInFunctions
                 // In-memory workbook has no on-disk path; Excel compat is empty string.
                 return new TextValue("");
             case "format":
-            {
-                if (underlying is null || ctx.CurrentWorkbook is null) return new TextValue("");
-                var style = ctx.CurrentWorkbook.GetStyle(underlying.StyleId);
-                return new TextValue(style.NumberFormat == "General" ? "" : style.NumberFormat);
-            }
+                return new TextValue(CellFormatCode(style?.NumberFormat));
             case "color":
                 return new NumberValue(0);
             case "parentheses":
@@ -107,6 +101,101 @@ public static partial class BuiltInFunctions
             default:
                 return ErrorValue.Value;
         }
+    }
+
+    private static CellStyle? ResolveCellStyle(IEvalContext ctx, Sheet? sheet, Cell? cell, uint row, uint col)
+    {
+        if (ctx.CurrentWorkbook is null || sheet is null) return null;
+        if (cell is not null) return ctx.CurrentWorkbook.GetStyle(cell.StyleId);
+
+        var styleOnly = sheet.GetStyleOnly(row, col);
+        return styleOnly is null ? CellStyle.Default : ctx.CurrentWorkbook.GetStyle(styleOnly.Value);
+    }
+
+    private static string CellFormatCode(string? numberFormat)
+    {
+        var normalized = NormalizeCellNumberFormat(numberFormat);
+        if (normalized.Length == 0 || normalized == "general")
+            return "G";
+
+        return normalized switch
+        {
+            "0" => "F0",
+            "#,##0" => ",0",
+            "0.00" => "F2",
+            "#,##0.00" => ",2",
+            "$#,##0" or "$#,##0;($#,##0)" => "C0",
+            "$#,##0.00" or "$#,##0.00;($#,##0.00)" => "C2",
+            "0%" => "P0",
+            "0.00%" => "P2",
+            "0.00e+00" or "0.00e+0" or "0e+00" or "0e+0" => "S2",
+            "d-mmm-yy" or "dd-mmm-yy" => "D1",
+            "d-mmm" or "dd-mmm" => "D2",
+            "mmm-yy" => "D3",
+            "m/d/yy" or "m/d/yyyy" or "mm/dd/yy" or "mm/dd/yyyy" or "m/d/yyh:mm" or "m/d/yyyyh:mm" => "D4",
+            "mm/dd" or "m/d" => "D5",
+            "h:mm:ssam/pm" => "D6",
+            "h:mmam/pm" => "D7",
+            "h:mm:ss" => "D8",
+            _ => "G"
+        };
+    }
+
+    private static string NormalizeCellNumberFormat(string? numberFormat)
+    {
+        if (string.IsNullOrWhiteSpace(numberFormat))
+            return "";
+
+        var chars = new List<char>(numberFormat.Length);
+        bool quoted = false;
+        bool escaped = false;
+        bool bracketed = false;
+
+        foreach (var ch in numberFormat)
+        {
+            if (ch == ';' && !quoted && !bracketed)
+                break;
+
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (ch == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                quoted = !quoted;
+                continue;
+            }
+
+            if (quoted)
+                continue;
+
+            if (ch == '[')
+            {
+                bracketed = true;
+                continue;
+            }
+
+            if (ch == ']')
+            {
+                bracketed = false;
+                continue;
+            }
+
+            if (bracketed || ch is '_' or '*' or ' ')
+                continue;
+
+            chars.Add(char.ToLowerInvariant(ch));
+        }
+
+        return new string(chars.ToArray());
     }
 
 
