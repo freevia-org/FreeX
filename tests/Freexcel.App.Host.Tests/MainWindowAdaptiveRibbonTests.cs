@@ -812,6 +812,27 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void CollapsedRibbonGroupButtons_UseTrimmedMetadataIdentityForKeyTips()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var group = new Grid();
+            RibbonMetadata.SetGroupName(group, "  Page Setup  ");
+
+            var createButton = typeof(MainWindow)
+                .GetMethod("CreateRibbonCollapsedGroupButton", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCollapsedGroupButton");
+
+            var button = (Button)createButton.Invoke(null, [group, null])!;
+
+            RibbonTooltip.GetTitle(button).Should().Be("Page Setup");
+            RibbonTooltip.GetKeyTip(button).Should().Be("PS");
+            button.ContextMenu.Should().NotBeNull();
+            button.ContextMenu!.Items.OfType<MenuItem>().Single().Header.Should().Be("Page Setup");
+        });
+    }
+
+    [Fact]
     public void RibbonGroupMetadata_IsSeededForEveryVisibleRibbonTab()
     {
         StaTestRunner.Run(() =>

@@ -61,6 +61,24 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void MouseDownUpdatesActiveSplitPaneRegionOnlyAfterCellHit()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseDown = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
+
+        mouseDown.Should().Contain("var hitAddress = Freexcel.App.UI.GridView.HitTestViewportCell(viewport, _currentSheetId, pos);");
+        mouseDown.Should().Contain("if (hitAddress is { } newAddr)");
+        mouseDown.Should().Contain("_activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(viewport, pos);");
+        mouseDown.IndexOf("if (hitAddress is { } newAddr)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseDown.IndexOf("_activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(viewport, pos);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void DragSelectionDefersStatusRefreshUntilMouseUp()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
