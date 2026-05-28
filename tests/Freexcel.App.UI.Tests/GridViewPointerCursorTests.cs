@@ -184,6 +184,61 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void PageMarginGuideMouseDownCapturesDragBeforeSplitPaneAndResize()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseDownBlock = source[
+            source.IndexOf("if (HitTestPageMarginGuide(pos) is { } marginEdge)", StringComparison.Ordinal)..
+            source.IndexOf("if (Viewport is not null)", StringComparison.Ordinal)];
+
+        mouseDownBlock.Should().Contain("_marginDragEdge = marginEdge;");
+        mouseDownBlock.Should().Contain("marginEdge is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right");
+        mouseDownBlock.Should().Contain("? Cursors.SizeWE");
+        mouseDownBlock.Should().Contain(": Cursors.SizeNS;");
+        mouseDownBlock.Should().Contain("CaptureMouse();");
+        mouseDownBlock.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
+    public void PageMarginGuideMouseMoveUpdatesPreviewMarginsAndKeepsResizeCursor()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseMoveBlock = source[
+            source.IndexOf("if (_marginDragEdge.HasValue)", StringComparison.Ordinal)..
+            source.IndexOf("if (_splitDividerDragHandle != SplitDividerHandle.None)", StringComparison.Ordinal)];
+
+        mouseMoveBlock.Should().Contain("GetPageMarginsForDraggedGuide(pos)");
+        mouseMoveBlock.Should().Contain("PageMargins = margins;");
+        mouseMoveBlock.Should().Contain("_marginDragEdge is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right");
+        mouseMoveBlock.Should().Contain("? Cursors.SizeWE");
+        mouseMoveBlock.Should().Contain(": Cursors.SizeNS;");
+        mouseMoveBlock.Should().Contain("InvalidateVisual();");
+        mouseMoveBlock.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
+    public void PageMarginGuideMouseUpCommitsMarginsAndClearsCaptureState()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var mouseUpBlock = source[
+            source.IndexOf("if (_marginDragEdge.HasValue)", mouseUpStart, StringComparison.Ordinal)..
+            source.IndexOf("if (_splitDividerDragHandle != SplitDividerHandle.None)", mouseUpStart, StringComparison.Ordinal)];
+
+        mouseUpBlock.Should().Contain("GetPageMarginsForDraggedGuide(pos)");
+        mouseUpBlock.Should().Contain("PageMargins = margins;");
+        mouseUpBlock.Should().Contain("PageMarginsChanged?.Invoke(margins);");
+        mouseUpBlock.Should().Contain("_marginDragEdge = null;");
+        mouseUpBlock.Should().Contain("Cursor = null;");
+        mouseUpBlock.Should().Contain("ReleaseMouseCapture();");
+        mouseUpBlock.Should().Contain("InvalidateVisual();");
+        mouseUpBlock.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
     public void AutofillDragMouseMoveKeepsCrossCursorAndHandlesEvent()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
