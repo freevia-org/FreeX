@@ -294,9 +294,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_startColorBox.Focus();");
-        source.Should().Contain("_startColorBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_startColorBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_startColorBox);");
     }
 
     [Fact]
@@ -311,6 +309,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("FocusInvalidColorInput(_startColorBox);");
         source.Should().Contain("FocusInvalidColorInput(_endColorBox);");
         source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(colorBox);");
     }
 
     [Fact]
