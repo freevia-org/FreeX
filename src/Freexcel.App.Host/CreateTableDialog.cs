@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -90,9 +89,7 @@ public sealed class CreateTableDialog : Window
 
     private void FocusRangeBox()
     {
-        _rangeBox.Focus();
-        _rangeBox.SelectAll();
-        Keyboard.Focus(_rangeBox);
+        DialogFocus.FocusAndSelect(_rangeBox);
     }
 
     private void Accept()
