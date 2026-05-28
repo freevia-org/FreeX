@@ -45,4 +45,14 @@ public sealed class RibbonKeyTipModeTests
 
         mode.HandleTopLevelKey(key).KeyTip.Should().Be(expected);
     }
+
+    [Theory]
+    [InlineData(Key.Space)]
+    [InlineData(Key.Tab)]
+    [InlineData(Key.OemPlus)]
+    [InlineData(Key.Escape)]
+    public void ToKeyTipToken_RejectsNonLetterDigitKeys(Key key)
+    {
+        RibbonKeyTipMode.ToKeyTipToken(key).Should().BeNull();
+    }
 }
