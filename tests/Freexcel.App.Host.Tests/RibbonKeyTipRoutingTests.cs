@@ -128,6 +128,23 @@ public sealed class RibbonKeyTipRoutingTests
         });
     }
 
+    [Fact]
+    public void ResolveMenuItem_IgnoresNonMenuItemsWhileSearchingNestedKeyTips()
+    {
+        RunSta(() =>
+        {
+            var parent = CreateMenuItem("H");
+            var child = CreateMenuItem("HG");
+            parent.Items.Add(new Separator());
+            parent.Items.Add("recent command header");
+            parent.Items.Add(child);
+
+            var resolved = RibbonKeyTipRouting.ResolveMenuItem([parent], "HG");
+
+            resolved.Should().BeSameAs(child);
+        });
+    }
+
     private static Button CreateButton(string keyTip)
     {
         var button = new Button();
