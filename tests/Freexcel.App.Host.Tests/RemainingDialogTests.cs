@@ -558,14 +558,14 @@ public sealed class RemainingDialogTests
             .Should()
             .Contain("Goal Seek found a solution")
             .And.Contain("Target value: 100")
-            .And.Contain("Current formula result: 100")
+            .And.Contain("Current value: 100")
             .And.Contain("Changing cell value: 42.25");
 
         GoalSeekStatusDialog.CreateMessage(new(false, 11, 98.5, 32), targetValue: 100)
             .Should()
             .Contain("could not find a solution")
             .And.Contain("Target value: 100")
-            .And.Contain("Current formula result: 98.5")
+            .And.Contain("Current value: 98.5")
             .And.Contain("Changing cell value: 11");
     }
 
@@ -578,6 +578,18 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = \"_Restore Original Values\"");
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("IsCancel = true");
+    }
+
+    [Fact]
+    public void GoalSeekStatusDialog_ExposesAutomationMetadataForStatusAndActions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetAutomationId(statusBlock, \"GoalSeekStatusSummary\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(keepButton, \"GoalSeekKeepResultButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(restoreButton, \"GoalSeekRestoreOriginalValuesButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekStatusOkButton\");");
+        source.Should().Contain("Reports whether Goal Seek reached the target value.");
     }
 
     [Fact]
@@ -604,7 +616,7 @@ public sealed class RemainingDialogTests
         var source = ReadStatusDialogSources();
 
         source.Should().Contain("Target value:");
-        source.Should().Contain("Current formula result:");
+        source.Should().Contain("Current value:");
         source.Should().Contain("Changing cell value:");
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
