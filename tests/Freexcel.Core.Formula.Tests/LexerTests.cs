@@ -113,6 +113,10 @@ public class LexerTests
     [InlineData("#NULL!")]
     [InlineData("#NUM!")]
     [InlineData("#SPILL!")]
+    [InlineData("#CONNECT!")]
+    [InlineData("#BLOCKED!")]
+    [InlineData("#UNKNOWN!")]
+    [InlineData("#FIELD!")]
     [InlineData("#CALC!")]
     public void Tokenizes_ErrorLiteral(string errorCode)
     {

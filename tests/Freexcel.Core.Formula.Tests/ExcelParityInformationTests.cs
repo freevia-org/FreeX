@@ -93,6 +93,18 @@ public sealed class ExcelParityInformationTests
         result.At(6, 1).Should().Be(new NumberValue(14));
     }
 
+    [Theory]
+    [InlineData("=ERROR.TYPE(#SPILL!)", 9)]
+    [InlineData("=ERROR.TYPE(#CONNECT!)", 10)]
+    [InlineData("=ERROR.TYPE(#BLOCKED!)", 11)]
+    [InlineData("=ERROR.TYPE(#UNKNOWN!)", 12)]
+    [InlineData("=ERROR.TYPE(#FIELD!)", 13)]
+    [InlineData("=ERROR.TYPE(#CALC!)", 14)]
+    public void ErrorType_ClassifiesModernExcelErrorLiterals(string formula, int expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
     [Fact]
     public void Na_Type_N_Cell_Info_ReturnExcelCompatibleScalarValues()
     {
