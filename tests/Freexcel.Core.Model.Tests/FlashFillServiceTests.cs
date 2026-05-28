@@ -447,6 +447,16 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_DelimitedWordsInitials_UppercasesLowercaseSourceInitialsWhenExamplesDo()
+    {
+        var result = FlashFillService.Fill(
+            [("ada lovelace", "AL"), ("grace hopper", "GH")],
+            ["alan turing"]);
+
+        result.Should().BeEquivalentTo(["AT"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_FullNameLastCommaFirst_ReordersDelimitedNameParts()
     {
         var result = FlashFillService.Fill(
@@ -581,6 +591,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_FullNames_AbbreviatesLowercaseNamesAsUppercaseInitials()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada lovelace", "A. L."),
+                ("grace hopper", "G. H.")
+            ],
+            ["alan turing"]);
+
+        result.Should().BeEquivalentTo(["A. T."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_FullNames_AbbreviatesLastNameFirstInitial()
     {
         var result = FlashFillService.Fill(
@@ -706,6 +729,19 @@ public sealed class FlashFillServiceTests
                 ("Grace Brewster Hopper", "G. B. H.")
             ],
             ["Alan Mathison Turing"]);
+
+        result.Should().BeEquivalentTo(["A. M. T."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ThreePartNames_AbbreviatesLowercaseNamesAsUppercaseInitials()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada byron lovelace", "A. B. L."),
+                ("grace brewster hopper", "G. B. H.")
+            ],
+            ["alan mathison turing"]);
 
         result.Should().BeEquivalentTo(["A. M. T."], o => o.WithStrictOrdering());
     }
