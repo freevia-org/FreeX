@@ -232,23 +232,17 @@ public sealed partial class ConsolidateDialog : Window
             return;
         }
 
-        _referenceBox.Focus();
-        Keyboard.Focus(_referenceBox);
-        _referenceBox.SelectAll();
+        DialogFocus.FocusAndSelect(_referenceBox);
     }
 
     private void FocusPendingReferenceInput()
     {
-        _referenceBox.Focus();
-        Keyboard.Focus(_referenceBox);
-        _referenceBox.SelectAll();
+        DialogFocus.FocusAndSelect(_referenceBox);
     }
 
     private void FocusDestinationInput()
     {
-        _destinationBox.Focus();
-        Keyboard.Focus(_destinationBox);
-        _destinationBox.SelectAll();
+        DialogFocus.FocusAndSelect(_destinationBox);
     }
 
     private ConsolidateFunction SelectedFunction() =>

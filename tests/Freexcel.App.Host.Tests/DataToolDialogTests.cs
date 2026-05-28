@@ -1569,7 +1569,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("FocusReferenceInput();");
         source.Should().Contain("FocusDestinationInput();");
         source.Should().Contain("_referencesList.Focus();");
-        source.Should().Contain("_destinationBox.SelectAll();");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_destinationBox);");
     }
 
     [Fact]
@@ -1581,9 +1581,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("MessageBox.Show(this, \"Add the reference before clicking OK.\"");
         source.Should().Contain("FocusPendingReferenceInput();");
         source.Should().Contain("private void FocusPendingReferenceInput()");
-        source.Should().Contain("_referenceBox.Focus();");
-        source.Should().Contain("_referenceBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_referenceBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_referenceBox);");
     }
 
     [Fact]
@@ -1595,9 +1593,7 @@ public sealed class DataToolDialogTests
             source.IndexOf("private void DeleteReferenceButton_Click", StringComparison.Ordinal)];
 
         addHandlerSource.Should().Contain("FocusReferenceInput();");
-        source.Should().Contain("_referenceBox.Focus();");
-        source.Should().Contain("_referenceBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_referenceBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_referenceBox);");
     }
 
     [Fact]
