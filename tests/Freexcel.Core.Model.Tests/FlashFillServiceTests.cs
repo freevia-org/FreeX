@@ -236,6 +236,8 @@ public sealed class FlashFillServiceTests
     [InlineData("Status: Open", "Open", "Status: Closed", "Closed", "Status: Pending", "Pending")]
     [InlineData("Priority = High", "High", "Priority = Low", "Low", "Priority = Medium", "Medium")]
     [InlineData("Owner - Ada", "Ada", "Owner - Grace", "Grace", "Owner - Alan", "Alan")]
+    [InlineData("Status / Open", "Open", "Status / Closed", "Closed", "Status / Pending", "Pending")]
+    [InlineData("Status/Open", "Open", "Status/Closed", "Closed", "Status/Pending", "Pending")]
     [InlineData("Status | Open", "Open", "Status | Closed", "Closed", "Status | Pending", "Pending")]
     [InlineData("Status|Open", "Open", "Status|Closed", "Closed", "Status|Pending", "Pending")]
     [InlineData("Status -> Open", "Open", "Status -> Closed", "Closed", "Status -> Pending", "Pending")]
@@ -268,9 +270,10 @@ public sealed class FlashFillServiceTests
     }
 
     [Theory]
+    [InlineData("Status / Open", "Open", "Status / Closed", "Closed")]
     [InlineData("Status | Open", "Open", "Status | Closed", "Closed")]
     [InlineData("Status -> Open", "Open", "Status -> Closed", "Closed")]
-    public void Fill_LabelValueExtraction_ReturnsNullWhenPipeOrArrowSeparatorIsMissing(
+    public void Fill_LabelValueExtraction_ReturnsNullWhenSlashPipeOrArrowSeparatorIsMissing(
         string source1,
         string expected1,
         string source2,
@@ -287,6 +290,8 @@ public sealed class FlashFillServiceTests
     [InlineData("Status: Open", "Status", "Priority: High", "Priority", "Owner: Ada", "Owner")]
     [InlineData("Status = Open", "Status", "Priority = High", "Priority", "Owner = Ada", "Owner")]
     [InlineData("Status - Open", "Status", "Priority - High", "Priority", "Owner - Ada", "Owner")]
+    [InlineData("Status / Open", "Status", "Priority / High", "Priority", "Owner / Ada", "Owner")]
+    [InlineData("Status/Open", "Status", "Priority/High", "Priority", "Owner/Ada", "Owner")]
     [InlineData("Status | Open", "Status", "Priority | High", "Priority", "Owner | Ada", "Owner")]
     [InlineData("Status|Open", "Status", "Priority|High", "Priority", "Owner|Ada", "Owner")]
     [InlineData("Status -> Open", "Status", "Priority -> High", "Priority", "Owner -> Ada", "Owner")]
@@ -319,9 +324,10 @@ public sealed class FlashFillServiceTests
     }
 
     [Theory]
+    [InlineData("Status / Open", "Status", "Priority / High", "Priority")]
     [InlineData("Status | Open", "Status", "Priority | High", "Priority")]
     [InlineData("Status -> Open", "Status", "Priority -> High", "Priority")]
-    public void Fill_LabelQualifierRemoval_ReturnsNullWhenPipeOrArrowSeparatorIsMissing(
+    public void Fill_LabelQualifierRemoval_ReturnsNullWhenSlashPipeOrArrowSeparatorIsMissing(
         string source1,
         string expected1,
         string source2,
