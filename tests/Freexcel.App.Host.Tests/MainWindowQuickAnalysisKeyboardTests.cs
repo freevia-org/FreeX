@@ -246,25 +246,19 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         {
             var menu = ActiveContextMenu
                 ?? throw new InvalidOperationException("Quick Analysis menu is not open.");
-            string? currentGroup = null;
-            foreach (var item in menu.Items.OfType<MenuItem>())
-            {
-                if (!item.IsEnabled)
-                {
-                    currentGroup = item.Header?.ToString();
-                    continue;
-                }
+            var item = menu.Items
+                .OfType<MenuItem>()
+                .FirstOrDefault(item =>
+                    item.Tag is QuickAnalysisOption option &&
+                    option.Group == group &&
+                    option.Label == header)
+                ?? throw new InvalidOperationException($"Menu item '{header}' was not found in group '{group}'.");
 
-                if (currentGroup == group && item.Header?.ToString() == header)
-                {
-                    item.Focus();
-                    Keyboard.Focus(item);
-                    PumpDispatcher();
-                    return;
-                }
-            }
-
-            throw new InvalidOperationException($"Menu item '{header}' was not found in group '{group}'.");
+            item.BringIntoView();
+            item.Focus();
+            Keyboard.Focus(item);
+            PumpDispatcher();
+            PumpDispatcher();
         }
 
         public static MainWindowHarness Create()
