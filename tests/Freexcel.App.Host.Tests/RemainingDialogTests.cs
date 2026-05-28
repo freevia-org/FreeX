@@ -452,11 +452,8 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_rowBreakBox.Focus();");
-        source.Should().Contain("_rowBreakBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_rowBreakBox);");
-        source.Should().Contain("_columnBreakBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(_columnBreakBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rowBreakBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_columnBreakBox);");
         source.Should().Contain("_resetAllButton.Focus();");
     }
 
@@ -483,6 +480,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("FocusInvalidBreakInput(_rowBreakBox);");
         source.Should().Contain("FocusInvalidBreakInput(_columnBreakBox);");
         source.Should().Contain("private static void FocusInvalidBreakInput(TextBox textBox)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
     }
 
     [Fact]

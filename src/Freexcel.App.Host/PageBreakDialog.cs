@@ -122,23 +122,17 @@ public sealed class PageBreakDialog : Window
         }
         else if (_insertColumnButton.IsChecked == true)
         {
-            _columnBreakBox.Focus();
-            _columnBreakBox.SelectAll();
-            Keyboard.Focus(_columnBreakBox);
+            DialogFocus.FocusAndSelect(_columnBreakBox);
         }
         else
         {
-            _rowBreakBox.Focus();
-            _rowBreakBox.SelectAll();
-            Keyboard.Focus(_rowBreakBox);
+            DialogFocus.FocusAndSelect(_rowBreakBox);
         }
     }
 
     private static void FocusInvalidBreakInput(TextBox textBox)
     {
-        textBox.Focus();
-        textBox.SelectAll();
-        Keyboard.Focus(textBox);
+        DialogFocus.FocusAndSelect(textBox);
     }
 
     private void UpdateBreakInputAvailability()
