@@ -252,7 +252,7 @@ public static partial class FlashFillService
             return false;
 
         var parts = userName.Split(separator, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 || parts.Any(part => part.Any(char.IsDigit)))
+        if (parts.Length < 2 || parts.Any(part => part.Any(char.IsDigit)))
             return false;
 
         displayName = string.Join(' ', parts.Select(ToProperCase));
