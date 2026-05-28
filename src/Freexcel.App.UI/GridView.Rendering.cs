@@ -325,9 +325,11 @@ public partial class GridView
 
     private void RenderCells(DrawingContext dc)
     {
-        var styleLookup = BuildRenderCellStyleLookup(Viewport!.Cells);
-        var rowLookupAll = BuildRenderRowMetricLookup(Viewport.RowMetrics);
-        var colLookupAll = BuildRenderColumnMetricLookup(Viewport.ColMetrics);
+        var viewport = Viewport!;
+        var lookups = GetRenderCellLookups(viewport);
+        var styleLookup = lookups.Styles;
+        var rowLookupAll = lookups.Rows;
+        var colLookupAll = lookups.Columns;
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         _brushCache.Clear();
         _borderPenCache.Clear();
@@ -337,9 +339,9 @@ public partial class GridView
         RenderCellBackgroundBase(dc);
 
         // Pass 1: non-default backgrounds and merged-cell surfaces
-        foreach (var rowMetric in Viewport.RowMetrics)
+        foreach (var rowMetric in viewport.RowMetrics)
         {
-            foreach (var colMetric in Viewport.ColMetrics)
+            foreach (var colMetric in viewport.ColMetrics)
             {
                 var merge = FindMerge(rowMetric.Row, colMetric.Col);
                 if (merge.HasValue && (rowMetric.Row != merge.Value.Start.Row || colMetric.Col != merge.Value.Start.Col))
@@ -381,7 +383,7 @@ public partial class GridView
         }
 
         // Pass 2: explicit cell borders
-        foreach (var cell in Viewport.Cells)
+        foreach (var cell in viewport.Cells)
         {
             if (cell.Style == null) continue;
             if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
@@ -399,7 +401,7 @@ public partial class GridView
         }
 
         // Pass 2b: comment/note indicators
-        foreach (var cell in Viewport.Cells)
+        foreach (var cell in viewport.Cells)
         {
             if (!cell.HasComment) continue;
             if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
@@ -417,9 +419,9 @@ public partial class GridView
         var rowLookup = rowLookupAll;
         var colLookup = colLookupAll;
 
-        var occupied = BuildOccupiedCellSet(Viewport.Cells, EditingCell);
+        var occupied = GetOccupiedCellLookup(viewport, EditingCell);
 
-        foreach (var cell in Viewport.Cells)
+        foreach (var cell in viewport.Cells)
         {
             if (!rowLookup.TryGetValue(cell.Row, out var rowMetric)) continue;
             if (!colLookup.TryGetValue(cell.Col, out var colMetric)) continue;
@@ -603,6 +605,40 @@ public partial class GridView
         }
 
         return lookup;
+    }
+
+    private RenderCellLookupCache GetRenderCellLookups(ViewportModel viewport)
+    {
+        if (_renderCellLookupCache is { } cached && ReferenceEquals(cached.Viewport, viewport))
+            return cached;
+
+        var lookups = new RenderCellLookupCache(
+            viewport,
+            BuildRenderCellStyleLookup(viewport.Cells),
+            BuildRenderRowMetricLookup(viewport.RowMetrics),
+            BuildRenderColumnMetricLookup(viewport.ColMetrics));
+        _renderCellLookupCache = lookups;
+        return lookups;
+    }
+
+    private HashSet<(uint Row, uint Col)> GetOccupiedCellLookup(ViewportModel viewport, CellAddress? editingCell)
+    {
+        if (_occupiedCellLookupCache is { } cached &&
+            ReferenceEquals(cached.Viewport, viewport) &&
+            cached.EditingCell == editingCell)
+        {
+            return cached.Occupied;
+        }
+
+        var occupied = BuildOccupiedCellSet(viewport.Cells, editingCell);
+        _occupiedCellLookupCache = new OccupiedCellLookupCache(viewport, editingCell, occupied);
+        return occupied;
+    }
+
+    private void ClearRenderLookupCache()
+    {
+        _renderCellLookupCache = null;
+        _occupiedCellLookupCache = null;
     }
 
     private static Dictionary<uint, RowMetric> BuildRenderRowMetricLookup(IReadOnlyList<RowMetric> rows)

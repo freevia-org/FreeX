@@ -27,7 +27,7 @@ public partial class GridView
 
     public static readonly DependencyProperty ViewportProperty =
         DependencyProperty.Register(nameof(Viewport), typeof(ViewportModel), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnChartRenderCacheInputChanged));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnViewportChanged));
     public ViewportModel? Viewport
     {
         get => (ViewportModel?)GetValue(ViewportProperty);
@@ -372,6 +372,15 @@ public partial class GridView
     {
         if (d is GridView grid)
             grid.ClearChartRenderCache();
+    }
+
+    private static void OnViewportChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not GridView grid)
+            return;
+
+        grid.ClearChartRenderCache();
+        grid.ClearRenderLookupCache();
     }
 
     // Merge lookup (rebuilt once per render pass, O(1) per cell)

@@ -32,9 +32,10 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
 
-        setup.Should().Contain("BuildRenderCellStyleLookup(Viewport!.Cells)");
-        setup.Should().Contain("BuildRenderRowMetricLookup(Viewport.RowMetrics)");
-        setup.Should().Contain("BuildRenderColumnMetricLookup(Viewport.ColMetrics)");
+        setup.Should().Contain("GetRenderCellLookups(viewport)");
+        setup.Should().Contain("var styleLookup = lookups.Styles;");
+        setup.Should().Contain("var rowLookupAll = lookups.Rows;");
+        setup.Should().Contain("var colLookupAll = lookups.Columns;");
         setup.Should().NotContain(".Where(");
         setup.Should().NotContain(".ToDictionary(");
 
@@ -187,6 +188,8 @@ public sealed class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<Brush, Pen> _underlinePenCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();");
+        gridViewSource.Should().Contain("private RenderCellLookupCache? _renderCellLookupCache;");
+        gridViewSource.Should().Contain("private OccupiedCellLookupCache? _occupiedCellLookupCache;");
     }
 
     [Fact]
@@ -220,6 +223,25 @@ public sealed class GridViewRenderPerformanceTests
         renderCells.Should().NotContain("new Dictionary<CellBorder, Pen>");
         renderCells.Should().NotContain("new Dictionary<CellTypefaceKey, Typeface>");
         renderCells.Should().NotContain("new Dictionary<Brush, Pen>");
+    }
+
+    [Fact]
+    public void RenderCells_CachesStableViewportLookupsAcrossRepaints()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.RenderLookupCache.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Properties.cs"));
+        var renderCells = rendering[
+            rendering.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("GetRenderCellLookups(viewport)");
+        rendering.Should().Contain("ReferenceEquals(cached.Viewport, viewport)");
+        rendering.Should().Contain("GetOccupiedCellLookup(viewport, EditingCell)");
+        cacheSource.Should().Contain("private sealed record RenderCellLookupCache");
+        cacheSource.Should().Contain("private sealed record OccupiedCellLookupCache");
+        propertiesSource.Should().Contain("OnViewportChanged");
+        propertiesSource.Should().Contain("grid.ClearRenderLookupCache();");
     }
 
     [Fact]
