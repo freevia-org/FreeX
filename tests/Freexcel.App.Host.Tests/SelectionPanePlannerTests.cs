@@ -193,6 +193,53 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_CreateResult_HandlesLargeStateListsWithUnnamedCurrentStates()
+    {
+        const int itemCount = 10_000;
+        var items = Enumerable.Range(0, itemCount)
+            .Select(index => new SelectionPaneItem(
+                index % 2 == 0 ? SelectionPaneObjectKind.Picture : SelectionPaneObjectKind.Shape,
+                Guid.NewGuid(),
+                $"Object {index}",
+                IsVisible: index % 3 != 0,
+                CanMoveUp: index > 0,
+                CanMoveDown: index < itemCount - 1))
+            .ToArray();
+        var states = items
+            .Select((item, index) => (item.Id, IsVisible: index % 4 == 0))
+            .ToArray();
+
+        var result = SelectionPaneDialog.CreateResult(
+            SelectionPaneDialogAction.ApplyVisibility,
+            null,
+            items,
+            states);
+        var expectedChangeCount = 0;
+        for (var index = 0; index < items.Length; index++)
+        {
+            if (items[index].IsVisible != (index % 4 == 0))
+                expectedChangeCount++;
+        }
+
+        result.VisibilityChanges.Should().HaveCount(expectedChangeCount);
+        result.RenameChanges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_PlannerUsesIndexedLookupsForStateProjection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "Freexcel.App.Host",
+            "SelectionPaneDialog.Planning.cs"));
+
+        source.Should().Contain("private static IReadOnlyList<(Guid Id, bool IsVisible, string Name)> ToNamedCurrentStates");
+        source.Should().Contain("TryGetValue(state.Id");
+        source.Should().NotContain("originalItems.FirstOrDefault(item => item.Id == state.Id)");
+        source.Should().NotContain("itemsById.ContainsKey(state.Id)");
+    }
+
+    [Fact]
     public void SelectionPaneDialog_CreateDragMoveChanges_PlansAdjacentMovesToDroppedPosition()
     {
         var front = Guid.NewGuid();

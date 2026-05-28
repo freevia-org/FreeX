@@ -203,9 +203,7 @@ public sealed partial class SelectionPaneDialog
         IReadOnlyList<(Guid Id, bool IsVisible)> currentStates) =>
         CreateVisibilityChanges(
             originalItems,
-            currentStates
-                .Select(state => (state.Id, state.IsVisible, Name: originalItems.FirstOrDefault(item => item.Id == state.Id)?.Name ?? ""))
-                .ToList());
+            ToNamedCurrentStates(originalItems, currentStates));
 
     public static IReadOnlyList<SelectionPaneRenameChange> CreateRenameChanges(
         IReadOnlyList<SelectionPaneItem> originalItems,
@@ -235,9 +233,7 @@ public sealed partial class SelectionPaneDialog
             action,
             target,
             originalItems,
-            currentStates
-                .Select(state => (state.Id, state.IsVisible, Name: originalItems.FirstOrDefault(item => item.Id == state.Id)?.Name ?? ""))
-                .ToList());
+            ToNamedCurrentStates(originalItems, currentStates));
 
     public static IReadOnlyList<SelectionPaneMoveChange> CreateDragMoveChanges(
         IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> currentOrder,
@@ -250,13 +246,28 @@ public sealed partial class SelectionPaneDialog
         IReadOnlyList<(Guid Id, bool IsVisible, string Name)> currentStates)
     {
         var itemsById = originalItems.ToDictionary(item => item.Id);
-        return currentStates
-            .Where(state => itemsById.ContainsKey(state.Id))
-            .Select(state =>
-            {
-                var item = itemsById[state.Id];
-                return new SelectionPaneDialogItemState(item.Kind, state.Id, state.Name, state.IsVisible);
-            })
-            .ToList();
+        var states = new List<SelectionPaneDialogItemState>(currentStates.Count);
+        foreach (var state in currentStates)
+        {
+            if (itemsById.TryGetValue(state.Id, out var item))
+                states.Add(new SelectionPaneDialogItemState(item.Kind, state.Id, state.Name, state.IsVisible));
+        }
+
+        return states;
+    }
+
+    private static IReadOnlyList<(Guid Id, bool IsVisible, string Name)> ToNamedCurrentStates(
+        IReadOnlyList<SelectionPaneItem> originalItems,
+        IReadOnlyList<(Guid Id, bool IsVisible)> currentStates)
+    {
+        var namesById = originalItems.ToDictionary(item => item.Id, item => item.Name);
+        var states = new List<(Guid Id, bool IsVisible, string Name)>(currentStates.Count);
+        foreach (var state in currentStates)
+        {
+            namesById.TryGetValue(state.Id, out var name);
+            states.Add((state.Id, state.IsVisible, name ?? ""));
+        }
+
+        return states;
     }
 }
