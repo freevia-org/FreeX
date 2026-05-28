@@ -69,6 +69,7 @@ public partial class MainWindow
 
         var viewport = SheetGrid.Viewport;
         if (viewport == null) return;
+        _dragSelectAddsAdditionalRange = false;
 
         // ── Header area ───────────────────────────────────────────────────────
         if (pos.X < rowHeaderW || pos.Y < colHeaderH)
@@ -203,10 +204,18 @@ public partial class MainWindow
             {
                 ExtendSelection(_selectionAnchor.Value, newAddr);
             }
-            else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryOpenHyperlink(newAddr))
+            else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
             {
-                e.Handled = true;
-                return;
+                if (TryOpenHyperlink(newAddr))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
+                AddOrMoveAdditionalSelection(newAddr, extendSelection: false);
+                _dragSelectAddsAdditionalRange = true;
+                _dragSelectActive = true;
+                SheetGrid.CaptureMouse();
             }
             else
             {
@@ -768,6 +777,8 @@ public partial class MainWindow
         if (_selectionAnchor is not { } anchor) return;
         if (hitAddr.HasValue && GetFormulaRangeEntryEditor() is not null)
             TryApplyFormulaRangeSelection(hitAddr.Value, extendSelection: true);
+        else if (hitAddr.HasValue && _dragSelectAddsAdditionalRange)
+            AddOrMoveAdditionalSelection(hitAddr.Value, extendSelection: true);
         else if (hitAddr.HasValue)
             ExtendSelection(anchor, hitAddr.Value);
     }
@@ -810,6 +821,7 @@ public partial class MainWindow
         {
             _formatPainterTargetSelectionActive = false;
             _dragSelectActive = false;
+            _dragSelectAddsAdditionalRange = false;
             SheetGrid.ReleaseMouseCapture();
 
             if (SheetGrid.SelectedRange is { } selectedRange)
@@ -821,6 +833,7 @@ public partial class MainWindow
 
         if (!_dragSelectActive) return;
         _dragSelectActive = false;
+        _dragSelectAddsAdditionalRange = false;
         SheetGrid.ReleaseMouseCapture();
         if (_borderDrawMode != BorderDrawMode.None && SheetGrid.SelectedRange is { } borderDrawRange)
         {

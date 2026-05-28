@@ -403,7 +403,7 @@ public static partial class BuiltInFunctions
         if (upper) converted = converted.ToUpperInvariant();
         if (placesArg is null or BlankValue) return new TextValue(converted);
         if (placesArg is ErrorValue error) return error;
-        if (!TryGetEngineeringTruncatedInteger(placesArg, out var places) || places < 0 || places > int.MaxValue) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(placesArg, out var places) || places < 0 || places > 255) return ErrorValue.Num;
         if (places < converted.Length) return ErrorValue.Num;
         return new TextValue(converted.PadLeft((int)places, '0'));
     }

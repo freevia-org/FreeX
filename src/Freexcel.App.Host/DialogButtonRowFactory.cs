@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 
 namespace Freexcel.App.Host;
@@ -20,14 +21,17 @@ internal static class DialogButtonRowFactory
             Margin = new Thickness(0, 0, 8, 0),
             IsDefault = true
         };
+        AutomationProperties.SetName(ok, CreateAutomationName(acceptContent));
         ok.Click += (_, _) => accept();
         row.Children.Add(ok);
-        row.Children.Add(new Button
+        var cancel = new Button
         {
             Content = "_Cancel",
             Width = buttonWidth,
             IsCancel = true
-        });
+        };
+        AutomationProperties.SetName(cancel, "Cancel");
+        row.Children.Add(cancel);
         return row;
     }
 
@@ -46,8 +50,12 @@ internal static class DialogButtonRowFactory
             IsDefault = true,
             IsCancel = true
         };
+        AutomationProperties.SetName(ok, CreateAutomationName(acceptContent));
         ok.Click += (_, _) => accept();
         row.Children.Add(ok);
         return row;
     }
+
+    private static string CreateAutomationName(string content) =>
+        content.Replace("_", string.Empty, StringComparison.Ordinal);
 }

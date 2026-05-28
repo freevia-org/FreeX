@@ -15,6 +15,24 @@ public sealed record HyperlinkNavigationPlan(
 
 public static class HyperlinkNavigationPlanner
 {
+    // Scheme whitelist for external hyperlink navigation.
+    // "file:" is intentionally excluded to prevent local filesystem access via crafted spreadsheets.
+    private static readonly HashSet<string> AllowedSchemes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "http", "https", "mailto", "ftp"
+    };
+
+    /// <summary>
+    /// Returns true only if <paramref name="url"/> is an absolute URI with an allowed scheme.
+    /// Rejects javascript:, data:, vbscript:, file:, and relative URLs.
+    /// </summary>
+    public static bool IsAllowedScheme(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return false;
+        return AllowedSchemes.Contains(uri.Scheme);
+    }
+
     public static bool TryCreatePlan(Sheet? sheet, CellAddress address, out HyperlinkNavigationPlan? plan)
     {
         plan = null;

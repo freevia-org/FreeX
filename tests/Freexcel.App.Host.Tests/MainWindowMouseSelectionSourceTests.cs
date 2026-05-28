@@ -31,4 +31,32 @@ public sealed class MainWindowMouseSelectionSourceTests
         helper.Should().Contain("if (request.HasAnyDirection)");
         helper.Should().Contain("OnAutofillEdgeScrollRequested(request);");
     }
+
+    [Fact]
+    public void CtrlMouseSelectionAddsNonContiguousRangesWithoutBreakingHyperlinkOpen()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        var mouseDownStart = selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal);
+        var textInputStart = selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal);
+        var mouseMoveStart = selectionSource.IndexOf("private void SheetGrid_MouseMove", StringComparison.Ordinal);
+        var autoScrollStart = selectionSource.IndexOf("private void RequestSelectionDragAutoScroll", StringComparison.Ordinal);
+        var mouseUpStart = selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal);
+
+        var mouseDown = selectionSource[mouseDownStart..textInputStart];
+        var mouseMove = selectionSource[mouseMoveStart..autoScrollStart];
+        var mouseUp = selectionSource[mouseUpStart..];
+
+        windowSource.Should().Contain("private bool _dragSelectAddsAdditionalRange;");
+        mouseDown.Should().Contain("else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)");
+        mouseDown.Should().Contain("if (TryOpenHyperlink(newAddr))");
+        mouseDown.Should().Contain("AddOrMoveAdditionalSelection(newAddr, extendSelection: false);");
+        mouseDown.Should().Contain("_dragSelectAddsAdditionalRange = true;");
+        mouseMove.Should().Contain("else if (hitAddr.HasValue && _dragSelectAddsAdditionalRange)");
+        mouseMove.Should().Contain("AddOrMoveAdditionalSelection(hitAddr.Value, extendSelection: true);");
+        mouseUp.Should().Contain("_dragSelectAddsAdditionalRange = false;");
+    }
 }

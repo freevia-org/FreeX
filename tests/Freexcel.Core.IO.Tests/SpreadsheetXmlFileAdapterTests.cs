@@ -100,6 +100,79 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_AdvancesImplicitCellIndexPastMergeAcrossSpan()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Merged">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell ss:MergeAcross="2"><ss:Data ss:Type="String">Merged heading</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="String">After merge</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Merged heading"));
+        sheet.GetCell(1, 4)!.Value.Should().Be(new TextValue("After merge"));
+        sheet.GetCell(1, 2).Should().BeNull();
+        sheet.GetCell(1, 3).Should().BeNull();
+    }
+
+    [Fact]
+    public void Load_TreatsBackwardCellIndexesAsImplicitNextColumn()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Indexes">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="String">First</ss:Data></ss:Cell>
+                    <ss:Cell ss:Index="1"><ss:Data ss:Type="String">Second</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("First"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("Second"));
+    }
+
+    [Fact]
+    public void Load_TreatsBackwardRowIndexesAsImplicitNextRow()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Indexes">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="String">First</ss:Data></ss:Cell>
+                  </ss:Row>
+                  <ss:Row ss:Index="1">
+                    <ss:Cell><ss:Data ss:Type="String">Second</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("First"));
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Second"));
+    }
+
+    [Fact]
     public void Save_WritesMergeAcrossAndMergeDownForMergedRegions()
     {
         var workbook = new Workbook("XmlMerges");
