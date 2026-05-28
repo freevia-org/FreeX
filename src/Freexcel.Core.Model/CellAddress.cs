@@ -54,8 +54,9 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
     public static uint ColumnNameToNumber(string name)
     {
         uint result = 0;
-        foreach (var c in name.ToUpperInvariant())
+        foreach (var raw in name)
         {
+            var c = NormalizeColumnLetter(raw);
             if (c < 'A' || c > 'Z') return 0; // non-letter would underflow uint arithmetic
             if (result > MaxCol) return result; // already beyond valid range - avoids overflow
             result = result * 26 + (uint)(c - 'A' + 1);
@@ -115,14 +116,15 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
     /// </summary>
     public static string NumberToColumnName(uint col)
     {
-        var result = "";
+        Span<char> buffer = stackalloc char[7];
+        var index = buffer.Length;
         while (col > 0)
         {
             col--;
-            result = (char)('A' + col % 26) + result;
+            buffer[--index] = (char)('A' + col % 26);
             col /= 26;
         }
-        return result;
+        return new string(buffer[index..]);
     }
 
     /// <summary>Format as A1 notation (e.g. "B7").</summary>

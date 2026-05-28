@@ -71,6 +71,28 @@ public class CellAddressTests
     }
 
     [Fact]
+    public void ColumnNameToNumber_RepeatedLowercaseCalls_DoNotAllocate()
+    {
+        CellAddress.ColumnNameToNumber("xfd").Should().Be(CellAddress.MaxCol);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 100_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        uint result = 0;
+        for (var i = 0; i < repetitions; i++)
+            result = CellAddress.ColumnNameToNumber("xfd");
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.Should().Be(CellAddress.MaxCol);
+        Console.WriteLine(
+            $"ColumnNameToNumber lowercase repeated {repetitions:N0}x: {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(1_000);
+    }
+
+    [Fact]
     public void NumberToColumnName_RoundTrips()
     {
         for (uint i = 1; i <= 100; i++)
@@ -87,6 +109,28 @@ public class CellAddressTests
         var sheet = SheetId.New();
         var addr = new CellAddress(sheet, 7, 2);
         addr.ToA1().Should().Be("B7");
+    }
+
+    [Fact]
+    public void NumberToColumnName_RepeatedCalls_AllocateOnlyResultStrings()
+    {
+        CellAddress.NumberToColumnName(CellAddress.MaxCol).Should().Be("XFD");
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 100_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        string result = "";
+        for (var i = 0; i < repetitions; i++)
+            result = CellAddress.NumberToColumnName(CellAddress.MaxCol);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.Should().Be("XFD");
+        Console.WriteLine(
+            $"NumberToColumnName repeated {repetitions:N0}x: {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(5_500_000);
     }
 }
 
