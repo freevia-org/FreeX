@@ -112,6 +112,33 @@ public sealed class NativeJsonSchemaTests
             .WithMessage("*schema version*999*");
     }
 
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    public void Load_TreatsNonFiniteNativeJsonNumbersAsText(string value)
+    {
+        var json = $$"""
+            {
+              "Name": "NonFinite",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": [
+                    { "Address": "A1", "Value": "{{value}}", "ValueType": "n" }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.GetSheetAt(0).GetCell(1, 1)!.Value.Should().Be(new TextValue(value));
+    }
+
     private static string FindWorkspaceFile(params string[] parts)
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);

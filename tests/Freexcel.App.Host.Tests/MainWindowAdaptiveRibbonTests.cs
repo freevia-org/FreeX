@@ -352,11 +352,12 @@ public sealed class MainWindowAdaptiveRibbonTests
 
         sizeChanged.Should().Contain("NormalizeRibbonSurfaceAfterResize();");
         sizeChanged.Should().Contain("ScheduleViewportResizeRefresh();");
+        sizeChanged.Should().Contain("if (e.WidthChanged)");
         sizeChanged.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange");
         resizeNormalizer.Should().Contain("ShouldNormalizeRibbonSurfaceForResize()");
-        resizeNormalizer.Should().Contain("UpdateRibbonCompactMode(force: true);");
-        resizeNormalizer.Should().NotContain("NormalizeRibbonSurface(");
-        resizeNormalizer.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange(");
+        resizeNormalizer.Should().Contain("CompactRibbonSurfaceAfterResize(scheduleFallback: !_isInWindowResizeMoveLoop)");
+        resizeNormalizer.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange");
+        resizeNormalizer.Should().NotContain("UpdateRibbonCompactMode();");
         resizeGate.Should().Contain("_ribbonResizeThresholds");
         resizeWidthResolver.Should().Contain("TryGetCachedRibbonResizeWidth(out var cachedWidth)");
         resizeWidthResolver.Should().Contain("IsCachedRibbonSurfaceSelected()");
@@ -431,6 +432,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private ScrollViewer? _ribbonAdaptiveScrollViewerCache;");
         fields.Should().Contain("private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;");
         fields.Should().Contain("private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];");
+        fields.Should().Contain("private bool _ribbonAdaptiveStateDiffInvalidated;");
+        fields.Should().Contain("private bool _ribbonResizeCompactFallbackPending;");
         source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
         source.Should().Contain("_ribbonAdaptiveGroupCache");
         source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])");
@@ -441,7 +444,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth)");
         source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth)");
         source.Should().Contain("CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates)");
-        source.Should().Contain("force ? null : _lastRibbonAdaptiveAppliedStates");
+        source.Should().Contain("_ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates");
         source.Should().Contain("SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth)");
         source.Should().NotContain("width <= 2200.0");
         source.Should().NotContain("width += 8.0");

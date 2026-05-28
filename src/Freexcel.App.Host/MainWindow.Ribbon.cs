@@ -56,6 +56,7 @@ public partial class MainWindow
             AlignRibbonIconColumns();
             HideRibbonScrollBars();
             ApplyToolbarDropdownWhiteBackgrounds();
+            _ribbonAdaptiveStateDiffInvalidated = true;
             UpdateRibbonCompactMode(force: forceCompact);
         }
         finally
@@ -84,13 +85,7 @@ public partial class MainWindow
         if (!ShouldNormalizeRibbonSurfaceForResize())
             return;
 
-        UpdateRibbonCompactMode(force: true);
-        if (_isInWindowResizeMoveLoop)
-            return;
-
-        Dispatcher.BeginInvoke(
-            (Action)(() => UpdateRibbonCompactMode(force: true)),
-            DispatcherPriority.Send);
+        CompactRibbonSurfaceAfterResize(scheduleFallback: !_isInWindowResizeMoveLoop);
     }
 
     private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab = false)
@@ -110,6 +105,22 @@ public partial class MainWindow
                 if (prepareSelectedTab)
                     PrepareSelectedRibbonTabForImmediateCompaction();
                 NormalizeRibbonSurface(forceCompact: true);
+            }),
+            DispatcherPriority.Send);
+    }
+
+    private void CompactRibbonSurfaceAfterResize(bool scheduleFallback)
+    {
+        UpdateRibbonCompactMode(force: true);
+        if (!scheduleFallback || _ribbonResizeCompactFallbackPending)
+            return;
+
+        _ribbonResizeCompactFallbackPending = true;
+        Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                _ribbonResizeCompactFallbackPending = false;
+                UpdateRibbonCompactMode(force: true);
             }),
             DispatcherPriority.Send);
     }
