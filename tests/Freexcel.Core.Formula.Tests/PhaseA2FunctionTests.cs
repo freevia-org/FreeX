@@ -370,6 +370,20 @@ public class PhaseA2FunctionTests
     }
 
     [Theory]
+    [InlineData("#,##0;[Red]-#,##0", ",0-")]
+    [InlineData("0;(#,##0)", "F0()")]
+    [InlineData("0;[Red](#,##0)", "F0-()")]
+    [InlineData("0;\"(\"#,##0\")\"", "F0")]
+    public void Cell_Format_AppendsExcelNegativeFormatSuffixes(string numberFormat, string expected)
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(-12)));
+        var styleId = wb.RegisterStyle(new CellStyle { NumberFormat = numberFormat });
+        sheet.GetCell(1, 1)!.StyleId = styleId;
+
+        _eval.Evaluate("=CELL(\"format\",A1)", sheet, wb).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
     [InlineData("#,##0;[Red]-#,##0", 1)]
     [InlineData("#,##0;[Color10](#,##0)", 1)]
     [InlineData("#,##0;[<=-100]#,##0", 0)]
