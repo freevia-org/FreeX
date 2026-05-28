@@ -312,6 +312,12 @@ public static class XlsxFeatureInspector
                 continue;
             }
 
+            if (normalizedType.EndsWith("/webpublishitems", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.LiveWebQueries;
+                continue;
+            }
+
             if (normalizedType.EndsWith("/model", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.DataModel;
