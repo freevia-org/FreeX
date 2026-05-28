@@ -194,6 +194,7 @@ public partial class GridView
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         _brushCache.Clear();
         _borderPenCache.Clear();
+        _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions))
         {
@@ -213,7 +214,7 @@ public partial class GridView
                 fill = BrushForCellColor(fillColor, _brushCache);
 
             dc.DrawRectangle(fill, GridPen, rect);
-            DrawFillPattern(dc, rect, style, _brushCache);
+            DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
 
             if (style is not null)
             {
@@ -337,6 +338,7 @@ public partial class GridView
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         _brushCache.Clear();
         _borderPenCache.Clear();
+        _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
         _underlinePenCache.Clear();
 
@@ -372,7 +374,7 @@ public partial class GridView
 
                 dc.DrawRectangle(fill, GridPen, rect);
                 if (bg is not null)
-                    DrawFillPattern(dc, rect, bg, _brushCache);
+                    DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache);
             }
         }
 

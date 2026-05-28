@@ -231,6 +231,28 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_ReusesFillPatternPensWithinRenderPass()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var cellStyles = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.CellStyles.cs"));
+        var renderCells = rendering[
+            rendering.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("// Pass 1: backgrounds", StringComparison.Ordinal)];
+        var drawFillPattern = cellStyles[
+            cellStyles.IndexOf("private static void DrawFillPattern", StringComparison.Ordinal)..
+            cellStyles.IndexOf("private static Pen FillPatternPenForCellColor", StringComparison.Ordinal)];
+
+        gridViewSource.Should().Contain("private readonly Dictionary<CellColor, Pen> _fillPatternPenCache = new();");
+        renderCells.Should().Contain("_fillPatternPenCache.Clear();");
+        rendering.Should().Contain("DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache)");
+        cellStyles.Should().Contain("FillPatternPenForCellColor(color, brushCache, fillPatternPenCache)");
+        cellStyles.Should().Contain("pen.Freeze();");
+        drawFillPattern.Should().NotContain("new Pen(");
+        drawFillPattern.Should().NotContain("new CellStyle");
+    }
+
+    [Fact]
     public void RenderCells_ReusesTypefacesWithinRenderPass()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
