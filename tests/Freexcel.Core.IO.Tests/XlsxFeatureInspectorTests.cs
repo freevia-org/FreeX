@@ -71,6 +71,22 @@ public class XlsxFeatureInspectorTests
         report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
     }
 
+    [Fact]
+    public void Inspect_ChartStyleAndColorPartsAlone_DoNotReportUnsupportedChart()
+    {
+        using var package = CreatePackageWithContent(
+            ("xl/charts/style1.xml", """
+                <c:chartStyle xmlns:c="http://schemas.microsoft.com/office/drawing/2012/chartStyle"/>
+                """),
+            ("xl/charts/colors1.xml", """
+                <c:colorStyle xmlns:c="http://schemas.microsoft.com/office/drawing/2012/chartStyle"/>
+                """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
+    }
+
     [Theory]
     [InlineData("histogramChart")]
     [InlineData("waterfallChart")]
