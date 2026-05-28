@@ -64,6 +64,7 @@ public partial class MainWindow : Window
     private bool _endMode;
     private bool _dragSelectActive;
     private bool _dragSelectAddsAdditionalRange;
+    private bool _dragSelectStatusRefreshPending;
     private Freexcel.App.UI.SplitPaneRegion _activeSplitPaneRegion = Freexcel.App.UI.SplitPaneRegion.BottomRight;
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
     private readonly List<FormulaTraceArrow> _formulaTraceArrows = [];
