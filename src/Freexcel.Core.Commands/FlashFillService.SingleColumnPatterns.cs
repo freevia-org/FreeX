@@ -19,6 +19,17 @@ public static partial class FlashFillService
         "Sir",
         "Dame"
     };
+    private static readonly HashSet<string> KnownNameSuffixes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Jr",
+        "Junior",
+        "Sr",
+        "Senior",
+        "II",
+        "III",
+        "IV",
+        "V"
+    };
 
     private static readonly (char Open, char Close)[] PairedDelimiters =
         [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ('\'', '\''), ('<', '>')];
@@ -274,6 +285,31 @@ public static partial class FlashFillService
             return false;
 
         name = string.Join(' ', tokens.Skip(1));
+        return name.Length > 0;
+    }
+
+    private static Func<string, string?>? TryKnownNameSuffixRemoval(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryRemoveKnownNameSuffix(e.Source, out var name) && name == e.Expected))
+            return null;
+
+        return source => TryRemoveKnownNameSuffix(source, out var name) ? name : null;
+    }
+
+    private static bool TryRemoveKnownNameSuffix(string source, out string name)
+    {
+        name = string.Empty;
+        var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length < 3)
+            return false;
+
+        var suffix = tokens[^1].TrimEnd('.');
+        if (!KnownNameSuffixes.Contains(suffix))
+            return false;
+
+        var nameTokens = tokens[..^1];
+        nameTokens[^1] = nameTokens[^1].TrimEnd(',');
+        name = string.Join(' ', nameTokens);
         return name.Length > 0;
     }
 
