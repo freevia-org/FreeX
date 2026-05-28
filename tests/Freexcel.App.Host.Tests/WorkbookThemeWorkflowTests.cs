@@ -36,6 +36,26 @@ public sealed class WorkbookThemeWorkflowTests
     }
 
     [Fact]
+    public void ThemeColorSlots_All_MatchesWorkbookThemeColorSlotEnum()
+    {
+        WorkbookThemeColorSlots.All.Should().Equal(
+            WorkbookThemeColorSlot.Dark1,
+            WorkbookThemeColorSlot.Light1,
+            WorkbookThemeColorSlot.Dark2,
+            WorkbookThemeColorSlot.Light2,
+            WorkbookThemeColorSlot.Accent1,
+            WorkbookThemeColorSlot.Accent2,
+            WorkbookThemeColorSlot.Accent3,
+            WorkbookThemeColorSlot.Accent4,
+            WorkbookThemeColorSlot.Accent5,
+            WorkbookThemeColorSlot.Accent6,
+            WorkbookThemeColorSlot.Hyperlink,
+            WorkbookThemeColorSlot.FollowedHyperlink);
+
+        WorkbookThemeColorSlots.All.Should().BeEquivalentTo(Enum.GetValues<WorkbookThemeColorSlot>());
+    }
+
+    [Fact]
     public void CreateCustomTheme_UpdatesMetadataAndKeepsPalette()
     {
         var theme = WorkbookThemeWorkflow.CreateCustomTheme(
@@ -55,7 +75,7 @@ public sealed class WorkbookThemeWorkflowTests
     [Fact]
     public void WorkbookThemeDialogPlanner_CreatesCustomThemeWithValidatedColors()
     {
-        var colors = Enum.GetValues<WorkbookThemeColorSlot>()
+        var colors = WorkbookThemeColorSlots.All
             .ToDictionary(slot => slot, _ => "#010203");
         colors[WorkbookThemeColorSlot.Accent1] = "#112233";
 
@@ -81,7 +101,7 @@ public sealed class WorkbookThemeWorkflowTests
     [Fact]
     public void WorkbookThemeDialogPlanner_ReportsInvalidColorSlot()
     {
-        var colors = Enum.GetValues<WorkbookThemeColorSlot>()
+        var colors = WorkbookThemeColorSlots.All
             .ToDictionary(slot => slot, _ => "#010203");
         colors[WorkbookThemeColorSlot.Hyperlink] = "not-a-color";
 
