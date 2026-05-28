@@ -346,6 +346,7 @@ public static class XlsxFeatureInspector
 
             if (normalizedType.EndsWith("/control", StringComparison.Ordinal) ||
                 normalizedType.EndsWith("/activexcontrol", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/activexcontrolbinary", StringComparison.Ordinal) ||
                 normalizedType.EndsWith("/ctrlprop", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.FormControls;

@@ -294,6 +294,22 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RelationshipOnlyActiveXBinaryReference_DetectsFormControls()
+    {
+        using var package = CreatePackageWithContent(("xl/activeX/_rels/activeX1.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdActiveXBinary"
+                            Type="http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary"
+                            Target="activeX1.bin"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.FormControls);
+    }
+
+    [Fact]
     public void Inspect_WorksheetControlMetadata_DetectsFormControls()
     {
         using var package = CreatePackageWithContent(("xl/worksheets/sheet1.xml", """
