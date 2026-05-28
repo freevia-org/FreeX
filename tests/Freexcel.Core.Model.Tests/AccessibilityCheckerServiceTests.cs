@@ -463,6 +463,55 @@ public sealed class AccessibilityCheckerServiceTests
         issue.Location.Should().Be("A1");
     }
 
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromMatchingConditionalFormat()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(address, new TextValue("At risk"));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            RuleType = CfRuleType.ContainsText,
+            TextRuleText = "risk",
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(120, 120, 120),
+                FillColor = new CellColor(130, 130, 130)
+            }
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("B2");
+        issue.Message.Should().Be("Cell text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresConditionalFormatContrastWhenRuleDoesNotMatchCell()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(address, new TextValue("On track"));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            RuleType = CfRuleType.ContainsText,
+            TextRuleText = "risk",
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(120, 120, 120),
+                FillColor = new CellColor(130, 130, 130)
+            }
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
     [Theory]
     [InlineData(18, false)]
     [InlineData(14, true)]
