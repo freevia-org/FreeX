@@ -4,41 +4,22 @@ public static class FileDialogFilterBuilder
 {
     public static string BuildOpenFilter(IEnumerable<IFileAdapter> adapters)
     {
-        var formats = adapters
-            .SelectMany(adapter => adapter.Formats)
-            .Where(format => format.CanOpen)
-            .ToList();
+        var formats = GetFormats(adapters, static format => format.CanOpen).ToList();
 
         var parts = new List<string>();
 
         if (formats.Count > 0)
-        {
-            var allSupported = string.Join(';', formats
-                .Select(format => FileFormatResolver.NormalizeExtension(format.Extension))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(extension => $"*{extension}"));
-            parts.Add($"All supported files ({allSupported})|{allSupported}");
-        }
+            parts.Add(BuildAllSupportedFilterEntry(formats));
 
-        parts.AddRange(formats.Select(format =>
-        {
-            var extension = FileFormatResolver.NormalizeExtension(format.Extension);
-            return $"{format.FormatName} (*{extension})|*{extension}";
-        }));
+        parts.AddRange(formats.Select(BuildFormatFilterEntry));
         parts.Add("All files (*.*)|*.*");
         return string.Join('|', parts);
     }
 
     public static string BuildSaveFilter(IEnumerable<IFileAdapter> adapters)
     {
-        var parts = adapters
-            .SelectMany(adapter => adapter.Formats)
-            .Where(format => format.CanSave)
-            .Select(format =>
-            {
-                var extension = FileFormatResolver.NormalizeExtension(format.Extension);
-                return $"{format.FormatName} (*{extension})|*{extension}";
-            });
+        var parts = GetFormats(adapters, static format => format.CanSave)
+            .Select(BuildFormatFilterEntry);
 
         return string.Join('|', parts);
     }
@@ -61,4 +42,25 @@ public static class FileDialogFilterBuilder
 
     public static string SafeFileTypeFromExtension(string extension) =>
         FileFormatResolver.SafeFileTypeFromExtension(extension);
+
+    private static IEnumerable<FileFormatDescriptor> GetFormats(
+        IEnumerable<IFileAdapter> adapters,
+        Func<FileFormatDescriptor, bool> predicate) =>
+        adapters.SelectMany(adapter => adapter.Formats).Where(predicate);
+
+    private static string BuildAllSupportedFilterEntry(IEnumerable<FileFormatDescriptor> formats)
+    {
+        var allSupported = string.Join(';', formats
+            .Select(format => FileFormatResolver.NormalizeExtension(format.Extension))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(extension => $"*{extension}"));
+
+        return $"All supported files ({allSupported})|{allSupported}";
+    }
+
+    private static string BuildFormatFilterEntry(FileFormatDescriptor format)
+    {
+        var extension = FileFormatResolver.NormalizeExtension(format.Extension);
+        return $"{format.FormatName} (*{extension})|*{extension}";
+    }
 }
