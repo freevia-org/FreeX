@@ -203,6 +203,29 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static Func<string, string?>? TryEmailLocalPartWithoutPlusTag(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryExtractEmailLocalPartWithoutPlusTag(e.Source, out var localPart) && localPart == e.Expected))
+            return null;
+
+        return source => TryExtractEmailLocalPartWithoutPlusTag(source, out var localPart) ? localPart : null;
+    }
+
+    private static bool TryExtractEmailLocalPartWithoutPlusTag(string source, out string localPart)
+    {
+        localPart = string.Empty;
+        var atIndex = source.IndexOf('@', StringComparison.Ordinal);
+        if (atIndex <= 0)
+            return false;
+
+        var plusIndex = source.IndexOf('+', 0, atIndex);
+        if (plusIndex <= 0)
+            return false;
+
+        localPart = source[..plusIndex];
+        return localPart.Length > 0;
+    }
+
     private static Func<string, string?>? TryStripThousandSeparators(IReadOnlyList<(string Source, string Expected)> examples)
     {
         foreach (var (source, expected) in examples)

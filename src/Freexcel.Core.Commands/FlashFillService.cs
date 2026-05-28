@@ -30,6 +30,7 @@ public static partial class FlashFillService
             ?? TryKnownTitleRemoval(examples)
             ?? TryKnownNameSuffixRemoval(examples)
             ?? TryEmailDisplayName(examples)
+            ?? TryEmailLocalPartWithoutPlusTag(examples)
             ?? TryDigitMask(examples)
             ?? TryStripThousandSeparators(examples)
             ?? TryExtractDigitsOnly(examples)

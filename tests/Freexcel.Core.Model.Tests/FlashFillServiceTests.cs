@@ -437,6 +437,32 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailLocalPartWithoutPlusTag_ExtractsUntaggedUserName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada+analytics@contoso.com", "ada"),
+                ("grace+navy@contoso.com", "grace")
+            ],
+            ["alan+math@contoso.com"]);
+
+        result.Should().BeEquivalentTo(["alan"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmailLocalPartWithoutPlusTag_ReturnsNullWhenRemainingTagIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada+analytics@contoso.com", "ada"),
+                ("grace+navy@contoso.com", "grace")
+            ],
+            ["alan@contoso.com"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_DelimitedWordsInitials_BuildsInitials()
     {
         var result = FlashFillService.Fill(
