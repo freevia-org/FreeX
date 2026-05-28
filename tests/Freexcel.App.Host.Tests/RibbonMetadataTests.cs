@@ -101,6 +101,19 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
+    public void GroupName_TrimsAttachedMetadataBeforeAdaptiveLookup()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var metadataGroup = new Grid();
+            RibbonMetadata.SetGroupName(metadataGroup, "  Page Setup  ");
+
+            RibbonMetadata.TryGetGroupName(metadataGroup, out var metadataName).Should().BeTrue();
+            metadataName.Should().Be("Page Setup");
+        });
+    }
+
+    [Fact]
     public void LegacyRibbonIconChevron_IsNotTreatedAsCommandIconForFootprintScaling()
     {
         StaTestRunner.Run(() =>
