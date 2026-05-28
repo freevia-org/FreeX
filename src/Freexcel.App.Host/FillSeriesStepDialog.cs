@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -62,6 +63,8 @@ public sealed class FillSeriesStepDialog : Window
         ShowInTaskbar = false;
         _stepBox.Text = step.ToString(CultureInfo.InvariantCulture);
         _stopBox.Text = "";
+        AutomationProperties.SetName(_stepBox, "Step value");
+        AutomationProperties.SetName(_stopBox, "Stop value");
         _linearButton.Checked += (_, _) => UpdateDateUnitAvailability();
         _growthButton.Checked += (_, _) => UpdateDateUnitAvailability();
         _dateButton.Checked += (_, _) => UpdateDateUnitAvailability();
@@ -170,7 +173,7 @@ public sealed class FillSeriesStepDialog : Window
         stack.Children.Add(new TextBlock { Text = "Date unit", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 6) });
         stack.Children.Add(CreateHorizontalRow(_dayButton, _weekdayButton, _monthButton, _yearButton));
         stack.Children.Add(CreateLabeledTextBox("Step _value:", _stepBox));
-        stack.Children.Add(CreateLabeledTextBox("Stop _value:", _stopBox));
+        stack.Children.Add(CreateLabeledTextBox("S_top value:", _stopBox));
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         return stack;
     }

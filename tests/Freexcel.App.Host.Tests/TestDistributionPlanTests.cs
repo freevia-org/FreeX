@@ -57,7 +57,26 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("UI Automation catalog review");
         source.Should().Contain("known-issues section");
         source.Should().Contain("internal-only");
+        source.Should().Contain("[TESTER_RELEASE_CHECKLIST.md](TESTER_RELEASE_CHECKLIST.md)");
         outstanding.Should().Contain("documented accessibility validation gate");
         outstanding.Should().Contain("keyboard-only, screen-reader, UI Automation catalog, and known-issues");
+    }
+
+    [Fact]
+    public void TesterReleaseChecklist_CapturesReleaseAndAccessibilityGateEvidence()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TESTER_RELEASE_CHECKLIST.md"));
+
+        source.Should().Contain("Tester Release");
+        source.Should().Contain("release_notes");
+        source.Should().Contain("Restore, build, and test");
+        source.Should().Contain("Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, and checksum artifacts");
+        source.Should().Contain("release/progress.json");
+        source.Should().Contain("Keyboard-only smoke validation");
+        source.Should().Contain("Screen-reader smoke validation");
+        source.Should().Contain("UI Automation catalog review");
+        source.Should().Contain("Known accessibility issues");
+        source.Should().Contain("internal-only");
+        source.Should().Contain("public-preview candidate");
     }
 }
