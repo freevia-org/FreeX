@@ -26,8 +26,8 @@ public sealed class SetRowHeightCommand : IWorkbookCommand
     {
         if (!IsValidRowRange(_startRow, _endRow))
             return new CommandOutcome(false, "Row range is outside the worksheet bounds.");
-        if (_height is { } height && (!double.IsFinite(height) || height is < 0 or > 409))
-            return new CommandOutcome(false, "Row height must be from 0 to 409.");
+        if (_height is { } height && (!double.IsFinite(height) || height is < 0 or > 409.5))
+            return new CommandOutcome(false, "Row height must be from 0 to 409.5.");
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)

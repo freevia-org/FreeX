@@ -125,6 +125,17 @@ public class SheetLayoutCommandTests
     }
 
     [Fact]
+    public void SetRowHeightCommand_AcceptsExcelMaximumHeight()
+    {
+        var (_, sheet, ctx) = Setup();
+
+        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, 409.5).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.RowHeights[1].Should().Be(409.5);
+    }
+
+    [Fact]
     public void SetRowHeightCommand_WithNullHeightClearsOverridesAndUndoRestores()
     {
         var (_, sheet, ctx) = Setup();
@@ -253,10 +264,10 @@ public class SheetLayoutCommandTests
     {
         var (_, sheet, ctx) = Setup();
 
-        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, 409.1).Apply(ctx);
+        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, 409.6).Apply(ctx);
 
         outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Contain("0 to 409");
+        outcome.ErrorMessage.Should().Contain("0 to 409.5");
         sheet.RowHeights.Should().BeEmpty();
     }
 

@@ -72,7 +72,7 @@ public sealed record RowHeightDialogResult(double Height);
 
 public sealed class RowHeightDialog : Window
 {
-    private const double MaximumExcelRowHeight = 409;
+    private const double MaximumExcelRowHeight = 409.5;
     private readonly TextBox _heightBox = new();
 
     public RowHeightDialogResult Result { get; private set; } = new(20);
@@ -108,7 +108,7 @@ public sealed class RowHeightDialog : Window
         error = null;
         if (input is null || !WorksheetSizeInputParser.TryParseSizeInRange(input, 0, MaximumExcelRowHeight, out var height))
         {
-            error = "Enter a row height from 0 to 409.";
+            error = "Enter a row height from 0 to 409.5.";
             return false;
         }
 
@@ -122,7 +122,7 @@ public sealed class RowHeightDialog : Window
         {
             MessageBox.Show(
                 this,
-                error ?? "Enter a row height from 0 to 409.",
+                error ?? "Enter a row height from 0 to 409.5.",
                 Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
