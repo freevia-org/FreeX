@@ -83,5 +83,7 @@ public partial class MainWindow
             EnterEditMode();
         });
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.RepeatLastAction, (_, _) => ExecuteRepeatLast());
+
+        _keyboardCommandDispatcher.EnsureRegistered(Enum.GetValues<KeyboardCommandShortcut>());
     }
 }
