@@ -31,7 +31,7 @@ public sealed partial class Sheet
     private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
     private readonly Dictionary<(uint Row, uint Col), StyleId> _styleOnly = [];
-    private Dictionary<(uint Row, uint Col), GridRange>? _mergeIndex;
+    private MergeRegionIndex? _mergeIndex;
     private GridRange? _usedRangeCache;
     private bool _usedRangeCacheDirty = true;
 

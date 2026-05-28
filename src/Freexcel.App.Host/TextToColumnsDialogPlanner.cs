@@ -30,7 +30,7 @@ internal static class TextToColumnsDialogPlanner
             return false;
         }
 
-        return CellAddress.TryParse(input.Trim(), defaultDestination.Sheet, out destination);
+        return CellReferenceInputParser.TryParseCell(input, defaultDestination.Sheet, out destination);
     }
 
     public static IReadOnlyList<TextToColumnsColumnFormat> NormalizeColumnFormats(
