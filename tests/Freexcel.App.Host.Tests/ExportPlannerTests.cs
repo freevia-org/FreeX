@@ -579,7 +579,7 @@ public class ExportPlannerTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
 
         source.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError)");
-        source.Should().Contain("MessageBox.Show(this, pdfLanguageError, \"Export Options\", MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, pdfLanguageError, \"Export Options\");");
         source.Should().Contain("FocusInvalidPdfLanguageInput();");
         source.Should().Contain("private void FocusInvalidPdfLanguageInput()");
         source.Should().Contain("_pdfLanguageBox.Focus();");
@@ -3117,7 +3117,7 @@ public class ExportPlannerTests
         source.Should().Contain("dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode)");
         source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
-        source.Should().Contain("MessageBox.Show(this, \"Enter a copy count from 1 to 999.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Enter a copy count from 1 to 999.\", Title);");
         source.Should().Contain("copiesBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(copiesBox);");
         source.Should().Contain("AutomationProperties.SetHelpText");

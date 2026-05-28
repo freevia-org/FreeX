@@ -78,7 +78,7 @@ public sealed class GoalSeekDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekDialog.xaml.cs"));
 
-        source.Should().Contain("MessageBox.Show(this, error, \"Goal Seek\", MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error, \"Goal Seek\");");
         source.Should().Contain("FocusInvalidInput(error);");
         source.Should().Contain("private void FocusInvalidInput(string error)");
         source.Should().Contain("target.Focus();");

@@ -125,9 +125,9 @@ public sealed class CustomViewsDialogXamlTests
     {
         var dialogSource = ReadCustomViewsDialogSource();
 
-        dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not apply custom view.\",");
-        dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not save custom view.\",");
-        dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not delete custom view.\",");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not apply custom view.\",");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not save custom view.\",");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not delete custom view.\",");
     }
 
     [Fact]
@@ -178,7 +178,7 @@ public sealed class CustomViewsDialogXamlTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewNameDialog.cs"));
         var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
 
-        dialogSource.Should().Contain("MessageBox.Show(this, \"Enter a view name.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Enter a view name.\", Title);");
         dialogSource.Should().Contain("FocusNameInput();");
         dialogSource.Should().Contain("private void FocusNameInput()");
         dialogSource.Should().Contain("_nameBox.Focus();");

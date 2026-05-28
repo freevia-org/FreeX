@@ -47,7 +47,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("if (!TryCreateResult(_thresholdBox.Text, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter a threshold value.\");");
-        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("_thresholdBox.Focus();");
         source.Should().Contain("_thresholdBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_thresholdBox);");
@@ -209,10 +209,8 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("error ?? \"Enter a numeric step value.\"");
-        source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInvalidStepInput();");
         source.Should().Contain("private void FocusInvalidStepInput()");
     }
@@ -350,7 +348,7 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("TryCreateResult(input, out var result, out var error)");
-        source.Should().Contain("MessageBox.Show(this, error");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error ?? \"Enter a valid zoom percent.\"");
         source.Should().Contain("_customZoomButton.IsChecked = true");
         source.Should().Contain("_zoomBox.Focus();");
         source.Should().Contain("_zoomBox.SelectAll();");
@@ -437,11 +435,9 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
 
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("Enter a row number within the worksheet for the page break.");
         source.Should().Contain("Enter a column number or letter within the worksheet for the page break.");
-        source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("PageLayoutInputParser.IsValidRowBreak(rowBreak)");
         source.Should().Contain("FocusInvalidBreakInput(_rowBreakBox);");
         source.Should().Contain("FocusInvalidBreakInput(_columnBreakBox);");
@@ -734,10 +730,8 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
 
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("error ?? \"Enter a positive whole number of forecast periods.\"");
-        source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInvalidPeriodsInput();");
         source.Should().Contain("private void FocusInvalidPeriodsInput()");
     }
@@ -748,17 +742,13 @@ public sealed class RemainingDialogTests
         var rowSource = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
         var columnSource = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record SheetNameDialogResult");
 
-        rowSource.Should().Contain("MessageBox.Show(");
-        rowSource.Should().Contain("this,");
+        rowSource.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         rowSource.Should().Contain("error ?? \"Enter a row height from 0 to 409.\"");
-        rowSource.Should().Contain("MessageBoxImage.Warning");
         rowSource.Should().Contain("FocusInvalidHeightInput();");
         rowSource.Should().Contain("private void FocusInvalidHeightInput()");
 
-        columnSource.Should().Contain("MessageBox.Show(");
-        columnSource.Should().Contain("this,");
+        columnSource.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         columnSource.Should().Contain("error ?? \"Enter a column width from 0 to 255.\"");
-        columnSource.Should().Contain("MessageBoxImage.Warning");
         columnSource.Should().Contain("FocusInvalidWidthInput();");
         columnSource.Should().Contain("private void FocusInvalidWidthInput()");
     }
@@ -911,7 +901,7 @@ public sealed class RemainingDialogTests
         plannerSource.Should().Contain("SparklineInputParser.TryParseLocation(locationText, sheetId, out _)");
         source.Should().Contain("ShowInvalidInputWarning(\"Invalid data range.\", _dataRangeBox)");
         source.Should().Contain("ShowInvalidInputWarning(\"Invalid location cell.\", _locationBox)");
-        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
         source.Should().Contain("FocusRangeSelectionInput(textBox);");
         insertSource.Should().Contain("_currentSheetId,");
     }
@@ -968,7 +958,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Content = ObjectSizeDialog.CreateSingleInputContent(\"Sheet _name:\", _nameBox, Accept);");
         source.Should().Contain("if (!TryCreateResult(_nameBox.Text, out var result, out var error))");
-        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("_nameBox.Focus();");
         source.Should().Contain("_nameBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_nameBox);");
