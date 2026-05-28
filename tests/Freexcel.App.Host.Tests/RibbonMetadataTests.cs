@@ -74,6 +74,19 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
+    public void CommandContentLayout_ReturnsNoneForMissingMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            RibbonMetadata.TryGetCommandContentLayout(null, out var nullLayout).Should().BeFalse();
+            nullLayout.Should().Be(RibbonCommandContentLayout.None);
+
+            RibbonMetadata.TryGetCommandContentLayout(new Grid(), out var untaggedLayout).Should().BeFalse();
+            untaggedLayout.Should().Be(RibbonCommandContentLayout.None);
+        });
+    }
+
+    [Fact]
     public void AttachedLayoutMetadata_TakesPrecedenceOverLegacyTags()
     {
         StaTestRunner.Run(() =>
