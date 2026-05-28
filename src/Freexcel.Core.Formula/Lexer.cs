@@ -254,7 +254,7 @@ public sealed class Lexer
             lookAhead++;
 
         if (lookAhead < _text.Length && _text[lookAhead] == '(')
-            return new Token(TokenType.FunctionName, upper, start);
+            return new Token(TokenType.FunctionName, NormalizeFunctionName(upper), start);
 
         // Check for boolean literals
         if (upper == "TRUE")
@@ -336,6 +336,19 @@ public sealed class Lexer
         while (i < clean.Length && char.IsDigit(clean[i])) i++;
 
         return i == clean.Length && digitStart < clean.Length;
+    }
+
+    private static string NormalizeFunctionName(string name)
+    {
+        const string futureFunctionPrefix = "_XLFN.";
+        const string worksheetFunctionPrefix = "_XLWS.";
+
+        if (name.StartsWith(futureFunctionPrefix, StringComparison.Ordinal))
+            name = name[futureFunctionPrefix.Length..];
+        if (name.StartsWith(worksheetFunctionPrefix, StringComparison.Ordinal))
+            name = name[worksheetFunctionPrefix.Length..];
+
+        return name;
     }
 
     private Token ReadLessThanOrComposite()
