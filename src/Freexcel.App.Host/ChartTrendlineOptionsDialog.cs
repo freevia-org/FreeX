@@ -4,6 +4,7 @@ using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
+using static Freexcel.App.Host.ChartDialogInputParser;
 using static Freexcel.App.Host.ChartDialogHelpers;
 
 namespace Freexcel.App.Host;
@@ -172,22 +173,6 @@ public sealed class ChartTrendlineOptionsDialog : Window
                 System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture,
                 out value)
-            && value >= min
-            && value <= max;
-    }
-
-    private static bool TryReadOptionalColor(TextBox textBox, out CellColor? color) =>
-        ColorInputParser.TryParseOptionalHexColor(textBox.Text, out color);
-
-    private static bool TryReadClampedDouble(TextBox textBox, double min, double max, out double value)
-    {
-        value = 0;
-        return double.TryParse(
-                textBox.Text,
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out value)
-            && double.IsFinite(value)
             && value >= min
             && value <= max;
     }
