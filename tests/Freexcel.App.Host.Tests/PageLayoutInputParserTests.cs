@@ -112,6 +112,39 @@ public sealed class PageLayoutInputParserTests
     }
 
     [Theory]
+    [InlineData("$A$1:$C$10", true, 1, 1, 10, 3)]
+    [InlineData("A$1:$C10", true, 1, 1, 10, 3)]
+    [InlineData("$B$2", true, 2, 2, 2, 2)]
+    [InlineData("", true, null, null, null, null)]
+    [InlineData("$XFE$1:$XFE$2", false, null, null, null, null)]
+    [InlineData("$A$0:$B$2", false, null, null, null, null)]
+    [InlineData("$A:$B", false, null, null, null, null)]
+    [InlineData("A$1$:B$2", false, null, null, null, null)]
+    public void TryParseOptionalPrintArea_ParsesExcelAbsoluteCellRanges(
+        string input,
+        bool expected,
+        int? expectedStartRow,
+        int? expectedStartColumn,
+        int? expectedEndRow,
+        int? expectedEndColumn)
+    {
+        var sheetId = SheetId.New();
+
+        var result = PageLayoutInputParser.TryParseOptionalPrintArea(input, sheetId, out var range);
+
+        result.Should().Be(expected);
+        if (expectedStartRow is null)
+        {
+            range.Should().BeNull();
+            return;
+        }
+
+        range.Should().NotBeNull();
+        range!.Value.Start.Should().Be(new CellAddress(sheetId, (uint)expectedStartRow.Value, (uint)expectedStartColumn!.Value));
+        range.Value.End.Should().Be(new CellAddress(sheetId, (uint)expectedEndRow!.Value, (uint)expectedEndColumn!.Value));
+    }
+
+    [Theory]
     [InlineData(100, null, null, "100")]
     [InlineData(null, 1, 1, "1x1")]
     [InlineData(null, null, null, "1x1")]

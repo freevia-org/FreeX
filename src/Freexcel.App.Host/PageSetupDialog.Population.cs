@@ -41,7 +41,9 @@ public partial class PageSetupDialog
 
         FirstPageNumberBox.Text = FirstPageNumber?.ToString(CultureInfo.InvariantCulture) ?? "";
         PrintQualityBox.Text = PrintQualityDpi?.ToString(CultureInfo.InvariantCulture) ?? "";
-        PrintAreaBox.Text = PrintArea?.ToString() ?? "";
+        PrintAreaBox.Text = PrintArea is { } printArea
+            ? PageSetupRangeSelectionFormatter.Format(PageSetupRangeSelectionTarget.PrintArea, printArea, useR1C1ReferenceStyle: false)
+            : "";
         RowsRepeatBox.Text = PrintTitleRows is { } rows ? $"${rows.Start}:${rows.End}" : "";
         ColumnsRepeatBox.Text = PrintTitleColumns is { } cols
             ? $"${CellAddress.NumberToColumnName(cols.Start)}:${CellAddress.NumberToColumnName(cols.End)}"
