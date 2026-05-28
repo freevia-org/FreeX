@@ -338,6 +338,37 @@ public class PhaseA2FunctionTests
         _eval.Evaluate("=CELL(\"width\",A1)", sheet, wb).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("General", "G")]
+    [InlineData("0", "F0")]
+    [InlineData("#,##0", ",0")]
+    [InlineData("0.00", "F2")]
+    [InlineData("#,##0.00", ",2")]
+    [InlineData("$#,##0.00", "C2")]
+    [InlineData("0%", "P0")]
+    [InlineData("0.00%", "P2")]
+    [InlineData("0.00E+00", "S2")]
+    [InlineData("m/d/yyyy", "D4")]
+    [InlineData("h:mm:ss", "D8")]
+    public void Cell_Format_ReturnsExcelFormatCode(string numberFormat, string expected)
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(1234.5)));
+        var styleId = wb.RegisterStyle(new CellStyle { NumberFormat = numberFormat });
+        sheet.GetCell(1, 1)!.StyleId = styleId;
+
+        _eval.Evaluate("=CELL(\"format\",A1)", sheet, wb).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void Cell_Format_UsesStyleOnlyCells()
+    {
+        var (wb, sheet) = MakeWb();
+        var styleId = wb.RegisterStyle(new CellStyle { NumberFormat = "0.00%" });
+        sheet.SetStyleOnly(1, 1, styleId);
+
+        _eval.Evaluate("=CELL(\"format\",A1)", sheet, wb).Should().Be(new TextValue("P2"));
+    }
+
     [Fact]
     public void Cell_Protect_UnprotectedSheet_ReturnsZero()
     {
