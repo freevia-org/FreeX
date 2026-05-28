@@ -1077,6 +1077,8 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_sheetBox, \"Unhide sheet\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_sheetBox, \"UnhideSheetList\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_sheetBox, \"Select the hidden worksheet to make visible.\");");
     }
 
     [Fact]
@@ -1099,6 +1101,39 @@ public sealed class RemainingDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_sheetBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_sheetBox);");
+    }
+
+    [Fact]
+    public void UnhideSheetDialog_OkButtonTracksSelectedSheet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new UnhideSheetDialog(["Hidden 1", "Hidden 2"]);
+            var sheetBox = GetField<ListBox>(dialog, "_sheetBox");
+            var okButton = GetField<Button>(dialog, "_okButton");
+
+            okButton.IsDefault.Should().BeTrue();
+            okButton.IsEnabled.Should().BeTrue();
+
+            sheetBox.SelectedItem = null;
+            okButton.IsEnabled.Should().BeFalse();
+
+            sheetBox.SelectedItem = "Hidden 2";
+            okButton.IsEnabled.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void UnhideSheetDialog_ActionButtonsExposeAutomationMetadata()
+    {
+        var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
+
+        source.Should().Contain("private readonly Button _okButton");
+        source.Should().Contain("private readonly Button _cancelButton");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_okButton, \"UnhideSheetOkButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_okButton, \"Unhide the selected worksheet.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_cancelButton, \"UnhideSheetCancelButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cancelButton, \"Close the Unhide Sheet dialog without changing worksheet visibility.\");");
     }
 
     [Fact]
