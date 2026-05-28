@@ -187,7 +187,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static uint ReadIndex(XElement element, uint fallback)
     {
         var indexText = element.Attribute(SpreadsheetIndexAttribute)?.Value;
-        return uint.TryParse(indexText, NumberStyles.None, CultureInfo.InvariantCulture, out var index) && index > 0
+        return uint.TryParse(indexText, NumberStyles.None, CultureInfo.InvariantCulture, out var index) && index >= fallback
             ? index
             : fallback;
     }
