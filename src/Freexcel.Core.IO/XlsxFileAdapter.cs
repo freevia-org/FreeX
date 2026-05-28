@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using Freexcel.Core.Model;
@@ -14,6 +16,9 @@ namespace Freexcel.Core.IO;
 public sealed partial class XlsxFileAdapter : IFileAdapter
 {
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
+    // ClosedXML keeps the immutable style key on internal cell types. Use a reflected delegate
+    // so repeated styles are mapped once without materializing an XLStyle for every used cell.
+    private static readonly Func<IXLCell, object?>? XlCellStyleValueAccessor = CreateXlCellStyleValueAccessor();
     public string Extension => ".xlsx";
     public string FormatName => "Excel Workbook";
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
@@ -43,9 +48,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     {
         using var packageStream = CreateLoadPackageStream(stream);
 
-        packageStream.Position = 0;
-        var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
-        packageStream.Position = 0;
         var workbookTheme = XlsxWorkbookThemeReader.Load(packageStream);
         packageStream.Position = 0;
         var uses1904DateSystem = XlsxWorkbookMetadataReader.LoadUses1904DateSystem(packageStream);
@@ -92,6 +94,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(packageStream);
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
+        closedXmlPackageStream.Position = 0;
+        var sheetXmlLayout = LoadSheetXmlLayout(closedXmlPackageStream);
         var workbook = new Workbook("Untitled");
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = uses1904DateSystem;
@@ -141,6 +145,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var loadedScenarioNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var customViewStatesById = new Dictionary<string, List<WorksheetCustomViewState>>(StringComparer.OrdinalIgnoreCase);
         var explicitStyleOnlyStyleIdsByXlsxStyleIndex = new Dictionary<int, StyleId?>();
+        var styleIdsByXlsxStyleValue = new Dictionary<object, StyleId?>();
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
             var sheet = workbook.AddSheet(xlSheet.Name);
@@ -149,8 +154,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheet.IsHidden = xlSheet.Visibility != XLWorksheetVisibility.Visible;
             if (xlSheet.TabColor.HasValue)
             {
-                var color = xlSheet.TabColor.Color;
-                sheet.TabColor = new CellColor(color.R, color.G, color.B);
+                sheet.TabColor = XlsxClosedXmlCellMapper.MapColor(xlSheet.TabColor, workbook.Theme);
             }
 
             foreach (var xlCell in xlSheet.CellsUsed())
@@ -174,9 +178,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     cell = Cell.FromValue(XlsxClosedXmlCellMapper.MapValue(xlCell));
                 }
 
-                var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
-                if (!style.Equals(CellStyle.Default))
-                    cell.StyleId = workbook.RegisterStyle(style);
+                if (GetRegisteredStyleId(xlCell, workbook, workbook.Theme, styleIdsByXlsxStyleValue) is { } styleId)
+                    cell.StyleId = styleId;
 
                 if (cell.Value is BlankValue && !cell.HasFormula)
                 {
@@ -422,6 +425,41 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         }
     }
 
+    private static StyleId? GetRegisteredStyleId(
+        IXLCell xlCell,
+        Workbook workbook,
+        WorkbookTheme theme,
+        Dictionary<object, StyleId?> styleIdsByStyleValue)
+    {
+        var styleValue = XlCellStyleValueAccessor is not null
+            ? XlCellStyleValueAccessor(xlCell)
+            : null;
+        if (styleValue is not null && styleIdsByStyleValue.TryGetValue(styleValue, out var cachedStyleId))
+            return cachedStyleId;
+
+        var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, theme);
+        StyleId? styleId = style.Equals(CellStyle.Default)
+            ? null
+            : workbook.RegisterStyle(style);
+        if (styleValue is not null)
+            styleIdsByStyleValue[styleValue] = styleId;
+        return styleId;
+    }
+
+    private static Func<IXLCell, object?>? CreateXlCellStyleValueAccessor()
+    {
+        var xlCellType = typeof(XLWorkbook).Assembly.GetType("ClosedXML.Excel.XLCell");
+        var property = xlCellType?.GetProperty("StyleValue", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (property is null)
+            return null;
+
+        var cell = Expression.Parameter(typeof(IXLCell), "cell");
+        var styleValue = Expression.Property(Expression.Convert(cell, xlCellType!), property);
+        return Expression.Lambda<Func<IXLCell, object?>>(
+            Expression.Convert(styleValue, typeof(object)),
+            cell).Compile();
+    }
+
     private static MemoryStream CreateLoadPackageStream(Stream stream)
     {
         if (stream is MemoryStream memoryStream &&
@@ -463,15 +501,19 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         {
             return (closedXmlPackageStream, new XLWorkbook(closedXmlPackageStream));
         }
-        catch
+        catch (Exception ex)
         {
             if (!ReferenceEquals(closedXmlPackageStream, packageStream))
                 closedXmlPackageStream.Dispose();
 
+            if (IsClosedXmlConditionalFormattingLoadFailure(ex))
+                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(packageStream);
+
             packageStream.Position = 0;
             var fallbackPackageStream = CreateClosedXmlParsePackage(
                 packageStream,
-                removeUnsupportedConditionalFormatting: true);
+                removeUnsupportedConditionalFormatting: true,
+                removeAllConditionalFormatting: false);
             try
             {
                 return (fallbackPackageStream, new XLWorkbook(fallbackPackageStream));
@@ -480,21 +522,55 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             {
                 if (!ReferenceEquals(fallbackPackageStream, packageStream))
                     fallbackPackageStream.Dispose();
-                throw;
+
+                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(packageStream);
             }
         }
     }
 
+    private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithConditionalFormattingStripped(
+        MemoryStream packageStream)
+    {
+        packageStream.Position = 0;
+        var conditionalFormattingStrippedPackageStream = CreateClosedXmlParsePackage(
+            packageStream,
+            removeUnsupportedConditionalFormatting: true,
+            removeAllConditionalFormatting: true);
+        try
+        {
+            return (conditionalFormattingStrippedPackageStream, new XLWorkbook(conditionalFormattingStrippedPackageStream));
+        }
+        catch
+        {
+            if (!ReferenceEquals(conditionalFormattingStrippedPackageStream, packageStream))
+                conditionalFormattingStrippedPackageStream.Dispose();
+            throw;
+        }
+    }
+
+    private static bool IsClosedXmlConditionalFormattingLoadFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current.StackTrace?.Contains("LoadConditionalFormatting", StringComparison.Ordinal) == true)
+                return true;
+        }
+
+        return false;
+    }
+
     private static MemoryStream CreateClosedXmlParsePackage(
         MemoryStream packageStream,
-        bool removeUnsupportedConditionalFormatting)
+        bool removeUnsupportedConditionalFormatting,
+        bool removeAllConditionalFormatting = false)
     {
         var styleOptimizedPackage = XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream);
         try
         {
             var sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(
                 styleOptimizedPackage,
-                removeUnsupportedConditionalFormatting);
+                removeUnsupportedConditionalFormatting,
+                removeAllConditionalFormatting);
             if (!ReferenceEquals(sanitizedPackage, styleOptimizedPackage) &&
                 !ReferenceEquals(styleOptimizedPackage, packageStream))
             {
