@@ -331,11 +331,11 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void GetData_IncludesDelimitedTextAdapters()
+    public void GetData_IncludesDelimitedTextAndSpreadsheetMlAdapters()
     {
         var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
 
-        dataCommandsSource.Should().Contain("\".csv\", \".txt\", \".tsv\", \".tab\"");
+        dataCommandsSource.Should().Contain("\".csv\", \".txt\", \".tsv\", \".tab\", \".xml\"");
     }
 
     [Fact]

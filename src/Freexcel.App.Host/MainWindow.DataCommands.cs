@@ -14,7 +14,7 @@ public partial class MainWindow
 {
     private void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
-        string[] dataExtensions = [".csv", ".txt", ".tsv", ".tab"];
+        string[] dataExtensions = [".csv", ".txt", ".tsv", ".tab", ".xml"];
         var adapters = _fileAdapters
             .Where(adapter => dataExtensions.Contains(adapter.Extension, StringComparer.OrdinalIgnoreCase))
             .ToList();
