@@ -15,7 +15,8 @@ public enum AccessibilityIssueKind
     HiddenRowWithContent,
     HiddenColumnWithContent,
     TableMissingHeaderText,
-    LowContrastCellText
+    LowContrastCellText,
+    LowContrastChartText
 }
 
 public sealed record AccessibilityIssue(
@@ -119,10 +120,106 @@ public static class AccessibilityCheckerService
                         FormatRange(chart.DataRange),
                         "Chart title should describe the chart."));
                 }
+
+                AddLowContrastChartTextIssues(issues, workbook, sheet, chart);
             }
         }
 
         return issues;
+    }
+
+    private static void AddLowContrastChartTextIssues(
+        List<AccessibilityIssue> issues,
+        Workbook workbook,
+        Sheet sheet,
+        ChartModel chart)
+    {
+        var chartBackground = chart.ResolveChartAreaFillColor(workbook.Theme) ?? CellColor.White;
+        var plotBackground = chart.ResolvePlotAreaFillColor(workbook.Theme) ?? chartBackground;
+        var defaultText = chart.ChartDefaultTextThemeColor?.Resolve(workbook.Theme) ??
+            chart.ChartDefaultTextColor ??
+            CellColor.Black;
+
+        AddLowContrastChartTextIssue(
+            issues,
+            sheet,
+            chart,
+            "Chart title",
+            chart.Title,
+            chart.ResolveChartTitleTextColor(workbook.Theme) ?? defaultText,
+            chartBackground,
+            chart.ChartTitleFontSize);
+
+        AddLowContrastChartTextIssue(
+            issues,
+            sheet,
+            chart,
+            "X-axis title",
+            chart.XAxisTitle,
+            chart.ResolveAxisTitleTextColor(workbook.Theme) ?? defaultText,
+            chartBackground,
+            chart.AxisTitleFontSize);
+
+        AddLowContrastChartTextIssue(
+            issues,
+            sheet,
+            chart,
+            "Y-axis title",
+            chart.YAxisTitle,
+            chart.ResolveAxisTitleTextColor(workbook.Theme) ?? defaultText,
+            chartBackground,
+            chart.AxisTitleFontSize);
+
+        if (chart.ShowLegend)
+        {
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "Legend text",
+                "Legend",
+                chart.ResolveLegendTextColor(workbook.Theme) ?? defaultText,
+                chart.ResolveLegendFillColor(workbook.Theme) ?? chartBackground,
+                chart.LegendFontSize);
+        }
+
+        if (chart.ShowDataLabels)
+        {
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "Data label text",
+                "Data labels",
+                chart.ResolveDataLabelTextColor(workbook.Theme) ?? defaultText,
+                chart.ResolveDataLabelFillColor(workbook.Theme) ?? plotBackground,
+                chart.DataLabelFontSize);
+        }
+    }
+
+    private static void AddLowContrastChartTextIssue(
+        List<AccessibilityIssue> issues,
+        Sheet sheet,
+        ChartModel chart,
+        string textArea,
+        string? text,
+        CellColor textColor,
+        CellColor background,
+        double fontSize)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        var minimumContrastRatio = MinimumTextContrastRatio(fontSize, bold: false);
+        if (ContrastRatio(textColor, background) >= minimumContrastRatio)
+            return;
+
+        issues.Add(new AccessibilityIssue(
+            AccessibilityIssueKind.LowContrastChartText,
+            sheet.Id,
+            sheet.Name,
+            FormatRange(chart.DataRange),
+            $"{textArea} should have at least {minimumContrastRatio:0.0}:1 contrast against its background."));
     }
 
     private static void AddLowContrastCellTextIssues(List<AccessibilityIssue> issues, Workbook workbook, Sheet sheet)
@@ -374,7 +471,10 @@ public static class AccessibilityCheckerService
     }
 
     private static double MinimumTextContrastRatio(CellStyle style) =>
-        style.FontSize >= 18 || (style.Bold && style.FontSize >= 14)
+        MinimumTextContrastRatio(style.FontSize, style.Bold);
+
+    private static double MinimumTextContrastRatio(double fontSize, bool bold) =>
+        fontSize >= 18 || (bold && fontSize >= 14)
             ? 3.0
             : 4.5;
 
