@@ -215,6 +215,12 @@ public static partial class FlashFillService
 
     private static Func<string, string?>? TryThreeTokenNameDropMiddle(IReadOnlyList<(string Source, string Expected)> examples)
     {
+        if (examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && e.Expected == tokens[1] + " " + tokens[2]))
+            return source => TrySplitWhitespaceTokens(source, out var tokens) ? tokens[1] + " " + tokens[2] : null;
+
+        if (examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && e.Expected == tokens[0] + " " + tokens[1]))
+            return source => TrySplitWhitespaceTokens(source, out var tokens) ? tokens[0] + " " + tokens[1] : null;
+
         if (examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && e.Expected == tokens[0] + " " + tokens[2]))
             return source => TrySplitWhitespaceTokens(source, out var tokens) ? tokens[0] + " " + tokens[2] : null;
 
