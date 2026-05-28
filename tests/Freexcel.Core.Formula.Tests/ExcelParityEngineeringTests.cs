@@ -27,6 +27,15 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
+    [InlineData("=BASE(7.9,2)", "111")]
+    [InlineData("=BASE(15,2.9,8.9)", "00001111")]
+    [InlineData("=BASE(35,36.9)", "Z")]
+    public void BaseFunction_TruncatesFractionalArguments(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
     [InlineData("=DECIMAL(\"FF\",16)", 255)]
     [InlineData("=DECIMAL(111,2)", 7)]
     [InlineData("=DECIMAL(\"zap\",36)", 45745)]
