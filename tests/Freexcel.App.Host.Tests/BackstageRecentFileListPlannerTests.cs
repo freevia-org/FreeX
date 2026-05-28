@@ -1,3 +1,5 @@
+using System.IO;
+using System.Text.Json;
 using FluentAssertions;
 using Freexcel.App.Host;
 
@@ -10,9 +12,9 @@ public sealed class BackstageRecentFileListPlannerTests
     {
         var entries = new[]
         {
-            new RecentFileEntry { Path = @"C:\Work\Budget.xlsx", LastOpened = DateTime.Now, IsPinned = false },
-            new RecentFileEntry { Path = @"C:\Work\Forecast.xlsx", LastOpened = DateTime.Now, IsPinned = true },
-            new RecentFileEntry { Path = @"C:\Work\Notes.xlsx", LastOpened = DateTime.Now, IsPinned = true }
+            new RecentFileEntry { Path = @"C:\Work\Budget.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Work\Forecast.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = true },
+            new RecentFileEntry { Path = @"C:\Work\Notes.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = true }
         };
 
         var plan = BackstageRecentFileListPlanner.Build(entries, "cast");
@@ -27,8 +29,8 @@ public sealed class BackstageRecentFileListPlannerTests
     {
         var entries = new[]
         {
-            new RecentFileEntry { Path = @"C:\Finance\Budget.xlsx", LastOpened = DateTime.Now, IsPinned = false },
-            new RecentFileEntry { Path = @"C:\Ops\Runbook.xlsx", LastOpened = DateTime.Now, IsPinned = false }
+            new RecentFileEntry { Path = @"C:\Finance\Budget.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Ops\Runbook.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false }
         };
 
         var plan = BackstageRecentFileListPlanner.Build(entries, "finance");
@@ -39,7 +41,7 @@ public sealed class BackstageRecentFileListPlannerTests
     [Fact]
     public void Build_SortsRecentAndPinnedItemsNewestFirst()
     {
-        var now = DateTime.Now;
+        var now = DateTimeOffset.UtcNow;
         var entries = new[]
         {
             new RecentFileEntry { Path = @"C:\Work\OldRecent.xlsx", LastOpened = now.AddDays(-4), IsPinned = false },
@@ -62,10 +64,10 @@ public sealed class BackstageRecentFileListPlannerTests
     {
         var entries = new[]
         {
-            new RecentFileEntry { Path = @"C:\Work\MissingPinned.xlsx", LastOpened = DateTime.Now, IsPinned = true },
-            new RecentFileEntry { Path = @"C:\Work\ExistingPinned.xlsx", LastOpened = DateTime.Now, IsPinned = true },
-            new RecentFileEntry { Path = @"C:\Work\MissingRecent.xlsx", LastOpened = DateTime.Now, IsPinned = false },
-            new RecentFileEntry { Path = @"C:\Work\ExistingRecent.xlsx", LastOpened = DateTime.Now, IsPinned = false }
+            new RecentFileEntry { Path = @"C:\Work\MissingPinned.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = true },
+            new RecentFileEntry { Path = @"C:\Work\ExistingPinned.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = true },
+            new RecentFileEntry { Path = @"C:\Work\MissingRecent.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Work\ExistingRecent.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false }
         };
 
         var plan = BackstageRecentFileListPlanner.Build(
@@ -83,8 +85,8 @@ public sealed class BackstageRecentFileListPlannerTests
     {
         var entries = new[]
         {
-            new RecentFileEntry { Path = @"C:\Work\Budget.xlsx", LastOpened = DateTime.Now, IsPinned = false },
-            new RecentFileEntry { Path = @"C:\Work\Forecast.xlsx", LastOpened = DateTime.Now, IsPinned = true }
+            new RecentFileEntry { Path = @"C:\Work\Budget.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Work\Forecast.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = true }
         };
 
         var plan = BackstageRecentFileListPlanner.Build(entries, filter: null);
@@ -101,5 +103,28 @@ public sealed class BackstageRecentFileListPlannerTests
         pinned.OpenAutomationName.Should().Be("Open pinned file Forecast.xlsx");
         pinned.PinAutomationName.Should().Be("Unpin Forecast.xlsx");
         pinned.PinAutomationHelpText.Should().Be("Remove this workbook from the pinned files list.");
+    }
+
+    [Fact]
+    public void RecentFileEntry_SerializesLastOpenedWithUtcOffset()
+    {
+        var entry = new RecentFileEntry
+        {
+            Path = @"C:\Work\Budget.xlsx",
+            LastOpened = new DateTimeOffset(2026, 5, 28, 12, 34, 56, TimeSpan.Zero)
+        };
+
+        var json = JsonSerializer.Serialize(entry);
+
+        json.Should().Contain(@"""LastOpened"":""2026-05-28T12:34:56+00:00""");
+    }
+
+    [Fact]
+    public void RecentFilesStore_UsesUtcClockForPersistedTimestamps()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RecentFilesStore.cs"));
+
+        source.Should().Contain("LastOpened = DateTimeOffset.UtcNow");
+        source.Should().NotContain("LastOpened = DateTime.Now");
     }
 }

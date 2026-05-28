@@ -67,13 +67,15 @@ public sealed class RecentFileViewModel
         RemoveAutomationHelpText = "Remove this workbook from the recent files list without deleting it.";
     }
 
-    private static string FormatDate(DateTime dt)
+    private static string FormatDate(DateTimeOffset timestamp)
     {
-        var diff = DateTime.Now - dt;
+        var localTimestamp = timestamp.ToLocalTime();
+        var now = DateTimeOffset.Now;
+        var diff = now - localTimestamp;
         if (diff.TotalHours < 1) return "Just now";
-        if (diff.TotalDays < 1) return "Today at " + dt.ToString("h:mm tt");
-        if (diff.TotalDays < 2) return "Yesterday at " + dt.ToString("h:mm tt");
-        if (diff.TotalDays < 7) return dt.DayOfWeek + " at " + dt.ToString("h:mm tt");
-        return dt.Year == DateTime.Now.Year ? dt.ToString("MMM d") : dt.ToString("MMM d, yyyy");
+        if (diff.TotalDays < 1) return "Today at " + localTimestamp.ToString("h:mm tt");
+        if (diff.TotalDays < 2) return "Yesterday at " + localTimestamp.ToString("h:mm tt");
+        if (diff.TotalDays < 7) return localTimestamp.DayOfWeek + " at " + localTimestamp.ToString("h:mm tt");
+        return localTimestamp.Year == now.Year ? localTimestamp.ToString("MMM d") : localTimestamp.ToString("MMM d, yyyy");
     }
 }
