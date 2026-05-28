@@ -341,14 +341,18 @@ public partial class GridView
         _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
         _underlinePenCache.Clear();
+        RenderCellBackgroundBase(dc);
 
-        // Pass 1: backgrounds
+        // Pass 1: non-default backgrounds and merged-cell surfaces
         foreach (var rowMetric in Viewport.RowMetrics)
         {
             foreach (var colMetric in Viewport.ColMetrics)
             {
                 var merge = FindMerge(rowMetric.Row, colMetric.Col);
                 if (merge.HasValue && (rowMetric.Row != merge.Value.Start.Row || colMetric.Col != merge.Value.Start.Col))
+                    continue;
+                styleLookup.TryGetValue((rowMetric.Row, colMetric.Col), out var bg);
+                if (bg is null && !merge.HasValue)
                     continue;
 
                 double w = colMetric.Width;
@@ -365,14 +369,19 @@ public partial class GridView
                 var rect = new Rect(
                     colMetric.LeftOffset + ActualRowHeaderWidth, rowMetric.TopOffset + EffectiveColHeaderHeight, w, h);
 
-                Brush? fill = WorksheetBackground == null ? Brushes.White : null;
-                if (styleLookup.TryGetValue((rowMetric.Row, colMetric.Col), out var bg)
-                    && bg.FillColor.HasValue)
+                Brush? fill = null;
+                if (bg?.FillColor.HasValue == true)
                 {
                     fill = BrushForCellColor(bg.FillColor.Value, _brushCache);
                 }
+                else if (WorksheetBackground == null &&
+                         (merge.HasValue || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None))
+                {
+                    fill = Brushes.White;
+                }
 
-                dc.DrawRectangle(fill, GridPen, rect);
+                if (fill is not null || merge.HasValue)
+                    dc.DrawRectangle(fill, merge.HasValue ? GridPen : null, rect);
                 if (bg is not null)
                     DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache);
             }
@@ -551,6 +560,42 @@ public partial class GridView
             }
             dc.Pop();
         }
+    }
+
+    private void RenderCellBackgroundBase(DrawingContext dc)
+    {
+        if (Viewport is null || Viewport.RowMetrics.Count == 0 || Viewport.ColMetrics.Count == 0)
+            return;
+
+        var left = ActualRowHeaderWidth;
+        var top = EffectiveColHeaderHeight;
+        var right = left + Viewport.ColMetrics[^1].LeftOffset + Viewport.ColMetrics[^1].Width;
+        var bottom = top + Viewport.RowMetrics[^1].TopOffset + Viewport.RowMetrics[^1].Height;
+        var rect = new Rect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return;
+
+        if (WorksheetBackground is null)
+            dc.DrawRectangle(Brushes.White, null, rect);
+
+        if (!ShowGridLines)
+            return;
+
+        foreach (var row in Viewport.RowMetrics)
+        {
+            var y = top + row.TopOffset;
+            dc.DrawLine(GridPen, new Point(left, y), new Point(right, y));
+        }
+
+        dc.DrawLine(GridPen, new Point(left, bottom), new Point(right, bottom));
+
+        foreach (var column in Viewport.ColMetrics)
+        {
+            var x = left + column.LeftOffset;
+            dc.DrawLine(GridPen, new Point(x, top), new Point(x, bottom));
+        }
+
+        dc.DrawLine(GridPen, new Point(right, top), new Point(right, bottom));
     }
 
     private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup(IReadOnlyList<DisplayCell> cells)

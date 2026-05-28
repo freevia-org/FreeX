@@ -30,7 +30,7 @@ public sealed class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
         var setup = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("// Pass 1: backgrounds", StringComparison.Ordinal)];
+            source.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
 
         setup.Should().Contain("BuildRenderCellStyleLookup(Viewport!.Cells)");
         setup.Should().Contain("BuildRenderRowMetricLookup(Viewport.RowMetrics)");
@@ -194,7 +194,7 @@ public sealed class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("// Pass 1: backgrounds", StringComparison.Ordinal)];
+            source.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("_brushCache.Clear();");
         renderCells.Should().Contain("_borderPenCache.Clear();");
@@ -204,6 +204,25 @@ public sealed class GridViewRenderPerformanceTests
         renderCells.Should().NotContain("new Dictionary<CellBorder, Pen>");
         renderCells.Should().NotContain("new Dictionary<CellTypefaceKey, Typeface>");
         renderCells.Should().NotContain("new Dictionary<Brush, Pen>");
+    }
+
+    [Fact]
+    public void RenderCells_BatchesDefaultBackgroundAndGridLines()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("// Pass 2: explicit cell borders", StringComparison.Ordinal)];
+        var backgroundBase = source[
+            source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)..
+            source.IndexOf("private static Dictionary<(uint Row, uint Col), CellStyle>", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("RenderCellBackgroundBase(dc);");
+        renderCells.Should().Contain("if (bg is null && !merge.HasValue)");
+        renderCells.Should().Contain("continue;");
+        backgroundBase.Should().Contain("dc.DrawRectangle(Brushes.White, null, rect);");
+        backgroundBase.Should().Contain("foreach (var row in Viewport.RowMetrics)");
+        backgroundBase.Should().Contain("foreach (var column in Viewport.ColMetrics)");
     }
 
     [Fact]
@@ -238,7 +257,7 @@ public sealed class GridViewRenderPerformanceTests
         var cellStyles = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.CellStyles.cs"));
         var renderCells = rendering[
             rendering.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            rendering.IndexOf("// Pass 1: backgrounds", StringComparison.Ordinal)];
+            rendering.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
         var drawFillPattern = cellStyles[
             cellStyles.IndexOf("private static void DrawFillPattern", StringComparison.Ordinal)..
             cellStyles.IndexOf("private static Pen FillPatternPenForCellColor", StringComparison.Ordinal)];

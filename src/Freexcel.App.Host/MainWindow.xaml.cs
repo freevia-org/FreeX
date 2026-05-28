@@ -94,6 +94,8 @@ public partial class MainWindow : Window
     private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
     private string? _lastRibbonCollapsedFootprintMode;
     private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
+    private bool _ribbonAdaptiveStateDiffInvalidated;
+    private bool _ribbonResizeCompactFallbackPending;
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;

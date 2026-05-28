@@ -336,16 +336,18 @@ public sealed class MainWindowAdaptiveRibbonTests
             workbookUiState.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal));
         var resizeNormalizer = ribbonSource.Substring(
             ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterResize", StringComparison.Ordinal),
-            ribbonSource.IndexOf("private void PrepareSelectedRibbonTabForImmediateCompaction", StringComparison.Ordinal) -
+            ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal) -
             ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterResize", StringComparison.Ordinal));
 
         sizeChanged.Should().Contain("NormalizeRibbonSurfaceAfterResize();");
         sizeChanged.Should().Contain("ScheduleViewportResizeRefresh();");
+        sizeChanged.Should().Contain("if (e.WidthChanged)");
         sizeChanged.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange");
         resizeNormalizer.Should().Contain("ShouldNormalizeRibbonSurfaceForResize()");
-        resizeNormalizer.Should().Contain("_ribbonResizeThresholds");
-        resizeNormalizer.Should().Contain("scheduleFallback: !_isInWindowResizeMoveLoop");
+        resizeNormalizer.Should().Contain("CompactRibbonSurfaceAfterResize(scheduleFallback: !_isInWindowResizeMoveLoop)");
+        resizeNormalizer.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange");
         resizeNormalizer.Should().NotContain("UpdateRibbonCompactMode();");
+        ribbonSource.Should().Contain("_ribbonResizeThresholds");
     }
 
     [Fact]
@@ -416,6 +418,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;");
         fields.Should().Contain("private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;");
         fields.Should().Contain("private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];");
+        fields.Should().Contain("private bool _ribbonAdaptiveStateDiffInvalidated;");
+        fields.Should().Contain("private bool _ribbonResizeCompactFallbackPending;");
         source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
         source.Should().Contain("_ribbonAdaptiveGroupCache");
         source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])");
@@ -427,7 +431,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("ExpandRibbonAdaptiveStatesIntoAvailableWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth)");
         source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth)");
         source.Should().Contain("CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates)");
-        source.Should().Contain("force ? null : _lastRibbonAdaptiveAppliedStates");
+        source.Should().Contain("_ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates");
         source.Should().Contain("SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth)");
         source.Should().NotContain("width <= 2200.0");
         source.Should().NotContain("width += 8.0");
