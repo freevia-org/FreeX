@@ -1211,6 +1211,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Trim_OnlyRemovesAsciiSpacesLikeExcel()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("\u00A0  hello  \u00A0")),
+            (2, 1, new TextValue("\t  hello  \t")));
+
+        _eval.Evaluate("=TRIM(A1)", sheet).Should().Be(new TextValue("\u00A0 hello \u00A0"));
+        _eval.Evaluate("=TRIM(A2)", sheet).Should().Be(new TextValue("\t hello \t"));
+    }
+
+    [Fact]
     public void Trim_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));

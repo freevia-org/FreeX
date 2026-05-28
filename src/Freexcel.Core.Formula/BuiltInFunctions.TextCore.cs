@@ -342,7 +342,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue TrimText(ScalarValue value)
     {
-        var text = MultiSpaceRegex.Replace(ToText(value).Trim(), " ");
+        var text = MultiSpaceRegex.Replace(ToText(value).Trim(' '), " ");
         return TextResult(text);
     }
 

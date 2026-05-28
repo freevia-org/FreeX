@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
 
@@ -28,11 +29,13 @@ public sealed class DialogButtonRowFactoryTests
             ok.Width.Should().Be(72);
             ok.Margin.Should().Be(new Thickness(0, 0, 8, 0));
             ok.IsDefault.Should().BeTrue();
+            AutomationProperties.GetName(ok).Should().Be("OK");
 
             var cancel = row.Children[1].Should().BeOfType<Button>().Subject;
             cancel.Content.Should().Be("_Cancel");
             cancel.Width.Should().Be(72);
             cancel.IsCancel.Should().BeTrue();
+            AutomationProperties.GetName(cancel).Should().Be("Cancel");
 
             ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             accepted.Should().Be(1);
@@ -61,9 +64,26 @@ public sealed class DialogButtonRowFactoryTests
             ok.Width.Should().Be(76);
             ok.IsDefault.Should().BeTrue();
             ok.IsCancel.Should().BeTrue();
+            AutomationProperties.GetName(ok).Should().Be("OK");
 
             ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             accepted.Should().Be(1);
+        });
+    }
+
+    [Fact]
+    public void Create_UsesMnemonicFreeAutomationNameForCustomAcceptContent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var row = DialogButtonRowFactory.Create(
+                () => { },
+                buttonWidth: 72,
+                acceptContent: "_Create");
+
+            var ok = row.Children[0].Should().BeOfType<Button>().Subject;
+            ok.Content.Should().Be("_Create");
+            AutomationProperties.GetName(ok).Should().Be("Create");
         });
     }
 }

@@ -22,13 +22,10 @@ public static class DrawingInputParser
     {
         value = 0;
         text = text.Trim().TrimEnd('%');
-        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var percent) &&
-            !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out percent))
-        {
+        if (!NumericInputParser.TryParseFiniteDouble(text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var percent))
             return false;
-        }
 
-        if (!double.IsFinite(percent) || percent < 0 || percent >= 100)
+        if (percent < 0 || percent >= 100)
             return false;
 
         value = percent / 100.0;
@@ -58,8 +55,8 @@ public static class DrawingInputParser
 
         var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 2 ||
-            !TryParseFiniteDouble(parts[0], out width) ||
-            !TryParseFiniteDouble(parts[1], out height))
+            !NumericInputParser.TryParseFiniteDouble(parts[0], CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out width) ||
+            !NumericInputParser.TryParseFiniteDouble(parts[1], CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out height))
         {
             width = 0;
             height = 0;
@@ -71,7 +68,7 @@ public static class DrawingInputParser
 
     public static bool TryParseRotationDegrees(string input, out double rotation)
     {
-        if (TryParseFiniteDouble(input, out var parsed))
+        if (NumericInputParser.TryParseFiniteDouble(input, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var parsed))
         {
             rotation = parsed;
             return true;
@@ -134,19 +131,4 @@ public static class DrawingInputParser
             _ => value.ToString() ?? ""
         };
 
-    private static bool TryParseFiniteDouble(string input, out double value)
-    {
-        if (!double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out value) &&
-            !double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value))
-        {
-            value = 0;
-            return false;
-        }
-
-        if (double.IsFinite(value))
-            return true;
-
-        value = 0;
-        return false;
-    }
 }

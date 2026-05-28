@@ -243,6 +243,7 @@ public enum KeyboardCommandShortcut
     NewNote,
     NewThreadedComment,
     SaveAs,
+    OpenHelp,
     ShowKeyTips,
     CycleShellFocus,
     OpenContextMenu,
