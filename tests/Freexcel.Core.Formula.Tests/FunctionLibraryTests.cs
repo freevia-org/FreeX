@@ -5676,6 +5676,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Rows_FullColumnReference_ReturnsWorksheetRowCount()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=ROWS(A:A)", sheet).Should().Be(new NumberValue(CellAddress.MaxRow));
+    }
+
+    [Fact]
+    public void Columns_FullRowReference_ReturnsWorksheetColumnCount()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=COLUMNS(1:1)", sheet).Should().Be(new NumberValue(CellAddress.MaxCol));
+    }
+
+    [Fact]
     public void Row_Range_SpillsRowNumbers()
     {
         var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));

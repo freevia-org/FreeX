@@ -595,6 +595,9 @@ public sealed class FormulaEvaluator
 
         var (func, minArgs, maxArgs) = entry;
 
+        if (TryEvaluateReferenceDimensionFunction(functionName, node, context, out var dimensionResult))
+            return dimensionResult;
+
         bool isStructured = IsStructuredRangeFunction(functionName);
         bool isAggregate = IsAggregateFunction(functionName);
         bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
@@ -1333,6 +1336,35 @@ public sealed class FormulaEvaluator
             _ => null!
         };
         return range is not null;
+    }
+
+    private static bool TryEvaluateReferenceDimensionFunction(
+        string functionName,
+        FunctionCallNode node,
+        IEvalContext context,
+        out ScalarValue result)
+    {
+        result = BlankValue.Instance;
+        if (node.Arguments.Count != 1 || functionName is not ("ROWS" or "COLUMNS"))
+            return false;
+
+        if (!TryAsRangeRef(node.Arguments[0], out var range))
+            return false;
+
+        if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+        {
+            result = ErrorValue.Ref;
+            return true;
+        }
+
+        uint r0 = Math.Min(range.Start.Row, range.End.Row);
+        uint r1 = Math.Max(range.Start.Row, range.End.Row);
+        uint c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+        result = functionName == "ROWS"
+            ? new NumberValue(r1 - r0 + 1)
+            : new NumberValue(c1 - c0 + 1);
+        return true;
     }
 
     private static RangeRefNode ToRangeRef(FullColumnRangeRefNode range)
