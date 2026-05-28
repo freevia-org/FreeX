@@ -94,7 +94,7 @@ public sealed class FormulaEvaluator
         "DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET",
         "DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP",
         "DVAR", "DVARP",
-        "ROW", "COLUMN", "ROWS", "COLUMNS", "COUNTBLANK",
+        "ROW", "COLUMN", "ROWS", "COLUMNS", "SHEET", "SHEETS", "COUNTBLANK",
         "AGGREGATE", "CELL", "GETPIVOTDATA",
         "TTEST", "T.TEST", "ZTEST", "Z.TEST", "FTEST", "F.TEST", "CHITEST", "CHISQ.TEST",
         "FREQUENCY",
@@ -160,7 +160,7 @@ public sealed class FormulaEvaluator
 
     private static readonly HashSet<string> SingleCellReferenceRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "ROW", "COLUMN", "ROWS", "COLUMNS", "COUNTBLANK", "CELL", "GETPIVOTDATA"
+        "ROW", "COLUMN", "ROWS", "COLUMNS", "SHEET", "SHEETS", "COUNTBLANK", "CELL", "GETPIVOTDATA"
     };
 
     /// <summary>

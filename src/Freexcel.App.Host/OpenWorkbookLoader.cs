@@ -25,7 +25,7 @@ public sealed class OpenWorkbookLoader
         FileFormatDescriptor format,
         IProgress<OpenProgressUpdate> progress)
     {
-        var bytes = await ReadFileBytesWithProgressAsync(path, progress);
+        await using var fileStream = OpenFileStream(path, progress);
 
         XlsxFeatureReport? featureReport = null;
         if (IsOpenXmlExcelPackageExtension(extension))
@@ -38,8 +38,8 @@ public sealed class OpenWorkbookLoader
                 TimeSpan.FromSeconds(4),
                 () =>
                 {
-                    using var inspectStream = new MemoryStream(bytes, writable: false);
-                    return _inspectXlsx(inspectStream);
+                    fileStream.Position = 0;
+                    return _inspectXlsx(fileStream);
                 });
         }
 
@@ -52,14 +52,14 @@ public sealed class OpenWorkbookLoader
             TimeSpan.FromSeconds(45),
             () =>
             {
-                using var loadStream = new MemoryStream(bytes, writable: false);
+                fileStream.Position = 0;
                 if (adapter is XlsxFileAdapter xlsxAdapter)
                 {
-                    var result = xlsxAdapter.LoadWithWarnings(loadStream);
+                    var result = xlsxAdapter.LoadWithWarnings(fileStream);
                     loadWarnings = result.Warnings;
                     return result.Workbook;
                 }
-                return adapter.Load(loadStream);
+                return adapter.Load(fileStream);
             });
         ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
 
@@ -138,45 +138,16 @@ public sealed class OpenWorkbookLoader
         }
     }
 
-    private static async Task<byte[]> ReadFileBytesWithProgressAsync(
-        string path,
-        IProgress<OpenProgressUpdate> progress)
+    private static FileStream OpenFileStream(string path, IProgress<OpenProgressUpdate> progress)
     {
-        progress.Report(new OpenProgressUpdate("Opening workbook", OpenWorkbookProgressPlanner.FormatLoadingFileDetail("reading", TimeSpan.Zero), 1));
-        await using var file = new FileStream(
+        progress.Report(new OpenProgressUpdate("Opening workbook", OpenWorkbookProgressPlanner.FormatLoadingFileDetail("reading", TimeSpan.Zero), 8));
+        return new FileStream(
             path,
             FileMode.Open,
             FileAccess.Read,
             FileShare.Read,
             bufferSize: 1024 * 128,
             useAsync: true);
-
-        var total = file.Length;
-        using var memory = new MemoryStream(total > int.MaxValue ? 0 : (int)total);
-        var buffer = new byte[1024 * 128];
-        long readTotal = 0;
-        var startTimestamp = Stopwatch.GetTimestamp();
-
-        while (true)
-        {
-            var read = await file.ReadAsync(buffer);
-            if (read == 0)
-                break;
-
-            memory.Write(buffer, 0, read);
-            readTotal += read;
-            if (total > 0)
-            {
-                var elapsed = Stopwatch.GetElapsedTime(startTimestamp);
-                var percent = 1 + readTotal * 7d / total;
-                progress.Report(new OpenProgressUpdate(
-                    "Opening workbook",
-                    OpenWorkbookProgressPlanner.FormatLoadingFileDetail("reading", elapsed),
-                    percent));
-            }
-        }
-
-        return memory.ToArray();
     }
 
     private static void ApplyTextWorkbookSheetName(Workbook workbook, string extension, string displayName)

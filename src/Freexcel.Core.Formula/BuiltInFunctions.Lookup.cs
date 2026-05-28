@@ -62,6 +62,88 @@ public static partial class BuiltInFunctions
         return new NumberValue(1);
     }
 
+    private static ScalarValue SheetFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count == 0)
+            return TryGetCurrentSheetIndex(ctx, out var currentIndex)
+                ? new NumberValue(currentIndex)
+                : ErrorValue.NA;
+
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range)
+        {
+            var sheetName = range.SheetName ?? ctx.CurrentSheet?.Name;
+            return sheetName is not null && TryGetSheetIndex(ctx, sheetName, out var rangeIndex)
+                ? new NumberValue(rangeIndex)
+                : ErrorValue.NA;
+        }
+
+        var requestedSheetName = ToText(args[0]);
+        return TryGetSheetIndex(ctx, requestedSheetName, out var sheetIndex)
+            ? new NumberValue(sheetIndex)
+            : ErrorValue.NA;
+    }
+
+    private static ScalarValue SheetsFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count == 0)
+        {
+            if (ctx.CurrentWorkbook is not null) return new NumberValue(ctx.CurrentWorkbook.SheetCount);
+            return ctx.CurrentSheet is not null ? new NumberValue(1) : ErrorValue.NA;
+        }
+
+        if (args[0] is ErrorValue e) return e;
+        return args[0] is RangeValue ? new NumberValue(1) : ErrorValue.Value;
+    }
+
+    private static bool TryGetCurrentSheetIndex(IEvalContext ctx, out int index)
+    {
+        index = 0;
+        var currentSheet = ctx.CurrentSheet;
+        if (currentSheet is null) return false;
+
+        if (ctx.CurrentWorkbook is null)
+        {
+            index = 1;
+            return true;
+        }
+
+        for (var i = 0; i < ctx.CurrentWorkbook.Sheets.Count; i++)
+        {
+            if (ctx.CurrentWorkbook.Sheets[i].Id != currentSheet.Id) continue;
+            index = i + 1;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetSheetIndex(IEvalContext ctx, string sheetName, out int index)
+    {
+        index = 0;
+        if (ctx.CurrentWorkbook is null)
+        {
+            if (ctx.CurrentSheet is not null &&
+                string.Equals(ctx.CurrentSheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))
+            {
+                index = 1;
+                return true;
+            }
+
+            return false;
+        }
+
+        for (var i = 0; i < ctx.CurrentWorkbook.Sheets.Count; i++)
+        {
+            if (!string.Equals(ctx.CurrentWorkbook.Sheets[i].Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                continue;
+            index = i + 1;
+            return true;
+        }
+
+        return false;
+    }
+
     private static ScalarValue Vlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[1] is ErrorValue e1) return e1;
@@ -438,6 +520,8 @@ public static partial class BuiltInFunctions
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
         if (useA1 && TryParseA1FullRowRangeRef(refText, out startRow, out endRow))
             return BuildIndirectRange(ctx, sheetName, startRow, 1, endRow, CellAddress.MaxCol);
+        if (useA1 && TryParseA1FullColumnRangeRef(refText, out startCol, out endCol))
+            return BuildIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, endCol);
         if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
 
@@ -517,6 +601,16 @@ public static partial class BuiltInFunctions
             && TryParseA1RowNumber(refText[(colon + 1)..], out endRow);
     }
 
+    private static bool TryParseA1FullColumnRangeRef(string refText, out uint startCol, out uint endCol)
+    {
+        startCol = endCol = 0;
+        int colon = refText.IndexOf(':');
+        if (colon < 0 || colon != refText.LastIndexOf(':')) return false;
+
+        return TryParseA1ColumnName(refText[..colon], out startCol)
+            && TryParseA1ColumnName(refText[(colon + 1)..], out endCol);
+    }
+
     private static bool TryParseA1RowNumber(string text, out uint row)
     {
         row = 0;
@@ -525,6 +619,17 @@ public static partial class BuiltInFunctions
         if (text.StartsWith('$')) text = text[1..];
         if (text.Length == 0 || text.Any(ch => !char.IsDigit(ch))) return false;
         return uint.TryParse(text, out row) && row is >= 1 and <= CellAddress.MaxRow;
+    }
+
+    private static bool TryParseA1ColumnName(string text, out uint col)
+    {
+        col = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        text = text.Trim();
+        if (text.StartsWith('$')) text = text[1..];
+        if (text.Length == 0 || text.Any(ch => !char.IsLetter(ch))) return false;
+        col = CellAddress.ColumnNameToNumber(text.ToUpperInvariant());
+        return col is >= 1 and <= CellAddress.MaxCol;
     }
 
     private static bool TryParseR1C1RangeRef(
