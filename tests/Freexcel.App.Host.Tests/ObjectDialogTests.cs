@@ -637,9 +637,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter hyperlink details.\");");
         source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
-        source.Should().Contain("_targetBox.Focus();");
-        source.Should().Contain("_targetBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_targetBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_targetBox);");
     }
 
     [Fact]
@@ -649,9 +647,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_targetBox.Focus();");
-        source.Should().Contain("_targetBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_targetBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_targetBox);");
     }
 
     [Fact]

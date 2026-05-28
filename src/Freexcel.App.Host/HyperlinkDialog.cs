@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -182,17 +181,13 @@ public sealed class HyperlinkDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _targetBox.Focus();
-        _targetBox.SelectAll();
-        Keyboard.Focus(_targetBox);
+        DialogFocus.FocusAndSelect(_targetBox);
     }
 
     private void ShowInvalidInputWarning(string message)
     {
         MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        _targetBox.Focus();
-        _targetBox.SelectAll();
-        Keyboard.Focus(_targetBox);
+        DialogFocus.FocusAndSelect(_targetBox);
     }
 
     private static bool IsValidEmailAddressTarget(string target)
