@@ -23,7 +23,7 @@ public static class RibbonKeyTipRouting
         if (string.IsNullOrWhiteSpace(keyTip))
             return null;
 
-        var normalizedKeyTip = NormalizeKeyTip(keyTip);
+        var normalizedKeyTip = keyTip.Trim();
         var candidates = elements.ToList();
         var matches = candidates
             .Where(element => string.Equals(NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)), normalizedKeyTip, StringComparison.OrdinalIgnoreCase))
@@ -50,7 +50,7 @@ public static class RibbonKeyTipRouting
         if (string.IsNullOrWhiteSpace(keyTipPrefix))
             return false;
 
-        var normalizedPrefix = NormalizeKeyTip(keyTipPrefix);
+        var normalizedPrefix = keyTipPrefix.Trim();
         return elements.Any(element =>
             NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)) is { } keyTip &&
             keyTip.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase));

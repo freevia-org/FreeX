@@ -329,6 +329,9 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             }
         }
 
+        if (workbook.Sheets.Count == 0)
+            workbook.AddSheet("Sheet1");
+
         foreach (var namedRangeDto in dto.NamedRanges ?? [])
         {
             if (string.IsNullOrWhiteSpace(namedRangeDto?.Name) ||
