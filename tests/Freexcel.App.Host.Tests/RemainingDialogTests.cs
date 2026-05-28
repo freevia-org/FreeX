@@ -969,9 +969,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = ObjectSizeDialog.CreateSingleInputContent(\"Sheet _name:\", _nameBox, Accept);");
         source.Should().Contain("if (!TryCreateResult(_nameBox.Text, out var result, out var error))");
         source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
-        source.Should().Contain("_nameBox.Focus();");
-        source.Should().Contain("_nameBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_nameBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_nameBox);");
     }
 
     [Fact]
@@ -981,9 +979,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_nameBox.Focus();");
-        source.Should().Contain("_nameBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_nameBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_nameBox);");
     }
 
     [Fact]
