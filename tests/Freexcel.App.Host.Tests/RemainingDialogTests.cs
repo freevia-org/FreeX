@@ -375,9 +375,11 @@ public sealed class RemainingDialogTests
     {
         PageBreakDialog.TryCreateResult(" row 12 ", out var rowResult).Should().BeTrue();
         PageBreakDialog.TryCreateResult(" column 5 ", out var columnResult).Should().BeTrue();
+        PageBreakDialog.TryCreateResult(" column C ", out var letterColumnResult).Should().BeTrue();
 
         rowResult.Should().Be(new PageBreakDialogResult(PageBreakDialogAction.AddRow, 12, null));
         columnResult.Should().Be(new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, 5));
+        letterColumnResult.Should().Be(new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, 3));
     }
 
     [Theory]
@@ -435,7 +437,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("MessageBox.Show(");
         source.Should().Contain("this,");
         source.Should().Contain("Enter a positive row number for the page break.");
-        source.Should().Contain("Enter a positive column number for the page break.");
+        source.Should().Contain("Enter a positive column number or letter for the page break.");
         source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("rowBreak == 0");
         source.Should().Contain("columnBreak == 0");

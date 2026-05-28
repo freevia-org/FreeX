@@ -54,8 +54,8 @@ public sealed class PageBreakDialog : Window
             return true;
         }
 
-        if ((PageLayoutInputParser.TryParseBreakInput(trimmed, "col", out var columnBreak) ||
-             PageLayoutInputParser.TryParseBreakInput(trimmed, "column", out columnBreak)) &&
+        if ((PageLayoutInputParser.TryParseColumnBreakInput(trimmed, "col", out var columnBreak) ||
+             PageLayoutInputParser.TryParseColumnBreakInput(trimmed, "column", out columnBreak)) &&
             columnBreak > 0)
         {
             result = new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, columnBreak);
@@ -72,11 +72,11 @@ public sealed class PageBreakDialog : Window
             result = CreateClearResult();
         else if (_insertColumnButton.IsChecked == true)
         {
-            if (!uint.TryParse(_columnBreakBox.Text.Trim(), out var columnBreak) || columnBreak == 0)
+            if (!PageLayoutInputParser.TryParseColumnBreakValue(_columnBreakBox.Text, out var columnBreak) || columnBreak == 0)
             {
                 MessageBox.Show(
                     this,
-                    "Enter a positive column number for the page break.",
+                    "Enter a positive column number or letter for the page break.",
                     Title,
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);

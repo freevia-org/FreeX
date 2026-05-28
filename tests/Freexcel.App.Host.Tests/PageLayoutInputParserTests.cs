@@ -19,10 +19,30 @@ public sealed class PageLayoutInputParserTests
     }
 
     [Theory]
+    [InlineData("Column C", "column", true, 3)]
+    [InlineData("col AA", "col", true, 27)]
+    [InlineData("col 12", "col", true, 12)]
+    [InlineData("row C", "row", false, 0)]
+    [InlineData("column A1", "column", false, 0)]
+    public void TryParseColumnBreakInput_AcceptsExcelColumnLettersOrNumbers(
+        string input,
+        string keyword,
+        bool expected,
+        uint expectedValue)
+    {
+        var result = PageLayoutInputParser.TryParseColumnBreakInput(input, keyword, out var value);
+
+        result.Should().Be(expected);
+        value.Should().Be(expectedValue);
+    }
+
+    [Theory]
     [InlineData("clear", PageBreakInputKind.Clear, null, null)]
     [InlineData("row 5", PageBreakInputKind.Row, 5, null)]
     [InlineData("col 3", PageBreakInputKind.Column, null, 3)]
+    [InlineData("col C", PageBreakInputKind.Column, null, 3)]
     [InlineData("column 7", PageBreakInputKind.Column, null, 7)]
+    [InlineData("column AA", PageBreakInputKind.Column, null, 27)]
     public void TryParsePageBreakInput_ParsesClearRowAndColumnCommands(
         string input,
         PageBreakInputKind expectedKind,

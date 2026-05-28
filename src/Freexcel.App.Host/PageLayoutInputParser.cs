@@ -24,6 +24,42 @@ public static class PageLayoutInputParser
         return uint.TryParse(numberText, out value);
     }
 
+    public static bool TryParseColumnBreakInput(string input, string keyword, out uint value)
+    {
+        value = 0;
+        if (!keyword.Equals("col", StringComparison.OrdinalIgnoreCase) &&
+            !keyword.Equals("column", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!input.StartsWith(keyword, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var columnText = input[keyword.Length..].Trim();
+        return TryParseColumnBreakValue(columnText, out value);
+    }
+
+    public static bool TryParseColumnBreakValue(string input, out uint value)
+    {
+        value = 0;
+        var trimmed = input.Trim();
+        if (uint.TryParse(trimmed, out value))
+            return true;
+
+        if (!IsColumnName(trimmed))
+            return false;
+
+        try
+        {
+            value = CellAddress.ColumnNameToNumber(trimmed);
+            return true;
+        }
+        catch (FormatException)
+        {
+            value = 0;
+            return false;
+        }
+    }
+
     public static bool TryParsePageBreakInput(string input, out PageBreakInput pageBreak)
     {
         var trimmed = input.Trim();
@@ -39,8 +75,8 @@ public static class PageLayoutInputParser
             return true;
         }
 
-        if (TryParseBreakInput(trimmed, "col", out var columnBreak) ||
-            TryParseBreakInput(trimmed, "column", out columnBreak))
+        if (TryParseColumnBreakInput(trimmed, "col", out var columnBreak) ||
+            TryParseColumnBreakInput(trimmed, "column", out columnBreak))
         {
             pageBreak = new PageBreakInput(PageBreakInputKind.Column, Column: columnBreak);
             return true;
