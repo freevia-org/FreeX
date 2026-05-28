@@ -2189,8 +2189,8 @@ public sealed class FormulaEvaluator
                 StringNode s     => s.Value,
                 _                => null
             };
-            if (!IsValidLocalFunctionName(name)) return ErrorValue.Value;
-            bindings[name] = EvaluateArrayOperand(node.Arguments[i * 2 + 1], scoped);
+            if (name is not { } localName || !IsValidLocalFunctionName(localName)) return ErrorValue.Value;
+            bindings[localName] = EvaluateArrayOperand(node.Arguments[i * 2 + 1], scoped);
         }
 
         return EvaluateNode(node.Arguments[^1], scoped);
