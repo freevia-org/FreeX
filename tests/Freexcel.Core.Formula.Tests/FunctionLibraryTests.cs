@@ -6311,6 +6311,41 @@ public class FunctionLibraryTests
             .Should().Be(new NumberValue(3));
     }
 
+    [Fact] public void Offset_A1FullColumnReferenceWithExplicitHeight_ReturnsRangeValue()
+    {
+        var sheet = MakeSheet(
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)),
+            (3, 2, new NumberValue(100)));
+
+        _eval.Evaluate("=SUM(OFFSET(B:B,0,0,2,1))", sheet)
+            .Should().Be(new NumberValue(3));
+    }
+
+    [Fact] public void Offset_A1FullRowReferenceWithExplicitWidth_ReturnsRangeValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(100)));
+
+        _eval.Evaluate("=SUM(OFFSET(1:1,0,0,1,2))", sheet)
+            .Should().Be(new NumberValue(3));
+    }
+
+    [Fact] public void Offset_SheetQualifiedFullColumnReference_ReturnsRangeValue()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var data = wb.AddSheet("Data");
+        data.SetCell(new CellAddress(data.Id, 1, 2), new NumberValue(1));
+        data.SetCell(new CellAddress(data.Id, 2, 2), new NumberValue(2));
+        data.SetCell(new CellAddress(data.Id, 3, 2), new NumberValue(100));
+
+        _eval.Evaluate("=SUM(OFFSET(Data!B:B,0,0,2,1))", sheet, wb)
+            .Should().Be(new NumberValue(3));
+    }
+
     [Fact] public void Indirect_InvalidR1C1String_ReturnsRefError()
     {
         _eval.Evaluate("=INDIRECT(\"R0C1\",FALSE)", MakeSheet()).Should().Be(ErrorValue.Ref);

@@ -243,6 +243,46 @@ public sealed class StatusBarLayoutTests
         });
     }
 
+    [Fact]
+    public void F6ShellFocusCycle_LandsInVisiblePivotFieldListPane()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.ShowPivotFieldListPane();
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.SheetTabs);
+
+            harness.CycleShellFocus(reverse: false);
+
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.TaskPane);
+            harness.FocusedElementName.Should().Be("PivotFieldListSearchBox");
+        });
+    }
+
+    [Fact]
+    public void F6ShellFocusCycle_LandsInVisibleSlicerTimelinePane()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.ShowSlicerTimelinePane();
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.SheetTabs);
+
+            harness.CycleShellFocus(reverse: false);
+
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.TaskPane);
+            harness.FocusedElementName.Should().Be("SlicerTimelinePaneCloseBtn");
+        });
+    }
+
     private static Rect BoundsRelativeToWindow(FrameworkElement element, Window window) =>
         element.TransformToAncestor(window).TransformBounds(new Rect(new Size(element.ActualWidth, element.ActualHeight)));
 
@@ -361,6 +401,20 @@ public sealed class StatusBarLayoutTests
             PumpDispatcher();
         }
 
+        public void ShowPivotFieldListPane()
+        {
+            SetElementVisibility("SlicerTimelinePane", Visibility.Collapsed);
+            SetElementVisibility("PivotFieldListPane", Visibility.Visible);
+            PumpDispatcher();
+        }
+
+        public void ShowSlicerTimelinePane()
+        {
+            SetElementVisibility("PivotFieldListPane", Visibility.Collapsed);
+            SetElementVisibility("SlicerTimelinePane", Visibility.Visible);
+            PumpDispatcher();
+        }
+
         public bool HandleFocusedStatusBarTab()
         {
             return HandleFocusedStatusBarKey(Key.Tab);
@@ -413,6 +467,13 @@ public sealed class StatusBarLayoutTests
         {
             MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
             PumpDispatcher();
+        }
+
+        private void SetElementVisibility(string name, Visibility visibility)
+        {
+            var element = (FrameworkElement)_window.FindName(name);
+            element.Visibility = visibility;
+            _window.UpdateLayout();
         }
     }
 

@@ -40,6 +40,8 @@ public class TextEntryDialog : Window
         ShowInTaskbar = false;
         _textBox.Text = initialText ?? "";
         AutomationProperties.SetName(_textBox, CreateAutomationName(label));
+        AutomationProperties.SetAutomationId(_textBox, CreateAutomationId(title));
+        AutomationProperties.SetHelpText(_textBox, CreateHelpText(label));
         Content = ObjectSizeDialog.CreateSingleInputContent(label, _textBox, () =>
         {
             Result = CreateResult(_textBox.Text);
@@ -54,6 +56,12 @@ public class TextEntryDialog : Window
         label.Replace("_", string.Empty, StringComparison.Ordinal)
             .Replace(":", string.Empty, StringComparison.Ordinal)
             .Trim();
+
+    private static string CreateAutomationId(string title) =>
+        string.Concat(title.Where(char.IsLetterOrDigit)) + "TextBox";
+
+    private static string CreateHelpText(string label) =>
+        $"Enter {CreateAutomationName(label).ToLowerInvariant()}.";
 
     private void FocusInitialKeyboardTarget()
     {
