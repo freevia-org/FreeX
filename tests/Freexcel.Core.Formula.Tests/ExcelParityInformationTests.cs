@@ -55,14 +55,22 @@ public sealed class ExcelParityInformationTests
     public void ErrorType_ClassifiesLoadedModernExcelErrors()
     {
         var sheet = Sheet();
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new ErrorValue("#FIELD!"));
-        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new ErrorValue("#BLOCKED!"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), ErrorValue.Spill);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new ErrorValue("#CONNECT!"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new ErrorValue("#BLOCKED!"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new ErrorValue("#UNKNOWN!"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new ErrorValue("#FIELD!"));
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 1), ErrorValue.Calc);
 
-        var result = _eval.Evaluate("=ERROR.TYPE(A1:A2)", sheet)
+        var result = _eval.Evaluate("=ERROR.TYPE(A1:A6)", sheet)
             .Should().BeOfType<RangeValue>().Subject;
 
-        result.At(1, 1).Should().Be(new NumberValue(13));
-        result.At(2, 1).Should().Be(new NumberValue(15));
+        result.At(1, 1).Should().Be(new NumberValue(9));
+        result.At(2, 1).Should().Be(new NumberValue(10));
+        result.At(3, 1).Should().Be(new NumberValue(11));
+        result.At(4, 1).Should().Be(new NumberValue(12));
+        result.At(5, 1).Should().Be(new NumberValue(13));
+        result.At(6, 1).Should().Be(new NumberValue(14));
     }
 
     [Fact]
