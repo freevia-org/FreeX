@@ -1400,6 +1400,26 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo(["Brown Ltd"], o => o.WithStrictOrdering());
     }
 
+    [Fact]
+    public void Fill_RemoveFinalDottedToken_DropsVariableFileExtensions()
+    {
+        var result = FlashFillService.Fill(
+            [("north.xlsx", "north"), ("sales.summary.csv", "sales.summary")],
+            ["ops.backup.tsv", "budget.final.v2.txt"]);
+
+        result.Should().BeEquivalentTo(["ops.backup", "budget.final.v2"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_RemoveFinalDottedToken_ReturnsNullWhenRemainingHasNoExtension()
+    {
+        var result = FlashFillService.Fill(
+            [("north.xlsx", "north"), ("sales.summary.csv", "sales.summary")],
+            ["README"]);
+
+        result.Should().BeNull();
+    }
+
     // ── Substring extraction ──────────────────────────────────────────────────
 
     [Fact]

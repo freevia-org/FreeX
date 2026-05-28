@@ -149,6 +149,25 @@ public static partial class FlashFillService
         return source => TryGetFinalDottedToken(source, out var token) ? token : null;
     }
 
+    private static Func<string, string?>? TryRemoveFinalDottedToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryRemoveFinalDottedToken(e.Source, out var stem) && stem == e.Expected))
+            return null;
+
+        return source => TryRemoveFinalDottedToken(source, out var stem) ? stem : null;
+    }
+
+    private static bool TryRemoveFinalDottedToken(string source, out string stem)
+    {
+        stem = string.Empty;
+        var lastDotIndex = source.LastIndexOf('.');
+        if (lastDotIndex <= 0 || lastDotIndex == source.Length - 1)
+            return false;
+
+        stem = source[..lastDotIndex].Trim();
+        return stem.Length > 0;
+    }
+
     private static bool TryGetFinalDottedToken(string source, out string token)
     {
         var parts = source.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
