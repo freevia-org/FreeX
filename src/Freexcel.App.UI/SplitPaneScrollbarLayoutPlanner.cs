@@ -21,9 +21,10 @@ public static class SplitPaneScrollbarLayoutPlanner
             Math.Max(MinThumbLength, trackLength * Math.Max(1, visibleCount) / maxIndex));
         var available = Math.Max(0, InnerTrackLength(orientation, track) - thumbLength);
         var maxStartIndex = Math.Max(1, maxIndex - (uint)Math.Max(1, visibleCount) + 1);
+        var clampedFirstVisibleIndex = Math.Min(maxStartIndex, Math.Max(1, firstVisibleIndex));
         var ratio = maxStartIndex <= 1
             ? 0
-            : (double)(Math.Max(1, firstVisibleIndex) - 1) / (maxStartIndex - 1);
+            : (double)(clampedFirstVisibleIndex - 1) / (maxStartIndex - 1);
 
         return orientation == SplitPaneScrollbarOrientation.Horizontal
             ? new Rect(track.X + 1 + available * ratio, track.Y + 1, thumbLength, Math.Max(0, track.Height - 2))
