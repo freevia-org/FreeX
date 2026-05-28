@@ -373,6 +373,22 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RelationshipOnlyWebExtensionTaskPanesReference_DetectsOfficeAddIns()
+    {
+        using var package = CreatePackageWithContent(("_rels/.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdTaskPanes"
+                            Type="http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes"
+                            Target="xl/webextensions/taskpanes.xml"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.OfficeAddIns);
+    }
+
+    [Fact]
     public void Inspect_WebPublishItemsPackage_DetectsLiveWebQueries()
     {
         using var package = CreatePackage("xl/webPublishItems.xml");
