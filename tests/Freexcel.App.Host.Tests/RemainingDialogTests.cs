@@ -116,6 +116,14 @@ public sealed class RemainingDialogTests
         result.Should().Be(new ColumnWidthDialogResult(8.5));
     }
 
+    [Fact]
+    public void ColumnWidthDialog_TryCreateResult_RejectsNegativeWidth()
+    {
+        ColumnWidthDialog.TryCreateResult("-1", out _, out var error).Should().BeFalse();
+
+        error.Should().Be("Enter a column width from 0 to 255.");
+    }
+
     [Theory]
     [InlineData("0", 0)]
     [InlineData("255", 255)]
