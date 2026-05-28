@@ -97,48 +97,25 @@ internal static class NumberFormatColorMapper
 
     private static bool TryGetThemeColorSlot(string token, out WorkbookThemeColorSlot slot)
     {
-        switch (NormalizeToken(token))
+        var mappedSlot = NormalizeToken(token) switch
         {
-            case "THEMEDARK1":
-                slot = WorkbookThemeColorSlot.Dark1;
-                return true;
-            case "THEMELIGHT1":
-                slot = WorkbookThemeColorSlot.Light1;
-                return true;
-            case "THEMEDARK2":
-                slot = WorkbookThemeColorSlot.Dark2;
-                return true;
-            case "THEMELIGHT2":
-                slot = WorkbookThemeColorSlot.Light2;
-                return true;
-            case "THEMEACCENT1":
-                slot = WorkbookThemeColorSlot.Accent1;
-                return true;
-            case "THEMEACCENT2":
-                slot = WorkbookThemeColorSlot.Accent2;
-                return true;
-            case "THEMEACCENT3":
-                slot = WorkbookThemeColorSlot.Accent3;
-                return true;
-            case "THEMEACCENT4":
-                slot = WorkbookThemeColorSlot.Accent4;
-                return true;
-            case "THEMEACCENT5":
-                slot = WorkbookThemeColorSlot.Accent5;
-                return true;
-            case "THEMEACCENT6":
-                slot = WorkbookThemeColorSlot.Accent6;
-                return true;
-            case "THEMEHYPERLINK":
-                slot = WorkbookThemeColorSlot.Hyperlink;
-                return true;
-            case "THEMEFOLLOWEDHYPERLINK":
-                slot = WorkbookThemeColorSlot.FollowedHyperlink;
-                return true;
-            default:
-                slot = default;
-                return false;
-        }
+            "THEMEDARK1" => (WorkbookThemeColorSlot?)WorkbookThemeColorSlot.Dark1,
+            "THEMELIGHT1" => WorkbookThemeColorSlot.Light1,
+            "THEMEDARK2" => WorkbookThemeColorSlot.Dark2,
+            "THEMELIGHT2" => WorkbookThemeColorSlot.Light2,
+            "THEMEACCENT1" => WorkbookThemeColorSlot.Accent1,
+            "THEMEACCENT2" => WorkbookThemeColorSlot.Accent2,
+            "THEMEACCENT3" => WorkbookThemeColorSlot.Accent3,
+            "THEMEACCENT4" => WorkbookThemeColorSlot.Accent4,
+            "THEMEACCENT5" => WorkbookThemeColorSlot.Accent5,
+            "THEMEACCENT6" => WorkbookThemeColorSlot.Accent6,
+            "THEMEHYPERLINK" => WorkbookThemeColorSlot.Hyperlink,
+            "THEMEFOLLOWEDHYPERLINK" => WorkbookThemeColorSlot.FollowedHyperlink,
+            _ => null
+        };
+
+        slot = mappedSlot.GetValueOrDefault();
+        return mappedSlot.HasValue;
     }
 
     private static string NormalizeToken(string token) =>

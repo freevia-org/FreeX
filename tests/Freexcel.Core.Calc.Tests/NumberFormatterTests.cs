@@ -253,6 +253,23 @@ public class NumberFormatterTests
     }
 
     [Fact]
+    public void CustomNumberSubset_ResolvesWhitespaceTolerantThemeColorDirectives()
+    {
+        var theme = WorkbookTheme.Office.WithColor(
+            WorkbookThemeColorSlot.Accent1,
+            CellColor.FromArgb(0x12, 0x34, 0x56));
+
+        var result = NumberFormatter.FormatWithColor(
+            new NumberValue(12.5),
+            "[ Theme Accent1 ]0.0",
+            new WorkbookIndexedColorPalette(),
+            theme);
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Equal("#123456", result.ColorHex);
+    }
+
+    [Fact]
     public void CustomNumberSubset_IgnoresThemeColorDirectivesWithoutThemeContext()
     {
         var result = NumberFormatter.FormatWithColor(new NumberValue(12.5), "[ThemeAccent1]0.0");
