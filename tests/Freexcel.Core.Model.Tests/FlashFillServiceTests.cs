@@ -503,6 +503,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ThreePartNames_ReordersLastCommaFirstMiddle()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "Lovelace, Ada Byron"),
+                ("Grace Brewster Hopper", "Hopper, Grace Brewster")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeEquivalentTo(["Turing, Alan Mathison"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_FullNames_AbbreviatesFirstInitialLastName()
     {
         var result = FlashFillService.Fill(

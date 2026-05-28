@@ -2190,7 +2190,6 @@ public sealed class FormulaEvaluator
             string? name = node.Arguments[i * 2] switch
             {
                 NamedRangeNode nm => nm.Name,
-                StringNode s     => s.Value,
                 _                => null
             };
             if (name is not { } localName || !IsValidLocalFunctionName(localName)) return ErrorValue.Value;
