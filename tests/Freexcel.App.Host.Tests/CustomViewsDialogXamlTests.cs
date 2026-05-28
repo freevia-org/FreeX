@@ -167,9 +167,7 @@ public sealed class CustomViewsDialogXamlTests
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
-        dialogSource.Should().Contain("_nameBox.Focus();");
-        dialogSource.Should().Contain("_nameBox.SelectAll();");
-        dialogSource.Should().Contain("Keyboard.Focus(_nameBox);");
+        dialogSource.Should().Contain("DialogFocus.FocusAndSelect(_nameBox);");
     }
 
     [Fact]
@@ -181,9 +179,7 @@ public sealed class CustomViewsDialogXamlTests
         dialogSource.Should().Contain("MessageBox.Show(this, \"Enter a view name.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         dialogSource.Should().Contain("FocusNameInput();");
         dialogSource.Should().Contain("private void FocusNameInput()");
-        dialogSource.Should().Contain("_nameBox.Focus();");
-        dialogSource.Should().Contain("_nameBox.SelectAll();");
-        dialogSource.Should().Contain("Keyboard.Focus(_nameBox);");
+        dialogSource.Should().Contain("DialogFocus.FocusAndSelect(_nameBox);");
     }
 
     [Fact]

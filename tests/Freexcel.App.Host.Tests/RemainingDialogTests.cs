@@ -449,6 +449,46 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void PageBreakDialog_EnablesOnlyTheSelectedBreakEntry()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PageBreakDialog("row 12");
+
+            var rowButton = GetField<RadioButton>(dialog, "_insertRowButton");
+            var columnButton = GetField<RadioButton>(dialog, "_insertColumnButton");
+            var resetButton = GetField<RadioButton>(dialog, "_resetAllButton");
+            var rowBox = GetField<TextBox>(dialog, "_rowBreakBox");
+            var columnBox = GetField<TextBox>(dialog, "_columnBreakBox");
+
+            rowButton.IsChecked.Should().BeTrue();
+            rowBox.IsEnabled.Should().BeTrue();
+            columnBox.IsEnabled.Should().BeFalse();
+
+            columnButton.IsChecked = true;
+            rowBox.IsEnabled.Should().BeFalse();
+            columnBox.IsEnabled.Should().BeTrue();
+
+            resetButton.IsChecked = true;
+            rowBox.IsEnabled.Should().BeFalse();
+            columnBox.IsEnabled.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void PageBreakDialog_UpdateBreakInputAvailabilityTracksExcelActionChoice()
+    {
+        var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
+
+        source.Should().Contain("_insertRowButton.Checked += (_, _) => UpdateBreakInputAvailability();");
+        source.Should().Contain("_insertColumnButton.Checked += (_, _) => UpdateBreakInputAvailability();");
+        source.Should().Contain("_resetAllButton.Checked += (_, _) => UpdateBreakInputAvailability();");
+        source.Should().Contain("private void UpdateBreakInputAvailability()");
+        source.Should().Contain("_rowBreakBox.IsEnabled = _insertRowButton.IsChecked == true;");
+        source.Should().Contain("_columnBreakBox.IsEnabled = _insertColumnButton.IsChecked == true;");
+    }
+
+    [Fact]
     public void GoalSeekStatusDialog_CreateMessage_DescribesSolvedAndUnsolvedResults()
     {
         GoalSeekStatusDialog.CreateMessage(new(true, 42.25, 100, 4), targetValue: 100)
