@@ -930,6 +930,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_FullNames_ExtractsLastNameAcrossVariableTokenCounts()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "Lovelace"),
+                ("Grace Hopper", "Hopper")
+            ],
+            ["Katherine Coleman Johnson"]);
+
+        result.Should().BeEquivalentTo(["Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameTitles_RemovesTitleFromVariableLengthNames()
     {
         var result = FlashFillService.Fill(
