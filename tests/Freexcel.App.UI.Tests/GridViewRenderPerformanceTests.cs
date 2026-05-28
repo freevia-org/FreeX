@@ -386,6 +386,23 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCharts_ReusesCachedChartImagesAcrossRepaints()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
+        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.DrawingObjects.cs"));
+        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.ChartRenderCache.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Properties.cs"));
+
+        gridViewSource.Should().Contain("private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();");
+        drawingSource.Should().Contain("GetCachedChartImage(chart, Viewport, WorkbookTheme)");
+        drawingSource.Should().NotContain("ChartRenderer.Render(chart, Viewport, WorkbookTheme)");
+        cacheSource.Should().Contain("_chartRenderCache.TryGetValue");
+        cacheSource.Should().Contain("ChartRenderer.Render(chart, viewport, theme)");
+        propertiesSource.Should().Contain("OnChartRenderCacheInputChanged");
+        propertiesSource.Should().Contain("grid.ClearChartRenderCache();");
+    }
+
+    [Fact]
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Overlays.cs"));

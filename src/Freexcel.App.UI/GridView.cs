@@ -155,6 +155,7 @@ public partial class GridView : FrameworkElement
     private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();
     private readonly Dictionary<Brush, Pen> _underlinePenCache = new();
     private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();
+    private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();
 
     private static double ToDisplayFontSize(double pointSize) =>
         Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));

@@ -27,7 +27,7 @@ public partial class GridView
 
     public static readonly DependencyProperty ViewportProperty =
         DependencyProperty.Register(nameof(Viewport), typeof(ViewportModel), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnChartRenderCacheInputChanged));
     public ViewportModel? Viewport
     {
         get => (ViewportModel?)GetValue(ViewportProperty);
@@ -108,7 +108,7 @@ public partial class GridView
 
     public static readonly DependencyProperty ChartsProperty =
         DependencyProperty.Register(nameof(Charts), typeof(IReadOnlyList<ChartModel>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnChartRenderCacheInputChanged));
     public IReadOnlyList<ChartModel>? Charts
     {
         get => (IReadOnlyList<ChartModel>?)GetValue(ChartsProperty);
@@ -135,7 +135,7 @@ public partial class GridView
 
     public static readonly DependencyProperty WorkbookThemeProperty =
         DependencyProperty.Register(nameof(WorkbookTheme), typeof(WorkbookTheme), typeof(GridView),
-            new FrameworkPropertyMetadata(WorkbookTheme.Office, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(WorkbookTheme.Office, FrameworkPropertyMetadataOptions.AffectsRender, OnChartRenderCacheInputChanged));
     public WorkbookTheme WorkbookTheme
     {
         get => (WorkbookTheme)GetValue(WorkbookThemeProperty);
@@ -366,6 +366,12 @@ public partial class GridView
             gv.StartMarchTimer();
         else
             gv.StopMarchTimer();
+    }
+
+    private static void OnChartRenderCacheInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+            grid.ClearChartRenderCache();
     }
 
     // Merge lookup (rebuilt once per render pass, O(1) per cell)
