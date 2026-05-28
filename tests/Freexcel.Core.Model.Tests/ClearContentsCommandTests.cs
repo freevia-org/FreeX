@@ -49,6 +49,68 @@ public sealed class ClearContentsCommandTests
     }
 
     [Fact]
+    public void ClearContents_RemovesHyperlinksAndUndoRestoresThem()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var style = workbook.RegisterStyle(new CellStyle
+        {
+            Underline = true,
+            FontColor = workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Hyperlink)
+        });
+        var cell = Cell.FromValue(new TextValue("Example"));
+        cell.StyleId = style;
+        sheet.SetCell(address, cell);
+        sheet.Hyperlinks[address] = "https://example.com";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Example site",
+            "https://example.com");
+        var context = new SimpleCommandContext(workbook);
+        var command = new ClearContentsCommand(sheet.Id, new GridRange(address, address));
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetCell(address)!.Value.Should().Be(BlankValue.Instance);
+        sheet.GetCell(address)!.StyleId.Should().Be(style);
+        sheet.Hyperlinks.Should().NotContainKey(address);
+        sheet.HyperlinkMetadata.Should().NotContainKey(address);
+
+        command.Revert(context);
+
+        sheet.GetValue(address).Should().Be(new TextValue("Example"));
+        sheet.Hyperlinks[address].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[address].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Example site",
+            "https://example.com"));
+    }
+
+    [Fact]
+    public void ClearContents_PreservesStyleOnlyFormattingAndUndoRestoresStyleOnlyCell()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var style = workbook.RegisterStyle(new CellStyle { Bold = true });
+        sheet.SetStyleOnly(address.Row, address.Col, style);
+        var context = new SimpleCommandContext(workbook);
+        var command = new ClearContentsCommand(sheet.Id, new GridRange(address, address));
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetCell(address)!.Value.Should().Be(BlankValue.Instance);
+        sheet.GetCell(address)!.StyleId.Should().Be(style);
+        sheet.GetStyleOnly(address.Row, address.Col).Should().BeNull();
+
+        command.Revert(context);
+
+        sheet.GetCell(address).Should().BeNull();
+        sheet.GetStyleOnly(address.Row, address.Col).Should().Be(style);
+    }
+
+    [Fact]
     public void ClearContents_RejectsLockedCellsOnProtectedSheet()
     {
         var workbook = new Workbook("test");

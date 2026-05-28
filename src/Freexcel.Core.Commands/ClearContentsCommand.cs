@@ -6,7 +6,9 @@ public sealed class ClearContentsCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
-    private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
+    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
 
     public string Label => "Clear Contents";
 
@@ -24,16 +26,27 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             return new CommandOutcome(false, "The sheet is protected.");
 
         _snapshot = [];
+        _hyperlinkSnapshot = sheet.Hyperlinks
+            .Where(pair => _range.Contains(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+        _hyperlinkMetadataSnapshot = sheet.HyperlinkMetadata
+            .Where(pair => _range.Contains(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
         var affected = new List<CellAddress>();
         foreach (var address in cells)
         {
             var oldCell = sheet.GetCell(address)?.Clone();
-            _snapshot.Add((address, oldCell));
+            var oldStyleOnly = sheet.GetStyleOnly(address.Row, address.Col);
+            _snapshot.Add((address, oldCell, oldStyleOnly));
 
             var cleared = Cell.FromValue(BlankValue.Instance);
             if (oldCell is not null)
                 cleared.StyleId = oldCell.StyleId;
+            else if (oldStyleOnly.HasValue)
+                cleared.StyleId = oldStyleOnly.Value;
             sheet.SetCell(address, cleared);
+            sheet.Hyperlinks.Remove(address);
+            sheet.HyperlinkMetadata.Remove(address);
             affected.Add(address);
         }
 
@@ -46,12 +59,41 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (address, oldCell) in _snapshot)
+        foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
         {
             if (oldCell is null)
+            {
                 sheet.ClearCell(address);
+                RestoreStyleOnly(sheet, address, oldStyleOnly);
+            }
             else
+            {
                 sheet.SetCell(address, oldCell.Clone());
+            }
         }
+
+        foreach (var (address, _, _) in _snapshot)
+        {
+            sheet.Hyperlinks.Remove(address);
+            sheet.HyperlinkMetadata.Remove(address);
+        }
+        if (_hyperlinkSnapshot is not null)
+        {
+            foreach (var (address, target) in _hyperlinkSnapshot)
+                sheet.Hyperlinks[address] = target;
+        }
+        if (_hyperlinkMetadataSnapshot is not null)
+        {
+            foreach (var (address, metadata) in _hyperlinkMetadataSnapshot)
+                sheet.HyperlinkMetadata[address] = metadata;
+        }
+    }
+
+    private static void RestoreStyleOnly(Sheet sheet, CellAddress address, StyleId? styleId)
+    {
+        if (styleId.HasValue)
+            sheet.SetStyleOnly(address.Row, address.Col, styleId.Value);
+        else
+            sheet.ClearStyleOnly(address.Row, address.Col);
     }
 }
