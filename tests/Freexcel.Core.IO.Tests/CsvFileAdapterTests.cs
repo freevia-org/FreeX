@@ -234,6 +234,19 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_NonMemoryStreamDecodesOnlyCopiedBytes()
+    {
+        using var stream = new ForwardOnlyReadStream(Encoding.UTF8.GetBytes("Name,Amount\r\nAlice,3.5\r\n"));
+
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(3.5));
+        sheet.GetCell(new CellAddress(sheet.Id, 3, 1)).Should().BeNull();
+    }
+
+    [Fact]
     public void Load_AccessibleMemoryStreamPastLengthReadsEmptySliceAndConsumesStream()
     {
         using var stream = new MemoryStream();
@@ -918,5 +931,39 @@ public sealed class CsvFileAdapterTests
         }
 
         return Encoding.UTF8.GetBytes(builder.ToString());
+    }
+
+    private sealed class ForwardOnlyReadStream(byte[] bytes) : Stream
+    {
+        private int position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => position;
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (position >= bytes.Length)
+                return 0;
+
+            var read = Math.Min(count, bytes.Length - position);
+            Array.Copy(bytes, position, buffer, offset, read);
+            position += read;
+            return read;
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
