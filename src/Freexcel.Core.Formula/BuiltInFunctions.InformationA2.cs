@@ -84,8 +84,10 @@ public static partial class BuiltInFunctions
             case "width":
             {
                 if (sheet is null) return new NumberValue(8);
-                if (sheet.ColumnWidths.TryGetValue(col, out var w)) return new NumberValue(w);
-                return new NumberValue(sheet.DefaultColumnWidth);
+                var width = sheet.ColumnWidths.TryGetValue(col, out var w)
+                    ? w
+                    : sheet.DefaultColumnWidth;
+                return new NumberValue(Math.Round(width, 0, MidpointRounding.AwayFromZero));
             }
             case "filename":
                 // In-memory workbook has no on-disk path; Excel compat is empty string.
