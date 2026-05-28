@@ -318,7 +318,10 @@ public static class XlsxFeatureInspector
                 continue;
             }
 
-            if (normalizedTarget.Contains("richdata/", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/rdrichvalue", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/rdrichvaluetypes", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/richvaluerel", StringComparison.Ordinal) ||
+                normalizedTarget.Contains("richdata/", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.LinkedDataTypes;
                 continue;
