@@ -43,6 +43,12 @@ public sealed class FilterPromptPlannerTests
     [InlineData("contains:East", typeof(TextContainsFilterCriterion))]
     [InlineData("equals:East", typeof(TextEqualsFilterCriterion))]
     [InlineData(">=10", typeof(NumberGreaterThanOrEqualFilterCriterion))]
+    [InlineData("<>10", typeof(NumberNotEqualsFilterCriterion))]
+    [InlineData("date<>2026-05-28", typeof(DateNotEqualsFilterCriterion))]
+    [InlineData("date>=2026-05-28", typeof(DateOnOrAfterFilterCriterion))]
+    [InlineData("date<=2026-05-28", typeof(DateOnOrBeforeFilterCriterion))]
+    [InlineData("and:>=10|<=20", typeof(CompositeFilterCriterion))]
+    [InlineData("or:contains:East|contains:West", typeof(CompositeFilterCriterion))]
     public void TryPlan_ClassifiesConditionFilters(string input, Type criterionType)
     {
         FilterPromptPlanner.TryPlan(input, out var plan, out var error).Should().BeTrue();
