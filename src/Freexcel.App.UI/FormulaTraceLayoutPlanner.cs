@@ -50,16 +50,28 @@ public static class FormulaTraceLayoutPlanner
         Point pos)
     {
         const double hitRadius = 8;
-        foreach (var arrow in CalculateLayouts(viewport, arrows, sheetId))
+        var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
+        var useMetricLookups = arrows.Count > 1;
+        Dictionary<uint, RowMetric>? rowLookup = null;
+        Dictionary<uint, ColMetric>? colLookup = null;
+        foreach (var arrow in arrows)
         {
-            if (arrow.Kind == FormulaTraceArrowLayoutKind.VisibleArrow ||
-                arrow.NavigationTarget is null ||
-                (arrow.Start - pos).Length > hitRadius)
+            if (!TryGetMarkerHit(
+                viewport,
+                arrow,
+                sheetId,
+                rowHeaderWidth,
+                useMetricLookups,
+                ref rowLookup,
+                ref colLookup,
+                out var markerPoint,
+                out var navigationTarget) ||
+                (markerPoint - pos).Length > hitRadius)
             {
                 continue;
             }
 
-            return arrow.NavigationTarget.Value;
+            return navigationTarget;
         }
 
         return null;
@@ -118,6 +130,41 @@ public static class FormulaTraceLayoutPlanner
             row.TopOffset + GridView.ColHeaderHeight,
             col.Width,
             row.Height);
+        return true;
+    }
+
+    private static bool TryGetMarkerHit(
+        ViewportModel viewport,
+        FormulaTraceArrow arrow,
+        SheetId sheetId,
+        double rowHeaderWidth,
+        bool useMetricLookups,
+        ref Dictionary<uint, RowMetric>? rowLookup,
+        ref Dictionary<uint, ColMetric>? colLookup,
+        out Point markerPoint,
+        out CellAddress navigationTarget)
+    {
+        var fromOnCurrentSheet = arrow.From.Sheet.Equals(sheetId);
+        var toOnCurrentSheet = arrow.To.Sheet.Equals(sheetId);
+        var fromVisible = fromOnCurrentSheet && TryGetCellRect(viewport, arrow.From, rowHeaderWidth, useMetricLookups, ref rowLookup, ref colLookup, out var fromRect);
+        var toVisible = toOnCurrentSheet && TryGetCellRect(viewport, arrow.To, rowHeaderWidth, useMetricLookups, ref rowLookup, ref colLookup, out var toRect);
+
+        if (fromVisible == toVisible)
+        {
+            markerPoint = default;
+            navigationTarget = default;
+            return false;
+        }
+
+        if (fromVisible)
+        {
+            markerPoint = CenterOf(fromRect);
+            navigationTarget = arrow.To;
+            return true;
+        }
+
+        markerPoint = CenterOf(toRect);
+        navigationTarget = arrow.From;
         return true;
     }
 

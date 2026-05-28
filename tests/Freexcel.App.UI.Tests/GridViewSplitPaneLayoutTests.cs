@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
+using System.Diagnostics;
 using System.Windows;
 
 namespace Freexcel.App.UI.Tests;
@@ -717,6 +718,33 @@ public sealed class GridViewSplitPaneLayoutTests
                 sheetId,
                 markerPoint)
             .Should().BeNull();
+    }
+
+    [Fact]
+    public void HitTestFormulaTraceMarker_StreamsArrowsWithoutBuildingLayouts()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 80).Select(row => new RowMetric((uint)row, 20, (row - 1) * 20)).ToList(),
+            Enumerable.Range(1, 20).Select(col => new ColMetric((uint)col, 64, (col - 1) * 64)).ToList(),
+            null,
+            []);
+        var visible = new CellAddress(sheetId, 1, 1);
+        var arrows = Enumerable.Range(1, 5_000)
+            .Select(row => new FormulaTraceArrow(visible, new CellAddress(sheetId, (uint)(200 + row), 1)))
+            .ToList();
+        var markerPoint = new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10);
+
+        FormulaTraceLayoutPlanner.HitTestMarker(viewport, arrows, sheetId, markerPoint)
+            .Should().Be(new CellAddress(sheetId, 201, 1));
+
+        var elapsed = Stopwatch.StartNew();
+        for (var i = 0; i < 500; i++)
+            FormulaTraceLayoutPlanner.HitTestMarker(viewport, arrows, sheetId, markerPoint);
+        elapsed.Stop();
+
+        elapsed.ElapsedMilliseconds.Should().BeLessThan(1_500);
     }
 
     private static DisplayCell Cell(uint row, uint col, string text, CellStyle? style = null) =>
