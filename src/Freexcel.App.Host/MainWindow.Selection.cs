@@ -63,6 +63,9 @@ public partial class MainWindow
 
     private void SheetGrid_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Left)
+            return;
+
         var pos = e.GetPosition(SheetGrid);
         const double colHeaderH = Freexcel.App.UI.GridView.ColHeaderHeight;
         double rowHeaderW = SheetGrid.ActualRowHeaderWidth;

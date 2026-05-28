@@ -61,6 +61,23 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void MouseDownSelectionIgnoresNonLeftButtonsBeforeHitTesting()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseDown = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
+
+        mouseDown.Should().Contain("if (e.ChangedButton != MouseButton.Left)");
+        mouseDown.Should().Contain("return;");
+        mouseDown.IndexOf("if (e.ChangedButton != MouseButton.Left)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseDown.IndexOf("var pos = e.GetPosition(SheetGrid);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MouseDownUpdatesActiveSplitPaneRegionOnlyAfterCellHit()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
