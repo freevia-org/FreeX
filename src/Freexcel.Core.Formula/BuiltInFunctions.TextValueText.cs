@@ -13,7 +13,7 @@ public static partial class BuiltInFunctions
             return error;
 
         if (args[0] is RangeValue range)
-            return TextResult(StrictArrayText(range));
+            return TextResult(format == 1 ? StrictArrayText(range) : ConciseArrayText(range));
 
         return TextResult(ValueText(args[0], format == 1));
     }
