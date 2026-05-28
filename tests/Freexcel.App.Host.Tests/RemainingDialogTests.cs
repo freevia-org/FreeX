@@ -268,6 +268,14 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ZoomDialog_TryCreateResult_RejectsFractionalCustomPercent()
+    {
+        ZoomDialog.TryCreateResult("125.5", out _, out var error).Should().BeFalse();
+
+        error.Should().Be("Zoom must be a whole percent between 10% and 400%.");
+    }
+
+    [Fact]
     public void ZoomDialog_ExposesExcelPresetPercentsAndCustomPercent()
     {
         var source = ReadRemainingDialogSources();

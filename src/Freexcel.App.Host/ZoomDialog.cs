@@ -59,7 +59,14 @@ public sealed class ZoomDialog : Window
             return false;
         }
 
-        result = new ZoomDialogResult((int)Math.Round(zoomPercent));
+        var roundedPercent = Math.Round(zoomPercent);
+        if (Math.Abs(zoomPercent - roundedPercent) > 0.000001)
+        {
+            error = "Zoom must be a whole percent between 10% and 400%.";
+            return false;
+        }
+
+        result = new ZoomDialogResult((int)roundedPercent);
         return true;
     }
 
