@@ -61,7 +61,9 @@ public partial class MainWindow
         plannedStates = RibbonAdaptiveLayoutPlanner
             .ApplyBreakpointOverrides(availableWidth, groupNames, plannedStates)
             .ToArray();
-        ApplyRibbonRuntimePriorityStates(plannedStates, groupNames, availableWidth);
+        plannedStates = RibbonAdaptivePriorityPlanner
+            .ApplyRuntimePriorityStates(availableWidth, groupNames, plannedStates)
+            .ToArray();
         FitRibbonAdaptiveStatesToWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth);
         ExpandRibbonAdaptiveStatesIntoAvailableWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth);
 
@@ -80,7 +82,7 @@ public partial class MainWindow
             force ? null : _lastRibbonAdaptiveAppliedStates);
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         var requiresMeasuredCorrection = correctedStates is null ||
-            IsRibbonGroupSet(groupNames, "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools");
+            RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(groupNames);
         if (requiresMeasuredCorrection)
         {
             ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
@@ -182,34 +184,6 @@ public partial class MainWindow
         }
     }
 
-    private static void ApplyRibbonRuntimePriorityStates(
-        RibbonAdaptiveGroupState[] plannedStates,
-        IReadOnlyList<string> groupNames,
-        double availableWidth)
-    {
-        if (availableWidth <= 900 &&
-            IsRibbonGroupSet(groupNames, "Tables", "Illustrations") &&
-            TryFindRibbonGroupNameIndex(groupNames, "Charts", out var chartsIndex))
-        {
-            plannedStates[chartsIndex] = RibbonAdaptiveGroupState.Collapsed;
-        }
-    }
-
-    private static bool TryFindRibbonGroupNameIndex(IReadOnlyList<string> groupNames, string groupName, out int index)
-    {
-        for (var i = 0; i < groupNames.Count; i++)
-        {
-            if (string.Equals(groupNames[i], groupName, StringComparison.Ordinal))
-            {
-                index = i;
-                return true;
-            }
-        }
-
-        index = -1;
-        return false;
-    }
-
     private static void ExpandRibbonAdaptiveStatesIntoAvailableWidth(
         RibbonAdaptiveGroupState[] plannedStates,
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
@@ -246,22 +220,9 @@ public partial class MainWindow
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
         double availableWidth)
     {
-        var groupNames = adaptiveGroups.Select(group => group.Name).ToList();
-        if (IsRibbonGroupSet(groupNames, "Proofing", "Accessibility", "Comments"))
-            yield break;
-
-        var protectedNames = GetRibbonPriorityProtectedGroupNames(groupNames, availableWidth);
-        if (protectedNames.Count > 0)
-        {
-            foreach (var protectedName in protectedNames)
-            {
-                var index = groupNames.IndexOf(protectedName);
-                if (index >= 0)
-                    yield return index;
-            }
-
-            yield break;
-        }
+        return RibbonAdaptivePriorityPlanner.GetExpandableGroupIndexes(
+            adaptiveGroups.Select(group => group.Name).ToList(),
+            availableWidth);
     }
 
     private static bool TryGetNextExpandedRibbonState(
@@ -369,22 +330,24 @@ public partial class MainWindow
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
         double availableWidth)
     {
-        for (var i = 0; i < adaptiveGroups.Count; i++)
+        var groupNames = adaptiveGroups.Select(group => group.Name).ToList();
+        foreach (var decision in RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(availableWidth, groupNames))
         {
-            if (availableWidth <= 900 &&
-                string.Equals(adaptiveGroups[i].Name, "Charts", StringComparison.Ordinal))
+            if (decision.Index < 0 || decision.Index >= adaptiveGroups.Count)
+                continue;
+
+            if (decision.State == RibbonAdaptiveGroupState.Collapsed)
             {
-                plannedStates[i] = RibbonAdaptiveGroupState.Collapsed;
-                groups[i].Visibility = Visibility.Collapsed;
-                collapsedButtons[i].Visibility = Visibility.Visible;
+                plannedStates[decision.Index] = RibbonAdaptiveGroupState.Collapsed;
+                groups[decision.Index].Visibility = Visibility.Collapsed;
+                collapsedButtons[decision.Index].Visibility = Visibility.Visible;
             }
-            else if (availableWidth <= 1120 &&
-                     string.Equals(adaptiveGroups[i].Name, "Data Tools", StringComparison.Ordinal))
+            else if (decision.State == RibbonAdaptiveGroupState.IconOnly)
             {
-                plannedStates[i] = RibbonAdaptiveGroupState.IconOnly;
-                groups[i].Visibility = Visibility.Visible;
-                collapsedButtons[i].Visibility = Visibility.Collapsed;
-                SetRibbonGroupCompact(groups[i], RibbonCompactLevel.IconOnly);
+                plannedStates[decision.Index] = RibbonAdaptiveGroupState.IconOnly;
+                groups[decision.Index].Visibility = Visibility.Visible;
+                collapsedButtons[decision.Index].Visibility = Visibility.Collapsed;
+                SetRibbonGroupCompact(groups[decision.Index], RibbonCompactLevel.IconOnly);
             }
         }
     }
@@ -423,51 +386,9 @@ public partial class MainWindow
         IReadOnlyList<RibbonAdaptiveGroup> groups,
         double availableWidth)
     {
-        var protectedIndexes = new HashSet<int>();
-        if (availableWidth <= 760)
-            return protectedIndexes;
-
         var groupNames = groups.Select(group => group.Name).ToList();
-        var pageSetupIndex = groupNames.IndexOf("Page Setup");
-        if (groupNames.Contains("Themes", StringComparer.Ordinal) &&
-            pageSetupIndex >= 0)
-        {
-            protectedIndexes.Add(pageSetupIndex);
-        }
-
-        foreach (var protectedGroupName in GetRibbonPriorityProtectedGroupNames(groupNames, availableWidth))
-        {
-            var index = groupNames.IndexOf(protectedGroupName);
-            if (index >= 0)
-                protectedIndexes.Add(index);
-        }
-
-        return protectedIndexes;
+        return RibbonAdaptivePriorityPlanner.GetFallbackProtectedGroupIndexes(groupNames, availableWidth).ToHashSet();
     }
-
-    private static IReadOnlyList<string> GetRibbonPriorityProtectedGroupNames(
-        IReadOnlyList<string> groupNames,
-        double availableWidth)
-    {
-        if (availableWidth <= 760)
-            return [];
-
-        if (IsRibbonGroupSet(groupNames, "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools"))
-            return availableWidth <= 1120
-                ? ["Sort & Filter", "Data Tools", "Forecast"]
-                : ["Sort & Filter"];
-
-        if (IsRibbonGroupSet(groupNames, "Themes", "Page Setup", "Sheet Options"))
-            return ["Page Setup"];
-
-        if (IsRibbonGroupSet(groupNames, "Tables", "Illustrations"))
-            return ["Tables"];
-
-        return [];
-    }
-
-    private static bool IsRibbonGroupSet(IReadOnlyList<string> groupNames, params string[] requiredNames) =>
-        requiredNames.All(requiredName => groupNames.Contains(requiredName, StringComparer.Ordinal));
 
     private static void ApplyRibbonAdaptiveStates(
         IReadOnlyList<FrameworkElement> groups,
@@ -639,7 +560,9 @@ public partial class MainWindow
             states = RibbonAdaptiveLayoutPlanner
                 .ApplyBreakpointOverrides(width, groupNames, states)
                 .ToArray();
-            ApplyRibbonRuntimePriorityStates(states, groupNames, width);
+            states = RibbonAdaptivePriorityPlanner
+                .ApplyRuntimePriorityStates(width, groupNames, states)
+                .ToArray();
             FitRibbonAdaptiveStatesToWidth(states, adaptiveGroups, fixedChromeWidth, width);
             ExpandRibbonAdaptiveStatesIntoAvailableWidth(states, adaptiveGroups, fixedChromeWidth, width);
 
