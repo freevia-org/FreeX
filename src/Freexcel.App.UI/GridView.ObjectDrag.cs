@@ -161,19 +161,28 @@ public partial class GridView
         if (Viewport is null) return default;
 
         if (TextBoxes is not null)
-            foreach (var t in TextBoxes.Reverse())
+            for (var i = TextBoxes.Count - 1; i >= 0; i--)
+            {
+                var t = TextBoxes[i];
                 if (t.IsVisible && TryCreateAnchoredObjectRect(t.Anchor, t.Width, t.Height, 8, 8, out var r) && ContainsInclusive(r, pos))
                     return (t.Id, ObjectKind.TextBox, r, t.Anchor);
+            }
 
         if (Pictures is not null)
-            foreach (var p in Pictures.Reverse())
+            for (var i = Pictures.Count - 1; i >= 0; i--)
+            {
+                var p = Pictures[i];
                 if (p.IsVisible && TryCreateAnchoredObjectRect(p.Anchor, p.Width, p.Height, 24, 18, out var r) && ContainsInclusive(r, pos))
                     return (p.Id, ObjectKind.Picture, r, p.Anchor);
+            }
 
         if (DrawingShapes is not null)
-            foreach (var s in DrawingShapes.Reverse())
+            for (var i = DrawingShapes.Count - 1; i >= 0; i--)
+            {
+                var s = DrawingShapes[i];
                 if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && ContainsInclusive(r, pos))
                     return (s.Id, ObjectKind.Shape, r, s.Anchor);
+            }
 
         return default;
     }
