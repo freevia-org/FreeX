@@ -22,10 +22,21 @@ public static class SpellCheckWorkflowPlanner
     public static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildReplaceAllEdits(
         IReadOnlyList<SpellingIssue> issues,
         string word,
-        string replacement) =>
-        issues
-            .Where(issue => string.Equals(issue.Word, word, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(issue => issue.Address)
-            .Select(group => BuildReplacementEdit(group.First(), replacement))
-            .ToList();
+        string replacement)
+    {
+        var edits = new List<(CellAddress Address, Cell NewCell)>();
+        var editedAddresses = new HashSet<CellAddress>();
+        foreach (var issue in issues)
+        {
+            if (!string.Equals(issue.Word, word, StringComparison.OrdinalIgnoreCase) ||
+                !editedAddresses.Add(issue.Address))
+            {
+                continue;
+            }
+
+            edits.Add(BuildReplacementEdit(issue, replacement));
+        }
+
+        return edits;
+    }
 }
