@@ -79,6 +79,21 @@ public sealed class MenuKeyTipAssignerTests
     }
 
     [Fact]
+    public void RepairsUntypeableExistingKeyTipsBeforeDynamicMenuRouting()
+    {
+        RunSta(() =>
+        {
+            var accented = new MenuItem { Header = "Eclair" };
+            RibbonTooltip.SetKeyTip(accented, "\u00C9");
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([accented]);
+
+            RibbonTooltip.GetKeyTip(accented).Should().Be("E");
+            RibbonKeyTipMode.ToKeyTipToken(Key.E).Should().Be(RibbonTooltip.GetKeyTip(accented));
+        });
+    }
+
+    [Fact]
     public void RepairsDuplicateExistingKeyTipsWithinDynamicMenuScope()
     {
         RunSta(() =>
