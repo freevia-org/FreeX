@@ -9,7 +9,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell Cell)> _cells;
-    private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => _cells.Count == 1 ? "Paste Cell" : $"Paste {_cells.Count} Cells";
 
@@ -36,7 +36,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand
 
         foreach (var (addr, cell) in _cells)
         {
-            _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
+            _snapshot.Add((addr, sheet.GetCell(addr)?.Clone(), sheet.GetStyleOnly(addr.Row, addr.Col)));
             sheet.SetCell(addr, cell.Clone());
             affected.Add(addr);
         }
@@ -50,12 +50,25 @@ public sealed class PasteCellsCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (addr, oldCell) in _snapshot)
+        foreach (var (addr, oldCell, oldStyleOnly) in _snapshot)
         {
             if (oldCell is null)
+            {
                 sheet.ClearCell(addr);
+                RestoreStyleOnly(sheet, addr, oldStyleOnly);
+            }
             else
+            {
                 sheet.SetCell(addr, oldCell.Clone());
+            }
         }
+    }
+
+    private static void RestoreStyleOnly(Sheet sheet, CellAddress address, StyleId? styleId)
+    {
+        if (styleId.HasValue)
+            sheet.SetStyleOnly(address.Row, address.Col, styleId.Value);
+        else
+            sheet.ClearStyleOnly(address.Row, address.Col);
     }
 }

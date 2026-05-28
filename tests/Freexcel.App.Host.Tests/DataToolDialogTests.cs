@@ -548,6 +548,18 @@ public sealed class DataToolDialogTests
         TextToColumnsDialog.TryParseDestination(" F2 ", defaultDestination, out var parsedDestination).Should().BeTrue();
         parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
 
+        TextToColumnsDialog.TryParseDestination("$F$2", defaultDestination, out parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
+        TextToColumnsDialog.TryParseDestination("F$2", defaultDestination, out parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
+        TextToColumnsDialog.TryParseDestination("$F2", defaultDestination, out parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
+        TextToColumnsDialog.TryParseDestination("R2C6", defaultDestination, out parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
         TextToColumnsDialog.TryParseDestination(" ", defaultDestination, out _).Should().BeFalse();
         TextToColumnsDialog.TryParseDestination("F2:G3", defaultDestination, out _).Should().BeFalse();
     }
