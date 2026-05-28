@@ -46,6 +46,10 @@ internal static class NativePasswordHelper
             {
                 return false;
             }
+            catch (ArgumentException)
+            {
+                return false;
+            }
 
             if (expectedHash.Length != SHA256.HashSizeInBytes)
             {

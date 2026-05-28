@@ -92,6 +92,30 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputDeclaration_PreservesStandaloneFlag()
+    {
+        using var source = StreamFromString("<rows><row name=\"Echo\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" standalone="yes" />
+              <xsl:template match="/rows">
+                <worksheet>
+                  <cell><xsl:value-of select="row/@name" /></cell>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .StartWith("<?xml")
+            .And.Contain("standalone=\"yes\"")
+            .And.Contain("<cell>Echo</cell>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_OutputAboveLimit_ReportsSafetyDiagnostic()
     {
         using var source = StreamFromString("<rows />");
