@@ -23,6 +23,10 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("dotnet restore Freexcel.slnx");
         workflow.Should().Contain("dotnet build Freexcel.slnx --configuration Release --no-restore");
         workflow.Should().Contain("dotnet test Freexcel.slnx --configuration Release --no-build");
+        workflow.Should().Contain("if: always()");
+        workflow.Should().Contain("name: freexcel-${{ github.run_id }}-${{ github.run_attempt }}-test-results");
+        workflow.Should().Contain("path: \"**/TestResults/tests.trx\"");
+        workflow.Should().Contain("if-no-files-found: warn");
         workflow.Should().Contain("tools/Publish-UserTestBuild.ps1");
         workflow.Should().Contain("-RuntimeIdentifier win-x64");
         workflow.Should().Contain("-PublishMode SingleFile");
