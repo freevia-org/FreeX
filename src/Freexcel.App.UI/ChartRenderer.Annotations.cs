@@ -91,6 +91,15 @@ public static partial class ChartRenderer
 
         var outline = chart.DataTable.ShowOutline == true;
         var showHorizontal = chart.DataTable.ShowHorizontalBorder != false;
+        var strokeColor = outline || showHorizontal
+            ? ToOxyColor(chart.DataTable.BorderColor) ?? OxyColor.FromRgb(166, 166, 166)
+            : OxyColors.Transparent;
+        var strokeThickness = outline || showHorizontal
+            ? GetChartDataTableBorderThickness(chart.DataTable)
+            : 0;
+        var background = ToOxyColor(chart.DataTable.FillColor) ?? OxyColor.FromAColor(225, OxyColors.White);
+        var textColor = ToOxyColor(chart.DataTable.TextColor) ?? OxyColor.FromRgb(64, 64, 64);
+        var fontSize = GetChartDataTableFontSize(chart.DataTable);
         for (var index = 0; index < rows.Count; index++)
         {
             model.Annotations.Add(new TextAnnotation
@@ -99,13 +108,29 @@ public static partial class ChartRenderer
                 TextPosition = new DataPoint(0, -1 - index),
                 TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Left,
                 TextVerticalAlignment = OxyPlot.VerticalAlignment.Middle,
-                Stroke = outline || showHorizontal ? OxyColor.FromRgb(166, 166, 166) : OxyColors.Transparent,
-                StrokeThickness = outline || showHorizontal ? 1 : 0,
-                Background = OxyColor.FromAColor(225, OxyColors.White),
-                TextColor = OxyColor.FromRgb(64, 64, 64),
-                FontSize = 9,
+                Stroke = strokeColor,
+                StrokeThickness = strokeThickness,
+                Background = background,
+                TextColor = textColor,
+                FontSize = fontSize,
                 Padding = new OxyThickness(4, 2, 4, 2)
             });
         }
+    }
+
+    private static double GetChartDataTableBorderThickness(ChartDataTableModel dataTable)
+    {
+        if (dataTable.BorderThickness is not { } thickness || !double.IsFinite(thickness))
+            return 1;
+
+        return Math.Clamp(thickness, 0, 20);
+    }
+
+    private static double GetChartDataTableFontSize(ChartDataTableModel dataTable)
+    {
+        if (dataTable.FontSize is not { } fontSize || !double.IsFinite(fontSize))
+            return 9;
+
+        return Math.Clamp(fontSize, 1, 96);
     }
 }
