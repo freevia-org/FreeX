@@ -292,6 +292,48 @@ public class PerformanceBenchmarkTests
         rebuildAllocated.Should().BeLessThan(10_000_000);
     }
 
+    [Fact]
+    public void Benchmark_SingleSectionNumberFormat_AvoidsSplitScaffoldingAllocation()
+    {
+        const int iterations = 10_000;
+        var value = new NumberValue(12345.678);
+
+        NumberFormatter.Format(value, "#,##0.00");
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var formatted = NumberFormatter.Format(value, "#,##0.00");
+            if (formatted != "12,345.68")
+                throw new Xunit.Sdk.XunitException("Single-section number format produced an unexpected value.");
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Single-section number format: {iterations:N0} iterations, {sw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
+
+        (allocated / iterations).Should().BeLessThan(
+            850,
+            "single-section number formats should skip List/StringBuilder section-splitting scaffolding");
+    }
+
+    [Fact]
+    public void Benchmark_MultiSectionNumberFormat_StillHonorsQuotedSemicolons()
+    {
+        var positive = NumberFormatter.Format(new NumberValue(1), "0;[Red]-0;0;\"a;b\"@");
+        var negative = NumberFormatter.Format(new NumberValue(-1), "0;[Red]-0;0;\"a;b\"@");
+        var zero = NumberFormatter.Format(new NumberValue(0), "0;[Red]-0;0;\"a;b\"@");
+        var text = NumberFormatter.Format(new TextValue("x"), "0;[Red]-0;0;\"a;b\"@");
+
+        positive.Should().Be("1");
+        negative.Should().Be("-1");
+        zero.Should().Be("0");
+        text.Should().Be("a;bx");
+    }
+
     /// <summary>
     /// Benchmark: Memory usage for 1,000,000 cells (values only, no formulas).
     /// Target: <200MB
