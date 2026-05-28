@@ -85,6 +85,7 @@ public sealed class RibbonTooltipTests
             var parent = new MenuItem { Header = "Highlight Cells Rules" };
             var child = new MenuItem { Header = "Greater Than..." };
             RibbonTooltip.SetKeyTip(child, "GT");
+            child.Items.Add(new MenuItem { Header = "Format Rule..." });
             parent.Items.Add(new Separator());
             parent.Items.Add("recent command header");
             parent.Items.Add(child);
