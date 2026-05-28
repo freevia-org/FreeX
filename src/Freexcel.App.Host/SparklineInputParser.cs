@@ -19,7 +19,7 @@ public static class SparklineInputParser
     }
 
     public static bool TryParseLocation(string input, SheetId sheetId, out CellAddress location) =>
-        CellAddress.TryParse(input, sheetId, out location);
+        CellReferenceInputParser.TryParseCell(input, sheetId, out location);
 
     public static SparklineKindChoice ParseDialogKindChoice(string type) =>
         type switch
