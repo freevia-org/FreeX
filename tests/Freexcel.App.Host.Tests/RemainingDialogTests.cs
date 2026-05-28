@@ -66,12 +66,13 @@ public sealed class RemainingDialogTests
     {
         RowHeightDialog.TryCreateResult("-1", out _, out var error).Should().BeFalse();
 
-        error.Should().Be("Enter a row height from 0 to 409.");
+        error.Should().Be("Enter a row height from 0 to 409.5.");
     }
 
     [Theory]
     [InlineData("0", 0)]
     [InlineData("409", 409)]
+    [InlineData("409.5", 409.5)]
     public void RowHeightDialog_TryCreateResult_AcceptsExcelRowHeightBounds(string input, double expected)
     {
         RowHeightDialog.TryCreateResult(input, out var result, out var error).Should().BeTrue(error);
@@ -82,9 +83,9 @@ public sealed class RemainingDialogTests
     [Fact]
     public void RowHeightDialog_TryCreateResult_RejectsOversizedExcelRowHeight()
     {
-        RowHeightDialog.TryCreateResult("409.1", out _, out var error).Should().BeFalse();
+        RowHeightDialog.TryCreateResult("409.6", out _, out var error).Should().BeFalse();
 
-        error.Should().Be("Enter a row height from 0 to 409.");
+        error.Should().Be("Enter a row height from 0 to 409.5.");
     }
 
     [Fact]
@@ -104,7 +105,7 @@ public sealed class RemainingDialogTests
     {
         RowHeightDialog.TryCreateResult(input, out _, out var error).Should().BeFalse();
 
-        error.Should().Be("Enter a row height from 0 to 409.");
+        error.Should().Be("Enter a row height from 0 to 409.5.");
     }
 
     [Fact]
@@ -113,6 +114,14 @@ public sealed class RemainingDialogTests
         ColumnWidthDialog.TryCreateResult("8.5", out var result, out _).Should().BeTrue();
 
         result.Should().Be(new ColumnWidthDialogResult(8.5));
+    }
+
+    [Fact]
+    public void ColumnWidthDialog_TryCreateResult_RejectsNegativeWidth()
+    {
+        ColumnWidthDialog.TryCreateResult("-1", out _, out var error).Should().BeFalse();
+
+        error.Should().Be("Enter a column width from 0 to 255.");
     }
 
     [Theory]
@@ -843,7 +852,7 @@ public sealed class RemainingDialogTests
 
         rowSource.Should().Contain("MessageBox.Show(");
         rowSource.Should().Contain("this,");
-        rowSource.Should().Contain("error ?? \"Enter a row height from 0 to 409.\"");
+        rowSource.Should().Contain("error ?? \"Enter a row height from 0 to 409.5.\"");
         rowSource.Should().Contain("MessageBoxImage.Warning");
         rowSource.Should().Contain("FocusInvalidHeightInput();");
         rowSource.Should().Contain("private void FocusInvalidHeightInput()");
