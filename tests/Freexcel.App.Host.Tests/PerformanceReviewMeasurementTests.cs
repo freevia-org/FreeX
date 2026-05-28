@@ -82,6 +82,30 @@ public sealed class PerformanceReviewMeasurementTests
         });
     }
 
+    [Fact]
+    public void Benchmark_SelectionDragStatusRefresh_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = SelectionDragHarness.Create();
+            harness.MeasureDragSelection(iterations: 10);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var result = harness.MeasureDragSelection(iterations: 80);
+            Console.WriteLine(
+                "PERF SELECTION_DRAG_STATUS " +
+                $"steps={result.StepCount} total_ms={result.TotalMilliseconds:F2} " +
+                $"mean_ms={result.MeanMilliseconds:F2} p95_ms={result.P95Milliseconds:F2} " +
+                $"max_ms={result.MaxMilliseconds:F2} allocated_bytes={result.AllocatedBytes:N0}");
+
+            result.StepCount.Should().Be(80);
+            result.TotalMilliseconds.Should().BeGreaterThan(0);
+        });
+    }
+
     private sealed class RibbonResizeHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -260,6 +284,90 @@ public sealed class PerformanceReviewMeasurementTests
             PumpDispatcher();
             viewportService.Reset();
             return new ColumnResizePreviewHarness(window, viewportService);
+        }
+
+        public void Dispose()
+        {
+            MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
+        }
+    }
+
+    private sealed class SelectionDragHarness : IDisposable
+    {
+        private readonly MainWindow _window;
+        private readonly MethodInfo _extendSelection;
+        private readonly FieldInfo _dragSelectActive;
+        private readonly CellAddress _anchor;
+
+        private SelectionDragHarness(MainWindow window, SheetId sheetId)
+        {
+            _window = window;
+            _anchor = new CellAddress(sheetId, 1, 1);
+            _extendSelection = typeof(MainWindow)
+                .GetMethod("ExtendSelection", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ExtendSelection");
+            _dragSelectActive = typeof(MainWindow)
+                .GetField("_dragSelectActive", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_dragSelectActive");
+        }
+
+        public MeasurementResult MeasureDragSelection(int iterations)
+        {
+            var timings = new List<double>(iterations);
+            _dragSelectActive.SetValue(_window, true);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            try
+            {
+                for (var i = 0; i < iterations; i++)
+                {
+                    var row = (uint)(20 + i * 6);
+                    var step = Stopwatch.StartNew();
+                    _extendSelection.Invoke(_window, [_anchor, new CellAddress(_anchor.Sheet, row, 40)]);
+                    PumpDispatcher();
+                    step.Stop();
+                    timings.Add(step.Elapsed.TotalMilliseconds);
+                }
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+            }
+
+            total.Stop();
+            return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+        }
+
+        public static SelectionDragHarness Create()
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Sheet1");
+            for (uint row = 1; row <= 600; row++)
+            {
+                for (uint col = 1; col <= 40; col++)
+                    sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
+            }
+
+            var workbookRef = new WorkbookRef { Current = workbook };
+            var graph = new DependencyGraph();
+            var evaluator = new FormulaEvaluator();
+            var window = new MainWindow(
+                NullLogger<MainWindow>.Instance,
+                new ViewportService(),
+                new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
+                new RecalcEngine(graph, evaluator),
+                Array.Empty<IFileAdapter>(),
+                workbookRef,
+                workbook)
+            {
+                Width = 1280,
+                Height = 720
+            };
+
+            window.Show();
+            window.UpdateLayout();
+            PumpDispatcher();
+            return new SelectionDragHarness(window, sheet.Id);
         }
 
         public void Dispose()
