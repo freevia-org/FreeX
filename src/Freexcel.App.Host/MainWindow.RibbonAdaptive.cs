@@ -542,7 +542,7 @@ public partial class MainWindow
             Padding = new Thickness(3, 2, 3, 2),
             VerticalAlignment = System.Windows.VerticalAlignment.Top,
             Visibility = Visibility.Collapsed,
-            ContextMenu = CreateCollapsedRibbonGroupMenu(group),
+            ContextMenu = CreateLazyCollapsedRibbonGroupMenu(group),
             Content = new StackPanel
             {
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
@@ -598,11 +598,28 @@ public partial class MainWindow
         layer.Add(new RibbonCollapsedGroupChevronAdorner(button));
     }
 
-    private static ContextMenu CreateCollapsedRibbonGroupMenu(FrameworkElement group)
+    private static ContextMenu CreateLazyCollapsedRibbonGroupMenu(FrameworkElement group)
     {
-        var menu = new ContextMenu();
-        var added = new HashSet<ButtonBase>();
+        var menu = new ContextMenu { Tag = group };
+        menu.Opened += (_, _) =>
+        {
+            EnsureCollapsedRibbonGroupMenuItems(menu);
+            SynchronizeCollapsedRibbonTopLevelMenuItems(menu.Items);
+        };
+        return menu;
+    }
 
+    private static void EnsureCollapsedRibbonGroupMenuItems(ContextMenu menu)
+    {
+        if (menu.Items.Count > 0 || menu.Tag is not FrameworkElement group)
+            return;
+
+        PopulateCollapsedRibbonGroupMenu(menu, group);
+    }
+
+    private static void PopulateCollapsedRibbonGroupMenu(ContextMenu menu, FrameworkElement group)
+    {
+        var added = new HashSet<ButtonBase>();
         foreach (var button in EnumerateVisualDescendants(group).OfType<ButtonBase>())
         {
             if (button.Visibility != Visibility.Visible)
@@ -623,9 +640,6 @@ public partial class MainWindow
                 IsEnabled = false
             });
         }
-
-        menu.Opened += (_, _) => SynchronizeCollapsedRibbonMenuItems(menu.Items);
-        return menu;
     }
 
     private static MenuItem? CreateMenuItemForRibbonButton(ButtonBase button)
@@ -700,18 +714,12 @@ public partial class MainWindow
         return LogicalTreeHelper.GetParent(element);
     }
 
-    private static void SynchronizeCollapsedRibbonMenuItems(ItemCollection items)
+    private static void SynchronizeCollapsedRibbonTopLevelMenuItems(ItemCollection items)
     {
         foreach (var item in items.OfType<MenuItem>())
         {
             if (item.Tag is ButtonBase sourceButton)
-            {
                 item.IsEnabled = sourceButton.IsEnabled;
-                if (sourceButton.ContextMenu is { } sourceMenu)
-                    SynchronizeClonedMenuItems(sourceMenu.Items, item.Items);
-            }
-
-            SynchronizeCollapsedRibbonMenuItems(item.Items);
         }
     }
 
