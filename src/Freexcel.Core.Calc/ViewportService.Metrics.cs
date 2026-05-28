@@ -17,11 +17,13 @@ public sealed partial class ViewportService
         var pinnedHeight = pinnedRows.Sum(row => row.Height);
         var remainingHeight = Math.Max(0, availableHeight - pinnedHeight);
         var bodyStart = Math.Max(startRow, frozenRows + 1);
-        var bodyRows = remainingHeight > 0 && bodyStart <= CellAddress.MaxRow
-            ? OffsetRows(BuildRowMetrics(sheet, bodyStart, CellAddress.MaxRow, remainingHeight), pinnedHeight)
-            : [];
+        if (remainingHeight <= 0 || bodyStart > CellAddress.MaxRow)
+            return pinnedRows;
 
-        return CombineRows(pinnedRows, bodyRows);
+        return CombineRowsWithOffset(
+            pinnedRows,
+            BuildRowMetrics(sheet, bodyStart, CellAddress.MaxRow, remainingHeight),
+            pinnedHeight);
     }
 
     private static List<ColMetric> BuildFrozenAwareColMetrics(Sheet sheet, uint startCol, double availableWidth)
@@ -34,45 +36,39 @@ public sealed partial class ViewportService
         var pinnedWidth = pinnedColumns.Sum(column => column.Width);
         var remainingWidth = Math.Max(0, availableWidth - pinnedWidth);
         var bodyStart = Math.Max(startCol, frozenCols + 1);
-        var bodyColumns = remainingWidth > 0 && bodyStart <= CellAddress.MaxCol
-            ? OffsetColumns(BuildColMetrics(sheet, bodyStart, CellAddress.MaxCol, remainingWidth), pinnedWidth)
-            : [];
+        if (remainingWidth <= 0 || bodyStart > CellAddress.MaxCol)
+            return pinnedColumns;
 
-        return CombineColumns(pinnedColumns, bodyColumns);
+        return CombineColumnsWithOffset(
+            pinnedColumns,
+            BuildColMetrics(sheet, bodyStart, CellAddress.MaxCol, remainingWidth),
+            pinnedWidth);
     }
 
-    private static List<RowMetric> CombineRows(IReadOnlyList<RowMetric> pinnedRows, IReadOnlyList<RowMetric> bodyRows)
+    private static List<RowMetric> CombineRowsWithOffset(
+        IReadOnlyList<RowMetric> pinnedRows,
+        IReadOnlyList<RowMetric> bodyRows,
+        double bodyTopOffset)
     {
         var combined = new List<RowMetric>(pinnedRows.Count + bodyRows.Count);
         combined.AddRange(pinnedRows);
-        combined.AddRange(bodyRows);
+        foreach (var row in bodyRows)
+            combined.Add(row with { TopOffset = row.TopOffset + bodyTopOffset });
+
         return combined;
     }
 
-    private static List<ColMetric> CombineColumns(IReadOnlyList<ColMetric> pinnedColumns, IReadOnlyList<ColMetric> bodyColumns)
+    private static List<ColMetric> CombineColumnsWithOffset(
+        IReadOnlyList<ColMetric> pinnedColumns,
+        IReadOnlyList<ColMetric> bodyColumns,
+        double bodyLeftOffset)
     {
         var combined = new List<ColMetric>(pinnedColumns.Count + bodyColumns.Count);
         combined.AddRange(pinnedColumns);
-        combined.AddRange(bodyColumns);
+        foreach (var column in bodyColumns)
+            combined.Add(column with { LeftOffset = column.LeftOffset + bodyLeftOffset });
+
         return combined;
-    }
-
-    private static List<RowMetric> OffsetRows(IReadOnlyList<RowMetric> rows, double topOffset)
-    {
-        var offsetRows = new List<RowMetric>(rows.Count);
-        foreach (var row in rows)
-            offsetRows.Add(row with { TopOffset = row.TopOffset + topOffset });
-
-        return offsetRows;
-    }
-
-    private static List<ColMetric> OffsetColumns(IReadOnlyList<ColMetric> columns, double leftOffset)
-    {
-        var offsetColumns = new List<ColMetric>(columns.Count);
-        foreach (var column in columns)
-            offsetColumns.Add(column with { LeftOffset = column.LeftOffset + leftOffset });
-
-        return offsetColumns;
     }
 
     private static List<RowMetric> BuildRowMetrics(Sheet sheet, uint startRow, uint endRow, double availableHeight)
