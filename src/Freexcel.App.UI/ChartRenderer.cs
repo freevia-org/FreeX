@@ -113,7 +113,7 @@ public static partial class ChartRenderer
             for (uint r = dataStartRow; r <= endRow; r++)
             {
                 if (!cellLookup.TryGetValue((r, dataStartCol), out var cell)) continue;
-                if (!double.TryParse(cell.DisplayText, out var v)) continue;
+                if (!double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) continue;
                 var label = categories.Count > (int)(r - dataStartRow) ? categories[(int)(r - dataStartRow)] : "";
                 var sliceIndex = pieSeries.Slices.Count;
                 var slice = new PieSlice(label, v)
@@ -257,7 +257,7 @@ public static partial class ChartRenderer
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
                     if (cellLookup.TryGetValue((r, col), out var cell)
-                        && double.TryParse(cell.DisplayText, out var v))
+                        && double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
                     {
                         series.Items.Add(new RectangleBarItem(i - colHalfWidth, Math.Min(0, v), i + colHalfWidth, Math.Max(0, v)));
                         trendPoints?.Add(new DataPoint(i, v));
@@ -302,7 +302,7 @@ public static partial class ChartRenderer
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
                     if (cellLookup.TryGetValue((r, col), out var cell)
-                        && double.TryParse(cell.DisplayText, out var v))
+                        && double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
                     {
                         series.Items.Add(new BarItem { Value = v });
                         trendPoints?.Add(new DataPoint(i, v));
@@ -369,7 +369,7 @@ public static partial class ChartRenderer
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
                     if (cellLookup.TryGetValue((r, col), out var cell)
-                        && double.TryParse(cell.DisplayText, out var v))
+                        && double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
                     {
                         series.Points.Add(new DataPoint(i, v));
                         trendPoints?.Add(new DataPoint(i, v));
@@ -419,11 +419,11 @@ public static partial class ChartRenderer
                 for (uint r = dataStartRow; r <= endRow; r++)
                 {
                     if (!cellLookup.TryGetValue((r, xCol), out var xCell) ||
-                        !double.TryParse(xCell.DisplayText, out var x))
+                        !double.TryParse(xCell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var x))
                         x = r - dataStartRow;
 
                     if (cellLookup.TryGetValue((r, col), out var yCell)
-                        && double.TryParse(yCell.DisplayText, out var y))
+                        && double.TryParse(yCell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var y))
                     {
                         series.Points.Add(new ScatterPoint(x, y));
                         trendPoints?.Add(new DataPoint(x, y));
