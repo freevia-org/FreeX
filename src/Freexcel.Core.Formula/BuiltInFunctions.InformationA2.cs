@@ -412,7 +412,7 @@ public static partial class BuiltInFunctions
         switch (infoType)
         {
             case "directory":
-                try { return new TextValue(Environment.CurrentDirectory); }
+                try { return new TextValue(EnsureTrailingDirectorySeparator(Environment.CurrentDirectory)); }
                 catch { return new TextValue(""); }
             case "numfile":
                 return new NumberValue(ctx.CurrentWorkbook?.SheetCount ?? 1);
@@ -435,6 +435,11 @@ public static partial class BuiltInFunctions
                 return ErrorValue.Value;
         }
     }
+
+    private static string EnsureTrailingDirectorySeparator(string path) =>
+        string.IsNullOrEmpty(path) || System.IO.Path.EndsInDirectorySeparator(path)
+            ? path
+            : path + System.IO.Path.DirectorySeparatorChar;
 
     private static ScalarValue Isblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         args[0] is RangeValue range
