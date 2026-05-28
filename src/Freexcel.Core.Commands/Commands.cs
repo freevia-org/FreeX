@@ -10,7 +10,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _edits;
-    private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => _edits.Count == 1 ? "Edit Cell" : $"Edit {_edits.Count} Cells";
 
@@ -58,7 +58,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         {
             // Save old state for undo
             var oldCell = sheet.GetCell(addr)?.Clone();
-            _snapshot.Add((addr, oldCell));
+            _snapshot.Add((addr, oldCell, sheet.GetStyleOnly(addr.Row, addr.Col)));
 
             // Apply new state while preserving the cell's existing formatting.
             var appliedCell = newCell.Clone();
@@ -77,12 +77,25 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         var sheet = ctx.GetSheet(_sheetId);
 
-        foreach (var (addr, oldCell) in _snapshot)
+        foreach (var (addr, oldCell, oldStyleOnly) in _snapshot)
         {
             if (oldCell is null)
+            {
                 sheet.ClearCell(addr);
+                RestoreStyleOnly(sheet, addr, oldStyleOnly);
+            }
             else
+            {
                 sheet.SetCell(addr, oldCell.Clone());
+            }
         }
+    }
+
+    private static void RestoreStyleOnly(Sheet sheet, CellAddress address, StyleId? styleId)
+    {
+        if (styleId.HasValue)
+            sheet.SetStyleOnly(address.Row, address.Col, styleId.Value);
+        else
+            sheet.ClearStyleOnly(address.Row, address.Col);
     }
 }
