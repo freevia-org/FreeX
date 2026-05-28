@@ -96,12 +96,16 @@ public partial class MainWindow
                         {
                             uint anchorCol = _selectionAnchor.Value.Col;
                             _selectionCursor = new CellAddress(_currentSheetId, 1_048_576, cm.Col);
+                            SheetGrid.SelectedRanges = null;
                             SheetGrid.SelectedRange = new GridRange(
                                 new CellAddress(_currentSheetId, 1, Math.Min(anchorCol, cm.Col)),
                                 new CellAddress(_currentSheetId, 1_048_576, Math.Max(anchorCol, cm.Col)));
                             var c1 = FormatColumnReference(Math.Min(anchorCol, cm.Col));
                             var c2 = FormatColumnReference(Math.Max(anchorCol, cm.Col));
                             CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
+                            SheetGrid.Focus();
+                            RefreshToolbar();
+                            RefreshStatusBar();
                         }
                         else
                         {
@@ -123,12 +127,16 @@ public partial class MainWindow
                     {
                         uint anchorRow = _selectionAnchor.Value.Row;
                         _selectionCursor = new CellAddress(_currentSheetId, rm.Row, 16_384);
+                        SheetGrid.SelectedRanges = null;
                         SheetGrid.SelectedRange = new GridRange(
                             new CellAddress(_currentSheetId, Math.Min(anchorRow, rm.Row), 1),
                             new CellAddress(_currentSheetId, Math.Max(anchorRow, rm.Row), 16_384));
                         var r1 = Math.Min(anchorRow, rm.Row);
                         var r2 = Math.Max(anchorRow, rm.Row);
                         CellAddressBox.Text = r1 == r2 ? $"{r1}:{r1}" : $"{r1}:{r2}";
+                        SheetGrid.Focus();
+                        RefreshToolbar();
+                        RefreshStatusBar();
                     }
                     else
                     {

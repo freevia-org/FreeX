@@ -155,6 +155,38 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void ShiftHeaderMouseSelectionClearsAdditionalRangesAndRefreshesUi()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseDown = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
+
+        var columnShiftSelection = mouseDown[
+            mouseDown.IndexOf("uint anchorCol = _selectionAnchor.Value.Col;", StringComparison.Ordinal)..
+            mouseDown.IndexOf("else", mouseDown.IndexOf("uint anchorCol = _selectionAnchor.Value.Col;", StringComparison.Ordinal), StringComparison.Ordinal)];
+        var rowShiftSelection = mouseDown[
+            mouseDown.IndexOf("uint anchorRow = _selectionAnchor.Value.Row;", StringComparison.Ordinal)..
+            mouseDown.IndexOf("else", mouseDown.IndexOf("uint anchorRow = _selectionAnchor.Value.Row;", StringComparison.Ordinal), StringComparison.Ordinal)];
+
+        columnShiftSelection.Should().Contain("SheetGrid.SelectedRanges = null;");
+        columnShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
+        columnShiftSelection.Should().Contain("CellAddressBox.Text");
+        columnShiftSelection.Should().Contain("SheetGrid.Focus();");
+        columnShiftSelection.Should().Contain("RefreshToolbar();");
+        columnShiftSelection.Should().Contain("RefreshStatusBar();");
+
+        rowShiftSelection.Should().Contain("SheetGrid.SelectedRanges = null;");
+        rowShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
+        rowShiftSelection.Should().Contain("CellAddressBox.Text");
+        rowShiftSelection.Should().Contain("SheetGrid.Focus();");
+        rowShiftSelection.Should().Contain("RefreshToolbar();");
+        rowShiftSelection.Should().Contain("RefreshStatusBar();");
+    }
+
+    [Fact]
     public void MouseUpSelectionIgnoresNonLeftButtonsBeforeCompletingDrag()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
