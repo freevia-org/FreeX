@@ -7,6 +7,19 @@ public static partial class FlashFillService
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', ';', '-', '_', '@', '.', '/', '\\'];
     private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "-", "/", "|"];
+    private static readonly HashSet<string> KnownNameTitles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Mr",
+        "Mrs",
+        "Ms",
+        "Miss",
+        "Dr",
+        "Prof",
+        "Professor",
+        "Sir",
+        "Dame"
+    };
+
     private static readonly (char Open, char Close)[] PairedDelimiters =
         [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ('\'', '\''), ('<', '>')];
 
@@ -239,6 +252,29 @@ public static partial class FlashFillService
             return source => TrySplitWhitespaceTokens(source, out var tokens) ? GetFirstInitial(tokens[1]) + "." : null;
 
         return null;
+    }
+
+    private static Func<string, string?>? TryKnownTitleRemoval(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryRemoveKnownNameTitle(e.Source, out var name) && name == e.Expected))
+            return null;
+
+        return source => TryRemoveKnownNameTitle(source, out var name) ? name : null;
+    }
+
+    private static bool TryRemoveKnownNameTitle(string source, out string name)
+    {
+        name = string.Empty;
+        var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length < 3)
+            return false;
+
+        var title = tokens[0].TrimEnd('.');
+        if (!KnownNameTitles.Contains(title))
+            return false;
+
+        name = string.Join(' ', tokens.Skip(1));
+        return name.Length > 0;
     }
 
     private static Func<string, string?>? TryDigitMask(IReadOnlyList<(string Source, string Expected)> examples)

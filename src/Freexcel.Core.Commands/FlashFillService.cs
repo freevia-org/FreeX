@@ -26,6 +26,7 @@ public static partial class FlashFillService
             ?? TryCaseTransform(examples)
             ?? TryInitials(examples)
             ?? TryNameAbbreviations(examples)
+            ?? TryKnownTitleRemoval(examples)
             ?? TryEmailDisplayName(examples)
             ?? TryDigitMask(examples)
             ?? TryStripThousandSeparators(examples)
