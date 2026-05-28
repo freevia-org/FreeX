@@ -320,7 +320,7 @@ public static partial class BuiltInFunctions
     {
         if (textValue is ErrorValue e0) return e0;
         if (radixValue is ErrorValue e1) return e1;
-        if (!TryGetEngineeringInteger(radixValue, out var radix) || radix is < 2 or > 36) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(radixValue, out var radix) || radix is < 2 or > 36) return ErrorValue.Num;
 
         var text = ToText(textValue).Trim();
         if (text.Length == 0 || text.Length > 255) return ErrorValue.Num;

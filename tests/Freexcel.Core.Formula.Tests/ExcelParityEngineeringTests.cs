@@ -45,6 +45,14 @@ public sealed class ExcelParityEngineeringTests
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=DECIMAL(\"11\",2.9)", 3)]
+    [InlineData("=DECIMAL(\"Z\",36.9)", 35)]
+    public void DecimalFunction_TruncatesFractionalRadix(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
     [Fact]
     public void BaseAndDecimalFunctions_SpillOverRanges()
     {
