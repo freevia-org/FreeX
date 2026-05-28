@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -135,10 +136,10 @@ public partial class ColorPickerDialog : Window
         }
 
         foreach (var swatch in BuildStandardSwatches())
-            StandardColorsPanel.Children.Add(CreateSwatchButton(swatch));
+            StandardColorsPanel.Children.Add(CreateSwatchButton(swatch, "Standard color"));
 
         foreach (var swatch in BuildCustomSpectrumSwatches())
-            CustomSpectrumPanel.Children.Add(CreateSwatchButton(swatch));
+            CustomSpectrumPanel.Children.Add(CreateSwatchButton(swatch, "Custom spectrum color"));
     }
 
     private Button CreateSwatchButton(ColorPickerSwatch swatch, string? groupName = null)
@@ -155,12 +156,17 @@ public partial class ColorPickerDialog : Window
             ToolTip = groupName is null ? swatch.Hex : $"{groupName} {swatch.Hex}",
             Tag = swatch.Color
         };
+        AutomationProperties.SetName(button, CreateSwatchAutomationName(swatch, groupName));
+        AutomationProperties.SetHelpText(button, "Select this color swatch.");
         button.Click += SwatchButton_Click;
         _initialFocusButton ??= button;
         if (SelectedColor == swatch.Color)
             MarkSelectedSwatch(button);
         return button;
     }
+
+    private static string CreateSwatchAutomationName(ColorPickerSwatch swatch, string? groupName) =>
+        groupName is null ? $"Color swatch {swatch.Hex}" : $"{groupName} swatch {swatch.Hex}";
 
     private void FocusInitialKeyboardTarget()
     {

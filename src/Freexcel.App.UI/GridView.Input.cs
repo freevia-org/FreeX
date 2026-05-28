@@ -102,7 +102,7 @@ public partial class GridView
 
         if (_resizeTarget == ResizeTarget.Column)
         {
-            var col = Viewport!.ColMetrics.FirstOrDefault(c => c.Col == _resizeIndex);
+            var col = FindColMetric(Viewport!.ColMetrics, _resizeIndex);
             if (col is null)
             {
                 Cursor = Cursors.SizeWE;
@@ -119,7 +119,7 @@ public partial class GridView
         }
         else if (_resizeTarget == ResizeTarget.Row)
         {
-            var row = Viewport!.RowMetrics.FirstOrDefault(r => r.Row == _resizeIndex);
+            var row = FindRowMetric(Viewport!.RowMetrics, _resizeIndex);
             if (row is null)
             {
                 Cursor = Cursors.SizeNS;
@@ -329,12 +329,12 @@ public partial class GridView
 
             if (target == ResizeTarget.Column)
             {
-                var col = Viewport!.ColMetrics.First(c => c.Col == index);
+                var col = FindColMetric(Viewport!.ColMetrics, index)!;
                 _resizeLinePos = col.LeftOffset + col.Width + ActualRowHeaderWidth;
             }
             else
             {
-                var row = Viewport!.RowMetrics.First(r => r.Row == index);
+                var row = FindRowMetric(Viewport!.RowMetrics, index)!;
                 _resizeLinePos = row.TopOffset + row.Height + EffectiveColHeaderHeight;
             }
 
@@ -575,4 +575,5 @@ public partial class GridView
             Cursor = null;
         base.OnMouseLeave(e);
     }
+
 }

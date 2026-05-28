@@ -19,6 +19,13 @@ public sealed class ExcelParityEngineeringTests
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
     }
 
+    [Fact]
+    public void BaseFunction_PadsToExcelMaximumMinLength()
+    {
+        _eval.Evaluate("=BASE(1,2,255)", MakeSheet())
+            .Should().Be(new TextValue(new string('0', 254) + "1"));
+    }
+
     [Theory]
     [InlineData("=DECIMAL(\"FF\",16)", 255)]
     [InlineData("=DECIMAL(111,2)", 7)]
@@ -47,6 +54,7 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=BASE(7,1)")]
     [InlineData("=BASE(7,37)")]
     [InlineData("=BASE(7,2,-1)")]
+    [InlineData("=BASE(7,2,256)")]
     [InlineData("=DECIMAL(\"\",16)")]
     [InlineData("=DECIMAL(\"2\",2)")]
     [InlineData("=DECIMAL(\"FF\",1)")]

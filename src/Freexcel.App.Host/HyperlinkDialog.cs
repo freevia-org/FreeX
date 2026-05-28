@@ -66,6 +66,10 @@ public sealed class HyperlinkDialog : Window
         AutomationProperties.SetName(_targetBox, "Address");
         _screenTipButton.Click += ScreenTipButton_Click;
         _bookmarkButton.Click += BookmarkButton_Click;
+        AutomationProperties.SetName(_screenTipButton, "Set ScreenTip");
+        AutomationProperties.SetHelpText(_screenTipButton, "Set the text shown when pointing to the hyperlink.");
+        AutomationProperties.SetName(_bookmarkButton, "Select place in document");
+        AutomationProperties.SetHelpText(_bookmarkButton, "Choose a bookmark, defined name, or cell reference in this workbook.");
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         _screenTipButton.Width = 96;
         _screenTipButton.Margin = new Thickness(0, 0, 8, 0);

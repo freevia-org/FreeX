@@ -93,6 +93,20 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
         source.Should().Contain("ViewportScrollCalculator.CalculateWheelScroll");
     }
 
+    [Fact]
+    public void MainWindowWheelHandler_RoutesSplitPaneWheelFromPointerPosition()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+        var wheelHandler = source[
+            source.IndexOf("private void SheetGrid_MouseWheel", StringComparison.Ordinal)..
+            source.IndexOf("private void OnAutofillEdgeScrollRequested", StringComparison.Ordinal)];
+
+        wheelHandler.Should().Contain("_activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(wheelViewport, e.GetPosition(SheetGrid));");
+        wheelHandler.IndexOf("HitTestSplitPaneRegion", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(wheelHandler.IndexOf("CanScrollSplitPaneRegion", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData(30, 1)]
     [InlineData(-30, -1)]
