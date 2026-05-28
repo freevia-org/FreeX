@@ -11,12 +11,9 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
-    private void NormalizeRibbonCommandButtons()
+    private void NormalizeRibbonCommandButtons(DependencyObject root)
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var button in EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>())
+        foreach (var button in EnumerateRibbonStaticDescendants(root).OfType<ButtonBase>())
         {
             if (button is CheckBox or RadioButton)
                 continue;
@@ -49,15 +46,7 @@ public partial class MainWindow
         _normalizingRibbonSurface = true;
         try
         {
-            NormalizeRibbonGroupMetadata();
-            NormalizeRibbonCommandButtons();
-            NormalizeExistingRibbonIconText();
-            ConfigureInsertRibbonSurface();
-            NormalizeRibbonCommandGroups();
-            AlignRibbonIconColumns();
-            HideRibbonScrollBars();
-            ApplyToolbarDropdownWhiteBackgrounds();
-            _ribbonAdaptiveStateDiffInvalidated = true;
+            NormalizeStaticRibbonSurfaceForSelectedTabOnce();
             UpdateRibbonCompactMode(force: forceCompact);
         }
         finally
@@ -66,15 +55,32 @@ public partial class MainWindow
         }
     }
 
-    private void NormalizeRibbonGroupMetadata()
+    private void NormalizeStaticRibbonSurfaceForSelectedTabOnce()
     {
-        if (RibbonTabs is null)
+        if (RibbonTabs?.SelectedItem is not TabItem tabItem)
             return;
 
-        foreach (var group in EnumerateVisualDescendants(RibbonTabs)
-                     .Concat(EnumerateLogicalDescendants(RibbonTabs))
-                     .OfType<Grid>()
-                     .Distinct())
+        PrepareSelectedRibbonTabForImmediateCompaction();
+        var root = GetRibbonTabContentRoot(tabItem);
+        if (!_normalizedRibbonStaticTabs.Add(tabItem))
+        {
+            return;
+        }
+
+        NormalizeRibbonGroupMetadata(root);
+        NormalizeRibbonCommandButtons(root);
+        NormalizeExistingRibbonIconText(root);
+        ConfigureInsertRibbonSurface(root);
+        NormalizeRibbonCommandGroups(root);
+        AlignRibbonIconColumns(root);
+        HideRibbonScrollBars(root);
+        ApplyToolbarDropdownWhiteBackgrounds(root);
+        _ribbonAdaptiveStateDiffInvalidated = true;
+    }
+
+    private void NormalizeRibbonGroupMetadata(DependencyObject root)
+    {
+        foreach (var group in EnumerateRibbonStaticDescendants(root).OfType<Grid>())
         {
             if (!RibbonMetadata.IsRibbonGroup(group) ||
                 RibbonMetadata.TryGetGroupName(group, out _))
@@ -104,14 +110,22 @@ public partial class MainWindow
         return false;
     }
 
-    private void HideRibbonScrollBars()
+    private void HideRibbonScrollBars(DependencyObject root)
     {
-        if (RibbonTabs is null)
-            return;
+        if (root is FrameworkElement element &&
+            FindVisualAncestor<ScrollViewer>(element) is { } owningScrollViewer)
+        {
+            owningScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
+        }
 
-        foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
+        foreach (var scrollViewer in EnumerateVisualDescendants(root).OfType<ScrollViewer>())
             scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
     }
+
+    private static IEnumerable<DependencyObject> EnumerateRibbonStaticDescendants(DependencyObject root) =>
+        EnumerateVisualDescendants(root)
+            .Concat(EnumerateLogicalDescendants(root))
+            .Distinct();
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
@@ -264,20 +278,15 @@ public partial class MainWindow
         }
     }
 
-    private void ConfigureInsertRibbonSurface()
+    private void ConfigureInsertRibbonSurface(DependencyObject root)
     {
-        var insertTab = RibbonTabs?.Items
-            .OfType<TabItem>()
-            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), "Insert", StringComparison.Ordinal));
-
-        if (insertTab is null)
+        if (RibbonTabs?.SelectedItem is not TabItem selectedTab ||
+            !string.Equals(selectedTab.Header?.ToString(), "Insert", StringComparison.Ordinal))
+        {
             return;
+        }
 
-        var contentRoot = GetRibbonTabContentRoot(insertTab);
-        foreach (var button in EnumerateVisualDescendants(contentRoot)
-                     .Concat(EnumerateLogicalDescendants(contentRoot))
-                     .OfType<Button>()
-                     .Distinct())
+        foreach (var button in EnumerateRibbonStaticDescendants(root).OfType<Button>())
         {
             var title = GetRibbonButtonTitleOrLabel(button);
             var groupName = FindRibbonOwningGroupName(button);
@@ -347,12 +356,9 @@ public partial class MainWindow
         return null;
     }
 
-    private void AlignRibbonIconColumns()
+    private void AlignRibbonIconColumns(DependencyObject root)
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var stack in EnumerateVisualDescendants(RibbonTabs).OfType<StackPanel>())
+        foreach (var stack in EnumerateRibbonStaticDescendants(root).OfType<StackPanel>())
         {
             if (RibbonMetadata.TryGetCommandContentLayout(stack, out _))
                 continue;
@@ -389,12 +395,9 @@ public partial class MainWindow
         }
     }
 
-    private void NormalizeExistingRibbonIconText()
+    private void NormalizeExistingRibbonIconText(DependencyObject root)
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var button in EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>())
+        foreach (var button in EnumerateRibbonStaticDescendants(root).OfType<ButtonBase>())
         {
             if (TryNormalizeHomeCompactIconButton(button))
                 continue;
@@ -514,7 +517,6 @@ public partial class MainWindow
     {
         if (RibbonTabs is null ||
             button is not Button commandButton ||
-            FindVisualAncestor<TabControl>(commandButton) != RibbonTabs ||
             IsRibbonCollapsedGroupButton(commandButton) ||
             IsRibbonCommandContent(commandButton.Content) ||
             (!ContainsUnreplacedRibbonIcon(commandButton.Content) &&
@@ -850,12 +852,9 @@ public partial class MainWindow
         }
     }
 
-    private void ApplyToolbarDropdownWhiteBackgrounds()
+    private void ApplyToolbarDropdownWhiteBackgrounds(DependencyObject root)
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var comboBox in EnumerateVisualDescendants(RibbonTabs).OfType<ComboBox>())
+        foreach (var comboBox in EnumerateRibbonStaticDescendants(root).OfType<ComboBox>())
         {
             comboBox.Background = Brushes.White;
             comboBox.Foreground = Brushes.Black;
@@ -1064,20 +1063,14 @@ public partial class MainWindow
         }
     }
 
-    private void NormalizeRibbonCommandGroups()
+    private void NormalizeRibbonCommandGroups(DependencyObject root)
     {
-        if (RibbonTabs is null)
-            return;
-
-        NormalizeRibbonCommandColumns();
+        NormalizeRibbonCommandColumns(root);
     }
 
-    private void NormalizeRibbonCommandColumns()
+    private void NormalizeRibbonCommandColumns(DependencyObject root)
     {
-        if (RibbonTabs is null)
-            return;
-
-        var panels = EnumerateVisualDescendants(RibbonTabs)
+        var panels = EnumerateRibbonStaticDescendants(root)
             .OfType<StackPanel>()
             .Where(panel => panel != HomeRibbonPanel &&
                             panel.Orientation == Orientation.Vertical &&

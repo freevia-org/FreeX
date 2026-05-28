@@ -82,6 +82,7 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
+    private readonly HashSet<TabItem> _normalizedRibbonStaticTabs = [];
     private string? _ribbonAdaptiveMeasurementCacheKey;
     private IReadOnlyList<RibbonAdaptiveGroup>? _ribbonAdaptiveGroupCache;
     private double _ribbonAdaptiveFixedChromeWidthCache;
