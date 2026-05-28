@@ -108,7 +108,7 @@ public partial class MainWindow
 
         if (!ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, out var dataRange))
         {
-            MessageBox.Show("Enter a valid chart data range.", "Select Data Source", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _messageService.ShowWarning("Enter a valid chart data range.", "Select Data Source");
             return;
         }
 
@@ -177,7 +177,7 @@ public partial class MainWindow
             var targetSheet = _workbook.GetSheet(dialog.Result.TargetName);
             if (targetSheet is null)
             {
-                MessageBox.Show("Target sheet was not found.", "Move Chart", MessageBoxButton.OK, MessageBoxImage.Warning);
+                _messageService.ShowWarning("Target sheet was not found.", "Move Chart");
                 return;
             }
 
@@ -231,11 +231,7 @@ public partial class MainWindow
         if (chart is not null)
             return true;
 
-        MessageBox.Show(
-            "Insert or select a chart before using this command.",
-            caption,
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        _messageService.ShowInfo("Insert or select a chart before using this command.", caption);
         return false;
     }
 
@@ -269,12 +265,10 @@ public partial class MainWindow
     private void ChartFunnelMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Funnel);
     private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e) => ShowDeferredChartFamilyMessage();
 
-    private static void ShowDeferredChartFamilyMessage() =>
-        MessageBox.Show(
+    private void ShowDeferredChartFamilyMessage() =>
+        _messageService.ShowInfo(
             "This chart family is retained when opening XLSX files, but authoring and rendering are deferred until its data model and renderer are implemented.",
-            "Chart family deferred",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+            "Chart family deferred");
 
     private void ChartFirstSliceAngleBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -341,7 +335,7 @@ public partial class MainWindow
 
         if (!ChartTypeSupport.SupportsBarGapWidth(chart.Type))
         {
-            MessageBox.Show(this, "Gap width and overlap only apply to bar and column charts.", "Format Bar/Column", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Gap width and overlap only apply to bar and column charts.", "Format Bar/Column");
             return;
         }
 
@@ -362,7 +356,7 @@ public partial class MainWindow
 
         if (chart.Type != ChartType.Bubble)
         {
-            MessageBox.Show(this, "Bubble format options only apply to bubble charts.", "Format Bubble Chart", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Bubble format options only apply to bubble charts.", "Format Bubble Chart");
             return;
         }
 
@@ -383,7 +377,7 @@ public partial class MainWindow
 
         if (!ChartTypeSupport.SupportsFirstSliceAngle(chart.Type))
         {
-            MessageBox.Show(this, "Pie format options only apply to pie and doughnut charts.", "Format Pie/Doughnut", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Pie format options only apply to pie and doughnut charts.", "Format Pie/Doughnut");
             return;
         }
 
@@ -404,7 +398,7 @@ public partial class MainWindow
 
         if (chart.Type != ChartType.Stock)
         {
-            MessageBox.Show(this, "Stock format options only apply to stock charts.", "Format Stock Chart", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Stock format options only apply to stock charts.", "Format Stock Chart");
             return;
         }
 

@@ -97,7 +97,7 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
         var startVal = sheet.GetValue(range.Start.Row, range.Start.Col) as NumberValue;
-        if (startVal is null) { MessageBox.Show("Select a cell with a numeric value to start a series."); return; }
+        if (startVal is null) { _messageService.ShowWarning("Select a cell with a numeric value to start a series."); return; }
         var dialog = new FillSeriesStepDialog { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
@@ -253,7 +253,7 @@ public partial class MainWindow
         if (matches.Count == 0)
         {
             if (showEmptyMessage)
-                MessageBox.Show("No cells found.", "Go To Special", MessageBoxButton.OK, MessageBoxImage.Information);
+                _messageService.ShowInfo("No cells found.", "Go To Special");
             return;
         }
 

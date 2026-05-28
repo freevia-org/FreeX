@@ -439,14 +439,12 @@ public partial class MainWindow
     {
         if (_workbook.Sheets.Count(s => !s.IsHidden) <= 1)
         {
-            MessageBox.Show("Cannot delete the only visible sheet.", "Delete Sheet",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            _messageService.ShowWarning("Cannot delete the only visible sheet.", "Delete Sheet");
             return;
         }
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        if (MessageBox.Show($"Delete sheet \"{tab.Name}\"?", "Delete Sheet",
-                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        if (!_messageService.AskYesNo($"Delete sheet \"{tab.Name}\"?", "Delete Sheet")) return;
         var outcome = _commandBus.Execute(_workbook.Id, new RemoveSheetCommand(tab.Id));
         if (!outcome.Success)
         {
@@ -538,7 +536,7 @@ public partial class MainWindow
         var hiddenSheets = _workbook.Sheets.Where(s => s.IsHidden).ToList();
         if (hiddenSheets.Count == 0)
         {
-            MessageBox.Show("No hidden sheets.", "Unhide Sheet", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("No hidden sheets.", "Unhide Sheet");
             return;
         }
 
@@ -552,7 +550,7 @@ public partial class MainWindow
         var sheet = hiddenSheets.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (sheet is null)
         {
-            MessageBox.Show("Hidden sheet not found.", "Unhide Sheet", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _messageService.ShowWarning("Hidden sheet not found.", "Unhide Sheet");
             return;
         }
 

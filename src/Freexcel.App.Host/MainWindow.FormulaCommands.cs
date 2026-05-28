@@ -117,7 +117,7 @@ public partial class MainWindow
         if (sender is not System.Windows.Controls.Button btn) return;
         if (_workbook.NamedRanges.Count == 0)
         {
-            MessageBox.Show("No names are defined in this workbook.", "Use in Formula", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("No names are defined in this workbook.", "Use in Formula");
             return;
         }
 
@@ -154,19 +154,16 @@ public partial class MainWindow
         var precedents = FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell);
         if (precedents.Count == 0)
         {
-            MessageBox.Show($"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no direct precedents.",
-                title, MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo($"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no direct precedents.", title);
             return;
         }
 
         _formulaTraceArrows.Clear();
         _formulaTraceArrows.AddRange(FormulaAuditingService.GetPrecedentTraceArrows(_workbook, activeCell));
         UpdateViewport();
-        MessageBox.Show(
+        _messageService.ShowInfo(
             $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} directly references {precedents.Count} cell(s):\n{FormulaAuditFormatter.FormatAddresses(_workbook, precedents)}",
-            title,
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+            title);
     }
 
     private void TraceDependentsBtn_Click(object sender, RoutedEventArgs e)
@@ -177,26 +174,23 @@ public partial class MainWindow
         var dependents = FormulaAuditingService.GetDirectDependents(_workbook, activeCell);
         if (dependents.Count == 0)
         {
-            MessageBox.Show($"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no direct dependents.",
-                "Trace Dependents", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo($"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no direct dependents.", "Trace Dependents");
             return;
         }
 
         _formulaTraceArrows.Clear();
         _formulaTraceArrows.AddRange(FormulaAuditingService.GetDependentTraceArrows(_workbook, activeCell));
         UpdateViewport();
-        MessageBox.Show(
+        _messageService.ShowInfo(
             $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} is directly referenced by {dependents.Count} cell(s):\n{FormulaAuditFormatter.FormatAddresses(_workbook, dependents)}",
-            "Trace Dependents",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+            "Trace Dependents");
     }
 
     private void RemoveArrowsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_formulaTraceArrows.Count == 0)
         {
-            MessageBox.Show("No auditing arrows to remove.", "Remove Arrows", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("No auditing arrows to remove.", "Remove Arrows");
             return;
         }
 
@@ -225,7 +219,7 @@ public partial class MainWindow
         var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId);
         if (issues.Count == 0)
         {
-            MessageBox.Show("No issues found.", "Error Checking", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("No issues found.", "Error Checking");
             return;
         }
 
@@ -273,7 +267,7 @@ public partial class MainWindow
         var summary = FormulaEvaluationSummaryService.GetSummary(_workbook, range.Start);
         if (summary is null)
         {
-            MessageBox.Show("Select a cell that contains a formula.", "Evaluate Formula", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Select a cell that contains a formula.", "Evaluate Formula");
             return;
         }
 
@@ -298,11 +292,9 @@ public partial class MainWindow
         _watchWindowDialog?.Refresh();
         if (showMessage)
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 WatchWindowMessageFormatter.FormatAddResult(added, FormatRangeReference(range.Start, range.End)),
-                "Watch Window",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Watch Window");
         }
         return added;
     }
@@ -314,11 +306,9 @@ public partial class MainWindow
 
         var removed = WatchWindowService.RemoveWatches(_workbook, range);
         _watchWindowDialog?.Refresh();
-        MessageBox.Show(
+        _messageService.ShowInfo(
             WatchWindowMessageFormatter.FormatRemoveResult(removed, FormatRangeReference(range.Start, range.End)),
-            "Watch Window",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+            "Watch Window");
     }
 
     private void WatchWindowBtn_Click(object sender, RoutedEventArgs e)

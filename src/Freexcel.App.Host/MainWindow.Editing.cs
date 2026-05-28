@@ -834,6 +834,8 @@ public partial class MainWindow
         MessageBoxImage icon)
     {
         Activate();
+        // Delegate to IUserMessageService where possible; for YesNo/YesNoCancel/OKCancel
+        // the raw call is used because the service's AskYesNo covers only the binary case.
         return MessageBox.Show(this, messageBoxText, caption, button, icon);
     }
 
