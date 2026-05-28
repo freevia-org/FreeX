@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using FluentAssertions;
 using Freexcel.App.Host;
 
@@ -57,6 +58,23 @@ public sealed class MenuKeyTipAssignerTests
             RibbonTooltip.GetKeyTip(copy).Should().Be("C");
             copy.InputGestureText.Should().Be("C");
             RibbonTooltip.GetKeyTip(clear).Should().Be("L");
+        });
+    }
+
+    [Fact]
+    public void AssignsOnlyTypeableAsciiKeyTipsFromMenuHeaders()
+    {
+        RunSta(() =>
+        {
+            var accented = new MenuItem { Header = "Éclair" };
+            var symbolOnly = new MenuItem { Header = "★" };
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([accented, symbolOnly]);
+
+            RibbonTooltip.GetKeyTip(accented).Should().Be("C");
+            RibbonKeyTipMode.ToKeyTipToken(Key.C).Should().Be(RibbonTooltip.GetKeyTip(accented));
+            RibbonTooltip.GetKeyTip(symbolOnly).Should().Be("1");
+            RibbonKeyTipMode.ToKeyTipToken(Key.D1).Should().Be(RibbonTooltip.GetKeyTip(symbolOnly));
         });
     }
 

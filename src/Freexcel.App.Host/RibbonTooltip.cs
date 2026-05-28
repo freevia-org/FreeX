@@ -48,6 +48,10 @@ public static class RibbonTooltip
                 return true;
             }
 
+            var wasOpen = item.IsSubmenuOpen;
+            if (item.Items.Count > 0)
+                item.IsSubmenuOpen = true;
+
             if (TryOpenSubmenuForKeyTip(item, keyTip, out openedSubmenu))
             {
                 item.IsSubmenuOpen = true;
@@ -55,6 +59,8 @@ public static class RibbonTooltip
                     openedSubmenu.IsSubmenuOpen = true;
                 return true;
             }
+
+            item.IsSubmenuOpen = wasOpen;
         }
 
         openedSubmenu = null;

@@ -73,4 +73,22 @@ public sealed class XmlNativeBagSerializerTests
         target.Attribute("plainFlag")?.Value.Should().Be("plain");
         target.Attribute(XName.Get("flag", "urn:freexcel:test"))?.Value.Should().Be("namespaced");
     }
+
+    [Fact]
+    public void ApplyToElement_NativeAttributes_DoesNotOverwriteModeledAttributes()
+    {
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["modeled"] = "native-copy",
+                ["nativeOnly"] = "preserved"
+            });
+        var target = new XElement("root", new XAttribute("modeled", "model-value"));
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, ["modeled"]);
+
+        changed.Should().BeTrue();
+        target.Attribute("modeled")?.Value.Should().Be("model-value");
+        target.Attribute("nativeOnly")?.Value.Should().Be("preserved");
+    }
 }
