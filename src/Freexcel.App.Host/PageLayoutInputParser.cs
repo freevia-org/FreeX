@@ -218,7 +218,7 @@ public static class PageLayoutInputParser
                 return true;
             }
         }
-        else if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var percent) &&
+        else if (int.TryParse(TrimPercentSuffix(trimmed), NumberStyles.Integer, CultureInfo.InvariantCulture, out var percent) &&
                  percent is >= 10 and <= 400)
         {
             scaleToFit = new WorksheetScaleToFit(percent, null, null);
@@ -273,6 +273,11 @@ public static class PageLayoutInputParser
     private static string TrimDpiSuffix(string value) =>
         value.EndsWith("dpi", StringComparison.OrdinalIgnoreCase)
             ? value[..^3].TrimEnd()
+            : value;
+
+    private static string TrimPercentSuffix(string value) =>
+        value.EndsWith('%')
+            ? value[..^1].TrimEnd()
             : value;
 
     private static bool IsClearInput(string normalized) =>
