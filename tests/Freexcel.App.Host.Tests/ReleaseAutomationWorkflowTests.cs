@@ -110,6 +110,9 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("[string]$MsixCertificatePassword = $env:FREEXCEL_MSIX_CERTIFICATE_PASSWORD");
         script.Should().Contain("[string]$MsixTimestampUrl = $env:FREEXCEL_MSIX_TIMESTAMP_URL");
         script.Should().Contain("$artifactMsixPath = Join-Path $artifactRoot \"$artifactName.msix\"");
+        script.Should().Contain("function ConvertTo-MsixPackageVersion");
+        script.Should().Contain("$msixVersion = ConvertTo-MsixPackageVersion -DisplayVersion $Version");
+        script.Should().Contain("$msixParts[$i] = $msixParts[$i] % 65536");
         script.Should().Contain("<Identity Name=\"Freexcel.Tester\" Publisher=\"CN=FreexcelLocal\" Version=\"$msixVersion\" />");
         script.Should().Contain("EntryPoint=\"Windows.FullTrustApplication\"");
         script.Should().Contain("<rescap:Capability Name=\"runFullTrust\" />");
