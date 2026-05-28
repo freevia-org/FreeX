@@ -163,6 +163,16 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ExtractColonDelimitedToken_ExtractsConsistentPart()
+    {
+        var result = FlashFillService.Fill(
+            [("08:15", "08"), ("14:45", "14")],
+            ["19:30"]);
+
+        result.Should().BeEquivalentTo(["19"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_ExtractSemicolonDelimitedToken_ReturnsNullWhenRemainingDelimiterIsMissing()
     {
         var result = FlashFillService.Fill(
