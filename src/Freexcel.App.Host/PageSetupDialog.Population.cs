@@ -42,9 +42,9 @@ public partial class PageSetupDialog
         FirstPageNumberBox.Text = FirstPageNumber?.ToString(CultureInfo.InvariantCulture) ?? "";
         PrintQualityBox.Text = PrintQualityDpi?.ToString(CultureInfo.InvariantCulture) ?? "";
         PrintAreaBox.Text = PrintArea?.ToString() ?? "";
-        RowsRepeatBox.Text = PrintTitleRows is { } rows ? $"{rows.Start}:{rows.End}" : "";
+        RowsRepeatBox.Text = PrintTitleRows is { } rows ? $"${rows.Start}:${rows.End}" : "";
         ColumnsRepeatBox.Text = PrintTitleColumns is { } cols
-            ? $"{CellAddress.NumberToColumnName(cols.Start)}:{CellAddress.NumberToColumnName(cols.End)}"
+            ? $"${CellAddress.NumberToColumnName(cols.Start)}:${CellAddress.NumberToColumnName(cols.End)}"
             : "";
         PrintGridlinesBox.IsChecked = PrintGridlines;
         PrintHeadingsBox.IsChecked = PrintHeadings;

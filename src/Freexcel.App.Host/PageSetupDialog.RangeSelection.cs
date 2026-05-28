@@ -20,8 +20,8 @@ public partial class PageSetupDialog
         {
             target.Text = targetName switch
             {
-                nameof(RowsRepeatBox) => $"{selection.Start.Row}:{selection.End.Row}",
-                nameof(ColumnsRepeatBox) => $"{CellAddress.NumberToColumnName(selection.Start.Col)}:{CellAddress.NumberToColumnName(selection.End.Col)}",
+                nameof(RowsRepeatBox) => $"${selection.Start.Row}:${selection.End.Row}",
+                nameof(ColumnsRepeatBox) => $"${CellAddress.NumberToColumnName(selection.Start.Col)}:${CellAddress.NumberToColumnName(selection.End.Col)}",
                 _ => selection.ToString()
             };
         }

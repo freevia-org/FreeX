@@ -73,7 +73,9 @@ public sealed class PageLayoutInputParserTests
 
     [Theory]
     [InlineData("1:2", true, 1, 2)]
+    [InlineData("$1:$2", true, 1, 2)]
     [InlineData("4", true, 4, 4)]
+    [InlineData("$4", true, 4, 4)]
     [InlineData("5:3", true, 3, 5)]
     [InlineData("1048576", true, 1048576, 1048576)]
     [InlineData("none", true, null, null)]
@@ -91,7 +93,9 @@ public sealed class PageLayoutInputParserTests
 
     [Theory]
     [InlineData("A:C", true, 1, 3)]
+    [InlineData("$A:$C", true, 1, 3)]
     [InlineData("D", true, 4, 4)]
+    [InlineData("$D", true, 4, 4)]
     [InlineData("C:A", true, 1, 3)]
     [InlineData("XFD", true, 16384, 16384)]
     [InlineData("clear", true, null, null)]
