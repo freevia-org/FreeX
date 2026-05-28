@@ -491,6 +491,13 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Info_Origin_ReturnsAbsoluteVisibleCellReference()
+    {
+        var (wb, sheet) = MakeWb();
+        _eval.Evaluate("=INFO(\"origin\")", sheet, wb).Should().Be(new TextValue("$A:$A$1"));
+    }
+
+    [Fact]
     public void Info_Recalc_AutomaticByDefault()
     {
         var (wb, sheet) = MakeWb();
