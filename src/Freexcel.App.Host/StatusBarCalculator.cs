@@ -6,7 +6,7 @@ namespace Freexcel.App.Host;
 /// <summary>Calculates aggregate statistics for a selection, for the status bar.</summary>
 public static class StatusBarCalculator
 {
-    public record Stats(double Sum, int Count, int NumericalCount, double? Average, double? Min, double? Max);
+    public readonly record struct Stats(double Sum, int Count, int NumericalCount, double? Average, double? Min, double? Max);
 
     public static Stats Calculate(Sheet sheet, GridRange range)
     {

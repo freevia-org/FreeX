@@ -175,7 +175,7 @@ public sealed class StatusBarCalculatorTests
         _ = cache.GetOrCreate(sheet, range, revision: 1, () => StatusBarCalculator.Calculate(sheet, range));
 
         var sw = Stopwatch.StartNew();
-        StatusBarCalculator.Stats stats = null!;
+        StatusBarCalculator.Stats stats = default;
         for (var i = 0; i < 25; i++)
             stats = cache.GetOrCreate(sheet, range, revision: 1, () => StatusBarCalculator.Calculate(sheet, range));
         sw.Stop();
@@ -197,7 +197,7 @@ public sealed class StatusBarCalculatorTests
             new CellAddress(sheet.Id, 10_000, 1));
 
         var sw = Stopwatch.StartNew();
-        StatusBarCalculator.Stats stats = null!;
+        StatusBarCalculator.Stats stats = default;
         for (var i = 0; i < 500; i++)
             stats = StatusBarCalculator.Calculate(sheet, range);
         sw.Stop();
@@ -221,7 +221,7 @@ public sealed class StatusBarCalculatorTests
             new CellAddress(sheet.Id, 20_000, 1));
 
         var sw = Stopwatch.StartNew();
-        StatusBarCalculator.Stats stats = null!;
+        StatusBarCalculator.Stats stats = default;
         for (var i = 0; i < 50; i++)
             stats = StatusBarCalculator.Calculate(sheet, range);
         sw.Stop();
@@ -247,7 +247,7 @@ public sealed class StatusBarCalculatorTests
 
         const int iterations = 500;
         var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
-        StatusBarCalculator.Stats stats = null!;
+        StatusBarCalculator.Stats stats = default;
         for (var i = 0; i < iterations; i++)
             stats = StatusBarCalculator.Calculate(sheet, range);
         var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
@@ -258,7 +258,7 @@ public sealed class StatusBarCalculatorTests
 
         stats.Sum.Should().Be(500_500d);
         (allocated / iterations).Should().BeLessThan(
-            128,
-            "bounded status scans should allocate only the returned Stats object, not range iterators");
+            64,
+            "bounded status scans should not allocate a Stats object or range iterators");
     }
 }
