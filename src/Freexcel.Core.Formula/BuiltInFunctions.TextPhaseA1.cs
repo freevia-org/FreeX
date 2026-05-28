@@ -239,9 +239,11 @@ public static partial class BuiltInFunctions
     private static ScalarValue NumbervalueScalar(ScalarValue value, string decSep, string grpSep)
     {
         var text = ToText(value).Trim();
-        // Validate separators per Excel spec
-        if (decSep.Length != 1) return ErrorValue.Value;
+        // Excel uses only the first character when separator arguments contain more than one character.
+        if (decSep.Length == 0) return ErrorValue.Value;
         if (grpSep.Length == 0) return ErrorValue.Value;
+        decSep = decSep[..1];
+        grpSep = grpSep[..1];
         if (decSep == grpSep) return ErrorValue.Value;
         if (grpSep.Contains(decSep)) return ErrorValue.Value;
 

@@ -8817,6 +8817,11 @@ public class FunctionLibraryTests
             .Should().Be(new NumberValue(-1234.56));
 
     [Fact]
+    public void Numbervalue_MultiCharacterSeparators_UseFirstCharacterLikeExcel() =>
+        _eval.Evaluate("=NUMBERVALUE(\"1.234,56\",\",ignored\",\".ignored\")", MakeSheet())
+            .Should().Be(new NumberValue(1234.56));
+
+    [Fact]
     public void Numbervalue_SameShapeSeparatorArguments_SpillsElementwise()
     {
         var sheet = MakeSheet(
