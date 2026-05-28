@@ -25,12 +25,15 @@ public static class CommentNavigationPlanner
         if (orderedComments.Count == 0)
             return default;
 
-        var target = previous
-            ? orderedComments.LastOrDefault(address => address.Row < current.Row || (address.Row == current.Row && address.Col < current.Col))
-            : orderedComments.FirstOrDefault(address => address.Row > current.Row || (address.Row == current.Row && address.Col > current.Col));
-        return target.Equals(default(CellAddress))
-            ? previous ? orderedComments[^1] : orderedComments[0]
-            : target;
+        var index = previous
+            ? FindFirstNotBefore(orderedComments, current) - 1
+            : FindFirstAfter(orderedComments, current);
+        if (index < 0)
+            index = orderedComments.Count - 1;
+        else if (index >= orderedComments.Count)
+            index = 0;
+
+        return orderedComments[index];
     }
 
     public static string FormatCommentList(IReadOnlyDictionary<CellAddress, string> comments) =>
@@ -102,4 +105,42 @@ public static class CommentNavigationPlanner
         string.IsNullOrWhiteSpace(author)
             ? text
             : $"{author.Trim()}: {text}";
+
+    private static int FindFirstAfter(IReadOnlyList<CellAddress> orderedComments, CellAddress current)
+    {
+        var low = 0;
+        var high = orderedComments.Count;
+        while (low < high)
+        {
+            var mid = low + ((high - low) / 2);
+            if (ComparePosition(orderedComments[mid], current) <= 0)
+                low = mid + 1;
+            else
+                high = mid;
+        }
+
+        return low;
+    }
+
+    private static int FindFirstNotBefore(IReadOnlyList<CellAddress> orderedComments, CellAddress current)
+    {
+        var low = 0;
+        var high = orderedComments.Count;
+        while (low < high)
+        {
+            var mid = low + ((high - low) / 2);
+            if (ComparePosition(orderedComments[mid], current) < 0)
+                low = mid + 1;
+            else
+                high = mid;
+        }
+
+        return low;
+    }
+
+    private static int ComparePosition(CellAddress left, CellAddress right)
+    {
+        var row = left.Row.CompareTo(right.Row);
+        return row != 0 ? row : left.Col.CompareTo(right.Col);
+    }
 }
