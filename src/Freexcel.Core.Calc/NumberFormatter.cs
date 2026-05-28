@@ -101,6 +101,15 @@ public static partial class NumberFormatter
         WorkbookIndexedColorPalette? indexedColors,
         WorkbookTheme? theme)
     {
+        if (sections.Length == 1 && (sections[0].Length == 0 || sections[0][0] != '['))
+        {
+            var singleSectionText = sections[0] == ""
+                ? ""
+                : ApplyNumericFormat(value, sections[0]);
+            singleSectionText = ApplyAccountingTargetWidth(singleSectionText, sections[0], targetWidthCharacters);
+            return new FormatResult(singleSectionText);
+        }
+
         var parsedSections = sections.Select(section => ParseSection(section, indexedColors, theme)).ToArray();
         bool hasConditions = parsedSections.Any(section => section.Condition is not null);
 

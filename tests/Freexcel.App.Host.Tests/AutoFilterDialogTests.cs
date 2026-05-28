@@ -421,9 +421,9 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("new CellFillColorFilterCommand");
         source.Should().Contain("new CellNoFillColorFilterCommand");
         source.Should().Contain("new CellFontColorFilterCommand");
-        source.Should().Contain("var parsed = FilterPromptPlanner.TryPlan(value, out var plan, out var error)");
-        source.Should().Contain("plan.Kind != FilterPromptPlanKind.AllowedValues");
-        source.Should().Contain("plan.CreateCommand(_currentSheetId, currentRange, filterColOffset)");
+        source.Should().Contain("FilterInputParser.TryParseCriterion");
+        source.Should().Contain("FilterInputParser.TryParseTopBottom");
+        source.Should().Contain("FilterInputParser.TryParseAverage");
     }
 
     [Fact]
