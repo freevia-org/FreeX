@@ -37,7 +37,7 @@ internal static class ExcelTextNumberParser
         {
             number = IsTimeOnlyText(trimmed)
                 ? dt.TimeOfDay.TotalDays
-                : DateToSerial(dt);
+                : ExcelDateSystem.DateToSerial(dt);
             return true;
         }
 
@@ -72,8 +72,4 @@ internal static class ExcelTextNumberParser
             || AmPmRegex.IsMatch(text);
     }
 
-    private static double DateToSerial(DateTime date) =>
-        date < new DateTime(1900, 3, 1)
-            ? (date - new DateTime(1899, 12, 30)).TotalDays - 1
-            : (date - new DateTime(1899, 12, 30)).TotalDays;
 }
