@@ -59,6 +59,66 @@ public sealed class FillSeriesPlannerTests
     }
 
     [Fact]
+    public void BuildLinearSeriesEdits_UsesColumnMajorOrderForExcelSeriesInColumns()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3));
+        sheet.SetCell(range.Start, new NumberValue(10));
+
+        var edits = FillSeriesPlanner.BuildLinearSeriesEdits(
+            sheet,
+            range,
+            step: 2,
+            FillSeriesDirection.Columns);
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new CellAddress(sheet.Id, 3, 2),
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 3, 3));
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(12, 14, 16);
+    }
+
+    [Fact]
+    public void BuildLinearSeriesEdits_StopsAtAscendingExcelStopValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 5));
+        sheet.SetCell(range.Start, new NumberValue(0));
+
+        var edits = FillSeriesPlanner.BuildLinearSeriesEdits(
+            sheet,
+            range,
+            step: 1,
+            FillSeriesDirection.Rows,
+            stopValue: 3);
+
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public void BuildLinearSeriesEdits_StopsAtDescendingExcelStopValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 5));
+        sheet.SetCell(range.Start, new NumberValue(0));
+
+        var edits = FillSeriesPlanner.BuildLinearSeriesEdits(
+            sheet,
+            range,
+            step: -1,
+            FillSeriesDirection.Rows,
+            stopValue: -3);
+
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(-1, -2, -3);
+    }
+
+    [Fact]
     public void BuildLinearSeriesEdits_ReturnsNoEditsWhenStartingCellIsNotNumeric()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
