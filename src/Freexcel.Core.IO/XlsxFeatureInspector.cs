@@ -318,6 +318,12 @@ public static class XlsxFeatureInspector
                 continue;
             }
 
+            if (normalizedTarget.Contains("richdata/", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.LinkedDataTypes;
+                continue;
+            }
+
             if (normalizedType.EndsWith("/model", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.DataModel;
