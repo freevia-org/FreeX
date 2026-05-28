@@ -81,6 +81,7 @@ public partial class MainWindow
             if (pos.X < rowHeaderW && pos.Y < colHeaderH)
             {
                 SelectAll();
+                e.Handled = true;
                 return;
             }
             // Column header: select entire column
@@ -106,6 +107,7 @@ public partial class MainWindow
                         {
                             SelectColumn(cm.Col);
                         }
+                        e.Handled = true;
                         return;
                     }
                 }
@@ -132,6 +134,7 @@ public partial class MainWindow
                     {
                         SelectRow(rm.Row);
                     }
+                    e.Handled = true;
                     return;
                 }
             }
@@ -237,6 +240,8 @@ public partial class MainWindow
                     SheetGrid.CaptureMouse();
                 }
             }
+
+            e.Handled = true;
         }
     }
 
