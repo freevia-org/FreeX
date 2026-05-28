@@ -134,7 +134,17 @@ jobs:
           $uploadRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts\upload"
           New-Item -ItemType Directory -Force -Path $uploadRoot | Out-Null
           Copy-Item -LiteralPath $versionedExe.FullName -Destination (Join-Path $uploadRoot $versionedExe.Name) -Force
-          Copy-Item -LiteralPath $versionedExe.FullName -Destination (Join-Path $uploadRoot "Freexcel-latest-win-x64.exe") -Force
+          $latestExePath = Join-Path $uploadRoot "Freexcel-latest-win-x64.exe"
+          Copy-Item -LiteralPath $versionedExe.FullName -Destination $latestExePath -Force
+
+          $versionedHashPath = "$($versionedExe.FullName).sha256"
+          if (-not (Test-Path -LiteralPath $versionedHashPath)) {
+            throw "Publish script did not create a versioned single-file exe checksum."
+          }
+
+          Copy-Item -LiteralPath $versionedHashPath -Destination (Join-Path $uploadRoot "$($versionedExe.Name).sha256") -Force
+          $latestHash = Get-FileHash -LiteralPath $latestExePath -Algorithm SHA256
+          Set-Content -LiteralPath "$latestExePath.sha256" -Value "$($latestHash.Hash.ToLowerInvariant())  Freexcel-latest-win-x64.exe" -Encoding ASCII
 
       - name: Publish unsigned local MSIX
         shell: pwsh
@@ -183,6 +193,13 @@ jobs:
           path: artifacts/upload/Freexcel-latest-win-x64.exe
           if-no-files-found: error
 
+      - name: Upload EXE checksum artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile-sha256
+          path: artifacts/upload/*.exe.sha256
+          if-no-files-found: error
+
       - name: Upload versioned MSIX artifact
         uses: actions/upload-artifact@v7
         with:
@@ -217,6 +234,7 @@ jobs:
 
           Commit: ${{ github.sha }}
           Download the stable latest asset: Freexcel-latest-win-x64.exe
+          Checksum for the latest single-file asset: Freexcel-latest-win-x64.exe.sha256
           Unsigned local MSIX package: Freexcel-latest-win-x64.msix
 
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
@@ -259,6 +277,7 @@ jobs:
 
           $assetPaths = @(
             "artifacts/upload/*.exe",
+            "artifacts/upload/*.exe.sha256",
             "artifacts/upload/*.msix",
             "artifacts/upload/*.msix.sha256"
           )

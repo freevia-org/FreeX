@@ -29,6 +29,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("Publish unsigned local MSIX");
         workflow.Should().Contain("-PublishMode Msix");
         workflow.Should().Contain("Freexcel-latest-win-x64.exe");
+        workflow.Should().Contain("Freexcel-latest-win-x64.exe.sha256");
         workflow.Should().Contain("Freexcel-latest-win-x64.msix");
         workflow.Should().Contain("actions/upload-artifact@v7");
         workflow.Should().Contain("gh release create");
@@ -49,9 +50,12 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("\"release_id=$releaseId\" >> $env:GITHUB_OUTPUT");
         workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile");
         workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-msix");
+        workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile-sha256");
         workflow.Should().Contain("path: artifacts/upload/freexcel-*-win-x64-msix.msix");
+        workflow.Should().Contain("path: artifacts/upload/*.exe.sha256");
         workflow.Should().Contain("path: artifacts/upload/*.msix.sha256");
         workflow.Should().Contain("$assetPaths = @(");
+        workflow.Should().Contain("\"artifacts/upload/*.exe.sha256\"");
         workflow.Should().Contain("\"artifacts/upload/*.msix.sha256\"");
         workflow.Should().Contain("gh release create $tag @assetPaths --target $env:GITHUB_SHA --title $title --notes $notes --draft @prereleaseArgs");
         workflow.Should().Contain("gh release edit $tag --draft=false @latestArgs");
@@ -78,6 +82,7 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("[string]$RuntimeIdentifier = \"win-x64\"");
         script.Should().Contain("\"-r\", $RuntimeIdentifier");
         script.Should().Contain("\"--self-contained\", \"false\"");
+        script.Should().Contain("Set-Content -LiteralPath \"$artifactExePath.sha256\"");
     }
 
     [Fact]
@@ -104,6 +109,7 @@ public sealed class ReleaseAutomationWorkflowTests
         var workflow = File.ReadAllText(workflowPath);
 
         workflow.Should().Contain("Download the stable latest asset: Freexcel-latest-win-x64.exe");
+        workflow.Should().Contain("Checksum for the latest single-file asset: Freexcel-latest-win-x64.exe.sha256");
         workflow.Should().Contain("Unsigned local MSIX package: Freexcel-latest-win-x64.msix");
 
         var prereleaseInput = Regex.Match(workflow, @"(?ms)^\s+prerelease:\s*$.*?^\s+type:\s+boolean\s*$");

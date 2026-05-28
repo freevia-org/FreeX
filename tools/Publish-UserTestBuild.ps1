@@ -110,8 +110,11 @@ $runtimeUrl = "https://dotnet.microsoft.com/download/dotnet/10.0"
 
 if ($PublishMode -eq "SingleFile") {
     Move-Item -LiteralPath $launchExePath -Destination $artifactExePath
+    $hash = Get-FileHash -LiteralPath $artifactExePath -Algorithm SHA256
+    Set-Content -LiteralPath "$artifactExePath.sha256" -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $artifactExePath)" -Encoding ASCII
     Remove-Item -LiteralPath $publishDir -Recurse -Force
     Write-Host "Created $artifactExePath"
+    Write-Host "Created $artifactExePath.sha256"
     exit 0
 }
 
