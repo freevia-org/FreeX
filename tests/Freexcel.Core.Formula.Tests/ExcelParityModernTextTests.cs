@@ -162,6 +162,15 @@ public sealed class ExcelParityModernTextTests
         rv.At(2, 2).Should().Be(ErrorValue.NA);
     }
 
+    [Fact]
+    public void Textsplit_ExplicitlyOmittedPaddingDefaultsToNa()
+    {
+        var rv = _eval.Evaluate("=TEXTSPLIT(\"a,b;c\",\",\",\";\",,,)", Sheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rv.At(2, 2).Should().Be(ErrorValue.NA);
+    }
+
     [Theory]
     [InlineData("=TEXTSPLIT(\"abc\",,)")]
     [InlineData("=TEXTSPLIT(\"abc\",\"\")")]
