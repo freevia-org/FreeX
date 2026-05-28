@@ -568,6 +568,46 @@ public partial class GridView
 
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
+        if (_objectDragKind != ObjectDragKind.None)
+        {
+            _objectDragKind = ObjectDragKind.None;
+            _objectDragCurrentRect = Rect.Empty;
+            Cursor = null;
+            InvalidateVisual();
+        }
+
+        if (_marginDragEdge.HasValue)
+        {
+            _marginDragEdge = null;
+            Cursor = null;
+            InvalidateVisual();
+        }
+
+        if (_splitDividerDragHandle != SplitDividerHandle.None)
+        {
+            _splitDividerDragHandle = SplitDividerHandle.None;
+            Cursor = null;
+            InvalidateVisual();
+        }
+
+        if (_splitPaneScrollbarDragging)
+        {
+            _splitPaneScrollbarDragging = false;
+            _splitPaneScrollbarDragSource = null;
+            _splitPaneScrollbarDragPointerOffset = 0;
+            Cursor = null;
+            InvalidateVisual();
+        }
+
+        if (_autofillDragging)
+        {
+            _autofillDragging = false;
+            _autofillSourceRange = null;
+            _autofillTarget = null;
+            Cursor = null;
+            InvalidateVisual();
+        }
+
         if (_resizeTarget != ResizeTarget.None)
         {
             _resizeTarget = ResizeTarget.None;

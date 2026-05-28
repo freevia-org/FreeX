@@ -263,7 +263,7 @@ public partial class GridView
             {
                 var bottom = ColHeaderHeight + row.TopOffset + row.Height;
                 if (y <= bottom)
-                    return Math.Min(CellAddress.MaxRow, row.Row + 1);
+                    return IncrementWithinLimit(row.Row, CellAddress.MaxRow);
             }
         }
 
@@ -293,7 +293,7 @@ public partial class GridView
             {
                 var right = ActualRowHeaderWidth + column.LeftOffset + column.Width;
                 if (x <= right)
-                    return Math.Min(CellAddress.MaxCol, column.Col + 1);
+                    return IncrementWithinLimit(column.Col, CellAddress.MaxCol);
             }
         }
 
@@ -306,6 +306,9 @@ public partial class GridView
 
         return null;
     }
+
+    private static uint IncrementWithinLimit(uint value, uint limit) =>
+        value >= limit ? limit : value + 1;
 
     public static bool CanScrollSplitPaneRegion(SplitPaneRegion region, bool horizontal) =>
         horizontal
