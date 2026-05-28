@@ -9,18 +9,26 @@ public partial class GridView
 {
     // Returns pixel coords for a range, clamped to viewport boundaries.
     private (double? top, double? left, double? bottom, double? right) GetRangePixels(
-        ViewportModel vp, GridRange range)
+        ViewportModel vp,
+        GridRange range) =>
+        GetRangePixels(vp, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
+
+    private (double? top, double? left, double? bottom, double? right) GetRangePixels(
+        ViewportModel vp,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
     {
         double? top = null, left = null, bottom = null, right = null;
         foreach (var row in vp.RowMetrics)
         {
-            if (row.Row == range.Start.Row) top    = row.TopOffset + EffectiveColHeaderHeight;
-            if (row.Row == range.End.Row)   bottom = row.TopOffset + row.Height + EffectiveColHeaderHeight;
+            if (row.Row == range.Start.Row) top    = row.TopOffset + columnHeaderHeight;
+            if (row.Row == range.End.Row)   bottom = row.TopOffset + row.Height + columnHeaderHeight;
         }
         foreach (var col in vp.ColMetrics)
         {
-            if (col.Col == range.Start.Col) left  = col.LeftOffset + ActualRowHeaderWidth;
-            if (col.Col == range.End.Col)   right = col.LeftOffset + col.Width + ActualRowHeaderWidth;
+            if (col.Col == range.Start.Col) left  = col.LeftOffset + rowHeaderWidth;
+            if (col.Col == range.End.Col)   right = col.LeftOffset + col.Width + rowHeaderWidth;
         }
         return (top, left, bottom, right);
     }
@@ -72,7 +80,9 @@ public partial class GridView
         if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
             return;
 
-        var rect = CalculateQuickAnalysisPreviewRect(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
+        var rowHeaderWidth = ActualRowHeaderWidth;
+        var columnHeaderHeight = EffectiveColHeaderHeight;
+        var rect = CalculateQuickAnalysisPreviewRect(Viewport, range, rowHeaderWidth, columnHeaderHeight);
         if (rect is null)
             return;
 
@@ -80,17 +90,17 @@ public partial class GridView
         switch (QuickAnalysisPreviewVisual)
         {
             case GridQuickAnalysisPreviewVisualKind.DataBars:
-                foreach (var bar in CalculateQuickAnalysisDataBarPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+                foreach (var bar in CalculateQuickAnalysisDataBarPreviewRects(Viewport, range, rowHeaderWidth, columnHeaderHeight))
                     dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, bar);
                 break;
             case GridQuickAnalysisPreviewVisualKind.ColorScale:
                 var index = 0;
-                foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+                foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, rowHeaderWidth, columnHeaderHeight))
                     dc.DrawRectangle(QuickAnalysisColorScalePreviewBrushes[index++ % QuickAnalysisColorScalePreviewBrushes.Length], null, cell);
                 break;
             case GridQuickAnalysisPreviewVisualKind.IconSet:
                 var iconIndex = 0;
-                foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+                foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, rowHeaderWidth, columnHeaderHeight))
                 {
                     var radius = Math.Min(cell.Width, cell.Height) / 4;
                     if (radius <= 0)
@@ -422,8 +432,10 @@ public partial class GridView
         var cols  = Viewport.ColMetrics;
         if (rows.Count == 0 || cols.Count == 0) return;
 
-        var (top, left, bottom, right) = GetRangePixels(Viewport, range);
-        var rect = CalculateVisibleSelectionRect(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
+        var rowHeaderWidth = ActualRowHeaderWidth;
+        var columnHeaderHeight = EffectiveColHeaderHeight;
+        var (top, left, bottom, right) = GetRangePixels(Viewport, range, rowHeaderWidth, columnHeaderHeight);
+        var rect = CalculateVisibleSelectionRect(Viewport, range, rowHeaderWidth, columnHeaderHeight);
         if (rect is null) return;
 
         double drawTop    = rect.Value.Top;
@@ -445,7 +457,7 @@ public partial class GridView
     private void RenderSelectionHandle(DrawingContext dc, GridRange range)
     {
         if (Viewport == null) return;
-        var (top, left, bottom, right) = GetRangePixels(Viewport, range);
+        var (top, left, bottom, right) = GetRangePixels(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
         double drawBottom = bottom ?? ActualHeight;
         double drawRight  = right  ?? ActualWidth;
         DrawSelectionHandle(dc, right, bottom, drawRight, drawBottom);
