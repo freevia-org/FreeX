@@ -12,10 +12,10 @@ public static class MenuKeyTipAssigner
         foreach (var item in items)
         {
             var existing = NormalizeKeyTip(RibbonTooltip.GetKeyTip(item));
-            if (string.IsNullOrWhiteSpace(existing) || !IsTypeableKeyTip(existing))
+            if (string.IsNullOrWhiteSpace(existing))
                 continue;
 
-            if (IsAvailable(existing, used))
+            if (IsTypeableKeyTip(existing) && IsAvailable(existing, used))
             {
                 RibbonTooltip.SetKeyTip(item, existing);
                 used.Add(existing);
