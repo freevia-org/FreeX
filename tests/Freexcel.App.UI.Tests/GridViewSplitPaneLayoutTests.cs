@@ -327,6 +327,26 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitDividerDragTarget_ClampsPinnedEdgeAtWorksheetLimits()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(CellAddress.MaxRow, 18, 0)],
+            [new ColMetric(CellAddress.MaxCol, 64, 0)],
+            SplitPanes: new SplitPaneState(
+                CellAddress.MaxRow,
+                CellAddress.MaxCol,
+                [new RowMetric(CellAddress.MaxRow, 18, 0)],
+                [new ColMetric(CellAddress.MaxCol, 64, 0)]));
+
+        GridView.CalculateSplitDividerDragTarget(
+                viewport,
+                SplitDividerHandle.Intersection,
+                new Point(GridView.RowHeaderWidth + 5, GridView.ColHeaderHeight + 5))
+            .Should().Be(new SplitDividerDragTarget(CellAddress.MaxRow, CellAddress.MaxCol));
+    }
+
+    [Fact]
     public void CalculateSplitPaneScrollbarChrome_AddsIndependentPaneTracksAndThumbs()
     {
         var viewport = SplitViewport();
