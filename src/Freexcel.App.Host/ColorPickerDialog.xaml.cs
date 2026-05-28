@@ -112,9 +112,7 @@ public partial class ColorPickerDialog : Window
     private void FocusInvalidCustomColorInput()
     {
         ColorTabs.SelectedItem = CustomTab;
-        CustomColorTextBox.Focus();
-        CustomColorTextBox.SelectAll();
-        Keyboard.Focus(CustomColorTextBox);
+        DialogFocus.FocusAndSelect(CustomColorTextBox);
     }
 
     private void NoColorButton_Click(object sender, RoutedEventArgs e)
