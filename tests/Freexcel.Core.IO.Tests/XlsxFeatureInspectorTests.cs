@@ -367,6 +367,22 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RelationshipOnlyWebPublishItemsReference_DetectsLiveWebQueries()
+    {
+        using var package = CreatePackageWithContent(("xl/worksheets/_rels/sheet1.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdWebPublishItems"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/webPublishItems"
+                            Target="../webPublishItems.xml"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.LiveWebQueries);
+    }
+
+    [Fact]
     public void Inspect_CustomPropertiesWithSensitivityLabel_DetectsSensitivityLabels()
     {
         using var package = CreatePackageWithContent(("docProps/custom.xml", """
