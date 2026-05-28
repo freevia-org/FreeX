@@ -17,7 +17,7 @@ public static class BorderDrawPlanner
         BorderDrawMode.DrawGrid => BorderShortcutService.GetAllBorderDiff(style, color),
         BorderDrawMode.Erase => BorderShortcutService.GetClearBorderDiff(),
         BorderDrawMode.None => new StyleDiff(),
-        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+        _ => ThrowInvalidMode<StyleDiff>(mode)
     };
 
     public static string CommandTitle(BorderDrawMode mode) => mode switch
@@ -25,6 +25,9 @@ public static class BorderDrawPlanner
         BorderDrawMode.DrawGrid => "Draw Border Grid",
         BorderDrawMode.Erase => "Erase Border",
         BorderDrawMode.None => "Border Draw",
-        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+        _ => ThrowInvalidMode<string>(mode)
     };
+
+    private static T ThrowInvalidMode<T>(BorderDrawMode mode) =>
+        throw new ArgumentOutOfRangeException(nameof(mode), mode, null);
 }
