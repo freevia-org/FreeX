@@ -259,12 +259,50 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RelationshipOnlyRevisionHistoryReference_DetectsTrackChanges()
+    {
+        using var package = CreatePackageWithContent(("xl/_rels/workbook.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdRevisionHeaders"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionHeaders"
+                            Target="revisionHeaders/revisionHeader1.xml"/>
+            </Relationships>
+            """), ("xl/revisionHeaders/_rels/revisionHeader1.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdRevisionLog"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionLog"
+                            Target="../revisions/revisionLog1.xml"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.TrackChanges);
+    }
+
+    [Fact]
     public void Inspect_ActiveXAndFormControlPackage_DetectsControls()
     {
         using var package = CreatePackage(
             "xl/activeX/activeX1.xml",
             "xl/activeX/activeX1.bin",
             "xl/ctrlProps/ctrlProp1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.FormControls);
+    }
+
+    [Fact]
+    public void Inspect_RelationshipOnlyActiveXBinaryReference_DetectsFormControls()
+    {
+        using var package = CreatePackageWithContent(("xl/activeX/_rels/activeX1.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdActiveXBinary"
+                            Type="http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary"
+                            Target="activeX1.bin"/>
+            </Relationships>
+            """));
 
         var report = XlsxFeatureInspector.Inspect(package);
 
