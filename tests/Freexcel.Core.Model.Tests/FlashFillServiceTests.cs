@@ -437,6 +437,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDisplayName_ConvertsMultiTokenUserNameToProperName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.byron.lovelace@contoso.com", "Ada Byron Lovelace"),
+                ("grace.brewster.hopper@contoso.com", "Grace Brewster Hopper")
+            ],
+            ["alan.mathison.turing@contoso.com"]);
+
+        result.Should().BeEquivalentTo(["Alan Mathison Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_SplitPascalCaseWords_InsertsWordSpaces()
     {
         var result = FlashFillService.Fill(
