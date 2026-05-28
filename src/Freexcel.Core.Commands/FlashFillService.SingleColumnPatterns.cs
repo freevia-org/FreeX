@@ -416,7 +416,7 @@ public static partial class FlashFillService
         var exampleTokens = new List<string[]>(examples.Count);
         foreach (var (source, expected) in examples)
         {
-            if (!TrySplitAnyWhitespaceTokens(source, out var tokens) || expected != tokens[^1])
+            if (!TrySplitVariableWhitespaceTokens(source, out var tokens) || expected != tokens[^1])
                 return null;
 
             exampleTokens.Add(tokens);
@@ -425,7 +425,7 @@ public static partial class FlashFillService
         if (exampleTokens.Select(tokens => tokens[0]).Distinct(StringComparer.Ordinal).Count() == 1)
             return null;
 
-        return source => TrySplitAnyWhitespaceTokens(source, out var tokens)
+        return source => TrySplitVariableWhitespaceTokens(source, out var tokens)
             ? tokens[^1]
             : null;
     }
@@ -722,7 +722,7 @@ public static partial class FlashFillService
         return tokens.Length == 3 && tokens.All(token => token.Length > 0);
     }
 
-    private static bool TrySplitAnyWhitespaceTokens(string source, out string[] tokens)
+    private static bool TrySplitVariableWhitespaceTokens(string source, out string[] tokens)
     {
         tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         return tokens.Length >= 2 && tokens.All(token => token.Length > 0);
