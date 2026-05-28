@@ -10,7 +10,7 @@ public enum GridResizeHitTarget
     Column
 }
 
-public sealed record GridResizeHit(GridResizeHitTarget Target, uint Index, double CurrentSize);
+public readonly record struct GridResizeHit(GridResizeHitTarget Target, uint Index, double CurrentSize);
 
 public static class GridResizeHitPlanner
 {
@@ -26,9 +26,14 @@ public static class GridResizeHitPlanner
 
         if (pointer.Y <= columnHeaderHeight)
         {
-            foreach (var column in viewport.ColMetrics)
+            var columns = viewport.ColMetrics;
+            for (var i = 0; i < columns.Count; i++)
             {
+                var column = columns[i];
                 var rightEdge = column.LeftOffset + column.Width + rowHeaderWidth;
+                if (rightEdge - pointer.X > hitZone)
+                    break;
+
                 if (Math.Abs(pointer.X - rightEdge) <= hitZone)
                     return new GridResizeHit(GridResizeHitTarget.Column, column.Col, column.Width);
             }
@@ -36,9 +41,14 @@ public static class GridResizeHitPlanner
 
         if (pointer.X <= rowHeaderWidth)
         {
-            foreach (var row in viewport.RowMetrics)
+            var rows = viewport.RowMetrics;
+            for (var i = 0; i < rows.Count; i++)
             {
+                var row = rows[i];
                 var bottomEdge = row.TopOffset + row.Height + columnHeaderHeight;
+                if (bottomEdge - pointer.Y > hitZone)
+                    break;
+
                 if (Math.Abs(pointer.Y - bottomEdge) <= hitZone)
                     return new GridResizeHit(GridResizeHitTarget.Row, row.Row, row.Height);
             }
