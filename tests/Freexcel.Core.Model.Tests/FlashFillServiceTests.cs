@@ -237,7 +237,9 @@ public sealed class FlashFillServiceTests
     [InlineData("Priority = High", "High", "Priority = Low", "Low", "Priority = Medium", "Medium")]
     [InlineData("Owner - Ada", "Ada", "Owner - Grace", "Grace", "Owner - Alan", "Alan")]
     [InlineData("Status | Open", "Open", "Status | Closed", "Closed", "Status | Pending", "Pending")]
+    [InlineData("Status|Open", "Open", "Status|Closed", "Closed", "Status|Pending", "Pending")]
     [InlineData("Status -> Open", "Open", "Status -> Closed", "Closed", "Status -> Pending", "Pending")]
+    [InlineData("Status->Open", "Open", "Status->Closed", "Closed", "Status->Pending", "Pending")]
     public void Fill_LabelValueExtraction_ExtractsTrimmedValueAfterSeparator(
         string source1,
         string expected1,
@@ -284,7 +286,9 @@ public sealed class FlashFillServiceTests
     [InlineData("Status = Open", "Status", "Priority = High", "Priority", "Owner = Ada", "Owner")]
     [InlineData("Status - Open", "Status", "Priority - High", "Priority", "Owner - Ada", "Owner")]
     [InlineData("Status | Open", "Status", "Priority | High", "Priority", "Owner | Ada", "Owner")]
+    [InlineData("Status|Open", "Status", "Priority|High", "Priority", "Owner|Ada", "Owner")]
     [InlineData("Status -> Open", "Status", "Priority -> High", "Priority", "Owner -> Ada", "Owner")]
+    [InlineData("Status->Open", "Status", "Priority->High", "Priority", "Owner->Ada", "Owner")]
     public void Fill_LabelQualifierRemoval_RemovesValueAfterSeparator(
         string source1,
         string expected1,

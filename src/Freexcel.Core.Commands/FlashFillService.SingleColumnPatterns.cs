@@ -6,7 +6,7 @@ public static partial class FlashFillService
 {
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', ';', '-', '_', '@', '.', '/', '\\'];
-    private static readonly string[] LabelValueSeparators = [":", "=", " - ", " | ", " -> "];
+    private static readonly string[] LabelValueSeparators = [":", "=", " - ", " | ", "|", " -> ", "->"];
     private static readonly (char Open, char Close)[] PairedDelimiters =
         [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ('\'', '\''), ('<', '>')];
 
