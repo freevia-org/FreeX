@@ -1,10 +1,11 @@
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 
 namespace Freexcel.App.Host;
 
-internal static class RibbonMetadata
+public static class RibbonMetadata
 {
     public static readonly DependencyProperty RoleProperty =
         DependencyProperty.RegisterAttached(
@@ -34,6 +35,13 @@ internal static class RibbonMetadata
             typeof(RibbonMetadata),
             new FrameworkPropertyMetadata(RibbonCommandContentLayout.None));
 
+    public static readonly DependencyProperty GroupNameProperty =
+        DependencyProperty.RegisterAttached(
+            "GroupName",
+            typeof(string),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(""));
+
     public static RibbonMetadataRole GetRole(DependencyObject element) =>
         (RibbonMetadataRole)element.GetValue(RoleProperty);
 
@@ -57,6 +65,12 @@ internal static class RibbonMetadata
 
     public static void SetCommandContentLayout(DependencyObject element, RibbonCommandContentLayout value) =>
         element.SetValue(CommandContentLayoutProperty, value);
+
+    public static string GetGroupName(DependencyObject element) =>
+        (string)element.GetValue(GroupNameProperty);
+
+    public static void SetGroupName(DependencyObject element, string value) =>
+        element.SetValue(GroupNameProperty, value);
 
     public static void SetCompactWidths(DependencyObject element, double fullWidth, double compactWidth)
     {
@@ -96,6 +110,22 @@ internal static class RibbonMetadata
 
     public static bool IsCommandSpacer(DependencyObject element) =>
         GetRole(element) == RibbonMetadataRole.CommandSpacer;
+
+    public static bool IsRibbonGroup(DependencyObject element) =>
+        GetRole(element) == RibbonMetadataRole.RibbonGroup;
+
+    public static bool TryGetGroupName(DependencyObject element, out string groupName)
+    {
+        groupName = GetGroupName(element);
+        if (!string.IsNullOrWhiteSpace(groupName))
+        {
+            groupName = groupName.Trim();
+            return true;
+        }
+
+        groupName = "";
+        return false;
+    }
 
     public static bool TryGetCommandContentLayout(DependencyObject? element, out RibbonCommandContentLayout layout)
     {
@@ -142,17 +172,18 @@ internal static class RibbonMetadata
     }
 }
 
-internal enum RibbonMetadataRole
+public enum RibbonMetadataRole
 {
     None,
     CommandLabel,
     CommandIcon,
     CollapsedGroupButton,
     CollapsedChevron,
-    CommandSpacer
+    CommandSpacer,
+    RibbonGroup
 }
 
-internal enum RibbonCommandContentLayout
+public enum RibbonCommandContentLayout
 {
     None,
     Small,

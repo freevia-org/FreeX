@@ -49,6 +49,7 @@ public partial class MainWindow
         _normalizingRibbonSurface = true;
         try
         {
+            NormalizeRibbonGroupMetadata();
             NormalizeRibbonCommandButtons();
             NormalizeExistingRibbonIconText();
             ConfigureInsertRibbonSurface();
@@ -63,6 +64,44 @@ public partial class MainWindow
         {
             _normalizingRibbonSurface = false;
         }
+    }
+
+    private void NormalizeRibbonGroupMetadata()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var group in EnumerateVisualDescendants(RibbonTabs)
+                     .Concat(EnumerateLogicalDescendants(RibbonTabs))
+                     .OfType<Grid>()
+                     .Distinct())
+        {
+            if (!RibbonMetadata.IsRibbonGroup(group) ||
+                RibbonMetadata.TryGetGroupName(group, out _))
+            {
+                continue;
+            }
+
+            if (TryFindStaticRibbonGroupLabel(group, out var groupName))
+                RibbonMetadata.SetGroupName(group, groupName);
+        }
+    }
+
+    private static bool TryFindStaticRibbonGroupLabel(Grid group, out string groupName)
+    {
+        foreach (var border in group.Children.OfType<Border>())
+        {
+            if (Grid.GetRow(border) == 1 &&
+                border.Child is TextBlock groupLabel &&
+                !string.IsNullOrWhiteSpace(groupLabel.Text))
+            {
+                groupName = groupLabel.Text.Trim();
+                return true;
+            }
+        }
+
+        groupName = "";
+        return false;
     }
 
     private void HideRibbonScrollBars()
@@ -256,10 +295,9 @@ public partial class MainWindow
         var current = element;
         while (current is not null)
         {
-            if (current is Grid grid &&
-                grid.Children.OfType<Border>().Any(border => Grid.GetRow(border) == 1))
+            if (RibbonMetadata.TryGetGroupName(current, out var groupName))
             {
-                return GetRibbonGroupName(grid);
+                return groupName;
             }
 
             current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
@@ -353,7 +391,10 @@ public partial class MainWindow
 
     private void NormalizeExistingRibbonIconText()
     {
-        foreach (var button in EnumerateVisualDescendants(this).OfType<ButtonBase>())
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var button in EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>())
         {
             if (TryNormalizeHomeCompactIconButton(button))
                 continue;
