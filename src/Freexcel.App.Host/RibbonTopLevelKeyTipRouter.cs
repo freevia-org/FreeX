@@ -7,7 +7,7 @@ public static class RibbonTopLevelKeyTipRouter
         if (string.IsNullOrWhiteSpace(keyTip))
             return null;
 
-        return keyTip.ToUpperInvariant() switch
+        return keyTip.Trim().ToUpperInvariant() switch
         {
             "F" => RibbonTopLevelKeyTipAction.BackstageFile,
             "H" => RibbonTopLevelKeyTipAction.RibbonTab("Home"),
@@ -31,11 +31,13 @@ public static class RibbonTopLevelKeyTipRouter
         if (string.IsNullOrWhiteSpace(keyTipPrefix))
             return false;
 
+        var normalizedPrefix = keyTipPrefix.Trim();
         return keyTips
             .Where(keyTip => !string.IsNullOrWhiteSpace(keyTip))
             .Any(keyTip =>
-                keyTip!.Length > keyTipPrefix.Length &&
-                keyTip.StartsWith(keyTipPrefix, StringComparison.OrdinalIgnoreCase));
+                keyTip!.Trim() is { } candidate &&
+                candidate.Length > normalizedPrefix.Length &&
+                candidate.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase));
     }
 }
 

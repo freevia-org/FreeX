@@ -31,6 +31,7 @@ public sealed class RibbonTopLevelKeyTipRouterTests
     public void Resolve_NormalizesCaseAndRejectsUnknownKeyTips()
     {
         RibbonTopLevelKeyTipRouter.Resolve("h")!.Value.RibbonTabHeader.Should().Be("Home");
+        RibbonTopLevelKeyTipRouter.Resolve(" h ")!.Value.RibbonTabHeader.Should().Be("Home");
         RibbonTopLevelKeyTipRouter.Resolve("ZZ").Should().BeNull();
         RibbonTopLevelKeyTipRouter.Resolve("").Should().BeNull();
     }
@@ -43,6 +44,14 @@ public sealed class RibbonTopLevelKeyTipRouterTests
         RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(prefix, ["J", "JA", "JD"])
             .Should()
             .BeTrue();
+    }
+
+    [Fact]
+    public void HasLongerVisibleKeyTipPrefix_NormalizesWhitespace()
+    {
+        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(" j ", ["J", " JA ", "JD"])
+            .Should()
+            .BeTrue("metadata-derived top-level keytips should route after normalization");
     }
 
     [Theory]

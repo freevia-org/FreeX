@@ -165,6 +165,32 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputDocType_PreservesPublicIdentifier()
+    {
+        using var source = StreamFromString("<rows><row name=\"Lima\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml"
+                  doctype-public="-//Freexcel//DTD Workbook 1.0//EN"
+                  doctype-system="freexcel-workbook.dtd"
+                  omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <workbook>
+                  <cell><xsl:value-of select="row/@name" /></cell>
+                </workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .StartWith("""<!DOCTYPE workbook PUBLIC "-//Freexcel//DTD Workbook 1.0//EN" "freexcel-workbook.dtd">""")
+            .And.Contain("<cell>Lima</cell>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetTextOutput_PreservesRawText()
     {
         using var source = StreamFromString("<rows><row name=\"India &amp; Juliet\" /></rows>");

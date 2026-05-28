@@ -25,6 +25,23 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
+    public void RoleHelpers_AttachedMetadataOverridesConflictingLegacyTags()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var label = new TextBlock { Tag = "RibbonIcon" };
+            var icon = new TextBlock { Tag = "RibbonLabel" };
+            RibbonMetadata.SetRole(label, RibbonMetadataRole.CommandLabel);
+            RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
+
+            RibbonMetadata.IsCommandLabel(label).Should().BeTrue();
+            RibbonMetadata.IsCommandIcon(label).Should().BeFalse();
+            RibbonMetadata.IsCommandIcon(icon).Should().BeTrue();
+            RibbonMetadata.IsCommandLabel(icon).Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void RoleHelpers_IgnoreLegacyTagsWithoutAttachedMetadata()
     {
         StaTestRunner.Run(() =>
