@@ -19,6 +19,15 @@ public sealed partial class DocumentationEncodingTests
         invalidLines.Should().BeEmpty("current user-facing docs should stay readable after UTF-8/Windows-1252 round trips");
     }
 
+    [Theory]
+    [InlineData("Code Review Hardening \u00E2\u20AC\u201D 2026-05-28")]
+    [InlineData("PRs (#33\u00E2\u20AC\u201C#44)")]
+    [InlineData("quote \u00E2\u20AC\u0153text\u00E2\u20AC\u009D")]
+    public void MojibakeDetector_CatchesCommonWindows1252Sequences(string text)
+    {
+        MojibakeRegex().IsMatch(text).Should().BeTrue();
+    }
+
     private static IEnumerable<string> FindMojibake(string repoDirectory, string path)
     {
         var relativePath = Path.GetRelativePath(repoDirectory, path).Replace('\\', '/');
