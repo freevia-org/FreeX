@@ -51,6 +51,19 @@ public interface IAffectedCellsCommand
     IReadOnlyList<CellAddress> AffectedCells { get; }
 }
 
+/// <summary>
+/// Optional interface a command can implement to report its estimated
+/// in-memory snapshot size.  Used by <see cref="CommandBus"/> to enforce
+/// a byte-budget cap on the undo stack in addition to the count cap.
+/// Commands that do <em>not</em> implement this interface are assigned a
+/// default estimate of 200 bytes.
+/// </summary>
+public interface IEstimatesMemory
+{
+    /// <summary>Estimated snapshot size in bytes.</summary>
+    int EstimatedBytes { get; }
+}
+
 /// <summary>Context provided to commands for accessing workbook state.</summary>
 public interface ICommandContext
 {

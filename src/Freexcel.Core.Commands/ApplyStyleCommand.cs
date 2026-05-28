@@ -6,14 +6,19 @@ namespace Freexcel.Core.Commands;
 /// Applies a partial style override to every cell in a range.
 /// Only non-null StyleDiff fields are changed; others are preserved.
 /// </summary>
-public sealed class ApplyStyleCommand : IWorkbookCommand
+public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly StyleDiff _diff;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
+    private const int BytesPerCell = 200;
+
     public string Label => "Apply Style";
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min(_range.CellCount * BytesPerCell, int.MaxValue);
 
     public ApplyStyleCommand(SheetId sheetId, GridRange range, StyleDiff diff)
     {
