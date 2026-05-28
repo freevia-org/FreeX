@@ -248,7 +248,7 @@ internal static class XlsxClosedXmlCellMapper
         _ => XLError.NoValueAvailable
     };
 
-    private static CellColor MapColor(XLColor xlColor, WorkbookTheme theme)
+    public static CellColor MapColor(XLColor xlColor, WorkbookTheme theme)
     {
         if (xlColor.ColorType == XLColorType.Theme)
             return theme.ResolveColor(ToWorkbookThemeColorSlot(xlColor.ThemeColor), xlColor.ThemeTint);

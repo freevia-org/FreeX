@@ -46,8 +46,12 @@ public sealed partial class XlsxFileAdapter
                     xlCell.Value = XlsxClosedXmlCellMapper.MapValueInverse(cell.Value);
                 }
 
-                var style = workbook.GetStyle(cell.StyleId);
-                XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
+                if (cell.StyleId != StyleId.Default)
+                {
+                    var style = workbook.GetStyle(cell.StyleId);
+                    if (!style.Equals(CellStyle.Default))
+                        XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
+                }
             }
 
             foreach (var run in GetStyleOnlyRuns(sheet))
