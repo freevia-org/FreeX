@@ -12,7 +12,7 @@ public static class MenuKeyTipAssigner
         foreach (var item in items)
         {
             var existing = NormalizeKeyTip(RibbonTooltip.GetKeyTip(item));
-            if (string.IsNullOrWhiteSpace(existing))
+            if (string.IsNullOrWhiteSpace(existing) || !IsTypeableKeyTip(existing))
                 continue;
 
             if (IsAvailable(existing, used))
@@ -80,4 +80,7 @@ public static class MenuKeyTipAssigner
         character is >= '0' and <= '9' or
             >= 'A' and <= 'Z' or
             >= 'a' and <= 'z';
+
+    private static bool IsTypeableKeyTip(string keyTip) =>
+        keyTip.All(IsTypeableKeyTipCharacter);
 }
