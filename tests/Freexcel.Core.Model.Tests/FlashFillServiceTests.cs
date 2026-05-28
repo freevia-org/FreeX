@@ -568,6 +568,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ThreePartNames_AbbreviatesFirstInitialLastName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "A. Lovelace"),
+                ("Grace Brewster Hopper", "G. Hopper")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeEquivalentTo(["A. Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_ThreePartNames_AbbreviatesFirstAndMiddleInitials()
     {
         var result = FlashFillService.Fill(
@@ -581,6 +594,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ThreePartNames_AbbreviatesFirstNameMiddleInitial()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "Ada B."),
+                ("Grace Brewster Hopper", "Grace B.")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeEquivalentTo(["Alan M."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_ThreePartNames_AbbreviatesLastCommaFirstAndMiddleInitials()
     {
         var result = FlashFillService.Fill(
@@ -591,6 +617,19 @@ public sealed class FlashFillServiceTests
             ["Alan Mathison Turing"]);
 
         result.Should().BeEquivalentTo(["Turing, A. M."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ThreePartNames_AbbreviatesLastCommaFirstNameMiddleInitial()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "Lovelace, Ada B."),
+                ("Grace Brewster Hopper", "Hopper, Grace B.")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeEquivalentTo(["Turing, Alan M."], o => o.WithStrictOrdering());
     }
 
     [Fact]
