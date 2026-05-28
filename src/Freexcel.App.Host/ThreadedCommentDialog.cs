@@ -18,7 +18,7 @@ public sealed class ThreadedCommentDialog : Window
 
     public ThreadedCommentDialog(string cellRef, ThreadedComment? existing)
     {
-        Title = $"Comment â€” {cellRef}";
+        Title = $"Comment - {cellRef}";
         Width = 480;
         MinHeight = 280;
         MaxHeight = 600;
