@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -24,6 +25,7 @@ public sealed class SheetNameDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _nameBox.Text = currentName;
+        AutomationProperties.SetName(_nameBox, "Sheet name");
         Content = ObjectSizeDialog.CreateSingleInputContent("Sheet _name:", _nameBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }

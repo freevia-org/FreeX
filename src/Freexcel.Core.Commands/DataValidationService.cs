@@ -57,7 +57,10 @@ public static partial class DataValidationService
     /// Returns all validation rules that apply to the given cell address.
     /// </summary>
     public static IEnumerable<DataValidation> GetApplicable(Sheet sheet, CellAddress addr)
-        => sheet.DataValidations.Where(dv => dv.AppliesTo.Contains(addr));
+        => sheet.DataValidations.Where(dv => AppliesTo(dv, addr));
+
+    public static bool AppliesTo(DataValidation dv, CellAddress addr) =>
+        dv.AppliesTo.Contains(addr) || dv.AdditionalRanges.Any(range => range.Contains(addr));
 
     public static InputPrompt? GetInputPrompt(Sheet sheet, CellAddress addr)
     {
@@ -128,15 +131,13 @@ public static partial class DataValidationService
         if (requireInteger && Math.Abs(numericValue - Math.Round(numericValue)) > double.Epsilon)
             return dv.ErrorMessage ?? "Value must be a whole number.";
 
-        if (!double.TryParse(dv.Formula1, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var v1))
+        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, out var v1))
             return null; // can't evaluate — treat as valid
 
         double v2 = 0;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!double.TryParse(dv.Formula2, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out v2))
+            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, out v2))
                 return null;
         }
 
@@ -153,7 +154,7 @@ public static partial class DataValidationService
             _                              => true
         };
 
-        return passes ? null : dv.ErrorMessage ?? BuildNumericErrorMessage(dv, v1, v2);
+        return passes ? null : dv.ErrorMessage ?? DataValidationErrorMessages.BuildNumericErrorMessage(dv, v1, v2);
     }
 
     private static string? ValidateTextLength(DataValidation dv, ScalarValue value)
@@ -163,15 +164,13 @@ public static partial class DataValidationService
 
         double length = tv.Value.Length;
 
-        if (!double.TryParse(dv.Formula1, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var v1))
+        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, out var v1))
             return null;
 
         double v2 = 0;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!double.TryParse(dv.Formula2, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out v2))
+            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, out v2))
                 return null;
         }
 
@@ -202,13 +201,13 @@ public static partial class DataValidationService
         else
             return dv.ErrorMessage ?? "Value must be a date.";
 
-        if (!TryParseDateBound(dv.Formula1, out var v1))
+        if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula1, out var v1))
             return null;
 
         string? formula2 = null;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!TryParseDateBound(dv.Formula2, out var v2))
+            if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula2, out var v2))
                 return null;
 
             formula2 = v2.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -237,13 +236,13 @@ public static partial class DataValidationService
         else
             return dv.ErrorMessage ?? "Value must be a time.";
 
-        if (!TryParseTimeBound(dv.Formula1, out var v1))
+        if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula1, out var v1))
             return null;
 
         string? formula2 = null;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!TryParseTimeBound(dv.Formula2, out var v2))
+            if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula2, out var v2))
                 return null;
 
             formula2 = v2.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -298,70 +297,4 @@ public static partial class DataValidationService
         }
     }
 
-    private static bool TryParseDateBound(string? text, out double oaDate)
-    {
-        oaDate = 0;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        if (double.TryParse(text, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out oaDate))
-            return true;
-
-        if (DateTime.TryParse(text, System.Globalization.CultureInfo.CurrentCulture,
-                System.Globalization.DateTimeStyles.None, out var currentCultureDate) ||
-            DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out currentCultureDate))
-        {
-            oaDate = currentCultureDate.ToOADate();
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryParseTimeBound(string? text, out double timeValue)
-    {
-        timeValue = 0;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        if (double.TryParse(text, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out timeValue))
-            return true;
-
-        if (TimeSpan.TryParse(text, System.Globalization.CultureInfo.CurrentCulture, out var currentCultureTime) ||
-            TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out currentCultureTime))
-        {
-            timeValue = currentCultureTime.TotalDays;
-            return true;
-        }
-
-        if (DateTime.TryParse(text, System.Globalization.CultureInfo.CurrentCulture,
-                System.Globalization.DateTimeStyles.None, out var currentCultureDateTime) ||
-            DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out currentCultureDateTime))
-        {
-            timeValue = currentCultureDateTime.TimeOfDay.TotalDays;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static string BuildNumericErrorMessage(DataValidation dv, double v1, double v2)
-    {
-        return dv.Operator switch
-        {
-            DvOperator.Between            => $"Value must be between {v1} and {v2}.",
-            DvOperator.NotBetween         => $"Value must not be between {v1} and {v2}.",
-            DvOperator.Equal              => $"Value must equal {v1}.",
-            DvOperator.NotEqual           => $"Value must not equal {v1}.",
-            DvOperator.GreaterThan        => $"Value must be greater than {v1}.",
-            DvOperator.LessThan           => $"Value must be less than {v1}.",
-            DvOperator.GreaterThanOrEqual => $"Value must be greater than or equal to {v1}.",
-            DvOperator.LessThanOrEqual    => $"Value must be less than or equal to {v1}.",
-            _                             => "Invalid value."
-        };
-    }
 }

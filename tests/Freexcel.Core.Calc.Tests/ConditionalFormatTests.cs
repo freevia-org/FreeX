@@ -53,6 +53,20 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void FormulaConditionalFormatEvaluation_DoesNotSerializeShiftedFormulaPerDisplayedCell()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.Calc", "ViewportService.ConditionalFormatFormulas.cs"));
+
+        source.Should().NotContain(
+            "FormulaSerializer.Serialize",
+            "viewport formula conditional formats should evaluate cached shifted ASTs instead of serializing formula text per cell");
+        source.Should().NotContain(
+            "Evaluate(\"=\" + formulaText",
+            "serializing shifted formulas back to text makes FormulaEvaluator parse the same rule again per visible cell");
+    }
+
+    [Fact]
     public void ColorScale_LargeSparseRange_UsesOccupiedCellsForAggregates()
     {
         var (wb, sheet) = MakeWorkbook();
@@ -574,6 +588,65 @@ public class ConditionalFormatTests
         var b1 = GetCell(vp, 1, 2);
         a1.Style!.FillColor.Should().Be(new CellColor(255, 0, 0));
         b1.Style!.FillColor.Should().Be(new CellColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void Formula_Rule_ShiftsRelativeRefsWhileKeepingAbsoluteRefs()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(6)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(4)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(8)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromValue(new NumberValue(9)));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), Cell.FromValue(new NumberValue(5)));
+
+        var greenStyle = new CellStyle { FillColor = new CellColor(0, 255, 0) };
+        var cf = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 2)),
+            Priority = 1,
+            RuleType = CfRuleType.Formula,
+            FormulaText = "A1>$D$4",
+            FormatIfTrue = greenStyle
+        };
+        sheet.ConditionalFormats.Add(cf);
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 1, 1).Style!.FillColor.Should().Be(new CellColor(0, 255, 0), "A1=6 is greater than $D$4=5");
+        GetCell(vp, 1, 2).Style!.FillColor.Should().NotBe(new CellColor(0, 255, 0), "B1=4 is not greater than $D$4=5");
+        GetCell(vp, 2, 1).Style!.FillColor.Should().Be(new CellColor(0, 255, 0), "A2=8 is greater than $D$4=5");
+        GetCell(vp, 2, 2).Style!.FillColor.Should().Be(new CellColor(0, 255, 0), "B2=9 is greater than $D$4=5");
+    }
+
+    [Fact]
+    public void Formula_Rule_ShiftPastSheetBounds_DoesNotMatch()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var greenStyle = new CellStyle { FillColor = new CellColor(0, 255, 0) };
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, CellAddress.MaxCol - 1), Cell.FromValue(new NumberValue(1)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, CellAddress.MaxCol), Cell.FromValue(new NumberValue(1)));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, CellAddress.MaxCol - 1),
+                new CellAddress(sheet.Id, 1, CellAddress.MaxCol)),
+            Priority = 1,
+            RuleType = CfRuleType.Formula,
+            FormulaText = "XFD1=1",
+            FormatIfTrue = greenStyle
+        });
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(wb, sheet.Id, new ViewportRequest(1, CellAddress.MaxCol - 1, 500, 500));
+
+        GetCell(vp, 1, CellAddress.MaxCol - 1).Style!.FillColor.Should().Be(new CellColor(0, 255, 0));
+        GetCell(vp, 1, CellAddress.MaxCol).Style!.FillColor.Should().NotBe(
+            new CellColor(0, 255, 0),
+            "shifting XFD1 one column right should become an invalid reference, not an XFE1 lookup");
     }
 
     // ─── ReplaceAllConditionalFormatsCommand tests ────────────────────────────

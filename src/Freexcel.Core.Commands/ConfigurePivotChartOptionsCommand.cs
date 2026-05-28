@@ -88,15 +88,23 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         chart.ShowPivotChartValueFieldButtons = _showValueFieldButtons ?? chart.ShowPivotChartValueFieldButtons;
         if (_showDataTable is { } showDataTable)
         {
-            chart.DataTable = showDataTable
-                ? new ChartDataTableModel
+            if (showDataTable)
+            {
+                chart.DataTable ??= new ChartDataTableModel
                 {
                     ShowHorizontalBorder = true,
                     ShowVerticalBorder = true,
                     ShowOutline = true,
-                    ShowLegendKeys = _showDataTableLegendKeys ?? chart.DataTable?.ShowLegendKeys ?? false
-                }
-                : null;
+                    ShowLegendKeys = _showDataTableLegendKeys ?? false
+                };
+
+                if (_showDataTableLegendKeys is { } showLegendKeys)
+                    chart.DataTable.ShowLegendKeys = showLegendKeys;
+            }
+            else
+            {
+                chart.DataTable = null;
+            }
         }
         else if (_showDataTableLegendKeys is { } showLegendKeys && chart.DataTable is not null)
         {
@@ -148,7 +156,15 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
                 ShowHorizontalBorder = dataTable.ShowHorizontalBorder,
                 ShowVerticalBorder = dataTable.ShowVerticalBorder,
                 ShowOutline = dataTable.ShowOutline,
-                ShowLegendKeys = dataTable.ShowLegendKeys
+                ShowLegendKeys = dataTable.ShowLegendKeys,
+                FillColor = dataTable.FillColor,
+                FillThemeColor = dataTable.FillThemeColor,
+                BorderColor = dataTable.BorderColor,
+                BorderThemeColor = dataTable.BorderThemeColor,
+                BorderThickness = dataTable.BorderThickness,
+                TextColor = dataTable.TextColor,
+                TextThemeColor = dataTable.TextThemeColor,
+                FontSize = dataTable.FontSize
             };
 
     private static int? NormalizeStyleId(int? chartStyleId)

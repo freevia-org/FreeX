@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -115,8 +116,8 @@ public sealed class ChartDialogTests
     {
         var source = ReadChartTypeDialogSource();
 
-        source.Should().Contain("Recommended Charts");
-        source.Should().Contain("All Charts");
+        source.Should().Contain("Header = \"_Recommended Charts\"");
+        source.Should().Contain("Header = \"_All Charts\"");
         source.Should().Contain("Chart categories");
         source.Should().Contain("Chart subtype gallery");
         source.Should().Contain("Preview");
@@ -156,6 +157,18 @@ public sealed class ChartDialogTests
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
         dialogSource.Should().Contain("_recommendedGallery.Focus();");
         dialogSource.Should().Contain("Keyboard.Focus(_recommendedGallery);");
+    }
+
+    [Fact]
+    public void ChartTypeGalleries_DoubleClickAcceptsSelectedSubtype()
+    {
+        var source = ReadChartTypeDialogSource();
+
+        source.Should().Contain("_recommendedGallery.MouseDoubleClick += (_, _) => Accept();");
+        source.Should().Contain("_subtypeGallery.MouseDoubleClick += (_, _) => Accept();");
+        source.Should().Contain("private void Accept()");
+        source.Should().Contain("_subtypeGallery.MouseDoubleClick += (_, _) => AcceptSelectedChartType();");
+        source.Should().Contain("private void AcceptSelectedChartType()");
     }
 
     [Fact]
@@ -203,6 +216,19 @@ public sealed class ChartDialogTests
         source.Should().Contain("AddInput(stack, \"_Primary horizontal axis title:\", _xAxisTitleBox)");
         source.Should().Contain("AddInput(stack, \"Primary _vertical axis title:\", _yAxisTitleBox)");
         source.Should().Contain("new Label { Content = label, Target = box");
+    }
+
+    [Fact]
+    public void ChartTitlesDialog_EditorsExposeAutomationNames()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[
+            source.IndexOf("public sealed class ChartTitlesDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record ChartStyleDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("AutomationProperties.SetName(_chartTitleBox, \"Chart title\");");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_xAxisTitleBox, \"Primary horizontal axis title\");");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_yAxisTitleBox, \"Primary vertical axis title\");");
     }
 
     [Fact]
@@ -318,12 +344,26 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void MoveChartDialog_LabelsTargetNameEditorWithAccessKeyAndAutomationName()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[
+            source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("new Label { Content = \"_Target name:\", Target = _targetBox");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_targetBox, \"Target chart sheet or object sheet name\");");
+        dialogSource.Should().Contain("AutomationProperties.SetHelpText(_targetBox, \"Enter the worksheet or chart sheet name that will contain the chart.\");");
+    }
+
+    [Fact]
     public void ChartDataAndMoveDialogs_ExposeKeyboardAccessKeys()
     {
         var source = ReadChartDialogSource();
 
-        source.Should().Contain("Content = \"_Object in sheet\"");
+        source.Should().Contain("Content = \"_Object in:\"");
         source.Should().Contain("Content = \"_New chart sheet\"");
+        source.Should().Contain("Content = \"_Target name:\"");
         source.Should().Contain("Content = \"_Chart data range:\"");
         source.Should().Contain("Content = \"_Switch Row/Column\"");
         source.Should().Contain("Content = \"First column contains _category labels\"");
@@ -357,6 +397,15 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialog_RangeEditorExposesAutomationName()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Chart data range\");");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_ExposesExcelStylePickerSeriesAndAxisControls()
     {
         var source = ReadChartDialogSource();
@@ -376,6 +425,8 @@ public sealed class ChartDialogTests
         source.Should().Contain("_Add series");
         source.Should().Contain("_Edit series");
         source.Should().Contain("_Edit Axis Labels");
+        source.Should().Contain("_seriesList.MouseDoubleClick += EditSeriesButton_Click;");
+        source.Should().Contain("_axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;");
         source.Should().Contain("Name and values are inferred from the selected chart range.");
     }
 
@@ -397,6 +448,35 @@ public sealed class ChartDialogTests
             }
 
             buttons.Should().ContainKey("_Hidden and Empty Cells");
+        });
+    }
+
+    [Fact]
+    public void SelectDataSourceDialog_SelectsFirstPreviewRowsAndDisablesSelectionActionsWhenEmpty()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SelectDataSourceDialog("A1:D12");
+            var buttons = FindLogicalDescendants<Button>(dialog)
+                .Where(button => button.Content is string)
+                .ToDictionary(button => (string)button.Content);
+            var lists = FindLogicalDescendants<ListBox>(dialog).ToList();
+
+            lists[0].SelectedIndex.Should().Be(0);
+            lists[1].SelectedIndex.Should().Be(0);
+            buttons["_Edit series"].IsEnabled.Should().BeTrue();
+            buttons["_Remove series"].IsEnabled.Should().BeTrue();
+            buttons["_Edit Axis Labels"].IsEnabled.Should().BeTrue();
+
+            dialog.ApplyRangeSelection("");
+
+            lists[0].Items.Count.Should().Be(0);
+            lists[1].Items.Count.Should().Be(0);
+            lists[0].SelectedIndex.Should().Be(-1);
+            lists[1].SelectedIndex.Should().Be(-1);
+            buttons["_Edit series"].IsEnabled.Should().BeFalse();
+            buttons["_Remove series"].IsEnabled.Should().BeFalse();
+            buttons["_Edit Axis Labels"].IsEnabled.Should().BeFalse();
         });
     }
 
@@ -426,6 +506,37 @@ public sealed class ChartDialogTests
             requests.Should().Equal(new SelectDataSourceRangeSelectionRequest("A1:D12", CollapseDialog: true));
             dialog.RangeSelectionRequest.Should().Be(requests[0]);
         });
+    }
+
+    [Fact]
+    public void SelectDataSourceApplyRangeSelection_UpdatesRangeBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SelectDataSourceDialog("A1:D12");
+
+            dialog.ApplyRangeSelection("Sheet2!B2:E20");
+
+            FindLogicalDescendants<TextBox>(dialog)
+                .Single()
+                .Text.Should().Be("Sheet2!B2:E20");
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresSelectDataSourceRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
+
+        source.Should().Contain("new SelectDataSourceDialog(");
+        source.Should().Contain("request => ApplySelectDataSourceRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplySelectDataSourceRangeSelection(");
+        source.Should().Contain("SelectDataSourceRangeSelectionRequest request");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
     }
 
     [Fact]
@@ -483,13 +594,13 @@ public sealed class ChartDialogTests
         helperSource.Should().Contain("new ColorPickerDialog(initialColor, allowNoColor: true)");
         foreach (var colorLabel in new[]
         {
-            "Chart area fill color",
-            "Plot area fill color",
-            "Legend text color",
-            "Fill color",
-            "Line color",
-            "Major gridline color",
-            "Axis line color"
+            "_Chart area fill color",
+            "_Plot area fill color",
+            "Legend _text color",
+            "_Fill color",
+            "_Line color",
+            "_Major gridline color",
+            "Axis _line color"
         })
         {
             source.Should().Contain($"AddColorText(stack, \"{colorLabel}\"");
@@ -527,9 +638,9 @@ public sealed class ChartDialogTests
             "Content = \"O_verlay legend on chart\"",
             "Content = \"_Show data labels\"",
             "Content = \"_Category name\"",
-            "Content = \"_Series name\"",
+            "Content = \"S_eries name\"",
             "Content = \"_Percentage\"",
-            "Content = \"Data label _callouts\"",
+            "Content = \"Data label callo_uts\"",
             "Content = \"_Show trendline\"",
             "Content = \"Display _equation\"",
             "Content = \"Display _R-squared value\"",
@@ -543,6 +654,52 @@ public sealed class ChartDialogTests
         {
             source.Should().Contain(content);
         }
+
+        foreach (var helperCall in new[]
+        {
+            "AddColorText(stack, \"_Chart area fill color\"",
+            "AddColorText(stack, \"_Plot area fill color\"",
+            "AddNumericText(stack, \"Plot area border _width\"",
+            "AddCombo(stack, \"Legend _position\"",
+            "AddColorText(stack, \"Legend _text color\"",
+            "AddNumericText(stack, \"Legend _font size\"",
+            "AddCombo(stack, \"P_osition\"",
+            "AddCombo(stack, \"Separato_r\"",
+            "AddCombo(stack, \"_Number format\"",
+            "AddNumericText(stack, \"Border t_hickness\"",
+            "AddNumericText(stack, \"_Minimum (blank for Auto)\"",
+            "AddNumericText(stack, \"Ma_ximum (blank for Auto)\"",
+            "AddCombo(stack, \"_Major tick marks\"",
+            "AddCombo(stack, \"M_inor tick marks\"",
+            "AddCombo(stack, \"_Series\"",
+            "AddCombo(stack, \"_Dash style\"",
+            "AddCombo(stack, \"_Marker\"",
+            "AddCombo(stack, \"_Type\"",
+            "AddCombo(stack, \"_Direction\"",
+            "AddNumericText(stack, \"_Gap width %\"",
+            "AddNumericText(stack, \"Series _overlap %\"",
+            "AddNumericText(stack, \"_First slice angle",
+            "AddNumericText(stack, \"_Bubble scale %\"",
+            "AddCombo(stack, \"Size _represents\""
+        })
+        {
+            source.Should().Contain(helperCall);
+        }
+    }
+
+    [Fact]
+    public void ChartDataLabelsDialog_UsesUniqueAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDataLabelsDialog.cs"));
+        var labels = Regex.Matches(source, "Content = \"(?<label>[^\"]*_[^\"]*)\"|Add(?:Combo|ColorText|NumericText)\\(stack, \"(?<label>[^\"]*_[^\"]*)\"")
+            .Select(match => match.Groups["label"].Value);
+        var duplicateAccessKeys = labels
+            .Select(label => new { Label = label, AccessKey = GetAccessKey(label) })
+            .GroupBy(item => item.AccessKey)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key}: {string.Join(", ", group.Select(item => item.Label))}");
+
+        duplicateAccessKeys.Should().BeEmpty();
     }
 
     private static string ReadChartFormatDialogSource()
@@ -556,8 +713,15 @@ public sealed class ChartDialogTests
                 "ChartDataLabelsDialog.cs",
                 "ChartErrorBarsDialog.cs",
                 "ChartTrendlineOptionsDialog.cs",
-                "ChartSeriesFormatDialog.cs"
+                "ChartSeriesFormatDialog.cs",
+                "ChartTypeFormatDialogs.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static char GetAccessKey(string label)
+    {
+        var index = label.IndexOf('_', StringComparison.Ordinal);
+        return char.ToUpperInvariant(label[index + 1]);
     }
 
     [Fact]
@@ -828,6 +992,14 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartErrorBarsDialog_ValueEditorExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartErrorBarsDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_valueBox, \"Error bar value\");");
+    }
+
+    [Fact]
     public void ChartErrorBarsDialogInvalidValue_ShowsOwnedWarningAndRefocusesValueBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartErrorBarsDialog.cs"));
@@ -1089,6 +1261,110 @@ public sealed class ChartDialogTests
         result.ToOptions().BubbleScale.Should().Be(150);
         result.ToOptions().ShowNegativeBubbles.Should().BeTrue();
         result.ToOptions().BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_ClampsFirstSliceAngleTo0To359()
+    {
+        ChartPieFormatDialogResult.CreateResult(-10, -1, 0.1, 0.55).FirstSliceAngle.Should().Be(0);
+        ChartPieFormatDialogResult.CreateResult(400, -1, 0.1, 0.55).FirstSliceAngle.Should().Be(359);
+        ChartPieFormatDialogResult.CreateResult(180, -1, 0.1, 0.55).FirstSliceAngle.Should().Be(180);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_ClampsExplodedSliceDistanceTo0To50Percent()
+    {
+        ChartPieFormatDialogResult.CreateResult(0, 0, -0.1, 0.55).ExplodedSliceDistance.Should().Be(0);
+        ChartPieFormatDialogResult.CreateResult(0, 0, 0.8, 0.55).ExplodedSliceDistance.Should().Be(0.5);
+        ChartPieFormatDialogResult.CreateResult(0, 0, 0.25, 0.55).ExplodedSliceDistance.Should().BeApproximately(0.25, 0.0001);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_ClampsDoughnutHoleSizeTo10To90Percent()
+    {
+        ChartPieFormatDialogResult.CreateResult(0, -1, 0.1, 0.05).DoughnutHoleSize.Should().Be(0.1);
+        ChartPieFormatDialogResult.CreateResult(0, -1, 0.1, 0.95).DoughnutHoleSize.Should().Be(0.9);
+        ChartPieFormatDialogResult.CreateResult(0, -1, 0.1, 0.75).DoughnutHoleSize.Should().BeApproximately(0.75, 0.0001);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_LoadsFromChart()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Doughnut,
+            FirstSliceAngle = 45,
+            ExplodedSliceIndex = 2,
+            ExplodedSliceDistance = 0.2,
+            DoughnutHoleSize = 0.6
+        };
+        var result = ChartPieFormatDialogResult.FromChart(chart);
+        result.FirstSliceAngle.Should().Be(45);
+        result.ExplodedSliceIndex.Should().Be(2);
+        result.ExplodedSliceDistance.Should().BeApproximately(0.2, 0.0001);
+        result.DoughnutHoleSize.Should().BeApproximately(0.6, 0.0001);
+    }
+
+    [Fact]
+    public void ChartPieFormatDialogResult_MapsToLayoutOptions()
+    {
+        var result = ChartPieFormatDialogResult.CreateResult(90, 1, 0.3, 0.7);
+        result.ToOptions().FirstSliceAngle.Should().Be(90);
+        result.ToOptions().ExplodedSliceIndex.Should().Be(1);
+        result.ToOptions().ExplodedSliceDistance.Should().BeApproximately(0.3, 0.0001);
+        result.ToOptions().DoughnutHoleSize.Should().BeApproximately(0.7, 0.0001);
+    }
+
+    [Fact]
+    public void ChartStockFormatDialogResult_ClampsUpDownBarGapWidthTo0To500()
+    {
+        ChartStockFormatDialogResult.CreateResult(-5, null, null, null, null, null, 1.0).UpDownBarGapWidth.Should().Be(0);
+        ChartStockFormatDialogResult.CreateResult(600, null, null, null, null, null, 1.0).UpDownBarGapWidth.Should().Be(500);
+        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 1.0).UpDownBarGapWidth.Should().Be(150);
+    }
+
+    [Fact]
+    public void ChartStockFormatDialogResult_ClampsHighLowLineThicknessTo05To10()
+    {
+        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 0.1).HighLowLineThickness.Should().BeApproximately(0.5, 0.001);
+        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 20.0).HighLowLineThickness.Should().BeApproximately(10.0, 0.001);
+        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 1.5).HighLowLineThickness.Should().BeApproximately(1.5, 0.001);
+    }
+
+    [Fact]
+    public void ChartStockFormatDialogResult_LoadsFromChart()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            UpDownBarGapWidth = 200,
+            UpBarFillColor = new CellColor(0, 128, 0),
+            DownBarFillColor = new CellColor(255, 0, 0),
+            HighLowLineColor = new CellColor(100, 100, 100),
+            HighLowLineThickness = 2.0
+        };
+        var result = ChartStockFormatDialogResult.FromChart(chart);
+        result.UpDownBarGapWidth.Should().Be(200);
+        result.UpBarFillColor.Should().Be(new CellColor(0, 128, 0));
+        result.DownBarFillColor.Should().Be(new CellColor(255, 0, 0));
+        result.HighLowLineColor.Should().Be(new CellColor(100, 100, 100));
+        result.HighLowLineThickness.Should().BeApproximately(2.0, 0.001);
+    }
+
+    [Fact]
+    public void ChartStockFormatDialogResult_MapsToLayoutOptions()
+    {
+        var result = ChartStockFormatDialogResult.CreateResult(
+            150, new CellColor(0, 200, 0), new CellColor(0, 100, 0),
+            new CellColor(200, 0, 0), new CellColor(100, 0, 0),
+            new CellColor(80, 80, 80), 1.5);
+        result.ToOptions().UpDownBarGapWidth.Should().Be(150);
+        result.ToOptions().UpBarFillColor.Should().Be(new CellColor(0, 200, 0));
+        result.ToOptions().UpBarBorderColor.Should().Be(new CellColor(0, 100, 0));
+        result.ToOptions().DownBarFillColor.Should().Be(new CellColor(200, 0, 0));
+        result.ToOptions().DownBarBorderColor.Should().Be(new CellColor(100, 0, 0));
+        result.ToOptions().HighLowLineColor.Should().Be(new CellColor(80, 80, 80));
+        result.ToOptions().HighLowLineThickness.Should().BeApproximately(1.5, 0.001);
     }
 
     private static string ReadChartDialogSource() =>

@@ -24,11 +24,11 @@
             </Grid.RowDefinitions>
             <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Show items for which the value" Margin="0,0,0,10"/>
             <Label Grid.Row="1" Grid.Column="0" Content="_Operator:" Target="{Binding ElementName=ValueFilterKindBox}" VerticalAlignment="Center" Margin="0,0,8,8"/>
-            <ComboBox x:Name="ValueFilterKindBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
-            <Label Grid.Row="2" Grid.Column="0" Content="_Value:" Target="{Binding ElementName=ValueFilterValueBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox x:Name="ValueFilterValueBox" Grid.Row="2" Grid.Column="1"/>
-            <Label Grid.Row="3" Grid.Column="0" Content="_And:" Target="{Binding ElementName=ValueFilterValue2Box}" VerticalAlignment="Center" Margin="0,8,8,0"/>
-            <TextBox x:Name="ValueFilterValue2Box" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0"/>
+            <ComboBox x:Name="ValueFilterKindBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="ValueFilterKindBox_SelectionChanged" AutomationProperties.Name="Value filter operator"/>
+            <Label x:Name="ValueFilterValueLabel" Grid.Row="2" Grid.Column="0" Content="_Value:" Target="{Binding ElementName=ValueFilterValueBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox x:Name="ValueFilterValueBox" Grid.Row="2" Grid.Column="1" AutomationProperties.Name="Value filter value"/>
+            <Label x:Name="ValueFilterValue2Label" Grid.Row="3" Grid.Column="0" Content="_And:" Target="{Binding ElementName=ValueFilterValue2Box}" VerticalAlignment="Center" Margin="0,8,8,0"/>
+            <TextBox x:Name="ValueFilterValue2Box" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" AutomationProperties.Name="Ending value filter value"/>
         </Grid>
     </DockPanel>
 </Window>

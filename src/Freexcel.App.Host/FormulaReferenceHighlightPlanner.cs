@@ -18,6 +18,13 @@ public static class FormulaReferenceHighlightPlanner
         string text,
         SheetId currentSheetId,
         Func<string, SheetId?>? resolveSheetId)
+        => GetHighlights(text, currentSheetId, resolveSheetId, resolveStructuredReference: null);
+
+    public static IReadOnlyList<FormulaReferenceHighlight> GetHighlights(
+        string text,
+        SheetId currentSheetId,
+        Func<string, SheetId?>? resolveSheetId,
+        Func<string, string, GridRange?>? resolveStructuredReference)
     {
         if (!text.StartsWith("=", StringComparison.Ordinal))
             return [];
@@ -32,6 +39,19 @@ public static class FormulaReferenceHighlightPlanner
                 continue;
             }
 
+            if (TryReadStructuredReference(text, index, resolveStructuredReference, highlights.Count % PaletteSize, out var structuredHighlight, out var structuredNextIndex))
+            {
+                highlights.Add(structuredHighlight);
+                index = structuredNextIndex;
+                continue;
+            }
+
+            if (text[index] == '[')
+            {
+                index = SkipStructuredReferenceSelector(text, index);
+                continue;
+            }
+
             if (TryReadReference(text, index, currentSheetId, resolveSheetId, highlights.Count % PaletteSize, out var highlight, out var nextIndex))
             {
                 highlights.Add(highlight);
@@ -43,6 +63,97 @@ public static class FormulaReferenceHighlightPlanner
         }
 
         return highlights;
+    }
+
+    private static bool TryReadStructuredReference(
+        string text,
+        int start,
+        Func<string, string, GridRange?>? resolveStructuredReference,
+        int paletteIndex,
+        out FormulaReferenceHighlight highlight,
+        out int nextIndex)
+    {
+        highlight = default!;
+        nextIndex = start + 1;
+
+        if (resolveStructuredReference is null || !IsReferenceBoundaryBefore(text, start))
+            return false;
+
+        var tableName = "";
+        var selectorStart = start;
+        if (text[start] != '[')
+        {
+            var tableEnd = start;
+            while (tableEnd < text.Length && IsUnquotedSheetNameChar(text[tableEnd]))
+                tableEnd++;
+
+            if (tableEnd == start || tableEnd >= text.Length || text[tableEnd] != '[')
+                return false;
+
+            tableName = text[start..tableEnd];
+            selectorStart = tableEnd;
+        }
+
+        if (!TryReadBalancedStructuredSelector(text, selectorStart, out var selector, out var selectorEnd))
+        {
+            nextIndex = selectorEnd;
+            return false;
+        }
+
+        if (!IsReferenceBoundaryAfter(text, selectorEnd))
+        {
+            nextIndex = selectorEnd;
+            return false;
+        }
+
+        var range = resolveStructuredReference(tableName, selector);
+        if (range is null)
+        {
+            nextIndex = selectorEnd;
+            return false;
+        }
+
+        nextIndex = selectorEnd;
+        highlight = new FormulaReferenceHighlight(
+            start,
+            selectorEnd - start,
+            paletteIndex,
+            text[start..selectorEnd],
+            SheetName: null,
+            range);
+        return true;
+    }
+
+    private static bool TryReadBalancedStructuredSelector(string text, int start, out string selector, out int end)
+    {
+        selector = "";
+        end = start + 1;
+        if (start >= text.Length || text[start] != '[')
+            return false;
+
+        var depth = 0;
+        for (var index = start; index < text.Length; index++)
+        {
+            if (text[index] == '[')
+            {
+                depth++;
+                continue;
+            }
+
+            if (text[index] != ']')
+                continue;
+
+            depth--;
+            if (depth == 0)
+            {
+                end = index + 1;
+                selector = text[(start + 1)..index].Trim();
+                return selector.Length > 0;
+            }
+        }
+
+        end = text.Length;
+        return false;
     }
 
     private static bool TryReadReference(
@@ -245,6 +356,30 @@ public static class FormulaReferenceHighlightPlanner
         }
 
         return text.Length;
+    }
+
+    private static int SkipStructuredReferenceSelector(string text, int start)
+    {
+        var depth = 0;
+        var index = start;
+
+        while (index < text.Length)
+        {
+            if (text[index] == '[')
+            {
+                depth++;
+            }
+            else if (text[index] == ']')
+            {
+                depth--;
+                if (depth == 0)
+                    return index + 1;
+            }
+
+            index++;
+        }
+
+        return start + 1;
     }
 
     private static bool IsReferenceBoundaryBefore(string text, int start) =>

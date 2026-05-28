@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
-using System.Xml;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -41,7 +40,7 @@ internal static class XlsxWorkbookMetadataWriter
                     continue;
                 }
 
-                TrySetNativeAttribute(workbookProperties, attribute.Key, attribute.Value);
+                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(workbookProperties, attribute.Key, attribute.Value);
             }
 
             workbookProperties.Elements().Remove();
@@ -103,9 +102,9 @@ internal static class XlsxWorkbookMetadataWriter
             bookViews.AddFirst(primaryView);
 
         primaryView.SetAttributeValue("showSheetTabs", workbook.ShowSheetTabs is { } showSheetTabs ? showSheetTabs ? "1" : "0" : null);
-        primaryView.SetAttributeValue("tabRatio", ClampWorkbookViewInteger(workbook.SheetTabRatio, 0, 1000));
-        primaryView.SetAttributeValue("firstSheet", ClampWorkbookViewInteger(workbook.FirstVisibleSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
-        primaryView.SetAttributeValue("activeTab", ClampWorkbookViewInteger(workbook.ActiveSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
+        primaryView.SetAttributeValue("tabRatio", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.SheetTabRatio, 0, 1000));
+        primaryView.SetAttributeValue("firstSheet", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.FirstVisibleSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
+        primaryView.SetAttributeValue("activeTab", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.ActiveSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
 
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
     }
@@ -190,7 +189,7 @@ internal static class XlsxWorkbookMetadataWriter
                 if (!string.IsNullOrWhiteSpace(attribute.Key) &&
                     attribute.Key is not "autoRecover" and not "crashSave" and not "dataExtractLoad" and not "repairLoad")
                 {
-                    TrySetNativeAttribute(element, attribute.Key, attribute.Value);
+                    XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(element, attribute.Key, attribute.Value);
                 }
             }
 
@@ -241,20 +240,18 @@ internal static class XlsxWorkbookMetadataWriter
             if (!string.IsNullOrWhiteSpace(attribute.Key) &&
                 attribute.Key is not "appName" and not "lastEdited" and not "lowestEdited" and not "rupBuild" and not "codeName")
             {
-                TrySetNativeAttribute(fileVersion, attribute.Key, attribute.Value);
+                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(fileVersion, attribute.Key, attribute.Value);
             }
         }
 
-        fileVersion.SetAttributeValue("appName", NullIfWhiteSpace(workbook.FileVersion.AppName));
-        fileVersion.SetAttributeValue("lastEdited", NullIfWhiteSpace(workbook.FileVersion.LastEdited));
-        fileVersion.SetAttributeValue("lowestEdited", NullIfWhiteSpace(workbook.FileVersion.LowestEdited));
-        fileVersion.SetAttributeValue("rupBuild", NullIfWhiteSpace(workbook.FileVersion.RupBuild));
-        fileVersion.SetAttributeValue("codeName", NullIfWhiteSpace(workbook.FileVersion.CodeName));
+        fileVersion.SetAttributeValue("appName", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.AppName));
+        fileVersion.SetAttributeValue("lastEdited", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.LastEdited));
+        fileVersion.SetAttributeValue("lowestEdited", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.LowestEdited));
+        fileVersion.SetAttributeValue("rupBuild", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.RupBuild));
+        fileVersion.SetAttributeValue("codeName", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.CodeName));
 
         root.AddFirst(fileVersion);
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
-
-        static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     public static void SaveFunctionGroups(Stream xlsxStream, Workbook workbook)
@@ -281,20 +278,20 @@ internal static class XlsxWorkbookMetadataWriter
         foreach (var attribute in workbook.FunctionGroups.NativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "builtInGroupCount")
-                TrySetNativeAttribute(functionGroups, attribute.Key, attribute.Value);
+                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(functionGroups, attribute.Key, attribute.Value);
         }
 
-        functionGroups.SetAttributeValue("builtInGroupCount", NullIfWhiteSpace(workbook.FunctionGroups.BuiltInGroupCount));
+        functionGroups.SetAttributeValue("builtInGroupCount", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FunctionGroups.BuiltInGroupCount));
         foreach (var group in workbook.FunctionGroups.Groups)
         {
             var element = new XElement(workbookNs + "functionGroup");
             foreach (var attribute in group.NativeAttributes)
             {
                 if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "name")
-                    TrySetNativeAttribute(element, attribute.Key, attribute.Value);
+                    XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(element, attribute.Key, attribute.Value);
             }
 
-            element.SetAttributeValue("name", NullIfWhiteSpace(group.Name));
+            element.SetAttributeValue("name", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(group.Name));
             functionGroups.Add(element);
         }
 
@@ -307,8 +304,6 @@ internal static class XlsxWorkbookMetadataWriter
             root.Add(functionGroups);
 
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
-
-        static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     public static void SaveSmartTags(Stream xlsxStream, Workbook workbook)
@@ -336,17 +331,17 @@ internal static class XlsxWorkbookMetadataWriter
         foreach (var attribute in workbook.SmartTags.PropertiesNativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key is not "embed" and not "show")
-                TrySetNativeAttribute(smartTagProperties, attribute.Key, attribute.Value);
+                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(smartTagProperties, attribute.Key, attribute.Value);
         }
 
         smartTagProperties.SetAttributeValue("embed", workbook.SmartTags.Embed is { } embed ? embed ? "1" : "0" : null);
-        smartTagProperties.SetAttributeValue("show", NullIfWhiteSpace(workbook.SmartTags.Show));
+        smartTagProperties.SetAttributeValue("show", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.SmartTags.Show));
 
         var smartTagTypes = new XElement(workbookNs + "smartTagTypes");
         foreach (var attribute in workbook.SmartTags.TypesNativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key))
-                TrySetNativeAttribute(smartTagTypes, attribute.Key, attribute.Value);
+                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(smartTagTypes, attribute.Key, attribute.Value);
         }
 
         foreach (var type in workbook.SmartTags.Types)
@@ -357,13 +352,13 @@ internal static class XlsxWorkbookMetadataWriter
                 if (!string.IsNullOrWhiteSpace(attribute.Key) &&
                     attribute.Key is not "namespaceUri" and not "name" and not "url")
                 {
-                    TrySetNativeAttribute(element, attribute.Key, attribute.Value);
+                    XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(element, attribute.Key, attribute.Value);
                 }
             }
 
-            element.SetAttributeValue("namespaceUri", NullIfWhiteSpace(type.NamespaceUri));
-            element.SetAttributeValue("name", NullIfWhiteSpace(type.Name));
-            element.SetAttributeValue("url", NullIfWhiteSpace(type.Url));
+            element.SetAttributeValue("namespaceUri", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(type.NamespaceUri));
+            element.SetAttributeValue("name", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(type.Name));
+            element.SetAttributeValue("url", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(type.Url));
             smartTagTypes.Add(element);
         }
 
@@ -374,8 +369,6 @@ internal static class XlsxWorkbookMetadataWriter
             root.Add(smartTagProperties, smartTagTypes);
 
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
-
-        static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     public static void SaveProtection(Stream xlsxStream, Workbook workbook)
@@ -392,7 +385,9 @@ internal static class XlsxWorkbookMetadataWriter
             return;
 
         root.Element(workbookNs + "workbookProtection")?.Remove();
-        if (!workbook.IsStructureProtected && workbook.ProtectionMetadata is null)
+        if (!workbook.IsStructureProtected &&
+            string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword) &&
+            workbook.ProtectionMetadata is null)
         {
             XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
             return;
@@ -410,7 +405,7 @@ internal static class XlsxWorkbookMetadataWriter
                     continue;
                 }
 
-                TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
+                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
             }
 
             foreach (var childXml in workbook.ProtectionMetadata.NativeChildXmls)
@@ -432,7 +427,7 @@ internal static class XlsxWorkbookMetadataWriter
         if (workbook.IsStructureProtected)
             protection.SetAttributeValue("lockStructure", "1");
         if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
-            protection.SetAttributeValue("workbookPassword", ToLegacyPasswordHash(workbook.StructureProtectionPassword));
+            protection.SetAttributeValue("workbookPassword", XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(workbook.StructureProtectionPassword));
 
         var sheets = root.Element(workbookNs + "sheets");
         if (sheets is not null)
@@ -480,49 +475,4 @@ internal static class XlsxWorkbookMetadataWriter
             element.SetAttributeValue(name, value ? "1" : null);
     }
 
-    private static string ToLegacyPasswordHash(string passwordOrHash)
-    {
-        if (IsLegacyPasswordHash(passwordOrHash))
-            return passwordOrHash.ToUpperInvariant();
-
-        var hash = 0;
-        for (var i = 0; i < passwordOrHash.Length; i++)
-        {
-            var value = passwordOrHash[i] << (i + 1);
-            var rotatedBits = value >> 15;
-            value &= 0x7fff;
-            hash ^= value | rotatedBits;
-        }
-
-        hash ^= passwordOrHash.Length;
-        hash ^= 0xCE4B;
-        return hash.ToString("X4", CultureInfo.InvariantCulture);
-    }
-
-    private static bool IsLegacyPasswordHash(string value) =>
-        value.Length is > 0 and <= 4 &&
-        value.All(ch =>
-            ch is >= '0' and <= '9' ||
-            ch is >= 'A' and <= 'F' ||
-            ch is >= 'a' and <= 'f');
-
-    private static int? ClampWorkbookViewInteger(int? value, int min, int max) =>
-        value is { } intValue ? Math.Clamp(intValue, min, max) : null;
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
-    }
 }

@@ -76,7 +76,7 @@ public partial class GridView
                 var pinnedRows = splitPanes.TopRows ?? [];
                 horizontalY = pinnedRows.Count > 0
                     ? ColHeaderHeight + pinnedRows.Sum(row => row.Height)
-                    : viewport.RowMetrics.FirstOrDefault(row => row.Row == splitRow)?.TopOffset + ColHeaderHeight;
+                    : FindRowMetric(viewport.RowMetrics, splitRow)?.TopOffset + ColHeaderHeight;
             }
 
             if (splitPanes.Column is { } splitColumn)
@@ -84,11 +84,33 @@ public partial class GridView
                 var pinnedColumns = splitPanes.LeftColumns ?? [];
                 verticalX = pinnedColumns.Count > 0
                     ? CalculateRowHeaderWidth(viewport) + pinnedColumns.Sum(column => column.Width)
-                    : viewport.ColMetrics.FirstOrDefault(column => column.Col == splitColumn)?.LeftOffset + CalculateRowHeaderWidth(viewport);
+                    : FindColMetric(viewport.ColMetrics, splitColumn)?.LeftOffset + CalculateRowHeaderWidth(viewport);
             }
         }
 
         return new SplitDividerLayout(horizontalY, verticalX);
+    }
+
+    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Row == row)
+                return metric;
+        }
+
+        return null;
+    }
+
+    private static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint column)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Col == column)
+                return metric;
+        }
+
+        return null;
     }
 
     public static SplitPaneScrollbarChrome CalculateSplitPaneScrollbarChrome(
@@ -352,7 +374,7 @@ public partial class GridView
 }
 
 public sealed record SplitDividerLayout(double? HorizontalY, double? VerticalX);
-public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect);
+public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region);
 public sealed record SplitDividerDragTarget(uint? Row, uint? Column);
 public sealed record SplitPaneScrollbarChrome(
     SplitPaneScrollbar? HorizontalTopRight,

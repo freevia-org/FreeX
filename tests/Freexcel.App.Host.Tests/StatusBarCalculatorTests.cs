@@ -42,6 +42,49 @@ public sealed class StatusBarCalculatorTests
     }
 
     [Fact]
+    public void Calculate_SeparatesNonblankCountFromNumericalCount()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new TextValue("counted")));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(BlankValue.Instance));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), Cell.FromValue(new NumberValue(3)));
+
+        var stats = StatusBarCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 4)));
+
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(2);
+        stats.Sum.Should().Be(4);
+        stats.Average.Should().Be(2);
+        stats.Min.Should().Be(1);
+        stats.Max.Should().Be(3);
+    }
+
+    [Fact]
+    public void Calculate_TextOnlySelectionStillReportsCountWithoutNumericStats()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("text")));
+
+        var stats = StatusBarCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 2)));
+
+        stats.Count.Should().Be(1);
+        stats.NumericalCount.Should().Be(0);
+        stats.Sum.Should().Be(0);
+        stats.Average.Should().BeNull();
+        stats.Min.Should().BeNull();
+        stats.Max.Should().BeNull();
+    }
+
+    [Fact]
     public void Calculate_LargeSelections_ScansSparseCellsWithoutCopyingUsedCellDictionary()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find(
@@ -67,6 +110,7 @@ public sealed class StatusBarCalculatorTests
         var stats = StatusBarCalculator.Calculate(sheet, range);
 
         stats.Count.Should().Be(2);
+        stats.NumericalCount.Should().Be(2);
         stats.Sum.Should().Be(40);
         stats.Average.Should().Be(20);
         stats.Min.Should().Be(10);
@@ -98,6 +142,7 @@ public sealed class StatusBarCalculatorTests
 
         Console.WriteLine($"Repeated cached whole-column status refreshes: {sw.ElapsedMilliseconds}ms for 25 runs");
         stats.Count.Should().Be(100_000);
+        stats.NumericalCount.Should().Be(100_000);
         stats.Sum.Should().Be(5_000_050_000d);
     }
 }

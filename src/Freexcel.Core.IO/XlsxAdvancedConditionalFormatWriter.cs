@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -8,7 +9,7 @@ namespace Freexcel.Core.IO;
 internal static partial class XlsxAdvancedConditionalFormatWriter
 {
     public static bool HasAdvancedConditionalFormats(Workbook workbook) =>
-        workbook.Sheets.Any(sheet => sheet.ConditionalFormats.Any(IsAdvancedConditionalFormat));
+        workbook.Sheets.Any(sheet => sheet.ConditionalFormats.Any(XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat));
 
     public static void Save(Stream xlsxStream, Workbook workbook)
     {
@@ -41,7 +42,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 continue;
             }
 
-            var advancedRules = sheet.ConditionalFormats.Where(IsAdvancedConditionalFormat).ToList();
+            var advancedRules = sheet.ConditionalFormats.Where(XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat).ToList();
             if (advancedRules.Count == 0)
                 continue;
 
@@ -55,7 +56,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 continue;
 
             var newX14DataBars = advancedRules
-                .Where(cf => cf.RuleType == CfRuleType.DataBar && RequiresGeneratedOrExistingX14DataBar(cf))
+                .Where(cf => cf.RuleType == CfRuleType.DataBar && XlsxAdvancedConditionalFormatMetadata.RequiresGeneratedOrExistingX14DataBar(cf))
                 .ToList();
 
             foreach (var cf in advancedRules)
@@ -87,8 +88,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     {
         foreach (var (name, value) in cf.NativeContainerAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         foreach (var nativeChildXml in (cf.NativeContainerChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -115,7 +115,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     {
         var rule = new XElement(
             worksheetNs + "cfRule",
-            new XAttribute("type", ToAdvancedCfRuleType(cf.RuleType)),
+            new XAttribute("type", XlsxAdvancedConditionalFormatMetadata.ToAdvancedCfRuleType(cf.RuleType)),
             new XAttribute("priority", cf.Priority));
         if (differentialStyleIds.TryGetValue(cf.Id, out var dxfId))
             rule.SetAttributeValue("dxfId", dxfId.ToString(CultureInfo.InvariantCulture));
@@ -126,9 +126,9 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             case CfRuleType.ColorScale:
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
                     worksheetNs + "colorScale",
-                    ToCfvoXml(worksheetNs, cf.MinThresholdType, cf.MinThresholdValue),
-                    cf.UseThreeColorScale ? ToCfvoXml(worksheetNs, cf.MidThresholdType, cf.MidThresholdValue) : null,
-                    ToCfvoXml(worksheetNs, cf.MaxThresholdType, cf.MaxThresholdValue),
+                    ToCfvoXml(worksheetNs, cf.MinThresholdType, cf.MinThresholdValue, cf.MinThresholdGreaterThanOrEqual),
+                    cf.UseThreeColorScale ? ToCfvoXml(worksheetNs, cf.MidThresholdType, cf.MidThresholdValue, cf.MidThresholdGreaterThanOrEqual) : null,
+                    ToCfvoXml(worksheetNs, cf.MaxThresholdType, cf.MaxThresholdValue, cf.MaxThresholdGreaterThanOrEqual),
                     ToColorXml(worksheetNs, cf.MinColor),
                     cf.UseThreeColorScale ? ToColorXml(worksheetNs, cf.MidColor) : null,
                     ToColorXml(worksheetNs, cf.MaxColor)), cf, worksheetNs));
@@ -145,7 +145,8 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 if (cf.DataBarMaxLength.HasValue)
                     dataBar.SetAttributeValue("maxLength", cf.DataBarMaxLength.Value.ToString(CultureInfo.InvariantCulture));
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(dataBar, cf, worksheetNs));
-                if (RequiresGeneratedOrExistingX14DataBar(cf) && TryGetExistingX14Id(cf) is null)
+                if (XlsxAdvancedConditionalFormatMetadata.RequiresGeneratedOrExistingX14DataBar(cf) &&
+                    XlsxAdvancedConditionalFormatMetadata.TryGetExistingX14Id(cf) is null)
                 {
                     XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
                     rule.Add(new XElement(
@@ -160,7 +161,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             case CfRuleType.IconSet:
             {
                 var thresholdXmls = GetIconSetThresholds(cf)
-                    .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value));
+                    .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value, threshold.GreaterThanOrEqual));
                 var overrideXmls = cf.IconOverrides.Select(o => new XElement(
                     worksheetNs + "cfIcon",
                     new XAttribute("iconSet", o.IconSet),
@@ -209,8 +210,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         foreach (var (name, value) in cf.NativeAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && rule.Attribute(name) is null)
-                rule.SetAttributeValue(name, value);
+            TrySetNativeAttributeIfMissing(rule, name, value);
         }
 
         foreach (var nativeChildXml in (cf.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
@@ -236,20 +236,16 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         XNamespace worksheetNs)
     {
         var modeledDataBarAttributes = cf.RuleType == CfRuleType.DataBar
-            ? ModeledDataBarPayloadAttributes(cf)
+            ? XlsxAdvancedConditionalFormatMetadata.ModeledDataBarPayloadAttributes(cf)
             : [];
         foreach (var (name, value) in cf.NativePayloadAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) &&
-                !modeledDataBarAttributes.Contains(name) &&
-                payload.Attribute(name) is null)
-            {
-                payload.SetAttributeValue(name, value);
-            }
+            if (!modeledDataBarAttributes.Contains(name))
+                TrySetNativeAttributeIfMissing(payload, name, value);
         }
 
         var modeledDataBarChildren = cf.RuleType == CfRuleType.DataBar
-            ? ModeledDataBarPayloadChildren(cf)
+            ? XlsxAdvancedConditionalFormatMetadata.ModeledDataBarPayloadChildren(cf)
             : [];
         foreach (var nativeChildXml in (cf.NativePayloadChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
         {
@@ -281,11 +277,46 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 new CfThresholdModel(CfThresholdType.Percent, "67")
             ];
 
+    private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        try
+        {
+            var attributeName = XName.Get(name);
+            if (element.Attribute(attributeName) is not null)
+                return false;
+
+            element.SetAttributeValue(attributeName, value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
+
     private static XElement ToCfvoXml(XNamespace worksheetNs, CfThresholdType type, string? value)
     {
-        var element = new XElement(worksheetNs + "cfvo", new XAttribute("type", ToCfvoType(type)));
+        return ToCfvoXml(worksheetNs, type, value, greaterThanOrEqual: null);
+    }
+
+    private static XElement ToCfvoXml(
+        XNamespace worksheetNs,
+        CfThresholdType type,
+        string? value,
+        bool? greaterThanOrEqual)
+    {
+        var element = new XElement(worksheetNs + "cfvo", new XAttribute("type", XlsxAdvancedConditionalFormatMetadata.ToCfvoType(type)));
         if (!string.IsNullOrWhiteSpace(value))
             element.SetAttributeValue("val", value);
+        if (greaterThanOrEqual.HasValue)
+            element.SetAttributeValue("gte", greaterThanOrEqual.Value ? "1" : "0");
         return element;
     }
 
@@ -320,34 +351,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         };
 
     private static string GetX14DataBarId(ConditionalFormat cf) =>
-        TryGetExistingX14Id(cf) ?? $"{{{cf.Id.ToString().ToUpperInvariant()}}}";
-
-    private static string? TryGetExistingX14Id(ConditionalFormat cf)
-    {
-        if (cf.NativeChildXmls is null)
-            return null;
-
-        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
-        foreach (var xml in cf.NativeChildXmls)
-        {
-            try
-            {
-                var el = XElement.Parse(xml);
-                if (el.Name.LocalName != "extLst")
-                    continue;
-
-                var id = el.Descendants(x14Ns + "id").FirstOrDefault()?.Value?.Trim();
-                if (!string.IsNullOrWhiteSpace(id))
-                    return id;
-            }
-            catch
-            {
-                // Ignore malformed native XML.
-            }
-        }
-
-        return null;
-    }
+        XlsxAdvancedConditionalFormatMetadata.TryGetExistingX14Id(cf) ?? $"{{{cf.Id.ToString().ToUpperInvariant()}}}";
 
     private static void AppendX14ConditionalFormattingsExt(
         XElement worksheetRoot,
@@ -392,49 +396,6 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 new XElement(x14Ns + "conditionalFormattings", x14CfElements))));
     }
 
-    private static bool IsAdvancedConditionalFormat(ConditionalFormat cf) =>
-        cf.RuleType is CfRuleType.ColorScale or CfRuleType.DataBar or CfRuleType.IconSet or
-            CfRuleType.AboveAverage or CfRuleType.Top10 or
-            CfRuleType.UniqueValues or CfRuleType.DuplicateValues or
-            CfRuleType.ContainsText or CfRuleType.NotContainsText or CfRuleType.BeginsWith or CfRuleType.EndsWith or
-            CfRuleType.DateOccurring or
-            CfRuleType.Blanks or CfRuleType.NoBlanks or CfRuleType.Errors or CfRuleType.NoErrors;
-
-    private static bool RequiresGeneratedX14DataBar(ConditionalFormat cf) =>
-        !cf.DataBarGradient ||
-        cf.DataBarBorder ||
-        !string.IsNullOrWhiteSpace(cf.DataBarAxisPosition) ||
-        cf.DataBarAxisColor is not null ||
-        cf.DataBarNegativeFillColor is not null ||
-        cf.DataBarNegativeBorderColor is not null;
-
-    private static bool RequiresGeneratedOrExistingX14DataBar(ConditionalFormat cf) =>
-        RequiresGeneratedX14DataBar(cf) ||
-        TryGetExistingX14Id(cf) is not null ||
-        HasNativeX14DataBarPayloadChildren(cf);
-
-    private static HashSet<string> ModeledDataBarPayloadAttributes(ConditionalFormat cf)
-    {
-        var attributes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (cf.DataBarBorder)
-            attributes.Add("border");
-        if (!string.IsNullOrWhiteSpace(cf.DataBarAxisPosition))
-            attributes.Add("axisPosition");
-        return attributes;
-    }
-
-    private static HashSet<string> ModeledDataBarPayloadChildren(ConditionalFormat cf)
-    {
-        var children = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (cf.DataBarAxisColor is not null)
-            children.Add("axisColor");
-        if (cf.DataBarNegativeFillColor is not null)
-            children.Add("negativeFillColor");
-        if (cf.DataBarNegativeBorderColor is not null)
-            children.Add("negativeBorderColor");
-        return children;
-    }
-
     private static XElement? ToX14ColorXml(XNamespace x14Ns, string elementName, RgbColor? color) =>
         color is null
             ? null
@@ -442,7 +403,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
     private static void AddNativeX14DataBarChildren(XElement dataBar, ConditionalFormat cf, XNamespace x14Ns)
     {
-        var modeledChildren = ModeledDataBarPayloadChildren(cf);
+        var modeledChildren = XlsxAdvancedConditionalFormatMetadata.ModeledDataBarPayloadChildren(cf);
         foreach (var nativeChildXml in (cf.NativePayloadChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
         {
             try
@@ -461,58 +422,6 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         }
     }
 
-    private static bool HasNativeX14DataBarPayloadChildren(ConditionalFormat cf)
-    {
-        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
-        foreach (var nativeChildXml in (cf.NativePayloadChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
-        {
-            try
-            {
-                if (XElement.Parse(nativeChildXml).Name.Namespace == x14Ns)
-                    return true;
-            }
-            catch
-            {
-                // Ignore malformed native payloads from older saves.
-            }
-        }
-
-        return false;
-    }
-
-    private static string ToAdvancedCfRuleType(CfRuleType type) =>
-        type switch
-        {
-            CfRuleType.ColorScale => "colorScale",
-            CfRuleType.DataBar => "dataBar",
-            CfRuleType.IconSet => "iconSet",
-            CfRuleType.AboveAverage => "aboveAverage",
-            CfRuleType.Top10 => "top10",
-            CfRuleType.UniqueValues => "uniqueValues",
-            CfRuleType.DuplicateValues => "duplicateValues",
-            CfRuleType.ContainsText => "containsText",
-            CfRuleType.NotContainsText => "notContainsText",
-            CfRuleType.BeginsWith => "beginsWith",
-            CfRuleType.EndsWith => "endsWith",
-            CfRuleType.DateOccurring => "timePeriod",
-            CfRuleType.Blanks => "containsBlanks",
-            CfRuleType.NoBlanks => "notContainsBlanks",
-            CfRuleType.Errors => "containsErrors",
-            CfRuleType.NoErrors => "notContainsErrors",
-            _ => throw new InvalidOperationException("Conditional format is not an advanced rule.")
-        };
-
     private static bool IsSupportedFontSize(double fontSize) =>
         double.IsFinite(fontSize) && fontSize is >= 1 and <= 409;
-
-    private static string ToCfvoType(CfThresholdType type) =>
-        type switch
-        {
-            CfThresholdType.Max => "max",
-            CfThresholdType.Number => "num",
-            CfThresholdType.Percent => "percent",
-            CfThresholdType.Percentile => "percentile",
-            CfThresholdType.Formula => "formula",
-            _ => "min"
-        };
 }

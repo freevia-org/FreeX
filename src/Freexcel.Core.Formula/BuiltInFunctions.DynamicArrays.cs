@@ -10,14 +10,14 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Sequence(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e) return e;
-        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        double rawRows = args[0] is not BlankValue ? ToNumber(args[0]) : 1;
-        double rawCols = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
-        double start = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
-        double step  = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
+        if (!TryGetScalarControlArgument(args[0], out var rowsArg, out var rowsError)) return rowsError;
+        if (!TryGetScalarControlArgument(args.Count > 1 ? args[1] : BlankValue.Instance, out var colsArg, out var colsError)) return colsError;
+        if (!TryGetScalarControlArgument(args.Count > 2 ? args[2] : BlankValue.Instance, out var startArg, out var startError)) return startError;
+        if (!TryGetScalarControlArgument(args.Count > 3 ? args[3] : BlankValue.Instance, out var stepArg, out var stepError)) return stepError;
+        double rawRows = rowsArg is not BlankValue ? ToNumber(rowsArg) : 1;
+        double rawCols = colsArg is not BlankValue ? ToNumber(colsArg) : 1;
+        double start = startArg is not BlankValue ? ToNumber(startArg) : 1;
+        double step  = stepArg is not BlankValue ? ToNumber(stepArg) : 1;
         if (!double.IsFinite(rawRows) || !double.IsFinite(rawCols)) return ErrorValue.Value;
         if (!double.IsFinite(start) || !double.IsFinite(step)) return ErrorValue.Num;
         int rows = (int)rawRows;
@@ -32,8 +32,59 @@ public static partial class BuiltInFunctions
                 if (!double.IsFinite(val)) return ErrorValue.Num;
                 cells[r, c] = new NumberValue(val);
                 val += step;
-            }
+        }
         return new RangeValue(cells);
+    }
+
+    private static ScalarValue RandArray(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryGetScalarControlArgument(args.Count > 0 ? args[0] : BlankValue.Instance, out var rowsArg, out var rowsError)) return rowsError;
+        if (!TryGetScalarControlArgument(args.Count > 1 ? args[1] : BlankValue.Instance, out var colsArg, out var colsError)) return colsError;
+        if (!TryGetScalarControlArgument(args.Count > 2 ? args[2] : BlankValue.Instance, out var minArg, out var minError)) return minError;
+        if (!TryGetScalarControlArgument(args.Count > 3 ? args[3] : BlankValue.Instance, out var maxArg, out var maxError)) return maxError;
+        if (!TryGetScalarControlArgument(args.Count > 4 ? args[4] : BlankValue.Instance, out var wholeNumberArg, out var wholeNumberError)) return wholeNumberError;
+
+        double rowsD = rowsArg is not BlankValue ? ToNumber(rowsArg) : 1;
+        double colsD = colsArg is not BlankValue ? ToNumber(colsArg) : 1;
+        double min = minArg is not BlankValue ? ToNumber(minArg) : 0;
+        double max = maxArg is not BlankValue ? ToNumber(maxArg) : 1;
+        bool wholeNumber = wholeNumberArg is not BlankValue && ToBool(wholeNumberArg);
+
+        if (!double.IsFinite(rowsD) || !double.IsFinite(colsD)) return ErrorValue.Value;
+        int rows = (int)rowsD;
+        int cols = (int)colsD;
+        if (rows < 1 || cols < 1) return ErrorValue.Value;
+        if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
+        if (!double.IsFinite(min) || !double.IsFinite(max) || min > max) return ErrorValue.Value;
+
+        if (wholeNumber)
+        {
+            if (!TryTruncateToLong(Math.Ceiling(min), out long bottom) ||
+                !TryTruncateToLong(Math.Floor(max), out long top))
+                return ErrorValue.Value;
+            if (bottom > top) return ErrorValue.Value;
+
+            long randExclusiveTop;
+            try { randExclusiveTop = checked(top + 1); }
+            catch (OverflowException) { return ErrorValue.Value; }
+            var integers = new ScalarValue[rows, cols];
+            for (int r = 0; r < rows; r++)
+                for (int c = 0; c < cols; c++)
+                    integers[r, c] = new NumberValue(Random.Shared.NextInt64(bottom, randExclusiveTop));
+            return new RangeValue(integers);
+        }
+
+        double width = max - min;
+        if (!double.IsFinite(width)) return ErrorValue.Value;
+        var result = new ScalarValue[rows, cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                var value = min + Random.Shared.NextDouble() * width;
+                if (!double.IsFinite(value)) return ErrorValue.Value;
+                result[r, c] = new NumberValue(value);
+            }
+        return new RangeValue(result);
     }
 
     private static ScalarValue Filter(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -132,17 +183,17 @@ public static partial class BuiltInFunctions
         var arr = args[0] is RangeValue arrayRange
             ? arrayRange
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
-        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        double sortIdxRaw   = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
-        double sortOrderRaw = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
+        if (!TryGetScalarControlArgument(args.Count > 1 ? args[1] : BlankValue.Instance, out var sortIdxArg, out var sortIdxError)) return sortIdxError;
+        if (!TryGetScalarControlArgument(args.Count > 2 ? args[2] : BlankValue.Instance, out var sortOrderArg, out var sortOrderError)) return sortOrderError;
+        if (!TryGetScalarControlArgument(args.Count > 3 ? args[3] : BlankValue.Instance, out var byColArg, out var byColError)) return byColError;
+        double sortIdxRaw   = sortIdxArg is not BlankValue ? ToNumber(sortIdxArg) : 1;
+        double sortOrderRaw = sortOrderArg is not BlankValue ? ToNumber(sortOrderArg) : 1;
         if (!double.IsFinite(sortIdxRaw) || !double.IsFinite(sortOrderRaw)) return ErrorValue.Value;
         int sortIdx   = (int)sortIdxRaw - 1;
         if (sortIdx < 0) return ErrorValue.Value;
         int sortOrder = (int)sortOrderRaw;
         if (sortOrder != 1 && sortOrder != -1) return ErrorValue.Value;
-        bool byCol    = args.Count > 3 && args[3] is not BlankValue && ToBool(args[3]);
+        bool byCol    = byColArg is not BlankValue && ToBool(byColArg);
         if (!byCol && sortIdx >= arr.ColCount) return ErrorValue.Value;
         if (byCol && sortIdx >= arr.RowCount) return ErrorValue.Value;
 
@@ -200,12 +251,13 @@ public static partial class BuiltInFunctions
             sortRows ??= keySortsRows;
 
             int sortOrder = 1;
-            if (i + 1 < args.Count && args[i + 1] is not RangeValue)
+            if (i + 1 < args.Count)
             {
-                if (args[i + 1] is not BlankValue)
+                if (!TryGetScalarControlArgument(args[i + 1], out var orderArg, out var orderError)) return orderError;
+                if (orderArg is not BlankValue)
                 {
-                    if (args[i + 1] is ErrorValue orderError) return orderError;
-                    double orderRaw = ToNumber(args[i + 1]);
+                    if (orderArg is ErrorValue orderArgError) return orderArgError;
+                    double orderRaw = ToNumber(orderArg);
                     if (!double.IsFinite(orderRaw)) return ErrorValue.Value;
                     sortOrder = (int)orderRaw;
                     if (sortOrder != 1 && sortOrder != -1) return ErrorValue.Value;
@@ -288,9 +340,6 @@ public static partial class BuiltInFunctions
         var arr = args[0] is RangeValue arrayRange
             ? arrayRange
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
-        if (args[1] is ErrorValue rowError) return rowError;
-        if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
-
         int rowStart = 0;
         int rowCount = arr.RowCount;
         if (args[1] is not BlankValue &&
@@ -314,9 +363,6 @@ public static partial class BuiltInFunctions
         var arr = args[0] is RangeValue arrayRange
             ? arrayRange
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
-        if (args[1] is ErrorValue rowError) return rowError;
-        if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
-
         int rowStart = 0;
         int rowCount = arr.RowCount;
         if (args[1] is not BlankValue &&
@@ -343,6 +389,14 @@ public static partial class BuiltInFunctions
         out ScalarValue error)
     {
         error = ErrorValue.Value;
+        if (!TryGetScalarControlArgument(countValue, out var scalarCountValue, out error))
+        {
+            start = 0;
+            count = 0;
+            return false;
+        }
+
+        countValue = scalarCountValue;
         double raw = ToNumber(countValue);
         if (!double.IsFinite(raw))
         {
@@ -360,14 +414,6 @@ public static partial class BuiltInFunctions
         int requested = (int)raw;
         if (requested == 0)
         {
-            if (!isTake)
-            {
-                // DROP 0 → return entire array unchanged
-                start = 0;
-                count = dimensionLength;
-                return true;
-            }
-            // TAKE 0 → empty result
             start = 0;
             count = 0;
             error = ErrorValue.Calc;
@@ -401,6 +447,37 @@ public static partial class BuiltInFunctions
         }
 
         return count > 0;
+    }
+
+    private static bool TryGetScalarControlArgument(ScalarValue value, out ScalarValue scalar, out ScalarValue error)
+    {
+        error = ErrorValue.Value;
+        if (value is RangeValue range)
+        {
+            if (range.RowCount != 1 || range.ColCount != 1)
+            {
+                scalar = ErrorValue.Value;
+                return false;
+            }
+
+            scalar = range.Cells[0, 0];
+            if (scalar is ErrorValue scalarError)
+            {
+                error = scalarError;
+                return false;
+            }
+
+            return true;
+        }
+
+        scalar = value;
+        if (value is ErrorValue directError)
+        {
+            error = directError;
+            return false;
+        }
+
+        return true;
     }
 
     private static RangeValue SliceRange(RangeValue arr, int rowStart, int colStart, int rowCount, int colCount)
@@ -560,12 +637,6 @@ public static partial class BuiltInFunctions
 
         foreach (var arg in args)
         {
-            if (arg is ErrorValue e)
-            {
-                error = e;
-                return false;
-            }
-
             arrays.Add(arg is RangeValue arr
                 ? arr
                 : new RangeValue(new[,] { { arg } }));
@@ -624,13 +695,8 @@ public static partial class BuiltInFunctions
         int ignore = 0;
         if (args.Count > 1 && args[1] is not BlankValue)
         {
-            if (args[1] is ErrorValue ignoreError)
-            {
-                error = ignoreError;
-                return false;
-            }
-
-            double rawIgnore = ToNumber(args[1]);
+            if (!TryGetScalarControlArgument(args[1], out var ignoreArg, out error)) return false;
+            double rawIgnore = ToNumber(ignoreArg);
             if (!double.IsFinite(rawIgnore)) return false;
             ignore = (int)rawIgnore;
             if (ignore is < 0 or > 3) return false;
@@ -639,13 +705,8 @@ public static partial class BuiltInFunctions
         bool scanByColumn = false;
         if (args.Count > 2 && args[2] is not BlankValue)
         {
-            if (args[2] is ErrorValue scanError)
-            {
-                error = scanError;
-                return false;
-            }
-
-            scanByColumn = ToBool(args[2]);
+            if (!TryGetScalarControlArgument(args[2], out var scanArg, out error)) return false;
+            scanByColumn = ToBool(scanArg);
         }
 
         bool ignoreBlanks = (ignore & 1) != 0;
@@ -679,7 +740,7 @@ public static partial class BuiltInFunctions
         bool ignoreErrors,
         List<ScalarValue> values)
     {
-        if (ignoreBlanks && (value is BlankValue || value is TextValue { Value.Length: 0 })) return;
+        if (ignoreBlanks && value is BlankValue) return;
         if (ignoreErrors && value is ErrorValue) return;
         values.Add(value);
     }
@@ -726,22 +787,8 @@ public static partial class BuiltInFunctions
             return false;
         }
 
-        if (args[0] is RangeValue arr)
-        {
-            if (!TryReadVector(arr, values)) return false;
-        }
-        else
-        {
-            values.Add(args[0]);
-        }
-
-        if (args[1] is ErrorValue countError)
-        {
-            error = countError;
-            return false;
-        }
-
-        double rawWrapCount = ToNumber(args[1]);
+        if (!TryGetScalarControlArgument(args[1], out var wrapCountArg, out error)) return false;
+        double rawWrapCount = ToNumber(wrapCountArg);
         if (!double.IsFinite(rawWrapCount)) return false;
         if (rawWrapCount > int.MaxValue || rawWrapCount <= int.MinValue)
         {
@@ -755,7 +802,20 @@ public static partial class BuiltInFunctions
             return false;
         }
 
-        if (args.Count > 2 && args[2] is not BlankValue) padWith = args[2];
+        if (args[0] is RangeValue arr)
+        {
+            if (!TryReadVector(arr, values)) return false;
+        }
+        else
+        {
+            values.Add(args[0]);
+        }
+
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            if (!TryGetScalarControlArgument(args[2], out padWith, out error)) return false;
+        }
+
         return values.Count > 0;
     }
 
@@ -784,20 +844,22 @@ public static partial class BuiltInFunctions
         var arr = args[0] is RangeValue range
             ? range
             : new RangeValue(new[,] { { args[0] } });
-        if (args[1] is ErrorValue rowError) return rowError;
-        if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
-
-        if (!TryGetExpandDimension(args[1], arr.RowCount, out int rowCount)) return ErrorValue.Value;
+        if (!TryGetExpandDimension(args[1], arr.RowCount, out int rowCount, out var rowError)) return rowError;
         int colCount = arr.ColCount;
         if (args.Count > 2 && args[2] is not BlankValue)
         {
-            if (!TryGetExpandDimension(args[2], arr.ColCount, out colCount)) return ErrorValue.Value;
+            if (!TryGetExpandDimension(args[2], arr.ColCount, out colCount, out var colError)) return colError;
         }
 
         if (rowCount < arr.RowCount || colCount < arr.ColCount) return ErrorValue.Value;
         if ((long)rowCount * colCount > 1_000_000) return ErrorValue.Value;
 
-        var padWith = args.Count > 3 && args[3] is not BlankValue ? args[3] : ErrorValue.NA;
+        var padWith = (ScalarValue)ErrorValue.NA;
+        if (args.Count > 3 && args[3] is not BlankValue)
+        {
+            if (!TryGetScalarControlArgument(args[3], out padWith, out var padError)) return padError;
+        }
+
         var result = CreateFilledRange(rowCount, colCount, padWith);
         for (int r = 0; r < arr.RowCount; r++)
             for (int c = 0; c < arr.ColCount; c++)
@@ -805,12 +867,14 @@ public static partial class BuiltInFunctions
         return new RangeValue(result);
     }
 
-    private static bool TryGetExpandDimension(ScalarValue value, int originalLength, out int dimension)
+    private static bool TryGetExpandDimension(ScalarValue value, int originalLength, out int dimension, out ScalarValue error)
     {
         dimension = originalLength;
+        error = ErrorValue.Value;
         if (value is BlankValue) return true;
 
-        double raw = ToNumber(value);
+        if (!TryGetScalarControlArgument(value, out var scalarValue, out error)) return false;
+        double raw = ToNumber(scalarValue);
         if (!double.IsFinite(raw) || raw > int.MaxValue) return false;
         dimension = (int)raw;
         return dimension >= 1;
@@ -822,10 +886,10 @@ public static partial class BuiltInFunctions
         var arr = args[0] is RangeValue arrayRange
             ? arrayRange
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
-        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        bool byCol       = args.Count > 1 && args[1] is not BlankValue && ToBool(args[1]);
-        bool exactlyOnce = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
+        if (!TryGetScalarControlArgument(args.Count > 1 ? args[1] : BlankValue.Instance, out var byColArg, out var byColError)) return byColError;
+        if (!TryGetScalarControlArgument(args.Count > 2 ? args[2] : BlankValue.Instance, out var exactlyOnceArg, out var exactlyOnceError)) return exactlyOnceError;
+        bool byCol       = byColArg is not BlankValue && ToBool(byColArg);
+        bool exactlyOnce = exactlyOnceArg is not BlankValue && ToBool(exactlyOnceArg);
 
         if (!byCol)
         {
@@ -942,6 +1006,72 @@ public static partial class BuiltInFunctions
                 sb.Append("other:").Append(ToText(value));
                 break;
         }
+    }
+
+    private static ScalarValue TrimRange(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue arrayError) return arrayError;
+        var range = args[0] is RangeValue rv
+            ? rv
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
+
+        if (!TryGetTrimRangeMode(args, 1, out int trimRows, out var rowsError)) return rowsError;
+        if (!TryGetTrimRangeMode(args, 2, out int trimCols, out var colsError)) return colsError;
+
+        int rowStart = 0;
+        int rowEnd = range.RowCount - 1;
+        if ((trimRows & 1) != 0)
+            while (rowStart <= rowEnd && IsTrimRangeBlankRow(range, rowStart)) rowStart++;
+        if ((trimRows & 2) != 0)
+            while (rowEnd >= rowStart && IsTrimRangeBlankRow(range, rowEnd)) rowEnd--;
+
+        int colStart = 0;
+        int colEnd = range.ColCount - 1;
+        if ((trimCols & 1) != 0)
+            while (colStart <= colEnd && IsTrimRangeBlankColumn(range, colStart, rowStart, rowEnd)) colStart++;
+        if ((trimCols & 2) != 0)
+            while (colEnd >= colStart && IsTrimRangeBlankColumn(range, colEnd, rowStart, rowEnd)) colEnd--;
+
+        if (rowStart > rowEnd || colStart > colEnd)
+            return ErrorValue.Calc;
+
+        return SliceRange(range, rowStart, colStart, rowEnd - rowStart + 1, colEnd - colStart + 1);
+    }
+
+    private static bool TryGetTrimRangeMode(
+        IReadOnlyList<ScalarValue> args,
+        int index,
+        out int mode,
+        out ScalarValue error)
+    {
+        mode = 3;
+        error = ErrorValue.Value;
+        if (args.Count <= index || args[index] is BlankValue) return true;
+        if (!TryGetScalarControlArgument(args[index], out var scalar, out error)) return false;
+
+        var raw = ToNumber(scalar);
+        if (!double.IsFinite(raw)) return false;
+
+        mode = (int)raw;
+        return mode is >= 0 and <= 3;
+    }
+
+    private static bool IsTrimRangeBlankRow(RangeValue range, int row)
+    {
+        for (int col = 0; col < range.ColCount; col++)
+            if (range.Cells[row, col] is not BlankValue)
+                return false;
+
+        return true;
+    }
+
+    private static bool IsTrimRangeBlankColumn(RangeValue range, int col, int rowStart, int rowEnd)
+    {
+        for (int row = rowStart; row <= rowEnd; row++)
+            if (range.Cells[row, col] is not BlankValue)
+                return false;
+
+        return true;
     }
 
 }

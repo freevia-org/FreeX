@@ -9,25 +9,26 @@ using Xunit;
 
 namespace Freexcel.App.Host.Tests;
 
-public sealed class FormulaEditingUiE2eTests
+public sealed class FreexcelUiE2eTests
 {
     [Fact]
     [Trait("Category", "UIE2E")]
-    public void FormulaEditing_CoversExcelReferenceEditingScenarios()
-    {
-        FormulaEditingUiE2eHarness.Run();
-    }
-}
-
-internal static class FormulaEditingUiE2eHarness
-{
-    public static void Run()
+    public void SharedAppInstance_CoversLiveUiScenarios()
     {
         if (!OperatingSystem.IsWindows())
             return;
 
         using var run = FreexcelUiRun.Start();
 
+        CellOverflowEditingUiE2eHarness.Run(run);
+        FormulaEditingUiE2eHarness.Run(run);
+    }
+}
+
+internal static class FormulaEditingUiE2eHarness
+{
+    public static void Run(FreexcelUiRun run)
+    {
         run.Capture("00-start");
         EnterNumber(run, col: 1, row: 1, "10");
         EnterNumber(run, col: 1, row: 2, "20");
@@ -160,15 +161,22 @@ internal sealed class FreexcelUiRun : IDisposable
 
     public DirectoryInfo Artifacts { get; }
 
+    public int ProcessId => _process.Id;
+
+    public IntPtr WindowHandle => _window;
+
     public static FreexcelUiRun Start()
     {
         var appExe = ResolveAppExecutable();
         var artifacts = CreateArtifactDirectory();
-        var process = Process.Start(new ProcessStartInfo(appExe)
+        var startInfo = new ProcessStartInfo(appExe)
         {
             WorkingDirectory = Path.GetDirectoryName(appExe)!,
             UseShellExecute = false
-        }) ?? throw new InvalidOperationException("Failed to launch Freexcel.");
+        };
+        startInfo.Environment["APPDATA"] = artifacts.FullName;
+
+        var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to launch Freexcel.");
 
         var window = WaitForWindow(process, TimeSpan.FromSeconds(20));
         Native.ShowWindow(window, Native.SW_RESTORE);
@@ -184,7 +192,7 @@ internal sealed class FreexcelUiRun : IDisposable
         var rect = GetWindowRect();
         var x = rect.Left + GridLeft + (col - 1) * CellWidth + CellWidth / 2;
         var y = rect.Top + GridTop + (row - 1) * CellHeight + CellHeight / 2;
-        Native.SetForegroundWindow(_window);
+        BringToForeground();
         Native.SetCursorPos(x, y);
         Thread.Sleep(80);
         Native.mouse_event(Native.LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
@@ -194,7 +202,7 @@ internal sealed class FreexcelUiRun : IDisposable
 
     public void TypeText(string text)
     {
-        Native.SetForegroundWindow(_window);
+        BringToForeground();
         foreach (var ch in text)
         {
             Native.SendUnicode(ch);
@@ -206,18 +214,61 @@ internal sealed class FreexcelUiRun : IDisposable
 
     public void Press(ushort key)
     {
-        Native.SetForegroundWindow(_window);
+        BringToForeground();
         Native.SendKey(key);
+        Thread.Sleep(180);
+    }
+
+    public void HoldControlAndPress(ushort key)
+    {
+        BringToForeground();
+        try
+        {
+            Native.KeyDown(VirtualKey.Control);
+            Native.SendKey(key);
+        }
+        finally
+        {
+            Native.KeyUp(VirtualKey.Control);
+        }
+
         Thread.Sleep(180);
     }
 
     public void HoldShiftAndPress(ushort key)
     {
-        Native.SetForegroundWindow(_window);
+        BringToForeground();
         Native.KeyDown(VirtualKey.Shift);
         Native.SendKey(key);
         Native.KeyUp(VirtualKey.Shift);
         Thread.Sleep(180);
+    }
+
+    public void WheelAtCell(int col, int row, int delta, bool shift = false, bool control = false)
+    {
+        var rect = GetWindowRect();
+        var x = rect.Left + GridLeft + (col - 1) * CellWidth + CellWidth / 2;
+        var y = rect.Top + GridTop + (row - 1) * CellHeight + CellHeight / 2;
+        BringToForeground();
+        Native.SetCursorPos(x, y);
+        Thread.Sleep(80);
+        if (shift)
+            Native.KeyDown(VirtualKey.Shift);
+        if (control)
+            Native.KeyDown(VirtualKey.Control);
+        try
+        {
+            Native.mouse_event(Native.WHEEL, 0, 0, unchecked((uint)delta), UIntPtr.Zero);
+        }
+        finally
+        {
+            if (control)
+                Native.KeyUp(VirtualKey.Control);
+            if (shift)
+                Native.KeyUp(VirtualKey.Shift);
+        }
+
+        Thread.Sleep(220);
     }
 
     public void Capture(string name)
@@ -250,6 +301,15 @@ internal sealed class FreexcelUiRun : IDisposable
         return rect;
     }
 
+    private void BringToForeground()
+    {
+        Native.SetForegroundWindow(_window).Should().BeTrue("UIE2E input must target the Freexcel window");
+        Thread.Sleep(80);
+        Native.ForegroundWindowBelongsToProcess(_process.Id)
+            .Should()
+            .BeTrue("global keyboard and mouse input must not leak into another process");
+    }
+
     private static string ResolveAppExecutable()
     {
         var assemblyDirectory = Path.GetDirectoryName(typeof(MainWindow).Assembly.Location)!;
@@ -264,7 +324,7 @@ internal sealed class FreexcelUiRun : IDisposable
     {
         var root = Path.Combine(
             AppContext.BaseDirectory,
-            "FormulaEditingUiE2E",
+            "FreexcelUiE2E",
             DateTime.Now.ToString("yyyyMMdd-HHmmss"));
         return Directory.CreateDirectory(root);
     }
@@ -294,7 +354,10 @@ internal static class VirtualKey
 {
     public const ushort Enter = 0x0D;
     public const ushort Escape = 0x1B;
+    public const ushort Control = 0x11;
     public const ushort Shift = 0x10;
+    public const ushort C = 0x43;
+    public const ushort V = 0x56;
     public const ushort Left = 0x25;
     public const ushort Up = 0x26;
     public const ushort Right = 0x27;
@@ -308,6 +371,7 @@ internal static class Native
     public const uint SWP_SHOWWINDOW = 0x0040;
     public const uint LEFTDOWN = 0x0002;
     public const uint LEFTUP = 0x0004;
+    public const uint WHEEL = 0x0800;
 
     private const uint KEYEVENTF_KEYUP = 0x0002;
 
@@ -321,6 +385,9 @@ internal static class Native
 
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
     public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
@@ -362,6 +429,16 @@ internal static class Native
             return false;
         }, IntPtr.Zero);
         return target;
+    }
+
+    public static bool ForegroundWindowBelongsToProcess(int processId)
+    {
+        var foreground = GetForegroundWindow();
+        if (foreground == IntPtr.Zero)
+            return false;
+
+        GetWindowThreadProcessId(foreground, out var foregroundProcessId);
+        return foregroundProcessId == processId;
     }
 
     public static void SendUnicode(char ch)

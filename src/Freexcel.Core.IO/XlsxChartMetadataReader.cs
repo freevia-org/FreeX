@@ -46,21 +46,22 @@ internal static class XlsxChartMetadataReader
 
     public static ChartManualLayoutModel? ReadManualLayout(XElement? layout)
     {
-        var manualLayout = layout?.Element(ChartNs + "manualLayout");
+        var chartNs = layout?.Name.Namespace ?? ChartNs;
+        var manualLayout = layout?.Element(chartNs + "manualLayout");
         if (manualLayout is null)
             return null;
 
         var result = new ChartManualLayoutModel
         {
-            LayoutTarget = manualLayout.Element(ChartNs + "layoutTarget")?.Attribute("val")?.Value,
-            XMode = manualLayout.Element(ChartNs + "xMode")?.Attribute("val")?.Value,
-            YMode = manualLayout.Element(ChartNs + "yMode")?.Attribute("val")?.Value,
-            WidthMode = manualLayout.Element(ChartNs + "wMode")?.Attribute("val")?.Value,
-            HeightMode = manualLayout.Element(ChartNs + "hMode")?.Attribute("val")?.Value,
-            X = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(ChartNs + "x")?.Attribute("val")?.Value),
-            Y = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(ChartNs + "y")?.Attribute("val")?.Value),
-            Width = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(ChartNs + "w")?.Attribute("val")?.Value),
-            Height = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(ChartNs + "h")?.Attribute("val")?.Value)
+            LayoutTarget = manualLayout.Element(chartNs + "layoutTarget")?.Attribute("val")?.Value,
+            XMode = manualLayout.Element(chartNs + "xMode")?.Attribute("val")?.Value,
+            YMode = manualLayout.Element(chartNs + "yMode")?.Attribute("val")?.Value,
+            WidthMode = manualLayout.Element(chartNs + "wMode")?.Attribute("val")?.Value,
+            HeightMode = manualLayout.Element(chartNs + "hMode")?.Attribute("val")?.Value,
+            X = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(chartNs + "x")?.Attribute("val")?.Value),
+            Y = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(chartNs + "y")?.Attribute("val")?.Value),
+            Width = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(chartNs + "w")?.Attribute("val")?.Value),
+            Height = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(chartNs + "h")?.Attribute("val")?.Value)
         };
 
         return string.IsNullOrWhiteSpace(result.LayoutTarget) &&

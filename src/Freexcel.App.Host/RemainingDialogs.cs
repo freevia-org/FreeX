@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -23,6 +24,7 @@ public sealed class ConditionalFormatThresholdDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _thresholdBox.Text = Result.ThresholdText;
+        AutomationProperties.SetName(_thresholdBox, "Conditional format threshold");
         Content = ObjectSizeDialog.CreateSingleInputContent("Format cells greater _than:", _thresholdBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -89,6 +91,7 @@ public sealed class RowHeightDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
+        AutomationProperties.SetName(_heightBox, "Row height");
         Content = ObjectSizeDialog.CreateSingleInputContent("Row _height:", _heightBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -156,6 +159,7 @@ public sealed class ColumnWidthDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
+        AutomationProperties.SetName(_widthBox, "Column width");
         Content = ObjectSizeDialog.CreateSingleInputContent("Column _width:", _widthBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }

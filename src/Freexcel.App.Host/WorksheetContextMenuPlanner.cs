@@ -41,9 +41,9 @@ public static class WorksheetContextMenuPlanner
         new("Sort Z to A", WorksheetContextMenuAction.SortDescending, AccessHeader: "Sort _Z to A"),
         new("Custom Sort...", WorksheetContextMenuAction.CustomSort, AccessHeader: "C_ustom Sort..."),
         new("Filter...", WorksheetContextMenuAction.Filter, AccessHeader: "_Filter..."),
-        new("Clear Filter", WorksheetContextMenuAction.ClearFilter, AccessHeader: "C_lear Filter"),
-        new("Reapply Filter", WorksheetContextMenuAction.ReapplyFilter, AccessHeader: "_Reapply Filter"),
-        new("Pick From Drop-down List...", WorksheetContextMenuAction.PickFromDropDown, AccessHeader: "Pick From _Drop-down List..."),
+        new("Clear Filter", WorksheetContextMenuAction.ClearFilter, AccessHeader: "C_lear Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
+        new("Reapply Filter", WorksheetContextMenuAction.ReapplyFilter, AccessHeader: "_Reapply Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
+        new("Pick From Drop-down List...", WorksheetContextMenuAction.PickFromDropDown, AccessHeader: "Pick From _Drop-down List...", IsEnabled: state.HasDropdownTarget),
         new("Quick Analysis", WorksheetContextMenuAction.QuickAnalysis, AccessHeader: "_Quick Analysis"),
         new("Define Name...", WorksheetContextMenuAction.DefineName, AccessHeader: "Define _Name..."),
         new("Create Table...", WorksheetContextMenuAction.CreateTable, AccessHeader: "Create Ta_ble..."),
@@ -52,14 +52,8 @@ public static class WorksheetContextMenuPlanner
         new("Remove Duplicates...", WorksheetContextMenuAction.RemoveDuplicates, AccessHeader: "Remove D_uplicates..."),
         new("Data Validation...", WorksheetContextMenuAction.DataValidation, AccessHeader: "Data _Validation..."),
         WorksheetContextMenuCommand.Separator,
-        new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
-        new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws"),
-        new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
-        new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight"),
-        new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
-        new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns"),
-        new("Column Width...", WorksheetContextMenuAction.ColumnWidth, AccessHeader: "Column _Width..."),
-        new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth"),
+        .. BuildRowSizingVisibilityCommands(),
+        .. BuildColumnSizingVisibilityCommands(),
         WorksheetContextMenuCommand.Separator,
         new("New Comment", WorksheetContextMenuAction.NewComment, AccessHeader: "New Co_mment"),
         new("Edit Comment...", WorksheetContextMenuAction.EditComment, AccessHeader: "_Edit Comment...", IsEnabled: state.HasThreadedComment),
@@ -90,6 +84,38 @@ public static class WorksheetContextMenuPlanner
         new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
     ];
 
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildRowSizingVisibilityCommands(
+        bool rowSelectionOrder = false) =>
+        rowSelectionOrder
+            ? [
+                new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
+                new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight"),
+                new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
+                new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws")
+            ]
+            : [
+                new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
+                new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws"),
+                new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
+                new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight")
+            ];
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildColumnSizingVisibilityCommands(
+        bool columnSelectionOrder = false) =>
+        columnSelectionOrder
+            ? [
+                new("Column Width...", WorksheetContextMenuAction.ColumnWidth, AccessHeader: "Column _Width..."),
+                new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth"),
+                new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
+                new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns")
+            ]
+            : [
+                new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
+                new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns"),
+                new("Column Width...", WorksheetContextMenuAction.ColumnWidth, AccessHeader: "Column _Width..."),
+                new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth")
+            ];
+
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildRowSelectionCommands() =>
     [
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
@@ -98,10 +124,10 @@ public static class WorksheetContextMenuPlanner
         new("Insert Row Above", WorksheetContextMenuAction.InsertRowAbove, AccessHeader: "Insert Row _Above"),
         new("Delete Row(s)", WorksheetContextMenuAction.DeleteRows, AccessHeader: "Delete _Row(s)"),
         WorksheetContextMenuCommand.Separator,
-        new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
-        new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight"),
-        new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
-        new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws"),
+        .. BuildRowSizingVisibilityCommands(rowSelectionOrder: true),
+        WorksheetContextMenuCommand.Separator,
+        new("Group", WorksheetContextMenuAction.Group, AccessHeader: "_Group"),
+        new("Ungroup", WorksheetContextMenuAction.Ungroup, AccessHeader: "_Ungroup"),
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         WorksheetContextMenuCommand.Separator,
@@ -121,10 +147,10 @@ public static class WorksheetContextMenuPlanner
         new("Insert Column Left", WorksheetContextMenuAction.InsertColumnLeft, AccessHeader: "Insert Column _Left"),
         new("Delete Column(s)", WorksheetContextMenuAction.DeleteColumns, AccessHeader: "Delete _Column(s)"),
         WorksheetContextMenuCommand.Separator,
-        new("Column Width...", WorksheetContextMenuAction.ColumnWidth, AccessHeader: "Column _Width..."),
-        new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth"),
-        new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
-        new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns"),
+        .. BuildColumnSizingVisibilityCommands(columnSelectionOrder: true),
+        WorksheetContextMenuCommand.Separator,
+        new("Group", WorksheetContextMenuAction.Group, AccessHeader: "_Group"),
+        new("Ungroup", WorksheetContextMenuAction.Ungroup, AccessHeader: "_Ungroup"),
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         WorksheetContextMenuCommand.Separator,
@@ -137,7 +163,7 @@ public static class WorksheetContextMenuPlanner
     {
         var commands = new List<WorksheetContextMenuCommand>
         {
-            new(formatHeader, WorksheetContextMenuAction.FormatDrawingObject, AccessHeader: "_Format..."),
+            new(formatHeader, WorksheetContextMenuAction.FormatDrawingObject, AccessHeader: $"_Format {formatHeader["Format ".Length..]}"),
             new("Size and Properties...", WorksheetContextMenuAction.ResizeDrawingObject, AccessHeader: "_Size and Properties..."),
             new("Rotate...", WorksheetContextMenuAction.RotateDrawingObject, AccessHeader: "_Rotate..."),
             new("Shape Fill...", WorksheetContextMenuAction.ShapeFill, AccessHeader: "Shape _Fill..."),
@@ -186,7 +212,9 @@ public sealed record WorksheetContextMenuState(
     bool HasThreadedComment = false,
     bool IsThreadedCommentResolved = false,
     bool HasNote = false,
-    bool HasHyperlink = false)
+    bool HasHyperlink = false,
+    bool HasAutoFilterHeaderTarget = false,
+    bool HasDropdownTarget = false)
 {
     public static WorksheetContextMenuState Default { get; } = new();
 }
@@ -229,6 +257,8 @@ public enum WorksheetContextMenuAction
     UnhideColumns,
     ColumnWidth,
     AutoFitColumnWidth,
+    Group,
+    Ungroup,
     NewComment,
     EditComment,
     ResolveComment,

@@ -43,17 +43,21 @@ public sealed class RibbonTabParityTests
             "Sparklines",
             "Filters",
             "Links",
+            "Comments",
             "Text",
-            "Symbols",
-            "Comments");
+            "Symbols");
 
         ExtractGroupXaml(insertTab, "Tables").Should().Contain("Recommended PivotTables");
+        ExtractGroupXaml(insertTab, "Tables").Should().Contain(
+            "local:RibbonTooltip.Title=\"Recommended PivotTables\"",
+            "Excel exposes Recommended PivotTables as a first-class Tables command, not only as a nested PivotTable menu item");
         ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Pictures\"");
         ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Shapes\"");
         ExtractGroupXaml(insertTab, "Charts").Should().Contain("local:RibbonTooltip.Title=\"Recommended Charts\"");
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Timeline\"");
         ExtractGroupXaml(insertTab, "Links").Should().Contain("local:RibbonTooltip.Title=\"Insert Link\"");
+        ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"New Comment\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Text Box\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Header &amp; Footer\"");
         ExtractGroupXaml(insertTab, "Symbols").Should().Contain("local:RibbonTooltip.Title=\"Insert Symbol\"");
@@ -64,13 +68,29 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var drawTab = ExtractTabXaml(xaml, "Draw", "Page Layout");
+        var toolsGroup = ExtractGroupXaml(drawTab, "Tools");
+        var pensGroup = ExtractGroupXaml(drawTab, "Pens");
 
         ExtractGroupLabels(drawTab).Should().Equal(
-            "Draw",
+            "Tools",
+            "Pens",
             "Convert",
             "Arrange",
             "Format");
 
+        ExtractTooltipTitles(toolsGroup).Should().ContainInOrder(
+            "Draw with Touch",
+            "Eraser",
+            "Lasso Select");
+        ExtractTooltipTitles(pensGroup).Should().ContainInOrder(
+            "Pen",
+            "Pencil",
+            "Highlighter",
+            "Add Pen");
+        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Rectangle\"");
+        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Ellipse\"");
+        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Line\"");
+        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Text Box\"");
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Shape\"");
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Math\"");
         ExtractGroupXaml(drawTab, "Format").Should().Contain("local:RibbonTooltip.Title=\"Shape Fill\"");
@@ -93,14 +113,41 @@ public sealed class RibbonTabParityTests
         ExtractTooltipTitles(pageSetupGroup).Should().ContainInOrder(
             "Margins",
             "Orientation",
-            "Size",
+            "Paper Size",
             "Print Area",
-            "Breaks");
-        ExtractTooltipTitles(pageSetupGroup).Should().NotContain("Paper Size");
+            "Breaks",
+            "Background",
+            "Print Titles");
+        pageSetupGroup.Should().NotContain("local:RibbonTooltip.Title=\"Header &amp; Footer\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Bring Forward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Send Backward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Selection Pane\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Rotate Object\"");
+    }
+
+    [Fact]
+    public void ArrangeGroups_TreatBringForwardAndSendBackwardAsDistinctRibbonRows()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var drawArrangeGroup = ExtractGroupXaml(ExtractTabXaml(xaml, "Draw", "Page Layout"), "Arrange");
+        var pageLayoutArrangeGroup = ExtractGroupXaml(ExtractTabXaml(xaml, "Page Layout", "Formulas"), "Arrange");
+
+        foreach (var (arrangeGroup, bringForwardKeyTip, sendBackwardKeyTip) in new[]
+        {
+            (drawArrangeGroup, "BF", "SB"),
+            (pageLayoutArrangeGroup, "BF", "SB")
+        })
+        {
+            ExtractTooltipTitles(arrangeGroup).Should().ContainInOrder("Bring Forward", "Send Backward");
+            arrangeGroup.Should().Contain("Click=\"BringForwardBtn_Click\"");
+            arrangeGroup.Should().Contain("Click=\"SendBackwardBtn_Click\"");
+            arrangeGroup.Should().Contain($"local:RibbonTooltip.KeyTip=\"{bringForwardKeyTip}\"");
+            arrangeGroup.Should().Contain($"local:RibbonTooltip.KeyTip=\"{sendBackwardKeyTip}\"");
+        }
+
+        File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"))
+            .Should()
+            .Contain("| Bring Forward/Send Backward | Implemented | |");
     }
 
     [Fact]
@@ -145,6 +192,7 @@ public sealed class RibbonTabParityTests
         ExtractGroupLabels(dataTab).Should().Equal(
             "Get & Transform Data",
             "Queries & Connections",
+            "Data Types",
             "Sort & Filter",
             "Data Tools",
             "Forecast",
@@ -190,6 +238,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var viewTab = ExtractTabXaml(xaml, "View", "PivotTable Analyze");
+        var zoomGroup = ExtractGroupXaml(viewTab, "Zoom");
         var windowGroup = ExtractGroupXaml(viewTab, "Window");
 
         ExtractGroupLabels(viewTab).Should().Equal(
@@ -199,11 +248,18 @@ public sealed class RibbonTabParityTests
             "Window",
             "Macros");
 
-        windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Freeze Panes\"");
-        windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Split\"");
+        ExtractTooltipTitles(zoomGroup).Should().ContainInOrder(
+            "Zoom",
+            "100%",
+            "Zoom to Selection");
+        ExtractTooltipTitles(zoomGroup).Should().NotContain(["Zoom Out", "Zoom In"]);
         ExtractTooltipTitles(windowGroup).Should().ContainInOrder(
             "New Window",
             "Arrange All",
+            "Freeze Panes",
+            "Split",
+            "Hide",
+            "Unhide",
             "View Side by Side",
             "Synchronous Scrolling",
             "Reset Window Position",
@@ -266,12 +322,13 @@ public sealed class RibbonTabParityTests
         ExtractGroupLabels(helpTab).Should().Equal("Help");
         ExtractTooltipTitles(helpGroup).Should().ContainInOrder(
             "Help Online",
-            "Contact Support",
             "Feedback",
             "Copy Diagnostics",
+            "Check for Updates",
+            "About Freexcel",
+            "Contact Support",
             "Show Training",
-            "What's New",
-            "About Freexcel");
+            "What's New");
     }
 
     private static string ExtractTabXaml(string xaml, string header, string nextHeader)

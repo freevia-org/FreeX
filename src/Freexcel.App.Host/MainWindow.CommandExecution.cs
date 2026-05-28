@@ -19,8 +19,14 @@ public partial class MainWindow
     private bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)
     {
         outcome = _commandBus.Execute(_workbook.Id, command);
+        RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
+        {
+            ["command"] = title,
+            ["status"] = outcome.Success ? "succeeded" : "failed"
+        });
         if (outcome.Success)
         {
+            MarkWorkbookDirty();
             InvalidateNavigationCaches();
             return true;
         }
@@ -86,6 +92,7 @@ public partial class MainWindow
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
         if (outcome.Success)
         {
+            MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
             return true;
@@ -111,6 +118,7 @@ public partial class MainWindow
         outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
         if (outcome.Success)
         {
+            MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
             return true;
@@ -140,6 +148,7 @@ public partial class MainWindow
         outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
         if (outcome.Success)
         {
+            MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
             return true;
@@ -176,6 +185,7 @@ public partial class MainWindow
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
         if (outcome.Success)
         {
+            MarkWorkbookDirty();
             _repeatPostAction = null;
             return true;
         }
@@ -225,6 +235,7 @@ public partial class MainWindow
     {
         var outcome = _commandBus.Undo(_workbook.Id);
         if (!outcome.Success) return;
+        MarkWorkbookDirty();
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
@@ -236,6 +247,7 @@ public partial class MainWindow
     {
         var outcome = _commandBus.Redo(_workbook.Id);
         if (!outcome.Success) return;
+        MarkWorkbookDirty();
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
@@ -248,6 +260,7 @@ public partial class MainWindow
         var postAction = _repeatPostAction;
         var outcome = _commandBus.RepeatLast(_workbook.Id);
         if (!outcome.Success) return;
+        MarkWorkbookDirty();
         InvalidateNavigationCaches();
         postAction?.Invoke(outcome);
         RecalculateAfterCommandOutcome(outcome);

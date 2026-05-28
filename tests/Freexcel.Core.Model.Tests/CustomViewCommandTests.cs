@@ -161,6 +161,76 @@ public sealed class CustomViewCommandTests
     }
 
     [Fact]
+    public void CustomViewStatePlanner_CapturesFindsSanitizesAndAppliesState()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
+        sheet.FrozenRows = 1;
+        sheet.FrozenCols = 0;
+        sheet.SplitRow = 7;
+        sheet.SplitColumn = 8;
+        sheet.ShowGridlines = false;
+        sheet.ShowHeadings = false;
+        sheet.ShowRulers = false;
+        sheet.ZoomPercent = 140;
+        sheet.ShowFormulas = true;
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "Review",
+            [new WorksheetCustomViewState("Sheet1", WorksheetViewMode.Normal, 0, 0, null, null)]));
+
+        CustomViewStatePlanner.FindViewIndex(workbook, "review").Should().Be(0);
+        CustomViewStatePlanner.FindViewIndex(workbook, "missing").Should().Be(-1);
+
+        var state = CustomViewStatePlanner.CaptureSheetState(sheet);
+        state.SplitRow.Should().BeNull();
+        state.SplitColumn.Should().BeNull();
+        state.ShowGridlines.Should().BeFalse();
+        state.ShowHeadings.Should().BeFalse();
+        state.ShowRulers.Should().BeFalse();
+        state.ZoomPercent.Should().Be(140);
+        state.ShowFormulas.Should().BeTrue();
+
+        CustomViewStatePlanner.CaptureWorkbookState(workbook).Should().ContainSingle().Which.Should().Be(state);
+
+        CustomViewStatePlanner.ApplyState(sheet, new WorksheetCustomViewState(
+            "Sheet1",
+            WorksheetViewMode.PageLayout,
+            FrozenRows: 2,
+            FrozenCols: 1,
+            SplitRow: 3,
+            SplitColumn: 4,
+            ShowGridlines: true,
+            ShowHeadings: true,
+            ShowRulers: true,
+            ZoomPercent: 90,
+            ShowFormulas: false));
+
+        sheet.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
+        sheet.FrozenRows.Should().Be(2);
+        sheet.FrozenCols.Should().Be(1);
+        sheet.SplitRow.Should().BeNull();
+        sheet.SplitColumn.Should().BeNull();
+        sheet.ShowGridlines.Should().BeTrue();
+        sheet.ShowHeadings.Should().BeTrue();
+        sheet.ShowRulers.Should().BeTrue();
+        sheet.ZoomPercent.Should().Be(90);
+        sheet.ShowFormulas.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CustomViewCommands_DelegateStatePlanning()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.Commands", "CustomViewCommands.cs"));
+
+        source.Should().Contain("CustomViewStatePlanner.FindViewIndex(workbook, name)");
+        source.Should().Contain("CustomViewStatePlanner.CaptureSheetState(sheet)");
+        source.Should().Contain("CustomViewStatePlanner.SanitizePaneState(state)");
+        source.Should().Contain("CustomViewStatePlanner.CaptureWorkbookState(workbook)");
+        source.Should().Contain("CustomViewStatePlanner.ApplyState(sheet, state)");
+    }
+
+    [Fact]
     public void DeleteCustomViewCommand_RemovesViewAndUndoRestores()
     {
         var workbook = new Workbook("test");
@@ -185,5 +255,20 @@ public sealed class CustomViewCommandTests
     {
         public Workbook Workbook { get; } = wb;
         public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not locate {Path.Combine(parts)} from {AppContext.BaseDirectory}.");
     }
 }

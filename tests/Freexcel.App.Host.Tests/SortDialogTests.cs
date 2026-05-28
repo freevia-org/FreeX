@@ -2,6 +2,9 @@ using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -23,6 +26,84 @@ public sealed class SortDialogTests
             new SortKey(2, true),
             new SortKey(1, true, SortOn.CellColor, new CellColor(255, 0, 0)),
             new SortKey(0, false, SortOn.FontColor, new CellColor(0, 0, 255)));
+    }
+
+    [Fact]
+    public void PlannerBuildSortKeys_MapsLabelsAndIgnoresColorForValueSorts()
+    {
+        var levels = new[]
+        {
+            new SortDialogLevel(0, true) { SortOn = "Cell Values", TargetColor = "#FF0000" },
+            new SortDialogLevel(1, false) { SortOn = "Cell Color", TargetColor = "#00FF00" },
+            new SortDialogLevel(2, true) { SortOn = "Font Color", TargetColor = "#0000FF" },
+            new SortDialogLevel(3, true) { SortOn = "Unknown", TargetColor = "#FFFFFF" }
+        };
+
+        SortDialogPlanner.BuildSortKeys(levels).Should().Equal(
+            new SortKey(0, true, SortOn.CellValues, null),
+            new SortKey(1, false, SortOn.CellColor, new CellColor(0, 255, 0)),
+            new SortKey(2, true, SortOn.FontColor, new CellColor(0, 0, 255)),
+            new SortKey(3, true, SortOn.CellValues, null));
+    }
+
+    [Fact]
+    public void PlannerBuildActiveColumnChoices_UsesRowsForLeftToRightAndHeaderAwareColumnsOtherwise()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sales");
+        sheet.SetCell(new CellAddress(sheetId, 4, 2), new TextValue("Region"));
+        var range = new GridRange(
+            new CellAddress(sheetId, 4, 2),
+            new CellAddress(sheetId, 6, 4));
+        var headerChoices = SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders: true);
+        var genericChoices = SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders: false);
+        var rowChoices = SortDialogPlanner.BuildRowChoices(range);
+
+        SortDialogPlanner.BuildActiveColumnChoices(
+                new SortDialogOptions(LeftToRight: false),
+                hasHeaders: true,
+                headerChoices,
+                genericChoices,
+                rowChoices)
+            .Should()
+            .Equal(headerChoices);
+        SortDialogPlanner.BuildActiveColumnChoices(
+                new SortDialogOptions(LeftToRight: false),
+                hasHeaders: false,
+                headerChoices,
+                genericChoices,
+                rowChoices)
+            .Should()
+            .Equal(genericChoices);
+        SortDialogPlanner.BuildActiveColumnChoices(
+                new SortDialogOptions(LeftToRight: true),
+                hasHeaders: true,
+                headerChoices,
+                genericChoices,
+                rowChoices)
+            .Should()
+            .Equal(rowChoices);
+    }
+
+    [Fact]
+    public void SortDialogPlanningFacade_ForwardsPureWorkToPlanner()
+    {
+        var planningSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.Planning.cs"));
+
+        planningSource.Should().Contain("internal static class SortDialogPlanner");
+        planningSource.Should().Contain("SortDialogPlanner.BuildSortKeys(levels)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildOrderChoices(sortOn)");
+        planningSource.Should().Contain("SortDialogPlanner.AddLevel(levels, columnOffset, ascending)");
+        planningSource.Should().Contain("SortDialogPlanner.RemoveLevel(levels, index)");
+        planningSource.Should().Contain("SortDialogPlanner.CopyLevel(levels, index)");
+        planningSource.Should().Contain("SortDialogPlanner.MoveLevel(levels, index, direction)");
+        planningSource.Should().Contain("SortDialogPlanner.UpdateLevel(levels, index, columnOffset, ascending)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(range)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildRowChoices(range)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColorChoices(workbook, sheet, range)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColorChoices(workbook, sheet, range, sortOn)");
+        planningSource.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");
     }
 
     [Fact]
@@ -107,6 +188,59 @@ public sealed class SortDialogTests
         source.Should().Contain("_levelsGrid.SelectedIndex = 0;");
         source.Should().Contain("_levelsGrid.Focus();");
         source.Should().Contain("Keyboard.Focus(_levelsGrid);");
+    }
+
+    [Fact]
+    public void SortLevelsGrid_DeletesSelectedLevelWithDeleteKey()
+    {
+        var source = ReadSortDialogSource();
+
+        source.Should().Contain("_levelsGrid.KeyDown += LevelsGrid_KeyDown;");
+        source.Should().Contain("private void LevelsGrid_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("e.Key == Key.Delete");
+        source.Should().Contain("_deleteLevelButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));");
+    }
+
+    [Fact]
+    public void ToolbarButtons_EnableOnlyValidLevelActions()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SortDialog([
+                new SortDialogLevel(0, true),
+                new SortDialogLevel(1, true)
+            ]);
+            dialog.Show();
+            try
+            {
+                var grid = GetControl<DataGrid>(dialog, "_levelsGrid");
+                var delete = GetControl<Button>(dialog, "_deleteLevelButton");
+                var copy = GetControl<Button>(dialog, "_copyLevelButton");
+                var moveUp = GetControl<Button>(dialog, "_moveUpButton");
+                var moveDown = GetControl<Button>(dialog, "_moveDownButton");
+
+                grid.SelectedIndex.Should().Be(0);
+                delete.IsEnabled.Should().BeTrue();
+                copy.IsEnabled.Should().BeTrue();
+                moveUp.IsEnabled.Should().BeFalse();
+                moveDown.IsEnabled.Should().BeTrue();
+
+                grid.SelectedIndex = 1;
+                moveUp.IsEnabled.Should().BeTrue();
+                moveDown.IsEnabled.Should().BeFalse();
+
+                delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                grid.Items.Count.Should().Be(1);
+                delete.IsEnabled.Should().BeFalse();
+                copy.IsEnabled.Should().BeTrue();
+                moveUp.IsEnabled.Should().BeFalse();
+                moveDown.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -380,4 +514,12 @@ public sealed class SortDialogTests
             "SortDialog.Types.cs",
             "SortOptionsDialog.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
+
+    private static T GetControl<T>(SortDialog dialog, string name)
+        where T : class
+    {
+        var field = typeof(SortDialog).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
 }

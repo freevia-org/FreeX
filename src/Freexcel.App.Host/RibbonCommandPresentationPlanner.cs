@@ -53,6 +53,7 @@ public static partial class RibbonCommandPresentationPlanner
 
         var name = title.Trim().ToLowerInvariant();
         return IsInsertChartType(name) ||
+               name is "recommended chart" or "recommended charts" ||
                name is "column" or
                        "stack col" or
                        "100% col" or
@@ -175,20 +176,7 @@ public static partial class RibbonCommandPresentationPlanner
         name == "zoom" ||
         name.Contains("zoom to 100") ||
         name.Contains("zoom to selection") ||
-        name.Contains("new window") ||
-        name.Contains("arrange all") ||
-        name.Contains("freeze panes") ||
-        name.Contains("switch windows") ||
-        name.Contains("side by side") ||
-        name.Contains("sync scrolling") ||
-        name.Contains("reset position") ||
-        name == "macros" ||
-        name.Contains("help online") ||
-        name.Contains("contact support") ||
-        name.Contains("training") ||
-        name.Contains("what's new") ||
-        name.Contains("about") ||
-        name.Contains("feedback");
+        name == "macros";
 
     private static bool IsMediumRibbonCommand(string name) =>
         name.Contains("theme colors") ||

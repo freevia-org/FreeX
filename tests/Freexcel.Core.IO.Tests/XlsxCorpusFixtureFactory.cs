@@ -52,6 +52,47 @@ internal static class XlsxCorpusFixtureFactory
         "generated-sensitivity-labels-001" => true,
         "generated-smartart-diagrams-001" => true,
         "generated-printer-settings-001" => true,
+        "generated-calc-chain-001" => true,
+        "generated-document-properties-001" => true,
+        "generated-header-footer-legacy-drawing-001" => true,
+        "generated-worksheet-legacy-drawing-001" => true,
+        "generated-workbook-extension-list-001" => true,
+        "generated-workbook-properties-001" => true,
+        "generated-workbook-calculation-001" => true,
+        "generated-workbook-file-version-001" => true,
+        "generated-workbook-file-recovery-001" => true,
+        "generated-workbook-file-sharing-001" => true,
+        "generated-workbook-protection-native-001" => true,
+        "generated-workbook-smart-tags-001" => true,
+        "generated-workbook-function-groups-001" => true,
+        "generated-workbook-views-001" => true,
+        "generated-workbook-defined-names-native-001" => true,
+        "generated-workbook-theme-native-schemes-001" => true,
+        "generated-stylesheet-native-metadata-001" => true,
+        "generated-worksheet-ignored-errors-001" => true,
+        "generated-worksheet-cell-watches-001" => true,
+        "generated-worksheet-single-xml-cells-001" => true,
+        "generated-worksheet-calculation-properties-001" => true,
+        "generated-worksheet-sheet-views-001" => true,
+        "generated-worksheet-sheet-format-001" => true,
+        "generated-worksheet-page-breaks-001" => true,
+        "generated-worksheet-print-options-001" => true,
+        "generated-worksheet-page-setup-native-001" => true,
+        "generated-worksheet-header-footer-native-001" => true,
+        "generated-worksheet-dimension-native-001" => true,
+        "generated-worksheet-sheet-properties-001" => true,
+        "generated-worksheet-protection-native-001" => true,
+        "generated-worksheet-protected-ranges-001" => true,
+        "generated-worksheet-cell-structure-native-001" => true,
+        "generated-worksheet-phonetic-properties-001" => true,
+        "generated-worksheet-sort-state-001" => true,
+        "generated-worksheet-data-consolidation-001" => true,
+        "generated-worksheet-auto-filter-metadata-001" => true,
+        "generated-worksheet-custom-properties-001" => true,
+        "generated-worksheet-smart-tags-001" => true,
+        "generated-worksheet-scenarios-001" => true,
+        "generated-worksheet-custom-sheet-views-001" => true,
+        "generated-worksheet-extension-list-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -63,6 +104,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-external-links-001" => true,
         "generated-embedded-objects-001" => true,
         "generated-custom-xml-001" => true,
+        "generated-custom-docprops-001" => true,
         _ => false
     };
 
@@ -144,6 +186,499 @@ internal static class XlsxCorpusFixtureFactory
             ("xl/diagrams/layout1.xml", "<dgm:layoutDef/>"),
             ("xl/diagrams/quickStyle1.xml", "<dgm:styleDef/>")),
         "generated-printer-settings-001" => CreatePackage(("xl/printerSettings/printerSettings1.bin", "Freexcel generated printer settings placeholder")),
+        "generated-calc-chain-001" => CreatePackage(("xl/calcChain.xml", """
+            <calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <c r="A1" i="1"/>
+            </calcChain>
+            """)),
+        "generated-document-properties-001" => CreatePackage(
+            ("docProps/core.xml", """
+                <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+                                   xmlns:dc="http://purl.org/dc/elements/1.1/"
+                                   xmlns:dcterms="http://purl.org/dc/terms/"
+                                   xmlns:dcmitype="http://purl.org/dc/dcmitype/"
+                                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                  <dc:title>Freexcel document property corpus</dc:title>
+                  <dc:subject>Stable document properties retained</dc:subject>
+                  <cp:keywords>xlsx parity</cp:keywords>
+                  <cp:lastModifiedBy>Freexcel Fixture</cp:lastModifiedBy>
+                </cp:coreProperties>
+                """),
+            ("docProps/app.xml", """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Application>Microsoft Excel</Application>
+                  <Company>Freexcel Test Lab</Company>
+                  <Manager>Workbook Fidelity</Manager>
+                </Properties>
+                """)),
+        "generated-header-footer-legacy-drawing-001" => CreatePackage(
+            ("xl/drawings/vmlDrawing1.vml", """
+                <xml xmlns:v="urn:schemas-microsoft-com:vml"
+                     xmlns:o="urn:schemas-microsoft-com:office:office"
+                     xmlns:x="urn:schemas-microsoft-com:office:excel">
+                  <v:shape id="LH" type="#_x0000_t75">
+                    <v:imagedata o:relid="rIdImage1" o:title="Header"/>
+                  </v:shape>
+                </xml>
+                """),
+            ("xl/drawings/_rels/vmlDrawing1.vml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/headerFooterImage1.png"/>
+                </Relationships>
+                """),
+            ("xl/media/headerFooterImage1.png", "Freexcel generated header footer image placeholder")),
+        "generated-worksheet-legacy-drawing-001" => CreatePackage(
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <legacyDrawing r:id="rIdFreexcelLegacyDrawing"/>
+                </worksheet>
+                """),
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdFreexcelLegacyDrawing"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing"
+                                Target="../drawings/vmlDrawing1.vml"/>
+                </Relationships>
+                """),
+            ("xl/drawings/vmlDrawing1.vml", """
+                <xml xmlns:v="urn:schemas-microsoft-com:vml"
+                     xmlns:o="urn:schemas-microsoft-com:office:office"
+                     xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                     xmlns:x="urn:schemas-microsoft-com:office:excel">
+                  <v:shape id="FreexcelLegacyDrawingShape" type="#_x0000_t201">
+                    <v:imagedata r:id="rIdFreexcelVmlImage"/>
+                    <x:ClientData ObjectType="Note"/>
+                  </v:shape>
+                </xml>
+                """),
+            ("xl/drawings/_rels/vmlDrawing1.vml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdFreexcelVmlImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/vmlImage1.png"/>
+                </Relationships>
+                """),
+            ("xl/media/vmlImage1.png", "Freexcel generated VML image placeholder")),
+        "generated-workbook-extension-list-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <extLst>
+                <ext uri="{00112233-4455-6677-8899-AABBCCDDEEFF}">
+                  <x15:futureMetadata xmlns:x15="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                                      name="FreexcelUnknownWorkbookExtension"/>
+                </ext>
+              </extLst>
+            </workbook>
+            """)),
+        "generated-workbook-properties-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:fx="urn:freexcel:test">
+              <workbookPr date1904="1" defaultThemeVersion="166925">
+                <fx:workbookPrNativeChild id="first"/>
+                <fx:workbookPrNativeChild id="second"/>
+              </workbookPr>
+            </workbook>
+            """)),
+        "generated-workbook-calculation-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <calcPr calcMode="manual" iterate="1" iterateCount="50" calcId="191029" refMode="A1" fullPrecision="0" concurrentCalc="1"/>
+            </workbook>
+            """)),
+        "generated-workbook-file-version-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <fileVersion appName="xl" lastEdited="7" lowestEdited="7" rupBuild="28129" customVersionFlag="keep"/>
+            </workbook>
+            """)),
+        "generated-workbook-file-recovery-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <fileRecoveryPr autoRecover="1" crashSave="1" customRecoveryFlag="keep" repairLoad="0"/>
+              <fileRecoveryPr dataExtractLoad="1" repairLoad="1"/>
+            </workbook>
+            """)),
+        "generated-workbook-file-sharing-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <fileSharing readOnlyRecommended="1" userName="FreexcelTest" revisionsPassword="1234"/>
+            </workbook>
+            """)),
+        "generated-workbook-protection-native-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                      xmlns:fx="urn:freexcel:test">
+              <workbookProtection lockStructure="1"
+                                  lockWindows="1"
+                                  workbookPassword="83AF"
+                                  algorithmName="SHA-512"
+                                  hashValue="def456"
+                                  saltValue="salt456"
+                                  spinCount="100000">
+                <fx:workbookProtectionNativeChild id="first"/>
+                <fx:workbookProtectionNativeChild id="second"/>
+              </workbookProtection>
+            </workbook>
+            """)),
+        "generated-workbook-smart-tags-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <smartTagPr embed="1" show="all" customSmartTagFlag="keep"/>
+              <smartTagTypes customSmartTagTypesFlag="keep">
+                <smartTagType namespaceUri="urn:schemas-microsoft-com:office:smarttags" name="place" customSmartTagTypeFlag="keep"/>
+              </smartTagTypes>
+            </workbook>
+            """)),
+        "generated-workbook-function-groups-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <functionGroups builtInGroupCount="16" customFunctionGroupFlag="keep">
+                <functionGroup name="FreexcelNativeFunctions" customGroupFlag="keep"/>
+              </functionGroups>
+            </workbook>
+            """)),
+        "generated-workbook-views-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <bookViews>
+                <workbookView visibility="visible" showSheetTabs="0" tabRatio="700" firstSheet="0" activeTab="0"/>
+                <workbookView visibility="hidden" minimized="1" showHorizontalScroll="0" showVerticalScroll="0" showSheetTabs="0" tabRatio="700" firstSheet="0" activeTab="0" customWorkbookViewFlag="kept"/>
+              </bookViews>
+              <customWorkbookViews>
+                <customWorkbookView name="FreexcelView" guid="{22222222-2222-2222-2222-222222222222}" autoUpdate="0" mergeInterval="0" personalView="0" includePrintSettings="1" includeHiddenRowCol="1"/>
+              </customWorkbookViews>
+            </workbook>
+            """)),
+        "generated-workbook-defined-names-native-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <definedNames>
+                <definedName name="DynamicSalesRange" hidden="1">1+1</definedName>
+              </definedNames>
+            </workbook>
+            """)),
+        "generated-workbook-theme-native-schemes-001" => CreatePackage(("xl/theme/theme1.xml", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Freexcel Native Scheme Theme">
+              <a:themeElements>
+                <a:clrScheme name="Freexcel Native Colors">
+                  <a:dk1><a:srgbClr val="010203"/></a:dk1>
+                  <a:lt1><a:srgbClr val="FAFBFC"/></a:lt1>
+                  <a:dk2><a:srgbClr val="44546A"/></a:dk2>
+                  <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+                  <a:accent1><a:srgbClr val="0C2238"><a:lumMod val="75000"/></a:srgbClr></a:accent1>
+                  <a:accent2><a:srgbClr val="E97132"/></a:accent2>
+                  <a:accent3><a:srgbClr val="196B24"/></a:accent3>
+                  <a:accent4><a:srgbClr val="0F9ED5"/></a:accent4>
+                  <a:accent5><a:srgbClr val="A02B93"/></a:accent5>
+                  <a:accent6><a:srgbClr val="4EA72E"/></a:accent6>
+                  <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+                  <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+                </a:clrScheme>
+                <a:fontScheme name="Freexcel Native Fonts">
+                  <a:majorFont>
+                    <a:latin typeface="Major Native"/>
+                    <a:ea typeface="Major East Asia"/>
+                    <a:cs typeface="Major Complex"/>
+                    <a:font script="Jpan" typeface="Yu Gothic"/>
+                  </a:majorFont>
+                  <a:minorFont>
+                    <a:latin typeface="Minor Native"/>
+                    <a:ea typeface="Minor East Asia"/>
+                    <a:cs typeface="Minor Complex"/>
+                  </a:minorFont>
+                </a:fontScheme>
+                <a:fmtScheme name="Effects Test"/>
+              </a:themeElements>
+            </a:theme>
+            """)),
+        "generated-stylesheet-native-metadata-001" => CreatePackage(("xl/styles.xml", """
+            <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                        xmlns:fx="urn:freexcel:test">
+              <colors>
+                <indexedColors>
+                  <rgbColor rgb="FF010203"/>
+                </indexedColors>
+              </colors>
+              <dxfs count="1">
+                <dxf nativePivotDxf="kept">
+                  <fill>
+                    <patternFill patternType="solid">
+                      <fgColor rgb="FFABCDEF"/>
+                    </patternFill>
+                  </fill>
+                  <fx:pivotStyleDxfNativeChild value="kept"/>
+                </dxf>
+              </dxfs>
+              <tableStyles defaultPivotStyle="PivotStyleMedium9">
+                <fx:tableStylesNativeChild value="kept"/>
+                <tableStyle name="FreexcelNativeTableStyle" pivot="0" table="1" count="1">
+                  <tableStyleElement type="wholeTable" dxfId="0"/>
+                </tableStyle>
+                <tableStyle name="FreexcelNativePivotStyle" pivot="1" table="0" count="1">
+                  <tableStyleElement type="wholeTable" dxfId="0"/>
+                </tableStyle>
+              </tableStyles>
+              <extLst>
+                <ext uri="{FFEEDDCC-7788-6655-4433-22110099AABB}">
+                  <FreexcelNativeStylesExtension/>
+                </ext>
+              </extLst>
+            </styleSheet>
+            """)),
+        "generated-worksheet-ignored-errors-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <ignoredErrors>
+                <ignoredError sqref="A1" numberStoredAsText="1" twoDigitTextYear="1"/>
+              </ignoredErrors>
+            </worksheet>
+            """)),
+        "generated-worksheet-cell-watches-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <cellWatches nativeContainer="kept">
+                <cellWatch r="A1" nativeWatch="kept"/>
+              </cellWatches>
+            </worksheet>
+            """)),
+        "generated-worksheet-single-xml-cells-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <singleXmlCells nativeSingleXmlCellsAttr="kept">
+                <singleXmlCell id="1" r="A1" xmlCellPrId="1" nativeSingleXmlCellAttr="cell-kept"/>
+              </singleXmlCells>
+            </worksheet>
+            """)),
+        "generated-worksheet-calculation-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetCalcPr fullCalcOnLoad="1" calcId="999"/>
+            </worksheet>
+            """)),
+        "generated-worksheet-sheet-views-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetViews nativeSheetViewsAttr="kept">
+                <sheetView workbookViewId="0" showZeros="0" rightToLeft="1">
+                  <pivotSelection pane="topRight"/>
+                </sheetView>
+              </sheetViews>
+            </worksheet>
+            """)),
+        "generated-worksheet-sheet-format-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetFormatPr baseColWidth="12" zeroHeight="1" thickTop="1" outlineLevelRow="3">
+                <nativeSheetFormatChild value="kept"/>
+              </sheetFormatPr>
+            </worksheet>
+            """)),
+        "generated-worksheet-page-breaks-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <rowBreaks count="1" manualBreakCount="1">
+                <brk id="20" max="16383" man="1" pt="1" customAttr="row-native"/>
+              </rowBreaks>
+              <colBreaks count="1" manualBreakCount="1">
+                <brk id="5" max="1048575" man="1" pt="1" customAttr="col-native"/>
+              </colBreaks>
+            </worksheet>
+            """)),
+        "generated-worksheet-print-options-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <printOptions gridLinesSet="1" customAttr="print-native">
+                <fx:nativePrintOptionsChild value="kept"/>
+              </printOptions>
+            </worksheet>
+            """)),
+        "generated-worksheet-page-setup-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <pageSetup usePrinterDefaults="1" copies="3" customAttr="page-setup-native">
+                <nativePageSetupChild value="kept"/>
+              </pageSetup>
+            </worksheet>
+            """)),
+        "generated-worksheet-header-footer-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <headerFooter nativeHeaderFooterAttr="kept">
+                <oddHeader>&amp;LLeft&amp;CCenter&amp;RRight</oddHeader>
+                <nativeHeaderFooterChild value="kept"/>
+              </headerFooter>
+            </worksheet>
+            """)),
+        "generated-worksheet-dimension-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <dimension ref="A1" nativeDimensionAttr="kept"/>
+            </worksheet>
+            """)),
+        "generated-worksheet-sheet-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <sheetPr filterMode="1">
+                <pageSetUpPr fitToPage="1" autoPageBreaks="0"/>
+                <fx:sheetPrNativeChild id="first"/>
+                <fx:sheetPrNativeChild id="second"/>
+              </sheetPr>
+            </worksheet>
+            """)),
+        "generated-worksheet-protection-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <sheetProtection sheet="1"
+                               algorithmName="SHA-512"
+                               hashValue="abc123"
+                               saltValue="salt123"
+                               spinCount="100000"
+                               objects="1"
+                               scenarios="1">
+                <fx:sheetProtectionNativeChild id="first"/>
+                <fx:sheetProtectionNativeChild id="second"/>
+              </sheetProtection>
+            </worksheet>
+            """)),
+        "generated-worksheet-protected-ranges-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <sheetData>
+                <row r="1"><c r="A1" t="str"><v>locked</v></c></row>
+              </sheetData>
+              <protectedRanges>
+                <protectedRange name="NativeEditableRange" sqref="B2:C3" password="ABCD" securityDescriptor="D:PAI">
+                  <extLst><ext uri="{FREEXCEL-PROTECTED-RANGE-TEST}"/></extLst>
+                  <fx:protectedRangeNativeChild id="first"/>
+                  <fx:protectedRangeNativeChild id="second"/>
+                </protectedRange>
+                <protectedRange name="NativeMultiAreaRange" sqref="B2 C3" password="1234"/>
+              </protectedRanges>
+            </worksheet>
+            """)),
+        "generated-worksheet-cell-structure-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <cols nativeColsAttr="kept">
+                <col min="2" max="2" width="14" customWidth="1" bestFit="1" phonetic="1" customAttr="column-native"/>
+              </cols>
+              <sheetData nativeSheetDataAttr="kept">
+                <row r="1"><c r="A1"><v>3.14</v></c></row>
+                <row r="2" thickTop="1" ph="1" customAttr="row-native">
+                  <c r="A2" cm="2" vm="1" ph="1" customAttr="cell-native">
+                    <f t="array" ref="A2:A2" ca="1" customAttr="formula-native">A1*2</f>
+                    <v>6.28</v>
+                    <fx:cellNativeChild value="kept"/>
+                    <extLst>
+                      <ext uri="{FREEXCEL-CELL-EXT}">
+                        <fx:cellExt value="cell-extension"/>
+                      </ext>
+                    </extLst>
+                  </c>
+                  <fx:rowNativeChild value="kept"/>
+                  <extLst>
+                    <ext uri="{FREEXCEL-ROW-EXT}">
+                      <fx:rowExt value="row-extension"/>
+                    </ext>
+                  </extLst>
+                </row>
+                <row r="4"><c r="A4" t="str"><v>merged</v></c></row>
+              </sheetData>
+              <mergeCells count="1" nativeMergeContainerAttr="kept">
+                <mergeCell ref="A4:B5" nativeMergeCellAttr="kept"/>
+              </mergeCells>
+            </worksheet>
+            """)),
+        "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
+            </worksheet>
+            """)),
+        "generated-worksheet-sort-state-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <autoFilter ref="A1:B3">
+                <filterColumn colId="0">
+                  <filters>
+                    <filter val="A"/>
+                  </filters>
+                </filterColumn>
+              </autoFilter>
+              <sortState ref="A1:A3" caseSensitive="1" sortMethod="stroke" customSortStateFlag="keep">
+                <sortCondition ref="A2:A3" descending="1" sortBy="cellColor" customSortConditionFlag="keep"/>
+              </sortState>
+            </worksheet>
+            """)),
+        "generated-worksheet-data-consolidation-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <dataConsolidate function="sum" leftLabels="1" topLabels="1" link="1" customDataConsolidationFlag="keep">
+                <dataRefs count="1">
+                  <dataRef ref="A1:B2" sheet="Data" customDataRefFlag="keep"/>
+                </dataRefs>
+              </dataConsolidate>
+            </worksheet>
+            """)),
+        "generated-worksheet-auto-filter-metadata-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1"><c r="A1" t="str"><v>Category</v></c><c r="B1" t="str"><v>Amount</v></c></row>
+                <row r="2"><c r="A2" t="str"><v>A</v></c><c r="B2"><v>10</v></c></row>
+                <row r="3"><c r="A3" t="str"><v>B</v></c><c r="B3"><v>20</v></c></row>
+              </sheetData>
+              <autoFilter ref="A1:B3">
+                <filterColumn colId="0">
+                  <filters blank="1">
+                    <filter val="A"/>
+                  </filters>
+                </filterColumn>
+              </autoFilter>
+            </worksheet>
+            """)),
+        "generated-worksheet-custom-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <customProperties>
+                <customPr name="FreexcelNativeProperty" id="1" unsupportedAttr="kept"/>
+              </customProperties>
+            </worksheet>
+            """)),
+        "generated-worksheet-smart-tags-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <smartTags>
+                <cellSmartTags r="A1">
+                  <cellSmartTag type="0" deleted="0">
+                    <cellSmartTagPr key="place" val="Seattle" customSmartTagPropertyFlag="keep"/>
+                  </cellSmartTag>
+                </cellSmartTags>
+              </smartTags>
+            </worksheet>
+            """)),
+        "generated-worksheet-scenarios-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <scenarios current="0" show="0">
+                <scenario name="BestCase" comment="Scenario comment" hidden="1" locked="1" count="1" user="FreexcelTest">
+                  <inputCells r="A1" val="42"/>
+                </scenario>
+              </scenarios>
+            </worksheet>
+            """)),
+        "generated-worksheet-custom-sheet-views-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <customSheetViews>
+                <customSheetView guid="{11111111-1111-1111-1111-111111111111}" scale="120" showGridLines="0" showRowCol="0" state="visible">
+                  <pane xSplit="1" ySplit="1" topLeftCell="B2" activePane="bottomRight"/>
+                </customSheetView>
+              </customSheetViews>
+            </worksheet>
+            """)),
+        "generated-worksheet-extension-list-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                       xmlns:x15="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                       xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main">
+              <sheetData>
+                <row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>
+              </sheetData>
+              <extLst>
+                <ext uri="{05C60535-1F16-4fd2-B633-F4F36F0B64E0}">
+                  <x14:sparklineGroups>
+                    <x14:sparklineGroup type="column">
+                      <x14:sparklines>
+                        <x14:sparkline>
+                          <xm:f>Sheet1!A1:C1</xm:f>
+                          <xm:sqref>D1</xm:sqref>
+                        </x14:sparkline>
+                      </x14:sparklines>
+                    </x14:sparklineGroup>
+                  </x14:sparklineGroups>
+                </ext>
+                <ext uri="{FFEEDDCC-BBAA-9988-7766-554433221100}">
+                  <x15:futureMetadata name="FreexcelUnknownWorksheetExtension"/>
+                </ext>
+              </extLst>
+            </worksheet>
+            """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -152,7 +687,7 @@ internal static class XlsxCorpusFixtureFactory
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
                 <c:plotArea>
-                  <c:treemapChart/>
+                  <c:mapChart/>
                 </c:plotArea>
               </c:chart>
             </c:chartSpace>
@@ -164,7 +699,34 @@ internal static class XlsxCorpusFixtureFactory
         "generated-power-query-001" => CreatePackage(
             ("xl/connections.xml", "<connections/>"),
             ("xl/queries/query1.xml", "<query/>"),
-            ("xl/queryTables/queryTable1.xml", "<queryTable/>")),
+            ("xl/queryTables/queryTable1.xml", """
+                <queryTable xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            name="FreexcelQueryTable"
+                            connectionId="1"
+                            autoFormatId="16"
+                            applyNumberFormats="0"
+                            applyBorderFormats="0"
+                            applyFontFormats="0"
+                            applyPatternFormats="0"
+                            applyAlignmentFormats="0"
+                            applyWidthHeightFormats="0"/>
+                """),
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheetData/>
+                  <queryTableParts count="1">
+                    <queryTablePart r:id="rIdFreexcelQueryTable"/>
+                  </queryTableParts>
+                </worksheet>
+                """),
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdFreexcelQueryTable"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable"
+                                Target="../queryTables/queryTable1.xml"/>
+                </Relationships>
+                """)),
         "generated-data-model-001" => CreatePackage(
             ("xl/model/item.data", "Freexcel generated data model placeholder"),
             ("xl/model/item.xml", "<dataModel/>")),
@@ -219,7 +781,30 @@ internal static class XlsxCorpusFixtureFactory
                 </Relationships>
                 """)),
         "generated-embedded-objects-001" => CreatePackage(("xl/embeddings/oleObject1.bin", "Freexcel generated OLE placeholder")),
-        "generated-custom-xml-001" => CreatePackage(("customXml/item1.xml", "<freexcelGeneratedCustomXml/>")),
+        "generated-custom-xml-001" => CreatePackage(
+            ("customXml/item1.xml", "<freexcelGeneratedCustomXml/>"),
+            ("customXml/itemProps1.xml", """
+                <ds:datastoreItem ds:itemID="{11111111-2222-3333-4444-555555555555}"
+                                  xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"/>
+                """),
+            ("customXml/_rels/item1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdCustomXmlProps1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps"
+                                Target="itemProps1.xml"/>
+                </Relationships>
+                """)),
+        "generated-custom-docprops-001" => CreatePackage(("docProps/custom.xml", """
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="Department">
+                <vt:lpwstr>Compliance</vt:lpwstr>
+              </property>
+              <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="3" name="MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled">
+                <vt:lpwstr>true</vt:lpwstr>
+              </property>
+            </Properties>
+            """)),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated known-gap XLSX package fixture exists for this id.")
     };
 
@@ -261,9 +846,84 @@ internal static class XlsxCorpusFixtureFactory
     }
 
     private static bool ShouldMergeThroughFixup(string id, string packagePart) =>
-        string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase) &&
-        (string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
-         string.Equals(packagePart, "xl/_rels/workbook.xml.rels", StringComparison.OrdinalIgnoreCase));
+        (string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase) &&
+         (string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
+          string.Equals(packagePart, "xl/_rels/workbook.xml.rels", StringComparison.OrdinalIgnoreCase))) ||
+        (string.Equals(id, "generated-workbook-extension-list-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-legacy-drawing-001", StringComparison.OrdinalIgnoreCase) &&
+         (string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase) ||
+          string.Equals(packagePart, "xl/worksheets/_rels/sheet1.xml.rels", StringComparison.OrdinalIgnoreCase))) ||
+        (string.Equals(id, "generated-workbook-properties-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-calculation-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-file-version-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-file-sharing-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-protection-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-function-groups-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-views-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-defined-names-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-stylesheet-native-metadata-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/styles.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-single-xml-cells-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-calculation-properties-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-sheet-views-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-sheet-format-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-page-breaks-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-print-options-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-page-setup-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-dimension-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-sheet-properties-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-protection-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-protected-ranges-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-cell-structure-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-sort-state-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-data-consolidation-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-auto-filter-metadata-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-custom-properties-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-smart-tags-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-scenarios-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-custom-sheet-views-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-extension-list-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase));
 
     private static void EnsureKnownGapContentTypeOverrides(ZipArchive archive, IReadOnlyCollection<string> partNames)
     {
@@ -304,15 +964,22 @@ internal static class XlsxCorpusFixtureFactory
             "xl/webextensions/taskpanes.xml" => "application/vnd.ms-office.webextensiontaskpanes+xml",
             "xl/webextensions/webextension1.xml" => "application/vnd.ms-office.webextension+xml",
             "xl/webPublishItems.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.webPublishItems+xml",
+            "docProps/core.xml" => "application/vnd.openxmlformats-package.core-properties+xml",
+            "docProps/app.xml" => "application/vnd.openxmlformats-officedocument.extended-properties+xml",
             "docProps/custom.xml" => "application/vnd.openxmlformats-officedocument.custom-properties+xml",
+            "xl/drawings/vmlDrawing1.vml" => "application/vnd.openxmlformats-officedocument.vmlDrawing",
+            "xl/media/headerFooterImage1.png" => "image/png",
+            "xl/media/vmlImage1.png" => "image/png",
             "xl/diagrams/data1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
             "xl/diagrams/layout1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
             "xl/diagrams/quickStyle1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
             "xl/printerSettings/printerSettings1.bin" => "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings",
+            "xl/calcChain.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml",
             "xl/chartsheets/sheet1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml",
             "xl/dialogSheets/sheet2.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml",
             "xl/macroSheets/sheet3.xml" => "application/vnd.ms-excel.macrosheet+xml",
             "xl/charts/chart1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.chart+xml",
+            "xl/theme/theme1.xml" => "application/vnd.openxmlformats-officedocument.theme+xml",
             "xl/vbaProject.bin" => "application/vnd.ms-office.vbaProject",
             "xl/pivotTables/pivotTable1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml",
             "xl/pivotCache/pivotCacheDefinition1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml",
@@ -331,12 +998,49 @@ internal static class XlsxCorpusFixtureFactory
             "xl/externalLinks/externalLink1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml",
             "xl/embeddings/oleObject1.bin" => "application/vnd.openxmlformats-officedocument.oleObject",
             "customXml/item1.xml" => "application/xml",
+            "customXml/itemProps1.xml" => "application/vnd.openxmlformats-officedocument.customXmlProperties+xml",
             _ => path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ? "application/xml" : ""
         };
     }
 
     private static void ApplyPackageFixups(string id, ZipArchive archive)
     {
+        if (string.Equals(id, "generated-form-controls-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyFormControlsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-custom-ribbon-ui-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCustomRibbonUiFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-office-addins-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyOfficeAddinsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-vba-macros-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyVbaMacrosFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-data-model-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyDataModelFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-smartart-diagrams-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySmartArtDiagramsFixup(archive);
+            return;
+        }
+
         if (string.Equals(id, "generated-slicers-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplySlicerTimelineFloatingDrawingFixup(
@@ -354,6 +1058,270 @@ internal static class XlsxCorpusFixtureFactory
                 "Timeline Date",
                 "../timelines/timeline1.xml",
                 "http://schemas.microsoft.com/office/2011/relationships/timeline");
+            return;
+        }
+
+        if (string.Equals(id, "generated-printer-settings-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyPrinterSettingsReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-calc-chain-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCalcChainReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-custom-xml-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCustomXmlReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-custom-docprops-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCustomDocumentPropertiesReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-header-footer-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyHeaderFooterLegacyDrawingReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-extension-list-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookExtensionListFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetLegacyDrawingFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookPropertiesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-calculation-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookCalculationFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-file-version-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookFileVersionFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookFileRecoveryFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-file-sharing-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookFileSharingFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-protection-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookProtectionNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookSmartTagsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-function-groups-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookFunctionGroupsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-views-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookViewsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-defined-names-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookDefinedNamesNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-stylesheet-native-metadata-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyStylesheetNativeMetadataFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetIgnoredErrorsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetCellWatchesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-single-xml-cells-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSingleXmlCellsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-calculation-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetCalculationPropertiesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-sheet-views-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSheetViewsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-sheet-format-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSheetFormatFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-page-breaks-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetPageBreaksFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-print-options-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetPrintOptionsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-page-setup-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetPageSetupNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetHeaderFooterNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-dimension-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetDimensionNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-sheet-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSheetPropertiesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-protection-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetProtectionNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-protected-ranges-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetProtectedRangesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-cell-structure-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetCellStructureNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetPhoneticPropertiesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-sort-state-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSortStateFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-data-consolidation-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetDataConsolidationFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-auto-filter-metadata-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetAutoFilterMetadataFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-custom-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetCustomPropertiesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-smart-tags-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetSmartTagsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-scenarios-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetScenariosFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-custom-sheet-views-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetCustomSheetViewsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-extension-list-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetExtensionListFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-threaded-comments-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyThreadedCommentsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-unsupported-sheet-types-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyUnsupportedSheetTypesFixup(archive);
             return;
         }
 
@@ -416,6 +1384,352 @@ internal static class XlsxCorpusFixtureFactory
         var workbookRelsReplacement = archive.CreateEntry("xl/_rels/workbook.xml.rels");
         using var relOutput = workbookRelsReplacement.Open();
         workbookRelsXml.Save(relOutput);
+    }
+
+    private static void ApplyFormControlsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            var controls = worksheetXml.Root?.Element(worksheetNs + "controls");
+            if (controls is null && worksheetXml.Root is not null)
+            {
+                controls = new XElement(worksheetNs + "controls");
+                worksheetXml.Root.Add(controls);
+            }
+
+            if (controls is not null && !controls.Elements(worksheetNs + "control").Any(control =>
+                    string.Equals(control.Attribute(officeRelNs + "id")?.Value, "rIdFreexcelControl1", StringComparison.OrdinalIgnoreCase)))
+            {
+                controls.Add(new XElement(
+                    worksheetNs + "control",
+                    new XAttribute("shapeId", "1026"),
+                    new XAttribute("name", "Freexcel Button"),
+                    new XAttribute(officeRelNs + "id", "rIdFreexcelControl1")));
+            }
+
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdFreexcelControl1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp",
+            "../ctrlProps/ctrlProp1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        var activeXRelsPath = "xl/activeX/_rels/activeX1.xml.rels";
+        var activeXRelsXml = archive.GetEntry(activeXRelsPath) is { } activeXRelsEntry
+            ? LoadPackageXml(activeXRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            activeXRelsXml,
+            "rIdFreexcelActiveXBinary1",
+            "http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary",
+            "activeX1.bin");
+        ReplacePackageXml(archive, activeXRelsPath, activeXRelsXml);
+    }
+
+    private static void ApplyCustomRibbonUiFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelCustomUi1",
+            "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility",
+            "customUI/customUI.xml");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+    }
+
+    private static void ApplyOfficeAddinsFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelOfficeAddinTaskpanes1",
+            "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes",
+            "xl/webextensions/taskpanes.xml");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+
+        var taskpanesRelsPath = "xl/webextensions/_rels/taskpanes.xml.rels";
+        var taskpanesRelsXml = archive.GetEntry(taskpanesRelsPath) is { } taskpanesRelsEntry
+            ? LoadPackageXml(taskpanesRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            taskpanesRelsXml,
+            "rIdFreexcelWebextension1",
+            "http://schemas.microsoft.com/office/2011/relationships/webextension",
+            "webextension1.xml");
+        ReplacePackageXml(archive, taskpanesRelsPath, taskpanesRelsXml);
+    }
+
+    private static void ApplyVbaMacrosFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelVbaProject1",
+            "http://schemas.microsoft.com/office/2006/relationships/vbaProject",
+            "vbaProject.bin");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    private static void ApplyDataModelFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelDataModel1",
+            "http://schemas.microsoft.com/office/2011/relationships/model",
+            "model/item.data");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    private static void ApplySmartArtDiagramsFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/drawings/drawing1.xml",
+                "application/vnd.openxmlformats-officedocument.drawing+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var drawingRelId = "rIdFreexcelSmartArtDrawing1";
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            if (worksheetXml.Root?.Element(worksheetNs + "drawing") is null)
+            {
+                worksheetXml.Root?.Add(new XElement(worksheetNs + "drawing", new XAttribute(officeRelNs + "id", drawingRelId)));
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+            }
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            drawingRelId,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+            "../drawings/drawing1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        ReplacePackageXml(archive, "xl/drawings/drawing1.xml", new XDocument(
+            new XElement(
+                spreadsheetDrawingNs + "wsDr",
+                new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XElement(
+                    spreadsheetDrawingNs + "absoluteAnchor",
+                    new XElement(spreadsheetDrawingNs + "pos", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                    new XElement(spreadsheetDrawingNs + "ext", new XAttribute("cx", "1828800"), new XAttribute("cy", "914400")),
+                    new XElement(
+                        spreadsheetDrawingNs + "graphicFrame",
+                        new XElement(
+                            spreadsheetDrawingNs + "nvGraphicFramePr",
+                            new XElement(
+                                spreadsheetDrawingNs + "cNvPr",
+                                new XAttribute("id", "2"),
+                                new XAttribute("name", "Freexcel SmartArt")),
+                            new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
+                        new XElement(spreadsheetDrawingNs + "xfrm"),
+                        new XElement(
+                            drawingNs + "graphic",
+                            new XElement(
+                                drawingNs + "graphicData",
+                                new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/diagram")))),
+                    new XElement(spreadsheetDrawingNs + "clientData")))));
+
+        var drawingRelsPath = "xl/drawings/_rels/drawing1.xml.rels";
+        var drawingRelsXml = archive.GetEntry(drawingRelsPath) is { } drawingRelsEntry
+            ? LoadPackageXml(drawingRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            drawingRelsXml,
+            "rIdFreexcelDiagramData1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+            "../diagrams/data1.xml");
+        EnsureRelationship(
+            drawingRelsXml,
+            "rIdFreexcelDiagramLayout1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout",
+            "../diagrams/layout1.xml");
+        EnsureRelationship(
+            drawingRelsXml,
+            "rIdFreexcelDiagramQuickStyle1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle",
+            "../diagrams/quickStyle1.xml");
+        ReplacePackageXml(archive, drawingRelsPath, drawingRelsXml);
+    }
+
+    private static void ApplyThreadedCommentsFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdFreexcelThreadedComments1",
+            "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment",
+            "../threadedComments/threadedComment1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelPersons1",
+            "http://schemas.microsoft.com/office/2017/10/relationships/person",
+            "persons/person.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    private static void ApplyUnsupportedSheetTypesFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/chartsheets/sheet1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml");
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/dialogSheets/sheet2.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml");
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/macroSheets/sheet3.xml",
+                "application/vnd.ms-excel.macrosheet+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is not null)
+        {
+            var workbookXml = LoadPackageXml(workbookEntry);
+            var sheets = workbookXml.Root?.Element(workbookNs + "sheets");
+            if (sheets is not null)
+            {
+                EnsureWorkbookSheet(
+                    sheets,
+                    workbookNs,
+                    officeRelNs,
+                    "Freexcel Chart Sheet",
+                    9001,
+                    "rIdFreexcelChartSheet1");
+                EnsureWorkbookSheet(
+                    sheets,
+                    workbookNs,
+                    officeRelNs,
+                    "Freexcel Dialog Sheet",
+                    9002,
+                    "rIdFreexcelDialogSheet1");
+                EnsureWorkbookSheet(
+                    sheets,
+                    workbookNs,
+                    officeRelNs,
+                    "Freexcel Macro Sheet",
+                    9003,
+                    "rIdFreexcelMacroSheet1");
+                ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+            }
+        }
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelChartSheet1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet",
+            "chartsheets/sheet1.xml");
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelDialogSheet1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet",
+            "dialogSheets/sheet2.xml");
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelMacroSheet1",
+            "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet",
+            "macroSheets/sheet3.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    private static void EnsureWorkbookSheet(
+        XElement sheets,
+        XNamespace workbookNs,
+        XNamespace officeRelNs,
+        string name,
+        int sheetId,
+        string relationshipId)
+    {
+        sheets.Elements(workbookNs + "sheet")
+            .Where(sheet => string.Equals(sheet.Attribute("name")?.Value, name, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        sheets.Add(new XElement(
+            workbookNs + "sheet",
+            new XAttribute("name", name),
+            new XAttribute("sheetId", sheetId),
+            new XAttribute(officeRelNs + "id", relationshipId)));
     }
 
     private static void ApplySlicerTimelineFloatingDrawingFixup(
@@ -525,7 +1839,1277 @@ internal static class XlsxCorpusFixtureFactory
         ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", drawingRelsXml);
     }
 
-    private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target)
+    private static void ApplyPrinterSettingsReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        if (contentTypesEntry is null || worksheetEntry is null)
+            return;
+
+        var contentTypes = LoadPackageXml(contentTypesEntry);
+        EnsureContentTypeOverride(
+            contentTypes,
+            "/xl/printerSettings/printerSettings1.bin",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings");
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
+        if (pageSetup is null)
+        {
+            pageSetup = new XElement(worksheetNs + "pageSetup",
+                new XAttribute("paperSize", "1"),
+                new XAttribute("orientation", "portrait"));
+            worksheetXml.Root?.Add(pageSetup);
+        }
+
+        pageSetup.SetAttributeValue(officeRelNs + "id", "rIdPrinterSettings1");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdPrinterSettings1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings",
+            "../printerSettings/printerSettings1.bin");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+    }
+
+    private static void ApplyCalcChainReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/calcChain.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreexcelCalcChain1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
+            "calcChain.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    private static void ApplyCustomXmlReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(contentTypes, "/customXml/item1.xml", "application/xml");
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/customXml/itemProps1.xml",
+                "application/vnd.openxmlformats-officedocument.customXmlProperties+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelCustomXml1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+            "customXml/item1.xml");
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelCustomXmlExternalSchema1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+            "https://schemas.freexcel.example/customXml/schema1.xsd",
+            "External");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+    }
+
+    private static void ApplyCustomDocumentPropertiesReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/docProps/custom.xml",
+                "application/vnd.openxmlformats-officedocument.custom-properties+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreexcelCustomDocumentProperties1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
+            "docProps/custom.xml");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+    }
+
+    private static void ApplyHeaderFooterLegacyDrawingReferenceFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/drawings/vmlDrawing1.vml",
+                "application/vnd.openxmlformats-officedocument.vmlDrawing");
+            EnsureContentTypeOverride(contentTypes, "/xl/media/headerFooterImage1.png", "image/png");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            worksheetXml.Root?.Elements(worksheetNs + "legacyDrawingHF").Remove();
+            worksheetXml.Root?.Add(new XElement(
+                worksheetNs + "legacyDrawingHF",
+                new XAttribute(officeRelNs + "id", "rIdHeaderFooterDrawing1")));
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdHeaderFooterDrawing1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
+            "../drawings/vmlDrawing1.vml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+    }
+
+    private static void ApplyWorkbookExtensionListFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "extLst").Remove();
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "extLst",
+            new XElement(
+                workbookNs + "ext",
+                new XAttribute("uri", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
+                new XElement(
+                    x15Ns + "futureMetadata",
+                    new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
+                    new XAttribute("name", "FreexcelUnknownWorkbookExtension")))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorksheetLegacyDrawingFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            worksheetXml.Root?.Elements(worksheetNs + "legacyDrawing").Remove();
+            worksheetXml.Root?.Add(new XElement(
+                worksheetNs + "legacyDrawing",
+                new XAttribute(officeRelNs + "id", "rIdFreexcelLegacyDrawing")));
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdFreexcelLegacyDrawing",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
+            "../drawings/vmlDrawing1.vml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+    }
+
+    private static void ApplyWorkbookFileVersionFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "fileVersion").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "fileVersion",
+            new XAttribute("appName", "xl"),
+            new XAttribute("lastEdited", "7"),
+            new XAttribute("lowestEdited", "7"),
+            new XAttribute("rupBuild", "28129"),
+            new XAttribute("customVersionFlag", "keep")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookPropertiesFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "workbookPr").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "workbookPr",
+            new XAttribute("date1904", "1"),
+            new XAttribute("defaultThemeVersion", "166925"),
+            new XElement(freexcelNs + "workbookPrNativeChild", new XAttribute("id", "first")),
+            new XElement(freexcelNs + "workbookPrNativeChild", new XAttribute("id", "second"))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookCalculationFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "calcPr").Remove();
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "calcPr",
+            new XAttribute("calcMode", "manual"),
+            new XAttribute("iterate", "1"),
+            new XAttribute("iterateCount", "50"),
+            new XAttribute("calcId", "191029"),
+            new XAttribute("refMode", "A1"),
+            new XAttribute("fullPrecision", "0"),
+            new XAttribute("concurrentCalc", "1")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookFileRecoveryFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "fileRecoveryPr").Remove();
+        workbookXml.Root?.Add(
+            new XElement(
+                workbookNs + "fileRecoveryPr",
+                new XAttribute("autoRecover", "1"),
+                new XAttribute("crashSave", "1"),
+                new XAttribute("customRecoveryFlag", "keep"),
+                new XAttribute("repairLoad", "0")),
+            new XElement(
+                workbookNs + "fileRecoveryPr",
+                new XAttribute("dataExtractLoad", "1"),
+                new XAttribute("repairLoad", "1")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookFileSharingFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "fileSharing").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "fileSharing",
+            new XAttribute("readOnlyRecommended", "1"),
+            new XAttribute("userName", "FreexcelTest"),
+            new XAttribute("revisionsPassword", "1234")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookProtectionNativeFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "workbookProtection").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "workbookProtection",
+            new XAttribute("lockStructure", "1"),
+            new XAttribute("lockWindows", "1"),
+            new XAttribute("workbookPassword", "83AF"),
+            new XAttribute("algorithmName", "SHA-512"),
+            new XAttribute("hashValue", "def456"),
+            new XAttribute("saltValue", "salt456"),
+            new XAttribute("spinCount", "100000"),
+            new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "first")),
+            new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "second"))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookSmartTagsFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "smartTagPr").Remove();
+        workbookXml.Root?.Elements(workbookNs + "smartTagTypes").Remove();
+        workbookXml.Root?.Add(
+            new XElement(
+                workbookNs + "smartTagPr",
+                new XAttribute("embed", "1"),
+                new XAttribute("show", "all"),
+                new XAttribute("customSmartTagFlag", "keep")),
+            new XElement(
+                workbookNs + "smartTagTypes",
+                new XAttribute("customSmartTagTypesFlag", "keep"),
+                new XElement(
+                    workbookNs + "smartTagType",
+                    new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
+                    new XAttribute("name", "place"),
+                    new XAttribute("customSmartTagTypeFlag", "keep"))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookFunctionGroupsFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "functionGroups").Remove();
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "functionGroups",
+            new XAttribute("builtInGroupCount", "16"),
+            new XAttribute("customFunctionGroupFlag", "keep"),
+            new XElement(
+                workbookNs + "functionGroup",
+                new XAttribute("name", "FreexcelNativeFunctions"),
+                new XAttribute("customGroupFlag", "keep"))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookViewsFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "bookViews").Remove();
+        workbookXml.Root?.Elements(workbookNs + "customWorkbookViews").Remove();
+        workbookXml.Root?.AddFirst(new XElement(
+            workbookNs + "bookViews",
+            new XElement(
+                workbookNs + "workbookView",
+                new XAttribute("visibility", "visible"),
+                new XAttribute("showSheetTabs", "0"),
+                new XAttribute("tabRatio", "700"),
+                new XAttribute("firstSheet", "0"),
+                new XAttribute("activeTab", "0")),
+            new XElement(
+                workbookNs + "workbookView",
+                new XAttribute("visibility", "hidden"),
+                new XAttribute("minimized", "1"),
+                new XAttribute("showHorizontalScroll", "0"),
+                new XAttribute("showVerticalScroll", "0"),
+                new XAttribute("showSheetTabs", "0"),
+                new XAttribute("tabRatio", "700"),
+                new XAttribute("firstSheet", "0"),
+                new XAttribute("activeTab", "0"),
+                new XAttribute("customWorkbookViewFlag", "kept"))));
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "customWorkbookViews",
+            new XElement(
+                workbookNs + "customWorkbookView",
+                new XAttribute("name", "FreexcelView"),
+                new XAttribute("guid", "{22222222-2222-2222-2222-222222222222}"),
+                new XAttribute("autoUpdate", "0"),
+                new XAttribute("mergeInterval", "0"),
+                new XAttribute("personalView", "0"),
+                new XAttribute("includePrintSettings", "1"),
+                new XAttribute("includeHiddenRowCol", "1"))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookDefinedNamesNativeFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "definedNames").Remove();
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "definedNames",
+            new XElement(
+                workbookNs + "definedName",
+                new XAttribute("name", "DynamicSalesRange"),
+                new XAttribute("hidden", "1"),
+                "1+1")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyStylesheetNativeMetadataFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var stylesPath = "xl/styles.xml";
+        var stylesEntry = archive.GetEntry(stylesPath);
+        if (stylesEntry is null)
+            return;
+
+        var stylesXml = LoadPackageXml(stylesEntry);
+        stylesXml.Root?.Elements(workbookNs + "colors").Remove();
+        stylesXml.Root?.Elements(workbookNs + "dxfs").Remove();
+        stylesXml.Root?.Elements(workbookNs + "tableStyles").Remove();
+        stylesXml.Root?.Elements(workbookNs + "extLst").Remove();
+        stylesXml.Root?.Add(
+            new XElement(
+                workbookNs + "colors",
+                new XElement(
+                    workbookNs + "indexedColors",
+                    new XElement(workbookNs + "rgbColor", new XAttribute("rgb", "FF010203")))),
+            new XElement(
+                workbookNs + "dxfs",
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "dxf",
+                    new XAttribute("nativePivotDxf", "kept"),
+                    new XElement(
+                        workbookNs + "fill",
+                        new XElement(
+                            workbookNs + "patternFill",
+                            new XAttribute("patternType", "solid"),
+                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FFABCDEF")))),
+                    new XElement(freexcelNs + "pivotStyleDxfNativeChild", new XAttribute("value", "kept")))),
+            new XElement(
+                workbookNs + "tableStyles",
+                new XAttribute("defaultPivotStyle", "PivotStyleMedium9"),
+                new XElement(freexcelNs + "tableStylesNativeChild", new XAttribute("value", "kept")),
+                new XElement(
+                    workbookNs + "tableStyle",
+                    new XAttribute("name", "FreexcelNativeTableStyle"),
+                    new XAttribute("pivot", "0"),
+                    new XAttribute("table", "1"),
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "tableStyleElement",
+                        new XAttribute("type", "wholeTable"),
+                        new XAttribute("dxfId", "0"))),
+                new XElement(
+                    workbookNs + "tableStyle",
+                    new XAttribute("name", "FreexcelNativePivotStyle"),
+                    new XAttribute("pivot", "1"),
+                    new XAttribute("table", "0"),
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "tableStyleElement",
+                        new XAttribute("type", "wholeTable"),
+                        new XAttribute("dxfId", "0")))),
+            new XElement(
+                workbookNs + "extLst",
+                new XElement(
+                    workbookNs + "ext",
+                    new XAttribute("uri", "{FFEEDDCC-7788-6655-4433-22110099AABB}"),
+                    new XElement(workbookNs + "FreexcelNativeStylesExtension"))));
+        ReplacePackageXml(archive, stylesPath, stylesXml);
+    }
+
+    private static void ApplyWorksheetIgnoredErrorsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "ignoredErrors").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "ignoredErrors",
+            new XElement(
+                worksheetNs + "ignoredError",
+                new XAttribute("sqref", "A1"),
+                new XAttribute("numberStoredAsText", "1"),
+                new XAttribute("twoDigitTextYear", "1"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetCellWatchesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "cellWatches").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "cellWatches",
+            new XAttribute("nativeContainer", "kept"),
+            new XElement(
+                worksheetNs + "cellWatch",
+                new XAttribute("r", "A1"),
+                new XAttribute("nativeWatch", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSingleXmlCellsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "singleXmlCells").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "singleXmlCells",
+            new XAttribute("nativeSingleXmlCellsAttr", "kept"),
+            new XElement(
+                worksheetNs + "singleXmlCell",
+                new XAttribute("id", "1"),
+                new XAttribute("r", "A1"),
+                new XAttribute("xmlCellPrId", "1"),
+                new XAttribute("nativeSingleXmlCellAttr", "cell-kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetCalculationPropertiesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetCalcPr").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "sheetCalcPr",
+            new XAttribute("fullCalcOnLoad", "1"),
+            new XAttribute("calcId", "999")));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSheetViewsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetViews").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "sheetViews",
+            new XAttribute("nativeSheetViewsAttr", "kept"),
+            new XElement(
+                worksheetNs + "sheetView",
+                new XAttribute("workbookViewId", "0"),
+                new XAttribute("showZeros", "0"),
+                new XAttribute("rightToLeft", "1"),
+                new XElement(
+                    worksheetNs + "pivotSelection",
+                    new XAttribute("pane", "topRight")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSheetFormatFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetFormatPr").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "sheetFormatPr",
+            new XAttribute("baseColWidth", "12"),
+            new XAttribute("zeroHeight", "1"),
+            new XAttribute("thickTop", "1"),
+            new XAttribute("outlineLevelRow", "3"),
+            new XElement(
+                worksheetNs + "nativeSheetFormatChild",
+                new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetPageBreaksFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "rowBreaks").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "colBreaks").Remove();
+        worksheetXml.Root?.Add(
+            new XElement(
+                worksheetNs + "rowBreaks",
+                new XAttribute("count", "1"),
+                new XAttribute("manualBreakCount", "1"),
+                new XElement(
+                    worksheetNs + "brk",
+                    new XAttribute("id", "20"),
+                    new XAttribute("max", "16383"),
+                    new XAttribute("man", "1"),
+                    new XAttribute("pt", "1"),
+                    new XAttribute("customAttr", "row-native"))),
+            new XElement(
+                worksheetNs + "colBreaks",
+                new XAttribute("count", "1"),
+                new XAttribute("manualBreakCount", "1"),
+                new XElement(
+                    worksheetNs + "brk",
+                    new XAttribute("id", "5"),
+                    new XAttribute("max", "1048575"),
+                    new XAttribute("man", "1"),
+                    new XAttribute("pt", "1"),
+                    new XAttribute("customAttr", "col-native"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetPrintOptionsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "printOptions").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "printOptions",
+            new XAttribute("gridLinesSet", "1"),
+            new XAttribute("customAttr", "print-native"),
+            new XElement(
+                freexcelNs + "nativePrintOptionsChild",
+                new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetPageSetupNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "pageSetup").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "pageSetup",
+            new XAttribute("usePrinterDefaults", "1"),
+            new XAttribute("copies", "3"),
+            new XAttribute("customAttr", "page-setup-native"),
+            new XElement(
+                worksheetNs + "nativePageSetupChild",
+                new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetHeaderFooterNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "headerFooter").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "headerFooter",
+            new XAttribute("nativeHeaderFooterAttr", "kept"),
+            new XElement(worksheetNs + "oddHeader", "&LLeft&CCenter&RRight"),
+            new XElement(
+                worksheetNs + "nativeHeaderFooterChild",
+                new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetDimensionNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "dimension").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "dimension",
+            new XAttribute("ref", "A1"),
+            new XAttribute("nativeDimensionAttr", "kept")));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSheetPropertiesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetPr").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "sheetPr",
+            new XAttribute("filterMode", "1"),
+            new XElement(
+                worksheetNs + "pageSetUpPr",
+                new XAttribute("fitToPage", "1"),
+                new XAttribute("autoPageBreaks", "0")),
+            new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "first")),
+            new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "second"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetProtectionNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetProtection").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "sheetProtection",
+            new XAttribute("sheet", "1"),
+            new XAttribute("algorithmName", "SHA-512"),
+            new XAttribute("hashValue", "abc123"),
+            new XAttribute("saltValue", "salt123"),
+            new XAttribute("spinCount", "100000"),
+            new XAttribute("objects", "1"),
+            new XAttribute("scenarios", "1"),
+            new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "first")),
+            new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "second"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetProtectedRangesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "protectedRanges").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "protectedRanges",
+            new XElement(
+                worksheetNs + "protectedRange",
+                new XAttribute("name", "NativeEditableRange"),
+                new XAttribute("sqref", "B2:C3"),
+                new XAttribute("password", "ABCD"),
+                new XAttribute("securityDescriptor", "D:PAI"),
+                new XElement(
+                    worksheetNs + "extLst",
+                    new XElement(
+                        worksheetNs + "ext",
+                        new XAttribute("uri", "{FREEXCEL-PROTECTED-RANGE-TEST}"))),
+                new XElement(freexcelNs + "protectedRangeNativeChild", new XAttribute("id", "first")),
+                new XElement(freexcelNs + "protectedRangeNativeChild", new XAttribute("id", "second"))),
+            new XElement(
+                worksheetNs + "protectedRange",
+                new XAttribute("name", "NativeMultiAreaRange"),
+                new XAttribute("sqref", "B2 C3"),
+                new XAttribute("password", "1234"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetCellStructureNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "cols").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "sheetData").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "mergeCells").Remove();
+        worksheetXml.Root?.AddFirst(new XElement(
+            worksheetNs + "cols",
+            new XAttribute("nativeColsAttr", "kept"),
+            new XElement(
+                worksheetNs + "col",
+                new XAttribute("min", "2"),
+                new XAttribute("max", "2"),
+                new XAttribute("width", "14"),
+                new XAttribute("customWidth", "1"),
+                new XAttribute("bestFit", "1"),
+                new XAttribute("phonetic", "1"),
+                new XAttribute("customAttr", "column-native"))));
+
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "sheetData",
+            new XAttribute("nativeSheetDataAttr", "kept"),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "1"),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "A1"),
+                    new XElement(worksheetNs + "v", "3.14"))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "2"),
+                new XAttribute("thickTop", "1"),
+                new XAttribute("ph", "1"),
+                new XAttribute("customAttr", "row-native"),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "A2"),
+                    new XAttribute("cm", "2"),
+                    new XAttribute("vm", "1"),
+                    new XAttribute("ph", "1"),
+                    new XAttribute("customAttr", "cell-native"),
+                    new XElement(
+                        worksheetNs + "f",
+                        new XAttribute("t", "array"),
+                        new XAttribute("ref", "A2:A2"),
+                        new XAttribute("ca", "1"),
+                        new XAttribute("customAttr", "formula-native"),
+                        "A1*2"),
+                    new XElement(worksheetNs + "v", "6.28"),
+                    new XElement(freexcelNs + "cellNativeChild", new XAttribute("value", "kept")),
+                    new XElement(
+                        worksheetNs + "extLst",
+                        new XElement(
+                            worksheetNs + "ext",
+                            new XAttribute("uri", "{FREEXCEL-CELL-EXT}"),
+                            new XElement(freexcelNs + "cellExt", new XAttribute("value", "cell-extension"))))),
+                new XElement(freexcelNs + "rowNativeChild", new XAttribute("value", "kept")),
+                new XElement(
+                    worksheetNs + "extLst",
+                    new XElement(
+                        worksheetNs + "ext",
+                        new XAttribute("uri", "{FREEXCEL-ROW-EXT}"),
+                        new XElement(freexcelNs + "rowExt", new XAttribute("value", "row-extension"))))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "4"),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "A4"),
+                    new XAttribute("t", "str"),
+                    new XElement(worksheetNs + "v", "merged")))));
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "mergeCells",
+            new XAttribute("count", "1"),
+            new XAttribute("nativeMergeContainerAttr", "kept"),
+            new XElement(
+                worksheetNs + "mergeCell",
+                new XAttribute("ref", "A4:B5"),
+                new XAttribute("nativeMergeCellAttr", "kept"))));
+
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetPhoneticPropertiesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "phoneticPr").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "phoneticPr",
+            new XAttribute("fontId", "1"),
+            new XAttribute("type", "fullwidthKatakana"),
+            new XAttribute("alignment", "center"),
+            new XAttribute("nativeOnly", "kept")));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSortStateFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "autoFilter").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "sortState").Remove();
+        worksheetXml.Root?.Add(
+            new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:B3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "filters",
+                        new XElement(worksheetNs + "filter", new XAttribute("val", "A"))))),
+            new XElement(
+                worksheetNs + "sortState",
+                new XAttribute("ref", "A1:A3"),
+                new XAttribute("caseSensitive", "1"),
+                new XAttribute("sortMethod", "stroke"),
+                new XAttribute("customSortStateFlag", "keep"),
+                new XElement(
+                    worksheetNs + "sortCondition",
+                    new XAttribute("ref", "A2:A3"),
+                    new XAttribute("descending", "1"),
+                    new XAttribute("sortBy", "cellColor"),
+                    new XAttribute("customSortConditionFlag", "keep"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetDataConsolidationFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "dataConsolidate").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "dataConsolidate",
+            new XAttribute("function", "sum"),
+            new XAttribute("leftLabels", "1"),
+            new XAttribute("topLabels", "1"),
+            new XAttribute("link", "1"),
+            new XAttribute("customDataConsolidationFlag", "keep"),
+            new XElement(
+                worksheetNs + "dataRefs",
+                new XAttribute("count", "1"),
+                new XElement(
+                    worksheetNs + "dataRef",
+                    new XAttribute("ref", "A1:B2"),
+                    new XAttribute("sheet", "Data"),
+                    new XAttribute("customDataRefFlag", "keep")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetAutoFilterMetadataFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetData").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "autoFilter").Remove();
+        worksheetXml.Root?.Add(
+            new XElement(
+                worksheetNs + "sheetData",
+                new XElement(
+                    worksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "A1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Category")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "B1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Amount"))),
+                new XElement(
+                    worksheetNs + "row",
+                    new XAttribute("r", "2"),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "A2"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "A")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "B2"), new XElement(worksheetNs + "v", "10"))),
+                new XElement(
+                    worksheetNs + "row",
+                    new XAttribute("r", "3"),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "A3"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "B")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "B3"), new XElement(worksheetNs + "v", "20")))),
+            new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:B3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "filters",
+                        new XAttribute("blank", "1"),
+                        new XElement(worksheetNs + "filter", new XAttribute("val", "A"))))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetCustomPropertiesFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "customProperties").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "customProperties",
+            new XElement(
+                worksheetNs + "customPr",
+                new XAttribute("name", "FreexcelNativeProperty"),
+                new XAttribute("id", "1"),
+                new XAttribute("unsupportedAttr", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetSmartTagsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "smartTags").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "smartTags",
+            new XElement(
+                worksheetNs + "cellSmartTags",
+                new XAttribute("r", "A1"),
+                new XElement(
+                    worksheetNs + "cellSmartTag",
+                    new XAttribute("type", "0"),
+                    new XAttribute("deleted", "0"),
+                    new XElement(
+                        worksheetNs + "cellSmartTagPr",
+                        new XAttribute("key", "place"),
+                        new XAttribute("val", "Seattle"),
+                        new XAttribute("customSmartTagPropertyFlag", "keep"))))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetScenariosFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "scenarios").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "scenarios",
+            new XAttribute("current", "0"),
+            new XAttribute("show", "0"),
+            new XElement(
+                worksheetNs + "scenario",
+                new XAttribute("name", "BestCase"),
+                new XAttribute("comment", "Scenario comment"),
+                new XAttribute("hidden", "1"),
+                new XAttribute("locked", "1"),
+                new XAttribute("count", "1"),
+                new XAttribute("user", "FreexcelTest"),
+                new XElement(
+                    worksheetNs + "inputCells",
+                    new XAttribute("r", "A1"),
+                    new XAttribute("val", "42")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetCustomSheetViewsFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "customSheetViews").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "customSheetViews",
+            new XElement(
+                worksheetNs + "customSheetView",
+                new XAttribute("guid", "{11111111-1111-1111-1111-111111111111}"),
+                new XAttribute("scale", "120"),
+                new XAttribute("showGridLines", "0"),
+                new XAttribute("showRowCol", "0"),
+                new XAttribute("state", "visible"),
+                new XElement(
+                    worksheetNs + "pane",
+                    new XAttribute("xSplit", "1"),
+                    new XAttribute("ySplit", "1"),
+                    new XAttribute("topLeftCell", "B2"),
+                    new XAttribute("activePane", "bottomRight")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetExtensionListFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+        XNamespace xmNs = "http://schemas.microsoft.com/office/excel/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetData").Remove();
+        worksheetXml.Root?.Elements(worksheetNs + "extLst").Remove();
+        worksheetXml.Root?.Add(
+            new XElement(
+                worksheetNs + "sheetData",
+                new XElement(
+                    worksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "A1"), new XElement(worksheetNs + "v", "1")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "B1"), new XElement(worksheetNs + "v", "2")),
+                    new XElement(worksheetNs + "c", new XAttribute("r", "C1"), new XElement(worksheetNs + "v", "3")))),
+            new XElement(
+                worksheetNs + "extLst",
+                new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}"),
+                    new XElement(
+                        x14Ns + "sparklineGroups",
+                        new XAttribute(XNamespace.Xmlns + "x14", x14Ns),
+                        new XAttribute(XNamespace.Xmlns + "xm", xmNs),
+                        new XElement(
+                            x14Ns + "sparklineGroup",
+                            new XAttribute("type", "column"),
+                            new XElement(
+                                x14Ns + "sparklines",
+                                new XElement(
+                                    x14Ns + "sparkline",
+                                    new XElement(xmNs + "f", "Sheet1!A1:C1"),
+                                    new XElement(xmNs + "sqref", "D1")))))),
+                new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{FFEEDDCC-BBAA-9988-7766-554433221100}"),
+                    new XElement(
+                        x15Ns + "futureMetadata",
+                        new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
+                        new XAttribute("name", "FreexcelUnknownWorksheetExtension")))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target, string? targetMode = null)
     {
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         relationshipsXml.Root?.Elements(packageRelNs + "Relationship")
@@ -535,7 +3119,8 @@ internal static class XlsxCorpusFixtureFactory
             packageRelNs + "Relationship",
             new XAttribute("Id", id),
             new XAttribute("Type", type),
-            new XAttribute("Target", target)));
+            new XAttribute("Target", target),
+            string.IsNullOrWhiteSpace(targetMode) ? null : new XAttribute("TargetMode", targetMode)));
     }
 
     private static void EnsureContentTypeOverride(XDocument contentTypes, string partName, string contentType)
@@ -668,7 +3253,7 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "B1", new TextValue("Quantity"));
         Set(sheet, "A2", new TextValue("Apple"));
         Set(sheet, "B2", new NumberValue(5));
-        sheet.DataValidations.Add(new DataValidation
+        var listValidation = new DataValidation
         {
             AppliesTo = Range(sheet, "A2", "A10"),
             Type = DvType.List,
@@ -677,7 +3262,9 @@ internal static class XlsxCorpusFixtureFactory
             ErrorMessage = "Choose a listed item.",
             PromptTitle = "Pick a fruit",
             PromptMessage = "Select Apple, Banana, or Cherry."
-        });
+        };
+        listValidation.AdditionalRanges.Add(Range(sheet, "C2", "C10"));
+        sheet.DataValidations.Add(listValidation);
         sheet.DataValidations.Add(new DataValidation
         {
             AppliesTo = Range(sheet, "B2", "B10"),
@@ -1505,9 +4092,14 @@ internal static class XlsxCorpusFixtureFactory
             0,
             [],
             IncludeBlank: false,
+            CustomFilters:
+            [
+                new StructuredTableCustomFilterModel("greaterThan", "15")
+            ],
+            CustomFiltersAnd: false,
+            NativeCustomFiltersAttributes: null,
             NativeFilterXmls:
             [
-                """<customFilters xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><customFilter operator="greaterThan" val="15" /></customFilters>"""
             ]));
         sheet.FilterHiddenRows.Add(2);
         sheet.FilterHiddenRows.Add(3);

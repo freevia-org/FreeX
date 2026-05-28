@@ -188,7 +188,7 @@ public static partial class PivotTableRefreshService
         var labelCell = sheet.GetCell(startRow, startCol);
         if (labelCell is not null)
         {
-            var style = workbook.GetStyle(labelCell.StyleId);
+            var style = workbook.GetStyle(labelCell.StyleId).Clone();
             style.HorizontalAlignment = HorizontalAlignment.Center;
             style.VerticalAlignment = VerticalAlignment.Center;
             labelCell.StyleId = workbook.RegisterStyle(style);

@@ -59,6 +59,7 @@ public static partial class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.NewNote, (key, modifiers) => modifiers == ModifierKeys.Shift && key == Key.F2),
         new(KeyboardCommandShortcut.NewThreadedComment, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.F2),
         new(KeyboardCommandShortcut.SaveAs, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F12),
+        new(KeyboardCommandShortcut.OpenHelp, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F1),
         new(KeyboardCommandShortcut.ShowKeyTips, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F10),
         new(KeyboardCommandShortcut.CycleShellFocus, (key, modifiers) => modifiers is ModifierKeys.None or ModifierKeys.Shift && key == Key.F6),
         new(KeyboardCommandShortcut.OpenContextMenu, (key, modifiers) => modifiers == ModifierKeys.Shift && key == Key.F10 || modifiers == ModifierKeys.None && key == Key.Apps),
@@ -79,7 +80,7 @@ public static partial class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.SelectCellsWithComments, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.O),
         new(KeyboardCommandShortcut.EditCell, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F2),
         new(KeyboardCommandShortcut.ClearSelection, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.Delete),
-        new(KeyboardCommandShortcut.ClearSelectionAndEdit, (key, modifiers) => !HasControl(modifiers) && key == Key.Back),
+        new(KeyboardCommandShortcut.ClearSelectionAndEdit, (key, modifiers) => modifiers is ModifierKeys.None or ModifierKeys.Shift && key == Key.Back),
         new(KeyboardCommandShortcut.RepeatLastAction, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F4),
     ];
 

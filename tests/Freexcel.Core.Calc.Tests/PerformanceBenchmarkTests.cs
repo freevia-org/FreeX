@@ -1,6 +1,7 @@
 using Freexcel.Core.Calc;
 using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
+using FluentAssertions;
 using System.Diagnostics;
 
 namespace Freexcel.Core.Calc.Tests;
@@ -117,6 +118,104 @@ public class PerformanceBenchmarkTests
         // Assert: Target <1s
         Assert.True(recalcSw.ElapsedMilliseconds < 2000, 
             $"100k recalc took {recalcSw.ElapsedMilliseconds}ms (expected <2000ms)");
+    }
+
+    [Fact]
+    public void Benchmark_RepeatedSmallChangeRecalc_ReportsAllocationDiagnostics()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        const uint formulaCount = 5_000;
+        const int iterations = 250;
+
+        for (uint row = 1; row <= formulaCount; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 2));
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 3), $"A{row}+B{row}");
+        }
+
+        engine.RebuildFormulaDependencies(workbook);
+
+        var changed = new[]
+        {
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2)
+        };
+
+        engine.Recalculate(workbook, changed);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+            engine.Recalculate(workbook, changed);
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Repeated small-change recalc: {iterations} iterations, {formulaCount:N0} formulas, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes allocated, " +
+            $"{allocated / iterations:N0} bytes/iteration");
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(3));
+        allocated.Should().BeGreaterThan(0);
+        (allocated / iterations).Should().BeLessThan(
+            2_250,
+            "exact-only recalc traversal should not allocate a HashSet for every dependency step");
+    }
+
+    [Fact]
+    public void Benchmark_LargeRangeDependencyRebuild_UsesCompactRangeTracking()
+    {
+        var workbook = new Workbook("Benchmark");
+        var sheet = workbook.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        var formula = new CellAddress(sheet.Id, 1, 2);
+        var inside = new CellAddress(sheet.Id, 50000, 1);
+        var outside = new CellAddress(sheet.Id, 1, 3);
+
+        sheet.SetFormula(formula, "SUM(A1:A100000)");
+        sheet.SetCell(inside, new NumberValue(1));
+        sheet.SetCell(outside, new NumberValue(2));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var rebuildSw = Stopwatch.StartNew();
+        engine.RebuildFormulaDependencies(workbook);
+        rebuildSw.Stop();
+        var rebuildAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var insideSw = Stopwatch.StartNew();
+        var insideReport = engine.Recalculate(workbook, [inside]);
+        insideSw.Stop();
+        var insideAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var outsideSw = Stopwatch.StartNew();
+        var outsideReport = engine.Recalculate(workbook, [outside]);
+        outsideSw.Stop();
+        var outsideAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Large range dependency rebuild: {rebuildSw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{rebuildAllocated:N0} bytes allocated");
+        Console.WriteLine(
+            $"Large range inside-cell recalc: {insideSw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{insideAllocated:N0} bytes allocated");
+        Console.WriteLine(
+            $"Large range outside-cell recalc: {outsideSw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{outsideAllocated:N0} bytes allocated");
+
+        insideReport.RecalculatedCells.Should().Contain(formula);
+        outsideReport.RecalculatedCells.Should().NotContain(formula);
+        rebuildAllocated.Should().BeLessThan(10_000_000);
     }
 
     /// <summary>

@@ -224,28 +224,35 @@ public partial class GridView
     {
         if (Viewport == null) return;
 
-        if (RowPageBreaks is not null)
+        if (RowPageBreaks is { Count: > 0 } rowPageBreaks)
         {
-            foreach (var rowBreak in RowPageBreaks)
+            var rowBreakLookup = AsPageBreakLookup(rowPageBreaks);
+            foreach (var metric in Viewport.RowMetrics)
             {
-                var metric = Viewport.RowMetrics.FirstOrDefault(row => row.Row == rowBreak);
-                if (metric is null) continue;
+                if (!rowBreakLookup.Contains(metric.Row))
+                    continue;
+
                 var y = metric.TopOffset + EffectiveColHeaderHeight;
                 dc.DrawLine(PageBreakPen, new Point(ActualRowHeaderWidth, y), new Point(ActualWidth, y));
             }
         }
 
-        if (ColumnPageBreaks is not null)
+        if (ColumnPageBreaks is { Count: > 0 } columnPageBreaks)
         {
-            foreach (var columnBreak in ColumnPageBreaks)
+            var columnBreakLookup = AsPageBreakLookup(columnPageBreaks);
+            foreach (var metric in Viewport.ColMetrics)
             {
-                var metric = Viewport.ColMetrics.FirstOrDefault(col => col.Col == columnBreak);
-                if (metric is null) continue;
+                if (!columnBreakLookup.Contains(metric.Col))
+                    continue;
+
                 var x = metric.LeftOffset + ActualRowHeaderWidth;
                 dc.DrawLine(PageBreakPen, new Point(x, EffectiveColHeaderHeight), new Point(x, ActualHeight));
             }
         }
     }
+
+    private static IReadOnlySet<uint> AsPageBreakLookup(IReadOnlyCollection<uint> pageBreaks) =>
+        pageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(pageBreaks);
 }
 
 public enum FormulaTraceArrowLayoutKind

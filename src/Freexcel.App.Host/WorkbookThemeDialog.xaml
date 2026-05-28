@@ -122,7 +122,8 @@
                         <Label Content="_Dark 1" Target="{Binding ElementName=Dark1ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Dark1ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Dark1ColorBox"
@@ -135,7 +136,8 @@
                         <Label Content="_Light 1" Target="{Binding ElementName=Light1ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Light1ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Light1ColorBox"
@@ -148,7 +150,8 @@
                         <Label Content="D_ark 2" Target="{Binding ElementName=Dark2ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Dark2ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Dark2ColorBox"
@@ -161,7 +164,8 @@
                         <Label Content="L_ight 2" Target="{Binding ElementName=Light2ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Light2ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Light2ColorBox"
@@ -174,7 +178,8 @@
                         <Label Content="_Accent 1" Target="{Binding ElementName=Accent1ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent1ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Accent1ColorBox"
@@ -187,7 +192,8 @@
                         <Label Content="A_ccent 2" Target="{Binding ElementName=Accent2ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent2ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Accent2ColorBox"
@@ -200,7 +206,8 @@
                         <Label Content="Ac_cent 3" Target="{Binding ElementName=Accent3ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent3ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Accent3ColorBox"
@@ -213,7 +220,8 @@
                         <Label Content="Acc_ent 4" Target="{Binding ElementName=Accent4ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent4ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Accent4ColorBox"
@@ -226,7 +234,8 @@
                         <Label Content="Acce_nt 5" Target="{Binding ElementName=Accent5ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent5ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Accent5ColorBox"
@@ -239,7 +248,8 @@
                         <Label Content="Accen_t 6" Target="{Binding ElementName=Accent6ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent6ColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="Accent6ColorBox"
@@ -252,7 +262,8 @@
                         <Label Content="H_yperlink" Target="{Binding ElementName=HyperlinkColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="HyperlinkColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="HyperlinkColorBox"
@@ -265,7 +276,8 @@
                         <Label Content="Followed Hype_rlink" Target="{Binding ElementName=FollowedHyperlinkColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="FollowedHyperlinkColorPickerButton"
-                                    Content="..."
+                                    Content=""
+                                    ToolTip="Pick color"
                                     Width="28"
                                     Margin="0,0,6,0"
                                     Tag="FollowedHyperlinkColorBox"

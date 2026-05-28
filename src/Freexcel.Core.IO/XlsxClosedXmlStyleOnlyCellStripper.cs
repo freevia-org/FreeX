@@ -8,44 +8,92 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
     public static MemoryStream Create(MemoryStream sourcePackage)
     {
         sourcePackage.Position = 0;
-        var strippedPackage = new MemoryStream();
-        var removedAny = false;
+        MemoryStream? strippedPackage = null;
+        ZipArchive? strippedArchive = null;
+        var returnStrippedPackage = false;
 
-        using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true))
-        using (var strippedArchive = new ZipArchive(strippedPackage, ZipArchiveMode.Create, leaveOpen: true))
+        try
         {
-            foreach (var sourceEntry in sourceArchive.Entries)
+            using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true))
             {
-                var targetEntry = strippedArchive.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
-                targetEntry.LastWriteTime = sourceEntry.LastWriteTime;
-                using var targetStream = targetEntry.Open();
-
-                if (IsWorksheetXml(sourceEntry))
+                var sourceEntries = sourceArchive.Entries;
+                for (var index = 0; index < sourceEntries.Count; index++)
                 {
-                    using var sourceStream = sourceEntry.Open();
-                    var worksheetXml = XDocument.Load(sourceStream);
-                    if (StripRedundantStyleOnlyCells(worksheetXml))
+                    var sourceEntry = sourceEntries[index];
+                    var strippedWorksheet = TryStripWorksheet(sourceEntry);
+
+                    if (strippedArchive is null)
                     {
-                        removedAny = true;
-                        worksheetXml.Save(targetStream);
+                        if (strippedWorksheet is null)
+                            continue;
+
+                        strippedPackage = new MemoryStream();
+                        strippedArchive = new ZipArchive(strippedPackage, ZipArchiveMode.Create, leaveOpen: true);
+                        for (var priorIndex = 0; priorIndex < index; priorIndex++)
+                            CopyEntry(sourceEntries[priorIndex], strippedArchive);
+
+                        WriteEntry(sourceEntry, strippedArchive, strippedWorksheet);
                         continue;
                     }
+
+                    if (strippedWorksheet is not null)
+                    {
+                        WriteEntry(sourceEntry, strippedArchive, strippedWorksheet);
+                        continue;
+                    }
+
+                    CopyEntry(sourceEntry, strippedArchive);
                 }
-
-                using var sourceStreamCopy = sourceEntry.Open();
-                sourceStreamCopy.CopyTo(targetStream);
             }
-        }
 
-        sourcePackage.Position = 0;
-        if (!removedAny)
+            sourcePackage.Position = 0;
+            if (strippedPackage is null || strippedArchive is null)
+                return sourcePackage;
+
+            strippedArchive.Dispose();
+            strippedArchive = null;
+            strippedPackage.Position = 0;
+            returnStrippedPackage = true;
+            return strippedPackage;
+        }
+        finally
         {
-            strippedPackage.Dispose();
-            return sourcePackage;
+            strippedArchive?.Dispose();
+            if (!returnStrippedPackage)
+                strippedPackage?.Dispose();
         }
+    }
 
-        strippedPackage.Position = 0;
-        return strippedPackage;
+    private static XDocument? TryStripWorksheet(ZipArchiveEntry sourceEntry)
+    {
+        if (!IsWorksheetXml(sourceEntry))
+            return null;
+
+        using var sourceStream = sourceEntry.Open();
+        var worksheetXml = XDocument.Load(sourceStream);
+        return StripRedundantStyleOnlyCells(worksheetXml) ? worksheetXml : null;
+    }
+
+    private static void CopyEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive)
+    {
+        var targetEntry = CreateTargetEntry(sourceEntry, strippedArchive);
+        using var targetStream = targetEntry.Open();
+        using var sourceStream = sourceEntry.Open();
+        sourceStream.CopyTo(targetStream);
+    }
+
+    private static void WriteEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive, XDocument worksheetXml)
+    {
+        var targetEntry = CreateTargetEntry(sourceEntry, strippedArchive);
+        using var targetStream = targetEntry.Open();
+        worksheetXml.Save(targetStream);
+    }
+
+    private static ZipArchiveEntry CreateTargetEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive)
+    {
+        var targetEntry = strippedArchive.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+        targetEntry.LastWriteTime = sourceEntry.LastWriteTime;
+        return targetEntry;
     }
 
     private static bool IsWorksheetXml(ZipArchiveEntry entry) =>

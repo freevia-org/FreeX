@@ -25,8 +25,11 @@ public static partial class BuiltInFunctions
         // ── Existing Phase-1 functions ──────────────────────────────────────
         ["SUM"]         = (Sum, 1, 255),
         ["AVERAGE"]     = (Average, 1, 255),
+        ["AVERAGEA"]    = (AverageA, 1, 255),
         ["MIN"]         = (Min, 1, 255),
+        ["MINA"]        = (MinA, 1, 255),
         ["MAX"]         = (Max, 1, 255),
+        ["MAXA"]        = (MaxA, 1, 255),
         ["COUNT"]       = (Count, 1, 255),
         ["COUNTA"]      = (CountA, 1, 255),
         ["IF"]          = (If, 2, 3),
@@ -66,11 +69,13 @@ public static partial class BuiltInFunctions
         ["UPPER"]       = (Upper, 1, 1),
         ["LOWER"]       = (Lower, 1, 1),
         ["PROPER"]      = (Proper, 1, 1),
+        ["ARABIC"]      = (Arabic, 1, 1),
         ["SUBSTITUTE"]  = (Substitute, 3, 4),
         ["FIND"]        = (Find, 2, 3),
         ["SEARCH"]      = (Search, 2, 3),
         ["MID"]         = (Mid, 3, 3),
         ["REPT"]        = (Rept, 2, 2),
+        ["ROMAN"]       = (Roman, 1, 2),
         ["VALUE"]       = (ValueFunc, 1, 1),
 
         // ── Phase 4.2: Date & time ───────────────────────────────────────────
@@ -91,10 +96,16 @@ public static partial class BuiltInFunctions
         ["SQRT"]        = (Sqrt, 1, 1),
         ["INT"]         = (IntFunc, 1, 1),
         ["CEILING"]     = (Ceiling, 2, 2),
+        ["CEILING.MATH"] = (CeilingMath, 1, 3),
+        ["CEILING.PRECISE"] = (CeilingPrecise, 1, 2),
+        ["ISO.CEILING"] = (IsoCeiling, 1, 2),
         ["FLOOR"]       = (Floor, 2, 2),
+        ["FLOOR.MATH"]  = (FloorMath, 1, 3),
+        ["FLOOR.PRECISE"] = (FloorPrecise, 1, 2),
         ["RANDBETWEEN"] = (Randbetween, 2, 2),
         ["SIGN"]        = (Sign, 1, 1),
         ["LOG"]         = (Log, 1, 2),
+        ["LOG10"]       = (Log10, 1, 1),
         ["LN"]          = (Ln, 1, 1),
         ["EXP"]         = (Exp, 1, 1),
         ["PI"]          = (Pi, 0, 0),
@@ -108,6 +119,8 @@ public static partial class BuiltInFunctions
         ["RANK.AVG"]    = (RankAvg, 2, 3),
         ["STDEV"]       = (Stdev, 1, 255),
         ["STDEV.S"]     = (Stdev, 1, 255),
+        ["STDEVA"]      = (StdevA, 1, 255),
+        ["STDEVPA"]     = (StdevPA, 1, 255),
         ["MEDIAN"]      = (Median, 1, 255),
         ["DEVSQ"]       = (Devsq, 1, 255),
 
@@ -117,6 +130,10 @@ public static partial class BuiltInFunctions
         ["SUMIFS"]      = (Sumifs, 3, 255),
         ["COUNTIFS"]    = (Countifs, 2, 255),
         ["AVERAGEIFS"]  = (Averageifs2, 3, 255),
+        ["SUMSQ"]       = (SumSq, 1, 255),
+        ["SUMX2MY2"]    = (SumX2My2, 2, 2),
+        ["SUMX2PY2"]    = (SumX2Py2, 2, 2),
+        ["SUMXMY2"]     = (SumXMy2, 2, 2),
 
         // Modern lookup
         ["XLOOKUP"]     = (Xlookup, 3, 6),
@@ -130,7 +147,9 @@ public static partial class BuiltInFunctions
         ["ISNUMBER"]    = (Isnumber, 1, 1),
         ["ISTEXT"]      = (Istext, 1, 1),
         ["ISERROR"]     = (Iserror, 1, 1),
+        ["ISERR"]       = (Iserr, 1, 1),
         ["ISNA"]        = (Isna, 1, 1),
+        ["ISNONTEXT"]   = (Isnontext, 1, 1),
         ["ISLOGICAL"]   = (Islogical, 1, 1),
 
         // Reference helpers
@@ -141,6 +160,12 @@ public static partial class BuiltInFunctions
 
         // Text
         ["TEXTJOIN"]    = (Textjoin, 3, 255),
+        ["TEXTBEFORE"]  = (Textbefore, 2, 6),
+        ["TEXTAFTER"]   = (Textafter, 2, 6),
+        ["TEXTSPLIT"]   = (Textsplit, 2, 6),
+        ["REGEXTEST"]    = (RegexTest, 2, 3),
+        ["REGEXEXTRACT"] = (RegexExtract, 2, 4),
+        ["REGEXREPLACE"] = (RegexReplace, 3, 5),
 
         // Count
         ["COUNTBLANK"]  = (Countblank, 1, 1),
@@ -156,28 +181,48 @@ public static partial class BuiltInFunctions
         ["CHAR"]        = (Char, 1, 1),
         ["ASC"]         = (Asc, 1, 1),
         ["DBCS"]        = (Dbcs, 1, 1),
+        ["JIS"]         = (Dbcs, 1, 1),
         ["PHONETIC"]    = (Phonetic, 1, 1),
+        ["VALUETOTEXT"] = (ValueToText, 1, 2),
+        ["ARRAYTOTEXT"] = (ArrayToText, 1, 2),
         ["BAHTTEXT"]    = (BahtText, 1, 1),
         ["ENCODEURL"]   = (EncodeUrl, 1, 1),
         ["FILTERXML"]   = (FilterXml, 2, 2),
 
         // ── Phase 4a: Math / Trig ────────────────────────────────────────────
         ["SIN"]      = (Sin, 1, 1),
+        ["SINH"]     = (Sinh, 1, 1),
         ["COS"]      = (Cos, 1, 1),
+        ["COSH"]     = (Cosh, 1, 1),
         ["TAN"]      = (Tan, 1, 1),
+        ["TANH"]     = (Tanh, 1, 1),
         ["ASIN"]     = (Asin, 1, 1),
+        ["ASINH"]    = (Asinh, 1, 1),
         ["ACOS"]     = (Acos, 1, 1),
+        ["ACOSH"]    = (Acosh, 1, 1),
         ["ATAN"]     = (Atan, 1, 1),
         ["ATAN2"]    = (Atan2Func, 2, 2),
+        ["ATANH"]    = (Atanh, 1, 1),
+        ["ACOT"]     = (Acot, 1, 1),
+        ["ACOTH"]    = (Acoth, 1, 1),
+        ["COT"]      = (Cot, 1, 1),
+        ["COTH"]     = (Coth, 1, 1),
+        ["CSC"]      = (Csc, 1, 1),
+        ["CSCH"]     = (Csch, 1, 1),
         ["DEGREES"]  = (Degrees, 1, 1),
         ["RADIANS"]  = (Radians, 1, 1),
+        ["SEC"]      = (Sec, 1, 1),
+        ["SECH"]     = (Sech, 1, 1),
         ["PRODUCT"]  = (Product, 1, 255),
         ["QUOTIENT"] = (Quotient, 2, 2),
         ["GCD"]      = (Gcd, 1, 255),
         ["LCM"]      = (Lcm, 1, 255),
         ["MROUND"]   = (Mround, 2, 2),
         ["COMBIN"]   = (Combin, 2, 2),
+        ["COMBINA"]  = (Combina, 2, 2),
         ["PERMUT"]   = (Permut, 2, 2),
+        ["PERMUTATIONA"] = (PermutationA, 2, 2),
+        ["FACTDOUBLE"] = (FactDouble, 1, 1),
         ["ODD"]      = (Odd, 1, 1),
         ["EVEN"]     = (Even, 1, 1),
 
@@ -195,25 +240,43 @@ public static partial class BuiltInFunctions
         ["YEARFRAC"]     = (Yearfrac, 2, 3),
 
         // ── Phase 4a: Statistical ────────────────────────────────────────────
+        ["FISHER"]           = (Fisher, 1, 1),
+        ["FISHERINV"]        = (FisherInv, 1, 1),
+        ["PROB"]             = (Prob, 3, 4),
         ["VAR"]              = (VarS, 1, 255),
         ["VAR.S"]            = (VarS, 1, 255),
+        ["VARA"]             = (VarA, 1, 255),
+        ["VARP"]             = (VarP, 1, 255),
         ["VAR.P"]            = (VarP, 1, 255),
+        ["VARPA"]            = (VarPA, 1, 255),
+        ["STDEVP"]           = (StdevP, 1, 255),
         ["STDEV.P"]          = (StdevP, 1, 255),
         ["PERCENTILE"]       = (PercentileInc, 2, 2),
         ["PERCENTILE.INC"]   = (PercentileInc, 2, 2),
         ["PERCENTILE.EXC"]   = (PercentileExc, 2, 2),
         ["QUARTILE"]         = (QuartileInc, 2, 2),
         ["QUARTILE.INC"]     = (QuartileInc, 2, 2),
+        ["QUARTILE.EXC"]     = (QuartileExc, 2, 2),
         ["GEOMEAN"]          = (Geomean, 1, 255),
         ["HARMEAN"]          = (Harmean, 1, 255),
         ["AVEDEV"]           = (Avedev, 1, 255),
         ["PERCENTRANK"]      = (PercentrankInc, 2, 3),
         ["PERCENTRANK.INC"]  = (PercentrankInc, 2, 3),
+        ["PERCENTRANK.EXC"]  = (PercentrankExc, 2, 3),
+        ["PERCENTOF"]        = (PercentOf, 2, 2),
         ["MODE"]             = (ModeSngl, 1, 255),
         ["MODE.SNGL"]        = (ModeSngl, 1, 255),
         ["CORREL"]           = (Correl, 2, 2),
+        ["COVAR"]            = (CovarianceP, 2, 2),
+        ["COVARIANCE.P"]     = (CovarianceP, 2, 2),
+        ["COVARIANCE.S"]     = (CovarianceS, 2, 2),
         ["FORECAST"]         = (Forecast, 3, 3),
         ["FORECAST.LINEAR"]  = (Forecast, 3, 3),
+        ["INTERCEPT"]        = (Intercept, 2, 2),
+        ["PEARSON"]          = (Pearson, 2, 2),
+        ["RSQ"]              = (Rsq, 2, 2),
+        ["SLOPE"]            = (Slope, 2, 2),
+        ["STEYX"]            = (Steyx, 2, 2),
 
         // ── Phase 4a: Financial ──────────────────────────────────────────────
         ["PMT"]  = (Pmt, 3, 5),
@@ -263,6 +326,7 @@ public static partial class BuiltInFunctions
         ["WRAPCOLS"] = (WrapCols, 2, 3),
         ["EXPAND"]   = (Expand, 2, 4),
         ["UNIQUE"]   = (Unique, 1, 3),
+        ["TRIMRANGE"] = (TrimRange, 1, 3),
 
         // ── Subtotal ─────────────────────────────────────────────────────────
         ["SUBTOTAL"] = (Subtotal, 2, 255),
@@ -281,6 +345,7 @@ public static partial class BuiltInFunctions
         ["MMULT"]    = (Mmult, 2, 2),
         ["MINVERSE"] = (Minverse, 1, 1),
         ["MDETERM"]  = (Mdeterm, 1, 1),
+        ["MUNIT"]    = (Munit, 1, 1),
 
         // ── Phase A1: Date (weekend mask) ───────────────────────────────────
         ["NETWORKDAYS.INTL"] = (NetworkdaysIntl, 2, 4),
@@ -313,7 +378,40 @@ public static partial class BuiltInFunctions
         ["GETPIVOTDATA"] = (GetPivotData, 2, 255),
 
         // ── Phase A2: CONVERT ───────────────────────────────────────────────
+        ["BASE"]        = (BaseFunc, 2, 3),
         ["CONVERT"]     = (Convert, 3, 3),
+        ["COMPLEX"]     = (ComplexFunc, 2, 3),
+        ["DECIMAL"]     = (DecimalFunc, 2, 2),
+        ["DELTA"]       = (Delta, 1, 2),
+        ["ERF"]         = (ErfFunc, 1, 2),
+        ["ERF.PRECISE"] = (ErfFunc, 1, 1),
+        ["ERFC"]        = (ErfcFunc, 1, 1),
+        ["ERFC.PRECISE"] = (ErfcFunc, 1, 1),
+        ["GESTEP"]      = (Gestep, 1, 2),
+        ["IMABS"]       = (ImAbs, 1, 1),
+        ["IMAGINARY"]   = (Imaginary, 1, 1),
+        ["IMCONJUGATE"] = (ImConjugate, 1, 1),
+        ["IMCOS"]       = (ImCos, 1, 1),
+        ["IMCOSH"]      = (ImCosh, 1, 1),
+        ["IMCOT"]       = (ImCot, 1, 1),
+        ["IMCSC"]       = (ImCsc, 1, 1),
+        ["IMCSCH"]      = (ImCsch, 1, 1),
+        ["IMDIV"]       = (ImDiv, 2, 2),
+        ["IMEXP"]       = (ImExp, 1, 1),
+        ["IMLN"]        = (ImLn, 1, 1),
+        ["IMLOG10"]     = (ImLog10, 1, 1),
+        ["IMLOG2"]      = (ImLog2, 1, 1),
+        ["IMPOWER"]     = (ImPower, 2, 2),
+        ["IMPRODUCT"]   = (ImProduct, 1, 255),
+        ["IMREAL"]      = (ImReal, 1, 1),
+        ["IMSIN"]       = (ImSin, 1, 1),
+        ["IMSINH"]      = (ImSinh, 1, 1),
+        ["IMSQRT"]      = (ImSqrt, 1, 1),
+        ["IMSUB"]       = (ImSub, 2, 2),
+        ["IMSUM"]       = (ImSum, 1, 255),
+        ["IMSEC"]       = (ImSec, 1, 1),
+        ["IMSECH"]      = (ImSech, 1, 1),
+        ["IMTAN"]       = (ImTan, 1, 1),
         ["BIN2DEC"]     = (Bin2Dec, 1, 1),
         ["BIN2HEX"]     = (Bin2Hex, 1, 2),
         ["BIN2OCT"]     = (Bin2Oct, 1, 2),
@@ -347,28 +445,45 @@ public static partial class BuiltInFunctions
         ["DVARP"]    = (DVarP, 3, 3),
 
         // ── Phase B1: Normal distribution ───────────────────────────────────
+        ["NORMDIST"]     = (NormDist, 4, 4),
         ["NORM.DIST"]    = (NormDist, 4, 4),
+        ["NORMINV"]      = (NormInv, 3, 3),
         ["NORM.INV"]     = (NormInv, 3, 3),
+        ["NORMSDIST"]    = (NormSDistCompat, 1, 1),
         ["NORM.S.DIST"]  = (NormSDist, 2, 2),
+        ["NORMSINV"]     = (NormSInvFunc, 1, 1),
         ["NORM.S.INV"]   = (NormSInvFunc, 1, 1),
+        ["PHI"]          = (Phi, 1, 1),
+        ["GAUSS"]        = (Gauss, 1, 1),
         ["STANDARDIZE"]  = (Standardize, 3, 3),
 
         // ── Phase B2: T, F, Chi-Squared + Tests ─────────────────────────────
+        ["TDIST"]        = (TDistCompat, 3, 3),
         ["T.DIST"]       = (TDist, 3, 3),
         ["T.DIST.RT"]    = (TDistRt, 2, 2),
         ["T.DIST.2T"]    = (TDist2T, 2, 2),
+        ["TINV"]         = (TInv2TFunc, 2, 2),
         ["T.INV"]        = (TInvFunc, 2, 2),
         ["T.INV.2T"]     = (TInv2TFunc, 2, 2),
+        ["TTEST"]        = (TTest, 4, 4),
         ["T.TEST"]       = (TTest, 4, 4),
+        ["ZTEST"]        = (ZTest, 2, 3),
+        ["Z.TEST"]       = (ZTest, 2, 3),
+        ["FDIST"]        = (FDistRt, 3, 3),
         ["F.DIST"]       = (FDist, 4, 4),
         ["F.DIST.RT"]    = (FDistRt, 3, 3),
+        ["FINV"]         = (FInvRt, 3, 3),
         ["F.INV"]        = (FInvFunc, 3, 3),
         ["F.INV.RT"]     = (FInvRt, 3, 3),
+        ["FTEST"]        = (FTest, 2, 2),
         ["F.TEST"]       = (FTest, 2, 2),
+        ["CHIDIST"]      = (ChiSqDistRt, 2, 2),
         ["CHISQ.DIST"]   = (ChiSqDist, 3, 3),
         ["CHISQ.DIST.RT"]= (ChiSqDistRt, 2, 2),
+        ["CHIINV"]       = (ChiSqInvRt, 2, 2),
         ["CHISQ.INV"]    = (ChiSqInvFunc, 2, 2),
         ["CHISQ.INV.RT"] = (ChiSqInvRt, 2, 2),
+        ["CHITEST"]      = (ChiSqTest, 2, 2),
         ["CHISQ.TEST"]   = (ChiSqTest, 2, 2),
 
         // ── Phase B3: Descriptive statistics ────────────────────────────────
@@ -381,27 +496,41 @@ public static partial class BuiltInFunctions
         ["CONFIDENCE.T"]     = (ConfidenceT, 3, 3),
 
         // ── Phase B4: Discrete distributions ────────────────────────────────
+        ["BINOMDIST"]        = (BinomDist, 4, 4),
         ["BINOM.DIST"]       = (BinomDist, 4, 4),
         ["BINOM.DIST.RANGE"] = (BinomDistRange, 3, 4),
+        ["CRITBINOM"]        = (BinomInv, 3, 3),
         ["BINOM.INV"]        = (BinomInv, 3, 3),
+        ["NEGBINOMDIST"]     = (NegbinomDistCompat, 3, 3),
         ["NEGBINOM.DIST"]    = (NegbinomDist, 4, 4),
+        ["POISSON"]          = (PoissonDist, 3, 3),
         ["POISSON.DIST"]     = (PoissonDist, 3, 3),
+        ["HYPGEOMDIST"]      = (HypergeomDistCompat, 4, 4),
         ["HYPERGEOM.DIST"]   = (HypergeomDist, 5, 5),
 
         // ── Phase B5: Continuous distributions ──────────────────────────────
+        ["EXPONDIST"]        = (ExponDist, 3, 3),
         ["EXPON.DIST"]       = (ExponDist, 3, 3),
+        ["WEIBULL"]          = (WeibullDist, 4, 4),
         ["WEIBULL.DIST"]     = (WeibullDist, 4, 4),
+        ["GAMMADIST"]        = (GammaDist, 4, 4),
         ["GAMMA.DIST"]       = (GammaDist, 4, 4),
+        ["GAMMAINV"]         = (GammaInvFunc, 3, 3),
         ["GAMMA.INV"]        = (GammaInvFunc, 3, 3),
         ["GAMMALN"]          = (GammaLnFunc, 1, 1),
         ["GAMMALN.PRECISE"]  = (GammaLnFunc, 1, 1),
         ["GAMMA"]            = (GammaFunc, 1, 1),
         ["BETA.DIST"]        = (BetaDist, 4, 6),
+        ["BETADIST"]         = (BetaDistCompat, 3, 5),
         ["BETA.INV"]         = (BetaInvFunc, 3, 5),
+        ["BETAINV"]          = (BetaInvFunc, 3, 5),
         ["LOGNORM.DIST"]     = (LognormDist, 4, 4),
+        ["LOGNORMDIST"]      = (LognormDistCompat, 3, 3),
         ["LOGNORM.INV"]      = (LognormInv, 3, 3),
+        ["LOGINV"]           = (LognormInv, 3, 3),
 
         // ── Phase C: Financial functions ─────────────────────────────────────
+        ["ISPMT"]     = (Ispmt, 4, 4),
         ["IPMT"]      = (Ipmt, 4, 6),
         ["PPMT"]      = (Ppmt, 4, 6),
         ["CUMIPMT"]   = (Cumipmt, 6, 6),
@@ -429,6 +558,7 @@ public static partial class BuiltInFunctions
         ["INTRATE"]   = (Intrate, 4, 5),
         ["RECEIVED"]  = (Received, 4, 5),
         ["ACCRINT"]   = (Accrint, 6, 8),
+        ["ACCRINTM"]  = (Accrintm, 3, 5),
         ["TBILLEQ"]   = (Tbilleq, 3, 3),
         ["TBILLPRICE"]= (Tbillprice, 3, 3),
         ["TBILLYIELD"]= (Tbillyield, 3, 3),
@@ -465,6 +595,7 @@ public static partial class BuiltInFunctions
         ["BYROW"]     = (ByRowFunc,     2, 2),
         ["BYCOL"]     = (ByColFunc,     2, 2),
         ["MAKEARRAY"] = (MakeArrayFunc, 3, 3),
+        ["ISOMITTED"] = (IsOmitted,     1, 1),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
@@ -482,6 +613,10 @@ public static partial class BuiltInFunctions
     /// <summary>Get a function by name.</summary>
     public static (FormulaFunction Func, int MinArgs, int MaxArgs) Get(string name) => Functions[name];
 
+    /// <summary>Try to get a function by name.</summary>
+    public static bool TryGet(string name, out (FormulaFunction Func, int MinArgs, int MaxArgs) entry) =>
+        Functions.TryGetValue(name, out entry);
+
     /// <summary>Validate argument count for a function.</summary>
     public static bool ValidateArgCount(string name, int count)
     {
@@ -497,8 +632,8 @@ public static partial class BuiltInFunctions
         DateTimeValue d => d.Value,
         BoolValue b => b.Value ? 1.0 : 0.0,
         BlankValue => 0.0,
-        DirectTextLiteralValue t when double.TryParse(t.Value, System.Globalization.CultureInfo.InvariantCulture, out var d) => d,
-        TextValue t when double.TryParse(t.Value, System.Globalization.CultureInfo.InvariantCulture, out var d) => d,
+        DirectTextLiteralValue t when ExcelTextNumberParser.TryParse(t.Value, out var d) => d,
+        TextValue t when ExcelTextNumberParser.TryParse(t.Value, out var d) => d,
         _ => throw new FormulaEvalException("#VALUE!", $"Cannot convert {v} to number")
     };
 
@@ -524,7 +659,7 @@ public static partial class BuiltInFunctions
     };
 
     private static bool TryDirectTextNumber(DirectTextLiteralValue value, out double number) =>
-        double.TryParse(value.Value, System.Globalization.CultureInfo.InvariantCulture, out number);
+        ExcelTextNumberParser.TryParse(value.Value, out number);
 
     private static bool TryCellNumber(ScalarValue value, out double number)
     {
@@ -619,192 +754,6 @@ public static partial class BuiltInFunctions
         return Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor;
     }
 
-
-    private static ScalarValue Concat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (var arg in args)
-        {
-            if (arg is ErrorValue err) return err;
-            sb.Append(ToText(arg));
-        }
-        return TextResult(sb.ToString());
-    }
-
-    private static ScalarValue Len(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue err) return err;
-        if (args[0] is RangeValue range)
-        {
-            var cells = new ScalarValue[range.RowCount, range.ColCount];
-            for (int r = 0; r < range.RowCount; r++)
-                for (int c = 0; c < range.ColCount; c++)
-                {
-                    var value = range.Cells[r, c];
-                    if (value is ErrorValue e) return e;
-                    cells[r, c] = LenScalar(value);
-                }
-
-            return new RangeValue(cells);
-        }
-
-        return LenScalar(args[0]);
-    }
-
-    private static ScalarValue LenScalar(ScalarValue value)
-    {
-        var text = ToText(value);
-        return new NumberValue(ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length);
-    }
-
-    private static ScalarValue Left(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue err) return err;
-        if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
-        return MapBinaryMathArgs(args[0], countArg, LeftScalarWithCount);
-    }
-
-    private static ScalarValue LeftScalarWithCount(ScalarValue value, ScalarValue countValue)
-    {
-        if (value is ErrorValue valueError) return valueError;
-        if (countValue is ErrorValue countError) return countError;
-        var rawCount = ToNumber(countValue);
-        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
-        var count = (int)rawCount;
-        if (count < 0) return ErrorValue.Value;
-        return LeftScalar(value, count);
-    }
-
-    private static ScalarValue LeftScalar(ScalarValue value, int count)
-    {
-        var text = ToText(value);
-        count = Math.Min(count, text.Length);
-        if (ContainsSurrogatePair(text))
-            return TextResult(text[..AdvanceTextElements(text, 0, count)]);
-        return TextResult(text[..count]);
-    }
-
-    private static ScalarValue Right(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue err) return err;
-        if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
-        return MapBinaryMathArgs(args[0], countArg, RightScalarWithCount);
-    }
-
-    private static ScalarValue RightScalarWithCount(ScalarValue value, ScalarValue countValue)
-    {
-        if (value is ErrorValue valueError) return valueError;
-        if (countValue is ErrorValue countError) return countError;
-        var rawCount = ToNumber(countValue);
-        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
-        var count = (int)rawCount;
-        if (count < 0) return ErrorValue.Value;
-        return RightScalar(value, count);
-    }
-
-    private static ScalarValue RightScalar(ScalarValue value, int count)
-    {
-        var text = ToText(value);
-        count = Math.Min(count, text.Length);
-        int start = ContainsSurrogatePair(text)
-            ? AdvanceTextElements(text, 0, Math.Max(0, CountTextElements(text) - count))
-            : text.Length - count;
-        return TextResult(text[start..]);
-    }
-
-    private static RangeValue MapTextSliceRange(RangeValue range, int count, bool fromRight)
-    {
-        var cells = new ScalarValue[range.RowCount, range.ColCount];
-        for (int r = 0; r < range.RowCount; r++)
-            for (int c = 0; c < range.ColCount; c++)
-            {
-                var value = range.Cells[r, c];
-                cells[r, c] = value is ErrorValue e
-                    ? e
-                    : fromRight ? RightScalar(value, count) : LeftScalar(value, count);
-            }
-
-        return new RangeValue(cells);
-    }
-
-    private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        DateTimeValue.FromDateTime(DateTime.Now);
-
-    private static ScalarValue Today(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        DateTimeValue.FromDateTime(DateTime.Today);
-
-    private static ScalarValue Rand(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new NumberValue(Random.Shared.NextDouble());
-
-    private static ScalarValue RandArray(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        foreach (var arg in args)
-            if (arg is ErrorValue e) return e;
-
-        double rowsD = args.Count > 0 && args[0] is not BlankValue ? ToNumber(args[0]) : 1;
-        double colsD = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
-        double min = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
-        double max = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
-        bool wholeNumber = args.Count > 4 && args[4] is not BlankValue && ToBool(args[4]);
-
-        if (!double.IsFinite(rowsD) || !double.IsFinite(colsD)) return ErrorValue.Value;
-        int rows = (int)rowsD;
-        int cols = (int)colsD;
-        if (rows < 1 || cols < 1) return ErrorValue.Value;
-        if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
-        if (!double.IsFinite(min) || !double.IsFinite(max) || min > max) return ErrorValue.Value;
-
-        if (wholeNumber)
-        {
-            if (!TryTruncateToLong(Math.Ceiling(min), out long bottom) ||
-                !TryTruncateToLong(Math.Floor(max), out long top))
-                return ErrorValue.Value;
-            if (bottom > top) return ErrorValue.Value;
-
-            long randExclusiveTop;
-            try { randExclusiveTop = checked(top + 1); }
-            catch (OverflowException) { return ErrorValue.Value; }
-            var integers = new ScalarValue[rows, cols];
-            for (int r = 0; r < rows; r++)
-                for (int c = 0; c < cols; c++)
-                    integers[r, c] = new NumberValue(Random.Shared.NextInt64(bottom, randExclusiveTop));
-            return new RangeValue(integers);
-        }
-
-        double width = max - min;
-        if (!double.IsFinite(width)) return ErrorValue.Value;
-        var result = new ScalarValue[rows, cols];
-        for (int r = 0; r < rows; r++)
-            for (int c = 0; c < cols; c++)
-            {
-                var value = min + Random.Shared.NextDouble() * width;
-                if (!double.IsFinite(value)) return ErrorValue.Value;
-                result[r, c] = new NumberValue(value);
-            }
-        return new RangeValue(result);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // Phase 4.2  –  Error handling
-    // ═══════════════════════════════════════════════════════════════════
-
-    private static ScalarValue IfError(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue) return args[1];
-        return args[0];
-    }
-
-    private static ScalarValue IfNa(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e && e.Code == "#N/A") return args[1];
-        return args[0];
-    }
-
-    private static ScalarValue NaFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        ErrorValue.NA;
-
     // ═══════════════════════════════════════════════════════════════════
     // Phase 4.2  –  Lookup
     // ═══════════════════════════════════════════════════════════════════
@@ -816,155 +765,6 @@ public static partial class BuiltInFunctions
     // ═══════════════════════════════════════════════════════════════════
     // Phase 4.2  –  Conditional aggregation
     // ═══════════════════════════════════════════════════════════════════
-
-    private static bool MatchExactValue(ScalarValue candidate, ScalarValue lookupValue)
-    {
-        if (lookupValue is TextValue pattern && candidate is TextValue text)
-            return WildcardMatch(text.Value, pattern.Value, ignoreCase: true);
-
-        return ScalarEquals(candidate, lookupValue);
-    }
-
-
-
-
-
-    /// <summary>
-    /// Test a cell value against an Excel criteria string or value.
-    /// Supports: number (exact), text (exact, case-insensitive),
-    /// operator strings ">5", ">=5", "<5", "<=5", "<>5", "=text",
-    /// and simple wildcard strings using * and ?.
-    /// </summary>
-    private static bool MatchesCriteria(ScalarValue cellValue, ScalarValue criteria)
-    {
-        if (criteria is BlankValue)
-            criteria = new TextValue("");
-
-        if (criteria is NumberValue cn)
-            return TryCellNumber(cellValue, out double cellNumber) && cellNumber == cn.Value;
-
-        if (criteria is DateTimeValue cdt)
-            return TryCellNumber(cellValue, out double cellDateNum) && cellDateNum == cdt.Value;
-
-        if (criteria is BoolValue cb)
-            return cellValue is BoolValue cvb && cvb.Value == cb.Value;
-
-        if (criteria is not TextValue ct) return false;
-        var crit = ct.Value;
-
-        // Operator prefix?
-        if (crit.StartsWith(">=") || crit.StartsWith("<=") || crit.StartsWith("<>"))
-        {
-            var op  = crit[..2];
-            var rhs = crit[2..];
-            return ApplyComparisonCriteria(cellValue, op, rhs);
-        }
-        if (crit.StartsWith(">") || crit.StartsWith("<") || crit.StartsWith("="))
-        {
-            var op  = crit[..1];
-            var rhs = crit[1..];
-            return ApplyComparisonCriteria(cellValue, op, rhs);
-        }
-
-        // Plain wildcard criteria in Excel match text cells only.
-        if (IsWildcardCriteria(crit))
-            return cellValue is TextValue tv && WildcardMatch(tv.Value, crit, ignoreCase: true);
-
-        var cellText = cellValue is TextValue text ? text.Value :
-                       TryCellNumber(cellValue, out double numericValue) ? numericValue.ToString(System.Globalization.CultureInfo.InvariantCulture) :
-                       cellValue is BoolValue bv ? (bv.Value ? "TRUE" : "FALSE") :
-                       "";
-        return string.Equals(cellText, crit, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool ApplyComparisonCriteria(ScalarValue cellValue, string op, string rhs)
-    {
-        // Try numeric comparison first
-        if (double.TryParse(rhs, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var rhsNum))
-        {
-            if (!TryCellNumber(cellValue, out double value)) return false;
-            return op switch
-            {
-                ">"  => value > rhsNum,
-                ">=" => value >= rhsNum,
-                "<"  => value < rhsNum,
-                "<=" => value <= rhsNum,
-                "="  => value == rhsNum,
-                "<>" => value != rhsNum,
-                _    => false
-            };
-        }
-
-        if (IsWildcardCriteria(rhs) && op is "=" or "<>")
-        {
-            bool matches = cellValue is TextValue textValue && WildcardMatch(textValue.Value, rhs, ignoreCase: true);
-            return op == "=" ? matches : !matches;
-        }
-
-        // Text comparison
-        var cellText = cellValue is TextValue tv ? tv.Value : ToText(cellValue);
-        int cmp = string.Compare(cellText, rhs, StringComparison.OrdinalIgnoreCase);
-        return op switch
-        {
-            ">"  => cmp > 0,
-            ">=" => cmp >= 0,
-            "<"  => cmp < 0,
-            "<=" => cmp <= 0,
-            "="  => cmp == 0,
-            "<>" => cmp != 0,
-            _    => false
-        };
-    }
-
-    private static bool IsWildcardCriteria(string criteria)
-    {
-        for (int i = 0; i < criteria.Length; i++)
-        {
-            char ch = criteria[i];
-            if (ch is '*' or '?') return true;
-            if (ch == '~' && i + 1 < criteria.Length && (criteria[i + 1] is '*' or '?' or '~')) return true;
-        }
-
-        return false;
-    }
-
-    private static readonly ConcurrentDictionary<(string Pattern, bool IgnoreCase), Regex> WildcardCache = new();
-    private const string RegexTextElement = @"(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[^\uD800-\uDFFF])";
-
-    private static string WildcardToRegexPattern(string pattern, bool anchored = true)
-    {
-        var sb = new System.Text.StringBuilder(anchored ? "^" : "");
-        for (int i = 0; i < pattern.Length; i++)
-        {
-            char ch = pattern[i];
-            if (ch == '~' && i + 1 < pattern.Length && pattern[i + 1] is '*' or '?' or '~')
-            {
-                sb.Append(Regex.Escape(pattern[++i].ToString()));
-                continue;
-            }
-
-            switch (ch)
-            {
-                case '*': sb.Append(RegexTextElement).Append('*'); break;
-                case '?': sb.Append(RegexTextElement); break;
-                default:  sb.Append(Regex.Escape(ch.ToString())); break;
-            }
-        }
-        if (anchored) sb.Append('$');
-        return sb.ToString();
-    }
-
-    /// <summary>Simple Excel-style wildcard match (* = any chars, ? = any single char).</summary>
-    private static bool WildcardMatch(string text, string pattern, bool ignoreCase)
-    {
-        var regex = WildcardCache.GetOrAdd((pattern, ignoreCase), key =>
-        {
-            var opts = key.IgnoreCase ? RegexOptions.IgnoreCase | RegexOptions.Compiled : RegexOptions.Compiled;
-            return new Regex(WildcardToRegexPattern(key.Pattern), opts);
-        });
-        return regex.IsMatch(text);
-    }
 
     // ═══════════════════════════════════════════════════════════════════
     // Phase 4.2  –  Text functions
@@ -998,19 +798,6 @@ public static partial class BuiltInFunctions
     // ═══════════════════════════════════════════════════════════════════
     // Phase 4.2  –  Date & time
     // ═══════════════════════════════════════════════════════════════════
-
-
-
-
-
-    private static DateTime OADateToDateTime(ScalarValue v) =>
-        DateTime.FromOADate(ToNumber(v));
-
-
-
-
-
-
 
 
 
@@ -1064,84 +851,6 @@ public static partial class BuiltInFunctions
 
     // IFS(condition1, value1, [condition2, value2, ...])
     // SWITCH(expr, val1, result1, [val2, result2, ...], [default])
-    // ═══════════════════════════════════════════════════════════════════
-    // Phase 5 – IS functions
-    // ═══════════════════════════════════════════════════════════════════
-
-    private static ScalarValue Isblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is BlankValue)
-            : new BoolValue(args[0] is BlankValue);
-
-    private static ScalarValue Isnumber(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is NumberValue or DateTimeValue)
-            : new BoolValue(args[0] is NumberValue or DateTimeValue);
-
-    private static ScalarValue Istext(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is TextValue)
-            : new BoolValue(args[0] is TextValue);
-
-    private static ScalarValue Iserror(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is ErrorValue)
-            : new BoolValue(args[0] is ErrorValue);
-
-    private static ScalarValue Isna(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is ErrorValue e2 && e2.Code == "#N/A")
-            : new BoolValue(args[0] is ErrorValue e2 && e2.Code == "#N/A");
-
-    private static ScalarValue Islogical(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is RangeValue range
-            ? MapPredicateRange(range, value => value is BoolValue)
-            : new BoolValue(args[0] is BoolValue);
-
-    private static RangeValue MapPredicateRange(RangeValue range, Func<ScalarValue, bool> predicate)
-    {
-        var cells = new ScalarValue[range.RowCount, range.ColCount];
-        for (int r = 0; r < range.RowCount; r++)
-            for (int c = 0; c < range.ColCount; c++)
-                cells[r, c] = new BoolValue(predicate(range.Cells[r, c]));
-
-        return new RangeValue(cells);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // Phase 5 – Reference helpers: ROW, COLUMN, ROWS, COLUMNS
-    // ═══════════════════════════════════════════════════════════════════
-
-    private static ScalarValue Row(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args.Count == 0) return ErrorValue.Value; // no cell reference available without context
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return new NumberValue(rv.StartRow);
-        return ErrorValue.Value;
-    }
-
-    private static ScalarValue Column(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args.Count == 0) return ErrorValue.Value;
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return new NumberValue(rv.StartCol);
-        return ErrorValue.Value;
-    }
-
-    private static ScalarValue Rows(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return new NumberValue(rv.RowCount);
-        return new NumberValue(1);
-    }
-
-    private static ScalarValue Columns(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue rv) return new NumberValue(rv.ColCount);
-        return new NumberValue(1);
-    }
-
     // ═══════════════════════════════════════════════════════════════════
     // Phase 5 – Text: TEXTJOIN, EXACT, CODE, CHAR
     // ═══════════════════════════════════════════════════════════════════
@@ -1268,309 +977,9 @@ public static partial class BuiltInFunctions
     // ═══════════════════════════════════════════════════════════════════
 
     // ═══════════════════════════════════════════════════════════════════
-    // Phase 4a  –  Logical / Text
-    // ═══════════════════════════════════════════════════════════════════
-
-    private static ScalarValue Iseven(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsevenScalar);
-        return IsevenScalar(args[0]);
-    }
-
-    private static ScalarValue IsevenScalar(ScalarValue value)
-    {
-        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
-        return new BoolValue(n % 2 == 0);
-    }
-
-    private static ScalarValue Isodd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsoddScalar);
-        return IsoddScalar(args[0]);
-    }
-
-    private static ScalarValue IsoddScalar(ScalarValue value)
-    {
-        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
-        return new BoolValue(n % 2 != 0);
-    }
-
-    private static ScalarValue Replace(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e0) return e0;
-        if (args[1] is ErrorValue e1) return e1;
-        if (args[2] is ErrorValue e2) return e2;
-        if (args[3] is ErrorValue e3) return e3;
-        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], ReplaceScalarWithArgs);
-    }
-
-    private static ScalarValue ReplaceScalarWithArgs(
-        ScalarValue value,
-        ScalarValue startValue,
-        ScalarValue numCharsValue,
-        ScalarValue newTextValue)
-    {
-        if (value is ErrorValue valueError) return valueError;
-        if (startValue is ErrorValue startError) return startError;
-        if (numCharsValue is ErrorValue numCharsError) return numCharsError;
-        if (newTextValue is ErrorValue newTextError) return newTextError;
-        double rawStart = ToNumber(startValue);
-        double rawNumChars = ToNumber(numCharsValue);
-        if (!double.IsFinite(rawStart) || !double.IsFinite(rawNumChars)) return ErrorValue.Value;
-        if (rawStart > int.MaxValue || rawNumChars > int.MaxValue) return ErrorValue.Value;
-
-        int startNum = (int)rawStart;
-        int numChars = (int)rawNumChars;
-        if (startNum < 1 || numChars < 0) return ErrorValue.Value;
-
-        return ReplaceText(ToText(value), startNum, numChars, ToText(newTextValue));
-    }
-
-    private static RangeValue MapReplaceRange(RangeValue range, int startNum, int numChars, string newText)
-    {
-        var cells = new ScalarValue[range.RowCount, range.ColCount];
-        for (int r = 0; r < range.RowCount; r++)
-            for (int c = 0; c < range.ColCount; c++)
-            {
-                var value = range.Cells[r, c];
-                cells[r, c] = value is ErrorValue e ? e : ReplaceText(ToText(value), startNum, numChars, newText);
-            }
-
-        return new RangeValue(cells);
-    }
-
-    private static ScalarValue ReplaceText(string text, int startNum, int numChars, string newText)
-    {
-        bool hasSurrogatePair = ContainsSurrogatePair(text);
-        int start = hasSurrogatePair
-            ? TextElementIndexFromOneBasedPosition(text, startNum)
-            : Math.Min(startNum - 1, text.Length);
-        int end = hasSurrogatePair
-            ? AdvanceTextElements(text, start, numChars)
-            : Math.Min(start + numChars, text.Length);
-        return TextResult(text[..start] + newText + text[end..]);
-    }
-
-    private static ScalarValue Concatenate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        var rangeIndex = -1;
-        for (int i = 0; i < args.Count; i++)
-        {
-            if (args[i] is ErrorValue e) return e;
-            if (args[i] is RangeValue)
-            {
-                if (rangeIndex >= 0) return ErrorValue.Value;
-                rangeIndex = i;
-            }
-        }
-
-        if (rangeIndex >= 0)
-            return MapConcatenateRange((RangeValue)args[rangeIndex], args, rangeIndex);
-
-        var sb = new System.Text.StringBuilder();
-        foreach (var a in args)
-        {
-            sb.Append(ToText(a));
-        }
-        return TextResult(sb.ToString());
-    }
-
-    private static RangeValue MapConcatenateRange(RangeValue range, IReadOnlyList<ScalarValue> args, int rangeIndex)
-    {
-        var cells = new ScalarValue[range.RowCount, range.ColCount];
-        for (int r = 0; r < range.RowCount; r++)
-            for (int c = 0; c < range.ColCount; c++)
-            {
-                var value = range.Cells[r, c];
-                if (value is ErrorValue e)
-                {
-                    cells[r, c] = e;
-                    continue;
-                }
-
-                var sb = new System.Text.StringBuilder();
-                for (int i = 0; i < args.Count; i++)
-                    sb.Append(i == rangeIndex ? ToText(value) : ToText(args[i]));
-                cells[r, c] = TextResult(sb.ToString());
-            }
-
-        return new RangeValue(cells);
-    }
-
-    private static ScalarValue TFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, TScalar);
-        return TScalar(args[0]);
-    }
-
-    private static ScalarValue TScalar(ScalarValue value) =>
-        value is TextValue t ? TextResult(t.Value) : new TextValue("");
-
-    private static ScalarValue Hyperlink(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e0) return e0;
-        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        if (args.Count > 1 && args[0] is RangeValue && args[1] is RangeValue)
-            return MapBinaryMathArgs(args[0], args[1], HyperlinkScalar);
-        if (args.Count > 1 && args[1] is RangeValue friendlyRange)
-            return MapUnaryTextRange(friendlyRange, value => HyperlinkScalar(args[0], value));
-        if (args[0] is RangeValue linkRange)
-            return MapUnaryTextRange(linkRange, value => HyperlinkScalar(value, args.Count > 1 ? args[1] : null));
-
-        return HyperlinkScalar(args[0], args.Count > 1 ? args[1] : null);
-    }
-
-    private static ScalarValue HyperlinkScalar(ScalarValue link, ScalarValue? friendlyName)
-    {
-        var display = friendlyName is not null && friendlyName is not BlankValue ? ToText(friendlyName) : ToText(link);
-        return TextResult(display);
-    }
-
-    private static ScalarValue Fixed(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e0) return e0;
-        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
-        var decimalsArg = args.Count > 1 ? args[1] : new NumberValue(2);
-        return MapBinaryMathArgs(args[0], decimalsArg, (value, decimalsValue) => FixedScalarWithDecimals(value, decimalsValue, noCommas));
-    }
-
-    private static ScalarValue FixedScalarWithDecimals(ScalarValue value, ScalarValue decimalsValue, bool noCommas)
-    {
-        if (value is ErrorValue valueError) return valueError;
-        if (decimalsValue is ErrorValue decimalsError) return decimalsError;
-        int dec = 2;
-        if (decimalsValue is not BlankValue)
-        {
-            double rawDec = ToNumber(decimalsValue);
-            if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
-            dec = (int)rawDec;
-        }
-        return FixedScalar(value, dec, noCommas);
-    }
-
-    private static ScalarValue FixedScalar(ScalarValue value, int dec, bool noCommas)
-    {
-        double n = ToNumber(value);
-        return TextResult(FormatRoundedNumber(n, dec, useCommas: !noCommas));
-    }
-
-    private static ScalarValue Clean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, CleanText);
-        return CleanText(args[0]);
-    }
-
-    private static ScalarValue CleanText(ScalarValue value)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (char c in ToText(value))
-            if (c >= 32) sb.Append(c);
-        return TextResult(sb.ToString());
-    }
-
-    private static ScalarValue Dollar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is ErrorValue e0) return e0;
-        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        var decimalsArg = args.Count > 1 ? args[1] : new NumberValue(2);
-        return MapBinaryMathArgs(args[0], decimalsArg, DollarScalarWithDecimals);
-    }
-
-    private static ScalarValue DollarScalarWithDecimals(ScalarValue value, ScalarValue decimalsValue)
-    {
-        if (value is ErrorValue valueError) return valueError;
-        if (decimalsValue is ErrorValue decimalsError) return decimalsError;
-        int dec = 2;
-        if (decimalsValue is BlankValue)
-        {
-            dec = 0;
-        }
-        else
-        {
-            double rawDec = ToNumber(decimalsValue);
-            if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
-            dec = (int)rawDec;
-        }
-        return DollarScalar(value, dec);
-    }
-
-    private static ScalarValue DollarScalar(ScalarValue value, int dec)
-    {
-        double n = ToNumber(value);
-        var numberText = FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
-        var formatted = "$" + numberText;
-        return TextResult(n < 0 && (dec >= 0 || numberText != "0") ? "(" + formatted + ")" : formatted);
-    }
-
-    private static string FormatRoundedNumber(double value, int decimals, bool useCommas)
-    {
-        if (!double.IsFinite(value)) throw new FormulaEvalException("#NUM!", "Invalid number");
-        if (decimals > 32767) throw new FormulaEvalException("#VALUE!", "Formatted text exceeds Excel cell text limit");
-
-        double rounded = decimals <= 15 ? RoundWithExcelDigits(value, decimals) : value;
-        int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
-        string format = (useCommas ? "N" : "F") + displayDecimals;
-        return rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
     // Phase 4a  –  Reference
     // ═══════════════════════════════════════════════════════════════════
 
-
-    private static bool TryParseA1Ref(string cellRef, out uint row, out uint col)
-    {
-        row = 0; col = 0;
-        int i = 0;
-        // Skip optional leading '$' (absolute column marker)
-        if (i < cellRef.Length && cellRef[i] == '$') i++;
-        while (i < cellRef.Length && char.IsLetter(cellRef[i])) i++;
-        if (i == 0 || i >= cellRef.Length) return false;
-        // Strip leading '$' from the column portion when building colStr
-        int colStart = cellRef[0] == '$' ? 1 : 0;
-        string colStr = cellRef[colStart..i].ToUpperInvariant();
-        string rowPart = cellRef[i..];
-        // Skip optional '$' before row number
-        if (rowPart.Length > 0 && rowPart[0] == '$') rowPart = rowPart[1..];
-        if (!uint.TryParse(rowPart, out row)) return false;
-        col = CellAddress.ColumnNameToNumber(colStr);
-        return row > 0 && row <= CellAddress.MaxRow && col > 0 && col <= CellAddress.MaxCol;
-    }
-
-    private static bool TryParseR1C1Ref(string cellRef, out uint row, out uint col)
-    {
-        row = 0; col = 0;
-        var match = Regex.Match(cellRef, @"^R(\d+)C(\d+)$", RegexOptions.IgnoreCase);
-        if (!match.Success) return false;
-        if (!uint.TryParse(match.Groups[1].Value, out row)) return false;
-        if (!uint.TryParse(match.Groups[2].Value, out col)) return false;
-        return row > 0 && row <= CellAddress.MaxRow && col > 0 && col <= CellAddress.MaxCol;
-    }
-
-
-
-
-    private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, NScalar);
-        return NScalar(args[0]);
-    }
-
-    private static ScalarValue NScalar(ScalarValue value) =>
-        value switch
-        {
-            NumberValue nv   => nv,
-            DateTimeValue dt => new NumberValue(dt.Value),
-            BoolValue bv     => new NumberValue(bv.Value ? 1 : 0),
-            ErrorValue ev    => ev,
-            _                => new NumberValue(0)
-        };
 
     // ════════════════════════════════════════════════════════════════════════
     // Phase A1 – Text: UNICHAR, UNICODE, NUMBERVALUE
@@ -1598,8 +1007,6 @@ public static partial class BuiltInFunctions
 
     /// <summary>Map DayOfWeek to a Mon=0..Sun=6 index.</summary>
 
-
-    private static int ExcelDowToMonIndex(int serial) => ((serial + 5) % 7 + 7) % 7;
 
 
 
@@ -1661,6 +1068,15 @@ public interface IEvalContext
 
     /// <summary>Returns true if the row is hidden (filter, manual, or group collapse).</summary>
     bool IsRowHidden(uint row);
+
+    /// <summary>Returns true if the row is hidden (filter, manual, or group collapse) on a named sheet.</summary>
+    bool IsRowHidden(string sheetName, uint row);
+
+    /// <summary>Returns true if the row is hidden by an active filter.</summary>
+    bool IsRowFilterHidden(uint row);
+
+    /// <summary>Returns true if the row is hidden by an active filter on a named sheet.</summary>
+    bool IsRowFilterHidden(string sheetName, uint row);
 
     /// <summary>Returns the current evaluation sheet (the formula's host sheet), or null when no sheet context.</summary>
     Model.Sheet? CurrentSheet { get; }

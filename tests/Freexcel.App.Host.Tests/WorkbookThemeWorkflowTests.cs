@@ -51,4 +51,53 @@ public sealed class WorkbookThemeWorkflowTests
         theme.EffectsName.Should().Be("Refined");
         theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(WorkbookTheme.Office.GetColor(WorkbookThemeColorSlot.Accent1));
     }
+
+    [Fact]
+    public void WorkbookThemeDialogPlanner_CreatesCustomThemeWithValidatedColors()
+    {
+        var colors = Enum.GetValues<WorkbookThemeColorSlot>()
+            .ToDictionary(slot => slot, _ => "#010203");
+        colors[WorkbookThemeColorSlot.Accent1] = "#112233";
+
+        WorkbookThemeDialogPlanner.TryCreateTheme(
+                WorkbookTheme.Office,
+                " Demo ",
+                "Georgia",
+                "Verdana",
+                "Refined",
+                colors,
+                out var theme,
+                out var error)
+            .Should().BeTrue();
+
+        error.Should().BeNull();
+        theme.Name.Should().Be("Demo");
+        theme.MajorFontName.Should().Be("Georgia");
+        theme.MinorFontName.Should().Be("Verdana");
+        theme.EffectsName.Should().Be("Refined");
+        theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(0x11, 0x22, 0x33));
+    }
+
+    [Fact]
+    public void WorkbookThemeDialogPlanner_ReportsInvalidColorSlot()
+    {
+        var colors = Enum.GetValues<WorkbookThemeColorSlot>()
+            .ToDictionary(slot => slot, _ => "#010203");
+        colors[WorkbookThemeColorSlot.Hyperlink] = "not-a-color";
+
+        WorkbookThemeDialogPlanner.TryCreateTheme(
+                WorkbookTheme.Office,
+                "Demo",
+                "Georgia",
+                "Verdana",
+                "Refined",
+                colors,
+                out _,
+                out var error)
+            .Should().BeFalse();
+
+        error.Should().Be(new WorkbookThemeDialogValidationError(
+            WorkbookThemeColorSlot.Hyperlink,
+            "Enter theme colors as #RRGGBB values."));
+    }
 }

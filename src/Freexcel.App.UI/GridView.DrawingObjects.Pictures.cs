@@ -8,26 +8,21 @@ namespace Freexcel.App.UI;
 
 public partial class GridView
 {
+    private static readonly Pen PictureBorderPen = CreateFrozenPen(MakeBrush(120, 120, 120), 1);
+    private static readonly Pen PictureGridPen = CreateFrozenPen(MakeBrush(210, 210, 210), 0.75);
+    private static readonly Brush PictureSelectionBrush = MakeBrush(33, 115, 70);
+    private static readonly Pen PictureSelectionPen = CreateFrozenPen(PictureSelectionBrush, 2);
+
     private void RenderPictures(DrawingContext dc)
     {
         if (Pictures == null || Viewport == null) return;
 
-        var borderPen = new Pen(new SolidColorBrush(Color.FromRgb(120, 120, 120)), 1);
-        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(210, 210, 210)), 0.75);
-        var selectedPen = new Pen(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 2);
         var fill = Brushes.White;
         foreach (var picture in Pictures)
         {
             if (!picture.IsVisible) continue;
-            var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == picture.Anchor.Row);
-            var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == picture.Anchor.Col);
-            if (row is null || col is null) continue;
-
-            var rect = new Rect(
-                col.LeftOffset + ActualRowHeaderWidth,
-                row.TopOffset + EffectiveColHeaderHeight,
-                Math.Max(24, picture.Width),
-                Math.Max(18, picture.Height));
+            if (!TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect))
+                continue;
 
             if (Math.Abs(picture.RotationDegrees) > 0.0001)
                 dc.PushTransform(new RotateTransform(
@@ -56,14 +51,14 @@ public partial class GridView
                 {
                     dc.DrawImage(image, rect);
                 }
-                dc.DrawRectangle(null, borderPen, rect);
-                DrawPictureSelectionAdorner(dc, picture, rect, selectedPen);
+                dc.DrawRectangle(null, PictureBorderPen, rect);
+                DrawPictureSelectionAdorner(dc, picture, rect);
                 if (Math.Abs(picture.RotationDegrees) > 0.0001)
                     dc.Pop();
                 continue;
             }
 
-            dc.DrawRectangle(fill, borderPen, rect);
+            dc.DrawRectangle(fill, PictureBorderPen, rect);
 
             var rows = Math.Max(1, picture.SourceRowCount);
             var cols = Math.Max(1, picture.SourceColumnCount);
@@ -73,13 +68,13 @@ public partial class GridView
             for (uint r = 1; r < rows; r++)
             {
                 var y = rect.Top + r * cellHeight;
-                dc.DrawLine(gridPen, new Point(rect.Left, y), new Point(rect.Right, y));
+                dc.DrawLine(PictureGridPen, new Point(rect.Left, y), new Point(rect.Right, y));
             }
 
             for (uint c = 1; c < cols; c++)
             {
                 var x = rect.Left + c * cellWidth;
-                dc.DrawLine(gridPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
+                dc.DrawLine(PictureGridPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
             }
 
             foreach (var cell in picture.Cells)
@@ -109,26 +104,24 @@ public partial class GridView
                 dc.Pop();
             }
 
-            DrawPictureSelectionAdorner(dc, picture, rect, selectedPen);
+            DrawPictureSelectionAdorner(dc, picture, rect);
 
             if (Math.Abs(picture.RotationDegrees) > 0.0001)
                 dc.Pop();
         }
     }
 
-    private void DrawPictureSelectionAdorner(DrawingContext dc, PictureModel picture, Rect rect, Pen selectedPen)
+    private void DrawPictureSelectionAdorner(DrawingContext dc, PictureModel picture, Rect rect)
     {
         if (SelectedRange?.Start != picture.Anchor)
             return;
 
-        dc.DrawRectangle(null, selectedPen, rect);
+        dc.DrawRectangle(null, PictureSelectionPen, rect);
         const double handle = 6;
-        var handleBrush = new SolidColorBrush(Color.FromRgb(33, 115, 70));
-        handleBrush.Freeze();
         foreach (var point in new[] { rect.TopLeft, rect.TopRight, rect.BottomLeft, rect.BottomRight })
         {
             dc.DrawRectangle(
-                handleBrush,
+                PictureSelectionBrush,
                 null,
                 new Rect(point.X - handle / 2, point.Y - handle / 2, handle, handle));
         }

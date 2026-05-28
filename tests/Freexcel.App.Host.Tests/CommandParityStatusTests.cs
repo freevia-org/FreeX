@@ -42,6 +42,43 @@ public sealed class CommandParityStatusTests
         }
     }
 
+    [Fact]
+    public void ScenarioManagerRepeatability_DistinguishesShowFromDialogManagementActions()
+    {
+        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+
+        doc.Should().Contain("Scenario Manager Show applies the selected scenario through the repeatable command path");
+        doc.Should().Contain("Scenario Manager add/edit/delete/report/list actions");
+        doc.Should().Contain("Scenario Manager Show is repeatable after the first explicit apply");
+        doc.Should().NotContain("| Data / What-If | Goal Seek, Scenario Manager, Forecast Sheet |");
+    }
+
+    [Fact]
+    public void HelpTabRows_TrackCurrentRibbonSurface()
+    {
+        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+        var tableRows = ParseMarkdownTableRows(doc);
+
+        (string Command, string Status)[] expectedRows =
+        [
+            ("Help (opens project repo)", "Implemented"),
+            ("Send Feedback (opens issue form)", "Implemented"),
+            ("Copy Diagnostics", "Implemented"),
+            ("Check for Updates", "Implemented"),
+            ("About Freexcel", "Implemented"),
+            ("Contact Support", "Excluded"),
+            ("Show Training", "Excluded"),
+            ("What's New", "Excluded")
+        ];
+
+        foreach (var expected in expectedRows)
+        {
+            tableRows.Should().Contain(
+                row => row.FirstCell == expected.Command && row.Status == expected.Status,
+                $"COMMAND_SURFACE_PARITY.md should track the Help tab row for {expected.Command}");
+        }
+    }
+
     private static IReadOnlyList<CommandTableRow> ParseMarkdownTableRows(string doc)
     {
         List<CommandTableRow> rows = [];

@@ -15,7 +15,23 @@ public enum GridObjectDisplayMode
 public enum GridQuickAnalysisPreviewVisualKind
 {
     None,
-    DataBars
+    DataBars,
+    ColorScale,
+    IconSet,
+    Highlight,
+    ClearFormat,
+    TotalFormula,
+    Table,
+    LineSparkline,
+    ColumnSparkline,
+    WinLossSparkline,
+    ColumnChart,
+    LineChart,
+    BarChart,
+    StackedColumnChart,
+    PieChart,
+    AreaChart,
+    ScatterChart
 }
 
 /// <summary>
@@ -68,6 +84,34 @@ public partial class GridView : FrameworkElement
     private static readonly Brush QuickAnalysisPreviewBrush = MakeBrushAlpha(38, 91, 155, 213);
     private static readonly Pen QuickAnalysisPreviewPen = new(MakeBrush(47, 117, 181), 2);
     private static readonly Brush QuickAnalysisDataBarPreviewBrush = MakeBrushAlpha(156, 91, 155, 213);
+    private static readonly Brush[] QuickAnalysisColorScalePreviewBrushes =
+    [
+        MakeBrushAlpha(176, 248, 105, 107),
+        MakeBrushAlpha(176, 255, 235, 132),
+        MakeBrushAlpha(176, 99, 190, 123)
+    ];
+    private static readonly Brush[] QuickAnalysisIconSetPreviewBrushes =
+    [
+        MakeBrush(99, 190, 123),
+        MakeBrush(255, 192, 0),
+        MakeBrush(248, 105, 107)
+    ];
+    private static readonly Brush QuickAnalysisHighlightPreviewBrush = MakeBrushAlpha(96, 255, 235, 156);
+    private static readonly Pen QuickAnalysisHighlightPreviewPen = new(MakeBrush(191, 143, 0), 1);
+    private static readonly Brush QuickAnalysisClearFormatPreviewBrush = MakeBrushAlpha(50, 217, 217, 217);
+    private static readonly Pen QuickAnalysisClearFormatPreviewPen = new(MakeBrush(128, 128, 128), 1);
+    private static readonly Brush QuickAnalysisTotalPreviewBrush = MakeBrushAlpha(70, 198, 239, 206);
+    private static readonly Pen QuickAnalysisTotalPreviewPen = new(MakeBrush(84, 130, 53), 1);
+    private static readonly Brush QuickAnalysisTablePreviewBrush = MakeBrushAlpha(58, 189, 215, 238);
+    private static readonly Pen QuickAnalysisTablePreviewPen = new(MakeBrush(91, 155, 213), 1);
+    private static readonly Pen QuickAnalysisSparklinePreviewPen = new(MakeBrush(68, 114, 196), 1.5);
+    private static readonly Brush QuickAnalysisWinLossPositiveBrush = MakeBrushAlpha(180, 84, 130, 53);
+    private static readonly Brush QuickAnalysisWinLossNegativeBrush = MakeBrushAlpha(180, 192, 80, 77);
+    private static readonly Brush QuickAnalysisColumnChartPreviewBrush = MakeBrushAlpha(170, 68, 114, 196);
+    private static readonly Brush QuickAnalysisPieChartAccentBrush = MakeBrushAlpha(176, 237, 125, 49);
+    private static readonly Brush QuickAnalysisAreaChartPreviewBrush = MakeBrushAlpha(96, 68, 114, 196);
+    private static readonly Brush QuickAnalysisScatterChartPreviewBrush = MakeBrushAlpha(190, 112, 173, 71);
+    private static readonly Pen QuickAnalysisColumnChartAxisPen = new(MakeBrush(89, 89, 89), 1);
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
     private static readonly Pen FreezePen = MakeFreezePen();
     private static readonly Brush PageBreakPreviewBrush = MakeBrushAlpha(28, 0, 103, 192);
@@ -82,6 +126,13 @@ public partial class GridView : FrameworkElement
     private static readonly Pen SplitScrollbarPen = new(MakeBrush(196, 196, 196), 1);
     private static readonly Brush FormulaTraceArrowBrush = MakeBrush(0, 102, 204);
     private static readonly Pen FormulaTraceArrowPen = MakeFormulaTraceArrowPen();
+
+    // Per-frame render caches: allocated once and cleared at the start of each render pass
+    // to avoid GC pressure from fresh Dictionary allocations on every frame.
+    private readonly Dictionary<CellColor, SolidColorBrush> _brushCache = new();
+    private readonly Dictionary<CellBorder, Pen> _borderPenCache = new();
+    private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();
+    private readonly Dictionary<Brush, Pen> _underlinePenCache = new();
 
     private static double ToDisplayFontSize(double pointSize) =>
         Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));
@@ -114,14 +165,7 @@ public partial class GridView : FrameworkElement
     }
 
     public static CellAddress ConstrainAutofillTarget(GridRange source, CellAddress target)
-    {
-        var verticalDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
-        var horizontalDistance = target.Col > source.End.Col ? target.Col - source.End.Col : 0;
-
-        return verticalDistance >= horizontalDistance
-            ? new CellAddress(target.Sheet, target.Row, source.End.Col)
-            : new CellAddress(target.Sheet, source.End.Row, target.Col);
-    }
+        => GridAutofillPlanner.ConstrainTarget(source, target);
 
     private static Pen MakeResizeLinePen()
     {

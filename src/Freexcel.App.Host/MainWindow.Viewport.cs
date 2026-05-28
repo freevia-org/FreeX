@@ -51,23 +51,12 @@ public partial class MainWindow
 
     private static void ExtendScrollRangeFromScrollbarArrow(ScrollBar scrollBar, uint absoluteLimit)
     {
-        TryExtendScrollRangeFromScrollbarArrow(scrollBar, absoluteLimit);
+        ViewportScrollbarUpdater.TryExtendFromArrowSmallIncrement(scrollBar, absoluteLimit);
     }
 
     private static bool TryExtendScrollRangeFromScrollbarArrow(ScrollBar scrollBar, uint absoluteLimit)
     {
-        var (maximum, value) = CalculateScrollbarArrowSmallIncrement(
-            scrollBar.Value,
-            scrollBar.Maximum,
-            scrollBar.SmallChange,
-            scrollBar.ViewportSize,
-            absoluteLimit);
-        if (maximum <= scrollBar.Maximum && value <= scrollBar.Value)
-            return false;
-
-        scrollBar.Maximum = maximum;
-        scrollBar.Value = value;
-        return true;
+        return ViewportScrollbarUpdater.TryExtendFromArrowSmallIncrement(scrollBar, absoluteLimit);
     }
 
     private void SheetGrid_MouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
@@ -124,6 +113,36 @@ public partial class MainWindow
             VerticalScroll.Value = value;
         }
         e.Handled = true;
+    }
+
+    private void OnAutofillEdgeScrollRequested(Freexcel.App.UI.GridAutoScrollRequest request)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (request.HorizontalDirection != 0)
+        {
+            var (maximum, value) = ViewportScrollCalculator.CalculateDragAutoScroll(
+                HorizontalScroll.Value,
+                HorizontalScroll.Maximum,
+                request.HorizontalDirection,
+                step: 1,
+                HorizontalScroll.ViewportSize,
+                GetScrollableColumnLimit(sheet));
+            HorizontalScroll.Maximum = maximum;
+            HorizontalScroll.Value = value;
+        }
+
+        if (request.VerticalDirection != 0)
+        {
+            var (maximum, value) = ViewportScrollCalculator.CalculateDragAutoScroll(
+                VerticalScroll.Value,
+                VerticalScroll.Maximum,
+                request.VerticalDirection,
+                step: 1,
+                VerticalScroll.ViewportSize,
+                GetScrollableRowLimit(sheet));
+            VerticalScroll.Maximum = maximum;
+            VerticalScroll.Value = value;
+        }
     }
 
     private bool TryScrollIndependentSplitPane(bool horizontal, int notches)
@@ -323,7 +342,10 @@ public partial class MainWindow
             if (PageLayoutViewHeadingsChk is not null)
                 PageLayoutViewHeadingsChk.IsChecked = SheetGrid.ShowHeaders;
             if (ViewRulerChk is not null)
+            {
                 ViewRulerChk.IsChecked = SheetGrid.ShowRulers;
+                ViewRulerChk.IsEnabled = sheet?.ViewMode == WorksheetViewMode.PageLayout;
+            }
             if (SplitViewBtn is not null)
                 SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null;
         }
@@ -519,6 +541,21 @@ public partial class MainWindow
             currentMaximum,
             wheelNotches,
             stepPerNotch,
+            visibleSpan,
+            absoluteLimit);
+
+    public static (double Maximum, double Value) CalculateDragAutoScroll(
+        double currentValue,
+        double currentMaximum,
+        int direction,
+        double step,
+        double visibleSpan,
+        uint absoluteLimit) =>
+        ViewportScrollCalculator.CalculateDragAutoScroll(
+            currentValue,
+            currentMaximum,
+            direction,
+            step,
             visibleSpan,
             absoluteLimit);
 

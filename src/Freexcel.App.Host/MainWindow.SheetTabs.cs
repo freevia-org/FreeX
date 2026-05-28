@@ -176,8 +176,14 @@ public partial class MainWindow
         UpdateSheetTabNavigation();
     }
 
+    private void SheetTabsRowGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateSheetTabNavigation();
+    }
+
     private void UpdateSheetTabNavigation()
     {
+        UpdateSheetTabViewportWidth();
         var canScroll = SheetTabsScroller.ScrollableWidth > SheetTabScrollEpsilon;
         SheetNavLeftBtn.Visibility = canScroll && SheetTabsScroller.HorizontalOffset > SheetTabScrollEpsilon
             ? Visibility.Visible
@@ -186,6 +192,33 @@ public partial class MainWindow
                                       SheetTabsScroller.HorizontalOffset < SheetTabsScroller.ScrollableWidth - SheetTabScrollEpsilon
             ? Visibility.Visible
             : Visibility.Hidden;
+    }
+
+    private void UpdateSheetTabViewportWidth()
+    {
+        if (SheetTabsRowGrid.ActualWidth <= 0)
+            return;
+
+        var rowHeaderWidth = SheetGrid.ActualRowHeaderWidth;
+        SheetTabsLeadingSpacer.Width = rowHeaderWidth;
+        GridBottomRuleSpacer.Width = rowHeaderWidth;
+
+        var tabContentWidth = Math.Max(SheetTabsControl.ActualWidth, SheetTabsControl.DesiredSize.Width);
+        if (tabContentWidth <= 0)
+            return;
+
+        var fixedWidth = SheetNavLeftBtn.ActualWidth +
+                         SheetTabsLeadingSpacer.ActualWidth +
+                         AddSheetButton.ActualWidth +
+                         SheetNavRightBtn.ActualWidth;
+        var available = Math.Max(80, SheetTabsRowGrid.ActualWidth - fixedWidth);
+        var targetWidth = Math.Min(tabContentWidth, available);
+
+        if (Math.Abs(SheetTabsScroller.Width - targetWidth) <= 0.5)
+            return;
+
+        SheetTabsScroller.Width = targetWidth;
+        Dispatcher.BeginInvoke(UpdateSheetTabNavigation, DispatcherPriority.Loaded);
     }
 
     private void BringCurrentSheetTabIntoView()
@@ -235,8 +268,10 @@ public partial class MainWindow
 
         if (target.DataContext is SheetTabViewModel tab)
         {
-            SelectSheetTabForKeyboardContextMenu(tab);
-            target = FindSheetTabContextMenuTarget(tab) ?? target;
+            var tabId = tab.Id;
+            SelectSheetTabForKeyboardContextMenu(tabId);
+            var refreshedTab = _sheetTabs.FirstOrDefault(item => item.Id == tabId);
+            target = refreshedTab is null ? target : FindSheetTabContextMenuTarget(refreshedTab) ?? target;
             contextMenu = target.ContextMenu;
             if (contextMenu is null)
                 return false;
@@ -289,25 +324,21 @@ public partial class MainWindow
     private bool FocusAdjacentVisibleSheetTab(int direction)
     {
         var visibleTabs = _sheetTabs.ToList();
-        if (visibleTabs.Count == 0)
+        var nextSheetId = SheetTabFocusPlanner.AdjacentTab(visibleTabs, _currentSheetId, direction);
+        if (nextSheetId is null)
             return false;
 
-        var index = visibleTabs.FindIndex(tab => tab.Id == _currentSheetId);
-        if (index < 0)
-            index = direction < 0 ? visibleTabs.Count : -1;
-
-        var nextIndex = Math.Clamp(index + direction, 0, visibleTabs.Count - 1);
-        FocusSheetTab(visibleTabs[nextIndex].Id);
+        FocusSheetTab(nextSheetId.Value);
         return true;
     }
 
     private bool FocusEdgeVisibleSheetTab(bool first)
     {
-        var tab = first ? _sheetTabs.FirstOrDefault() : _sheetTabs.LastOrDefault();
-        if (tab is null)
+        var sheetId = SheetTabFocusPlanner.EdgeTab(_sheetTabs.ToList(), first);
+        if (sheetId is null)
             return false;
 
-        FocusSheetTab(tab.Id);
+        FocusSheetTab(sheetId.Value);
         return true;
     }
 
@@ -343,12 +374,12 @@ public partial class MainWindow
         return null;
     }
 
-    private void SelectSheetTabForKeyboardContextMenu(SheetTabViewModel tab)
+    private void SelectSheetTabForKeyboardContextMenu(SheetId tabId)
     {
-        _currentSheetId = tab.Id;
+        _currentSheetId = tabId;
         if (_groupedSheetIds.Count == 0)
-            _groupedSheetIds.Add(tab.Id);
-        _sheetGroupAnchor ??= tab.Id;
+            _groupedSheetIds.Add(tabId);
+        _sheetGroupAnchor ??= tabId;
         UpdateViewport();
         RefreshSheetTabs();
     }

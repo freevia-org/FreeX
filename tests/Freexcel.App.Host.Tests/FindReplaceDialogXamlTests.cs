@@ -113,7 +113,7 @@ public sealed class FindReplaceDialogXamlTests
             .Single(element => element.Attribute(xaml + "Name")?.Value == "OptionsExpander")
             .Attribute("IsExpanded")?.Value.Should().Be("False");
 
-        AssertComboBoxContainsExactly(document, presentation, xaml, "WithinCombo", ["Workbook", "Sheet"]);
+        AssertComboBoxContainsExactly(document, presentation, xaml, "WithinCombo", ["Sheet", "Workbook"]);
         AssertComboBoxContainsExactly(document, presentation, xaml, "SearchCombo", ["By Rows", "By Columns"]);
         AssertComboBoxContainsExactly(document, presentation, xaml, "LookInCombo", ["Formulas", "Values", "Notes", "Comments"]);
         document.Descendants(presentation + "ComboBoxItem")
@@ -150,6 +150,14 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_DefaultsWithinScopeToSheet()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
+
+        source.Should().Contain("Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet");
+    }
+
+    [Fact]
     public void Dialog_FindAllResultsUseExcelLikeResultColumns()
     {
         var document = LoadDialogXaml();
@@ -179,6 +187,35 @@ public sealed class FindReplaceDialogXamlTests
             .ToList();
 
         buttonContents.Should().ContainInOrder("Find _All", "_Find Next", "_Replace", "_Replace All", "_Close");
+    }
+
+    [Fact]
+    public void FindNextButton_IsDefaultAction()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml"));
+
+        xaml.Should().Contain("<Button x:Name=\"FindNextBtn\"");
+        xaml.Should().Contain("x:Name=\"FindNextBtn\" Content=\"_Find Next\" Width=\"80\" Margin=\"0,0,8,0\" IsDefault=\"True\"");
+    }
+
+    [Fact]
+    public void Dialog_ShowsReplaceActionsOnlyOnReplaceTab()
+    {
+        var document = LoadDialogXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        document.Descendants(presentation + "TabControl")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "FindReplaceTabs")
+            .Attribute("SelectionChanged")?.Value.Should().Be("FindReplaceTabs_SelectionChanged");
+
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceBtn", "Visibility", "Collapsed");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceAllBtn", "Visibility", "Collapsed");
+
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
+        source.Should().Contain("private void FindReplaceTabs_SelectionChanged");
+        source.Should().Contain("UpdateReplaceButtonVisibility();");
+        source.Should().Contain("FindReplaceTabs.SelectedItem == ReplaceTab ? Visibility.Visible : Visibility.Collapsed");
     }
 
     [Fact]
@@ -334,7 +371,7 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("FindClearFormatButton_Click");
         source.Should().Contain("ReplaceWithClearFormatButton_Click");
         source.Should().Contain("UpdateFormatStateButtons");
-        source.Should().Contain("Format Set...");
+        source.Should().Contain("For_mat Set...");
         source.Should().Contain("replacementFormat: _replaceFormatDiff");
         source.Should().Contain("FindResultsGrid_SelectionChanged");
         source.Should().Contain("_navigateTo(row.Address)");

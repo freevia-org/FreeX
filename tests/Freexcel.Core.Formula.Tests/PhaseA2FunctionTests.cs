@@ -59,6 +59,22 @@ public class PhaseA2FunctionTests
         _eval.Evaluate("=ISREF(MyData)", sheet, wb).Should().Be(new BoolValue(true));
     }
 
+    [Fact]
+    public void IsRef_OffsetReference_ReturnsTrue()
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=ISREF(OFFSET(A1,0,0))", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void IsRef_IndirectReference_ReturnsTrue()
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=ISREF(INDIRECT(\"A1\"))", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
     // ── ISFORMULA ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -90,14 +106,32 @@ public class PhaseA2FunctionTests
         _eval.Evaluate("=ISFORMULA(1)", sheet, wb).Should().Be(ErrorValue.Value);
     }
 
+    [Fact]
+    public void IsFormula_OffsetReference_InspectsTargetCell()
+    {
+        var (wb, sheet) = MakeWb();
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "1+2");
+
+        _eval.Evaluate("=ISFORMULA(OFFSET(A1,1,1))", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void IsFormula_IndirectReference_InspectsTargetCell()
+    {
+        var (wb, sheet) = MakeWb();
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "1+2");
+
+        _eval.Evaluate("=ISFORMULA(INDIRECT(\"B2\"))", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
     // ── FORMULATEXT ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void FormulaText_FormulaCell_ReturnsFormulaWithoutEquals()
+    public void FormulaText_FormulaCell_ReturnsFormulaWithEquals()
     {
         var (wb, sheet) = MakeWb();
         sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "SUM(B1:B3)");
-        _eval.Evaluate("=FORMULATEXT(A1)", sheet, wb).Should().Be(new TextValue("SUM(B1:B3)"));
+        _eval.Evaluate("=FORMULATEXT(A1)", sheet, wb).Should().Be(new TextValue("=SUM(B1:B3)"));
     }
 
     [Fact]
@@ -112,6 +146,26 @@ public class PhaseA2FunctionTests
     {
         var (wb, sheet) = MakeWb();
         _eval.Evaluate("=FORMULATEXT(1)", sheet, wb).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void FormulaText_OffsetReference_ReturnsTargetFormulaWithEquals()
+    {
+        var (wb, sheet) = MakeWb();
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "SUM(C1:C3)");
+
+        _eval.Evaluate("=FORMULATEXT(OFFSET(A1,1,1))", sheet, wb)
+            .Should().Be(new TextValue("=SUM(C1:C3)"));
+    }
+
+    [Fact]
+    public void FormulaText_IndirectReference_ReturnsTargetFormulaWithEquals()
+    {
+        var (wb, sheet) = MakeWb();
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "SUM(C1:C3)");
+
+        _eval.Evaluate("=FORMULATEXT(INDIRECT(\"B2\"))", sheet, wb)
+            .Should().Be(new TextValue("=SUM(C1:C3)"));
     }
 
     // ── OFFSET ───────────────────────────────────────────────────────────────
@@ -173,6 +227,15 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Offset_ZeroHeightOrWidth_ReturnsRefError()
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(42)));
+
+        _eval.Evaluate("=OFFSET(A1,0,0,0,1)", sheet, wb).Should().Be(ErrorValue.Ref);
+        _eval.Evaluate("=OFFSET(A1,0,0,1,0)", sheet, wb).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
     public void Offset_IsVolatile()
     {
         BuiltInFunctions.IsVolatile("OFFSET").Should().BeTrue();
@@ -185,6 +248,24 @@ public class PhaseA2FunctionTests
     {
         var (wb, sheet) = MakeWb();
         _eval.Evaluate("=CELL(\"address\",B3)", sheet, wb).Should().Be(new TextValue("$B$3"));
+    }
+
+    [Fact]
+    public void Cell_Address_OffsetReference_ReturnsTargetAddress()
+    {
+        var (wb, sheet) = MakeWb();
+
+        _eval.Evaluate("=CELL(\"address\",OFFSET(A1,1,1))", sheet, wb)
+            .Should().Be(new TextValue("$B$2"));
+    }
+
+    [Fact]
+    public void Cell_Address_IndirectReference_ReturnsTargetAddress()
+    {
+        var (wb, sheet) = MakeWb();
+
+        _eval.Evaluate("=CELL(\"address\",INDIRECT(\"B2\"))", sheet, wb)
+            .Should().Be(new TextValue("$B$2"));
     }
 
     [Fact]
@@ -234,6 +315,16 @@ public class PhaseA2FunctionTests
     {
         var (wb, sheet) = MakeWb();
         _eval.Evaluate("=CELL(\"bogus\",A1)", sheet, wb).Should().Be(ErrorValue.Value);
+    }
+
+    [Theory]
+    [InlineData("=CELL(\"address\",1+1)")]
+    [InlineData("=CELL(\"contents\",\"x\")")]
+    public void Cell_NonReferenceSecondArgument_ReturnsValueError(string formula)
+    {
+        var (wb, sheet) = MakeWb();
+
+        _eval.Evaluate(formula, sheet, wb).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -731,6 +822,60 @@ public class PhaseA2FunctionTests
             (3, 1, new NumberValue(3)));
         // function 9 = SUM, options 4 = ignore nothing
         _eval.Evaluate("=AGGREGATE(9,4,A1:A3)", sheet, wb).Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
+    public void Aggregate_Sum_Option5IgnoresHiddenRows()
+    {
+        var (wb, sheet) = MakeWb(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+        sheet.HiddenRows.Add(2);
+
+        _eval.Evaluate("=AGGREGATE(9,5,A1:A3)", sheet, wb).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Aggregate_Sum_Option4IncludesHiddenRows()
+    {
+        var (wb, sheet) = MakeWb(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+        sheet.HiddenRows.Add(2);
+
+        _eval.Evaluate("=AGGREGATE(9,4,A1:A3)", sheet, wb).Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
+    public void Aggregate_Sum_Option0IgnoresNestedSubtotalFormulaCell()
+    {
+        var (wb, sheet) = MakeWb(
+            (1, 1, new NumberValue(10)),
+            (3, 1, new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell
+        {
+            FormulaText = "SUBTOTAL(9,A1:A1)",
+            Value = new NumberValue(10)
+        });
+
+        _eval.Evaluate("=AGGREGATE(9,0,A1:A3)", sheet, wb).Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
+    public void Aggregate_Sum_Option4IncludesNestedSubtotalFormulaCell()
+    {
+        var (wb, sheet) = MakeWb(
+            (1, 1, new NumberValue(10)),
+            (3, 1, new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell
+        {
+            FormulaText = "SUBTOTAL(9,A1:A1)",
+            Value = new NumberValue(10)
+        });
+
+        _eval.Evaluate("=AGGREGATE(9,4,A1:A3)", sheet, wb).Should().Be(new NumberValue(50));
     }
 
     [Fact]

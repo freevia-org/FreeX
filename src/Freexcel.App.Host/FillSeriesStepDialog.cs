@@ -62,7 +62,12 @@ public sealed class FillSeriesStepDialog : Window
         ShowInTaskbar = false;
         _stepBox.Text = step.ToString(CultureInfo.InvariantCulture);
         _stopBox.Text = "";
+        _linearButton.Checked += (_, _) => UpdateDateUnitAvailability();
+        _growthButton.Checked += (_, _) => UpdateDateUnitAvailability();
+        _dateButton.Checked += (_, _) => UpdateDateUnitAvailability();
+        _autoFillButton.Checked += (_, _) => UpdateDateUnitAvailability();
         Content = CreateSeriesContent();
+        UpdateDateUnitAvailability();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -84,6 +89,15 @@ public sealed class FillSeriesStepDialog : Window
         _stopBox.Focus();
         _stopBox.SelectAll();
         Keyboard.Focus(_stopBox);
+    }
+
+    private void UpdateDateUnitAvailability()
+    {
+        var isDateSeries = _dateButton.IsChecked == true;
+        _dayButton.IsEnabled = isDateSeries;
+        _weekdayButton.IsEnabled = isDateSeries;
+        _monthButton.IsEnabled = isDateSeries;
+        _yearButton.IsEnabled = isDateSeries;
     }
 
     public static bool TryCreateResult(string? input, out FillSeriesStepDialogResult result, out string? error)

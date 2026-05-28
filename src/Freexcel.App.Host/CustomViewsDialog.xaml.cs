@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -29,12 +28,8 @@ public sealed partial class CustomViewsDialog : Window
     private void RefreshList()
     {
         _items.Clear();
-        foreach (var view in _workbook.CustomViews)
-            _items.Add(new CustomViewViewModel(
-                view.Name,
-                view.Sheets.Count,
-                view.IncludePrintSettings ? "Included" : "Not included",
-                view.IncludeHiddenRowsColumnsAndFilterSettings ? "Included" : "Not included"));
+        foreach (var item in CustomViewsDialogPlanner.BuildItems(_workbook))
+            _items.Add(item);
 
         if (_items.Count > 0 && ViewsList.SelectedIndex < 0)
             ViewsList.SelectedIndex = 0;
@@ -43,6 +38,9 @@ public sealed partial class CustomViewsDialog : Window
 
     private void ViewsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) =>
         UpdateButtons();
+
+    private void ViewsList_MouseDoubleClick(object sender, MouseButtonEventArgs e) =>
+        ShowButton_Click(sender, e);
 
     private void UpdateButtons()
     {
@@ -71,7 +69,7 @@ public sealed partial class CustomViewsDialog : Window
 
     private void AddButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new CustomViewNameDialog($"Custom View {_workbook.CustomViews.Count + 1}") { Owner = this };
+        var dialog = new CustomViewNameDialog(CustomViewsDialogPlanner.CreateDefaultViewName(_workbook.CustomViews.Count)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -131,111 +129,5 @@ public sealed partial class CustomViewsDialog : Window
             ViewsList.ScrollIntoView(_items[i]);
             break;
         }
-    }
-}
-
-internal sealed class CustomViewViewModel(string name, int sheetCount, string printSettingsIndicator, string filterSettingsIndicator)
-{
-    public string Name { get; } = name;
-    public int SheetCount { get; } = sheetCount;
-    public string PrintSettingsIndicator { get; } = printSettingsIndicator;
-    public string FilterSettingsIndicator { get; } = filterSettingsIndicator;
-}
-
-public sealed record CustomViewNameDialogResult(
-    string ViewName,
-    bool IncludePrintSettings = true,
-    bool IncludeHiddenRowsColumnsAndFilterSettings = true);
-
-public sealed class CustomViewNameDialog : Window
-{
-    private readonly TextBox _nameBox = new();
-    private readonly CheckBox _printSettingsBox = new() { Content = "_Print settings", IsChecked = true };
-    private readonly CheckBox _hiddenFilterSettingsBox = new() { Content = "_Hidden rows, columns and filter settings", IsChecked = true };
-
-    public CustomViewNameDialogResult Result { get; private set; }
-
-    public CustomViewNameDialog(string defaultValue)
-    {
-        Result = CreateResult(defaultValue);
-        Title = "Add View";
-        Width = 320;
-        Height = 190;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
-        ShowInTaskbar = false;
-
-        var grid = new Grid { Margin = new Thickness(12) };
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var label = new Label { Content = "_Name:", Target = _nameBox, Margin = new Thickness(0, 0, 0, 4) };
-        _nameBox.Text = Result.ViewName;
-        _printSettingsBox.Margin = new Thickness(0, 8, 0, 4);
-        _hiddenFilterSettingsBox.Margin = new Thickness(0, 0, 0, 4);
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "_Cancel", Width = 72, IsCancel = true };
-        ok.Click += (_, _) => Accept();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
-
-        Grid.SetRow(label, 0);
-        Grid.SetRow(_nameBox, 1);
-        Grid.SetRow(_printSettingsBox, 2);
-        Grid.SetRow(_hiddenFilterSettingsBox, 3);
-        Grid.SetRow(buttons, 4);
-        grid.Children.Add(label);
-        grid.Children.Add(_nameBox);
-        grid.Children.Add(_printSettingsBox);
-        grid.Children.Add(_hiddenFilterSettingsBox);
-        grid.Children.Add(buttons);
-        Content = grid;
-
-        Loaded += (_, _) => FocusInitialKeyboardTarget();
-    }
-
-    public static CustomViewNameDialogResult CreateResult(
-        string viewName,
-        bool includePrintSettings = true,
-        bool includeHiddenRowsColumnsAndFilterSettings = true) =>
-        new(
-            viewName.Trim(),
-            includePrintSettings,
-            includeHiddenRowsColumnsAndFilterSettings);
-
-    private void Accept()
-    {
-        Result = CreateResult(
-            _nameBox.Text,
-            _printSettingsBox.IsChecked == true,
-            _hiddenFilterSettingsBox.IsChecked == true);
-        if (string.IsNullOrWhiteSpace(Result.ViewName))
-        {
-            MessageBox.Show(this, "Enter a view name.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-            FocusNameInput();
-            return;
-        }
-
-        DialogResult = true;
-    }
-
-    private void FocusInitialKeyboardTarget()
-    {
-        FocusNameInput();
-    }
-
-    private void FocusNameInput()
-    {
-        _nameBox.Focus();
-        _nameBox.SelectAll();
-        Keyboard.Focus(_nameBox);
     }
 }

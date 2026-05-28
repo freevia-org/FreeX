@@ -1,5 +1,4 @@
 using Freexcel.Core.Model;
-using System.Linq;
 using System.Windows;
 
 namespace Freexcel.App.UI;
@@ -26,20 +25,64 @@ public static class SelectionMarqueeLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        var visibleRows = viewport.RowMetrics
-            .Where(row => row.Row >= range.Start.Row && row.Row <= range.End.Row)
-            .ToList();
-        var visibleColumns = viewport.ColMetrics
-            .Where(column => column.Col >= range.Start.Col && column.Col <= range.End.Col)
-            .ToList();
+        var hasVisibleRow = false;
+        var top = 0d;
+        var bottom = 0d;
+        foreach (var row in viewport.RowMetrics)
+        {
+            if (row.Row < range.Start.Row || row.Row > range.End.Row)
+                continue;
 
-        if (visibleRows.Count == 0 || visibleColumns.Count == 0)
+            var rowTop = row.TopOffset;
+            var rowBottom = row.TopOffset + row.Height;
+            if (!hasVisibleRow)
+            {
+                top = rowTop;
+                bottom = rowBottom;
+                hasVisibleRow = true;
+                continue;
+            }
+
+            if (rowTop < top)
+                top = rowTop;
+            if (rowBottom > bottom)
+                bottom = rowBottom;
+        }
+
+        if (!hasVisibleRow)
             return null;
 
-        var top = visibleRows.Min(row => row.TopOffset) + columnHeaderHeight;
-        var bottom = visibleRows.Max(row => row.TopOffset + row.Height) + columnHeaderHeight;
-        var left = visibleColumns.Min(column => column.LeftOffset) + rowHeaderWidth;
-        var right = visibleColumns.Max(column => column.LeftOffset + column.Width) + rowHeaderWidth;
+        var hasVisibleColumn = false;
+        var left = 0d;
+        var right = 0d;
+        foreach (var column in viewport.ColMetrics)
+        {
+            if (column.Col < range.Start.Col || column.Col > range.End.Col)
+                continue;
+
+            var columnLeft = column.LeftOffset;
+            var columnRight = column.LeftOffset + column.Width;
+            if (!hasVisibleColumn)
+            {
+                left = columnLeft;
+                right = columnRight;
+                hasVisibleColumn = true;
+                continue;
+            }
+
+            if (columnLeft < left)
+                left = columnLeft;
+            if (columnRight > right)
+                right = columnRight;
+        }
+
+        if (!hasVisibleColumn)
+            return null;
+
+        top += columnHeaderHeight;
+        bottom += columnHeaderHeight;
+        left += rowHeaderWidth;
+        right += rowHeaderWidth;
 
         if (right <= left || bottom <= top)
             return null;

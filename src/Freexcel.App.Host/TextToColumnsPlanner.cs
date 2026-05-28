@@ -119,7 +119,7 @@ public static class TextToColumnsPlanner
 
                 var trimmed = parts[index].Trim();
                 var address = new CellAddress(sheet.Id, targetRow, targetCol);
-                ScalarValue value = ConvertValue(trimmed, columnFormat, advancedOptions);
+                ScalarValue value = TextToColumnsValueConverter.ConvertValue(trimmed, columnFormat, advancedOptions);
                 edits.Add((address, Cell.FromValue(value)));
                 outputIndex++;
             }
@@ -134,69 +134,6 @@ public static class TextToColumnsPlanner
         columnFormats is not null && index >= 0 && index < columnFormats.Count
             ? columnFormats[index]
             : TextToColumnsColumnFormat.General;
-
-    private static bool TryParseNumber(string text, TextToColumnsAdvancedOptions? advancedOptions, out double number)
-    {
-        if (advancedOptions is null)
-            return double.TryParse(text, out number);
-
-        var normalized = text.Trim();
-        if (advancedOptions.TrailingMinusNumbers && normalized.EndsWith("-", StringComparison.Ordinal))
-            normalized = "-" + normalized[..^1];
-
-        if (!string.IsNullOrEmpty(advancedOptions.ThousandsSeparator))
-            normalized = normalized.Replace(advancedOptions.ThousandsSeparator, string.Empty, StringComparison.Ordinal);
-
-        if (!string.IsNullOrEmpty(advancedOptions.DecimalSeparator) && advancedOptions.DecimalSeparator != ".")
-            normalized = normalized.Replace(advancedOptions.DecimalSeparator, ".", StringComparison.Ordinal);
-
-        return double.TryParse(
-            normalized,
-            System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out number);
-    }
-
-    private static ScalarValue ConvertValue(
-        string text,
-        TextToColumnsColumnFormat columnFormat,
-        TextToColumnsAdvancedOptions? advancedOptions) =>
-        columnFormat switch
-        {
-            TextToColumnsColumnFormat.Text => new TextValue(text),
-            TextToColumnsColumnFormat.DateMDY when TryParseDate(text, [0, 1, 2], out var date) => new DateTimeValue(date.ToOADate()),
-            TextToColumnsColumnFormat.DateDMY when TryParseDate(text, [1, 0, 2], out var date) => new DateTimeValue(date.ToOADate()),
-            TextToColumnsColumnFormat.DateYMD when TryParseDate(text, [1, 2, 0], out var date) => new DateTimeValue(date.ToOADate()),
-            _ when TryParseNumber(text, advancedOptions, out var number) => new NumberValue(number),
-            _ => new TextValue(text)
-        };
-
-    private static bool TryParseDate(string text, int[] monthDayYearOrder, out DateTime date)
-    {
-        date = default;
-        var parts = text
-            .Split(['/', '-', '.'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 3 ||
-            !int.TryParse(parts[monthDayYearOrder[0]], out var month) ||
-            !int.TryParse(parts[monthDayYearOrder[1]], out var day) ||
-            !int.TryParse(parts[monthDayYearOrder[2]], out var year))
-        {
-            return false;
-        }
-
-        if (year is >= 0 and < 100)
-            year += year < 30 ? 2000 : 1900;
-
-        try
-        {
-            date = new DateTime(year, month, day);
-            return true;
-        }
-        catch (ArgumentOutOfRangeException)
-        {
-            return false;
-        }
-    }
 
     public static IReadOnlyList<CellAddress> FindOverwriteTargets(
         Sheet sheet,
@@ -226,86 +163,16 @@ public static class TextToColumnsPlanner
         address.Row >= sourceRange.Start.Row &&
         address.Row <= sourceRange.End.Row;
 
-    public static string[] SplitText(string text, string delimiters)
-    {
-        return SplitText(text, delimiters, '"', false);
-    }
+    public static string[] SplitText(string text, string delimiters) =>
+        TextToColumnsSplitter.SplitText(text, delimiters);
 
     public static string[] SplitText(
         string text,
         string delimiters,
         char? textQualifier,
-        bool treatConsecutiveDelimitersAsOne)
-    {
-        var delimiterChars = string.IsNullOrEmpty(delimiters)
-            ? [',']
-            : delimiters.Distinct().ToArray();
+        bool treatConsecutiveDelimitersAsOne) =>
+        TextToColumnsSplitter.SplitText(text, delimiters, textQualifier, treatConsecutiveDelimitersAsOne);
 
-        var parts = new List<string>();
-        var current = new System.Text.StringBuilder();
-        var inQualifiedText = false;
-        for (var index = 0; index < text.Length; index++)
-        {
-            var ch = text[index];
-            if (textQualifier is { } qualifier && ch == qualifier)
-            {
-                if (inQualifiedText && index + 1 < text.Length && text[index + 1] == qualifier)
-                {
-                    current.Append(qualifier);
-                    index++;
-                    continue;
-                }
-
-                inQualifiedText = !inQualifiedText;
-                continue;
-            }
-
-            if (!inQualifiedText && delimiterChars.Contains(ch))
-            {
-                parts.Add(current.ToString());
-                current.Clear();
-
-                if (treatConsecutiveDelimitersAsOne)
-                {
-                    while (index + 1 < text.Length && delimiterChars.Contains(text[index + 1]))
-                        index++;
-                }
-
-                continue;
-            }
-
-            current.Append(ch);
-        }
-
-        parts.Add(current.ToString());
-        return parts.ToArray();
-    }
-
-    public static string[] SplitFixedWidthText(string text, IReadOnlyList<int> breakPositions)
-    {
-        var positions = breakPositions
-            .Where(position => position > 0)
-            .Distinct()
-            .Order()
-            .ToList();
-        if (positions.Count == 0)
-            return [text];
-
-        var parts = new List<string>();
-        var start = 0;
-        foreach (var position in positions)
-        {
-            var end = Math.Min(position, text.Length);
-            if (end > start)
-                parts.Add(text[start..end]);
-            start = Math.Min(position, text.Length);
-        }
-
-        if (start < text.Length)
-            parts.Add(text[start..]);
-        else if (parts.Count == 0)
-            parts.Add(string.Empty);
-
-        return parts.ToArray();
-    }
+    public static string[] SplitFixedWidthText(string text, IReadOnlyList<int> breakPositions) =>
+        TextToColumnsSplitter.SplitFixedWidthText(text, breakPositions);
 }

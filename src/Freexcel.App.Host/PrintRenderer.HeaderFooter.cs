@@ -19,7 +19,7 @@ public static partial class PrintRenderer
         return (sheet.PageHeader, sheet.PageFooter, sheet.PageHeaderPictures, sheet.PageFooterPictures);
     }
 
-    private static (DrawingVisual Visual, IReadOnlyList<PdfTextOverlay> TextOverlays) RenderPageVisual(
+    private static (DrawingVisual Visual, IReadOnlyList<PdfTextOverlay> TextOverlays, IReadOnlyList<PdfLinkOverlay> LinkOverlays) RenderPageVisual(
         double pageW,
         double pageH,
         double marginLeft,
@@ -31,6 +31,7 @@ public static partial class PrintRenderer
         IReadOnlyList<uint> pageRows,
         IReadOnlyList<uint> pageColumns,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        IReadOnlyDictionary<(uint Row, uint Col), PdfLinkTarget> hyperlinkLookup,
         bool printGridlines,
         bool printHeadings,
         WorksheetHeaderFooter pageHeader,
@@ -39,6 +40,8 @@ public static partial class PrintRenderer
         WorksheetHeaderFooterPictureSet pageFooterPictures,
         string workbookName,
         string sheetName,
+        WorkbookTheme workbookTheme,
+        IReadOnlyList<TextBoxModel> textBoxes,
         bool alignHeaderFooterWithMargins,
         bool centerHorizontally,
         bool centerVertically,
@@ -55,10 +58,12 @@ public static partial class PrintRenderer
     {
         var visual = new DrawingVisual();
         var textOverlays = new List<PdfTextOverlay>();
+        var linkOverlays = new List<PdfLinkOverlay>();
         using var dc = visual.RenderOpen();
         dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pageW, pageH));
         DrawHeaderFooter(
             dc,
+            textOverlays,
             pageW,
             pageH,
             marginLeft,
@@ -96,19 +101,34 @@ public static partial class PrintRenderer
         DrawPrintedGridCells(
             dc,
             textOverlays,
+            linkOverlays,
             measurement,
             pageRows,
             pageColumns,
             cellLookup,
+            hyperlinkLookup,
             printGridlines,
             printErrorValue,
             gridLeft,
             gridTop);
 
+        DrawPrintedTextBoxes(
+            dc,
+            textOverlays,
+            textBoxes,
+            workbookTheme,
+            pageRows,
+            pageColumns,
+            gridLeft,
+            gridTop,
+            colWidth,
+            rowHeight);
+
         if (!draftQuality && printComments == WorksheetPrintComments.AsDisplayed)
         {
             DrawDisplayedComments(
                 dc,
+                textOverlays,
                 comments,
                 threadedComments,
                 pageRows,
@@ -122,7 +142,7 @@ public static partial class PrintRenderer
                 blackAndWhite);
         }
 
-        return (visual, textOverlays);
+        return (visual, textOverlays, linkOverlays);
     }
 
 }

@@ -40,7 +40,7 @@ internal static class XlsxWorksheetPageMarginsMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPageMarginsAttribute(attribute.Key))
                     continue;
 
-                pageMargins.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(pageMargins, attribute.Key, attribute.Value);
             }
 
             if (sheet.PageMarginsMetadata.NativeChildXmls.Count > 0)

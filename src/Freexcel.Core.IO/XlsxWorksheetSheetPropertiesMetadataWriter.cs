@@ -40,7 +40,7 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetPropertiesAttribute(attribute.Key))
                     continue;
 
-                sheetProperties.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetProperties, attribute.Key, attribute.Value);
             }
 
             if (sheet.SheetPropertiesMetadata.NativeChildXmls.Count > 0)

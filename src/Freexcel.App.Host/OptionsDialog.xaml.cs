@@ -66,6 +66,7 @@ public partial class OptionsDialog : Window
             FreexcelEnterDirection.Left => 3,
             _ => 0
         };
+        UpdateAfterEnterDirectionState();
         OptShowGridlines.IsChecked = _opts.ShowGridlines;
         OptShowHeadings.IsChecked = _opts.ShowHeadings;
         OptObjectsDisplay.ItemsSource = new[] { "All", "Placeholders", "Nothing (hide objects)" };
@@ -83,6 +84,7 @@ public partial class OptionsDialog : Window
         // Save
         OptDefaultFormat.ItemsSource = new[] { "Excel Workbook (.xlsx)", "Freexcel JSON (.json)" };
         OptDefaultFormat.SelectedIndex = _opts.DefaultFormat == ".json" ? 1 : 0;
+        OptCrashAnalytics.IsChecked = _opts.CrashAnalyticsEnabled;
 
         OptRecentFilesPath.Text = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -111,6 +113,17 @@ public partial class OptionsDialog : Window
     {
         TabList.Focus();
         Keyboard.Focus(TabList);
+    }
+
+    private void MoveAfterEnter_Changed(object sender, RoutedEventArgs e) =>
+        UpdateAfterEnterDirectionState();
+
+    private void UpdateAfterEnterDirectionState()
+    {
+        if (OptAfterEnterDirection is null)
+            return;
+
+        OptAfterEnterDirection.IsEnabled = OptMoveAfterEnter.IsChecked == true;
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
@@ -154,6 +167,9 @@ public partial class OptionsDialog : Window
                 _ => FreexcelObjectDisplay.All
             },
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
+            CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
+            CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
+            PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
         };
         opts.Save();
         Result = opts;

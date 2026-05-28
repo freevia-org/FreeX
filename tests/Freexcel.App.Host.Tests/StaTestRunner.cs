@@ -1,4 +1,5 @@
 using System.Windows.Threading;
+using System.Runtime.ExceptionServices;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -22,7 +23,7 @@ internal static class StaTestRunner
         });
 
         if (exception is not null)
-            throw exception;
+            ExceptionDispatchInfo.Capture(exception).Throw();
     }
 
     private static Dispatcher CreateDispatcher()

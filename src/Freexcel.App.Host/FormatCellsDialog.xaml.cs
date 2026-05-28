@@ -43,7 +43,7 @@ public partial class FormatCellsDialog : Window
             (int)FormatCellsDialogTab.Alignment => DlgHAlignBox,
             (int)FormatCellsDialogTab.Font => DlgFontNameBox,
             (int)FormatCellsDialogTab.Fill => DlgFillColorBox,
-            (int)FormatCellsDialogTab.Border => DlgBorderLineStyleBox,
+            (int)FormatCellsDialogTab.Border => DlgBorderLineStyleList,
             (int)FormatCellsDialogTab.Protection => DlgLockedCheck,
             _ => NumberCategoryList
         };
@@ -54,10 +54,10 @@ public partial class FormatCellsDialog : Window
 
     private void Populate(CellStyle s)
     {
-        NumberCategoryList.ItemsSource = NumberCategories;
-        NumberSymbolCombo.ItemsSource = NumberSymbols;
+        NumberCategoryList.ItemsSource = FormatCellsNumberFormatPlanner.Categories;
+        NumberSymbolCombo.ItemsSource = FormatCellsNumberFormatPlanner.Symbols;
         NumberSymbolCombo.SelectedIndex = 0;
-        NumberNegativeNumbersList.ItemsSource = NegativeNumberOptions;
+        NumberNegativeNumbersList.ItemsSource = FormatCellsNumberFormatPlanner.NegativeOptions;
         NumberNegativeNumbersList.SelectedIndex = 0;
         NumberDecimalPlacesBox.Text = DecimalPlacesForFormat(s.NumberFormat).ToString();
         var option = FindNumberFormatOption(s.NumberFormat);
@@ -140,14 +140,10 @@ public partial class FormatCellsDialog : Window
         if (NumberCategoryList.SelectedItem is not string category)
             return;
 
-        var labels = NumberFormatOptions
-            .Where(option => option.Category == category)
-            .Select(option => option.Label)
-            .Distinct()
-            .ToArray();
+        var labels = FormatCellsNumberFormatPlanner.LabelsForCategory(category);
 
         NumberFormatCombo.ItemsSource = labels;
-        NumberFormatCombo.SelectedIndex = labels.Length > 0 ? 0 : -1;
+        NumberFormatCombo.SelectedIndex = labels.Count > 0 ? 0 : -1;
         SyncDecimalPlacesFromSelectedNumberFormat();
         UpdateNumberControlAvailability();
         UpdateNumberPreview();

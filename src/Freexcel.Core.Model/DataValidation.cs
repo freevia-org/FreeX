@@ -19,6 +19,9 @@ public sealed class DataValidation
     /// <summary>The range on the sheet this rule covers.</summary>
     public GridRange AppliesTo { get; set; }
 
+    /// <summary>Additional discontiguous ranges covered by the same Excel validation rule.</summary>
+    public List<GridRange> AdditionalRanges { get; } = [];
+
     public DvType Type { get; set; } = DvType.Any;
     public DvOperator Operator { get; set; } = DvOperator.Between;
 

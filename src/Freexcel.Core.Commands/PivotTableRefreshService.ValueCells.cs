@@ -20,7 +20,8 @@ public static partial class PivotTableRefreshService
         }
 
         var cell = Cell.FromValue(new NumberValue(value));
-        if (TryResolveNumberFormat(workbook, dataField, out var formatCode) &&
+        if (pivotTable?.ApplyNumberFormats != false &&
+            TryResolveNumberFormat(workbook, dataField, out var formatCode) &&
             formatCode != CellStyle.Default.NumberFormat)
         {
             var style = CellStyle.Default.Clone();

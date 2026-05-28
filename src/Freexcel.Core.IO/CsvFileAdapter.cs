@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -12,101 +10,13 @@ public sealed class CsvFileAdapter : IFileAdapter
     public string Extension => ".csv";
     public string FormatName => "CSV (Comma-separated values)";
 
+    public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
+    [
+        new FileFormatDescriptor(".csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true)
+    ];
+
     public Workbook Load(Stream stream) => DelimitedTextWorkbookReader.Load(stream, ',', allowSeparatorDirective: true);
 
-    public void Save(Workbook workbook, Stream stream)
-    {
-        if (workbook.Sheets.Count == 0) return;
-        var sheet = workbook.Sheets[0];
-        var usedCells = new Dictionary<(uint Row, uint Col), Cell>();
-        var endRow = 0u;
-        var endCol = 0u;
-        foreach (var (address, cell) in sheet.EnumerateCells())
-        {
-            if (!IsValidCsvCellAddress(address.Row, address.Col))
-                continue;
-
-            usedCells[(address.Row, address.Col)] = cell;
-            endRow = Math.Max(endRow, address.Row);
-            endCol = Math.Max(endCol, address.Col);
-        }
-
-        if (usedCells.Count == 0) return;
-
-        var startRow = 1u;
-        var startCol = 1u;
-
-        using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
-        for (uint r = startRow; r <= endRow; r++)
-        {
-            for (uint c = startCol; c <= endCol; c++)
-            {
-                if (c > startCol)
-                    writer.Write(',');
-
-                if (usedCells.TryGetValue((r, c), out var cell))
-                    WriteCsvField(writer, FormatCell(cell), cell.Value is TextValue);
-            }
-
-            writer.Write("\r\n");
-        }
-    }
-
-    private static bool IsValidCsvCellAddress(uint row, uint col) =>
-        row is >= 1 and <= CellAddress.MaxRow &&
-        col is >= 1 and <= CellAddress.MaxCol;
-
-    private static void WriteCsvField(TextWriter writer, string value, bool isTextValue)
-    {
-        if (value.Length == 0) return;
-        if (!ShouldQuoteCsvField(value, isTextValue))
-        {
-            writer.Write(value);
-            return;
-        }
-
-        writer.Write('"');
-        foreach (var ch in value)
-        {
-            if (ch == '"')
-                writer.Write("\"\"");
-            else
-                writer.Write(ch);
-        }
-        writer.Write('"');
-    }
-
-    private static bool ShouldQuoteCsvField(string value, bool isTextValue) =>
-        value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r') ||
-        (isTextValue && IsFormulaLikeText(value));
-
-    private static bool IsFormulaLikeText(string value) =>
-        value[0] is '=' or '+' or '-' or '@';
-
-    private static string FormatCell(Cell cell) =>
-        cell.FormulaText is { } formulaText
-            ? $"={formulaText}"
-            : FormatValue(cell.Value);
-
-    private static string FormatValue(ScalarValue value) => value switch
-    {
-        NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
-        DateTimeValue dt => FormatDateTimeValue(dt),
-        BoolValue b => b.Value ? "TRUE" : "FALSE",
-        TextValue t => t.Value,
-        ErrorValue e => e.Code,
-        _ => "",
-    };
-
-    private static string FormatDateTimeValue(DateTimeValue value)
-    {
-        var dateTime = value.ToDateTime();
-        var hasFractionalSeconds = dateTime.Ticks % TimeSpan.TicksPerSecond != 0;
-        if (dateTime.Date == new DateTime(1899, 12, 30) && dateTime.TimeOfDay != TimeSpan.Zero)
-            return dateTime.ToString(hasFractionalSeconds ? "HH:mm:ss.FFFFFFF" : "HH:mm:ss", CultureInfo.InvariantCulture);
-
-        return dateTime.TimeOfDay == TimeSpan.Zero
-            ? dateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-            : dateTime.ToString(hasFractionalSeconds ? "yyyy-MM-dd HH:mm:ss.FFFFFFF" : "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-    }
+    public void Save(Workbook workbook, Stream stream) =>
+        DelimitedTextWorkbookWriter.Save(workbook, stream, ',');
 }

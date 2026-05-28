@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Model;
@@ -14,6 +15,9 @@ public sealed partial class SelectDataSourceDialog : Window
     private readonly ListBox _seriesList = new() { Height = 72 };
     private readonly ListBox _axisLabelsList = new() { Height = 72 };
     private readonly Action<SelectDataSourceRangeSelectionRequest>? _requestRangeSelection;
+    private Button? _editSeriesButton;
+    private Button? _removeSeriesButton;
+    private Button? _editAxisLabelsButton;
 
     public SelectDataSourceDialogResult Result { get; private set; }
     public SelectDataSourceRangeSelectionRequest? RangeSelectionRequest { get; private set; }
@@ -37,9 +41,14 @@ public sealed partial class SelectDataSourceDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Chart data range:", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _rangeBox.Text = Result.SourceRangeText;
+        AutomationProperties.SetName(_rangeBox, "Chart data range");
         stack.Children.Add(CreateReferenceEditor(_rangeBox, "Select chart data range"));
         _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
         stack.Children.Add(_switchRowColumnBox);
+        _seriesList.MouseDoubleClick += EditSeriesButton_Click;
+        _seriesList.SelectionChanged += (_, _) => UpdateActionButtonState();
+        _axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;
+        _axisLabelsList.SelectionChanged += (_, _) => UpdateActionButtonState();
         stack.Children.Add(CreateSourceListPanel(
             "Legend Entries (Series)",
             "Series list",
@@ -100,6 +109,12 @@ public sealed partial class SelectDataSourceDialog : Window
                 _requestRangeSelection?.Invoke(RangeSelectionRequest);
                 FocusRangeSelectionInput(request.Target);
             });
+
+    public void ApplyRangeSelection(string rangeText)
+    {
+        _rangeBox.Text = rangeText;
+        FocusRangeSelectionInput(_rangeBox);
+    }
 
     private static void FocusRangeSelectionInput(TextBox target)
     {

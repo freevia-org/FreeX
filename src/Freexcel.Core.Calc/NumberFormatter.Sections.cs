@@ -6,6 +6,9 @@ namespace Freexcel.Core.Calc;
 
 public static partial class NumberFormatter
 {
+    private static readonly Regex SectionConditionRegex = new(
+        @"^\s*(>=|<=|<>|>|<|=)\s*([+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?)\s*$");
+
     private sealed record ParsedSection(string Format, string? ColorHex, FormatCondition? Condition);
 
     private sealed record FormatCondition(string Operator, double Value)
@@ -89,9 +92,15 @@ public static partial class NumberFormatter
     }
 
     private static ParsedSection ParseSection(string section)
-        => ParseSection(section, null);
+        => ParseSection(section, null, null);
 
     private static ParsedSection ParseSection(string section, WorkbookIndexedColorPalette? indexedColors)
+        => ParseSection(section, indexedColors, null);
+
+    private static ParsedSection ParseSection(
+        string section,
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme)
     {
         string? color = null;
         FormatCondition? condition = null;
@@ -104,9 +113,15 @@ public static partial class NumberFormatter
                 break;
 
             string token = section[(index + 1)..close];
-            if (NumberFormatColorMapper.TryMapColor(token, indexedColors, out var tokenColor))
+            if (NumberFormatColorMapper.TryMapColor(token, indexedColors, theme, out var tokenColor))
             {
                 color = tokenColor;
+                index = SkipInterDirectiveWhitespace(section, close + 1);
+                continue;
+            }
+
+            if (NumberFormatColorMapper.IsThemeColorDirective(token))
+            {
                 index = SkipInterDirectiveWhitespace(section, close + 1);
                 continue;
             }
@@ -137,7 +152,7 @@ public static partial class NumberFormatter
 
     private static bool TryParseCondition(string token, out FormatCondition? condition)
     {
-        var match = Regex.Match(token, @"^\s*(>=|<=|<>|>|<|=)\s*([+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?)\s*$");
+        var match = SectionConditionRegex.Match(token);
         if (match.Success &&
             double.TryParse(match.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
         {

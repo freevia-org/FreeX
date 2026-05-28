@@ -56,6 +56,8 @@ public sealed class DataTableDialog : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+        AutomationProperties.SetName(_rowInputBox, "Row input cell");
+        AutomationProperties.SetName(_columnInputBox, "Column input cell");
 
         var root = new StackPanel { Margin = new Thickness(12) };
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
@@ -196,6 +198,15 @@ public sealed class DataTableDialog : Window
         FocusRangeSelectionInput(request.Target);
     }
 
+    public void ApplyRangeSelection(DataTableRangeSelectionTarget target, CellAddress address)
+    {
+        var textBox = target == DataTableRangeSelectionTarget.ColumnInputCell
+            ? _columnInputBox
+            : _rowInputBox;
+        textBox.Text = address.ToA1();
+        FocusRangeSelectionInput(textBox);
+    }
+
     private static void FocusRangeSelectionInput(TextBox target)
     {
         target.Focus();
@@ -205,8 +216,7 @@ public sealed class DataTableDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _rowInputBox.Focus();
-        Keyboard.Focus(_rowInputBox);
+        FocusRangeSelectionInput(_rowInputBox);
     }
 
     private void FocusInvalidInput(string? error)

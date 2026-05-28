@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -67,11 +68,14 @@ public sealed partial class SelectionPaneDialog : Window
         ShowInTaskbar = false;
 
         _list.Margin = new Thickness(0, 0, 0, 10);
+        AutomationProperties.SetName(_list, "Objects");
+        AutomationProperties.SetHelpText(_list, "Workbook objects available for selection, rename, visibility, and stacking order changes.");
         _list.AllowDrop = true;
         _list.PreviewMouseLeftButtonDown += List_PreviewMouseLeftButtonDown;
         _list.MouseMove += List_MouseMove;
         _list.DragOver += List_DragOver;
         _list.Drop += List_Drop;
+        _list.KeyDown += List_KeyDown;
         _items = items.Select(item => new SelectionPaneDialogItem(item)).ToList();
         _list.ItemsSource = _items;
         _list.SelectionChanged += (_, _) =>
@@ -82,21 +86,43 @@ public sealed partial class SelectionPaneDialog : Window
         if (_list.Items.Count > 0)
             _list.SelectedIndex = 0;
         _list.ItemTemplate = CreateItemTemplate();
+        AutomationProperties.SetName(_searchBox, "Search objects");
+        AutomationProperties.SetHelpText(_searchBox, "Filter selection pane objects by name or object type.");
         _searchBox.TextChanged += (_, _) => ApplySearchAndFilter();
         _filterBox.ItemsSource = new[] { "All", "Visible", "Hidden", "Charts", "Pictures", "Shapes", "Text Boxes" };
         _filterBox.SelectedIndex = 0;
+        AutomationProperties.SetName(_filterBox, "Object filter");
+        AutomationProperties.SetHelpText(_filterBox, "Show all objects or limit the list to visible, hidden, or a specific object type.");
         _filterBox.SelectionChanged += (_, _) => ApplySearchAndFilter();
+        AutomationProperties.SetName(_renameBox, "Object name");
+        AutomationProperties.SetHelpText(_renameBox, "Edit the selected object's name.");
+        AutomationProperties.SetName(_renameButton, "Rename selected object");
+        AutomationProperties.SetHelpText(_renameButton, "Apply the typed name to the selected object.");
         _renameButton.Click += (_, _) => RenameSelectedItem();
+        AutomationProperties.SetName(_toggleVisibilityButton, "Toggle selected object visibility");
+        AutomationProperties.SetHelpText(_toggleVisibilityButton, "Show or hide the selected object.");
         _toggleVisibilityButton.Click += (_, _) => ToggleSelectedVisibility();
 
+        AutomationProperties.SetName(_moveUpButton, "Bring selected object forward");
+        AutomationProperties.SetHelpText(_moveUpButton, "Move the selected object forward within its object type stack.");
+        AutomationProperties.SetName(_moveDownButton, "Send selected object backward");
+        AutomationProperties.SetHelpText(_moveDownButton, "Move the selected object backward within its object type stack.");
         _moveUpButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveUp);
         _moveDownButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveDown);
+        AutomationProperties.SetName(_showAllButton, "Show all objects");
+        AutomationProperties.SetHelpText(_showAllButton, "Mark every listed object visible.");
+        AutomationProperties.SetName(_hideAllButton, "Hide all objects");
+        AutomationProperties.SetHelpText(_hideAllButton, "Mark every listed object hidden.");
         _showAllButton.Click += (_, _) => SetAllVisibility(true);
         _hideAllButton.Click += (_, _) => SetAllVisibility(false);
 
         var okButton = new Button { Content = "_OK", Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+        AutomationProperties.SetName(okButton, "Apply selection pane changes");
+        AutomationProperties.SetHelpText(okButton, "Apply visibility, rename, and stacking order changes.");
         okButton.Click += (_, _) => AcceptVisibility();
         var cancelButton = new Button { Content = "_Cancel", Width = 78, IsCancel = true };
+        AutomationProperties.SetName(cancelButton, "Cancel selection pane changes");
+        AutomationProperties.SetHelpText(cancelButton, "Close the selection pane without applying pending changes.");
 
         var searchRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         searchRow.Children.Add(new Label { Content = "_Search:", Target = _searchBox, Padding = new Thickness(0, 4, 6, 0) });
@@ -151,6 +177,8 @@ public sealed partial class SelectionPaneDialog : Window
         checkBox.SetValue(CheckBox.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
         checkBox.SetValue(FrameworkElement.WidthProperty, 24.0);
         checkBox.SetValue(CheckBox.ToolTipProperty, "Show or hide object");
+        checkBox.SetValue(AutomationProperties.NameProperty, "Object visibility");
+        checkBox.SetValue(AutomationProperties.HelpTextProperty, "Toggle whether this object is visible.");
         checkBox.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.IsVisible)) { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.AppendChild(checkBox);
 
@@ -160,6 +188,8 @@ public sealed partial class SelectionPaneDialog : Window
         name.SetValue(TextBox.BorderThicknessProperty, new Thickness(0));
         name.SetValue(TextBox.BackgroundProperty, Brushes.Transparent);
         name.SetValue(TextBox.ToolTipProperty, "Rename object");
+        name.SetValue(AutomationProperties.NameProperty, "Object name");
+        name.SetValue(AutomationProperties.HelpTextProperty, "Edit this object's display name.");
         name.SetBinding(TextBox.TextProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.Name))
         {
             Mode = System.Windows.Data.BindingMode.TwoWay,

@@ -26,21 +26,59 @@ internal static class XlsxWorkbookThemeWriter
                 new XAttribute(XNamespace.Xmlns + "a", drawingNs),
                 new XAttribute("name", theme.Name),
                 new XElement(drawingNs + "themeElements",
-                    new XElement(drawingNs + "clrScheme",
-                        new XAttribute("name", $"{theme.Name} Colors"),
-                        XlsxWorkbookThemeReader.ColorElements.Select(color =>
-                            new XElement(drawingNs + color.ElementName,
-                                new XElement(drawingNs + "srgbClr",
-                                    new XAttribute("val", FormatColor(theme.GetColor(color.Slot))))))),
-                    new XElement(drawingNs + "fontScheme",
-                        new XAttribute("name", $"{theme.Name} Fonts"),
-                        new XElement(drawingNs + "majorFont",
-                            new XElement(drawingNs + "latin",
-                                new XAttribute("typeface", theme.MajorFontName))),
-                        new XElement(drawingNs + "minorFont",
-                            new XElement(drawingNs + "latin",
-                                new XAttribute("typeface", theme.MinorFontName)))),
+                    CreateColorSchemeElement(theme, drawingNs),
+                    CreateFontSchemeElement(theme, drawingNs),
                     CreateFormatSchemeElement(theme, drawingNs))));
+    }
+
+    private static XElement CreateColorSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
+    {
+        if (!string.IsNullOrWhiteSpace(theme.NativeColorSchemeXml))
+        {
+            try
+            {
+                var colorScheme = XElement.Parse(theme.NativeColorSchemeXml);
+                if (colorScheme.Name == drawingNs + "clrScheme")
+                    return new XElement(colorScheme);
+            }
+            catch
+            {
+                // Fall back to modeled colors when native theme XML is malformed.
+            }
+        }
+
+        return new XElement(drawingNs + "clrScheme",
+            new XAttribute("name", $"{theme.Name} Colors"),
+            XlsxWorkbookThemeReader.ColorElements.Select(color =>
+                new XElement(drawingNs + color.ElementName,
+                    new XElement(drawingNs + "srgbClr",
+                        new XAttribute("val", FormatColor(theme.GetColor(color.Slot)))))));
+    }
+
+    private static XElement CreateFontSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
+    {
+        if (!string.IsNullOrWhiteSpace(theme.NativeFontSchemeXml))
+        {
+            try
+            {
+                var fontScheme = XElement.Parse(theme.NativeFontSchemeXml);
+                if (fontScheme.Name == drawingNs + "fontScheme")
+                    return new XElement(fontScheme);
+            }
+            catch
+            {
+                // Fall back to modeled fonts when native theme XML is malformed.
+            }
+        }
+
+        return new XElement(drawingNs + "fontScheme",
+            new XAttribute("name", $"{theme.Name} Fonts"),
+            new XElement(drawingNs + "majorFont",
+                new XElement(drawingNs + "latin",
+                    new XAttribute("typeface", theme.MajorFontName))),
+            new XElement(drawingNs + "minorFont",
+                new XElement(drawingNs + "latin",
+                    new XAttribute("typeface", theme.MinorFontName))));
     }
 
     private static XElement CreateFormatSchemeElement(WorkbookTheme theme, XNamespace drawingNs)

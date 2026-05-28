@@ -13,6 +13,8 @@ public sealed class UserTestIssueTemplateTests
 
         template.Should().Contain("Freexcel user test report");
         template.Should().Contain("App version/build");
+        template.Should().Contain("tester-release");
+        template.Should().NotContain("phase-5");
         template.Should().Contain("%LOCALAPPDATA%\\Freexcel\\Diagnostics");
         template.Should().Contain("CrashReports");
         template.Should().Contain("Expected result");

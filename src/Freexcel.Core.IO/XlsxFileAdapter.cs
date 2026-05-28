@@ -24,7 +24,22 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         new(".xltm", "Excel Macro-Enabled Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
     ];
 
-    public Workbook Load(Stream stream)
+    /// <summary>
+    /// Loads a workbook from the given stream and returns it together with any non-fatal
+    /// warnings collected during loading (e.g. features that failed to parse).
+    /// The workbook is always returned; warnings indicate partial data loss.
+    /// </summary>
+    public XlsxLoadResult LoadWithWarnings(Stream stream)
+    {
+        var warnings = new List<string>();
+        var workbook = LoadCore(stream, warnings);
+        return new XlsxLoadResult(workbook, warnings.AsReadOnly());
+    }
+
+    /// <inheritdoc/>
+    public Workbook Load(Stream stream) => LoadWithWarnings(stream).Workbook;
+
+    private Workbook LoadCore(Stream stream, List<string> warnings)
     {
         using var packageStream = CreateLoadPackageStream(stream);
 
@@ -78,8 +93,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
         var workbook = new Workbook("Untitled");
-        SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream));
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = uses1904DateSystem;
         workbook.Properties = workbookProperties;
@@ -269,7 +282,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheet.ActiveCol = xmlLayout?.ActiveCol;
 
             try { XlsxWorksheetPageSetupMapper.LoadPrintArea(xlSheet, sheet); }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Print-area load failed: {ex.Message}"); }
+            catch (Exception ex) { warnings.Add($"[print-area] Sheet '{xlSheet.Name}': {ex.Message}"); }
 
             sheet.PageOrientation = xlSheet.PageSetup.PageOrientation == XLPageOrientation.Landscape
                 ? WorksheetPageOrientation.Landscape
@@ -359,24 +372,24 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
             // Load CellIs conditional format rules (best-effort; skip anything we can't map)
             try { XlsxConditionalFormatClosedXmlMapper.Load(xlSheet, sheet, workbook.Theme, XlsxClosedXmlCellMapper.MapStyle); }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] CF load failed: {ex.Message}"); }
+            catch (Exception ex) { warnings.Add($"[conditional-format] Sheet '{xlSheet.Name}': {ex.Message}"); }
 
             // Load data validation rules (best-effort)
             try { XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet); }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] DV load failed: {ex.Message}"); }
+            catch (Exception ex) { warnings.Add($"[data-validation] Sheet '{xlSheet.Name}': {ex.Message}"); }
             if (xmlLayout is not null)
                 XlsxDataValidationNativeMetadataMapper.Apply(sheet, xmlLayout.DataValidationNativeMetadata);
 
             // Load merged regions (best-effort)
             try { LoadMergedRegions(xlSheet, sheet); }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Merge load failed: {ex.Message}"); }
+            catch (Exception ex) { warnings.Add($"[merged-regions] Sheet '{xlSheet.Name}': {ex.Message}"); }
         }
 
         ResolvePivotChartCacheBindings(workbook);
 
         // Load named ranges (best-effort; skip any we cannot map)
         try { XlsxNamedRangeMapper.Load(xlWorkbook, workbook); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Named-range load failed: {ex.Message}"); }
+        catch (Exception ex) { warnings.Add($"[named-ranges]: {ex.Message}"); }
 
         foreach (var customView in xlsxCustomViews)
         {
@@ -389,6 +402,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     customView.IncludeHiddenRowsColumnsAndFilterSettings));
         }
 
+        SourcePackages.Remove(workbook);
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream, workbook));
         return workbook;
     }
 

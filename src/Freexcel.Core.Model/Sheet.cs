@@ -21,176 +21,6 @@ public sealed record HyperlinkMetadata(
     string ScreenTip = "",
     string Bookmark = "");
 
-public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml);
-
-public sealed class WorksheetProtectionMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetPageSetupMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetPrintOptionsMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetSheetFormatMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetDimensionMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-}
-
-public sealed class WorksheetSheetPropertiesMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetPrimaryViewMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetPageBreaksMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
-}
-
-public sealed class WorksheetCellWatchesMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-}
-
-public sealed class WorksheetIgnoredErrorsMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public Dictionary<string, Dictionary<string, string>> ErrorNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-}
-
-public sealed class WorksheetSingleXmlCellsModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<WorksheetSingleXmlCellModel> Cells { get; set; } = [];
-}
-
-public sealed class WorksheetSingleXmlCellModel
-{
-    public int? Id { get; set; }
-    public string? Reference { get; set; }
-    public int? XmlCellPropertyId { get; set; }
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-}
-
-public sealed class WorksheetPageMarginsMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetHeaderFooterMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorksheetSmartTagsModel
-{
-    public string? NativeXml { get; set; }
-    public List<WorksheetCellSmartTagsModel> Cells { get; set; } = [];
-}
-
-public sealed class WorksheetCellSmartTagsModel
-{
-    public string? Reference { get; set; }
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<WorksheetCellSmartTagModel> Tags { get; set; } = [];
-}
-
-public sealed class WorksheetCellSmartTagModel
-{
-    public string? Type { get; set; }
-    public bool? Deleted { get; set; }
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<WorksheetCellSmartTagPropertyModel> Properties { get; set; } = [];
-}
-
-public sealed class WorksheetCellSmartTagPropertyModel
-{
-    public string? Key { get; set; }
-    public string? Value { get; set; }
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-}
-
-public sealed class WorksheetDataConsolidationModel
-{
-    public string? Function { get; set; }
-    public bool? LeftLabels { get; set; }
-    public bool? TopLabels { get; set; }
-    public bool? Link { get; set; }
-    public string? NativeXml { get; set; }
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<WorksheetDataConsolidationReferenceModel> References { get; set; } = [];
-}
-
-public sealed class WorksheetDataConsolidationReferenceModel
-{
-    public string? Reference { get; set; }
-    public string? Sheet { get; set; }
-    public string? Name { get; set; }
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-}
-
-public sealed class WorksheetSortStateModel
-{
-    public string? Reference { get; set; }
-    public bool? ColumnSort { get; set; }
-    public bool? CaseSensitive { get; set; }
-    public string? SortMethod { get; set; }
-    public string? NativeXml { get; set; }
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<WorksheetSortConditionModel> Conditions { get; set; } = [];
-}
-
-public sealed class WorksheetSortConditionModel
-{
-    public string? Reference { get; set; }
-    public bool? Descending { get; set; }
-    public string? SortBy { get; set; }
-    public string? CustomList { get; set; }
-    public string? DxfId { get; set; }
-    public string? IconSet { get; set; }
-    public string? IconId { get; set; }
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-}
-
-public sealed class WorksheetAdditionalViewsModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<WorksheetAdditionalViewModel> Views { get; set; } = [];
-}
-
-public sealed class WorksheetAdditionalViewModel
-{
-    public string? WorkbookViewId { get; set; }
-    public string? NativeXml { get; set; }
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-}
-
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
@@ -202,6 +32,8 @@ public sealed partial class Sheet
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
     private readonly Dictionary<(uint Row, uint Col), StyleId> _styleOnly = [];
     private Dictionary<(uint Row, uint Col), GridRange>? _mergeIndex;
+    private GridRange? _usedRangeCache;
+    private bool _usedRangeCacheDirty = true;
 
     /// <summary>Unique identifier for this sheet.</summary>
     public SheetId Id { get; }
@@ -595,6 +427,7 @@ public sealed partial class Sheet
     public void SetCell(CellAddress address, ScalarValue value)
     {
         ClearSpillRange(address);
+        MarkUsedRangeDirty();
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
             existing.Value = value;
@@ -615,6 +448,7 @@ public sealed partial class Sheet
     public void SetFormula(CellAddress address, string formulaText)
     {
         ClearSpillRange(address);
+        MarkUsedRangeDirty();
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
             existing.FormulaText = formulaText;
@@ -631,6 +465,7 @@ public sealed partial class Sheet
     public void SetCell(CellAddress address, Cell cell)
     {
         ClearSpillRange(address);
+        MarkUsedRangeDirty();
         _cells[(address.Row, address.Col)] = cell;
         _styleOnly.Remove((address.Row, address.Col));
     }
@@ -639,14 +474,16 @@ public sealed partial class Sheet
     public void ClearCell(uint row, uint col)
     {
         ClearSpillRange(new CellAddress(Id, row, col));
-        _cells.Remove((row, col));
+        if (_cells.Remove((row, col)))
+            MarkUsedRangeDirty();
     }
 
     /// <summary>Remove a cell at the given address.</summary>
     public void ClearCell(CellAddress address)
     {
         ClearSpillRange(address);
-        _cells.Remove((address.Row, address.Col));
+        if (_cells.Remove((address.Row, address.Col)))
+            MarkUsedRangeDirty();
     }
 
     /// <summary>
@@ -714,6 +551,22 @@ public sealed partial class Sheet
         return GetValue(address.Row, address.Col);
     }
 
+    /// <summary>Enumerate positions whose effective value is not blank, including spill values.</summary>
+    public IEnumerable<CellAddress> EnumerateValueBearingCells()
+    {
+        foreach (var ((row, col), cell) in _cells)
+        {
+            if (cell.Value is not BlankValue)
+                yield return new CellAddress(Id, row, col);
+        }
+
+        foreach (var ((row, col), value) in _spillValues)
+        {
+            if (value is not BlankValue && !_cells.ContainsKey((row, col)))
+                yield return new CellAddress(Id, row, col);
+        }
+    }
+
     /// <summary>Get all non-empty cell positions.</summary>
     public IReadOnlyCollection<(uint Row, uint Col)> GetOccupiedCells()
     {
@@ -746,8 +599,15 @@ public sealed partial class Sheet
     /// </summary>
     public GridRange? GetUsedRange()
     {
+        if (!_usedRangeCacheDirty)
+            return _usedRangeCache;
+
         if (_cells.Count == 0)
+        {
+            _usedRangeCache = null;
+            _usedRangeCacheDirty = false;
             return null;
+        }
 
         uint minRow = uint.MaxValue, maxRow = 0, minCol = uint.MaxValue, maxCol = 0;
         foreach (var (row, col) in _cells.Keys)
@@ -758,25 +618,16 @@ public sealed partial class Sheet
             if (col > maxCol) maxCol = col;
         }
 
-        return new GridRange(
+        _usedRangeCache = new GridRange(
             new CellAddress(Id, minRow, minCol),
             new CellAddress(Id, maxRow, maxCol));
+        _usedRangeCacheDirty = false;
+        return _usedRangeCache;
     }
 
+    private void MarkUsedRangeDirty() => _usedRangeCacheDirty = true;
+
 }
-
-public sealed class WorksheetCustomPropertyMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed record WorksheetCustomProperty(
-    string Name,
-    int Id,
-    WorksheetCustomPropertyMetadataModel? Metadata = null);
-
-public sealed record WorksheetPhoneticProperties(string? FontId, string? Type, string? Alignment);
 
 public enum WorksheetViewMode
 {

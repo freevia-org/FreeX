@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -28,9 +29,9 @@ public sealed partial class FunctionArgumentsDialog : Window
         ShowInTaskbar = false;
 
         var root = new DockPanel { Margin = new Thickness(12) };
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 76, rowMargin: new Thickness(0, 12, 0, 0));
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        root.Children.Add(buttons);
+        var btnRow = CreateButtonRow();
+        DockPanel.SetDock(btnRow, Dock.Bottom);
+        root.Children.Add(btnRow);
 
         var body = new StackPanel();
         root.Children.Add(body);
@@ -48,12 +49,15 @@ public sealed partial class FunctionArgumentsDialog : Window
             Margin = new Thickness(0, 0, 0, 12)
         });
 
-        foreach (var argument in _arguments)
-            AddArgumentRow(body, argument);
+        var argumentLabels = CreateArgumentLabels(_arguments);
+        for (var index = 0; index < _arguments.Count; index++)
+            AddArgumentRow(body, _arguments[index], argumentLabels[index]);
 
-        body.Children.Add(new TextBlock { Text = "Formula result:", Margin = new Thickness(0, 12, 0, 2) });
+        body.Children.Add(new TextBlock { Text = "Formula result =", Margin = new Thickness(0, 12, 0, 2) });
         _formulaPreview.FontWeight = FontWeights.SemiBold;
         _formulaPreview.TextWrapping = TextWrapping.Wrap;
+        AutomationProperties.SetName(_formulaPreview, "Formula result");
+        AutomationProperties.SetHelpText(_formulaPreview, "Shows the formula that will be inserted from the current argument values.");
         body.Children.Add(_formulaPreview);
         UpdatePreview();
 
@@ -80,7 +84,35 @@ public sealed partial class FunctionArgumentsDialog : Window
         return $"{normalized}({string.Join(", ", cleaned)})";
     }
 
-    private void AddArgumentRow(Panel body, FunctionArgumentSpec argument)
+    public static IReadOnlyList<string> CreateArgumentLabels(IEnumerable<FunctionArgumentSpec> arguments)
+    {
+        var usedAccessKeys = new HashSet<char>();
+        return arguments.Select(argument => CreateArgumentLabel(argument.Name, usedAccessKeys)).ToList();
+    }
+
+    private static string CreateArgumentLabel(string argumentName, ISet<char> usedAccessKeys)
+    {
+        var accessIndex = -1;
+        for (var index = 0; index < argumentName.Length; index++)
+        {
+            var candidate = argumentName[index];
+            if (!char.IsLetterOrDigit(candidate))
+                continue;
+
+            var normalized = char.ToUpperInvariant(candidate);
+            if (!usedAccessKeys.Add(normalized))
+                continue;
+
+            accessIndex = index;
+            break;
+        }
+
+        var label = string.Concat(argumentName.Select((character, index) =>
+            $"{(index == accessIndex ? "_" : "")}{(character == '_' ? "__" : character)}"));
+        return $"{label}:";
+    }
+
+    private void AddArgumentRow(Panel body, FunctionArgumentSpec argument, string labelText)
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
@@ -94,7 +126,7 @@ public sealed partial class FunctionArgumentsDialog : Window
 
         var label = new Label
         {
-            Content = argument.Optional ? $"{argument.Name}:" : $"{argument.Name}:",
+            Content = labelText,
             Target = box,
             Padding = new Thickness(0),
             VerticalAlignment = VerticalAlignment.Center
@@ -127,6 +159,31 @@ public sealed partial class FunctionArgumentsDialog : Window
     {
         ResultFormula = CreateFormula(_functionName, _argumentBoxes.Select(box => box.Text));
         DialogResult = true;
+    }
+
+    private StackPanel CreateButtonRow()
+    {
+        var btnRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        var help = new Button { Content = "_Help on this function", Width = 146, Margin = new Thickness(0, 0, 8, 0) };
+        help.Click += (_, _) => ShowFunctionHelp();
+        var ok = new Button { Content = "_OK", Width = 76, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        ok.Click += (_, _) => Accept();
+        var cancel = new Button { Content = "_Cancel", Width = 76, IsCancel = true };
+        btnRow.Children.Add(help);
+        btnRow.Children.Add(ok);
+        btnRow.Children.Add(cancel);
+        return btnRow;
+    }
+
+    private void ShowFunctionHelp()
+    {
+        MessageBox.Show(this, $"{_functionName}()\n\n{string.Join(Environment.NewLine, _arguments.Select(argument => $"{argument.Name}: {argument.Description}"))}",
+            "Function Help", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void FocusInitialKeyboardTarget()

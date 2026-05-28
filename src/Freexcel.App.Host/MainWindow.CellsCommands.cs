@@ -124,7 +124,8 @@ public partial class MainWindow
     private void FormatRowHeightMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new RowHeightDialog { Owner = this };
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var dialog = new RowHeightDialog(RowColumnDimensionPlanner.GetRowHeightDialogValue(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -132,12 +133,12 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);
-                    return new SetRowHeightCommand(sheetId, startRow, endRow, dialog.Result.Height);
+                    return RowColumnDimensionPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height);
                 }))
             return;
         UpdateViewport();
     }
+
     private void FormatAutoRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -148,7 +149,8 @@ public partial class MainWindow
     private void FormatColWidthMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new ColumnWidthDialog { Owner = this };
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var dialog = new ColumnWidthDialog(RowColumnDimensionPlanner.GetColumnWidthDialogValue(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -156,12 +158,12 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);
-                    return new SetColumnWidthCommand(sheetId, startCol, endCol, dialog.Result.Width);
+                    return RowColumnDimensionPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width);
                 }))
             return;
         UpdateViewport();
     }
+
     private void FormatAutoColMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -182,7 +184,7 @@ public partial class MainWindow
             (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultRowHeight);
 
-        return CreateAutoFitRowHeightCommand(sheetId, plans);
+        return RowColumnDimensionPlanner.CreateAutoFitRowHeightCommand(sheetId, plans);
     }
 
     private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
@@ -197,31 +199,7 @@ public partial class MainWindow
             (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultColumnWidth);
 
-        return CreateAutoFitColumnWidthCommand(sheetId, plans);
-    }
-
-    private static IWorkbookCommand CreateAutoFitRowHeightCommand(
-        SheetId sheetId,
-        IReadOnlyList<AutoFitSizePlan> plans)
-    {
-        if (plans.Count == 1)
-            return new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
-
-        return new CompositeWorkbookCommand(
-            "Auto Row Height",
-            plans.Select(plan => (IWorkbookCommand)new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
-    }
-
-    private static IWorkbookCommand CreateAutoFitColumnWidthCommand(
-        SheetId sheetId,
-        IReadOnlyList<AutoFitSizePlan> plans)
-    {
-        if (plans.Count == 1)
-            return new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
-
-        return new CompositeWorkbookCommand(
-            "Auto Column Width",
-            plans.Select(plan => (IWorkbookCommand)new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
+        return RowColumnDimensionPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans);
     }
 
     private string? GetAutoFitDisplayText(Sheet sheet, uint row, uint col)
@@ -550,8 +528,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);
-                    return new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden);
+                    return RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden);
                 }))
             return;
 
@@ -566,8 +543,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);
-                    return new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden);
+                    return RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden);
                 }))
             return;
 

@@ -62,9 +62,6 @@ public static class PivotValueFilterInputParser
         return true;
     }
 
-    private static bool TryParseFiniteDouble(string input, out double value)
-    {
-        return double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
-               double.IsFinite(value);
-    }
+    private static bool TryParseFiniteDouble(string input, out double value) =>
+        NumericInputParser.TryParseFiniteDouble(input, CultureInfo.InvariantCulture, out value);
 }

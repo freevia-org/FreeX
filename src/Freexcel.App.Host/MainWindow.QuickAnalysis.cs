@@ -11,23 +11,33 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
+    private ContextMenu? _quickAnalysisMenu;
+    private bool _suppressNextQuickAnalysisClosedStatusReset;
+    private bool _preserveQuickAnalysisUnsupportedStatus;
+
     private void ShowQuickAnalysisMenu()
     {
         if (SheetGrid.SelectedRange is not { } range)
+        {
+            ShowQuickAnalysisUnsupportedSelectionStatus();
             return;
+        }
 
         var options = QuickAnalysisPlanner.BuildOptions(range);
         if (options.Count == 0)
         {
-            StatusReadyText.Text = "Select a range to use Quick Analysis.";
+            ShowQuickAnalysisUnsupportedSelectionStatus();
             return;
         }
 
+        _preserveQuickAnalysisUnsupportedStatus = false;
+        CloseQuickAnalysisMenu();
         var menu = new ContextMenu
         {
             PlacementTarget = SheetGrid,
             Placement = PlacementMode.RelativePoint
         };
+        _quickAnalysisMenu = menu;
         if (SheetGrid.Viewport is { } viewport)
         {
             var anchor = QuickAnalysisMenuPlacementPlanner.BuildAnchor(
@@ -40,7 +50,13 @@ public partial class MainWindow
         }
 
         menu.Opened += QuickAnalysisMenu_Opened;
-        menu.Closed += (_, _) => ClearQuickAnalysisPreview();
+        menu.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_quickAnalysisMenu, menu))
+                _quickAnalysisMenu = null;
+            ClearQuickAnalysisPreview(resetStatus: !_suppressNextQuickAnalysisClosedStatusReset);
+            _suppressNextQuickAnalysisClosedStatusReset = false;
+        };
 
         string? currentGroup = null;
         foreach (var option in options)
@@ -75,6 +91,22 @@ public partial class MainWindow
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>().Where(item => item.IsEnabled));
         menu.IsOpen = true;
+    }
+
+    private void CloseQuickAnalysisMenu()
+    {
+        if (_quickAnalysisMenu is { IsOpen: true } menu)
+            menu.IsOpen = false;
+        _quickAnalysisMenu = null;
+    }
+
+    private void ShowQuickAnalysisUnsupportedSelectionStatus()
+    {
+        _preserveQuickAnalysisUnsupportedStatus = true;
+        _suppressNextQuickAnalysisClosedStatusReset = true;
+        CloseQuickAnalysisMenu();
+        ClearQuickAnalysisPreview(resetStatus: false);
+        StatusReadyText.Text = "Select a range to use Quick Analysis.";
     }
 
     private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)
@@ -284,20 +316,40 @@ public partial class MainWindow
         }
 
         var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
+        _preserveQuickAnalysisUnsupportedStatus = false;
         SheetGrid.QuickAnalysisPreviewRange = preview.Range;
         SheetGrid.QuickAnalysisPreviewVisual = MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind);
         StatusReadyText.Text = preview.StatusText;
     }
 
-    private void ClearQuickAnalysisPreview()
+    private void ClearQuickAnalysisPreview(bool resetStatus = true)
     {
         SheetGrid.QuickAnalysisPreviewRange = null;
         SheetGrid.QuickAnalysisPreviewVisual = GridQuickAnalysisPreviewVisualKind.None;
-        StatusReadyText.Text = "Ready";
+        if (resetStatus && !_preserveQuickAnalysisUnsupportedStatus)
+            StatusReadyText.Text = "Ready";
     }
 
     private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind kind) =>
-        kind == QuickAnalysisPreviewVisualKind.DataBars
-            ? GridQuickAnalysisPreviewVisualKind.DataBars
-            : GridQuickAnalysisPreviewVisualKind.None;
+        kind switch
+        {
+            QuickAnalysisPreviewVisualKind.DataBars => GridQuickAnalysisPreviewVisualKind.DataBars,
+            QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale,
+            QuickAnalysisPreviewVisualKind.IconSet => GridQuickAnalysisPreviewVisualKind.IconSet,
+            QuickAnalysisPreviewVisualKind.Highlight => GridQuickAnalysisPreviewVisualKind.Highlight,
+            QuickAnalysisPreviewVisualKind.ClearFormat => GridQuickAnalysisPreviewVisualKind.ClearFormat,
+            QuickAnalysisPreviewVisualKind.TotalFormula => GridQuickAnalysisPreviewVisualKind.TotalFormula,
+            QuickAnalysisPreviewVisualKind.Table => GridQuickAnalysisPreviewVisualKind.Table,
+            QuickAnalysisPreviewVisualKind.LineSparkline => GridQuickAnalysisPreviewVisualKind.LineSparkline,
+            QuickAnalysisPreviewVisualKind.ColumnSparkline => GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
+            QuickAnalysisPreviewVisualKind.WinLossSparkline => GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
+            QuickAnalysisPreviewVisualKind.ColumnChart => GridQuickAnalysisPreviewVisualKind.ColumnChart,
+            QuickAnalysisPreviewVisualKind.LineChart => GridQuickAnalysisPreviewVisualKind.LineChart,
+            QuickAnalysisPreviewVisualKind.BarChart => GridQuickAnalysisPreviewVisualKind.BarChart,
+            QuickAnalysisPreviewVisualKind.StackedColumnChart => GridQuickAnalysisPreviewVisualKind.StackedColumnChart,
+            QuickAnalysisPreviewVisualKind.PieChart => GridQuickAnalysisPreviewVisualKind.PieChart,
+            QuickAnalysisPreviewVisualKind.AreaChart => GridQuickAnalysisPreviewVisualKind.AreaChart,
+            QuickAnalysisPreviewVisualKind.ScatterChart => GridQuickAnalysisPreviewVisualKind.ScatterChart,
+            _ => GridQuickAnalysisPreviewVisualKind.None
+        };
 }

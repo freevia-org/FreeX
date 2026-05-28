@@ -6,13 +6,17 @@ namespace Freexcel.Core.IO;
 internal static class XlsxChartLevelReader
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace ChartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
     public static string? ReadTitle(XDocument chartXml)
     {
         var title = chartXml.Root?
             .Element(ChartNs + "chart")?
-            .Element(ChartNs + "title");
+            .Element(ChartNs + "title")
+            ?? chartXml.Root?
+                .Element(ChartExNs + "chart")?
+                .Element(ChartExNs + "title");
 
         return title?
             .Descendants(DrawingNs + "t")
@@ -22,24 +26,26 @@ internal static class XlsxChartLevelReader
 
     public static void ApplyChartLevelProperties(XDocument chartXml, ChartModel chart)
     {
-        var chartElement = chartXml.Root?.Element(ChartNs + "chart");
-        var title = chartElement?.Element(ChartNs + "title");
-        chart.TitleLayout = XlsxChartMetadataReader.ReadManualLayout(title?.Element(ChartNs + "layout"));
-        chart.TitleOverlay = XlsxChartScalarReader.IsTrue(title?.Element(ChartNs + "overlay")?.Attribute("val")?.Value);
+        var chartElement = chartXml.Root?.Element(ChartNs + "chart")
+            ?? chartXml.Root?.Element(ChartExNs + "chart");
+        var chartNs = chartElement?.Name.Namespace ?? ChartNs;
+        var title = chartElement?.Element(chartNs + "title");
+        chart.TitleLayout = XlsxChartMetadataReader.ReadManualLayout(title?.Element(chartNs + "layout"));
+        chart.TitleOverlay = XlsxChartScalarReader.IsTrue(title?.Element(chartNs + "overlay")?.Attribute("val")?.Value);
         XlsxChartFormattingReader.ApplyChartTitleFormatting(title, chart);
         XlsxChartFormattingReader.ApplyChartAreaShapeProperties(chartXml.Root?.Element(ChartNs + "spPr"), chart);
-        var plotArea = chartElement?.Element(ChartNs + "plotArea");
-        chart.PlotAreaLayout = XlsxChartMetadataReader.ReadManualLayout(plotArea?.Element(ChartNs + "layout"));
+        var plotArea = chartElement?.Element(chartNs + "plotArea");
+        chart.PlotAreaLayout = XlsxChartMetadataReader.ReadManualLayout(plotArea?.Element(chartNs + "layout"));
         chart.ThreeDView = Read3DView(chartElement?.Element(ChartNs + "view3D"));
         chart.FloorFormat = XlsxChartFormattingReader.ReadSurfaceFormat(chartElement?.Element(ChartNs + "floor"));
         chart.SideWallFormat = XlsxChartFormattingReader.ReadSurfaceFormat(chartElement?.Element(ChartNs + "sideWall"));
         chart.BackWallFormat = XlsxChartFormattingReader.ReadSurfaceFormat(chartElement?.Element(ChartNs + "backWall"));
-        chart.DataTable = ReadChartDataTable(plotArea?.Element(ChartNs + "dTable"));
-        XlsxChartFormattingReader.ApplyPlotAreaShapeProperties(plotArea?.Element(ChartNs + "spPr"), chart);
+        chart.DataTable = ReadChartDataTable(plotArea?.Element(chartNs + "dTable"));
+        XlsxChartFormattingReader.ApplyPlotAreaShapeProperties(plotArea?.Element(chartNs + "spPr"), chart);
         XlsxChartAxisReader.ApplyAxisMetadata(plotArea, chart);
         XlsxChartDataLabelReader.ApplyDataLabels(plotArea, chart);
 
-        var legend = chartElement?.Element(ChartNs + "legend");
+        var legend = chartElement?.Element(chartNs + "legend");
         if (legend is null)
         {
             chart.ShowLegend = false;
@@ -49,8 +55,8 @@ internal static class XlsxChartLevelReader
         }
 
         chart.ShowLegend = true;
-        chart.LegendLayout = XlsxChartMetadataReader.ReadManualLayout(legend.Element(ChartNs + "layout"));
-        chart.LegendPosition = legend.Element(ChartNs + "legendPos")?.Attribute("val")?.Value switch
+        chart.LegendLayout = XlsxChartMetadataReader.ReadManualLayout(legend.Element(chartNs + "layout"));
+        chart.LegendPosition = legend.Element(chartNs + "legendPos")?.Attribute("val")?.Value switch
         {
             "l" => ChartLegendPosition.Left,
             "t" => ChartLegendPosition.Top,
@@ -58,16 +64,16 @@ internal static class XlsxChartLevelReader
             "r" => ChartLegendPosition.Right,
             _ => ChartLegendPosition.Right
         };
-        chart.LegendOverlay = XlsxChartScalarReader.IsTrue(legend.Element(ChartNs + "overlay")?.Attribute("val")?.Value);
-        chart.LegendEntries = ReadLegendEntries(legend);
-        ApplyLegendFormatting(legend, chart);
+        chart.LegendOverlay = XlsxChartScalarReader.IsTrue(legend.Element(chartNs + "overlay")?.Attribute("val")?.Value);
+        chart.LegendEntries = ReadLegendEntries(legend, chartNs);
+        ApplyLegendFormatting(legend, chartNs, chart);
     }
 
-    private static List<ChartLegendEntryModel> ReadLegendEntries(XElement legend) =>
-        legend.Elements(ChartNs + "legendEntry")
+    private static List<ChartLegendEntryModel> ReadLegendEntries(XElement legend, XNamespace chartNs) =>
+        legend.Elements(chartNs + "legendEntry")
             .Select(entry => new ChartLegendEntryModel(
-                XlsxChartScalarReader.ReadOptionalInt(entry.Element(ChartNs + "idx")?.Attribute("val")?.Value) ?? -1,
-                XlsxChartScalarReader.ReadOptionalBool(entry.Element(ChartNs + "delete")?.Attribute("val")?.Value)))
+                XlsxChartScalarReader.ReadOptionalInt(entry.Element(chartNs + "idx")?.Attribute("val")?.Value) ?? -1,
+                XlsxChartScalarReader.ReadOptionalBool(entry.Element(chartNs + "delete")?.Attribute("val")?.Value)))
             .Where(entry => entry.Index >= 0 && entry.IsDeleted is not null)
             .ToList();
 
@@ -178,9 +184,9 @@ internal static class XlsxChartLevelReader
                 : result;
     }
 
-    private static void ApplyLegendFormatting(XElement legend, ChartModel chart)
+    private static void ApplyLegendFormatting(XElement legend, XNamespace chartNs, ChartModel chart)
     {
-        var shapeProperties = legend.Element(ChartNs + "spPr");
+        var shapeProperties = legend.Element(chartNs + "spPr");
         var fill = shapeProperties?.Element(DrawingNs + "solidFill");
         if (fill is not null)
         {
@@ -219,7 +225,7 @@ internal static class XlsxChartLevelReader
         }
 
         var textProperties = legend
-            .Element(ChartNs + "txPr")?
+            .Element(chartNs + "txPr")?
             .Descendants(DrawingNs + "defRPr")
             .FirstOrDefault();
         if (textProperties is null)

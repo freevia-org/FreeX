@@ -7,6 +7,85 @@ namespace Freexcel.App.Host.Tests;
 public sealed class SelectionPanePlannerTests
 {
     [Fact]
+    public void SelectionPaneDialogStatePlanner_FilterItems_AppliesSearchAndKindFilters()
+    {
+        var picture = DialogState(SelectionPaneObjectKind.Picture, "Logo", isVisible: true);
+        var hiddenShape = DialogState(SelectionPaneObjectKind.Shape, "Process Box", isVisible: false);
+        var textBox = DialogState(SelectionPaneObjectKind.TextBox, "Quarter Notes", isVisible: true);
+
+        var visibleMatches = SelectionPaneDialogStatePlanner.FilterItems(
+            [picture, hiddenShape, textBox],
+            "  notes  ",
+            "Visible");
+        var shapeMatches = SelectionPaneDialogStatePlanner.FilterItems(
+            [picture, hiddenShape, textBox],
+            "shape",
+            "All");
+
+        visibleMatches.Should().Equal(textBox);
+        shapeMatches.Should().Equal(hiddenShape);
+    }
+
+    [Fact]
+    public void SelectionPaneDialogStatePlanner_FindSameKindMoveTargetIndex_SkipsOtherKinds()
+    {
+        var frontPicture = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
+        var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
+        var backPicture = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+
+        var forwardTarget = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(
+            [frontPicture, shape, backPicture],
+            currentIndex: 2,
+            forward: true);
+        var backwardTarget = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(
+            [frontPicture, shape, backPicture],
+            currentIndex: 0,
+            forward: false);
+
+        forwardTarget.Should().Be(0);
+        backwardTarget.Should().Be(2);
+    }
+
+    [Fact]
+    public void SelectionPaneDialogStatePlanner_PlanMove_ReordersAgainstSameKindTarget()
+    {
+        var frontPicture = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
+        var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
+        var backPicture = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+
+        var plan = SelectionPaneDialogStatePlanner.PlanMove(
+            [frontPicture, shape, backPicture],
+            backPicture.Id,
+            forward: true);
+
+        plan.Should().NotBeNull();
+        plan!.OrderedIds.Should().Equal(backPicture.Id, shape.Id, frontPicture.Id);
+        plan.MoveChanges.Should().Equal(new SelectionPaneMoveChange(
+            SelectionPaneObjectKind.Picture,
+            backPicture.Id,
+            Forward: true));
+    }
+
+    [Fact]
+    public void SelectionPaneDialogStatePlanner_PlanDragReorder_ReordersAndPlansAdjacentMoves()
+    {
+        var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
+        var middle = DialogState(SelectionPaneObjectKind.Picture, "Middle", isVisible: true);
+        var back = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+
+        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+            [front, middle, back],
+            draggedId: back.Id,
+            targetId: front.Id);
+
+        plan.Should().NotBeNull();
+        plan!.OrderedIds.Should().Equal(back.Id, front.Id, middle.Id);
+        plan.MoveChanges.Should().Equal(
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back.Id, Forward: true),
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back.Id, Forward: true));
+    }
+
+    [Fact]
     public void BuildItems_ListsVisibleObjectsTopToBottomWithExcelLikeNames()
     {
         var wb = new Workbook("test");
@@ -195,6 +274,41 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_ObjectListExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_list, \"Objects\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_list, \"Workbook objects available for selection, rename, visibility, and stacking order changes.\");");
+        source.Should().Contain("AutomationProperties.SetName(_searchBox, \"Search objects\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_searchBox, \"Filter selection pane objects by name or object type.\");");
+        source.Should().Contain("AutomationProperties.SetName(_filterBox, \"Object filter\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_filterBox, \"Show all objects or limit the list to visible, hidden, or a specific object type.\");");
+        source.Should().Contain("AutomationProperties.SetName(_renameBox, \"Object name\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_renameBox, \"Edit the selected object's name.\");");
+        source.Should().Contain("AutomationProperties.SetName(_renameButton, \"Rename selected object\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_renameButton, \"Apply the typed name to the selected object.\");");
+        source.Should().Contain("AutomationProperties.SetName(_toggleVisibilityButton, \"Toggle selected object visibility\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_toggleVisibilityButton, \"Show or hide the selected object.\");");
+        source.Should().Contain("AutomationProperties.SetName(_moveUpButton, \"Bring selected object forward\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_moveUpButton, \"Move the selected object forward within its object type stack.\");");
+        source.Should().Contain("AutomationProperties.SetName(_moveDownButton, \"Send selected object backward\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_moveDownButton, \"Move the selected object backward within its object type stack.\");");
+        source.Should().Contain("AutomationProperties.SetName(_showAllButton, \"Show all objects\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_showAllButton, \"Mark every listed object visible.\");");
+        source.Should().Contain("AutomationProperties.SetName(_hideAllButton, \"Hide all objects\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_hideAllButton, \"Mark every listed object hidden.\");");
+        source.Should().Contain("AutomationProperties.SetName(okButton, \"Apply selection pane changes\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(okButton, \"Apply visibility, rename, and stacking order changes.\");");
+        source.Should().Contain("AutomationProperties.SetName(cancelButton, \"Cancel selection pane changes\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(cancelButton, \"Close the selection pane without applying pending changes.\");");
+        source.Should().Contain("checkBox.SetValue(AutomationProperties.NameProperty, \"Object visibility\");");
+        source.Should().Contain("checkBox.SetValue(AutomationProperties.HelpTextProperty, \"Toggle whether this object is visible.\");");
+        source.Should().Contain("name.SetValue(AutomationProperties.NameProperty, \"Object name\");");
+        source.Should().Contain("name.SetValue(AutomationProperties.HelpTextProperty, \"Edit this object's display name.\");");
+    }
+
+    [Fact]
     public void SelectionPaneDialogOpenedFromKeyboard_FocusesSearchBox()
     {
         var source = ReadSelectionPaneDialogSources();
@@ -218,13 +332,31 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_ListKeyboardShortcutsRenameAndToggleVisibility()
+    {
+        var source = ReadSelectionPaneDialogSources();
+
+        source.Should().Contain("_list.KeyDown += List_KeyDown;");
+        source.Should().Contain("private void List_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("if (e.Key == Key.F2)");
+        source.Should().Contain("FocusRenameBox();");
+        source.Should().Contain("if (e.Key == Key.Space)");
+        source.Should().Contain("ToggleSelectedVisibility();");
+        source.Should().Contain("private void FocusRenameBox()");
+        source.Should().Contain("_renameBox.Focus();");
+        source.Should().Contain("_renameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_renameBox);");
+    }
+
+    [Fact]
     public void SelectionPaneDialog_AccumulatesMoveChangesInsteadOfClosingOnMove()
     {
         var source = ReadSelectionPaneDialogSources();
         var hostSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
 
         source.Should().Contain("private readonly List<SelectionPaneMoveChange> _moveChanges = [];");
-        source.Should().Contain("_moveChanges.Add(new SelectionPaneMoveChange");
+        source.Should().Contain("SelectionPaneDialogStatePlanner.PlanMove");
+        source.Should().Contain("_moveChanges.AddRange(plan.MoveChanges)");
         source.Should().Contain("ApplySearchAndFilter(selected.Source.Id)");
         var acceptMoveBody = source.Substring(
             source.IndexOf("private void AcceptMove", StringComparison.Ordinal),
@@ -246,6 +378,7 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("_list.DragOver");
         source.Should().Contain("_list.Drop");
         source.Should().Contain("DragDrop.DoDragDrop");
+        source.Should().Contain("SelectionPaneDialogStatePlanner.PlanDragReorder");
         source.Should().Contain("CreateDragMoveChanges");
     }
 
@@ -253,5 +386,12 @@ public sealed class SelectionPanePlannerTests
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.State.cs")));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.State.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.Planning.cs")));
+
+    private static SelectionPaneDialogItemState DialogState(
+        SelectionPaneObjectKind kind,
+        string name,
+        bool isVisible) =>
+        new(kind, Guid.NewGuid(), name, isVisible);
 }

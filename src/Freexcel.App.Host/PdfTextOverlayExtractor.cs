@@ -40,6 +40,10 @@ internal static class PdfTextOverlayExtractor
             y += frameworkElement.Margin.Top;
         }
 
+        var renderTranslation = ReadSimpleTranslation(element.RenderTransform);
+        x += renderTranslation.X;
+        y += renderTranslation.Y;
+
         if (element is VisualHost { TextOverlays.Count: > 0 } visualHost)
         {
             foreach (var overlay in visualHost.TextOverlays)
@@ -52,7 +56,7 @@ internal static class PdfTextOverlayExtractor
             }
         }
 
-        if (element is TextBlock textBlock && ExtractText(textBlock) is { Length: > 0 } text)
+        if (element is TextBlock textBlock && WpfTextContentExtractor.ExtractText(textBlock) is { Length: > 0 } text)
         {
             overlays.Add(new PdfTextOverlay(
                 text,
@@ -64,7 +68,7 @@ internal static class PdfTextOverlayExtractor
                 textBlock.FontStyle == FontStyles.Italic || textBlock.FontStyle == FontStyles.Oblique,
                 ResolveColor(textBlock.Foreground)));
         }
-        else if (element is AccessText accessText && NormalizeAccessText(accessText.Text) is { Length: > 0 } accessTextValue)
+        else if (element is AccessText accessText && WpfTextContentExtractor.NormalizeAccessText(accessText.Text) is { Length: > 0 } accessTextValue)
         {
             overlays.Add(new PdfTextOverlay(
                 accessTextValue,
@@ -89,7 +93,7 @@ internal static class PdfTextOverlayExtractor
                 ResolveColor(textBox.Foreground)));
         }
         else if (element is RichTextBox richTextBox &&
-                 ExtractFlowDocumentText(richTextBox.Document) is { Length: > 0 } richText)
+                 WpfTextContentExtractor.ExtractFlowDocumentText(richTextBox.Document) is { Length: > 0 } richText)
         {
             overlays.Add(new PdfTextOverlay(
                 richText,
@@ -102,7 +106,7 @@ internal static class PdfTextOverlayExtractor
                 ResolveColor(richTextBox.Foreground)));
         }
         else if (element is FlowDocumentScrollViewer flowDocumentViewer &&
-                 ExtractFlowDocumentText(flowDocumentViewer.Document) is { Length: > 0 } flowText)
+                 WpfTextContentExtractor.ExtractFlowDocumentText(flowDocumentViewer.Document) is { Length: > 0 } flowText)
         {
             overlays.Add(new PdfTextOverlay(
                 flowText,
@@ -115,7 +119,7 @@ internal static class PdfTextOverlayExtractor
                 ResolveColor(flowDocumentViewer.Foreground)));
         }
         else if (element is HeaderedContentControl headeredContentControl &&
-                 ExtractHeaderedContentText(headeredContentControl) is { Length: > 0 } headeredText)
+                 WpfTextContentExtractor.ExtractHeaderedContentText(headeredContentControl) is { Length: > 0 } headeredText)
         {
             overlays.Add(new PdfTextOverlay(
                 headeredText,
@@ -128,7 +132,7 @@ internal static class PdfTextOverlayExtractor
                 ResolveColor(headeredContentControl.Foreground)));
         }
         else if (element is ContentControl contentControl &&
-                 ExtractContentText(contentControl.Content) is { Length: > 0 } contentText)
+                 WpfTextContentExtractor.ExtractContentText(contentControl.Content) is { Length: > 0 } contentText)
         {
             overlays.Add(new PdfTextOverlay(
                 contentText,
@@ -140,7 +144,22 @@ internal static class PdfTextOverlayExtractor
                 contentControl.FontStyle == FontStyles.Italic || contentControl.FontStyle == FontStyles.Oblique,
                 ResolveColor(contentControl.Foreground)));
         }
-        else if (element is ItemsControl itemsControl && ExtractItemsText(itemsControl) is { Length: > 0 } itemsText)
+        else if (element is ComboBox { IsDropDownOpen: false } comboBox)
+        {
+            if (WpfTextContentExtractor.ExtractComboBoxSelectionText(comboBox) is { Length: > 0 } comboBoxText)
+            {
+                overlays.Add(new PdfTextOverlay(
+                    comboBoxText,
+                    x,
+                    y,
+                    comboBox.FontSize,
+                    comboBox.FontFamily.Source,
+                    comboBox.FontWeight >= FontWeights.SemiBold,
+                    comboBox.FontStyle == FontStyles.Italic || comboBox.FontStyle == FontStyles.Oblique,
+                    ResolveColor(comboBox.Foreground)));
+            }
+        }
+        else if (element is ItemsControl itemsControl && WpfTextContentExtractor.ExtractItemsText(itemsControl) is { Length: > 0 } itemsText)
         {
             overlays.Add(new PdfTextOverlay(
                 itemsText,
@@ -184,93 +203,11 @@ internal static class PdfTextOverlayExtractor
 
         if (element is ItemsControl itemsControlWithElementItems)
         {
-            foreach (var item in itemsControlWithElementItems.Items)
+            foreach (var item in WpfTextContentExtractor.EnumerateVisibleItemElements(itemsControlWithElementItems))
             {
-                if (item is UIElement itemElement)
-                    Extract(itemElement, x, y, overlays);
+                Extract(item, x, y, overlays);
             }
         }
-    }
-
-    private static string ExtractText(TextBlock textBlock)
-    {
-        if (!string.IsNullOrEmpty(textBlock.Text))
-            return textBlock.Text;
-
-        var parts = new List<string>();
-        foreach (var inline in textBlock.Inlines)
-            AppendInlineText(inline, parts);
-
-        return string.Concat(parts);
-    }
-
-    private static string ExtractContentText(object? content)
-    {
-        if (content is null or UIElement)
-            return "";
-
-        var text = content.ToString();
-        return string.IsNullOrWhiteSpace(text) ? "" : text;
-    }
-
-    private static string ExtractHeaderedContentText(HeaderedContentControl control)
-    {
-        var parts = new List<string>();
-        if (ExtractContentText(control.Header) is { Length: > 0 } headerText)
-            parts.Add(headerText);
-        if (ExtractContentText(control.Content) is { Length: > 0 } contentText)
-            parts.Add(contentText);
-
-        return string.Join("\n", parts);
-    }
-
-    private static string ExtractItemsText(ItemsControl itemsControl)
-    {
-        var parts = new List<string>();
-        foreach (var item in itemsControl.Items)
-        {
-            var text = ExtractContentText(item);
-            if (!string.IsNullOrWhiteSpace(text))
-                parts.Add(text);
-        }
-
-        return string.Join("\n", parts);
-    }
-
-    private static string ExtractFlowDocumentText(FlowDocument? document)
-    {
-        if (document is null)
-            return "";
-
-        var range = new TextRange(document.ContentStart, document.ContentEnd);
-        return range.Text.TrimEnd('\r', '\n');
-    }
-
-    private static void AppendInlineText(Inline inline, List<string> parts)
-    {
-        switch (inline)
-        {
-            case Run run:
-                parts.Add(run.Text);
-                break;
-            case LineBreak:
-                parts.Add("\n");
-                break;
-            case Span span:
-                foreach (var child in span.Inlines)
-                    AppendInlineText(child, parts);
-                break;
-        }
-    }
-
-    private static string NormalizeAccessText(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return "";
-
-        return text.Replace("__", "\u0000", StringComparison.Ordinal)
-            .Replace("_", "", StringComparison.Ordinal)
-            .Replace("\u0000", "_", StringComparison.Ordinal);
     }
 
     private static double ReadLeft(UIElement element)
@@ -284,6 +221,61 @@ internal static class PdfTextOverlayExtractor
         var top = Canvas.GetTop(element);
         return double.IsNaN(top) ? 0 : top;
     }
+
+    private static Vector ReadSimpleTranslation(Transform? transform)
+    {
+        return TryReadSimpleTranslation(transform, out var translation)
+            ? translation
+            : default;
+    }
+
+    private static bool TryReadSimpleTranslation(Transform? transform, out Vector translation)
+    {
+        if (transform is null || transform == Transform.Identity)
+        {
+            translation = default;
+            return true;
+        }
+
+        switch (transform)
+        {
+            case TranslateTransform translate:
+                translation = new Vector(translate.X, translate.Y);
+                return true;
+            case MatrixTransform matrixTransform when IsOffsetOnly(matrixTransform.Matrix):
+                translation = new Vector(matrixTransform.Matrix.OffsetX, matrixTransform.Matrix.OffsetY);
+                return true;
+            case TransformGroup group:
+                return TryReadSimpleTranslation(group, out translation);
+            default:
+                translation = default;
+                return false;
+        }
+    }
+
+    private static bool TryReadSimpleTranslation(TransformGroup group, out Vector translation)
+    {
+        var result = new Vector();
+        foreach (var child in group.Children)
+        {
+            if (!TryReadSimpleTranslation(child, out var childTranslation))
+            {
+                translation = default;
+                return false;
+            }
+
+            result += childTranslation;
+        }
+
+        translation = result;
+        return true;
+    }
+
+    private static bool IsOffsetOnly(Matrix matrix) =>
+        matrix.M11 == 1 &&
+        matrix.M12 == 0 &&
+        matrix.M21 == 0 &&
+        matrix.M22 == 1;
 
     private static Color ResolveColor(Brush brush) =>
         brush is SolidColorBrush solid

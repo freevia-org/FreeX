@@ -10,10 +10,12 @@ public static partial class PrintRenderer
     private static void DrawPrintedGridCells(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
+        ICollection<PdfLinkOverlay> linkOverlays,
         PrintGridMeasurement measurement,
         IReadOnlyList<uint> pageRows,
         IReadOnlyList<uint> pageColumns,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        IReadOnlyDictionary<(uint Row, uint Col), PdfLinkTarget> hyperlinkLookup,
         bool printGridlines,
         WorksheetPrintErrorValue printErrorValue,
         double gridLeft,
@@ -37,6 +39,17 @@ public static partial class PrintRenderer
                         new Rect(x, y, colWidth, rowHeight));
                 }
 
+                if (hyperlinkLookup.TryGetValue((row, col), out var link))
+                {
+                    linkOverlays.Add(new PdfLinkOverlay(
+                        link.Target,
+                        link.TargetKind,
+                        x,
+                        y,
+                        colWidth,
+                        rowHeight));
+                }
+
                 if (!cellLookup.TryGetValue((row, col), out var cell) ||
                     string.IsNullOrEmpty(cell.DisplayText))
                 {
@@ -51,7 +64,7 @@ public static partial class PrintRenderer
                     displayText,
                     CultureInfo.CurrentCulture,
                     FlowDirection.LeftToRight,
-                    new Typeface("Segoe UI"),
+                    PrintedCellTypeface,
                     PrintFontSize,
                     Brushes.Black,
                     1.0)
@@ -63,12 +76,13 @@ public static partial class PrintRenderer
 
                 var textPoint = new Point(x + 2, y + (rowHeight - ft.Height) / 2);
                 dc.DrawText(ft, textPoint);
+                var overlayText = BoundPrintedCellOverlayText(displayText, ft.MaxTextWidth);
                 textOverlays.Add(new PdfTextOverlay(
-                    displayText,
+                    overlayText,
                     textPoint.X,
                     textPoint.Y,
                     PrintFontSize,
-                    "Segoe UI",
+                    PrintedCellTypeface.FontFamily.Source,
                     Bold: false,
                     Italic: false,
                     Colors.Black));

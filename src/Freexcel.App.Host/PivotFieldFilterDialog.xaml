@@ -49,6 +49,7 @@
                     <CheckBox x:Name="SelectAllCheckBox"
                               Grid.Row="3"
                               Content="Select _All"
+                              IsThreeState="True"
                               Margin="2,0,0,6"
                               Click="SelectAllCheckBox_Click"/>
 

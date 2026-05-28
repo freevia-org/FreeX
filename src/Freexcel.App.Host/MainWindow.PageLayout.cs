@@ -115,11 +115,23 @@ public partial class MainWindow
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Sheet Background",
-            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*"
+            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
         };
 
         if (dialog.ShowDialog(this) != true)
             return;
+
+        if (!IsSupportedSheetBackgroundFile(dialog.FileName))
+        {
+            ShowOwnedMessage(
+                "Choose a PNG, JPG, JPEG, BMP, or GIF image file.",
+                "Sheet Background",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
 
         byte[] bytes;
         try
@@ -128,12 +140,12 @@ public partial class MainWindow
         }
         catch (IOException ex)
         {
-            MessageBox.Show($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         catch (UnauthorizedAccessException ex)
         {
-            MessageBox.Show($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -148,6 +160,13 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private static bool IsSupportedSheetBackgroundFile(string fileName) =>
+        Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" => true,
+            _ => false
+        };
+
     private void BackgroundClearMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (!TryExecuteGroupedSheetCommand("Clear Sheet Background", sheetId => new ClearWorksheetBackgroundCommand(sheetId)))
@@ -159,7 +178,7 @@ public partial class MainWindow
     private void PageMarginsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void MarginNormalMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -184,7 +203,7 @@ public partial class MainWindow
     private void PageOrientBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void OrientPortraitMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -203,7 +222,7 @@ public partial class MainWindow
     private void PageSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void SizeLetter_Click(object sender, RoutedEventArgs e)
     {
@@ -223,7 +242,7 @@ public partial class MainWindow
     private void PrintAreaBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void PrintAreaSetMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -242,7 +261,7 @@ public partial class MainWindow
 
     private void ScaleToFitBtn_Click(object sender, RoutedEventArgs e)
     {
-        PageSetupDialogBtn_Click(sender, e);
+        ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit);
     }
 
     private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
@@ -325,64 +344,29 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        PageSetupDialogBtn_Click(sender, e);
+        ShowPageSetupDialog(PageSetupInitialFocusTarget.RepeatRows);
     }
 
-    private void PageSetupDialogBtn_Click(object sender, RoutedEventArgs e)
+    private void PageSetupDialogBtn_Click(object sender, RoutedEventArgs e) =>
+        ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+
+    private void ShowPageSetupDialog(PageSetupInitialFocusTarget initialFocusTarget)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var dialog = new PageSetupDialog(sheet, SheetGrid.SelectedRange) { Owner = this };
+        PageSetupDialog? dialog = null;
+        dialog = new PageSetupDialog(
+            sheet,
+            SheetGrid.SelectedRange,
+            request => ApplyPageSetupRangeSelection(dialog, request),
+            initialFocusTarget) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
         if (!TryExecuteGroupedSheetCommand(
                 "Page Setup",
-                sheetId => new CompositeWorkbookCommand(
-                    "Page Setup",
-                    [
-                        CreatePageSetupPrintAreaCommand(sheetId, dialog.PrintArea),
-                        new SetPageSetupCommand(
-                            sheetId,
-                            dialog.Orientation,
-                            dialog.PaperSize,
-                            dialog.Margins,
-                            dialog.PrintGridlines,
-                            dialog.PrintHeadings,
-                            dialog.ScaleToFit,
-                            dialog.PrintTitleRows,
-                            dialog.PrintTitleColumns,
-                            dialog.CenterHorizontally,
-                            dialog.CenterVertically,
-                            dialog.PageOrder,
-                            dialog.FirstPageNumber,
-                            dialog.HeaderMargin,
-                            dialog.FooterMargin,
-                            dialog.PrintBlackAndWhite,
-                            dialog.PrintDraftQuality,
-                            dialog.PrintQualityDpi,
-                            dialog.PrintErrorValue,
-                            dialog.PrintComments),
-                        new SetHeaderFooterCommand(
-                            sheetId,
-                            dialog.Header,
-                            dialog.Footer,
-                            dialog.FirstPageHeader,
-                            dialog.FirstPageFooter,
-                            dialog.EvenPageHeader,
-                            dialog.EvenPageFooter,
-                            dialog.DifferentFirstPage,
-                            dialog.DifferentOddEvenPages,
-                            dialog.ScaleHeaderFooterWithDocument,
-                            dialog.AlignHeaderFooterWithMargins,
-                            dialog.HeaderPictures,
-                            dialog.FooterPictures,
-                            dialog.FirstPageHeaderPictures,
-                            dialog.FirstPageFooterPictures,
-                            dialog.EvenPageHeaderPictures,
-                            dialog.EvenPageFooterPictures)
-                    ])))
+                sheetId => PageSetupCommandBuilder.Build(sheetId, dialog)))
             return;
 
         UpdateViewport();
@@ -397,10 +381,31 @@ public partial class MainWindow
             PrintButton_Click(this, new RoutedEventArgs());
     }
 
-    private static IWorkbookCommand CreatePageSetupPrintAreaCommand(SheetId sheetId, GridRange? printArea) =>
-        printArea is { } range
-            ? new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))
-            : new ClearPrintAreaCommand(sheetId);
+    private void ApplyPageSetupRangeSelection(PageSetupDialog? dialog, PageSetupRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = PageSetupRangeSelectionFormatter.Format(
+            request.Target,
+            selectedRange,
+            _options.UseR1C1ReferenceStyle);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
 
     private void ShowPageSetupPrinterOptions()
     {

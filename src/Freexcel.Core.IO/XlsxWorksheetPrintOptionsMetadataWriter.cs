@@ -40,7 +40,7 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrintOptionsAttribute(attribute.Key))
                     continue;
 
-                printOptions.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(printOptions, attribute.Key, attribute.Value);
             }
 
             if (sheet.PrintOptionsMetadata.NativeChildXmls.Count > 0)

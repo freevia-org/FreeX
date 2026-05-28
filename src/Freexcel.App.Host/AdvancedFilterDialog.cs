@@ -33,6 +33,8 @@ public sealed partial class AdvancedFilterDialog : Window
     private readonly TextBox _listRangeBox = new();
     private readonly TextBox _criteriaRangeBox = new();
     private readonly TextBox _copyToBox = new();
+    private readonly DockPanel _copyToEditor;
+    private readonly Label _copyToLabel;
     private readonly RadioButton _filterInPlaceButton = new() { Content = "_Filter the list, in-place", IsChecked = true };
     private readonly RadioButton _copyToAnotherLocationButton = new() { Content = "_Copy to another location" };
     private readonly CheckBox _uniqueBox = new() { Content = "_Unique records only" };
@@ -56,6 +58,7 @@ public sealed partial class AdvancedFilterDialog : Window
         _sheetId = sheetId;
         _resolveSheetId = resolveSheetId ?? (_ => null);
         _requestRangeSelection = requestRangeSelection;
+        _copyToEditor = CreateReferenceEditor(_copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo);
         Title = "Advanced Filter";
         Width = 420;
         Height = 340;
@@ -64,18 +67,14 @@ public sealed partial class AdvancedFilterDialog : Window
         ShowInTaskbar = false;
 
         _listRangeBox.Text = defaultListRange;
+        AutomationProperties.SetName(_listRangeBox, "List range");
+        AutomationProperties.SetName(_criteriaRangeBox, "Criteria range");
+        AutomationProperties.SetName(_copyToBox, "Copy to");
         var root = new DockPanel { Margin = new Thickness(12) };
         DockPanel.SetDock(root, Dock.Top);
 
         var content = new StackPanel();
         root.Children.Add(content);
-
-        content.Children.Add(new TextBlock
-        {
-            Text = "Action",
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 4)
-        });
 
         var actionGroup = new GroupBox { Header = "Action", Margin = new Thickness(0, 0, 0, 10) };
         var actionPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
@@ -92,8 +91,8 @@ public sealed partial class AdvancedFilterDialog : Window
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         AddReferenceRow(rangesGrid, 0, "_List range:", _listRangeBox, "Select list range", AdvancedFilterRangeSelectionTarget.ListRange);
-        AddReferenceRow(rangesGrid, 1, "_Criteria range:", _criteriaRangeBox, "Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange);
-        AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo);
+        AddReferenceRow(rangesGrid, 1, "Criteria _range:", _criteriaRangeBox, "Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange);
+        _copyToLabel = AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo, _copyToEditor);
         content.Children.Add(rangesGrid);
         content.Children.Add(_copyToHint);
 
@@ -121,13 +120,14 @@ public sealed partial class AdvancedFilterDialog : Window
             automationName,
             requestSelection: request => RequestRangeSelection(target, request));
 
-    private void AddReferenceRow(
+    private Label AddReferenceRow(
         Grid grid,
         int row,
         string label,
         TextBox textBox,
         string automationName,
-        AdvancedFilterRangeSelectionTarget target)
+        AdvancedFilterRangeSelectionTarget target,
+        DockPanel? editor = null)
     {
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var labelBlock = new Label
@@ -142,11 +142,12 @@ public sealed partial class AdvancedFilterDialog : Window
         Grid.SetColumn(labelBlock, 0);
         grid.Children.Add(labelBlock);
 
-        var editor = CreateReferenceEditor(textBox, automationName, target);
-        editor.Margin = new Thickness(0, row == 0 ? 0 : 8, 0, 0);
-        Grid.SetRow(editor, row);
-        Grid.SetColumn(editor, 1);
-        grid.Children.Add(editor);
+        var rowEditor = editor ?? CreateReferenceEditor(textBox, automationName, target);
+        rowEditor.Margin = new Thickness(0, row == 0 ? 0 : 8, 0, 0);
+        Grid.SetRow(rowEditor, row);
+        Grid.SetColumn(rowEditor, 1);
+        grid.Children.Add(rowEditor);
+        return labelBlock;
     }
 
     private void RequestRangeSelection(AdvancedFilterRangeSelectionTarget target, DialogReferencePickerRequest request)
@@ -154,6 +155,25 @@ public sealed partial class AdvancedFilterDialog : Window
         RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         FocusRangeSelectionInput(request.Target);
+    }
+
+    public void ApplyRangeSelection(AdvancedFilterRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target switch
+        {
+            AdvancedFilterRangeSelectionTarget.CriteriaRange => _criteriaRangeBox,
+            AdvancedFilterRangeSelectionTarget.CopyTo => _copyToBox,
+            _ => _listRangeBox
+        };
+
+        textBox.Text = rangeText;
+        if (target == AdvancedFilterRangeSelectionTarget.CopyTo)
+        {
+            _copyToAnotherLocationButton.IsChecked = true;
+            UpdateCopyToState();
+        }
+
+        FocusRangeSelectionInput(textBox);
     }
 
     private static void FocusRangeSelectionInput(TextBox target)
@@ -171,7 +191,10 @@ public sealed partial class AdvancedFilterDialog : Window
 
     private void UpdateCopyToState()
     {
-        _copyToBox.IsEnabled = _copyToAnotherLocationButton.IsChecked == true;
+        var isCopyToEnabled = _copyToAnotherLocationButton.IsChecked == true;
+        _copyToLabel.IsEnabled = isCopyToEnabled;
+        _copyToEditor.IsEnabled = isCopyToEnabled;
+        _copyToBox.IsEnabled = isCopyToEnabled;
         _copyToHint.Visibility = _copyToAnotherLocationButton.IsChecked == true
             ? Visibility.Collapsed
             : Visibility.Visible;
@@ -181,6 +204,10 @@ public sealed partial class AdvancedFilterDialog : Window
     {
         TextBox target;
         if (string.Equals(error, "Enter a valid criteria range.", StringComparison.Ordinal))
+        {
+            target = _criteriaRangeBox;
+        }
+        else if (string.Equals(error, "Criteria range must include headers and at least one criteria row.", StringComparison.Ordinal))
         {
             target = _criteriaRangeBox;
         }

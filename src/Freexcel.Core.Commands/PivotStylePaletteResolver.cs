@@ -47,9 +47,9 @@ internal static class PivotStylePaletteResolver
             return true;
         }
 
-        if (string.Equals(styleName, "PivotStyleLight16", StringComparison.OrdinalIgnoreCase))
+        if (TryResolveLightThemeSlot(styleName, out var lightSlot))
         {
-            palette = ThemedLightPalette(theme, WorkbookThemeColorSlot.Accent1);
+            palette = ThemedLightPalette(theme, lightSlot);
             return true;
         }
 
@@ -78,6 +78,48 @@ internal static class PivotStylePaletteResolver
         }
 
         palette = LightPalette();
+        return false;
+    }
+
+    private static bool TryResolveLightThemeSlot(string styleName, out WorkbookThemeColorSlot slot)
+    {
+        if (string.Equals(styleName, "PivotStyleLight16", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent1;
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleLight17", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent2;
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleLight18", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent3;
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleLight19", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent4;
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleLight20", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent5;
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleLight21", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent6;
+            return true;
+        }
+
+        slot = default;
         return false;
     }
 

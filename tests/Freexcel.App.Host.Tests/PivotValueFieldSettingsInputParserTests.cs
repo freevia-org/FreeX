@@ -178,13 +178,13 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData(PivotShowValuesAs.PercentOfParentTotal)]
     public void TryValidateShowValuesAs_RequiresBaseFieldForBaseFieldModes(PivotShowValuesAs showValuesAs)
     {
-        PivotValueFieldSettingsDialog.TryValidateShowValuesAs(showValuesAs, null, null, out var error)
+        PivotValueFieldSettingsDialogPlanner.TryValidateShowValuesAs(showValuesAs, null, null, out var error)
             .Should()
             .BeFalse();
 
         error.Should().Be("Select a base field for this Show Values As calculation.");
 
-        PivotValueFieldSettingsDialog.TryValidateShowValuesAs(showValuesAs, 1, null, out error)
+        PivotValueFieldSettingsDialogPlanner.TryValidateShowValuesAs(showValuesAs, 1, null, out error)
             .Should()
             .BeTrue();
         error.Should().BeNull();
@@ -195,15 +195,47 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData(PivotShowValuesAs.PercentDifferenceFrom)]
     public void TryValidateShowValuesAs_RequiresBaseItemForDifferenceModes(PivotShowValuesAs showValuesAs)
     {
-        PivotValueFieldSettingsDialog.TryValidateShowValuesAs(showValuesAs, 1, "", out var error)
+        PivotValueFieldSettingsDialogPlanner.TryValidateShowValuesAs(showValuesAs, 1, "", out var error)
             .Should()
             .BeFalse();
 
         error.Should().Be("Enter a base item for this Show Values As calculation.");
 
-        PivotValueFieldSettingsDialog.TryValidateShowValuesAs(showValuesAs, 1, "Q1", out error)
+        PivotValueFieldSettingsDialogPlanner.TryValidateShowValuesAs(showValuesAs, 1, "Q1", out error)
             .Should()
             .BeTrue();
         error.Should().BeNull();
+    }
+
+    [Fact]
+    public void DialogPlanner_MapsSelectionsAndCreatesResult()
+    {
+        var field = new PivotDataFieldModel(0, "Amount", "count")
+        {
+            ShowValuesAs = PivotShowValuesAs.None
+        };
+
+        PivotValueFieldSettingsDialogPlanner.FindSummaryFunctionIndex("average").Should().Be(2);
+        PivotValueFieldSettingsDialogPlanner.FindShowValuesAsIndex(PivotShowValuesAs.DifferenceFrom).Should().Be(5);
+        PivotValueFieldSettingsDialogPlanner.FindBaseFieldIndex(1, sourceHeaderCount: 3).Should().Be(2);
+        PivotValueFieldSettingsDialogPlanner.ShowValuesAsRequiresBaseField(PivotShowValuesAs.PercentOfGrandTotal).Should().BeFalse();
+
+        var result = PivotValueFieldSettingsDialogPlanner.CreateResult(
+            field,
+            " Average Amount ",
+            summaryFunctionIndex: 2,
+            showValuesAsIndex: 5,
+            baseFieldSelectedIndex: 3,
+            baseItemText: " Q1 ",
+            numberFormatId: 4,
+            numberFormatCode: "#,##0.00");
+
+        result.Name.Should().Be("Average Amount");
+        result.SummaryFunction.Should().Be("average");
+        result.ShowValuesAs.Should().Be(PivotShowValuesAs.DifferenceFrom);
+        result.BaseFieldIndex.Should().Be(2);
+        result.BaseItem.Should().Be("Q1");
+        result.NumberFormatId.Should().Be(4);
+        result.NumberFormatCode.Should().Be("#,##0.00");
     }
 }

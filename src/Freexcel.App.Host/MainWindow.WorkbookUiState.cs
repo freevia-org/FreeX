@@ -60,7 +60,43 @@ public partial class MainWindow
 
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        UpdateRibbonCompactMode();
+        NormalizeRibbonSurfaceAfterResize();
+        ScheduleViewportResizeRefresh();
+    }
+
+    private void ScheduleViewportResizeRefresh()
+    {
+        if (!_resizeViewportRefreshPending)
+            SheetGrid.IsLiveResizing = true;
+
+        _resizeViewportRefreshPending = true;
+        _resizeViewportRefreshTimer ??= CreateResizeViewportRefreshTimer();
+        _resizeViewportRefreshTimer.Stop();
+        if (_isInWindowResizeMoveLoop)
+            return;
+
+        _resizeViewportRefreshTimer.Start();
+    }
+
+    private System.Windows.Threading.DispatcherTimer CreateResizeViewportRefreshTimer()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background,
+            Dispatcher)
+        {
+            Interval = System.TimeSpan.FromMilliseconds(ResizeViewportRefreshDelayMilliseconds)
+        };
+
+        timer.Tick += (_, _) => CompleteViewportResizeRefresh();
+
+        return timer;
+    }
+
+    private void CompleteViewportResizeRefresh()
+    {
+        _resizeViewportRefreshTimer?.Stop();
+        _resizeViewportRefreshPending = false;
+        SheetGrid.IsLiveResizing = false;
         UpdateViewport();
     }
 
@@ -200,6 +236,9 @@ public partial class MainWindow
         ProtectSheetButton.Content = uiText.ButtonContent;
         RibbonTooltip.SetTitle(ProtectSheetButton, uiText.TooltipTitle);
         RibbonTooltip.SetDescription(ProtectSheetButton, uiText.TooltipDescription);
+
+        if (AllowEditRangesButton is not null)
+            AllowEditRangesButton.IsEnabled = !sheet.IsProtected;
     }
 
     private void RefreshWorkbookProtectionUi()

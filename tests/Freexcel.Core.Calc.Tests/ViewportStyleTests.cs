@@ -85,6 +85,30 @@ public class ViewportStyleTests
     }
 
     [Fact]
+    public void GetViewport_NumberFormatColorUsesWorkbookTheme()
+    {
+        var workbook = new Workbook("test")
+        {
+            Theme = WorkbookTheme.Office.WithColor(
+                WorkbookThemeColorSlot.Accent2,
+                CellColor.FromArgb(0x21, 0x43, 0x65))
+        };
+        var sheet = workbook.AddSheet("Sheet1");
+        var style = new CellStyle { NumberFormat = "[ThemeAccent2]0.0" };
+        var styleId = workbook.RegisterStyle(style);
+        var cell = Cell.FromValue(new NumberValue(12.5));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var displayCell = vp.Cells.Single(c => c.Row == 1 && c.Col == 1);
+        displayCell.DisplayText.Should().Be("12.5");
+        displayCell.Style!.FontColor.Should().Be(CellColor.FromArgb(0x21, 0x43, 0x65));
+    }
+
+    [Fact]
     public void GetViewport_CommentOnlyCell_PopulatesDisplayCellWithCommentIndicator()
     {
         var workbook = new Workbook("test");
@@ -98,6 +122,24 @@ public class ViewportStyleTests
         var dc = vp.Cells.Single(c => c.Row == 2 && c.Col == 2);
         dc.HasComment.Should().BeTrue();
         dc.DisplayText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FrozenViewportMetrics_AvoidLinqListMaterialization()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.Calc", "ViewportService.Metrics.cs"));
+        var frozenMetricHelpers = source[
+            source.IndexOf("private static List<RowMetric> BuildFrozenAwareRowMetrics", StringComparison.Ordinal)..
+            source.IndexOf("private static List<RowMetric> BuildRowMetrics", StringComparison.Ordinal)];
+
+        frozenMetricHelpers.Should().Contain("CombineRows(pinnedRows, bodyRows)");
+        frozenMetricHelpers.Should().Contain("CombineColumns(pinnedColumns, bodyColumns)");
+        frozenMetricHelpers.Should().Contain("new List<RowMetric>(pinnedRows.Count + bodyRows.Count)");
+        frozenMetricHelpers.Should().Contain("new List<ColMetric>(pinnedColumns.Count + bodyColumns.Count)");
+        frozenMetricHelpers.Should().NotContain("Concat(");
+        frozenMetricHelpers.Should().NotContain(".Select(");
+        frozenMetricHelpers.Should().NotContain(".ToList()");
     }
 
     [Fact]
@@ -136,5 +178,19 @@ public class ViewportStyleTests
             .Should().BeFalse("value 10 is below the average of 20");
         vp.Cells.Single(c => c.Row == 2 && c.Col == 1).Style!.Bold
             .Should().BeFalse("value 20 equals the average, not strictly above");
+    }
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 }

@@ -94,9 +94,11 @@ public partial class MainWindow
         if (!TryGetActiveNormalChart("Select Data Source", out var chart))
             return;
 
-        var dialog = new SelectDataSourceDialog(
+        SelectDataSourceDialog? dialog = null;
+        dialog = new SelectDataSourceDialog(
             FormatRangeReference(chart.DataRange.Start, chart.DataRange.End),
             chart.FirstColIsCategories,
+            request => ApplySelectDataSourceRangeSelection(dialog, request),
             sheetId: _currentSheetId)
         {
             Owner = this
@@ -121,6 +123,31 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+    }
+
+    private void ApplySelectDataSourceRangeSelection(
+        SelectDataSourceDialog? dialog,
+        SelectDataSourceRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void MoveChartBtn_Click(object sender, RoutedEventArgs e)
@@ -346,6 +373,48 @@ public partial class MainWindow
         ApplyChartLayoutDialogResult("Format Bubble Chart", chart, dialog.Result.ToOptions());
     }
 
+    private void ChartPieFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Pie/Doughnut",
+                "Insert or select a pie or doughnut chart before changing pie options.",
+                out var chart))
+            return;
+
+        if (!ChartTypeSupport.SupportsFirstSliceAngle(chart.Type))
+        {
+            MessageBox.Show(this, "Pie format options only apply to pie and doughnut charts.", "Format Pie/Doughnut", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ChartPieFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Pie/Doughnut", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartStockFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Stock Chart",
+                "Insert or select a stock chart before changing stock options.",
+                out var chart))
+            return;
+
+        if (chart.Type != ChartType.Stock)
+        {
+            MessageBox.Show(this, "Stock format options only apply to stock charts.", "Format Stock Chart", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ChartStockFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Stock Chart", chart, dialog.Result.ToOptions());
+    }
+
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
     {
         ShowChartDataLabelsDialog();
@@ -401,13 +470,7 @@ public partial class MainWindow
             "Label Separator",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelSeparator: chart.DataLabelSeparator switch
-                {
-                    ChartDataLabelSeparator.Comma => ChartDataLabelSeparator.Semicolon,
-                    ChartDataLabelSeparator.Semicolon => ChartDataLabelSeparator.NewLine,
-                    ChartDataLabelSeparator.NewLine => ChartDataLabelSeparator.Space,
-                    _ => ChartDataLabelSeparator.Comma
-                }));
+                DataLabelSeparator: ChartOptionCycler.NextDataLabelSeparator(chart.DataLabelSeparator)));
     }
 
     private void ChartDataLabelNumberFormatBtn_Click(object sender, RoutedEventArgs e)

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Model;
@@ -61,9 +62,11 @@ public sealed class SparklineDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Data range:", Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _dataRangeBox.Text = Result.DataRangeText;
+        AutomationProperties.SetName(_dataRangeBox, "Sparkline data range");
         stack.Children.Add(CreateRangePickerRow(_dataRangeBox, _dataRangePickerButton));
         stack.Children.Add(new Label { Content = "_Location:", Target = _locationBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _locationBox.Text = Result.LocationText;
+        AutomationProperties.SetName(_locationBox, "Sparkline location");
         stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
         stack.Children.Add(new Label { Content = "Sparkline _type:", Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>()
@@ -81,12 +84,12 @@ public sealed class SparklineDialog : Window
     }
 
     public static SparklineDialogResult CreateResult(string dataRangeText, string locationText, SparklineKindChoice kind) =>
-        new(dataRangeText.Trim(), locationText.Trim(), kind);
+        SparklineDialogPlanner.CreateResult(dataRangeText, locationText, kind);
 
     public static SparklineRangeSelectionRequest CreateRangeSelectionRequest(
         SparklineRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        SparklineDialogPlanner.CreateRangeSelectionRequest(target, currentText);
 
     private void Accept()
     {
@@ -102,19 +105,14 @@ public sealed class SparklineDialog : Window
 
     private bool ValidateInputs()
     {
-        if (!SparklineInputParser.TryParseDataRange(_dataRangeBox.Text, _sheetId, out _))
+        return SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId) switch
         {
-            ShowInvalidInputWarning("Invalid data range.", _dataRangeBox);
-            return false;
-        }
-
-        if (!SparklineInputParser.TryParseLocation(_locationBox.Text, _sheetId, out _))
-        {
-            ShowInvalidInputWarning("Invalid location cell.", _locationBox);
-            return false;
-        }
-
-        return true;
+            SparklineDialogValidationResult.InvalidDataRange =>
+                ShowInvalidInputWarning("Invalid data range.", _dataRangeBox),
+            SparklineDialogValidationResult.InvalidLocation =>
+                ShowInvalidInputWarning("Invalid location cell.", _locationBox),
+            _ => true
+        };
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox textBox)
@@ -125,7 +123,7 @@ public sealed class SparklineDialog : Window
     }
 
     public static string GetKindLabel(SparklineKindChoice kind) =>
-        kind == SparklineKindChoice.WinLoss ? "Win/Loss" : kind.ToString();
+        SparklineDialogPlanner.GetKindLabel(kind);
 
     private void FocusInitialKeyboardTarget()
     {
@@ -150,6 +148,15 @@ public sealed class SparklineDialog : Window
         FocusRangeSelectionInput(textBox);
         RangeSelectionRequest = CreateRangeSelectionRequest(target, textBox.Text);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
+        FocusRangeSelectionInput(textBox);
+    }
+
+    public void ApplyRangeSelection(SparklineRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target == SparklineRangeSelectionTarget.Location
+            ? _locationBox
+            : _dataRangeBox;
+        textBox.Text = rangeText;
         FocusRangeSelectionInput(textBox);
     }
 

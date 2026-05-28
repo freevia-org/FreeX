@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -12,7 +13,7 @@ internal sealed class ExportOptionsDialog : Window
     private readonly CheckBox _documentPropertiesBox = new() { Content = "_Include document properties" };
     private readonly CheckBox _openAfterPublishBox = new() { Content = "_Open after publishing" };
     private readonly CheckBox _ignorePrintAreasBox = new() { Content = "_Ignore print areas" };
-    private readonly CheckBox _bookmarksBox = new() { Content = "Create _PDF bookmarks using sheet names" };
+    private readonly CheckBox _bookmarksBox = new() { Content = "Create _PDF bookmarks" };
     private readonly CheckBox _bitmapTextBox = new() { Content = "_Bitmap text when fonts may not be embedded" };
     private readonly CheckBox _pdfABox = new() { Content = "PDF/_A compliant (not supported)", IsEnabled = false };
     private readonly CheckBox _structureTagsBox = new() { Content = "Document structure _tags (not supported)", IsEnabled = false };
@@ -29,7 +30,7 @@ internal sealed class ExportOptionsDialog : Window
 
     public ExportOptions Result { get; private set; } = ExportOptions.ExcelLikeDefault;
 
-    public ExportOptionsDialog(bool hasSelection)
+    public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null)
     {
         Title = "Export Options";
         Width = 430;
@@ -38,9 +39,14 @@ internal sealed class ExportOptionsDialog : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
+        _pdfLanguageBox.Text = ExportPlanner.NormalizePdfLanguage(initialPdfLanguage);
+
         _selectionButton.IsEnabled = hasSelection;
         if (!hasSelection)
+        {
             _selectionButton.ToolTip = "Select a cell range before exporting the selection.";
+            AutomationProperties.SetHelpText(_selectionButton, "Select a cell range before exporting the selection.");
+        }
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = "Publish what", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
@@ -100,6 +106,8 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(_bitmapTextBox);
         _pdfABox.ToolTip = "Freexcel's current PDF exporter cannot write PDF/A conformance metadata.";
         _structureTagsBox.ToolTip = "Freexcel's current PDF exporter cannot write tagged PDF structure trees.";
+        AutomationProperties.SetHelpText(_pdfABox, "Freexcel's current PDF exporter cannot write PDF/A conformance metadata.");
+        AutomationProperties.SetHelpText(_structureTagsBox, "Freexcel's current PDF exporter cannot write tagged PDF structure trees.");
         stack.Children.Add(_pdfABox);
         stack.Children.Add(_structureTagsBox);
         stack.Children.Add(_standardQualityButton);
@@ -187,16 +195,9 @@ internal sealed class ExportOptionsDialog : Window
 
     private TextBox ResolveInvalidPageRangeInput(string? error)
     {
-        if (string.Equals(error, "From page must be less than or equal to To page.", StringComparison.Ordinal))
-            return _toPageBox;
-
-        if (int.TryParse(_fromPageBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var fromPage)
-            && fromPage >= 1)
-        {
-            return _toPageBox;
-        }
-
-        return _fromPageBox;
+        return ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text) == ExportOptionsFocusTarget.ToPage
+            ? _toPageBox
+            : _fromPageBox;
     }
 
     private void FocusInvalidPdfLanguageInput()
@@ -221,48 +222,28 @@ internal sealed class ExportOptionsDialog : Window
         string? pdfLanguage = ExportPlanner.DefaultPdfLanguage,
         PdfConformance pdfConformance = PdfConformance.Standard,
         bool includeDocumentStructureTags = false) =>
-        new(
-            Enum.IsDefined(scope) ? scope : ExportContentScope.ActiveSheet,
+        ExportOptionsDialogPlanner.CreateResult(
+            scope,
             includeDocumentProperties,
             openAfterPublish,
             ignorePrintAreas,
             pageRange,
-            Enum.IsDefined(quality) ? quality : ExportQuality.Standard,
+            quality,
             createBookmarks,
-            createBookmarks && Enum.IsDefined(bookmarkMode) && bookmarkMode != PdfBookmarkMode.None
-                ? bookmarkMode
-                : createBookmarks
-                    ? PdfBookmarkMode.SheetNames
-                    : PdfBookmarkMode.None,
-            Enum.IsDefined(initialView) ? initialView : PdfInitialView.SinglePage,
-            Enum.IsDefined(openMode) ? openMode : PdfOpenMode.Normal,
+            bookmarkMode,
+            initialView,
+            openMode,
             bitmapTextWhenFontsMayNotBeEmbedded,
-            ExportPlanner.NormalizePdfLanguage(pdfLanguage),
-            Enum.IsDefined(pdfConformance) ? pdfConformance : PdfConformance.Standard,
+            pdfLanguage,
+            pdfConformance,
             includeDocumentStructureTags);
 
     private PdfBookmarkMode GetSelectedBookmarkMode() =>
-        _bookmarkModeBox.SelectedIndex switch
-        {
-            1 => PdfBookmarkMode.PrintTitles,
-            2 => PdfBookmarkMode.PageNumbers,
-            _ => PdfBookmarkMode.SheetNames
-        };
+        ExportOptionsDialogPlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex);
 
     private PdfInitialView GetSelectedInitialView() =>
-        _initialViewBox.SelectedIndex switch
-        {
-            1 => PdfInitialView.OneColumn,
-            2 => PdfInitialView.TwoColumnLeft,
-            3 => PdfInitialView.TwoColumnRight,
-            _ => PdfInitialView.SinglePage
-        };
+        ExportOptionsDialogPlanner.InitialViewFromIndex(_initialViewBox.SelectedIndex);
 
     private PdfOpenMode GetSelectedOpenMode() =>
-        _openModeBox.SelectedIndex switch
-        {
-            1 => PdfOpenMode.Outlines,
-            2 => PdfOpenMode.FullScreen,
-            _ => PdfOpenMode.Normal
-        };
+        ExportOptionsDialogPlanner.OpenModeFromIndex(_openModeBox.SelectedIndex);
 }

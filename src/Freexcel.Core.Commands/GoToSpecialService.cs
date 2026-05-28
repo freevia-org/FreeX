@@ -104,7 +104,7 @@ public static class GoToSpecialService
                 case GoToSpecialKind.Comments when sheet.Comments.ContainsKey(address) || sheet.ThreadedComments.ContainsKey(address):
                     result.Add(address);
                     break;
-                case GoToSpecialKind.DataValidation when sheet.DataValidations.Any(rule => rule.AppliesTo.Contains(address)):
+                case GoToSpecialKind.DataValidation when sheet.DataValidations.Any(rule => DataValidationService.AppliesTo(rule, address)):
                     result.Add(address);
                     break;
                 case GoToSpecialKind.ConditionalFormats when sheet.ConditionalFormats.Any(rule => rule.AppliesTo.Contains(address)):

@@ -46,11 +46,11 @@ public sealed class GridViewSplitPaneLayoutTests
 
         var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
 
-        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height))
+        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height, layout.Region))
             .Should().Equal(
-                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18),
-                (1u, 10u, GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 64, 18),
-                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18));
+                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18, SplitPaneRegion.TopLeft),
+                (1u, 10u, GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 64, 18, SplitPaneRegion.TopRight),
+                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18, SplitPaneRegion.BottomLeft));
     }
 
     [Fact]
@@ -73,11 +73,11 @@ public sealed class GridViewSplitPaneLayoutTests
 
         var layouts = SplitPaneCellLayoutPlanner.CalculateLayouts(viewport);
 
-        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height))
+        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height, layout.Region))
             .Should().Equal(
-                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18),
-                (1u, 10u, GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 64, 18),
-                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18));
+                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18, SplitPaneRegion.TopLeft),
+                (1u, 10u, GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 64, 18, SplitPaneRegion.TopRight),
+                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18, SplitPaneRegion.BottomLeft));
     }
 
     [Fact]
@@ -354,6 +354,54 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneScrollbarLayoutPlanner_MapsThumbHitAndDragMath()
+    {
+        var scrollbar = new SplitPaneScrollbar(
+            SplitPaneScrollbarOrientation.Horizontal,
+            SplitPaneRegion.TopRight,
+            new Rect(100, 20, 200, 10),
+            SplitPaneScrollbarLayoutPlanner.CalculateThumb(
+                SplitPaneScrollbarOrientation.Horizontal,
+                new Rect(100, 20, 200, 10),
+                firstVisibleIndex: 50,
+                visibleCount: 10,
+                maxIndex: 200),
+            VisibleSpan: 10,
+            MaxStartIndex: 191);
+
+        SplitPaneScrollbarLayoutPlanner.HitTestScrollbar(scrollbar, scrollbar.Thumb.TopLeft + new Vector(2, 2))
+            .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Thumb, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
+        SplitPaneScrollbarLayoutPlanner.CalculateScrollTarget(scrollbar, new Point(scrollbar.Track.Right - 1, scrollbar.Track.Top + 2))
+            .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 191));
+        SplitPaneScrollbarLayoutPlanner.CalculatePageTarget(scrollbar, currentIndex: 50, new Point(scrollbar.Thumb.Left - 4, scrollbar.Track.Top + 2))
+            .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 40));
+        SplitPaneScrollbarLayoutPlanner.CalculateThumbDragTarget(
+                scrollbar,
+                new Point(scrollbar.Track.Left + 1 + 99 + scrollbar.Thumb.Width / 2, scrollbar.Track.Top + 2),
+                scrollbar.Thumb.Width / 2)
+            .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 109));
+    }
+
+    [Fact]
+    public void SplitPaneScrollbarLayoutPlanner_IncludesThumbAndTrackHitBoundaries()
+    {
+        var scrollbar = new SplitPaneScrollbar(
+            SplitPaneScrollbarOrientation.Horizontal,
+            SplitPaneRegion.TopRight,
+            new Rect(100, 20, 200, 10),
+            new Rect(120, 21, 30, 8),
+            VisibleSpan: 10,
+            MaxStartIndex: 191);
+
+        SplitPaneScrollbarLayoutPlanner.HitTestScrollbar(scrollbar, new Point(scrollbar.Thumb.Right, scrollbar.Thumb.Bottom))
+            .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Thumb, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
+        SplitPaneScrollbarLayoutPlanner.HitTestScrollbar(scrollbar, new Point(scrollbar.Track.Right, scrollbar.Track.Bottom))
+            .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Track, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
+        SplitPaneScrollbarLayoutPlanner.CalculateScrollTarget(scrollbar, new Point(scrollbar.Track.Right, scrollbar.Track.Bottom))
+            .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 191));
+    }
+
+    [Fact]
     public void CalculateSplitPaneScrollbarChrome_SizesThumbsFromVisibleSpan()
     {
         var viewport = SplitViewport();
@@ -561,6 +609,43 @@ public sealed class GridViewSplitPaneLayoutTests
             new FormulaTraceArrowLayout(
                 new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
                 new Point(GridView.RowHeaderWidth + 64 + 32, GridView.ColHeaderHeight + 20 + 10)));
+    }
+
+    [Fact]
+    public void FormulaTraceLayoutPlanner_ReturnsMultipleLayoutsWithMetricLookups()
+    {
+        var sheetId = SheetId.New();
+        var otherSheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 24, 20), new RowMetric(4, 30, 44)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(4, 100, 144)],
+            null,
+            []);
+
+        var arrows = FormulaTraceLayoutPlanner.CalculateLayouts(
+            viewport,
+            [
+                new FormulaTraceArrow(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+                new FormulaTraceArrow(new CellAddress(sheetId, 4, 4), new CellAddress(sheetId, 8, 4)),
+                new FormulaTraceArrow(new CellAddress(otherSheetId, 1, 1), new CellAddress(sheetId, 1, 1))
+            ],
+            sheetId);
+
+        arrows.Should().Equal(
+            new FormulaTraceArrowLayout(
+                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new Point(GridView.RowHeaderWidth + 64 + 40, GridView.ColHeaderHeight + 20 + 12)),
+            new FormulaTraceArrowLayout(
+                new Point(GridView.RowHeaderWidth + 144 + 50, GridView.ColHeaderHeight + 44 + 15),
+                new Point(GridView.RowHeaderWidth + 144 + 50, GridView.ColHeaderHeight + 44 + 15),
+                FormulaTraceArrowLayoutKind.OffscreenMarker,
+                new CellAddress(sheetId, 8, 4)),
+            new FormulaTraceArrowLayout(
+                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                FormulaTraceArrowLayoutKind.CrossSheetMarker,
+                new CellAddress(otherSheetId, 1, 1)));
     }
 
     [Fact]

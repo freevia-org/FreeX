@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Commands;
@@ -16,6 +17,7 @@ public sealed class WatchWindowDialog : Window
     private readonly Action<CellAddress> _removeWatch;
     private readonly ObservableCollection<WatchWindowRow> _rows = [];
     private readonly ListView _listView;
+    private readonly Button _deleteButton;
 
     public WatchWindowDialog(
         Func<IReadOnlyList<WatchWindowEntry>> getEntries,
@@ -58,6 +60,9 @@ public sealed class WatchWindowDialog : Window
             IsEnabled = _addWatch is not null,
             ToolTip = "Add the current worksheet selection to the Watch Window."
         };
+        AutomationProperties.SetName(add, "Add Watch");
+        AutomationProperties.SetAutomationId(add, "WatchWindowAddButton");
+        AutomationProperties.SetHelpText(add, "Add the current worksheet selection to the Watch Window.");
         add.Click += (_, _) =>
         {
             var dialog = new AddWatchDialog(_getSelectionText()) { Owner = this };
@@ -70,19 +75,37 @@ public sealed class WatchWindowDialog : Window
         buttons.Children.Add(add);
 
         var refresh = new Button { Content = "_Refresh", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        AutomationProperties.SetName(refresh, "Refresh watches");
+        AutomationProperties.SetAutomationId(refresh, "WatchWindowRefreshButton");
+        AutomationProperties.SetHelpText(refresh, "Refresh values and formulas for watched cells.");
         refresh.Click += (_, _) => Refresh();
         buttons.Children.Add(refresh);
 
-        var delete = new Button { Content = "_Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        delete.Click += (_, _) => DeleteSelectedWatch();
-        buttons.Children.Add(delete);
+        _deleteButton = new Button { Content = "_Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        AutomationProperties.SetName(_deleteButton, "Delete Watch");
+        AutomationProperties.SetAutomationId(_deleteButton, "WatchWindowDeleteButton");
+        AutomationProperties.SetHelpText(_deleteButton, "Delete the selected watched cells.");
+        _deleteButton.Click += (_, _) => DeleteSelectedWatch();
+        buttons.Children.Add(_deleteButton);
 
-        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
+        AutomationProperties.SetName(close, "Close Watch Window");
+        AutomationProperties.SetAutomationId(close, "WatchWindowCloseButton");
+        AutomationProperties.SetHelpText(close, "Close the Watch Window.");
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
+        var listPanel = new DockPanel();
         _listView = new ListView { ItemsSource = _rows, SelectionMode = SelectionMode.Extended };
+        AutomationProperties.SetName(_listView, "Watches");
+        AutomationProperties.SetAutomationId(_listView, "WatchWindowList");
+        AutomationProperties.SetHelpText(_listView, "Lists watched cells with their workbook, sheet, address, value, and formula.");
+        var listLabel = new Label { Content = "_Watches:", Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(listLabel, Dock.Top);
+        listPanel.Children.Add(listLabel);
         _listView.MouseDoubleClick += ListView_MouseDoubleClick;
+        _listView.SelectionChanged += (_, _) => UpdateDeleteButtonState();
+        _listView.KeyDown += ListView_KeyDown;
         _listView.View = new System.Windows.Controls.GridView
         {
             Columns =
@@ -95,7 +118,8 @@ public sealed class WatchWindowDialog : Window
                 new GridViewColumn { Header = "Formula", Width = 170, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
             }
         };
-        root.Children.Add(_listView);
+        listPanel.Children.Add(_listView);
+        root.Children.Add(listPanel);
 
         Refresh();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -103,6 +127,10 @@ public sealed class WatchWindowDialog : Window
 
     public void Refresh()
     {
+        var selectedAddresses = _listView.SelectedItems
+            .OfType<WatchWindowRow>()
+            .Select(row => row.Address)
+            .ToHashSet();
         _rows.Clear();
         foreach (var entry in _getEntries())
         {
@@ -115,6 +143,17 @@ public sealed class WatchWindowDialog : Window
                 entry.FormulaText ?? "",
                 entry.Address));
         }
+        RestoreSelection(selectedAddresses);
+        UpdateDeleteButtonState();
+    }
+
+    private void RestoreSelection(IReadOnlySet<CellAddress> selectedAddresses)
+    {
+        if (selectedAddresses.Count == 0)
+            return;
+
+        foreach (var row in _rows.Where(row => selectedAddresses.Contains(row.Address)))
+            _listView.SelectedItems.Add(row);
     }
 
     private void DeleteSelectedWatch()
@@ -133,12 +172,27 @@ public sealed class WatchWindowDialog : Window
         Refresh();
         if (_rows.Count > 0)
             _listView.SelectedIndex = Math.Min(Math.Max(0, selectedIndex), _rows.Count - 1);
+        UpdateDeleteButtonState();
     }
 
     private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (_listView.SelectedItem is WatchWindowRow row)
             _navigateTo(row.Address);
+    }
+
+    private void ListView_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete)
+        {
+            DeleteSelectedWatch();
+            e.Handled = true;
+        }
+    }
+
+    private void UpdateDeleteButtonState()
+    {
+        _deleteButton.IsEnabled = _listView.SelectedItems.Count > 0;
     }
 
     private void FocusInitialKeyboardTarget()
@@ -158,65 +212,4 @@ public sealed class WatchWindowDialog : Window
         string Value,
         string Formula,
         CellAddress Address);
-}
-
-public sealed class AddWatchDialog : Window
-{
-    private readonly TextBox _rangeBox = new();
-
-    public AddWatchDialog(string selectedRangeText)
-    {
-        Title = "Add Watch";
-        Width = 360;
-        Height = 170;
-        ResizeMode = ResizeMode.NoResize;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ShowInTaskbar = false;
-
-        var root = new DockPanel { Margin = new Thickness(12) };
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        root.Children.Add(buttons);
-
-        var add = new Button { Content = "_Add", Width = 76, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-        add.Click += (_, _) => DialogResult = true;
-        buttons.Children.Add(add);
-        buttons.Children.Add(new Button { Content = "_Cancel", Width = 76, IsCancel = true });
-
-        var body = new StackPanel();
-        root.Children.Add(body);
-        _rangeBox.Text = selectedRangeText;
-        _rangeBox.IsReadOnly = true;
-        _rangeBox.Margin = new Thickness(0, 0, 0, 8);
-        body.Children.Add(new Label
-        {
-            Content = "Selected _range:",
-            Target = _rangeBox,
-            Padding = new Thickness(0),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 4)
-        });
-        body.Children.Add(_rangeBox);
-        body.Children.Add(new TextBlock
-        {
-            Text = "The selected cells will be added to the Watch Window.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = SystemColors.GrayTextBrush
-        });
-
-        Content = root;
-        Loaded += (_, _) => FocusInitialKeyboardTarget();
-    }
-
-    private void FocusInitialKeyboardTarget()
-    {
-        _rangeBox.Focus();
-        _rangeBox.SelectAll();
-        Keyboard.Focus(_rangeBox);
-    }
 }

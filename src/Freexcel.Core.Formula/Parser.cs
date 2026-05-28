@@ -290,10 +290,70 @@ public sealed class Parser
                 return expr;
             }
 
+            case TokenType.OpenBrace:
+                return ParseArrayConstant();
+
             default:
                 throw new FormulaParseException(
                     $"Unexpected token '{Current.Value}' at position {Current.Position}");
         }
+    }
+
+    private FormulaNode ParseArrayConstant()
+    {
+        Expect(TokenType.OpenBrace);
+        var rows = new List<IReadOnlyList<FormulaNode>>();
+        int? expectedColumnCount = null;
+
+        while (true)
+        {
+            var row = new List<FormulaNode> { ParseArrayConstantElement() };
+            while (Current.Type == TokenType.Comma)
+            {
+                Advance();
+                row.Add(ParseArrayConstantElement());
+            }
+
+            expectedColumnCount ??= row.Count;
+            if (row.Count != expectedColumnCount.Value)
+                throw new FormulaParseException(
+                    $"Array constant rows must have the same number of columns at position {Current.Position}");
+            rows.Add(row);
+
+            if (Current.Type != TokenType.Semicolon)
+                break;
+
+            Advance();
+        }
+
+        Expect(TokenType.CloseBrace);
+        return new ArrayConstantNode(rows);
+    }
+
+    private FormulaNode ParseArrayConstantElement()
+    {
+        return Current.Type switch
+        {
+            TokenType.Number => new NumberNode(double.Parse(Advance().Value, System.Globalization.CultureInfo.InvariantCulture)),
+            TokenType.String => new StringNode(Advance().Value),
+            TokenType.Boolean => new BooleanNode(Advance().Value == "TRUE"),
+            TokenType.Error => new ErrorNode(ParseErrorValue(Advance().Value)),
+            TokenType.Plus or TokenType.Minus => ParseSignedArrayConstantNumber(),
+            _ => throw new FormulaParseException(
+                $"Expected array constant at position {Current.Position}")
+        };
+    }
+
+    private FormulaNode ParseSignedArrayConstantNumber()
+    {
+        bool negative = Current.Type == TokenType.Minus;
+        Advance();
+        if (Current.Type != TokenType.Number)
+            throw new FormulaParseException(
+                $"Expected number after array constant sign at position {Current.Position}");
+
+        var value = double.Parse(Advance().Value, System.Globalization.CultureInfo.InvariantCulture);
+        return new NumberNode(negative ? -value : value);
     }
 
     private FormulaNode ParseSheetQualifiedReference(string sheetName)

@@ -140,6 +140,25 @@ public sealed class AutoFilterDropdownPlannerTests
     }
 
     [Fact]
+    public void CreateMenuPlan_UsesAbsoluteColumnNameForBlankHeaders()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 3, 3), new TextValue(""));
+        sheet.SetCell(new CellAddress(SheetId, 4, 3), new TextValue("West"));
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 3, 3),
+                new CellAddress(SheetId, 4, 4)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+
+        menu.HeaderText.Should().Be("Column C");
+        menu.Entries.Should().Contain(entry => entry.Header == "Clear Filter From \"Column C\"");
+    }
+
+    [Fact]
     public void CreateMenuPlan_IncludesExcelStyleSectionSeparators()
     {
         var sheet = new Sheet(SheetId, "Sheet1");

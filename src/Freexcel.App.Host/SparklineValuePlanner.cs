@@ -12,8 +12,14 @@ public static class SparklineValuePlanner
             var series = new List<double>();
             for (var row = sparkline.DataRange.Start.Row; row <= sparkline.DataRange.End.Row; row++)
             {
+                if (sheet.IsRowEffectivelyHidden(row))
+                    continue;
+
                 for (var col = sparkline.DataRange.Start.Col; col <= sparkline.DataRange.End.Col; col++)
                 {
+                    if (sheet.IsColEffectivelyHidden(col))
+                        continue;
+
                     switch (sheet.GetValue(row, col))
                     {
                         case NumberValue number:

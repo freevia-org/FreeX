@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -31,6 +32,8 @@ public sealed class CreateNamesFromSelectionDialog : Window
             Margin = new Thickness(0, 0, 0, 6)
         });
         var group = new GroupBox { Header = "Create names from", Margin = new Thickness(0, 0, 0, 10) };
+        AutomationProperties.SetName(group, "Create names from selected labels");
+        AutomationProperties.SetHelpText(group, "Choose which row or column labels Excel uses to create named ranges.");
         var options = new StackPanel { Margin = new Thickness(8, 4, 8, 8) };
         options.Children.Add(_topRow);
         options.Children.Add(_leftColumn);

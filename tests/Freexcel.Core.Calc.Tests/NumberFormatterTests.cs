@@ -65,6 +65,8 @@ public class NumberFormatterTests
     [Theory]
     [InlineData("_(EUR* #,##0.00_);_(EUR* (#,##0.00);_(EUR* \"-\"??_);_(@_)", 1234.5, "EUR 1,234.50")]
     [InlineData("_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)", 0, "GBP -")]
+    [InlineData("_(\u20B4* #,##0.00_);_(\u20B4* (#,##0.00);_(\u20B4* \"-\"??_);_(@_)", 1234.5, "\u20B4 1,234.50")]
+    [InlineData("_(\u20B9* #,##0.00_);_(\u20B9* (#,##0.00);_(\u20B9* \"-\"??_);_(@_)", 0, "\u20B9 -")]
     public void AccountingSubset_PreservesRawMultiCharacterSymbolFillGap(
         string format,
         double value,
@@ -85,6 +87,10 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("0*-", 12, 6, "12----")]
+    [InlineData("0*-\" kg\"", 12, 8, "12--- kg")]
+    [InlineData("0*-\\ kg", 12, 8, "12--- kg")]
+    [InlineData("0\" kg\"*-", 12, 8, "12 kg---")]
+    [InlineData("0*-0", 120, 6, "120---")]
     [InlineData("$* #,##0.00", 1234.5, 14, "$     1,234.50")]
     public void CustomNumberSubset_ExpandsFillDirectiveToRequestedCharacterWidth(
         string format,
@@ -224,6 +230,62 @@ public class NumberFormatterTests
         palette.SetColor(5, CellColor.FromArgb(1, 2, 3));
 
         var result = NumberFormatter.FormatWithColor(new NumberValue(12.5), "[Color 5]0.0", palette);
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Equal("#010203", result.ColorHex);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_ResolvesThemeColorDirectivesWithWorkbookTheme()
+    {
+        var theme = WorkbookTheme.Office.WithColor(
+            WorkbookThemeColorSlot.Accent1,
+            CellColor.FromArgb(0x12, 0x34, 0x56));
+
+        var result = NumberFormatter.FormatWithColor(
+            new NumberValue(12.5),
+            "[ThemeAccent1]0.0",
+            new WorkbookIndexedColorPalette(),
+            theme);
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Equal("#123456", result.ColorHex);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_IgnoresThemeColorDirectivesWithoutThemeContext()
+    {
+        var result = NumberFormatter.FormatWithColor(new NumberValue(12.5), "[ThemeAccent1]0.0");
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Null(result.ColorHex);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_UnsupportedThemeColorDirectiveDoesNotBlockConditions()
+    {
+        var result = NumberFormatter.FormatWithColor(
+            new NumberValue(12.5),
+            "[ThemeAccent1Tint40][>10]0.0;0");
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Null(result.ColorHex);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_ThemeContextDoesNotChangeIndexedColorResolution()
+    {
+        var palette = new WorkbookIndexedColorPalette();
+        palette.SetColor(5, CellColor.FromArgb(1, 2, 3));
+        var theme = WorkbookTheme.Office.WithColor(
+            WorkbookThemeColorSlot.Accent1,
+            CellColor.FromArgb(0xAA, 0xBB, 0xCC));
+
+        var result = NumberFormatter.FormatWithColor(
+            new NumberValue(12.5),
+            "[Color 5]0.0",
+            palette,
+            theme);
 
         Assert.Equal("12.5", result.Text);
         Assert.Equal("#010203", result.ColorHex);
@@ -566,7 +628,14 @@ public class NumberFormatterTests
             var value = new DateTimeValue(new DateTime(2024, 1, 1, 13, 14, 15).ToOADate());
 
             Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(value, "[$-F800]"));
+            Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(value, "[$-F800]dddd, mmmm dd, yyyy"));
             Assert.Equal("13:14:15", NumberFormatter.Format(value, "[$-F400]"));
+            Assert.Equal("13:14:15", NumberFormatter.Format(value, "[$-F400]h:mm:ss AM/PM"));
+
+            var numericSerial = new NumberValue(value.Value);
+            Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(numericSerial, "[$-F800]dddd, mmmm dd, yyyy"));
+            Assert.Equal("13:14:15", NumberFormatter.Format(numericSerial, "[$-F400]h:mm:ss AM/PM"));
+            Assert.Equal("45292.55", NumberFormatter.Format(numericSerial, "[$-F400]0.00"));
         }
         finally
         {
@@ -584,6 +653,34 @@ public class NumberFormatterTests
         string expected)
     {
         var result = NumberFormatter.Format(new DateTimeValue(45292), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("m/d/yyyy*-", 45292, 12, "1/1/2024----")]
+    [InlineData("h:mm*-\" hrs\"", 45292.5, 12, "12:00--- hrs")]
+    public void CustomNumberSubset_ExpandsDateTimeFillDirectiveAfterRenderedValue(
+        string format,
+        double value,
+        int targetWidthCharacters,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format, targetWidthCharacters);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("m/d/yyyy*-", 45292, 12, "1/1/2024----")]
+    [InlineData("h:mm*-\" hrs\"", 45292.5, 12, "12:00--- hrs")]
+    public void CustomNumberSubset_ExpandsDateTimeValueFillDirectiveAfterRenderedValue(
+        string format,
+        double value,
+        int targetWidthCharacters,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(value), format, targetWidthCharacters);
 
         Assert.Equal(expected, result);
     }
@@ -666,6 +763,22 @@ public class NumberFormatterTests
         var result = NumberFormatter.Format(new NumberValue(1.5), format);
 
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_ExpandsElapsedTimeFillDirectiveAfterRenderedValue()
+    {
+        var result = NumberFormatter.Format(new NumberValue(1.5), "[h]:mm:ss*-", 12);
+
+        Assert.Equal("36:00:00----", result);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_ExpandsElapsedDateTimeValueFillDirectiveAfterRenderedValue()
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(1.5), "[h]:mm:ss*-", 12);
+
+        Assert.Equal("36:00:00----", result);
     }
 
     [Theory]

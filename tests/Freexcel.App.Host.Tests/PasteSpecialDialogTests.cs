@@ -71,6 +71,34 @@ public sealed class PasteSpecialDialogTests
         });
     }
 
+    [Fact]
+    public void PasteChoices_FollowExcelDialogOrder()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PasteSpecialDialog.Controls.cs"));
+        var expectedOrder = new[]
+        {
+            "AddPasteChoice(grid, _rbAll,",
+            "AddPasteChoice(grid, _rbFormulas,",
+            "AddPasteChoice(grid, _rbValues,",
+            "AddPasteChoice(grid, _rbFormats,",
+            "AddPasteChoice(grid, _rbComments,",
+            "AddPasteChoice(grid, _rbValidation,",
+            "AddPasteChoice(grid, _rbAllUsingSourceTheme,",
+            "AddPasteChoice(grid, _rbAllExceptBorders,",
+            "AddPasteChoice(grid, _rbColumnWidths,",
+            "AddPasteChoice(grid, _rbFormulasAndNumberFormats,",
+            "AddPasteChoice(grid, _rbValuesAndNumberFormats,",
+            "AddPasteChoice(grid, _rbAllMergingConditionalFormats,"
+        };
+
+        var positions = expectedOrder
+            .Select(marker => source.IndexOf(marker, StringComparison.Ordinal))
+            .ToArray();
+
+        positions.Should().OnlyContain(position => position >= 0);
+        positions.Should().BeInAscendingOrder();
+    }
+
     [Theory]
     [InlineData("_opNone", "None")]
     [InlineData("_opAdd", "Add")]

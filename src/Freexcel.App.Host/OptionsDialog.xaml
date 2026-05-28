@@ -58,6 +58,9 @@
                 <ListBox x:Name="TabList" BorderThickness="0" Background="Transparent"
                          Margin="0,8,0,0"
                          SelectionChanged="TabList_SelectionChanged"
+                         AutomationProperties.Name="Options categories"
+                         AutomationProperties.AutomationId="OptionsCategoryList"
+                         AutomationProperties.HelpText="Select a Freexcel Options category."
                          ItemContainerStyle="{StaticResource OptionTabItem}">
                     <ListBoxItem Content="_General"/>
                     <ListBoxItem Content="_Formulas"/>
@@ -269,7 +272,9 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
                         <CheckBox x:Name="OptMoveAfterEnter"
                                   Content="After pressing Enter, _move selection"
-                                  IsChecked="True" FontSize="12" Margin="0,0,0,8"/>
+                                  IsChecked="True" FontSize="12" Margin="0,0,0,8"
+                                  Checked="MoveAfterEnter_Changed"
+                                  Unchecked="MoveAfterEnter_Changed"/>
                         <Grid Margin="18,0,0,9">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160"/>
@@ -390,6 +395,17 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
                         <TextBlock Text="Security and privacy settings for Freexcel."
                                    FontSize="12" Foreground="#555" Margin="0,0,0,12"/>
+                        <CheckBox x:Name="OptCrashAnalytics"
+                                  Content="Send opt-in _crash reports"
+                                  FontSize="12"
+                                  Margin="0,0,0,6"
+                                  AutomationProperties.HelpText="Crash reports include app version, runtime, operating system, session ID, exception type, message, and stack trace. Workbook contents, formulas, filenames, and paths are not collected intentionally, but exception details can occasionally include sensitive values."/>
+                        <TextBlock Text="Crash reports are sent only when this option is enabled and the tester build is configured with a crash analytics endpoint."
+                                   FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="18,0,0,12"/>
+                        <TextBlock Text="Local tester diagnostics"
+                                   FontWeight="SemiBold" FontSize="12" Margin="0,8,0,5"/>
+                        <TextBlock Text="Freexcel writes local usage events and crash files to %LOCALAPPDATA%\Freexcel\Diagnostics. These files stay on this computer unless you attach them to an issue. Crash exception messages and stack traces can occasionally contain sensitive values, so review files before sharing them. Start Freexcel with FREEXCEL_DIAGNOSTICS=0 to disable local diagnostics for that run."
+                                   FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,12"/>
                         <Button x:Name="TrustCenterSettingsButton" Content="Trust Center _Settings..." Width="170" Height="26"
                                 HorizontalAlignment="Left" Click="TrustCenterSettingsButton_Click"/>
                     </StackPanel>
@@ -403,8 +419,14 @@
                 Padding="16,10" Background="#F5F5F5">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="OkBtn" Content="_OK" Width="80" Height="26"
-                        Margin="0,0,8,0" IsDefault="True" Click="OkBtn_Click"/>
-                <Button Content="_Cancel" Width="80" Height="26"
+                        Margin="0,0,8,0" IsDefault="True" Click="OkBtn_Click"
+                        AutomationProperties.Name="OK"
+                        AutomationProperties.AutomationId="OptionsOkButton"
+                        AutomationProperties.HelpText="Apply Freexcel Options changes."/>
+                <Button x:Name="CancelBtn" Content="_Cancel" Width="80" Height="26"
+                        AutomationProperties.Name="Cancel"
+                        AutomationProperties.AutomationId="OptionsCancelButton"
+                        AutomationProperties.HelpText="Close Freexcel Options without applying changes."
                         IsCancel="True" Click="CancelBtn_Click"/>
             </StackPanel>
         </Border>

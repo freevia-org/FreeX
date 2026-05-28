@@ -125,106 +125,38 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     }
 }
 
-public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
+public sealed record StructuredTableStyleBanding(
+    CellColor HeaderFill,
+    CellColor OddRowFill,
+    CellColor EvenRowFill,
+    CellColor HeaderFontColor);
+
+public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly int _tableId;
-    private HashSet<uint>? _previousFilterHiddenRows;
+    private readonly bool _showFirstColumn;
+    private readonly bool _showLastColumn;
+    private readonly bool _showRowStripes;
+    private readonly bool _showColumnStripes;
+    private StructuredTableModel? _previousTable;
 
-    public string Label => "Apply Table Filter";
+    public string Label => "Configure Table Style Options";
 
-    public ApplyStructuredTableFiltersCommand(SheetId sheetId, int tableId)
+    public ConfigureStructuredTableStyleOptionsCommand(
+        SheetId sheetId,
+        int tableId,
+        bool showFirstColumn,
+        bool showLastColumn,
+        bool showRowStripes,
+        bool showColumnStripes)
     {
         _sheetId = sheetId;
         _tableId = tableId;
-    }
-
-    public CommandOutcome Apply(ICommandContext ctx)
-    {
-        var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
-            return protectedOutcome;
-
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
-            return new CommandOutcome(false, "Table was not found.");
-
-        var filters = BuildFilters(table).ToList();
-        if (filters.Count != table.FilterColumns.Count)
-            return new CommandOutcome(false, "Table filter refers to a missing column.");
-
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
-
-        for (var row = table.Range.Start.Row + 1; row <= table.Range.End.Row; row++)
-            sheet.FilterHiddenRows.Remove(row);
-
-        if (filters.Count == 0)
-            return new CommandOutcome(true);
-
-        for (var row = table.Range.Start.Row + 1; row <= table.Range.End.Row; row++)
-        {
-            if (!RowMatchesAllFilters(sheet, row, filters))
-                sheet.FilterHiddenRows.Add(row);
-        }
-
-        return new CommandOutcome(true);
-    }
-
-    public void Revert(ICommandContext ctx)
-    {
-        if (_previousFilterHiddenRows is null)
-            return;
-
-        var sheet = ctx.GetSheet(_sheetId);
-        sheet.FilterHiddenRows.Clear();
-        sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
-    }
-
-    private static IEnumerable<TableFilterState> BuildFilters(StructuredTableModel table)
-    {
-        foreach (var filterColumn in table.FilterColumns)
-        {
-            var tableColumnIndex = filterColumn.ColumnId;
-            if (tableColumnIndex < 0 || tableColumnIndex >= table.Columns.Count)
-                continue;
-
-            yield return new TableFilterState(
-                table.Range.Start.Col + (uint)tableColumnIndex,
-                new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
-                filterColumn.IncludeBlank);
-        }
-    }
-
-    private static bool RowMatchesAllFilters(Sheet sheet, uint row, IReadOnlyList<TableFilterState> filters)
-    {
-        foreach (var filter in filters)
-        {
-            var text = FilterValueFormatter.ToText(sheet.GetValue(row, filter.Column));
-            if (text.Length == 0 && filter.IncludeBlank)
-                continue;
-
-            if (!filter.AllowedValues.Contains(text))
-                return false;
-        }
-
-        return true;
-    }
-
-    private sealed record TableFilterState(uint Column, HashSet<string> AllowedValues, bool IncludeBlank);
-}
-
-public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
-{
-    private readonly SheetId _sheetId;
-    private readonly int _tableId;
-    private readonly Dictionary<CellAddress, Cell?> _previousCells = [];
-
-    public string Label => "Refresh Table Totals";
-
-    public RefreshStructuredTableTotalsCommand(SheetId sheetId, int tableId)
-    {
-        _sheetId = sheetId;
-        _tableId = tableId;
+        _showFirstColumn = showFirstColumn;
+        _showLastColumn = showLastColumn;
+        _showRowStripes = showRowStripes;
+        _showColumnStripes = showColumnStripes;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -233,102 +165,73 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
+        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
+        if (tableIndex < 0)
             return new CommandOutcome(false, "Table was not found.");
-        if (!table.TotalsRowShown)
-            return new CommandOutcome(false, "Table totals row is not shown.");
-        if (table.Columns.Count == 0)
-            return new CommandOutcome(false, "Table has no columns.");
 
-        _previousCells.Clear();
-        var totalsRow = table.Range.End.Row;
-        for (var index = 0; index < table.Columns.Count; index++)
-        {
-            var address = new CellAddress(_sheetId, totalsRow, table.Range.Start.Col + (uint)index);
-            _previousCells[address] = sheet.GetCell(address.Row, address.Col)?.Clone();
-            if (ResolveTotalsValue(sheet, table, table.Columns[index], index) is { } value)
-                sheet.SetCell(address, value);
-            else
-                sheet.SetCell(address, BlankValue.Instance);
-        }
+        _previousTable = sheet.StructuredTables[tableIndex];
+        sheet.StructuredTables[tableIndex] = CopyWithStyleOptions(
+            _previousTable,
+            _showFirstColumn,
+            _showLastColumn,
+            _showRowStripes,
+            _showColumnStripes);
 
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previousCells.Count == 0)
+        if (_previousTable is null)
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (address, cell) in _previousCells)
-        {
-            if (cell is null)
-                sheet.ClearCell(address.Row, address.Col);
-            else
-                sheet.SetCell(address, cell);
-        }
-        _previousCells.Clear();
+        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
+        if (tableIndex >= 0)
+            sheet.StructuredTables[tableIndex] = _previousTable;
     }
 
-    private static ScalarValue? ResolveTotalsValue(
-        Sheet sheet,
+    private static StructuredTableModel CopyWithStyleOptions(
         StructuredTableModel table,
-        StructuredTableColumnModel column,
-        int columnIndex)
+        bool showFirstColumn,
+        bool showLastColumn,
+        bool showRowStripes,
+        bool showColumnStripes)
     {
-        if (!string.IsNullOrWhiteSpace(column.TotalsRowLabel))
-            return new TextValue(column.TotalsRowLabel);
-        if (!string.IsNullOrWhiteSpace(column.TotalsRowFormula))
-            return new TextValue(column.TotalsRowFormula);
-        if (string.IsNullOrWhiteSpace(column.TotalsRowFunction))
-            return null;
-
-        var values = ReadColumnValues(sheet, table, columnIndex).ToList();
-        var numbers = values
-            .Select(TryGetNumber)
-            .Where(value => value.HasValue)
-            .Select(value => value!.Value)
-            .ToList();
-
-        return column.TotalsRowFunction.Trim().ToLowerInvariant() switch
+        var copy = new StructuredTableModel
         {
-            "sum" => new NumberValue(numbers.Sum()),
-            "average" or "avg" => new NumberValue(numbers.Count == 0 ? 0 : numbers.Average()),
-            "count" => new NumberValue(values.Count(IsNonBlank)),
-            "countnums" or "countNums" => new NumberValue(numbers.Count),
-            "min" => new NumberValue(numbers.Count == 0 ? 0 : numbers.Min()),
-            "max" => new NumberValue(numbers.Count == 0 ? 0 : numbers.Max()),
-            _ => null
-        };
-    }
-
-    private static IEnumerable<ScalarValue> ReadColumnValues(Sheet sheet, StructuredTableModel table, int columnIndex)
-    {
-        var col = table.Range.Start.Col + (uint)columnIndex;
-        var lastDataRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
-        for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
-            yield return sheet.GetValue(row, col);
-    }
-
-    private static double? TryGetNumber(ScalarValue value) =>
-        value switch
-        {
-            NumberValue number => number.Value,
-            DateTimeValue date => date.Value,
-            BoolValue boolean => boolean.Value ? 1 : 0,
-            _ => null
+            Id = table.Id,
+            Name = table.Name,
+            DisplayName = table.DisplayName,
+            Range = table.Range,
+            HasAutoFilter = table.HasAutoFilter,
+            TotalsRowShown = table.TotalsRowShown,
+            HeaderRowCount = table.HeaderRowCount,
+            TotalsRowCount = table.TotalsRowCount,
+            InsertRow = table.InsertRow,
+            InsertRowShift = table.InsertRowShift,
+            Published = table.Published,
+            Comment = table.Comment,
+            StyleName = table.StyleName,
+            ShowFirstColumn = showFirstColumn,
+            ShowLastColumn = showLastColumn,
+            ShowRowStripes = showRowStripes,
+            ShowColumnStripes = showColumnStripes,
+            PackagePart = table.PackagePart,
+            NativeSortStateXml = table.NativeSortStateXml,
+            NativeAttributes = table.NativeAttributes,
+            NativeChildXmls = table.NativeChildXmls,
+            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
+            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
+            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
+            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
         };
 
-    private static bool IsNonBlank(ScalarValue value) => value is not BlankValue;
+        copy.Columns.AddRange(table.Columns);
+        copy.FilterColumns.AddRange(table.FilterColumns);
+        return copy;
+    }
 }
-
-public sealed record StructuredTableStyleBanding(
-    CellColor HeaderFill,
-    CellColor OddRowFill,
-    CellColor EvenRowFill,
-    CellColor HeaderFontColor);
 
 public sealed class CreateStyledStructuredTableCommand : IWorkbookCommand
 {
@@ -397,8 +300,9 @@ public sealed class CreateStyledStructuredTableCommand : IWorkbookCommand
                 Bold: true);
         }
 
+        var dataRowOffset = row - _range.Start.Row;
         return new StyleDiff(
-            FillColor: row % 2 == 0 ? _banding.EvenRowFill : _banding.OddRowFill,
+            FillColor: dataRowOffset % 2 == 1 ? _banding.EvenRowFill : _banding.OddRowFill,
             FontColor: CellColor.Black,
             Bold: false);
     }

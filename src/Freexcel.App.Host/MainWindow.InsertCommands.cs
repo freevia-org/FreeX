@@ -39,10 +39,12 @@ public partial class MainWindow
     private void InsertSparkline(string type)
     {
         var selected = SheetGrid.SelectedRange;
-        var dialog = new SparklineDialog(
+        SparklineDialog? dialog = null;
+        dialog = new SparklineDialog(
             selected?.ToString() ?? "",
             "",
             SparklineInputParser.ParseDialogKindChoice(type),
+            request => ApplySparklineRangeSelection(dialog, request),
             sheetId: _currentSheetId)
         { Owner = this };
         if (dialog.ShowDialog() != true)
@@ -50,28 +52,70 @@ public partial class MainWindow
 
         if (!SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange))
         {
-            MessageBox.Show("Invalid data range.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage("Invalid data range.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (!SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location))
         {
-            MessageBox.Show("Invalid location cell.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage("Invalid location cell.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var kind = SparklineInputParser.ToModelKind(dialog.Result.Kind);
 
         var fallbackLocationRange = new GridRange(location, location);
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Insert Sparkline",
-                fallbackLocationRange,
-                currentRange => new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)))
+        var useDialogLocationForInitialInsert = true;
+        IWorkbookCommand CreateCommand()
+        {
+            var currentRange = useDialogLocationForInitialInsert
+                ? fallbackLocationRange
+                : SheetGrid.SelectedRange ?? fallbackLocationRange;
+            return new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        useDialogLocationForInitialInsert = false;
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Insert Sparkline");
             return;
+        }
+
+        MarkWorkbookDirty();
+        _repeatPostAction = null;
+        InvalidateNavigationCaches();
 
         SetActiveCell(location);
         EnsureCellVisible(location);
         UpdateViewport();
+    }
+
+    private void ApplySparklineRangeSelection(
+        SparklineDialog? dialog,
+        SparklineRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = request.Target == SparklineRangeSelectionTarget.Location
+            ? FormatCellReference(selectedRange.Start)
+            : FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void InsertLinkBtn_Click(object sender, RoutedEventArgs e)
@@ -107,7 +151,13 @@ public partial class MainWindow
             if (TryNavigateToWorkbookReference(plan.Target))
                 return true;
 
-            MessageBox.Show("The hyperlink target could not be found.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage("The hyperlink target could not be found.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return true;
+        }
+
+        if (!HyperlinkNavigationPlanner.IsAllowedScheme(plan.Target))
+        {
+            ShowOwnedMessage("This hyperlink type is not supported for security reasons.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
             return true;
         }
 
@@ -117,7 +167,7 @@ public partial class MainWindow
         }
         catch
         {
-            MessageBox.Show("The hyperlink target could not be opened.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage("The hyperlink target could not be opened.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         return true;
@@ -221,9 +271,9 @@ public partial class MainWindow
     private void SymbolPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         var dlg = new SymbolPickerDialog { Owner = this };
-        if (dlg.ShowDialog() != true || dlg.SelectedChar == '\0') return;
+        if (dlg.ShowDialog() != true || string.IsNullOrEmpty(dlg.SelectedSymbol)) return;
         if (SheetGrid.SelectedRange is null) return;
-        var selectedChar = dlg.SelectedChar;
+        var selectedSymbol = dlg.SelectedSymbol;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Symbol",
                 SheetGrid.SelectedRange.Value,
@@ -232,7 +282,7 @@ public partial class MainWindow
                     var currentAddress = currentRange.Start;
                     var currentSheet = _workbook.GetSheet(_currentSheetId);
                     var currentExisting = currentSheet?.GetCell(currentAddress)?.Value as TextValue;
-                    var currentText = (currentExisting?.Value ?? "") + selectedChar;
+                    var currentText = (currentExisting?.Value ?? "") + selectedSymbol;
                     return CreateSingleCellEditCommand(currentAddress, Cell.FromValue(new TextValue(currentText)));
                 }))
             return;

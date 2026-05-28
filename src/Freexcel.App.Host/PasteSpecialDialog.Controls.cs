@@ -14,20 +14,20 @@ public sealed partial class PasteSpecialDialog
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         AddPasteChoice(grid, _rbAll, 0, 0);
-        AddPasteChoice(grid, _rbValues, 1, 0);
-        AddPasteChoice(grid, _rbFormulas, 2, 0);
+        AddPasteChoice(grid, _rbFormulas, 1, 0);
+        AddPasteChoice(grid, _rbValues, 2, 0);
         AddPasteChoice(grid, _rbFormats, 3, 0);
         AddPasteChoice(grid, _rbComments, 4, 0);
         AddPasteChoice(grid, _rbValidation, 5, 0);
-        AddPasteChoice(grid, _rbColumnWidths, 6, 0);
-        AddPasteChoice(grid, _rbText, 7, 0);
-        AddPasteChoice(grid, _rbUnicodeText, 8, 0);
-        AddPasteChoice(grid, _rbAllUsingSourceTheme, 0, 1);
-        AddPasteChoice(grid, _rbAllExceptBorders, 1, 1);
+        AddPasteChoice(grid, _rbAllUsingSourceTheme, 6, 0);
+        AddPasteChoice(grid, _rbAllExceptBorders, 7, 0);
+        AddPasteChoice(grid, _rbColumnWidths, 8, 0);
+        AddPasteChoice(grid, _rbFormulasAndNumberFormats, 0, 1);
+        AddPasteChoice(grid, _rbValuesAndNumberFormats, 1, 1);
         AddPasteChoice(grid, _rbAllMergingConditionalFormats, 2, 1);
-        AddPasteChoice(grid, _rbFormulasAndNumberFormats, 3, 1);
-        AddPasteChoice(grid, _rbValuesAndNumberFormats, 4, 1);
-        AddPasteChoice(grid, _rbValuesAndSourceFormatting, 5, 1);
+        AddPasteChoice(grid, _rbValuesAndSourceFormatting, 3, 1);
+        AddPasteChoice(grid, _rbText, 4, 1);
+        AddPasteChoice(grid, _rbUnicodeText, 5, 1);
         AddPasteChoice(grid, _rbPicture, 6, 1);
         AddPasteChoice(grid, _rbLinkedPicture, 7, 1);
 

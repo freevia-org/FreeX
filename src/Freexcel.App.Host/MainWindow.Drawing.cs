@@ -19,7 +19,9 @@ public partial class MainWindow
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Insert Picture",
-            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*"
+            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
         };
         if (dialog.ShowDialog(this) != true) return;
 
@@ -30,7 +32,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not read picture file:\n{ex.Message}",
+            ShowOwnedMessage($"Could not read picture file:\n{ex.Message}",
                 "Insert Picture", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -54,7 +56,7 @@ public partial class MainWindow
         var picture = GetTargetPicture(_currentSheetId);
         if (picture is null)
         {
-            MessageBox.Show("No picture found on this sheet.", "Picture Size", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("No picture found on this sheet.", "Picture Size", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -103,7 +105,7 @@ public partial class MainWindow
         var picture = GetTargetPicture(_currentSheetId);
         if (picture is null)
         {
-            MessageBox.Show("No picture found on this sheet.", "Rotate Picture", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("No picture found on this sheet.", "Rotate Picture", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -126,13 +128,13 @@ public partial class MainWindow
         var picture = GetTargetPicture(_currentSheetId);
         if (picture is null)
         {
-            MessageBox.Show("No picture found on this sheet.", "Crop Picture", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("No picture found on this sheet.", "Crop Picture", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (picture.Kind != PictureKind.Image)
         {
-            MessageBox.Show("Only inserted image pictures can be cropped.", "Crop Picture", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("Only inserted image pictures can be cropped.", "Crop Picture", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -161,13 +163,13 @@ public partial class MainWindow
         var picture = GetTargetPicture(_currentSheetId);
         if (picture is null)
         {
-            MessageBox.Show("No picture found on this sheet.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("No picture found on this sheet.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (picture.Kind != PictureKind.Image)
         {
-            MessageBox.Show("Only inserted image pictures can be cropped.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("Only inserted image pictures can be cropped.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -246,7 +248,7 @@ public partial class MainWindow
         var currentShape = GetTargetDrawingShape(_currentSheetId);
         if (currentShape is null)
         {
-            MessageBox.Show("No drawing shapes are available on this sheet.",
+            ShowOwnedMessage("No drawing shapes are available on this sheet.",
                 "Draw", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -273,7 +275,7 @@ public partial class MainWindow
         var target = GetTargetDrawingObject(_currentSheetId);
         if (target is null)
         {
-            MessageBox.Show("No drawing object found on this sheet.", "Object Size", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("No drawing object found on this sheet.", "Object Size", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -301,7 +303,7 @@ public partial class MainWindow
         var target = GetTargetDrawingObject(_currentSheetId);
         if (target is null)
         {
-            MessageBox.Show("No drawing object found on this sheet.", "Rotate Object", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("No drawing object found on this sheet.", "Rotate Object", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -329,7 +331,7 @@ public partial class MainWindow
         var target = GetTargetDrawingObject(_currentSheetId);
         if (target is null)
         {
-            MessageBox.Show("No drawing object found on this sheet.",
+            ShowOwnedMessage("No drawing object found on this sheet.",
                 isFill ? "Object Fill" : "Object Outline",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -373,7 +375,7 @@ public partial class MainWindow
         var shape = GetTargetDrawingShape(_currentSheetId);
         if (shape is null)
         {
-            MessageBox.Show("No drawing shape found on this sheet.", "Shape Gradient", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("No drawing shape found on this sheet.", "Shape Gradient", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -399,7 +401,7 @@ public partial class MainWindow
         var shape = GetTargetDrawingShape(_currentSheetId);
         if (shape is null)
         {
-            MessageBox.Show("No drawing shape found on this sheet.", "Shape Effects", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("No drawing shape found on this sheet.", "Shape Effects", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -423,7 +425,7 @@ public partial class MainWindow
         var items = SelectionPanePlanner.BuildItems(sheet);
         if (items.Count == 0)
         {
-            MessageBox.Show("No objects are available on this sheet.", "Selection Pane", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage("No objects are available on this sheet.", "Selection Pane", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 

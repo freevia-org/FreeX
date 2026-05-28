@@ -75,10 +75,104 @@ public partial class MainWindow
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
+        _ribbonResizeNormalizationRequired = true;
+        NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true);
+    }
+
+    private void NormalizeRibbonSurfaceAfterResize()
+    {
+        if (!ShouldNormalizeRibbonSurfaceForResize())
+            return;
+
+        NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: false, scheduleFallback: !_isInWindowResizeMoveLoop);
+    }
+
+    private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab = false)
+        => NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab, scheduleFallback: true);
+
+    private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab, bool scheduleFallback)
+    {
+        if (prepareSelectedTab)
+            PrepareSelectedRibbonTabForImmediateCompaction();
         NormalizeRibbonSurface(forceCompact: true);
+        if (!scheduleFallback)
+            return;
+
         Dispatcher.BeginInvoke(
-            (Action)(() => NormalizeRibbonSurface(forceCompact: true)),
-            DispatcherPriority.Loaded);
+            (Action)(() =>
+            {
+                if (prepareSelectedTab)
+                    PrepareSelectedRibbonTabForImmediateCompaction();
+                NormalizeRibbonSurface(forceCompact: true);
+            }),
+            DispatcherPriority.Send);
+    }
+
+    private bool ShouldNormalizeRibbonSurfaceForResize()
+    {
+        var width = GetCurrentRibbonResizeWidth();
+        if (width <= 0 || double.IsNaN(width))
+            return true;
+
+        if (double.IsNaN(_lastRibbonResizeWidth))
+        {
+            _lastRibbonResizeWidth = width;
+            return true;
+        }
+
+        if (_ribbonResizeNormalizationRequired)
+        {
+            _ribbonResizeNormalizationRequired = false;
+            _lastRibbonResizeWidth = width;
+            return true;
+        }
+
+        var previousWidth = _lastRibbonResizeWidth;
+        _lastRibbonResizeWidth = width;
+        if (_ribbonResizeThresholds.Count == 0)
+            return true;
+
+        foreach (var threshold in _ribbonResizeThresholds)
+        {
+            if ((previousWidth < threshold && width >= threshold) ||
+                (previousWidth >= threshold && width < threshold))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private double GetCurrentRibbonResizeWidth()
+    {
+        if (RibbonTabs is null)
+            return 0;
+
+        if (GetActiveRibbonPanel() is { } activePanel &&
+            FindVisualAncestor<ScrollViewer>(activePanel) is { } scrollViewer)
+        {
+            var width = scrollViewer.ActualWidth > 0 ? scrollViewer.ActualWidth : scrollViewer.ViewportWidth;
+            if (width > 0)
+                return RibbonTabs.ActualWidth > 0
+                    ? Math.Min(width, Math.Max(0, RibbonTabs.ActualWidth - 12))
+                    : width;
+        }
+
+        return RibbonTabs.ActualWidth;
+    }
+
+    private void PrepareSelectedRibbonTabForImmediateCompaction()
+    {
+        if (RibbonTabs?.SelectedItem is not TabItem tabItem)
+            return;
+
+        tabItem.ApplyTemplate();
+        if (tabItem.Content is FrameworkElement content)
+        {
+            content.ApplyTemplate();
+            content.UpdateLayout();
+        }
     }
 
     private void ConfigureInsertRibbonSurface()
@@ -216,7 +310,9 @@ public partial class MainWindow
             {
                 if (string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal))
                 {
-                    textBlock.FontSize = 12;
+                    textBlock.FontSize = string.Equals(textBlock.Uid, "RibbonCompactRowLabel", StringComparison.Ordinal)
+                        ? 9
+                        : 12;
                     textBlock.TextTrimming = TextTrimming.CharacterEllipsis;
                     textBlock.VerticalAlignment = System.Windows.VerticalAlignment.Center;
                     if (tall)
@@ -317,32 +413,82 @@ public partial class MainWindow
         if (RibbonTabs is null ||
             button is not Button commandButton ||
             FindVisualAncestor<TabControl>(commandButton) != RibbonTabs ||
-            !ContainsUnreplacedRibbonIcon(commandButton.Content))
+            IsRibbonCollapsedGroupButton(commandButton) ||
+            IsRibbonCommandContent(commandButton.Content) ||
+            (!ContainsUnreplacedRibbonIcon(commandButton.Content) &&
+             !ContainsRibbonCommandLabel(commandButton.Content)))
         {
             return false;
         }
 
+        var hadUnreplacedIcon = ContainsUnreplacedRibbonIcon(commandButton.Content);
+        var hadRibbonCommandLabel = ContainsRibbonCommandLabel(commandButton.Content);
         var commandName = GetRibbonButtonTitleOrLabel(commandButton);
         if (string.IsNullOrWhiteSpace(commandName))
             return false;
 
         var label = commandName;
-        var layoutKind = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
+        var layoutKind = commandButton.Height is > 0 and <= 34 &&
+                         (hadUnreplacedIcon || hadRibbonCommandLabel)
+            ? RibbonCommandLayoutKind.Small
+            : RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
         ApplyRibbonCommandSize(commandButton, layoutKind);
         if (layoutKind is RibbonCommandLayoutKind.Small)
+        {
             commandButton.Width = Math.Max(commandButton.Width is > 0 ? commandButton.Width : 0, GetSmallRibbonCommandWidth(label));
+            if (!hadUnreplacedIcon && hadRibbonCommandLabel)
+                commandButton.Width = Math.Max(commandButton.Width, GetIconLabelRowRibbonCommandWidth(label));
+        }
         SetRibbonCompactWidthTag(
             commandButton,
             commandButton.Width is > 0 ? commandButton.Width : Math.Max(commandButton.ActualWidth, 64),
             layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 24);
 
         commandButton.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
+        if (!hadUnreplacedIcon && hadRibbonCommandLabel && commandButton.Content is DependencyObject contentRoot)
+        {
+            foreach (var textBlock in EnumerateVisualDescendants(contentRoot)
+                         .Concat(EnumerateLogicalDescendants(contentRoot))
+                         .OfType<TextBlock>()
+                         .Distinct()
+                         .Where(textBlock => string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal)))
+            {
+                textBlock.Uid = "RibbonCompactRowLabel";
+                textBlock.FontSize = 9;
+            }
+        }
+
         if (layoutKind is RibbonCommandLayoutKind.Small)
             commandButton.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
         commandButton.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
             ? System.Windows.HorizontalAlignment.Left
             : System.Windows.HorizontalAlignment.Center;
         return true;
+    }
+
+    private static bool IsRibbonCommandContent(object? content)
+    {
+        return content is FrameworkElement element &&
+               element.Tag is string tag &&
+               tag.StartsWith("RibbonCommandContent", StringComparison.Ordinal);
+    }
+
+    private static bool ContainsRibbonCommandLabel(object? content)
+    {
+        switch (content)
+        {
+            case TextBlock textBlock:
+                return string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal) &&
+                       !string.IsNullOrWhiteSpace(textBlock.Text);
+            case Panel panel:
+                return panel.Children.Cast<object>().Any(ContainsRibbonCommandLabel);
+            case Decorator decorator:
+                return ContainsRibbonCommandLabel(decorator.Child);
+            case ContentControl contentControl when !ReferenceEquals(contentControl.Content, content):
+                return ContainsRibbonCommandLabel(contentControl.Content);
+            default:
+                return false;
+        }
     }
 
     private static void NormalizeRibbonButtonSizeForCommandIcons(ButtonBase button, bool tall)
@@ -720,12 +866,13 @@ public partial class MainWindow
             UseLayoutRounding = true
         };
         compactGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(slotSize) });
+        compactGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5) });
         compactGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         iconSlot.Margin = new Thickness(0);
-        labelBlock.Margin = new Thickness(5, 0, 0, 0);
+        labelBlock.Margin = new Thickness(0);
         Grid.SetColumn(iconSlot, 0);
-        Grid.SetColumn(labelBlock, 1);
+        Grid.SetColumn(labelBlock, 2);
         compactGrid.Children.Add(iconSlot);
         compactGrid.Children.Add(labelBlock);
         return compactGrid;
@@ -873,7 +1020,7 @@ public partial class MainWindow
 
         var label = FindRibbonContentLabel(button.Content) ?? commandName;
         button.Height = 24;
-        button.Width = GetSmallRibbonCommandWidth(label);
+        button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
         SetRibbonCompactWidthTag(button, button.Width, 24);
         button.Padding = new Thickness(4, 2, 4, 2);
         button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
@@ -893,6 +1040,12 @@ public partial class MainWindow
             <= 14 => 126,
             _ => Math.Min(150, 44 + length * 6)
         };
+    }
+
+    private static double GetIconLabelRowRibbonCommandWidth(string label)
+    {
+        var length = string.IsNullOrWhiteSpace(label) ? 0 : label.Trim().Length;
+        return Math.Min(210, 72 + length * 7);
     }
 
     private static double GetLargeRibbonCommandWidth(string label)

@@ -32,6 +32,7 @@ public sealed partial class ManageConditionalFormatsDialog
         var flags = new List<string>();
         if (cf.IconSetReverse) flags.Add("reverse");
         if (!cf.IconSetShowValue) flags.Add("icons only");
+        if (cf.IconOverrides.Count > 0) flags.Add("custom icons");
         return flags.Count == 0
             ? $"Icon Set: {style}"
             : $"Icon Set: {style} ({string.Join(", ", flags)})";

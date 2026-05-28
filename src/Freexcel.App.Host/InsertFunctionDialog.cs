@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -43,7 +44,7 @@ public sealed class InsertFunctionDialog : Window
         searchPanel.Children.Add(searchLabel);
         Grid.SetColumn(_searchBox, 1);
         searchPanel.Children.Add(_searchBox);
-        var go = new Button { Content = "_Go", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6), IsDefault = true };
+        var go = new Button { Content = "_Go", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6) };
         go.Click += (_, _) => RefreshList();
         Grid.SetColumn(go, 2);
         searchPanel.Children.Add(go);
@@ -61,6 +62,7 @@ public sealed class InsertFunctionDialog : Window
         searchPanel.Children.Add(_categoryBox);
 
         _listBox = new ListBox();
+        AutomationProperties.SetName(_listBox, "Functions");
         var listLabel = new Label { Content = "Select a _function:", Target = _listBox, Padding = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(listLabel, Dock.Top);
 

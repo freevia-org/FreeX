@@ -51,6 +51,11 @@ public partial class MainWindow
         if (_suppressViewOptionSync || SheetGrid is null) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || sender is not System.Windows.Controls.CheckBox chk) return;
+        if (sheet.ViewMode != WorksheetViewMode.PageLayout)
+        {
+            chk.IsChecked = sheet.ShowRulers;
+            return;
+        }
 
         if (!TryExecuteGroupedSheetCommand(
                 "Ruler",
@@ -97,7 +102,11 @@ public partial class MainWindow
         var dialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
         dialog.ShowDialog();
         if (dialog.ViewApplied)
+        {
             UpdateViewport();
+            RefreshStatusBar();
+            FocusSheetGridIfNeeded();
+        }
     }
 
     private void ArrangeAllPickerBtn_Click(object sender, RoutedEventArgs e)
@@ -129,11 +138,7 @@ public partial class MainWindow
     {
         var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString() ?? "This command";
         var message = DeferredCommandMessages.MultiWindow(commandName);
-        MessageBox.Show(
-            message.Body,
-            message.Title,
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        ShowOwnedMessage(message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void FreezePanesPickerBtn_Click(object sender, RoutedEventArgs e)
@@ -255,11 +260,34 @@ public partial class MainWindow
     {
         var current = (int)Math.Round(_zoomLevel * 100);
         var dialog = new ZoomDialog(current) { Owner = this };
-        if (dialog.ShowDialog() != true)
+        try
+        {
+            if (dialog.ShowDialog() != true)
+                return;
+
+            ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(dialog.Result.ZoomPercent);
+        }
+        finally
+        {
+            FocusSheetGridIfNeeded();
+        }
+    }
+
+    private void StatusZoomText_OpenZoomDialog(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        ZoomCustomMenuItem_Click(sender, e);
+    }
+
+    private void StatusZoomText_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not Key.Enter and not Key.Space)
             return;
 
-        ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(dialog.Result.ZoomPercent);
+        e.Handled = true;
+        ZoomCustomMenuItem_Click(sender, e);
     }
+
     private void Zoom100Btn_Click(object sender, RoutedEventArgs e)
     {
         ZoomSlider.Value = 100;

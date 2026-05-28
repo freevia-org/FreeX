@@ -37,6 +37,7 @@ public sealed class ChangeChartTypeDialog : Window
         root.Children.Add(heading);
         var panel = InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery, currentType);
         panel.Height = 290;
+        _subtypeGallery.MouseDoubleClick += (_, _) => AcceptSelectedChartType();
         DockPanel.SetDock(panel, Dock.Top);
         root.Children.Add(panel);
         var buttons = CreateButtonRow();
@@ -48,13 +49,15 @@ public sealed class ChangeChartTypeDialog : Window
 
     public static ChangeChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
 
-    private StackPanel CreateButtonRow() => InsertChartDialog.CreateButtonRow(() =>
+    private StackPanel CreateButtonRow() => InsertChartDialog.CreateButtonRow(AcceptSelectedChartType);
+
+    private void AcceptSelectedChartType()
     {
         if (_subtypeGallery.SelectedItem is ChartTypeGalleryChoice option)
             SelectedChartType = option.Type;
         Result = CreateResult(SelectedChartType);
         DialogResult = true;
-    });
+    }
 
     private void FocusInitialKeyboardTarget()
     {

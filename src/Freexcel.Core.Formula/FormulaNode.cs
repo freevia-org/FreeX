@@ -15,6 +15,9 @@ public sealed record BooleanNode(bool Value) : FormulaNode;
 /// <summary>An omitted function argument, such as the empty slot in EXPAND(A1:B1,,3).</summary>
 public sealed record OmittedArgumentNode : FormulaNode;
 
+/// <summary>An inline Excel array constant, such as {1,2;3,4}.</summary>
+public sealed record ArrayConstantNode(IReadOnlyList<IReadOnlyList<FormulaNode>> Rows) : FormulaNode;
+
 /// <summary>A cell reference (e.g. A1, $B$3, Sheet2!A1).</summary>
 public sealed record CellRefNode(
     string  ColumnName,

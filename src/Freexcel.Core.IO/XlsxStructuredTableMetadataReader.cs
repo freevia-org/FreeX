@@ -119,9 +119,9 @@ internal static class XlsxStructuredTableMetadataReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "totalsRowShown"),
             XlsxXmlAttributeReader.ReadIntAttribute(root, "headerRowCount"),
             XlsxXmlAttributeReader.ReadIntAttribute(root, "totalsRowCount"),
-            ReadOptionalBoolAttribute(root, "insertRow"),
-            ReadOptionalBoolAttribute(root, "insertRowShift"),
-            ReadOptionalBoolAttribute(root, "published"),
+            XlsxStructuredTableNativeMetadataReader.ReadOptionalBoolAttribute(root, "insertRow"),
+            XlsxStructuredTableNativeMetadataReader.ReadOptionalBoolAttribute(root, "insertRowShift"),
+            XlsxStructuredTableNativeMetadataReader.ReadOptionalBoolAttribute(root, "published"),
             root.Attribute("comment")?.Value,
             style?.Attribute("name")?.Value,
             XlsxXmlAttributeReader.ReadBoolAttribute(style, "showFirstColumn"),
@@ -130,12 +130,12 @@ internal static class XlsxStructuredTableMetadataReader
             XlsxXmlAttributeReader.ReadBoolAttribute(style, "showColumnStripes"),
             tablePath,
             root.Element(workbookNs + "sortState")?.ToString(SaveOptions.DisableFormatting),
-            ReadNativeTableAttributes(root),
-            ReadNativeTableChildXmls(root, workbookNs),
-            ReadNativeAutoFilterAttributes(autoFilter),
-            ReadNativeAutoFilterChildXmls(autoFilter, workbookNs),
-            ReadNativeStyleInfoAttributes(style),
-            ReadNativeStyleInfoChildXmls(style),
+            XlsxStructuredTableNativeMetadataReader.ReadTableAttributes(root),
+            XlsxStructuredTableNativeMetadataReader.ReadTableChildXmls(root, workbookNs),
+            XlsxStructuredTableNativeMetadataReader.ReadAutoFilterAttributes(autoFilter),
+            XlsxStructuredTableNativeMetadataReader.ReadAutoFilterChildXmls(autoFilter, workbookNs),
+            XlsxStructuredTableNativeMetadataReader.ReadStyleInfoAttributes(style),
+            XlsxStructuredTableNativeMetadataReader.ReadStyleInfoChildXmls(style),
             root.Element(workbookNs + "tableColumns")?
                 .Elements(workbookNs + "tableColumn")
                 .Select(column => new StructuredTableColumnModel(
@@ -145,8 +145,8 @@ internal static class XlsxStructuredTableMetadataReader
                     column.Attribute("totalsRowFunction")?.Value,
                     ReadTableColumnFormula(column, workbookNs, "calculatedColumnFormula"),
                     ReadTableColumnFormula(column, workbookNs, "totalsRowFormula"),
-                    ReadNativeColumnChildXmls(column, workbookNs),
-                    ReadNativeColumnAttributes(column)))
+                    XlsxStructuredTableNativeMetadataReader.ReadColumnChildXmls(column, workbookNs),
+                    XlsxStructuredTableNativeMetadataReader.ReadColumnAttributes(column)))
                 .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
                 .ToList() ?? [],
             ReadFilterColumns(autoFilter, workbookNs));
@@ -238,117 +238,6 @@ internal static class XlsxStructuredTableMetadataReader
         return string.IsNullOrWhiteSpace(formula) ? null : formula;
     }
 
-    private static List<string> ReadNativeColumnChildXmls(XElement column, XNamespace workbookNs) =>
-        column.Elements()
-            .Where(element =>
-                element.Name != workbookNs + "calculatedColumnFormula" &&
-                element.Name != workbookNs + "totalsRowFormula")
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-    private static Dictionary<string, string> ReadNativeColumnAttributes(XElement column)
-    {
-        string[] modeledAttributes = ["id", "name", "totalsRowLabel", "totalsRowFunction"];
-        return column.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-    }
-
-    private static Dictionary<string, string>? ReadNativeStyleInfoAttributes(XElement? styleInfo)
-    {
-        if (styleInfo is null)
-            return null;
-
-        string[] modeledAttributes = ["name", "showFirstColumn", "showLastColumn", "showRowStripes", "showColumnStripes"];
-        var attributes = styleInfo.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-        return attributes.Count == 0 ? null : attributes;
-    }
-
-    private static List<string>? ReadNativeStyleInfoChildXmls(XElement? styleInfo)
-    {
-        if (styleInfo is null)
-            return null;
-
-        var children = styleInfo.Elements()
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-        return children.Count == 0 ? null : children;
-    }
-
-    private static Dictionary<string, string>? ReadNativeTableAttributes(XElement table)
-    {
-        string[] modeledAttributes =
-        [
-            "id",
-            "name",
-            "displayName",
-            "ref",
-            "totalsRowShown",
-            "headerRowCount",
-            "totalsRowCount",
-            "insertRow",
-            "insertRowShift",
-            "published",
-            "comment"
-        ];
-        var attributes = table.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-        return attributes.Count == 0 ? null : attributes;
-    }
-
-    private static bool? ReadOptionalBoolAttribute(XElement element, string name)
-    {
-        var value = element.Attribute(name)?.Value;
-        return value switch
-        {
-            "1" or "true" => true,
-            "0" or "false" => false,
-            _ => null
-        };
-    }
-
-    private static List<string>? ReadNativeTableChildXmls(XElement table, XNamespace workbookNs)
-    {
-        XName[] modeledChildren =
-        [
-            workbookNs + "autoFilter",
-            workbookNs + "sortState",
-            workbookNs + "tableColumns",
-            workbookNs + "tableStyleInfo"
-        ];
-        var children = table.Elements()
-            .Where(element => !modeledChildren.Contains(element.Name))
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-        return children.Count == 0 ? null : children;
-    }
-
-    private static Dictionary<string, string>? ReadNativeAutoFilterAttributes(XElement? autoFilter)
-    {
-        if (autoFilter is null)
-            return null;
-
-        var attributes = autoFilter.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "ref")
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-        return attributes.Count == 0 ? null : attributes;
-    }
-
-    private static List<string>? ReadNativeAutoFilterChildXmls(XElement? autoFilter, XNamespace workbookNs)
-    {
-        if (autoFilter is null)
-            return null;
-
-        var children = autoFilter.Elements()
-            .Where(element => element.Name != workbookNs + "filterColumn")
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-        return children.Count == 0 ? null : children;
-    }
-
     private static List<StructuredTableFilterColumnModel> ReadFilterColumns(
         XElement? autoFilter,
         XNamespace workbookNs)
@@ -361,7 +250,12 @@ internal static class XlsxStructuredTableMetadataReader
             .Select(column =>
             {
                 var filters = column.Element(workbookNs + "filters");
-                var nativeFilters = ReadNativeFilterXmls(column, workbookNs);
+                var customFilters = column.Element(workbookNs + "customFilters");
+                var nativeFilters = XlsxStructuredTableNativeMetadataReader.ReadFilterXmls(column, workbookNs);
+                var nativeCustomFiltersAttributes = customFilters?
+                    .Attributes()
+                    .Where(attribute => !IsModeledAttribute(attribute, "and"))
+                    .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
                 return new StructuredTableFilterColumnModel(
                     XlsxXmlAttributeReader.ReadIntAttribute(column, "colId") ?? -1,
                     filters?
@@ -371,26 +265,43 @@ internal static class XlsxStructuredTableMetadataReader
                         .Select(value => value!)
                         .ToList() ?? [],
                     XlsxXmlAttributeReader.ReadBoolAttribute(filters, "blank"),
+                    customFilters?
+                        .Elements(workbookNs + "customFilter")
+                        .Select(filter => new StructuredTableCustomFilterModel(
+                            filter.Attribute("operator")?.Value,
+                            filter.Attribute("val")?.Value,
+                            ReadCustomFilterNativeAttributes(filter)))
+                        .ToList() ?? [],
+                    XlsxXmlAttributeReader.ReadBoolAttribute(customFilters, "and"),
+                    customFilters?.Attribute("and")?.Value,
+                    nativeCustomFiltersAttributes?.Count > 0 ? nativeCustomFiltersAttributes : null,
                     nativeFilters,
-                    ReadNativeFilterColumnAttributes(column));
+                    XlsxStructuredTableNativeMetadataReader.ReadFilterColumnAttributes(column));
             })
-            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank || column.NativeFilterXmls.Count > 0 || column.NativeAttributes?.Count > 0))
+            .Where(column => column.ColumnId >= 0 &&
+                (column.Values.Count > 0 ||
+                 column.IncludeBlank ||
+                 column.CustomFilters.Count > 0 ||
+                 column.CustomFiltersAndRaw is not null ||
+                 column.NativeCustomFiltersAttributes?.Count > 0 ||
+                 column.NativeFilterXmls.Count > 0 ||
+                 column.NativeAttributes?.Count > 0))
             .ToList();
     }
 
-    private static List<string> ReadNativeFilterXmls(XElement filterColumn, XNamespace workbookNs) =>
-        filterColumn.Elements()
-            .Where(element => element.Name != workbookNs + "filters")
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-    private static Dictionary<string, string>? ReadNativeFilterColumnAttributes(XElement filterColumn)
+    private static IReadOnlyDictionary<string, string>? ReadCustomFilterNativeAttributes(XElement filter)
     {
-        var attributes = filterColumn.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "colId")
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+        var attributes = filter.Attributes()
+            .Where(attribute =>
+                !IsModeledAttribute(attribute, "operator") &&
+                !IsModeledAttribute(attribute, "val"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
         return attributes.Count == 0 ? null : attributes;
     }
+
+    private static bool IsModeledAttribute(XAttribute attribute, string localName) =>
+        attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == localName;
+
 }
 
 internal sealed record StructuredTablePackageMetadata(

@@ -149,6 +149,93 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_IgnoresHiddenDrawingObjectsForAltTextChecks()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            IsVisible = false
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = PictureKind.Image,
+            AltText = "Picture 1",
+            IsVisible = false
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            IsVisible = false
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Shape",
+            IsVisible = false
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 1),
+            Text = "Hidden annotation",
+            IsVisible = false
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 6, 1),
+            Text = "Hidden annotation",
+            AltText = "Text box",
+            IsVisible = false
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i =>
+                i.Kind == AccessibilityIssueKind.MissingAltText ||
+                i.Kind == AccessibilityIssueKind.GenericAltText)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresHiddenChartsForTitleChecks()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            IsVisible = false
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = dataRange,
+            Title = "Chart Title",
+            IsVisible = false
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i =>
+                i.Kind == AccessibilityIssueKind.ChartMissingTitle ||
+                i.Kind == AccessibilityIssueKind.GenericChartTitle)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
     public void FindIssues_FlagsHyperlinksWhoseDisplayTextIsTheUrl()
     {
         var workbook = new Workbook("Accessibility");
@@ -328,4 +415,104 @@ public sealed class AccessibilityCheckerServiceTests
         issue.Message.Should().Be("Table headers should not be blank.");
     }
 
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WithExplicitFontAndFill()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 3, 2);
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(120, 120, 120),
+            FillColor = new CellColor(130, 130, 130)
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Projected revenue"),
+            StyleId = lowContrastStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.SheetId.Should().Be(sheet.Id);
+        issue.SheetName.Should().Be("Sales");
+        issue.Location.Should().Be("B3");
+        issue.Message.Should().Be("Cell text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WithDefaultWhiteBackground()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(245, 245, 245)
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Low contrast on no fill"),
+            StyleId = lowContrastStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("A1");
+    }
+
+    [Theory]
+    [InlineData(18, false)]
+    [InlineData(14, true)]
+    public void FindIssues_UsesLowerContrastThresholdForLargeCellText(double fontSize, bool bold)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var largeTextStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(120, 120, 120),
+            FillColor = CellColor.White,
+            FontSize = fontSize,
+            Bold = bold
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = new TextValue("Large readable heading"),
+            StyleId = largeTextStyle
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresBlankCellsAndSufficientContrast()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(245, 245, 245)
+        });
+        var sufficientContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = CellColor.Black,
+            FillColor = CellColor.White
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = BlankValue.Instance,
+            StyleId = lowContrastStyle
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell
+        {
+            Value = new TextValue("Readable text"),
+            StyleId = sufficientContrastStyle
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
 }

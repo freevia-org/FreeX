@@ -11,31 +11,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XName[] retainedChildNames =
-        [
-            workbookNs + "customSheetViews",
-            workbookNs + "scenarios",
-            workbookNs + "ignoredErrors",
-            workbookNs + "cellWatches",
-            workbookNs + "sheetCalcPr",
-            workbookNs + "phoneticPr",
-            workbookNs + "sortState",
-            workbookNs + "dataConsolidate",
-            workbookNs + "legacyDrawing",
-            workbookNs + "legacyDrawingHF",
-            workbookNs + "picture",
-            workbookNs + "customProperties",
-            workbookNs + "smartTags",
-            workbookNs + "singleXmlCells",
-            workbookNs + "autoFilter",
-            workbookNs + "protectedRanges",
-            workbookNs + "rowBreaks",
-            workbookNs + "colBreaks",
-            workbookNs + "queryTableParts",
-            workbookNs + "webPublishItems",
-            workbookNs + "oleObjects",
-            workbookNs + "controls"
-        ];
+        var retainedChildNames = GetRetainedWorksheetChildNames(workbookNs);
 
         var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
         var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
@@ -323,31 +299,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             return;
         }
 
-        XName[] retainedChildNames =
-        [
-            context.WorkbookNs + "customSheetViews",
-            context.WorkbookNs + "scenarios",
-            context.WorkbookNs + "ignoredErrors",
-            context.WorkbookNs + "cellWatches",
-            context.WorkbookNs + "sheetCalcPr",
-            context.WorkbookNs + "phoneticPr",
-            context.WorkbookNs + "sortState",
-            context.WorkbookNs + "dataConsolidate",
-            context.WorkbookNs + "legacyDrawing",
-            context.WorkbookNs + "legacyDrawingHF",
-            context.WorkbookNs + "picture",
-            context.WorkbookNs + "customProperties",
-            context.WorkbookNs + "smartTags",
-            context.WorkbookNs + "singleXmlCells",
-            context.WorkbookNs + "autoFilter",
-            context.WorkbookNs + "protectedRanges",
-            context.WorkbookNs + "rowBreaks",
-            context.WorkbookNs + "colBreaks",
-            context.WorkbookNs + "queryTableParts",
-            context.WorkbookNs + "webPublishItems",
-            context.WorkbookNs + "oleObjects",
-            context.WorkbookNs + "controls"
-        ];
+        var retainedChildNames = GetRetainedWorksheetChildNames(context.WorkbookNs);
 
         PreserveWorksheetMetadata(
             sourceArchive,
@@ -647,6 +599,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
         if (sourceBlockName == workbookNs + "smartTags")
             return sheet.SmartTags is null;
+
+        if (sourceBlockName == workbookNs + "autoFilter")
+            return sheet.AutoFilter is null;
 
         if (sourceBlockName == workbookNs + "legacyDrawingHF")
             return !XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet);

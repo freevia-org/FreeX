@@ -10,6 +10,23 @@ public sealed class ExcelEditKeyPlannerTests
     private static readonly CellAddress Current = new(SheetId, 10, 5);
 
     [Theory]
+    [InlineData(Key.F4, ModifierKeys.None, Key.None, true)]
+    [InlineData(Key.System, ModifierKeys.None, Key.F4, true)]
+    [InlineData(Key.F4, ModifierKeys.Control, Key.None, false)]
+    [InlineData(Key.F4, ModifierKeys.Shift, Key.None, false)]
+    [InlineData(Key.F4, ModifierKeys.Alt, Key.None, false)]
+    public void ShouldCycleFormulaReference_RequiresPlainF4(
+        Key key,
+        ModifierKeys modifiers,
+        Key systemKey,
+        bool expected)
+    {
+        ExcelEditKeyPlanner.ShouldCycleFormulaReference(key, modifiers, systemKey)
+            .Should()
+            .Be(expected);
+    }
+
+    [Theory]
     [InlineData(Key.Enter, ModifierKeys.None, 11, 5)]
     [InlineData(Key.Enter, ModifierKeys.Shift, 9, 5)]
     [InlineData(Key.Tab, ModifierKeys.None, 10, 6)]
@@ -190,9 +207,39 @@ public sealed class ExcelEditKeyPlannerTests
     }
 
     [Fact]
+    public void GetIntent_MapsSystemAltEnterToLineBreakInsertion()
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.System,
+            ModifierKeys.Alt,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            systemKey: Key.Enter);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.InsertLineBreak);
+        intent.Target.Should().BeNull();
+    }
+
+    [Fact]
     public void GetIntent_MapsCtrlEnterToCommitSelection()
     {
         var intent = ExcelEditKeyPlanner.GetIntent(Key.Enter, ModifierKeys.Control, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.CommitSelection);
+        intent.Target.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetIntent_MapsSystemCtrlEnterToCommitSelection()
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.System,
+            ModifierKeys.Control,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            systemKey: Key.Enter);
 
         intent.Action.Should().Be(ExcelEditKeyAction.CommitSelection);
         intent.Target.Should().BeNull();

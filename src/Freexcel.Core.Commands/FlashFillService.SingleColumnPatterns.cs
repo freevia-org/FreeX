@@ -5,7 +5,10 @@ namespace Freexcel.Core.Commands;
 public static partial class FlashFillService
 {
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
-    private static readonly char[] Delimiters = [' ', ',', '-', '_', '@', '/', '\\'];
+    private static readonly char[] Delimiters = [' ', ',', ';', '-', '_', '@', '.', '/', '\\'];
+    private static readonly string[] LabelValueSeparators = [":", "=", " - ", " | ", " -> "];
+    private static readonly (char Open, char Close)[] PairedDelimiters =
+        [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ('\'', '\''), ('<', '>')];
 
     private static Func<string, string?>? TryConstant(IReadOnlyList<(string Source, string Expected)> examples)
     {
@@ -90,7 +93,10 @@ public static partial class FlashFillService
                 return s =>
                 {
                     var parts = s.Split(d);
-                    return idx < parts.Length ? parts[idx] : s;
+                    if (idx < parts.Length)
+                        return parts[idx];
+
+                    return idx == 0 ? s : null;
                 };
             }
         }
@@ -114,6 +120,13 @@ public static partial class FlashFillService
             return false;
 
         var userName = source[..atIndex];
+        var plusIndex = userName.IndexOf('+');
+        if (plusIndex >= 0)
+            userName = userName[..plusIndex];
+
+        if (userName.Length == 0)
+            return false;
+
         var separator = userName.Contains('.', StringComparison.Ordinal)
             ? '.'
             : userName.Contains('_', StringComparison.Ordinal)
@@ -172,6 +185,20 @@ public static partial class FlashFillService
 
             return commaFirstPattern;
         }
+
+        if (TryDelimitedPartReorder(examples, ',', s => s[1] + " " + s[0], out var firstLastPattern))
+            return firstLastPattern;
+
+        return null;
+    }
+
+    private static Func<string, string?>? TryThreeTokenNameDropMiddle(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && e.Expected == tokens[0] + " " + tokens[2]))
+            return source => TrySplitWhitespaceTokens(source, out var tokens) ? tokens[0] + " " + tokens[2] : null;
+
+        if (examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && e.Expected == tokens[2] + ", " + tokens[0]))
+            return source => TrySplitWhitespaceTokens(source, out var tokens) ? tokens[2] + ", " + tokens[0] : null;
 
         return null;
     }
@@ -244,6 +271,127 @@ public static partial class FlashFillService
     {
         parts = source.Split(delimiter, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 2 && parts.All(part => part.Length > 0);
+    }
+
+    private static Func<string, string?>? TryPairedDelimiterExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (open, close) in PairedDelimiters)
+        {
+            if (!examples.All(e => TryExtractBetweenPairedDelimiters(e.Source, open, close, out var extracted) && extracted == e.Expected))
+                continue;
+
+            return source => TryExtractBetweenPairedDelimiters(source, open, close, out var extracted)
+                ? extracted
+                : null;
+        }
+
+        return null;
+    }
+
+    private static bool TryExtractBetweenPairedDelimiters(string source, char open, char close, out string extracted)
+    {
+        extracted = string.Empty;
+        var openIndex = source.IndexOf(open);
+        if (openIndex < 0)
+            return false;
+
+        var closeIndex = source.IndexOf(close, openIndex + 1);
+        if (closeIndex <= openIndex + 1)
+            return false;
+
+        extracted = source[(openIndex + 1)..closeIndex].Trim();
+        return extracted.Length > 0;
+    }
+
+    private static Func<string, string?>? TryPairedDelimiterRemoval(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (open, close) in PairedDelimiters)
+        {
+            if (!examples.All(e => TryRemovePairedDelimiterText(e.Source, open, close, out var removed) && removed == e.Expected))
+                continue;
+
+            return source => TryRemovePairedDelimiterText(source, open, close, out var removed)
+                ? removed
+                : null;
+        }
+
+        return null;
+    }
+
+    private static bool TryRemovePairedDelimiterText(string source, char open, char close, out string removed)
+    {
+        removed = string.Empty;
+        var openIndex = source.IndexOf(open);
+        if (openIndex < 0)
+            return false;
+
+        var closeIndex = source.IndexOf(close, openIndex + 1);
+        if (closeIndex <= openIndex)
+            return false;
+
+        removed = (source[..openIndex] + source[(closeIndex + 1)..]).Trim();
+        while (removed.Contains("  ", StringComparison.Ordinal))
+            removed = removed.Replace("  ", " ", StringComparison.Ordinal);
+
+        return removed.Length > 0 && !string.Equals(removed, source, StringComparison.Ordinal);
+    }
+
+    private static Func<string, string?>? TryLabelValueExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var separator in LabelValueSeparators)
+        {
+            if (!examples.All(e => TryExtractLabelValue(e.Source, separator, out var extracted) && extracted == e.Expected))
+                continue;
+
+            return source => TryExtractLabelValue(source, separator, out var extracted)
+                ? extracted
+                : null;
+        }
+
+        return null;
+    }
+
+    private static bool TryExtractLabelValue(string source, string separator, out string extracted)
+    {
+        extracted = string.Empty;
+        var separatorIndex = source.IndexOf(separator, StringComparison.Ordinal);
+        if (separatorIndex < 0)
+            return false;
+
+        extracted = source[(separatorIndex + separator.Length)..].Trim();
+        return extracted.Length > 0;
+    }
+
+    private static Func<string, string?>? TryLabelQualifierRemoval(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var separator in LabelValueSeparators)
+        {
+            if (!examples.All(e => TryRemoveLabelValue(e.Source, separator, out var removed) && removed == e.Expected))
+                continue;
+
+            return source => TryRemoveLabelValue(source, separator, out var removed)
+                ? removed
+                : null;
+        }
+
+        return null;
+    }
+
+    private static bool TryRemoveLabelValue(string source, string separator, out string removed)
+    {
+        removed = string.Empty;
+        var separatorIndex = source.IndexOf(separator, StringComparison.Ordinal);
+        if (separatorIndex <= 0)
+            return false;
+
+        removed = source[..separatorIndex].Trim();
+        return removed.Length > 0;
+    }
+
+    private static bool TrySplitWhitespaceTokens(string source, out string[] tokens)
+    {
+        tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length == 3 && tokens.All(token => token.Length > 0);
     }
 
     private static string ExtractDigits(string value) =>
@@ -409,6 +557,52 @@ public static partial class FlashFillService
 
         initials = string.Concat(parts.Select(GetFirstInitial));
         return true;
+    }
+
+    private static Func<string, string?>? TryNameAbbreviations(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (TryNameAbbreviation(examples, 2, tokens => GetFirstInitial(tokens[0]) + ". " + tokens[1], out var firstInitialLast))
+            return firstInitialLast;
+
+        if (TryNameAbbreviation(examples, 2, tokens => tokens[0] + " " + GetFirstInitial(tokens[1]) + ".", out var firstLastInitial))
+            return firstLastInitial;
+
+        if (TryNameAbbreviation(examples, 2, tokens => tokens[1] + " " + GetFirstInitial(tokens[0]) + ".", out var lastFirstInitial))
+            return lastFirstInitial;
+
+        if (TryNameAbbreviation(examples, 2, tokens => tokens[1] + ", " + GetFirstInitial(tokens[0]) + ".", out var lastCommaFirstInitial))
+            return lastCommaFirstInitial;
+
+        if (TryNameAbbreviation(examples, 3, tokens => tokens[0] + " " + GetFirstInitial(tokens[1]) + ". " + tokens[2], out var middleInitial))
+            return middleInitial;
+
+        return null;
+    }
+
+    private static bool TryNameAbbreviation(
+        IReadOnlyList<(string Source, string Expected)> examples,
+        int tokenCount,
+        Func<string[], string> formatter,
+        out Func<string, string?>? pattern)
+    {
+        pattern = null;
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitWhitespaceTokens(source, tokenCount, out var tokens) || formatter(tokens) != expected)
+                return false;
+        }
+
+        pattern = source =>
+            TrySplitWhitespaceTokens(source, tokenCount, out var tokens)
+                ? formatter(tokens)
+                : null;
+        return true;
+    }
+
+    private static bool TrySplitWhitespaceTokens(string source, int tokenCount, out string[] tokens)
+    {
+        tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length == tokenCount && tokens.All(token => token.Length > 0);
     }
 
     private static string GetFirstInitial(string value) =>

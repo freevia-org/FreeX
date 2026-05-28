@@ -30,6 +30,26 @@ public sealed class AltTextCommandTests
     }
 
     [Fact]
+    public void SetPictureAltTextCommand_TrimsAltTextAndClearsWhitespace()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            AltText = "Old picture text"
+        };
+        sheet.Pictures.Add(picture);
+
+        new SetPictureAltTextCommand(sheet.Id, picture.Id, "  Trimmed picture text  ").Apply(ctx).Success.Should().BeTrue();
+        picture.AltText.Should().Be("Trimmed picture text");
+
+        new SetPictureAltTextCommand(sheet.Id, picture.Id, "   ").Apply(ctx).Success.Should().BeTrue();
+        picture.AltText.Should().BeNull();
+    }
+
+    [Fact]
     public void SetDrawingShapeAltTextCommand_SetsAltTextAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -50,6 +70,26 @@ public sealed class AltTextCommandTests
         command.Revert(ctx);
 
         shape.AltText.Should().Be("Old shape text");
+    }
+
+    [Fact]
+    public void SetDrawingShapeAltTextCommand_TrimsAltTextAndClearsWhitespace()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            AltText = "Old shape text"
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        new SetDrawingShapeAltTextCommand(sheet.Id, shape.Id, "  Trimmed shape text  ").Apply(ctx).Success.Should().BeTrue();
+        shape.AltText.Should().Be("Trimmed shape text");
+
+        new SetDrawingShapeAltTextCommand(sheet.Id, shape.Id, "   ").Apply(ctx).Success.Should().BeTrue();
+        shape.AltText.Should().BeNull();
     }
 
     [Fact]
@@ -74,6 +114,27 @@ public sealed class AltTextCommandTests
         command.Revert(ctx);
 
         textBox.AltText.Should().Be("Old text box text");
+    }
+
+    [Fact]
+    public void SetTextBoxAltTextCommand_TrimsAltTextAndClearsWhitespace()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Note",
+            AltText = "Old text box text"
+        };
+        sheet.TextBoxes.Add(textBox);
+
+        new SetTextBoxAltTextCommand(sheet.Id, textBox.Id, "  Trimmed text box text  ").Apply(ctx).Success.Should().BeTrue();
+        textBox.AltText.Should().Be("Trimmed text box text");
+
+        new SetTextBoxAltTextCommand(sheet.Id, textBox.Id, "   ").Apply(ctx).Success.Should().BeTrue();
+        textBox.AltText.Should().BeNull();
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext

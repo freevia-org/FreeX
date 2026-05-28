@@ -129,6 +129,28 @@ public sealed class FormulaEvaluationSummaryServiceTests
     }
 
     [Fact]
+    public void FormulaEvaluationSession_StepInIsUnavailableWithoutNestedEvaluationTarget()
+    {
+        var summary = new FormulaEvaluationSummary(
+            new SheetId(Guid.NewGuid()),
+            "Sheet1",
+            new CellAddress(new SheetId(Guid.NewGuid()), 1, 1),
+            "=B1*2",
+            "10",
+            [
+                new FormulaEvaluationStep("B1", "5"),
+                new FormulaEvaluationStep("2", "2"),
+                new FormulaEvaluationStep("B1*2", "10")
+            ]);
+
+        var session = FormulaEvaluationSession.Start(summary);
+
+        session.CanStepIn.Should().BeFalse();
+        session.StepIn().Should().BeFalse();
+        session.CurrentStep.Should().Be(summary.Steps[0]);
+    }
+
+    [Fact]
     public void GetSummary_ReturnsNullForNonFormulaCell()
     {
         var workbook = new Workbook("test");

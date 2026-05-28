@@ -43,6 +43,7 @@ public sealed class OpenWorkbookLoader
                 });
         }
 
+        IReadOnlyList<string> loadWarnings = [];
         var workbook = await RunStageAsync(
             progress,
             "parsing",
@@ -52,6 +53,12 @@ public sealed class OpenWorkbookLoader
             () =>
             {
                 using var loadStream = new MemoryStream(bytes, writable: false);
+                if (adapter is XlsxFileAdapter xlsxAdapter)
+                {
+                    var result = xlsxAdapter.LoadWithWarnings(loadStream);
+                    loadWarnings = result.Warnings;
+                    return result.Workbook;
+                }
                 return adapter.Load(loadStream);
             });
         ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
@@ -79,7 +86,8 @@ public sealed class OpenWorkbookLoader
             workbook,
             featureReport,
             Path.GetFileNameWithoutExtension(path),
-            format.OpensAsTemplate);
+            format.OpensAsTemplate,
+            loadWarnings);
     }
 
     private static async Task<T> RunStageAsync<T>(
@@ -213,4 +221,5 @@ public sealed record OpenWorkbookResult(
     Workbook Workbook,
     XlsxFeatureReport? FeatureReport,
     string DisplayName,
-    bool OpenedAsTemplate);
+    bool OpenedAsTemplate,
+    IReadOnlyList<string>? LoadWarnings = null);

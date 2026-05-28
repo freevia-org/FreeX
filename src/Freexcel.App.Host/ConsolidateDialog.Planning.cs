@@ -6,53 +6,26 @@ namespace Freexcel.App.Host;
 public sealed partial class ConsolidateDialog
 {
     public static IReadOnlyList<string> SplitSourceRangeText(string sourceRangesText) =>
-        sourceRangesText
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .ToList();
+        ConsolidateDialogPlanner.SplitSourceRangeText(sourceRangesText);
 
     public static string JoinSourceRanges(IEnumerable<string> sourceRanges) =>
-        string.Join("; ", sourceRanges.Select(item => item.Trim()).Where(item => item.Length > 0));
+        ConsolidateDialogPlanner.JoinSourceRanges(sourceRanges);
 
-    public static bool HasPendingReferenceText(IEnumerable<string> existingReferences, string? referenceText)
-    {
-        var pendingReferences = SplitSourceRangeText(referenceText ?? "");
-        if (pendingReferences.Count == 0)
-            return false;
-
-        var existing = existingReferences
-            .Select(item => item.Trim())
-            .Where(item => item.Length > 0)
-            .ToList();
-        return pendingReferences.Any(pending =>
-            !existing.Contains(pending, StringComparer.OrdinalIgnoreCase));
-    }
+    public static bool HasPendingReferenceText(IEnumerable<string> existingReferences, string? referenceText) =>
+        ConsolidateDialogPlanner.HasPendingReferenceText(existingReferences, referenceText);
 
     public static bool TryAddReference(
         SheetId sheetId,
         IEnumerable<string> existingReferences,
         string referenceText,
         out IReadOnlyList<string> updatedReferences,
-        out string? error)
-    {
-        var references = existingReferences.Select(item => item.Trim()).Where(item => item.Length > 0).ToList();
-        updatedReferences = references;
-        error = null;
-
-        var reference = referenceText.Trim();
-        if (!ConsolidateInputParser.TryParseSourceRanges(reference, sheetId, out var ranges, out var invalidPart) ||
-            ranges.Count != 1)
-        {
-            error = string.IsNullOrWhiteSpace(invalidPart)
-                ? "Enter a valid source range."
-                : $"Enter a valid source range: {invalidPart}.";
-            return false;
-        }
-
-        references.Add(reference);
-        updatedReferences = references;
-        return true;
-    }
+        out string? error) =>
+        ConsolidateDialogPlanner.TryAddReference(
+            sheetId,
+            existingReferences,
+            referenceText,
+            out updatedReferences,
+            out error);
 
     public static ConsolidateDialogResult CreateResult(
         IEnumerable<GridRange> sourceRanges,
@@ -60,31 +33,17 @@ public sealed partial class ConsolidateDialog
         ConsolidateFunction function,
         bool useTopRowLabels = false,
         bool useLeftColumnLabels = false,
-        bool createLinksToSourceData = false)
-    {
-        var ranges = sourceRanges.ToList();
-        if (ranges.Count == 0)
-            throw new ArgumentException("At least one source range is required.", nameof(sourceRanges));
-
-        return new ConsolidateDialogResult(
-            ranges,
+        bool createLinksToSourceData = false) =>
+        ConsolidateDialogPlanner.CreateResult(
+            sourceRanges,
             destinationCell,
             function,
             useTopRowLabels,
             useLeftColumnLabels,
             createLinksToSourceData);
-    }
 
-    public static bool HaveSameSize(IEnumerable<GridRange> sourceRanges)
-    {
-        var ranges = sourceRanges.ToList();
-        if (ranges.Count < 2)
-            return true;
-
-        var rowCount = ranges[0].RowCount;
-        var colCount = ranges[0].ColCount;
-        return ranges.All(range => range.RowCount == rowCount && range.ColCount == colCount);
-    }
+    public static bool HaveSameSize(IEnumerable<GridRange> sourceRanges) =>
+        ConsolidateDialogPlanner.HaveSameSize(sourceRanges);
 
     public static bool TryParse(
         SheetId sheetId,
@@ -92,14 +51,10 @@ public sealed partial class ConsolidateDialog
         string destinationCellText,
         out ConsolidateDialogResult result,
         out string? error) =>
-        TryParse(
+        ConsolidateDialogPlanner.TryParse(
             sheetId,
             sourceRangesText,
             destinationCellText,
-            ConsolidateFunction.Sum,
-            useTopRowLabels: false,
-            useLeftColumnLabels: false,
-            createLinksToSourceData: false,
             out result,
             out error);
 
@@ -112,52 +67,23 @@ public sealed partial class ConsolidateDialog
         bool useLeftColumnLabels,
         bool createLinksToSourceData,
         out ConsolidateDialogResult result,
-        out string? error)
-    {
-        result = default!;
-        error = null;
-
-        if (!ConsolidateInputParser.TryParseSourceRanges(sourceRangesText, sheetId, out var ranges, out var invalidPart))
-        {
-            error = string.IsNullOrWhiteSpace(invalidPart)
-                ? "Enter at least one valid source range."
-                : $"Enter a valid source range: {invalidPart}.";
-            return false;
-        }
-
-        if (!HaveSameSize(ranges))
-        {
-            error = "Source ranges must be the same size.";
-            return false;
-        }
-
-        if (!ConsolidateInputParser.TryParseDestination(destinationCellText, sheetId, out var destination))
-        {
-            error = "Enter a valid destination cell.";
-            return false;
-        }
-
-        result = CreateResult(
-            ranges,
-            destination,
+        out string? error) =>
+        ConsolidateDialogPlanner.TryParse(
+            sheetId,
+            sourceRangesText,
+            destinationCellText,
             function,
             useTopRowLabels,
             useLeftColumnLabels,
-            createLinksToSourceData);
-        return true;
-    }
+            createLinksToSourceData,
+            out result,
+            out error);
 
     public static ConsolidateRangeSelectionRequest CreateRangeSelectionRequest(
         ConsolidateRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        ConsolidateDialogPlanner.CreateRangeSelectionRequest(target, currentText);
 
     private static string FunctionLabel(ConsolidateFunction function) =>
-        function switch
-        {
-            ConsolidateFunction.CountNumbers => "Count Numbers",
-            ConsolidateFunction.StdDev => "StdDev",
-            ConsolidateFunction.StdDevp => "StdDevp",
-            _ => function.ToString()
-        };
+        ConsolidateDialogPlanner.FunctionLabel(function);
 }

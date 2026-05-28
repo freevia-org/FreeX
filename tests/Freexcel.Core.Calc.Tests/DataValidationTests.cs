@@ -515,6 +515,24 @@ public class DataValidationTests
         DataValidationService.GetApplicable(sheet, addr3).Should().BeEmpty("no rule covers C3");
     }
 
+    [Fact]
+    public void GetApplicable_ReturnsRulesContainingAddressInAdditionalRanges()
+    {
+        var (_, sheet) = MakeWorkbook();
+        var rule = new DataValidation
+        {
+            AppliesTo = MakeSingleCellRange(sheet, 1, 1),
+            Type = DvType.List,
+            Formula1 = "A,B,C"
+        };
+        rule.AdditionalRanges.Add(MakeSingleCellRange(sheet, 3, 3));
+        sheet.DataValidations.Add(rule);
+
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 3, 3))
+            .Should().ContainSingle()
+            .Which.Should().Be(rule);
+    }
+
     // ─── SetDataValidationCommand ─────────────────────────────────────────────
 
     [Fact]

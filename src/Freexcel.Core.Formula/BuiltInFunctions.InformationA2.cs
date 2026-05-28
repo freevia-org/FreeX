@@ -7,7 +7,7 @@ public static partial class BuiltInFunctions
     // Phase A2 information and aggregate functions.
 
     // Defensive fallback if EvaluateAstAware routing is bypassed; the
-    // FormulaEvaluator dispatches ISREF/ISFORMULA/FORMULATEXT/OFFSET to
+    // FormulaEvaluator dispatches ISREF/ISFORMULA/FORMULATEXT/OFFSET/CELL to
     // AST-aware code paths before invoking this delegate.
     private static ScalarValue AstAwareStub(IReadOnlyList<ScalarValue> args, IEvalContext ctx) => ErrorValue.Value;
 
@@ -15,7 +15,7 @@ public static partial class BuiltInFunctions
     // Phase A2 – CELL(info_type, [reference])
     // ════════════════════════════════════════════════════════════════════════
 
-    private static ScalarValue CellInfo(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    internal static ScalarValue CellInfo(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
         var infoType = ToText(args[0]).Trim().ToLowerInvariant();
@@ -139,6 +139,98 @@ public static partial class BuiltInFunctions
         }
     }
 
+    private static ScalarValue Isblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is BlankValue)
+            : new BoolValue(args[0] is BlankValue);
+
+    private static ScalarValue Isnumber(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is NumberValue or DateTimeValue)
+            : new BoolValue(args[0] is NumberValue or DateTimeValue);
+
+    private static ScalarValue Istext(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is TextValue)
+            : new BoolValue(args[0] is TextValue);
+
+    private static ScalarValue Iserror(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is ErrorValue)
+            : new BoolValue(args[0] is ErrorValue);
+
+    private static ScalarValue Iserr(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is ErrorValue error && error.Code != "#N/A")
+            : new BoolValue(args[0] is ErrorValue error && error.Code != "#N/A");
+
+    private static ScalarValue Isna(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is ErrorValue e2 && e2.Code == "#N/A")
+            : new BoolValue(args[0] is ErrorValue e2 && e2.Code == "#N/A");
+
+    private static ScalarValue Isnontext(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is not TextValue)
+            : new BoolValue(args[0] is not TextValue);
+
+    private static ScalarValue Islogical(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is BoolValue)
+            : new BoolValue(args[0] is BoolValue);
+
+    private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, NScalar);
+        return NScalar(args[0]);
+    }
+
+    private static ScalarValue NScalar(ScalarValue value) =>
+        value switch
+        {
+            NumberValue nv   => nv,
+            DateTimeValue dt => new NumberValue(dt.Value),
+            BoolValue bv     => new NumberValue(bv.Value ? 1 : 0),
+            ErrorValue ev    => ev,
+            _                => new NumberValue(0)
+        };
+
+    private static ScalarValue Iseven(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsevenScalar);
+        return IsevenScalar(args[0]);
+    }
+
+    private static ScalarValue IsevenScalar(ScalarValue value)
+    {
+        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
+        return new BoolValue(n % 2 == 0);
+    }
+
+    private static ScalarValue Isodd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsoddScalar);
+        return IsoddScalar(args[0]);
+    }
+
+    private static ScalarValue IsoddScalar(ScalarValue value)
+    {
+        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
+        return new BoolValue(n % 2 != 0);
+    }
+
+    private static RangeValue MapPredicateRange(RangeValue range, Func<ScalarValue, bool> predicate)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                cells[r, c] = new BoolValue(predicate(range.Cells[r, c]));
+
+        return new RangeValue(cells);
+    }
+
     private static ScalarValue Aggregate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
@@ -152,7 +244,8 @@ public static partial class BuiltInFunctions
         if (options < 0 || options > 7) return ErrorValue.Value;
 
         bool ignoreErrors = options == 2 || options == 3 || options == 6 || options == 7;
-        // Hidden-row ignore (options 1, 3, 5, 7) is not honored here — see header note.
+        bool ignoreHiddenRows = options == 1 || options == 3 || options == 5 || options == 7;
+        bool ignoreNestedAggregates = options <= 3;
 
         bool needsK = funcNum is >= 14 and <= 19;
         if (needsK && args.Count < 4) return ErrorValue.Value;
@@ -171,7 +264,7 @@ public static partial class BuiltInFunctions
             }
             if (arg is RangeValue rv)
             {
-                foreach (var cell in rv.Flatten())
+                foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows, ignoreNestedAggregates))
                 {
                     if (cell is ErrorValue ce)
                     {
@@ -212,7 +305,7 @@ public static partial class BuiltInFunctions
                     }
                     if (arg is RangeValue rv)
                     {
-                        foreach (var cell in rv.Flatten())
+                        foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows, ignoreNestedAggregates))
                         {
                             if (cell is ErrorValue ce)
                             {
@@ -314,6 +407,32 @@ public static partial class BuiltInFunctions
             default:
                 return ErrorValue.Value;
         }
+    }
+
+    private static IEnumerable<ScalarValue> AggregateVisibleCells(
+        RangeValue range,
+        IEvalContext ctx,
+        bool ignoreHiddenRows,
+        bool ignoreNestedAggregates)
+    {
+        for (int r = 0; r < range.RowCount; r++)
+        {
+            uint absRow = range.StartRow + (uint)r;
+            if (ignoreHiddenRows && IsAggregateRowHidden(ctx, range, absRow)) continue;
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                uint absCol = range.StartCol + (uint)c;
+                if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, range, absRow, absCol)) continue;
+                yield return range.Cells[r, c];
+            }
+        }
+    }
+
+    private static bool IsAggregateRowHidden(IEvalContext ctx, RangeValue range, uint row)
+    {
+        return range.SheetName is null
+            ? ctx.IsRowHidden(row)
+            : ctx.IsRowHidden(range.SheetName, row);
     }
 
     private static double PercentileIncCalc(List<double> nums, double p)
