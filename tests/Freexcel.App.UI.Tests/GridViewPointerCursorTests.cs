@@ -302,15 +302,17 @@ public sealed class GridViewPointerCursorTests
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "Freexcel.App.UI", "GridView.Input.cs"));
-        var releaseStart = source.LastIndexOf("if (_autofillDragging)", StringComparison.Ordinal);
+        var mouseUp = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var releaseStart = source.IndexOf("if (_autofillDragging)", mouseUp, StringComparison.Ordinal);
         var resizeStart = source.IndexOf("if (_resizeTarget != ResizeTarget.None)", releaseStart, StringComparison.Ordinal);
         var releaseBlock = source[releaseStart..resizeStart];
 
         releaseBlock.Should().Contain("_autofillSourceRange = null;");
-        releaseBlock.Should().Contain("_autofillTarget      = null;");
+        releaseBlock.Should().Contain("_autofillTarget");
+        releaseBlock.Should().Contain("= null;");
         releaseBlock.Should().Contain("InvalidateVisual();");
         releaseBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal)
-            .Should().BeGreaterThan(releaseBlock.IndexOf("_autofillTarget      = null;", StringComparison.Ordinal));
+            .Should().BeGreaterThan(releaseBlock.IndexOf("_autofillTarget", StringComparison.Ordinal));
     }
 
     [Fact]

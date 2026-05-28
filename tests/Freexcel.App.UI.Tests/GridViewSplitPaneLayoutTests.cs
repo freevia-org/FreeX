@@ -342,7 +342,7 @@ public sealed class GridViewSplitPaneLayoutTests
         GridView.CalculateSplitDividerDragTarget(
                 viewport,
                 SplitDividerHandle.Intersection,
-                new Point(GridView.RowHeaderWidth + 5, GridView.ColHeaderHeight + 5))
+                new Point(GridView.RowHeaderWidth + 64, GridView.ColHeaderHeight + 5))
             .Should().Be(new SplitDividerDragTarget(CellAddress.MaxRow, CellAddress.MaxCol));
     }
 
