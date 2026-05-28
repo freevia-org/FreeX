@@ -52,6 +52,14 @@ jobs:
         shell: pwsh
         run: dotnet test Freexcel.slnx --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
 
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: freexcel-${{ github.run_id }}-${{ github.run_attempt }}-test-results
+          path: "**/TestResults/tests.trx"
+          if-no-files-found: warn
+
       - name: Compute release metadata
         id: meta
         shell: pwsh
