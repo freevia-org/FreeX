@@ -83,6 +83,22 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             RibbonAdaptiveGroupState.Full);
     }
 
+    [Theory]
+    [InlineData(RibbonAdaptiveGroupState.Collapsed, RibbonAdaptiveGroupState.IconOnly, true)]
+    [InlineData(RibbonAdaptiveGroupState.IconOnly, RibbonAdaptiveGroupState.SmallWithLabels, true)]
+    [InlineData(RibbonAdaptiveGroupState.SmallWithLabels, RibbonAdaptiveGroupState.Full, true)]
+    [InlineData(RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.Full, false)]
+    public void TryGetNextExpandedState_ExpandsOneStepUntilFull(
+        RibbonAdaptiveGroupState currentState,
+        RibbonAdaptiveGroupState expectedState,
+        bool expectedResult)
+    {
+        var result = RibbonAdaptiveLayoutEngine.TryGetNextExpandedState(currentState, out var expandedState);
+
+        result.Should().Be(expectedResult);
+        expandedState.Should().Be(expectedState);
+    }
+
     [Fact]
     public void Plan_RelaxesProtectedFallbacksWhenPriorityGroupsStillOverflow()
     {
