@@ -22,25 +22,14 @@ internal static class WorkbookThemeDialogPlanner
             effects ?? string.Empty);
         error = null;
 
-        foreach (var slot in WorkbookThemeColorSlots.All)
+        if (TryApplyThemeColors(theme, colorTextBySlot, out var themedPalette, out error))
         {
-            var text = colorTextBySlot.TryGetValue(slot, out var value)
-                ? value
-                : string.Empty;
-
-            try
-            {
-                theme = theme.WithColor(slot, WorkbookThemeDialogColorCodec.ParseColor(text ?? string.Empty));
-            }
-            catch (FormatException ex)
-            {
-                error = new WorkbookThemeDialogValidationError(slot, ex.Message);
-                theme = initialTheme;
-                return false;
-            }
+            theme = themedPalette;
+            return true;
         }
 
-        return true;
+        theme = initialTheme;
+        return false;
     }
 
     public static CellColor PreviewColorOrBlack(string? text)
@@ -55,6 +44,40 @@ internal static class WorkbookThemeDialogPlanner
         }
     }
 
+    private static bool TryApplyThemeColors(
+        WorkbookTheme theme,
+        IReadOnlyDictionary<WorkbookThemeColorSlot, string> colorTextBySlot,
+        out WorkbookTheme themedPalette,
+        out WorkbookThemeDialogValidationError? error)
+    {
+        themedPalette = theme;
+        error = null;
+
+        foreach (var slot in WorkbookThemeColorSlots.All)
+        {
+            try
+            {
+                themedPalette = themedPalette.WithColor(
+                    slot,
+                    WorkbookThemeDialogColorCodec.ParseColor(ReadColorText(colorTextBySlot, slot)));
+            }
+            catch (FormatException ex)
+            {
+                error = new WorkbookThemeDialogValidationError(slot, ex.Message);
+                themedPalette = theme;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string ReadColorText(
+        IReadOnlyDictionary<WorkbookThemeColorSlot, string> colorTextBySlot,
+        WorkbookThemeColorSlot slot) =>
+        colorTextBySlot.TryGetValue(slot, out var value)
+            ? value ?? string.Empty
+            : string.Empty;
 }
 
 internal sealed record WorkbookThemeDialogValidationError(
