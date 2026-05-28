@@ -160,6 +160,8 @@ public sealed class FileDialogFilterBuilderTests
     [Theory]
     [InlineData("xlsx", ".xlsx")]
     [InlineData(" .CSV ", ".CSV")]
+    [InlineData("*.XLSX", ".XLSX")]
+    [InlineData(" *.csv ", ".csv")]
     [InlineData(".fxl", ".fxl")]
     [InlineData("   ", "")]
     public void FileFormatResolver_NormalizesExtensionsForFilterAndAdapterMatching(string extension, string expected)
@@ -206,7 +208,7 @@ public sealed class FileDialogFilterBuilderTests
 
     [Theory]
     [InlineData("xlsx", typeof(XlsxFileAdapter), ".xlsx")]
-    [InlineData(".CSV", typeof(CsvFileAdapter), ".csv")]
+    [InlineData("*.CSV", typeof(CsvFileAdapter), ".csv")]
     [InlineData(".xml", typeof(SpreadsheetXmlFileAdapter), ".xml")]
     [InlineData(".fxl", typeof(NativeJsonAdapter), ".fxl")]
     public void FindSaveAdapter_RealAdaptersResolveOnlySaveCapableFormats(

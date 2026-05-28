@@ -108,9 +108,7 @@ public sealed class SpellCheckDialog : Window
             return;
         }
 
-        _replacementBox.Focus();
-        _replacementBox.SelectAll();
-        Keyboard.Focus(_replacementBox);
+        DialogFocus.FocusAndSelect(_replacementBox);
     }
 
     private UIElement CreateSpellCheckContent(string word)

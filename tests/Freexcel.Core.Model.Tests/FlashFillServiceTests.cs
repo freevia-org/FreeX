@@ -146,6 +146,7 @@ public sealed class FlashFillServiceTests
     [Theory]
     [InlineData("Smith, John", "John", "Doe, Jane", "Jane", "Brown, Bob", "Bob")]
     [InlineData("SKU-001; Retail; West", "Retail", "SKU-002; Wholesale; East", "Wholesale", "SKU-003; Online; North", "Online")]
+    [InlineData("SKU-001 | Retail | West", "Retail", "SKU-002 | Wholesale | East", "Wholesale", "SKU-003 | Online | North", "Online")]
     public void Fill_ExtractDelimitedToken_TrimsTokenEdges(
         string source1,
         string expected1,
@@ -926,6 +927,19 @@ public sealed class FlashFillServiceTests
             ["Katherine Coleman Johnson"]);
 
         result.Should().BeEquivalentTo(["C."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNames_ExtractsLastNameAcrossVariableTokenCounts()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "Lovelace"),
+                ("Grace Hopper", "Hopper")
+            ],
+            ["Katherine Coleman Johnson"]);
+
+        result.Should().BeEquivalentTo(["Johnson"], o => o.WithStrictOrdering());
     }
 
     [Fact]

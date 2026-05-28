@@ -446,9 +446,9 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void TextToColumnsResultFactory_ForwardsFixedWidthBreakWorkToPlanner()
+    public void TextToColumnsDialogHelpers_ForwardFixedWidthBreakWorkToPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialogResultFactory.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.Helpers.cs"));
 
         source.Should().Contain("TextToColumnsDialogPlanner.BuildPreviewRows");
         source.Should().Contain("TextToColumnsDialogPlanner.TryParseDestination");
@@ -2328,7 +2328,7 @@ public sealed class DataToolDialogTests
             button.ToolTip.Should().Be("Collapse dialog and select range");
 
             var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DialogReferencePicker.cs"));
-            pickerSource.Should().Contain("Keyboard.Focus(textBox);");
+            pickerSource.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
         });
     }
 

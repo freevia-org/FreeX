@@ -845,6 +845,19 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void CountifAndSumif_TextErrorCriteriaMatchErrorCells()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA), (1, 2, new NumberValue(10)),
+            (2, 1, ErrorValue.Value), (2, 2, new NumberValue(20)),
+            (3, 1, new TextValue("#N/A")), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=COUNTIF(A1:A3,\"#N/A\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=COUNTIF(A1:A3,\"#VALUE!\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SUMIF(A1:A3,\"#N/A\",B1:B3)", sheet).Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
     public void CriteriaWildcards_MatchExcelTextOnlyAndOperatorPatterns()
     {
         var sheet = MakeSheet(
@@ -6044,6 +6057,21 @@ public class FunctionLibraryTests
 
     [Fact] public void T_Number_ReturnsEmpty() =>
         _eval.Evaluate("=T(42)", MakeSheet()).Should().Be(new TextValue(""));
+
+    [Fact]
+    public void T_RangeArgument_PropagatesElementErrors()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("hello")),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(42)));
+
+        AssertColumn(
+            _eval.Evaluate("=T(A1:A3)", sheet),
+            new TextValue("hello"),
+            ErrorValue.NA,
+            new TextValue(""));
+    }
 
     [Fact]
     public void Hyperlink_ReturnsDisplayTextWhenFriendlyNameIsProvided()

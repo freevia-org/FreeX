@@ -1135,7 +1135,7 @@ public sealed class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void OnRowResized(");
         mainSource.Should().NotContain("private void OnPageMarginsChanged(");
         mainSource.Should().NotContain("private void CaptureColumnResizeSnapshot(");
-        mainSource.Should().NotContain("private void RestoreRowResizeSnapshot(");
+        mainSource.Should().NotContain("private void CaptureRowResizeSnapshot(");
 
         gridSource.Should().Contain("private void RefreshStatusBar(");
         gridSource.Should().Contain("private void OnColumnResizing(");
@@ -1144,7 +1144,7 @@ public sealed class MainWindowSourceHygieneTests
         gridSource.Should().Contain("private void OnRowResized(");
         gridSource.Should().Contain("private void OnPageMarginsChanged(");
         gridSource.Should().Contain("private void CaptureColumnResizeSnapshot(");
-        gridSource.Should().Contain("private void RestoreRowResizeSnapshot(");
+        gridSource.Should().Contain("private void CaptureRowResizeSnapshot(");
         gridSource.Should().Contain("StatusBarCalculator");
     }
 
@@ -1239,7 +1239,7 @@ public sealed class MainWindowSourceHygieneTests
         dataFilterSource.Should().Contain("private void ValidationButton_Click(");
         dataFilterSource.Should().Contain("private void ClearFilterButton_Click(");
         dataFilterSource.Should().Contain("private void NamedRangesButton_Click(");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
+        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
     }
 
     [Fact]
@@ -2296,9 +2296,8 @@ public sealed class MainWindowSourceHygieneTests
 
         editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
         dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseTopBottom");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseAverage");
+        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
+        dataFilterSource.Should().Contain("FilterInputParser.ParseAllowedValues");
     }
 
     [Fact]

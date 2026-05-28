@@ -29,6 +29,7 @@ public sealed class ZoomDialog : Window
         ShowInTaskbar = false;
         _zoomBox.Text = currentZoomPercent.ToString(CultureInfo.InvariantCulture);
         AutomationProperties.SetName(_zoomBox, "Custom zoom percent");
+        _zoomBox.GotKeyboardFocus += (_, _) => _customZoomButton.IsChecked = true;
         Content = CreateZoomContent(currentZoomPercent);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -44,8 +45,7 @@ public sealed class ZoomDialog : Window
         else
         {
             _customZoomButton.Focus();
-            _zoomBox.SelectAll();
-            Keyboard.Focus(_zoomBox);
+            DialogFocus.FocusAndSelect(_zoomBox);
         }
     }
 
@@ -91,9 +91,7 @@ public sealed class ZoomDialog : Window
         {
             MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             _customZoomButton.IsChecked = true;
-            _zoomBox.Focus();
-            _zoomBox.SelectAll();
-            Keyboard.Focus(_zoomBox);
+            DialogFocus.FocusAndSelect(_zoomBox);
             return;
         }
 

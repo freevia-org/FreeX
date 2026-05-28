@@ -83,9 +83,9 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("=> ExecuteFillCells(FillCellsDirection.Right)");
         source.Should().Contain("=> ExecuteFillCells(FillCellsDirection.Up)");
         source.Should().Contain("=> ExecuteFillCells(FillCellsDirection.Left)");
-        source.Should().Contain("FillSeriesPlanner.BuildLinearSeriesEdits(");
-        source.Should().Contain("dialog.Result.SeriesIn");
-        source.Should().Contain("dialog.Result.StopValue");
+        source.Should().Contain("FillSeriesPlanner.BuildSeriesEdits(");
+        source.Should().Contain("dialog.Result");
+        source.Should().Contain("Select a numeric or date cell to start a series.");
         source.Should().Contain("private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();");
         source.Should().Contain("currentRange => CreateFlashFillCommand(sheet, currentRange)");
         source.Should().Contain("private void SortAZMenuItem_Click(object sender, RoutedEventArgs e)    => SortAscButton_Click(sender, e);");

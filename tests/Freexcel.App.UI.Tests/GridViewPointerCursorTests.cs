@@ -302,15 +302,17 @@ public sealed class GridViewPointerCursorTests
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "Freexcel.App.UI", "GridView.Input.cs"));
-        var releaseStart = source.LastIndexOf("if (_autofillDragging)", StringComparison.Ordinal);
+        var mouseUp = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var releaseStart = source.IndexOf("if (_autofillDragging)", mouseUp, StringComparison.Ordinal);
         var resizeStart = source.IndexOf("if (_resizeTarget != ResizeTarget.None)", releaseStart, StringComparison.Ordinal);
         var releaseBlock = source[releaseStart..resizeStart];
 
         releaseBlock.Should().Contain("_autofillSourceRange = null;");
-        releaseBlock.Should().Contain("_autofillTarget      = null;");
+        releaseBlock.Should().Contain("_autofillTarget");
+        releaseBlock.Should().Contain("= null;");
         releaseBlock.Should().Contain("InvalidateVisual();");
         releaseBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal)
-            .Should().BeGreaterThan(releaseBlock.IndexOf("_autofillTarget      = null;", StringComparison.Ordinal));
+            .Should().BeGreaterThan(releaseBlock.IndexOf("_autofillTarget", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -328,6 +330,48 @@ public sealed class GridViewPointerCursorTests
         mouseLeave.Should().Contain("_splitDividerDragHandle == SplitDividerHandle.None");
         mouseLeave.Should().Contain("!_splitPaneScrollbarDragging");
         mouseLeave.Should().Contain("Cursor = null;");
+    }
+
+    [Fact]
+    public void LostMouseCaptureCancelsActiveResize()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var eventsSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Events.cs"));
+        var lostCapture = source[
+            source.IndexOf("protected override void OnLostMouseCapture", StringComparison.Ordinal)..];
+
+        eventsSource.Should().Contain("public event Action? ResizeCanceled;");
+        lostCapture.Should().Contain("if (_resizeTarget != ResizeTarget.None)");
+        lostCapture.Should().Contain("_resizeTarget = ResizeTarget.None;");
+        lostCapture.Should().Contain("ResizeCanceled?.Invoke();");
+        lostCapture.Should().Contain("InvalidateVisual();");
+    }
+
+    [Fact]
+    public void LostMouseCaptureClearsCapturedPointerDragStates()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var lostCapture = source[
+            source.IndexOf("protected override void OnLostMouseCapture", StringComparison.Ordinal)..];
+
+        lostCapture.Should().Contain("if (_objectDragKind != ObjectDragKind.None)");
+        lostCapture.Should().Contain("_objectDragKind = ObjectDragKind.None;");
+        lostCapture.Should().Contain("_objectDragCurrentRect = Rect.Empty;");
+        lostCapture.Should().Contain("if (_marginDragEdge.HasValue)");
+        lostCapture.Should().Contain("_marginDragEdge = null;");
+        lostCapture.Should().Contain("if (_splitDividerDragHandle != SplitDividerHandle.None)");
+        lostCapture.Should().Contain("_splitDividerDragHandle = SplitDividerHandle.None;");
+        lostCapture.Should().Contain("if (_splitPaneScrollbarDragging)");
+        lostCapture.Should().Contain("_splitPaneScrollbarDragging = false;");
+        lostCapture.Should().Contain("_splitPaneScrollbarDragSource = null;");
+        lostCapture.Should().Contain("_splitPaneScrollbarDragPointerOffset = 0;");
+        lostCapture.Should().Contain("if (_autofillDragging)");
+        lostCapture.Should().Contain("_autofillDragging = false;");
+        lostCapture.Should().Contain("_autofillSourceRange = null;");
+        lostCapture.Should().Contain("_autofillTarget = null;");
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)

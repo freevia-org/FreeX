@@ -248,7 +248,7 @@ internal static partial class DelimitedTextWorkbookReader
         if (!buffered.TryGetBuffer(out var bytes))
             throw new InvalidOperationException("Buffered delimited text stream is not accessible.");
 
-        return new StringReader(DecodeText(bytes.AsSpan()));
+        return new StringReader(DecodeText(bytes.AsSpan(0, checked((int)buffered.Length))));
     }
 
     private static string DecodeText(ReadOnlySpan<byte> bytes)

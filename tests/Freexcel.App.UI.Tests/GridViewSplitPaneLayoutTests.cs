@@ -327,6 +327,26 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitDividerDragTarget_ClampsPinnedEdgeAtWorksheetLimits()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(CellAddress.MaxRow, 18, 0)],
+            [new ColMetric(CellAddress.MaxCol, 64, 0)],
+            SplitPanes: new SplitPaneState(
+                CellAddress.MaxRow,
+                CellAddress.MaxCol,
+                [new RowMetric(CellAddress.MaxRow, 18, 0)],
+                [new ColMetric(CellAddress.MaxCol, 64, 0)]));
+
+        GridView.CalculateSplitDividerDragTarget(
+                viewport,
+                SplitDividerHandle.Intersection,
+                new Point(GridView.RowHeaderWidth + 64, GridView.ColHeaderHeight + 5))
+            .Should().Be(new SplitDividerDragTarget(CellAddress.MaxRow, CellAddress.MaxCol));
+    }
+
+    [Fact]
     public void CalculateSplitPaneScrollbarChrome_AddsIndependentPaneTracksAndThumbs()
     {
         var viewport = SplitViewport();
@@ -400,6 +420,37 @@ public sealed class GridViewSplitPaneLayoutTests
             .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Track, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
         SplitPaneScrollbarLayoutPlanner.CalculateScrollTarget(scrollbar, new Point(scrollbar.Track.Right, scrollbar.Track.Bottom))
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 191));
+    }
+
+    [Fact]
+    public void SplitPaneScrollbarLayoutPlanner_ClampsThumbToTrackWhenFirstVisibleExceedsLastStart()
+    {
+        var track = new Rect(100, 20, 200, 10);
+
+        var thumb = SplitPaneScrollbarLayoutPlanner.CalculateThumb(
+            SplitPaneScrollbarOrientation.Horizontal,
+            track,
+            firstVisibleIndex: 500,
+            visibleCount: 10,
+            maxIndex: 200);
+
+        thumb.Left.Should().BeGreaterThanOrEqualTo(track.Left + 1);
+        thumb.Right.Should().BeLessThanOrEqualTo(track.Right - 1);
+    }
+
+    [Fact]
+    public void SplitPaneScrollbarLayoutPlanner_ClampsVisibleSpanToRangeWhenCalculatingThumb()
+    {
+        var track = new Rect(100, 20, 200, 10);
+
+        var thumb = SplitPaneScrollbarLayoutPlanner.CalculateThumb(
+            SplitPaneScrollbarOrientation.Horizontal,
+            track,
+            firstVisibleIndex: 50,
+            visibleCount: 500,
+            maxIndex: 200);
+
+        thumb.Should().Be(new Rect(track.Left + 1, track.Top + 1, track.Width - 2, track.Height - 2));
     }
 
     [Fact]
@@ -485,6 +536,24 @@ public sealed class GridViewSplitPaneLayoutTests
                 chrome,
                 new Point(chrome.VerticalBottomLeft!.Track.Left + 2, chrome.VerticalBottomLeft.Thumb.Bottom + 12))
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.BottomLeft, SplitPaneScrollbarOrientation.Vertical, 22));
+    }
+
+    [Fact]
+    public void CalculateSplitPaneScrollbarInteractionTarget_DoesNotJumpScrollOnThumbMouseDown()
+    {
+        var viewport = SplitViewport();
+        var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
+
+        GridView.CalculateSplitPaneScrollbarInteractionTarget(
+                viewport,
+                chrome,
+                chrome.HorizontalTopRight!.Thumb.TopLeft + new Vector(2, 2))
+            .Should().BeNull();
+        GridView.CalculateSplitPaneScrollbarInteractionTarget(
+                viewport,
+                chrome,
+                chrome.VerticalBottomLeft!.Thumb.TopLeft + new Vector(2, 2))
+            .Should().BeNull();
     }
 
     [Fact]

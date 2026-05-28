@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Media;
 using Freexcel.Core.Model;
 using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
@@ -50,6 +51,25 @@ public partial class GridView : FrameworkElement
         TextOptions.SetTextHintingMode(this, TextHintingMode.Fixed);
     }
 
+    /// <summary>
+    /// Returns a custom automation peer that exposes the grid as a data-grid-style custom
+    /// control so that screen readers announce the name and control type correctly instead
+    /// of the default FrameworkElement peer (which reports a generic "custom" type).
+    /// </summary>
+    protected override AutomationPeer OnCreateAutomationPeer() => new GridViewAutomationPeer(this);
+
+    private sealed class GridViewAutomationPeer(GridView owner) : FrameworkElementAutomationPeer(owner)
+    {
+        protected override AutomationControlType GetAutomationControlTypeCore() =>
+            AutomationControlType.DataGrid;
+
+        protected override string GetClassNameCore() => nameof(GridView);
+
+        protected override bool IsContentElementCore() => true;
+
+        protected override bool IsControlElementCore() => true;
+    }
+
     public const double ColHeaderHeight = 18;
     public const double RowHeaderWidth = 30;
 
@@ -57,8 +77,19 @@ public partial class GridView : FrameworkElement
 
     public double EffectiveColHeaderHeight => ShowHeaders ? ColHeaderHeight : 0.0;
 
-    public static double CalculateRowHeaderWidth(ViewportModel? viewport) =>
-        viewport?.RowMetrics.Max(r => (uint?)r.Row) switch
+    public static double CalculateRowHeaderWidth(ViewportModel? viewport)
+    {
+        var maxRow = 0u;
+        if (viewport is not null)
+        {
+            foreach (var row in viewport.RowMetrics)
+            {
+                if (row.Row > maxRow)
+                    maxRow = row.Row;
+            }
+        }
+
+        return maxRow switch
         {
             >= 1_000_000 => 54,
             >= 100_000   => 48,
@@ -66,6 +97,7 @@ public partial class GridView : FrameworkElement
             >= 1_000     => 36,
             _            => RowHeaderWidth,
         };
+    }
 
     private const double ResizeHitZone = 4;
     private const double SplitDividerHitZone = 4;
@@ -78,11 +110,11 @@ public partial class GridView : FrameworkElement
     private static readonly Brush TextBrush = Brushes.Black;
     private static readonly Brush HeaderBackgroundBrush = MakeBrush(242, 242, 242);
     private static readonly Brush HeaderHighlightBrush = MakeBrush(218, 232, 218);
-    private static readonly Pen GridPen = new(GridLineBrush, 1);
+    private static readonly Pen GridPen = MakeGridPen();
     private static readonly Brush SelectionBrush = MakeBrushAlpha(32, 33, 115, 70);
-    private static readonly Pen SelectionPen = new(MakeBrush(33, 115, 70), 2);
+    private static readonly Pen SelectionPen = MakePen(MakeBrush(33, 115, 70), 2);
     private static readonly Brush QuickAnalysisPreviewBrush = MakeBrushAlpha(38, 91, 155, 213);
-    private static readonly Pen QuickAnalysisPreviewPen = new(MakeBrush(47, 117, 181), 2);
+    private static readonly Pen QuickAnalysisPreviewPen = MakePen(MakeBrush(47, 117, 181), 2);
     private static readonly Brush QuickAnalysisDataBarPreviewBrush = MakeBrushAlpha(156, 91, 155, 213);
     private static readonly Brush[] QuickAnalysisColorScalePreviewBrushes =
     [
@@ -97,33 +129,33 @@ public partial class GridView : FrameworkElement
         MakeBrush(248, 105, 107)
     ];
     private static readonly Brush QuickAnalysisHighlightPreviewBrush = MakeBrushAlpha(96, 255, 235, 156);
-    private static readonly Pen QuickAnalysisHighlightPreviewPen = new(MakeBrush(191, 143, 0), 1);
+    private static readonly Pen QuickAnalysisHighlightPreviewPen = MakePen(MakeBrush(191, 143, 0), 1);
     private static readonly Brush QuickAnalysisClearFormatPreviewBrush = MakeBrushAlpha(50, 217, 217, 217);
-    private static readonly Pen QuickAnalysisClearFormatPreviewPen = new(MakeBrush(128, 128, 128), 1);
+    private static readonly Pen QuickAnalysisClearFormatPreviewPen = MakePen(MakeBrush(128, 128, 128), 1);
     private static readonly Brush QuickAnalysisTotalPreviewBrush = MakeBrushAlpha(70, 198, 239, 206);
-    private static readonly Pen QuickAnalysisTotalPreviewPen = new(MakeBrush(84, 130, 53), 1);
+    private static readonly Pen QuickAnalysisTotalPreviewPen = MakePen(MakeBrush(84, 130, 53), 1);
     private static readonly Brush QuickAnalysisTablePreviewBrush = MakeBrushAlpha(58, 189, 215, 238);
-    private static readonly Pen QuickAnalysisTablePreviewPen = new(MakeBrush(91, 155, 213), 1);
-    private static readonly Pen QuickAnalysisSparklinePreviewPen = new(MakeBrush(68, 114, 196), 1.5);
+    private static readonly Pen QuickAnalysisTablePreviewPen = MakePen(MakeBrush(91, 155, 213), 1);
+    private static readonly Pen QuickAnalysisSparklinePreviewPen = MakePen(MakeBrush(68, 114, 196), 1.5);
     private static readonly Brush QuickAnalysisWinLossPositiveBrush = MakeBrushAlpha(180, 84, 130, 53);
     private static readonly Brush QuickAnalysisWinLossNegativeBrush = MakeBrushAlpha(180, 192, 80, 77);
     private static readonly Brush QuickAnalysisColumnChartPreviewBrush = MakeBrushAlpha(170, 68, 114, 196);
     private static readonly Brush QuickAnalysisPieChartAccentBrush = MakeBrushAlpha(176, 237, 125, 49);
     private static readonly Brush QuickAnalysisAreaChartPreviewBrush = MakeBrushAlpha(96, 68, 114, 196);
     private static readonly Brush QuickAnalysisScatterChartPreviewBrush = MakeBrushAlpha(190, 112, 173, 71);
-    private static readonly Pen QuickAnalysisColumnChartAxisPen = new(MakeBrush(89, 89, 89), 1);
+    private static readonly Pen QuickAnalysisColumnChartAxisPen = MakePen(MakeBrush(89, 89, 89), 1);
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
     private static readonly Pen FreezePen = MakeFreezePen();
     private static readonly Brush PageBreakPreviewBrush = MakeBrushAlpha(28, 0, 103, 192);
     private static readonly Pen PageBreakPen = MakePageBreakPen();
     private static readonly Pen PageLayoutPen = MakePageLayoutPen();
     private static readonly Pen PageMarginGuidePen = MakePageMarginGuidePen();
-    private static readonly Pen PageMarginRulerHandlePen = new(MakeBrush(75, 75, 75), 1);
+    private static readonly Pen PageMarginRulerHandlePen = MakePen(MakeBrush(75, 75, 75), 1);
     private static readonly Brush PageMarginRulerHandleBrush = MakeBrush(238, 238, 238);
     private static readonly Pen SplitPanePen = MakeSplitPanePen();
     private static readonly Brush SplitScrollbarTrackBrush = MakeBrush(244, 244, 244);
     private static readonly Brush SplitScrollbarThumbBrush = MakeBrush(188, 188, 188);
-    private static readonly Pen SplitScrollbarPen = new(MakeBrush(196, 196, 196), 1);
+    private static readonly Pen SplitScrollbarPen = MakePen(MakeBrush(196, 196, 196), 1);
     private static readonly Brush FormulaTraceArrowBrush = MakeBrush(0, 102, 204);
     private static readonly Pen FormulaTraceArrowPen = MakeFormulaTraceArrowPen();
 
@@ -134,6 +166,10 @@ public partial class GridView : FrameworkElement
     private readonly Dictionary<CellColor, Pen> _fillPatternPenCache = new();
     private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();
     private readonly Dictionary<Brush, Pen> _underlinePenCache = new();
+    private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();
+    private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();
+    private RenderCellLookupCache? _renderCellLookupCache;
+    private OccupiedCellLookupCache? _occupiedCellLookupCache;
 
     private static double ToDisplayFontSize(double pointSize) =>
         Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));
@@ -171,6 +207,18 @@ public partial class GridView : FrameworkElement
     private static Pen MakeResizeLinePen()
     {
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(100, 100, 100)), 1);
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen MakeGridPen()
+    {
+        return MakePen(GridLineBrush, 1);
+    }
+
+    private static Pen MakePen(Brush brush, double thickness)
+    {
+        var pen = new Pen(brush, thickness);
         pen.Freeze();
         return pen;
     }

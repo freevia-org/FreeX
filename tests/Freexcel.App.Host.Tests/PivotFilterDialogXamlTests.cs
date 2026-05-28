@@ -231,9 +231,7 @@ public sealed class PivotFilterDialogXamlTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("CustomNameBox.Focus();");
-        source.Should().Contain("CustomNameBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(CustomNameBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(CustomNameBox);");
     }
 
     [Fact]
@@ -249,9 +247,10 @@ public sealed class PivotFilterDialogXamlTests
         source.Should().Contain("FocusInvalidShowValuesAsInput(baseFieldIndex);");
         source.Should().Contain("ValueFieldTabs.SelectedItem = NumberFormatTab;");
         source.Should().Contain("ValueFieldTabs.SelectedItem = ShowValuesAsTab;");
-        source.Should().Contain("FocusAndSelect(NumberFormatBox);");
-        source.Should().Contain("FocusAndSelect(BaseItemBox);");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(NumberFormatBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(BaseItemBox);");
+        source.Should().Contain("Keyboard.Focus(BaseFieldBox);");
+        source.Should().NotContain("private static void FocusAndSelect(System.Windows.Controls.TextBox target)");
     }
 
     [Fact]

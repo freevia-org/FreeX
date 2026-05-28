@@ -23,6 +23,8 @@ public partial class GridView
     public event Action<uint, double>? RowResized;
     /// <summary>Fired when the user double-clicks a row border to AutoFit.</summary>
     public event Action<uint>? RowAutoFitRequested;
+    /// <summary>Fired when an in-progress row or column resize is canceled.</summary>
+    public event Action? ResizeCanceled;
 
     /// <summary>Fired when the user drags the autofill handle and releases.</summary>
     public event Action<GridRange, GridRange>? AutofillRequested;

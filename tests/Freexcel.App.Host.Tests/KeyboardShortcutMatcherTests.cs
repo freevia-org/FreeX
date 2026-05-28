@@ -45,6 +45,24 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Fact]
+    public void CommandShortcutRules_CoverEveryCommandShortcut()
+    {
+        var field = typeof(KeyboardShortcutMatcher).GetField("CommandShortcutRules", BindingFlags.NonPublic | BindingFlags.Static);
+        field.Should().NotBeNull();
+        var rules = (Array)field!.GetValue(null)!;
+
+        var coveredShortcuts = rules
+            .Cast<object>()
+            .Select(RuleShortcut)
+            .Distinct()
+            .ToArray();
+
+        coveredShortcuts.Should().BeEquivalentTo(
+            Enum.GetValues<KeyboardCommandShortcut>(),
+            "every keyboard command enum value should remain reachable from at least one physical shortcut");
+    }
+
+    [Fact]
     public void ShortcutFamilies_DoNotReuseTheSamePhysicalChord()
     {
         var collisions = EnumeratePhysicalChords()

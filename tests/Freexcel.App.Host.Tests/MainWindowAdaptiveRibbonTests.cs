@@ -100,19 +100,22 @@ public sealed class MainWindowAdaptiveRibbonTests
     {
         StaTestRunner.Run(() =>
         {
-            var label = new TextBlock { Text = "Paste", Tag = "RibbonLabel" };
+            var icon = new TextBlock { Text = "\uE16D" };
+            RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
+            var label = new TextBlock { Text = "Paste" };
+            RibbonMetadata.SetRole(label, RibbonMetadataRole.CommandLabel);
             var content = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-                Children = { new TextBlock { Text = "\uE16D", Tag = "RibbonIcon" }, label }
+                Children = { icon, label }
             };
             var button = new Button
             {
-                Tag = "RibbonCompact:72:32",
                 HorizontalContentAlignment = System.Windows.HorizontalAlignment.Right,
                 Content = content
             };
+            RibbonMetadata.SetCompactWidths(button, 72, 32);
 
             var compactLevel = typeof(MainWindow).GetNestedType("RibbonCompactLevel", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonCompactLevel");
@@ -140,9 +143,9 @@ public sealed class MainWindowAdaptiveRibbonTests
             var button = new Button
             {
                 Content = content,
-                Tag = "RibbonCompact:150:24",
                 HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left
             };
+            RibbonMetadata.SetCompactWidths(button, 150, 24);
 
             var compactLevel = typeof(MainWindow).GetNestedType("RibbonCompactLevel", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonCompactLevel");
@@ -325,7 +328,7 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void WindowResize_UsesCachedRibbonBreakpointsBeforeNormalizing()
+    public void WindowResize_UsesCachedRibbonBreakpointsBeforeAdaptiveUpdate()
     {
         var workbookUiState = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
         var ribbonSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
@@ -336,16 +339,28 @@ public sealed class MainWindowAdaptiveRibbonTests
             workbookUiState.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal));
         var resizeNormalizer = ribbonSource.Substring(
             ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterResize", StringComparison.Ordinal),
-            ribbonSource.IndexOf("private void PrepareSelectedRibbonTabForImmediateCompaction", StringComparison.Ordinal) -
+            ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal) -
             ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterResize", StringComparison.Ordinal));
+        var resizeWidthResolver = ribbonSource.Substring(
+            ribbonSource.IndexOf("private double GetCurrentRibbonResizeWidth", StringComparison.Ordinal),
+            ribbonSource.IndexOf("private void PrepareSelectedRibbonTabForImmediateCompaction", StringComparison.Ordinal) -
+            ribbonSource.IndexOf("private double GetCurrentRibbonResizeWidth", StringComparison.Ordinal));
+        var resizeGate = ribbonSource.Substring(
+            ribbonSource.IndexOf("private bool ShouldNormalizeRibbonSurfaceForResize", StringComparison.Ordinal),
+            ribbonSource.IndexOf("private double GetCurrentRibbonResizeWidth", StringComparison.Ordinal) -
+            ribbonSource.IndexOf("private bool ShouldNormalizeRibbonSurfaceForResize", StringComparison.Ordinal));
 
         sizeChanged.Should().Contain("NormalizeRibbonSurfaceAfterResize();");
         sizeChanged.Should().Contain("ScheduleViewportResizeRefresh();");
+        sizeChanged.Should().Contain("if (e.WidthChanged)");
         sizeChanged.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange");
         resizeNormalizer.Should().Contain("ShouldNormalizeRibbonSurfaceForResize()");
-        resizeNormalizer.Should().Contain("_ribbonResizeThresholds");
-        resizeNormalizer.Should().Contain("scheduleFallback: !_isInWindowResizeMoveLoop");
+        resizeNormalizer.Should().Contain("CompactRibbonSurfaceAfterResize(scheduleFallback: !_isInWindowResizeMoveLoop)");
+        resizeNormalizer.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange");
         resizeNormalizer.Should().NotContain("UpdateRibbonCompactMode();");
+        resizeGate.Should().Contain("_ribbonResizeThresholds");
+        resizeWidthResolver.Should().Contain("TryGetCachedRibbonResizeWidth(out var cachedWidth)");
+        resizeWidthResolver.Should().Contain("IsCachedRibbonSurfaceSelected()");
     }
 
     [Fact]
@@ -397,7 +412,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         wndProc.Should().Contain("SheetGrid.IsLiveResizing = true;");
         wndProc.Should().Contain("msg == WM_EXITSIZEMOVE && _isInWindowResizeMoveLoop");
         wndProc.Should().Contain("_isInWindowResizeMoveLoop = false;");
-        wndProc.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange();");
+        wndProc.Should().Contain("CompleteRibbonResizeCompaction();");
+        wndProc.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange();");
         wndProc.Should().Contain("CompleteViewportResizeRefresh();");
     }
 
@@ -414,24 +430,51 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private string? _lastRibbonAdaptiveAppliedStateKey;");
         fields.Should().Contain("private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;");
         fields.Should().Contain("private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;");
+        fields.Should().Contain("private ScrollViewer? _ribbonAdaptiveScrollViewerCache;");
         fields.Should().Contain("private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;");
         fields.Should().Contain("private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];");
+        fields.Should().Contain("private bool _ribbonAdaptiveStateDiffInvalidated;");
+        fields.Should().Contain("private bool _ribbonResizeCompactFallbackPending;");
         source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
         source.Should().Contain("_ribbonAdaptiveGroupCache");
         source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])");
         source.Should().Contain("UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);");
+        source.Should().Contain("RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth)");
         source.Should().Contain("GetCachedRibbonAdaptiveGroups(activePanel)");
         source.Should().Contain("GetCachedRibbonCollapsedGroupButtons(activePanel, groups, controlCacheKey)");
-        source.Should().Contain("EnumerateRibbonAdaptiveThresholdCandidates(adaptiveGroups, fixedChromeWidth)");
-        source.Should().Contain("FitRibbonAdaptiveStatesToWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth)");
-        source.Should().Contain("ExpandRibbonAdaptiveStatesIntoAvailableWidth(plannedStates, adaptiveGroups, fixedChromeWidth, availableWidth)");
+        source.Should().Contain("_ribbonAdaptiveScrollViewerCache");
+        source.Should().Contain("ribbonScrollViewer ??= FindVisualAncestor<ScrollViewer>(activePanel)");
+        source.Should().Contain("RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth)");
         source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth)");
         source.Should().Contain("CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates)");
-        source.Should().Contain("force ? null : _lastRibbonAdaptiveAppliedStates");
+        source.Should().Contain("_ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates");
         source.Should().Contain("SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth)");
         source.Should().NotContain("width <= 2200.0");
         source.Should().NotContain("width += 8.0");
         source.Should().NotContain("RemoveRibbonCollapsedGroupButtons(activePanel)");
+    }
+
+    [Fact]
+    public void RibbonGroupDiscovery_UsesMetadataRatherThanVisualShapeDuringResize()
+    {
+        var ribbonSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
+        var adaptiveSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        var resources = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "MainWindowResources.xaml"));
+        var footprintUpdater = adaptiveSource.Substring(
+            adaptiveSource.IndexOf("private static void SetCollapsedRibbonButtonFootprint", StringComparison.Ordinal),
+            adaptiveSource.IndexOf("private void SetCollapsedRibbonButtonFootprintIfNeeded", StringComparison.Ordinal) -
+            adaptiveSource.IndexOf("private static void SetCollapsedRibbonButtonFootprint", StringComparison.Ordinal));
+
+        ribbonSource.Should().Contain("NormalizeRibbonGroupMetadata();");
+        ribbonSource.Should().Contain("EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>()");
+        ribbonSource.Should().NotContain("EnumerateVisualDescendants(this).OfType<ButtonBase>()");
+        adaptiveSource.Should().Contain("RibbonMetadata.IsRibbonGroup(e)");
+        adaptiveSource.Should().NotContain("System.Windows.Shapes.Rectangle");
+        adaptiveSource.Should().NotContain("FindVisualAncestor<Border>(textBlock)");
+        footprintUpdater.Should().Contain("TryGetCollapsedRibbonButtonCaption(button, out var caption)");
+        footprintUpdater.Should().NotContain("EnumerateVisualDescendants");
+        footprintUpdater.Should().NotContain("EnumerateLogicalDescendants");
+        resources.Should().Contain("Property=\"local:RibbonMetadata.Role\" Value=\"RibbonGroup\"");
     }
 
     [Fact]
@@ -722,6 +765,23 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void CollapsedRibbonGroupButtons_KeepKeyTipsWithinSelectedTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 220);
+
+                harness.CollapsedActiveRibbonGroupsWithoutKeyTips.Should().BeEmpty(
+                    $"{tab} collapsed group buttons should remain reachable through command-scope keytips after adaptive layout changes");
+            }
+        });
+    }
+
+    [Fact]
     public void CollapsedRibbonGroups_ShowGroupCaptionsAtNormalNarrowWidths()
     {
         StaTestRunner.Run(() =>
@@ -734,6 +794,60 @@ public sealed class MainWindowAdaptiveRibbonTests
             harness.CollapsedActiveRibbonGroupVisibleLabels.Should().Contain(
                 ["Notes", "Protect"],
                 "Excel keeps collapsed group captions visible at common 900px workbook widths so icon-only fallbacks remain identifiable");
+        });
+    }
+
+    [Fact]
+    public void CollapsedRibbonGroups_TrimCompactCaptionsInsteadOfWrappingMidWord()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Home", 900);
+
+            harness.CollapsedActiveRibbonGroupWrappedVisibleLabels.Should().BeEmpty(
+                "compact collapsed group captions should not create uneven two-line buttons during resize");
+        });
+    }
+
+    [Fact]
+    public void CollapsedRibbonGroupButtons_UseTrimmedMetadataIdentityForKeyTips()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var group = new Grid();
+            RibbonMetadata.SetGroupName(group, "  Page Setup  ");
+
+            var createButton = typeof(MainWindow)
+                .GetMethod("CreateRibbonCollapsedGroupButton", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCollapsedGroupButton");
+
+            var button = (Button)createButton.Invoke(null, [group, null])!;
+
+            RibbonTooltip.GetTitle(button).Should().Be("Page Setup");
+            RibbonTooltip.GetKeyTip(button).Should().Be("PA");
+            button.ContextMenu.Should().NotBeNull();
+            button.ContextMenu!.Items.OfType<MenuItem>().Single().Header.Should().Be("Page Setup");
+        });
+    }
+
+    [Fact]
+    public void RibbonGroupMetadata_IsSeededForEveryVisibleRibbonTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 1100);
+
+                harness.ActiveRibbonGroupNames.Should().NotBeEmpty($"{tab} should expose metadata-backed ribbon groups");
+                harness.ActiveRibbonGroupNames.Should().OnlyContain(
+                    name => !string.IsNullOrWhiteSpace(name) && !string.Equals(name, "Commands", StringComparison.Ordinal),
+                    $"{tab} group names should be seeded from the existing group captions before adaptive layout runs");
+            }
         });
     }
 
@@ -782,7 +896,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         public IReadOnlyList<string> CollapsedRibbonGroupNames =>
             HomeRibbonChildren
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
                 .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
@@ -790,38 +904,70 @@ public sealed class MainWindowAdaptiveRibbonTests
         public IReadOnlyList<string> CollapsedActiveRibbonGroupNames =>
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
                 .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
+        public IReadOnlyList<string> ActiveRibbonGroupNames =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<DependencyObject>()
+                .Where(RibbonMetadata.IsRibbonGroup)
+                .Select(group => RibbonMetadata.TryGetGroupName(group, out var name) ? name : "")
+                .Where(name => !string.IsNullOrWhiteSpace(name))
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupVisibleLabels =>
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => EnumerateSelfAndVisualDescendants(button)
                     .Concat(EnumerateLogicalDescendants(button))
                     .OfType<TextBlock>()
                     .Any(textBlock =>
-                        textBlock.Tag?.ToString() == "RibbonLabel" &&
+                        RibbonMetadata.IsCommandLabel(textBlock) &&
                         IsEffectivelyVisible(textBlock) &&
                         string.Equals(textBlock.Text, RibbonTooltip.GetTitle(button), StringComparison.Ordinal)))
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
                 .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
 
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupWrappedVisibleLabels =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(IsVisibleCollapsedGroupButton)
+                .SelectMany(button => EnumerateSelfAndVisualDescendants(button)
+                    .Concat(EnumerateLogicalDescendants(button))
+                    .OfType<TextBlock>()
+                    .Where(RibbonMetadata.IsCommandLabel)
+                    .Where(IsEffectivelyVisible))
+                .Where(textBlock => textBlock.TextWrapping != TextWrapping.NoWrap ||
+                                    textBlock.TextTrimming != TextTrimming.CharacterEllipsis)
+                .Select(textBlock => textBlock.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToList();
+
         public IReadOnlyList<CollapsedGroupKeyTip> CollapsedActiveRibbonGroupKeyTips =>
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => new CollapsedGroupKeyTip(RibbonTooltip.GetTitle(button) ?? "", RibbonTooltip.GetKeyTip(button) ?? ""))
                 .Where(pair => !string.IsNullOrWhiteSpace(pair.GroupName) && !string.IsNullOrWhiteSpace(pair.KeyTip))
+                .ToList();
+
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutKeyTips =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(IsVisibleCollapsedGroupButton)
+                .Where(button => string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(button)))
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutDropdownGlyph =>
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => System.Windows.Documents.AdornerLayer.GetAdornerLayer(button)
                     ?.GetAdorners(button)
                     ?.Any(adorner => adorner.GetType().Name == "RibbonCollapsedGroupChevronAdorner") != true)
@@ -832,7 +978,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         public IReadOnlyList<ContextMenu> CollapsedRibbonGroupMenus =>
             HomeRibbonChildren
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => button.ContextMenu)
                 .Where(menu => menu is not null)
                 .Cast<ContextMenu>()
@@ -841,7 +987,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         public IReadOnlyList<string> CollapsedMenuHeaders(string groupName) =>
             HomeRibbonChildren
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
                 .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
                 .Select(item => item.Header?.ToString() ?? "")
@@ -851,7 +997,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         public IReadOnlyList<string> CollapsedActiveMenuHeaders(string groupName) =>
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
                 .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
                 .Select(item => item.Header?.ToString() ?? "")
@@ -861,7 +1007,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         public MenuItem? CollapsedActiveMenuItem(string groupName, string header) =>
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
                 .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
                 .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
@@ -869,7 +1015,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         public ContextMenu? CollapsedMenu(string groupName) =>
             HomeRibbonChildren
                 .OfType<Button>()
-                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
                 .Select(button => button.ContextMenu)
                 .FirstOrDefault(menu => menu is not null);
@@ -952,7 +1098,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             var maxCommandBottom = EnumerateSelfAndVisualDescendants(group)
                 .OfType<Button>()
                 .Where(IsEffectivelyVisible)
-                .Where(button => button.Tag is not string tag || tag != "RibbonCollapsedGroupButton")
+                .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
                 .Select(button =>
                 {
                     var top = button.TransformToAncestor(group).Transform(new Point(0, 0)).Y;
@@ -979,7 +1125,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Concat(EnumerateLogicalDescendants(group))
                     .OfType<TextBlock>()
                     .Distinct()
-                    .Where(textBlock => textBlock.Tag?.ToString() == "RibbonLabel")
+                    .Where(RibbonMetadata.IsCommandLabel)
                     .Where(IsEffectivelyVisible)
                     .Where(IsTextVisuallyClipped)
                     .Select(FormatClippedTextBlock)
@@ -992,7 +1138,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                 ? EnumerateSelfAndVisualDescendants(group)
                     .OfType<Button>()
                     .Where(IsEffectivelyVisible)
-                    .Where(button => button.Tag is not string tag || tag != "RibbonCollapsedGroupButton")
+                    .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
                     .Select(button => new { Label = GetButtonLabel(button), HasIconSlot = TryGetCommandIconSlot(button, out _) })
                     .Where(item => !string.IsNullOrWhiteSpace(item.Label) && !item.HasIconSlot)
                     .Select(item => item.Label)
@@ -1079,20 +1225,18 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Concat(EnumerateLogicalDescendants(tabItem.Content as DependencyObject ?? tabItem))
                     .OfType<StackPanel>()
                     .Distinct()
-                    .Where(panel => FindVisualAncestor<Button>(panel) is not { Tag: "RibbonCollapsedGroupButton" })
-                    .OrderByDescending(panel => panel.Children.OfType<Grid>().Count(IsRibbonGroupGrid))
+                    .Where(panel => FindVisualAncestor<Button>(panel) is not { } button ||
+                                    !RibbonMetadata.IsCollapsedGroupButton(button))
+                    .OrderByDescending(panel => panel.Children.OfType<DependencyObject>().Count(RibbonMetadata.IsRibbonGroup))
                     .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
-                                             panel.Children.OfType<Grid>().Any(IsRibbonGroupGrid))
+                                             panel.Children.OfType<DependencyObject>().Any(RibbonMetadata.IsRibbonGroup))
                 : null;
 
         private Grid? FindActiveRibbonGroup(string groupName) =>
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Grid>()
-                .FirstOrDefault(grid => grid.Children
-                    .OfType<Border>()
-                    .Any(border => Grid.GetRow(border) == 1 &&
-                                   border.Child is TextBlock label &&
-                                   string.Equals(label.Text, groupName, StringComparison.Ordinal)));
+                .FirstOrDefault(grid => RibbonMetadata.TryGetGroupName(grid, out var candidate) &&
+                                        string.Equals(candidate, groupName, StringComparison.Ordinal));
 
         public void SetRibbonWidth(double width)
         {
@@ -1232,7 +1376,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             return EnumerateSelfAndVisualDescendants(button)
                 .Concat(EnumerateLogicalDescendants(button))
                 .OfType<TextBlock>()
-                .FirstOrDefault(textBlock => string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal))
+                .FirstOrDefault(RibbonMetadata.IsCommandLabel)
                 ?.Text ?? "";
         }
 
@@ -1296,7 +1440,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             panel.Children.OfType<Button>()
                 .Where(IsEffectivelyVisible)
                 .Where(button => button.Content is FrameworkElement content &&
-                                 string.Equals(content.Tag?.ToString(), "RibbonCommandContent:S", StringComparison.Ordinal) &&
+                                 RibbonMetadata.TryGetCommandContentLayout(content, out var layout) &&
+                                 layout == RibbonCommandContentLayout.Small &&
                                  TryGetCommandIconSlot(button, out _));
 
         private static RibbonIconStackOffsets CreateIconStackOffsets(Visual ancestor, IReadOnlyList<Button> buttons) =>
@@ -1318,14 +1463,12 @@ public sealed class MainWindowAdaptiveRibbonTests
         private static bool TryGetCommandIconSlot(Button button, out FrameworkElement iconSlot)
         {
             iconSlot = null!;
-            if (button.Content is not Panel { Children.Count: > 0 } content ||
-                content.Children[0] is not FrameworkElement firstChild)
-            {
-                return false;
-            }
-
-            iconSlot = firstChild;
-            return true;
+            var contentRoot = button.Content as DependencyObject ?? button;
+            iconSlot = EnumerateSelfAndVisualDescendants(contentRoot)
+                .OfType<FrameworkElement>()
+                .FirstOrDefault(element => RibbonMetadata.IsCommandIcon(element) &&
+                                           !RibbonMetadata.IsCollapsedChevron(element))!;
+            return iconSlot is not null;
         }
 
         private static bool IsTextVisuallyClipped(TextBlock textBlock)
@@ -1339,6 +1482,10 @@ public sealed class MainWindowAdaptiveRibbonTests
             textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             return $"{textBlock.Text} ({textBlock.ActualWidth:0.#}/{textBlock.DesiredSize.Width:0.#})";
         }
+
+        private static bool IsVisibleCollapsedGroupButton(Button button) =>
+            RibbonMetadata.IsCollapsedGroupButton(button) &&
+            button.Visibility == Visibility.Visible;
 
         private static double GetCheckBoxLabelOffset(CheckBox checkBox)
         {
@@ -1366,12 +1513,6 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             return null;
         }
-
-        private static bool IsRibbonGroupGrid(Grid grid) =>
-            grid.Children.OfType<Border>().Any(border =>
-                Grid.GetRow(border) == 1 &&
-                border.Child is TextBlock groupLabel &&
-                !string.IsNullOrWhiteSpace(groupLabel.Text));
 
         private static bool IsEffectivelyVisible(DependencyObject element)
         {

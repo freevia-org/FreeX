@@ -82,16 +82,12 @@ public sealed class FillSeriesStepDialog : Window
 
     private void FocusInvalidStepInput()
     {
-        _stepBox.Focus();
-        _stepBox.SelectAll();
-        Keyboard.Focus(_stepBox);
+        DialogFocus.FocusAndSelect(_stepBox);
     }
 
     private void FocusInvalidStopInput()
     {
-        _stopBox.Focus();
-        _stopBox.SelectAll();
-        Keyboard.Focus(_stopBox);
+        DialogFocus.FocusAndSelect(_stopBox);
     }
 
     private void UpdateDateUnitAvailability()

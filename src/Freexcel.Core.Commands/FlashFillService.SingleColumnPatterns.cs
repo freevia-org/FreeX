@@ -5,7 +5,7 @@ namespace Freexcel.Core.Commands;
 public static partial class FlashFillService
 {
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
-    private static readonly char[] Delimiters = [' ', ',', ';', '-', '_', '@', '.', '/', '\\'];
+    private static readonly char[] Delimiters = [' ', ',', ';', '|', '-', '_', '@', '.', '/', '\\'];
     private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "-", "/", "|"];
     private static readonly HashSet<string> KnownNameTitles = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -412,6 +412,16 @@ public static partial class FlashFillService
             return source => TrySplitWhitespaceTokens(source, out var tokens) ? GetFirstInitial(tokens[1]) + "." : null;
 
         return null;
+    }
+
+    private static Func<string, string?>? TryFinalWhitespaceToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && tokens.Length >= 2 && e.Expected == tokens[^1]))
+            return null;
+
+        return source => TrySplitWhitespaceTokens(source, out var tokens) && tokens.Length >= 2
+            ? tokens[^1]
+            : null;
     }
 
     private static Func<string, string?>? TryKnownTitleRemoval(IReadOnlyList<(string Source, string Expected)> examples)

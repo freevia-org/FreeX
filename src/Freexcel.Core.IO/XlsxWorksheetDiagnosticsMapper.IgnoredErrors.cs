@@ -36,7 +36,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             if (string.IsNullOrWhiteSpace(sqref))
                 continue;
 
-            foreach (var token in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (var token in SplitSqrefTokens(sqref))
             {
                 if (!TryParseSqrefToken(token, tempSheet, out var range))
                     continue;
@@ -280,7 +280,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
         if (string.IsNullOrWhiteSpace(sqref))
             return false;
 
-        foreach (var token in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var token in SplitSqrefTokens(sqref))
         {
             if (!TryParseSqrefToken(token, sheet, out var range))
                 return false;
@@ -318,7 +318,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
 
         foreach (var pair in metadata.ErrorNativeAttributes)
         {
-            foreach (var token in pair.Key.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (var token in SplitSqrefTokens(pair.Key))
             {
                 if (TryParseSqrefToken(token, tempSheet, out var range) && range.Contains(address))
                 {
@@ -330,4 +330,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
 
         return false;
     }
+
+    private static string[] SplitSqrefTokens(string sqref) =>
+        sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

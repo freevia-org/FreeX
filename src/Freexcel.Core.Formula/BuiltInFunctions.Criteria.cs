@@ -54,10 +54,7 @@ public static partial class BuiltInFunctions
         if (IsWildcardCriteria(crit))
             return cellValue is TextValue tv && WildcardMatch(tv.Value, crit, ignoreCase: true);
 
-        var cellText = cellValue is TextValue text ? text.Value :
-                       TryCellNumber(cellValue, out double numericValue) ? numericValue.ToString(System.Globalization.CultureInfo.InvariantCulture) :
-                       cellValue is BoolValue bv ? (bv.Value ? "TRUE" : "FALSE") :
-                       "";
+        var cellText = CriteriaComparableText(cellValue);
         return string.Equals(cellText, crit, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -98,6 +95,15 @@ public static partial class BuiltInFunctions
             _ => false
         };
     }
+
+    private static string CriteriaComparableText(ScalarValue value) => value switch
+    {
+        TextValue text => text.Value,
+        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+        ErrorValue error => error.Code,
+        _ when TryCellNumber(value, out double numericValue) => numericValue.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        _ => ""
+    };
 
     private static bool IsWildcardCriteria(string criteria)
     {

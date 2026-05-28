@@ -136,7 +136,7 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
             return new CommandOutcome(false, "Text box was not found.");
 
         _previousRotationDegrees = textBox.RotationDegrees;
-        textBox.RotationDegrees = Normalize(_rotationDegrees);
+        textBox.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);
     }
@@ -150,11 +150,6 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
         _applied = false;
     }
 
-    private static double Normalize(double value)
-    {
-        var normalized = value % 360;
-        return normalized < 0 ? normalized + 360 : normalized;
-    }
 }
 
 public sealed class SetTextBoxColorsCommand : IWorkbookCommand

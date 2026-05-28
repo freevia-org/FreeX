@@ -63,7 +63,12 @@ public partial class MainWindow
     {
         int notches = ViewportScrollCalculator.NormalizeWheelNotches(e.Delta);
         if (SheetGrid.Viewport is { } wheelViewport)
-            _activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(wheelViewport, e.GetPosition(SheetGrid));
+        {
+            var wheelPos = e.GetPosition(SheetGrid);
+            _activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestViewportCell(wheelViewport, _currentSheetId, wheelPos) is null
+                ? Freexcel.App.UI.SplitPaneRegion.BottomRight
+                : Freexcel.App.UI.GridView.HitTestSplitPaneRegion(wheelViewport, wheelPos);
+        }
 
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
@@ -233,15 +238,13 @@ public partial class MainWindow
         var frozenRows = sheet?.FrozenRows ?? 0;
         var frozenCols = sheet?.FrozenCols ?? 0;
 
-        var rows = vp.RowMetrics.Where(row => row.Row > frozenRows).ToList();
-        if (addr.Row > frozenRows && rows.Count > 0 && !rows.Any(r => r.Row == addr.Row))
+        var rows = GetScrollableRowWindow(vp, frozenRows, addr.Row);
+        if (addr.Row > frozenRows && rows.Count > 0 && !rows.ContainsTarget)
         {
-            uint firstRow = rows[0].Row;
-            uint lastRow  = rows[^1].Row;
             var scrollValue = CalculateScrollValueToRevealCell(
                 WorksheetIndexToScrollbarValue(addr.Row, frozenRows),
-                WorksheetIndexToScrollbarValue(firstRow, frozenRows),
-                WorksheetIndexToScrollbarValue(lastRow, frozenRows),
+                WorksheetIndexToScrollbarValue(rows.First, frozenRows),
+                WorksheetIndexToScrollbarValue(rows.Last, frozenRows),
                 GetScrollableRowLimit(sheet),
                 (uint)rows.Count);
             VerticalScroll.Maximum = CalculateScrollbarMaximumForKeyboardReveal(
@@ -251,15 +254,13 @@ public partial class MainWindow
             VerticalScroll.Value = scrollValue;
         }
 
-        var cols = vp.ColMetrics.Where(col => col.Col > frozenCols).ToList();
-        if (addr.Col > frozenCols && cols.Count > 0 && !cols.Any(c => c.Col == addr.Col))
+        var cols = GetScrollableColumnWindow(vp, frozenCols, addr.Col);
+        if (addr.Col > frozenCols && cols.Count > 0 && !cols.ContainsTarget)
         {
-            uint firstCol = cols[0].Col;
-            uint lastCol  = cols[^1].Col;
             var scrollValue = CalculateScrollValueToRevealCell(
                 WorksheetIndexToScrollbarValue(addr.Col, frozenCols),
-                WorksheetIndexToScrollbarValue(firstCol, frozenCols),
-                WorksheetIndexToScrollbarValue(lastCol, frozenCols),
+                WorksheetIndexToScrollbarValue(cols.First, frozenCols),
+                WorksheetIndexToScrollbarValue(cols.Last, frozenCols),
                 GetScrollableColumnLimit(sheet),
                 (uint)cols.Count);
             HorizontalScroll.Maximum = CalculateScrollbarMaximumForKeyboardReveal(
@@ -268,6 +269,47 @@ public partial class MainWindow
                 GetScrollableColumnLimit(sheet));
             HorizontalScroll.Value = scrollValue;
         }
+    }
+
+    private static ScrollableMetricWindow GetScrollableRowWindow(ViewportModel viewport, uint frozenRows, uint targetRow)
+    {
+        var result = new ScrollableMetricWindow();
+        foreach (var metric in viewport.RowMetrics)
+        {
+            if (metric.Row <= frozenRows)
+                continue;
+
+            result = result.Include(metric.Row, metric.Row == targetRow);
+        }
+
+        return result;
+    }
+
+    private static ScrollableMetricWindow GetScrollableColumnWindow(ViewportModel viewport, uint frozenCols, uint targetCol)
+    {
+        var result = new ScrollableMetricWindow();
+        foreach (var metric in viewport.ColMetrics)
+        {
+            if (metric.Col <= frozenCols)
+                continue;
+
+            result = result.Include(metric.Col, metric.Col == targetCol);
+        }
+
+        return result;
+    }
+
+    private readonly record struct ScrollableMetricWindow(uint First, uint Last, int Count, bool ContainsTarget)
+    {
+        public ScrollableMetricWindow Include(uint index, bool isTarget) =>
+            Count == 0
+                ? new ScrollableMetricWindow(index, index, 1, isTarget)
+                : this with
+                {
+                    Last = index,
+                    Count = Count + 1,
+                    ContainsTarget = ContainsTarget || isTarget
+                };
     }
 
     // ── Navigation helpers ────────────────────────────────────────────────────
@@ -389,6 +431,7 @@ public partial class MainWindow
             LeftCol: leftCol,
             AvailableHeight: (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel,
             AvailableWidth: CalculateViewportAvailableWidth(SheetGrid.ActualWidth, rowHeaderWidth, _zoomLevel),
+            IncludeObjects: _options.ObjectsDisplay == FreexcelObjectDisplay.All,
             SplitPaneOffsets: GetSplitPaneViewportOffsets(sheet, topRow, leftCol));
 
         return _viewportService.GetViewport(_workbook, _currentSheetId, request);
