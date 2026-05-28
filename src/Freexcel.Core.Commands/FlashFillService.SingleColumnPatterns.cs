@@ -6,7 +6,7 @@ public static partial class FlashFillService
 {
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', ';', '-', '_', '@', '.', '/', '\\'];
-    private static readonly string[] LabelValueSeparators = [":", "=", " - ", "-", " / ", "/", " | ", "|", " -> ", "->", " => ", "=>"];
+    private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "-", "/", "|"];
     private static readonly (char Open, char Close)[] PairedDelimiters =
         [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ('\'', '\''), ('<', '>')];
 
@@ -375,11 +375,10 @@ public static partial class FlashFillService
     private static bool TryExtractLabelValue(string source, string separator, out string extracted)
     {
         extracted = string.Empty;
-        var separatorIndex = source.IndexOf(separator, StringComparison.Ordinal);
-        if (separatorIndex < 0)
+        if (!TryFindLabelValueSeparator(source, separator, out _, out var separatorEnd))
             return false;
 
-        extracted = source[(separatorIndex + separator.Length)..].Trim();
+        extracted = source[separatorEnd..].Trim();
         return extracted.Length > 0;
     }
 
@@ -401,12 +400,49 @@ public static partial class FlashFillService
     private static bool TryRemoveLabelValue(string source, string separator, out string removed)
     {
         removed = string.Empty;
-        var separatorIndex = source.IndexOf(separator, StringComparison.Ordinal);
-        if (separatorIndex <= 0)
+        if (!TryFindLabelValueSeparator(source, separator, out var separatorStart, out _))
             return false;
 
-        removed = source[..separatorIndex].Trim();
+        removed = source[..separatorStart].Trim();
         return removed.Length > 0;
+    }
+
+    private static bool TryFindLabelValueSeparator(
+        string source,
+        string separator,
+        out int separatorStart,
+        out int separatorEnd)
+    {
+        separatorStart = -1;
+        separatorEnd = -1;
+
+        var searchStart = 0;
+        while (searchStart < source.Length)
+        {
+            var tokenIndex = source.IndexOf(separator, searchStart, StringComparison.Ordinal);
+            if (tokenIndex < 0)
+                return false;
+
+            if ((separator == "-" || separator == "=") &&
+                tokenIndex + 1 < source.Length &&
+                source[tokenIndex + 1] == '>')
+            {
+                searchStart = tokenIndex + separator.Length;
+                continue;
+            }
+
+            separatorStart = tokenIndex;
+            while (separatorStart > 0 && char.IsWhiteSpace(source[separatorStart - 1]))
+                separatorStart--;
+
+            separatorEnd = tokenIndex + separator.Length;
+            while (separatorEnd < source.Length && char.IsWhiteSpace(source[separatorEnd]))
+                separatorEnd++;
+
+            return separatorStart > 0 && separatorEnd < source.Length;
+        }
+
+        return false;
     }
 
     private static bool TrySplitWhitespaceTokens(string source, out string[] tokens)

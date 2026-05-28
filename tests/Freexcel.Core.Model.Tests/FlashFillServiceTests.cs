@@ -260,6 +260,27 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData("Owner  -   Ada", "Ada", "Owner\t-\tGrace", "Grace", "Owner - Alan", "Alan")]
+    [InlineData("Status  /   Open", "Open", "Status\t/\tClosed", "Closed", "Status / Pending", "Pending")]
+    [InlineData("Status  |   Open", "Open", "Status\t|\tClosed", "Closed", "Status | Pending", "Pending")]
+    [InlineData("Status  ->   Open", "Open", "Status\t->\tClosed", "Closed", "Status -> Pending", "Pending")]
+    [InlineData("Status  =>   Open", "Open", "Status\t=>\tClosed", "Closed", "Status => Pending", "Pending")]
+    public void Fill_LabelValueExtraction_ToleratesUnevenSeparatorWhitespace(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
     [Fact]
     public void Fill_LabelValueExtraction_ReturnsNullWhenRemainingSeparatorIsMissing()
     {
@@ -301,6 +322,27 @@ public sealed class FlashFillServiceTests
     [InlineData("Status => Open", "Status", "Priority => High", "Priority", "Owner => Ada", "Owner")]
     [InlineData("Status=>Open", "Status", "Priority=>High", "Priority", "Owner=>Ada", "Owner")]
     public void Fill_LabelQualifierRemoval_RemovesValueAfterSeparator(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("Status  -   Open", "Status", "Priority\t-\tHigh", "Priority", "Owner - Ada", "Owner")]
+    [InlineData("Status  /   Open", "Status", "Priority\t/\tHigh", "Priority", "Owner / Ada", "Owner")]
+    [InlineData("Status  |   Open", "Status", "Priority\t|\tHigh", "Priority", "Owner | Ada", "Owner")]
+    [InlineData("Status  ->   Open", "Status", "Priority\t->\tHigh", "Priority", "Owner -> Ada", "Owner")]
+    [InlineData("Status  =>   Open", "Status", "Priority\t=>\tHigh", "Priority", "Owner => Ada", "Owner")]
+    public void Fill_LabelQualifierRemoval_ToleratesUnevenSeparatorWhitespace(
         string source1,
         string expected1,
         string source2,
