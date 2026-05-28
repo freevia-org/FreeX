@@ -16,6 +16,17 @@ public static partial class BuiltInFunctions
         foreach (var arg in args)
         {
             if (arg is ErrorValue err) return err;
+            if (arg is RangeValue range)
+            {
+                foreach (var cell in range.Flatten())
+                {
+                    if (cell is ErrorValue cellError) return cellError;
+                    sb.Append(ToText(cell));
+                }
+
+                continue;
+            }
+
             sb.Append(ToText(arg));
         }
         return TextResult(sb.ToString());

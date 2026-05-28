@@ -5923,6 +5923,29 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Concat_RangeArguments_FlattenCellsInExcelOrder()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 2, new NumberValue(2)),
+            (2, 1, new BoolValue(true)),
+            (2, 2, BlankValue.Instance),
+            (3, 1, new TextValue("z")));
+
+        _eval.Evaluate("=CONCAT(A1:B2,\"-\",A3)", sheet).Should().Be(new TextValue("a2TRUE-z"));
+    }
+
+    [Fact]
+    public void Concat_RangeArgumentErrors_Propagate()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 2, ErrorValue.NA));
+
+        _eval.Evaluate("=CONCAT(A1:B1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Concat_DirectTodayResult_UsesDateSerialText()
     {
         var expected = DateTime.Today.ToOADate().ToString(System.Globalization.CultureInfo.InvariantCulture);
