@@ -103,6 +103,9 @@ public sealed class StatusBarCalculatorTests
             ".Select(",
             "whole-column status calculations should avoid LINQ iterator chains in the hot path");
         source.Should().Contain(
+            "sheet.CellCount < totalCells",
+            "status calculations should choose the cheaper scan direction for both sparse whole-column and dense bounded selections");
+        source.Should().Contain(
             "foreach (var address in scanRange.AllCells())",
             "small status-bar selections should clip to the used range before enumerating addresses");
     }
@@ -192,5 +195,31 @@ public sealed class StatusBarCalculatorTests
 
         Console.WriteLine($"Clipped sparse status selection: {sw.ElapsedMilliseconds}ms for 500 runs");
         stats.Should().Be(new StatusBarCalculator.Stats(5, 1, 1, 5, 5, 5));
+    }
+
+    [Fact]
+    public void Benchmark_BoundedStatusSelectionInLargeOccupiedSheet()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 100_000; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(row)));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), Cell.FromValue(new NumberValue(row * 2)));
+        }
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 20_000, 1));
+
+        var sw = Stopwatch.StartNew();
+        StatusBarCalculator.Stats stats = null!;
+        for (var i = 0; i < 50; i++)
+            stats = StatusBarCalculator.Calculate(sheet, range);
+        sw.Stop();
+
+        Console.WriteLine($"Bounded status selection in large occupied sheet: {sw.ElapsedMilliseconds}ms for 50 runs");
+        stats.Count.Should().Be(20_000);
+        stats.NumericalCount.Should().Be(20_000);
+        stats.Sum.Should().Be(200_010_000d);
     }
 }

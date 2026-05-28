@@ -20,11 +20,9 @@ public static class StatusBarCalculator
 
         var scanRange = Intersect(range, usedRange);
 
-        // For large ranges (full rows/cols/sheet) iterate only used cells to avoid
-        // enumerating billions of empty addresses.
         long totalCells = scanRange.CellCount;
 
-        if (totalCells > 10_000)
+        if (sheet.CellCount < totalCells)
         {
             foreach (var (address, cell) in sheet.EnumerateCells())
             {
