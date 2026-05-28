@@ -54,6 +54,11 @@ public static partial class BuiltInFunctions
         if (IsWildcardCriteria(crit))
             return cellValue is TextValue tv && WildcardMatch(tv.Value, crit, ignoreCase: true);
 
+        if (double.TryParse(crit, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var numericCriteria)
+            && TryCellNumber(cellValue, out double comparableNumber))
+            return comparableNumber == numericCriteria;
+
         var cellText = CriteriaComparableText(cellValue);
         return string.Equals(cellText, crit, StringComparison.OrdinalIgnoreCase);
     }

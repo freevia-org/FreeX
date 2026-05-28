@@ -825,6 +825,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void CountifAndSumif_TextNumericCriteria_CompareNumericCellsByValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)),
+            (2, 1, new NumberValue(1.0)), (2, 2, new NumberValue(20)),
+            (3, 1, new NumberValue(2)), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=COUNTIF(A1:A3,\"1.0\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SUMIF(A1:A3,\"1.0\",B1:B3)", sheet).Should().Be(new NumberValue(30));
+    }
+
+    [Fact]
     public void Countif_GreaterThanCriteria()
     {
         var sheet = MakeSheet(
