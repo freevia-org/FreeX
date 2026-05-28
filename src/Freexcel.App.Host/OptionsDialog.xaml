@@ -58,6 +58,9 @@
                 <ListBox x:Name="TabList" BorderThickness="0" Background="Transparent"
                          Margin="0,8,0,0"
                          SelectionChanged="TabList_SelectionChanged"
+                         AutomationProperties.Name="Options categories"
+                         AutomationProperties.AutomationId="OptionsCategoryList"
+                         AutomationProperties.HelpText="Select a Freexcel Options category."
                          ItemContainerStyle="{StaticResource OptionTabItem}">
                     <ListBoxItem Content="_General"/>
                     <ListBoxItem Content="_Formulas"/>
@@ -416,8 +419,14 @@
                 Padding="16,10" Background="#F5F5F5">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="OkBtn" Content="_OK" Width="80" Height="26"
-                        Margin="0,0,8,0" IsDefault="True" Click="OkBtn_Click"/>
-                <Button Content="_Cancel" Width="80" Height="26"
+                        Margin="0,0,8,0" IsDefault="True" Click="OkBtn_Click"
+                        AutomationProperties.Name="OK"
+                        AutomationProperties.AutomationId="OptionsOkButton"
+                        AutomationProperties.HelpText="Apply Freexcel Options changes."/>
+                <Button x:Name="CancelBtn" Content="_Cancel" Width="80" Height="26"
+                        AutomationProperties.Name="Cancel"
+                        AutomationProperties.AutomationId="OptionsCancelButton"
+                        AutomationProperties.HelpText="Close Freexcel Options without applying changes."
                         IsCancel="True" Click="CancelBtn_Click"/>
             </StackPanel>
         </Border>

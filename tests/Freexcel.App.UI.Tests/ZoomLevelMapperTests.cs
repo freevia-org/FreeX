@@ -32,6 +32,14 @@ public sealed class ZoomLevelMapperTests
     }
 
     [Theory]
+    [InlineData(-25, 10)]
+    [InlineData(225, 400)]
+    public void SliderToZoomPercent_ClampsSliderRange(double sliderValue, double expected)
+    {
+        ZoomLevelMapper.SliderToZoomPercent(sliderValue).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("25%", 25)]
     [InlineData(" 150 ", 150)]
     [InlineData("400", 400)]

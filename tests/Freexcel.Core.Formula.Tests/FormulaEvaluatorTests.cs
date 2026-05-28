@@ -1505,4 +1505,43 @@ public class ShortCircuitEvaluationTests
         var result = _evaluator.Evaluate("=A0", sheet, wb);
         result.Should().Be(ErrorValue.Ref);
     }
+
+    // ── Recursion depth guard (Issue E) ──
+
+    [Fact]
+    public void DeeplyNested_FunctionCall_ReturnsNumErrorInsteadOfStackOverflow()
+    {
+        // Construct a 300-level deep IF(TRUE, IF(TRUE, ... 1 ...)) AST directly
+        // to avoid any parser stack-overflow and test only the evaluator depth guard.
+        const int depth = 300;
+        FormulaNode body = new NumberNode(1);
+        for (int i = 0; i < depth; i++)
+        {
+            body = new FunctionCallNode("IF",
+                [new BooleanNode(true), body]);
+        }
+
+        var sheet = new Sheet(SheetId.New(), "S");
+        // Should return #NUM! (depth exceeded), not throw StackOverflowException
+        var result = _evaluator.Evaluate(body, sheet);
+        result.Should().Be(ErrorValue.Num,
+            "a 300-level nested formula must return #NUM! rather than causing a stack overflow");
+    }
+
+    [Fact]
+    public void ModeratelyNested_FunctionCall_EvaluatesNormally()
+    {
+        // 10 levels of nesting should work fine (well within the 256 depth limit)
+        FormulaNode body = new NumberNode(42);
+        for (int i = 0; i < 10; i++)
+        {
+            body = new FunctionCallNode("IF",
+                [new BooleanNode(true), body]);
+        }
+
+        var sheet = new Sheet(SheetId.New(), "S");
+        var result = _evaluator.Evaluate(body, sheet);
+        result.Should().Be(new NumberValue(42),
+            "10-level nesting is well within the recursion limit and should evaluate normally");
+    }
 }

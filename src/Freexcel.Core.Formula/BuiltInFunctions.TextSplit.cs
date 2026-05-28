@@ -81,7 +81,8 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue e) return e;
 
         var text = ToText(value);
-        if (Math.Abs(options.InstanceNum) > text.Length) return ErrorValue.Value;
+        var textLength = ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length;
+        if (Math.Abs(options.InstanceNum) > textLength) return ErrorValue.Value;
 
         if (options.Delimiters.Any(delimiter => delimiter.Length == 0))
         {

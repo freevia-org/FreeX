@@ -191,7 +191,7 @@ public static partial class PivotTableRefreshService
             if (cell is null)
                 continue;
 
-            var style = workbook.GetStyle(cell.StyleId);
+            var style = workbook.GetStyle(cell.StyleId).Clone();
             style.IndentLevel = indent;
             cell.StyleId = workbook.RegisterStyle(style);
         }

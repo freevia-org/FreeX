@@ -550,6 +550,9 @@
                                     <Button x:Name="FillColorBtn" Width="28" Height="22"
                                             Style="{StaticResource RibbonIconButton}"
                                             Click="FillColorBtn_Click"
+                                            AutomationProperties.Name="Fill Color"
+                                            AutomationProperties.AutomationId="HomeFillColorButton"
+                                            AutomationProperties.HelpText="Open the fill color picker for selected cells."
                                             local:RibbonTooltip.Title="Fill Color"
                                             local:RibbonTooltip.KeyTip="H"
                                             local:RibbonTooltip.Description="Color the background of the selected cells.">
@@ -566,6 +569,9 @@
                                     <Button x:Name="FontColorBtn" Width="28" Height="22"
                                             Style="{StaticResource RibbonIconButton}"
                                             Click="FontColorBtn_Click"
+                                            AutomationProperties.Name="Font Color"
+                                            AutomationProperties.AutomationId="HomeFontColorButton"
+                                            AutomationProperties.HelpText="Open the font color picker for selected cells."
                                             local:RibbonTooltip.Title="Font Color"
                                             local:RibbonTooltip.KeyTip="FC"
                                             local:RibbonTooltip.Description="Change the color of the text.">
@@ -1392,6 +1398,9 @@
                                     <Button Content="Pie Format"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieFormatBtn_Click"
                                             local:RibbonTooltip.Title="Format Pie/Doughnut" local:RibbonTooltip.KeyTip="PI"
                                             local:RibbonTooltip.Description="Set first slice angle, exploded slice, and doughnut hole size."/>
+                                    <Button Content="Stock Fmt"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStockFormatBtn_Click"
+                                            local:RibbonTooltip.Title="Format Stock Chart" local:RibbonTooltip.KeyTip="NF"
+                                            local:RibbonTooltip.Description="Set up/down bar colors and high-low line style for stock charts."/>
                                 </StackPanel>
                                 <StackPanel>
                                     <Button Content="Explode"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartExplodedSliceBtn_Click"
@@ -1928,23 +1937,38 @@
                                             local:RibbonTooltip.KeyTip="OO"
                                             local:RibbonTooltip.Description="Change the outline color of the selected drawing object."/>
                                     <Button Content="Crop" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
+                                            AutomationProperties.Name="Crop Picture"
+                                            AutomationProperties.AutomationId="DrawCropPictureButton"
+                                            AutomationProperties.HelpText="Open crop controls for the selected or most recent inserted picture."
                                             local:RibbonTooltip.Title="Crop Picture"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge.">
                                         <Button.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="Crop..." local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click"/>
-                                                <MenuItem Header="Reset Crop" local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click"/>
+                                                <MenuItem Header="Crop..."
+                                                          AutomationProperties.Name="Crop Picture"
+                                                          AutomationProperties.AutomationId="DrawCropPictureMenuItem"
+                                                          local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click"/>
+                                                <MenuItem Header="Reset Crop"
+                                                          AutomationProperties.Name="Reset Picture Crop"
+                                                          AutomationProperties.AutomationId="DrawResetPictureCropMenuItem"
+                                                          local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Margin="1,0" VerticalAlignment="Center">
                                     <Button Content="Gradient" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectGradientBtn_Click"
+                                            AutomationProperties.Name="Shape Gradient"
+                                            AutomationProperties.AutomationId="DrawShapeGradientButton"
+                                            AutomationProperties.HelpText="Open gradient fill controls for the selected shape."
                                             local:RibbonTooltip.Title="Shape Gradient"
                                             local:RibbonTooltip.KeyTip="G"
                                             local:RibbonTooltip.Description="Apply a two-color gradient fill to the selected shape."/>
                                     <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectEffectsBtn_Click"
+                                            AutomationProperties.Name="Shape Effects"
+                                            AutomationProperties.AutomationId="DrawShapeEffectsButton"
+                                            AutomationProperties.HelpText="Toggle the selected shape shadow effect."
                                             local:RibbonTooltip.Title="Shape Effects"
                                             local:RibbonTooltip.KeyTip="FX"
                                             local:RibbonTooltip.Description="Toggle a shadow effect on the selected shape."/>
@@ -1973,52 +1997,112 @@
                                 <Button Content="Themes" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeBtn_Click"
                                         local:RibbonTooltip.Title="Themes"
                                         local:RibbonTooltip.KeyTip="TH"
-                                        local:RibbonTooltip.Description="Change the workbook theme colors and fonts.">
+                                        local:RibbonTooltip.Description="Change the workbook theme colors and fonts."
+                                        AutomationProperties.Name="Themes"
+                                        AutomationProperties.AutomationId="PageLayoutThemesButton"
+                                        AutomationProperties.HelpText="Open workbook theme presets and customization.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeOfficeMenuItem_Click"/>
-                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorfulMenuItem_Click"/>
-                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeGrayscaleMenuItem_Click"/>
-                                            <MenuItem Header="Customize..." local:RibbonTooltip.KeyTip="U" Click="ThemeCustomizeMenuItem_Click"/>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeOfficeMenuItem_Click"
+                                                      AutomationProperties.Name="Office theme"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeOfficeMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Office workbook theme."/>
+                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorfulMenuItem_Click"
+                                                      AutomationProperties.Name="Freexcel Colorful theme"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorfulMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Freexcel Colorful workbook theme."/>
+                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeGrayscaleMenuItem_Click"
+                                                      AutomationProperties.Name="Grayscale theme"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeGrayscaleMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Grayscale workbook theme."/>
+                                            <MenuItem Header="Customize..." local:RibbonTooltip.KeyTip="U" Click="ThemeCustomizeMenuItem_Click"
+                                                      AutomationProperties.Name="Customize theme"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeCustomizeMenuItem"
+                                                      AutomationProperties.HelpText="Open the Customize Theme dialog."/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Colors" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeColorsBtn_Click"
                                         local:RibbonTooltip.Title="Theme Colors"
                                         local:RibbonTooltip.KeyTip="TC"
-                                        local:RibbonTooltip.Description="Change the workbook theme color palette.">
+                                        local:RibbonTooltip.Description="Change the workbook theme color palette."
+                                        AutomationProperties.Name="Theme Colors"
+                                        AutomationProperties.AutomationId="PageLayoutThemeColorsButton"
+                                        AutomationProperties.HelpText="Open workbook theme color presets and customization.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeColorsOfficeMenuItem_Click"/>
-                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorsColorfulMenuItem_Click"/>
-                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeColorsGrayscaleMenuItem_Click"/>
-                                            <MenuItem Header="Customize Colors..." local:RibbonTooltip.KeyTip="U" Click="ThemeColorsCustomizeMenuItem_Click"/>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeColorsOfficeMenuItem_Click"
+                                                      AutomationProperties.Name="Office theme colors"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorsOfficeMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Office theme color palette."/>
+                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorsColorfulMenuItem_Click"
+                                                      AutomationProperties.Name="Freexcel Colorful theme colors"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorsColorfulMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Freexcel Colorful theme color palette."/>
+                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeColorsGrayscaleMenuItem_Click"
+                                                      AutomationProperties.Name="Grayscale theme colors"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorsGrayscaleMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Grayscale theme color palette."/>
+                                            <MenuItem Header="Customize Colors..." local:RibbonTooltip.KeyTip="U" Click="ThemeColorsCustomizeMenuItem_Click"
+                                                      AutomationProperties.Name="Customize theme colors"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeColorsCustomizeMenuItem"
+                                                      AutomationProperties.HelpText="Open the Customize Theme dialog for colors."/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Fonts" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeFontsBtn_Click"
                                         local:RibbonTooltip.Title="Theme Fonts"
                                         local:RibbonTooltip.KeyTip="TF"
-                                        local:RibbonTooltip.Description="Change the workbook theme heading and body fonts.">
+                                        local:RibbonTooltip.Description="Change the workbook theme heading and body fonts."
+                                        AutomationProperties.Name="Theme Fonts"
+                                        AutomationProperties.AutomationId="PageLayoutThemeFontsButton"
+                                        AutomationProperties.HelpText="Open workbook theme font presets and customization.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeFontsOfficeMenuItem_Click"/>
-                                            <MenuItem Header="Arial" local:RibbonTooltip.KeyTip="A" Click="ThemeFontsArialMenuItem_Click"/>
-                                            <MenuItem Header="Times New Roman" local:RibbonTooltip.KeyTip="T" Click="ThemeFontsTimesMenuItem_Click"/>
-                                            <MenuItem Header="Customize Fonts..." local:RibbonTooltip.KeyTip="U" Click="ThemeFontsCustomizeMenuItem_Click"/>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeFontsOfficeMenuItem_Click"
+                                                      AutomationProperties.Name="Office theme fonts"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeFontsOfficeMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Office theme fonts."/>
+                                            <MenuItem Header="Arial" local:RibbonTooltip.KeyTip="A" Click="ThemeFontsArialMenuItem_Click"
+                                                      AutomationProperties.Name="Arial theme fonts"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeFontsArialMenuItem"
+                                                      AutomationProperties.HelpText="Apply Arial as the heading and body theme font."/>
+                                            <MenuItem Header="Times New Roman" local:RibbonTooltip.KeyTip="T" Click="ThemeFontsTimesMenuItem_Click"
+                                                      AutomationProperties.Name="Times New Roman theme fonts"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeFontsTimesMenuItem"
+                                                      AutomationProperties.HelpText="Apply Times New Roman as the heading and body theme font."/>
+                                            <MenuItem Header="Customize Fonts..." local:RibbonTooltip.KeyTip="U" Click="ThemeFontsCustomizeMenuItem_Click"
+                                                      AutomationProperties.Name="Customize theme fonts"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeFontsCustomizeMenuItem"
+                                                      AutomationProperties.HelpText="Open the Customize Theme dialog for fonts."/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeEffectsBtn_Click"
                                         local:RibbonTooltip.Title="Theme Effects"
                                         local:RibbonTooltip.KeyTip="TE"
-                                        local:RibbonTooltip.Description="Change the workbook theme effect set name.">
+                                        local:RibbonTooltip.Description="Change the workbook theme effect set name."
+                                        AutomationProperties.Name="Theme Effects"
+                                        AutomationProperties.AutomationId="PageLayoutThemeEffectsButton"
+                                        AutomationProperties.HelpText="Open workbook theme effect presets and customization.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeEffectsOfficeMenuItem_Click"/>
-                                            <MenuItem Header="Subtle" local:RibbonTooltip.KeyTip="S" Click="ThemeEffectsSubtleMenuItem_Click"/>
-                                            <MenuItem Header="Refined" local:RibbonTooltip.KeyTip="R" Click="ThemeEffectsRefinedMenuItem_Click"/>
-                                            <MenuItem Header="Customize Effects..." local:RibbonTooltip.KeyTip="U" Click="ThemeEffectsCustomizeMenuItem_Click"/>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeEffectsOfficeMenuItem_Click"
+                                                      AutomationProperties.Name="Office theme effects"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeEffectsOfficeMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Office theme effects."/>
+                                            <MenuItem Header="Subtle" local:RibbonTooltip.KeyTip="S" Click="ThemeEffectsSubtleMenuItem_Click"
+                                                      AutomationProperties.Name="Subtle theme effects"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeEffectsSubtleMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Subtle theme effects."/>
+                                            <MenuItem Header="Refined" local:RibbonTooltip.KeyTip="R" Click="ThemeEffectsRefinedMenuItem_Click"
+                                                      AutomationProperties.Name="Refined theme effects"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeEffectsRefinedMenuItem"
+                                                      AutomationProperties.HelpText="Apply the Refined theme effects."/>
+                                            <MenuItem Header="Customize Effects..." local:RibbonTooltip.KeyTip="U" Click="ThemeEffectsCustomizeMenuItem_Click"
+                                                      AutomationProperties.Name="Customize theme effects"
+                                                      AutomationProperties.AutomationId="PageLayoutThemeEffectsCustomizeMenuItem"
+                                                      AutomationProperties.HelpText="Open the Customize Theme dialog for effects."/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
@@ -2524,12 +2608,6 @@
                                             local:RibbonTooltip.Description="Combine values from multiple ranges into a single summary range.">
                                         <TextBlock Text="Consolidate" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SubtotalBtn_Click"
-                                            local:RibbonTooltip.Title="Subtotal"
-                                            local:RibbonTooltip.KeyTip="B"
-                                            local:RibbonTooltip.Description="Insert subtotal rows for grouped data in the selected range.">
-                                        <TextBlock Text="Subtotal" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data Tools" Style="{StaticResource GroupLbl}"/></Border>
@@ -2578,6 +2656,10 @@
                                             local:RibbonTooltip.Title="Ungroup"
                                             local:RibbonTooltip.KeyTip="U"
                                             local:RibbonTooltip.Description="Remove grouping from selected rows or whole selected columns (Alt+Shift+Left Arrow)."/>
+                                    <Button Content="Subtotal" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SubtotalBtn_Click"
+                                            local:RibbonTooltip.Title="Subtotal"
+                                            local:RibbonTooltip.KeyTip="B"
+                                            local:RibbonTooltip.Description="Insert subtotal rows for grouped data in the selected range."/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Collapse" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CollapseGroupBtn_Click"
@@ -2621,6 +2703,8 @@
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
                                         Click="WorkbookStatisticsBtn_Click"
+                                        AutomationProperties.AutomationId="ReviewWorkbookStatisticsButton"
+                                        AutomationProperties.HelpText="Show workbook counts for sheets, cells, formulas, comments, and objects."
                                         local:RibbonTooltip.Title="Workbook Statistics"
                                         local:RibbonTooltip.KeyTip="W"
                                         local:RibbonTooltip.Description="Show workbook counts for sheets, cells, formulas, comments, and objects."/>
@@ -2636,6 +2720,8 @@
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
                                         Click="AccessibilityCheckerBtn_Click"
+                                        AutomationProperties.AutomationId="ReviewAccessibilityCheckerButton"
+                                        AutomationProperties.HelpText="Find merged cells, blank table headers, objects missing alternate text, and charts without titles."
                                         local:RibbonTooltip.Title="Check Accessibility"
                                         local:RibbonTooltip.KeyTip="CA"
                                         local:RibbonTooltip.Description="Find merged cells, blank table headers, objects missing alternate text, and charts without titles."/>
@@ -3172,6 +3258,7 @@
                                                                   Content="Check for Updates" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CheckForUpdatesBtn_Click"
                                                                   AutomationProperties.Name="Check for Updates"
                                                                   AutomationProperties.AutomationId="HelpCheckForUpdatesButton"
+                                                                  AutomationProperties.HelpText="Open the latest Freexcel tester release in a web browser."
                                                                   local:RibbonTooltip.Title="Check for Updates"
                                                                   local:RibbonTooltip.KeyTip="UP"
                                                                   local:RibbonTooltip.Description="Open the latest Freexcel tester release in a web browser."/>
@@ -3309,8 +3396,7 @@
                     <Border x:Name="GridBottomRuleSpacer"
                             DockPanel.Dock="Left"
                             Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"/>
-                    <Border BorderBrush="{StaticResource FreexcelGreenBrush}"
-                            BorderThickness="0,0,0,1"/>
+                    <Border BorderThickness="0"/>
                 </DockPanel>
                 <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
                 <Canvas x:Name="EditOverlay"
@@ -3649,6 +3735,13 @@
                         BorderThickness="0,0,0,1"
                         IsHitTestVisible="False"/>
 
+                <Border Grid.Column="2" Grid.ColumnSpan="5"
+                        BorderBrush="{StaticResource FreexcelGreenBrush}"
+                        BorderThickness="0"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="0"
+                        IsHitTestVisible="False"/>
+
                 <Button x:Name="SheetNavLeftBtn" Grid.Column="1" Content="&lt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
                         Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="2,2,0,0"
@@ -3737,6 +3830,7 @@
                                               StrokeLineJoin="Round"
                                               Panel.ZIndex="3"
                                               SnapsToDevicePixels="True"
+                                              Visibility="Collapsed"
                                               IsHitTestVisible="False"/>
                                         <Path x:Name="TabRightOutline"
                                               Data="M 12,0 A 8,8 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"
@@ -3748,6 +3842,7 @@
                                               StrokeLineJoin="Round"
                                               Panel.ZIndex="3"
                                               SnapsToDevicePixels="True"
+                                              Visibility="Collapsed"
                                               IsHitTestVisible="False"/>
                                         <Border x:Name="TabBottomOutline"
                                                 Height="1.25"
@@ -3755,23 +3850,35 @@
                                                 Margin="12,0,12,0"
                                                 Background="{Binding ElementName=TabBorder, Path=BorderBrush}"
                                                 Panel.ZIndex="3"
+                                                Visibility="Collapsed"
                                                 IsHitTestVisible="False"/>
-                                        <Border Height="4"
+                                        <Canvas x:Name="TabOutlineCanvas"
+                                                Height="26"
                                                 VerticalAlignment="Top"
-                                                Margin="14,0,14,0"
+                                                Panel.ZIndex="4"
+                                                IsHitTestVisible="False">
+                                            <Path x:Name="TabOutline"
+                                                  Data="M 1,0 C 5,0 8,3 8,8 L 8,22 C 8,24 10,26 12,26 L 88,26 C 90,26 92,24 92,22 L 92,8 C 92,3 95,0 99,0"
+                                                  Width="{Binding ActualWidth, ElementName=TabChrome}"
+                                                  Height="26"
+                                                  Stretch="Fill"
+                                                  Stroke="{Binding ElementName=TabBorder, Path=BorderBrush}"
+                                                  StrokeThickness="1.25"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  StrokeLineJoin="Round"
+                                                  SnapsToDevicePixels="True"/>
+                                        </Canvas>
+                                        <Border x:Name="ActiveTabTopCutout"
+                                                Height="2"
+                                                VerticalAlignment="Top"
+                                                Margin="2,0,2,0"
                                                 Background="{StaticResource FreexcelRibbonSurfaceBrush}"
-                                                Panel.ZIndex="5">
+                                                Panel.ZIndex="6"
+                                                IsHitTestVisible="False">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
                                         </Border>
@@ -3825,18 +3932,10 @@
                                     </Grid>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
-                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
-                                            <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter TargetName="TabLeftOutline" Property="Data" Value="M 8,8 L 8,22 A 4,4 0 0 0 12,26"/>
-                                            <Setter TargetName="TabRightOutline" Property="Data" Value="M 4,8 L 4,22 A 4,4 0 0 1 0,26"/>
-                                            <Setter TargetName="TabLeftOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabRightOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
-                                            <Setter TargetName="TabBottomOutline" Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
+                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -3859,9 +3958,9 @@
                         local:RibbonTooltip.Description="Add a new sheet to the workbook.">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid Opacity="{TemplateBinding Opacity}">
+                            <Grid x:Name="GhostTabRoot" Opacity="{TemplateBinding Opacity}">
                                 <Path Data="M 0,0 A 8,8 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26"
-                                      Stroke="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
+                                      Stroke="{StaticResource FreexcelGreenBrush}"
                                       StrokeThickness="1.25"
                                       StrokeStartLineCap="Round"
                                       StrokeEndLineCap="Round"
@@ -3870,21 +3969,40 @@
                                       SnapsToDevicePixels="True"
                                       Visibility="Collapsed"
                                       IsHitTestVisible="False"/>
-                                <Path Data="M 12,0 A 8,8 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"
+                                <Path Data="M 4,12 L 4,22 A 4,4 0 0 1 0,26"
                                       HorizontalAlignment="Right"
                                       Stroke="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
                                       StrokeThickness="1.25"
                                       StrokeStartLineCap="Round"
                                       StrokeEndLineCap="Round"
                                       StrokeLineJoin="Round"
+                                      Opacity="0.75"
                                       Panel.ZIndex="3"
                                       SnapsToDevicePixels="True"
+                                      Visibility="Collapsed"
                                       IsHitTestVisible="False"/>
+                                <Canvas Height="26"
+                                        VerticalAlignment="Top"
+                                        Panel.ZIndex="3"
+                                        IsHitTestVisible="False">
+                                    <Path Data="M 92,8 L 92,22 C 92,24 90,26 88,26 L 12,26"
+                                          Width="{Binding ActualWidth, ElementName=GhostTabRoot}"
+                                          Height="26"
+                                          Stretch="Fill"
+                                          Stroke="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
+                                          StrokeThickness="1.25"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round"
+                                          Opacity="0.9"
+                                          SnapsToDevicePixels="True"/>
+                                </Canvas>
                                 <Border Height="1.25"
                                         VerticalAlignment="Bottom"
                                         Margin="12,0,12,0"
                                         Background="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
                                         Panel.ZIndex="3"
+                                        Visibility="Collapsed"
                                         IsHitTestVisible="False"/>
                                 <Border x:Name="GhostTabChrome"
                                         Background="{TemplateBinding Background}"
@@ -3915,6 +4033,13 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
+
+                <Border Grid.Column="3"
+                        BorderBrush="{StaticResource FreexcelGreenBrush}"
+                        BorderThickness="0,1,0,0"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="6"
+                        IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="5" Content="&gt;" Width="20" Height="20" Padding="0"
                         FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"

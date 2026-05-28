@@ -138,11 +138,7 @@ public partial class MainWindow
     {
         var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString() ?? "This command";
         var message = DeferredCommandMessages.MultiWindow(commandName);
-        MessageBox.Show(
-            message.Body,
-            message.Title,
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        ShowOwnedMessage(message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void FreezePanesPickerBtn_Click(object sender, RoutedEventArgs e)

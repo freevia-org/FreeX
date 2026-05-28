@@ -34,22 +34,42 @@ public static class WorkbookRangeTextCodec
     {
         range = default;
         var normalized = input.Trim();
-        var sheetId = defaultSheetId;
-        var bangIndex = normalized.LastIndexOf('!');
-        if (bangIndex >= 0)
-        {
-            var sheetName = PivotUiPlanner.UnquoteSheetName(normalized[..bangIndex].Trim());
-            if (resolveSheetId(sheetName) is not { } resolvedSheetId)
-                return false;
-
-            sheetId = resolvedSheetId;
-            normalized = normalized[(bangIndex + 1)..].Trim();
-        }
+        if (!TryResolveReferenceSheet(defaultSheetId, normalized, resolveSheetId, out var sheetId, out normalized))
+            return false;
 
         var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length is 0 or > 2)
             return false;
 
+        return TryParseRangeParts(parts, sheetId, out range);
+    }
+
+    private static bool TryResolveReferenceSheet(
+        SheetId defaultSheetId,
+        string reference,
+        Func<string, SheetId?> resolveSheetId,
+        out SheetId sheetId,
+        out string addressReference)
+    {
+        sheetId = defaultSheetId;
+        addressReference = reference;
+
+        var bangIndex = reference.LastIndexOf('!');
+        if (bangIndex < 0)
+            return true;
+
+        var sheetName = PivotUiPlanner.UnquoteSheetName(reference[..bangIndex].Trim());
+        if (resolveSheetId(sheetName) is not { } resolvedSheetId)
+            return false;
+
+        sheetId = resolvedSheetId;
+        addressReference = reference[(bangIndex + 1)..].Trim();
+        return true;
+    }
+
+    private static bool TryParseRangeParts(string[] parts, SheetId sheetId, out GridRange range)
+    {
+        range = default;
         try
         {
             var start = CellAddress.Parse(parts[0], sheetId);

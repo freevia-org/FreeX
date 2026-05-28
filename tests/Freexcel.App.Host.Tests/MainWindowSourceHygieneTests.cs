@@ -487,6 +487,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void DrawingCommands_UseOwnedNoTargetMessages()
+    {
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
+
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Picture Size\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Rotate Picture\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Crop Picture\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"Only inserted image pictures can be cropped.\", \"Crop Picture\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Reset Crop\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"Only inserted image pictures can be cropped.\", \"Reset Crop\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing shapes are available on this sheet.\",");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing object found on this sheet.\", \"Object Size\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing object found on this sheet.\", \"Rotate Object\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing object found on this sheet.\",");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing shape found on this sheet.\", \"Shape Gradient\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing shape found on this sheet.\", \"Shape Effects\"");
+        drawingSource.Should().Contain("ShowOwnedMessage(\"No objects are available on this sheet.\", \"Selection Pane\"");
+        drawingSource.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void PrintAndExportController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -1246,6 +1267,26 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void InsertSparkline_UsesDialogLocationForInitialInsertAndOwnedValidationWarnings()
+    {
+        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+        var method = ExtractMethodSource(insertSource, "private void InsertSparkline(");
+
+        method.Should().Contain("new SparklineDialog(");
+        method.Should().Contain("SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange)");
+        method.Should().Contain("SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location)");
+        method.Should().Contain("ShowOwnedMessage(\"Invalid data range.\", \"Insert Sparkline\", MessageBoxButton.OK, MessageBoxImage.Warning)");
+        method.Should().Contain("ShowOwnedMessage(\"Invalid location cell.\", \"Insert Sparkline\", MessageBoxButton.OK, MessageBoxImage.Warning)");
+        method.Should().Contain("var useDialogLocationForInitialInsert = true;");
+        method.Should().Contain("useDialogLocationForInitialInsert");
+        method.Should().Contain("? fallbackLocationRange");
+        method.Should().Contain(": SheetGrid.SelectedRange ?? fallbackLocationRange");
+        method.Should().Contain("var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);");
+        method.Should().Contain("useDialogLocationForInitialInsert = false;");
+        method.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void ShellChromeController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -1746,6 +1787,9 @@ public sealed class MainWindowSourceHygieneTests
         insertSource.Should().Contain("new SetHyperlinkCommand(");
         insertSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan");
         insertSource.Should().Contain("TryNavigateToWorkbookReference(plan.Target)");
+        insertSource.Should().Contain("ShowOwnedMessage(\"The hyperlink target could not be found.\"");
+        insertSource.Should().Contain("ShowOwnedMessage(\"The hyperlink target could not be opened.\"");
+        ExtractMethodSource(insertSource, "private bool TryOpenHyperlink(").Should().NotContain("MessageBox.Show(");
         selectionSource.Should().Contain("(Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryOpenHyperlink(newAddr)");
     }
 
@@ -2636,13 +2680,30 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
 
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Open crop controls for the selected or most recent inserted picture.\"");
         xaml.Should().Contain("Header=\"Crop...\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureMenuItem\"");
         xaml.Should().Contain("Header=\"Reset Crop\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawResetPictureCropMenuItem\"");
         xaml.Should().Contain("Click=\"PictureCropDialogMenuItem_Click\"");
         xaml.Should().Contain("Click=\"PictureResetCropMenuItem_Click\"");
         source.Should().Contain("PictureResetCropMenuItem_Click");
         source.Should().Contain("new SetPictureCropCommand(");
         source.Should().Contain("0, 0, 0, 0");
+    }
+
+    [Fact]
+    public void DrawGradientAndEffectsButtons_ExposeStableAutomationMetadata()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Open gradient fill controls for the selected shape.\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Toggle the selected shape shadow effect.\"");
+        xaml.Should().Contain("Click=\"ObjectGradientBtn_Click\"");
+        xaml.Should().Contain("Click=\"ObjectEffectsBtn_Click\"");
     }
 
     [Fact]
