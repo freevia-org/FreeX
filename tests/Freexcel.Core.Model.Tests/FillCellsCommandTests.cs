@@ -50,6 +50,75 @@ public sealed class FillCellsCommandTests
     }
 
     [Fact]
+    public void FillDown_CopiesHyperlinkTargetAndMetadataAndUndoRestoresTargets()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(source, Cell.FromValue(new TextValue("Example")));
+        sheet.Hyperlinks[source] = "https://example.com";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open example",
+            "section-one");
+        sheet.SetCell(target, Cell.FromValue(new TextValue("Old")));
+        sheet.Hyperlinks[target] = "mailto:old@example.com";
+        sheet.HyperlinkMetadata[target] = new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email old",
+            "old@example.com");
+        var context = new SimpleCommandContext(workbook);
+
+        var command = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(source, target),
+            FillCellsDirection.Down);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetCell(target)!.Value.Should().Be(new TextValue("Example"));
+        sheet.Hyperlinks[target].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[target].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open example",
+            "section-one"));
+
+        command.Revert(context);
+
+        sheet.GetCell(target)!.Value.Should().Be(new TextValue("Old"));
+        sheet.Hyperlinks[target].Should().Be("mailto:old@example.com");
+        sheet.HyperlinkMetadata[target].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email old",
+            "old@example.com"));
+    }
+
+    [Fact]
+    public void FillRight_ClearsTargetHyperlinkWhenSourceHasNoHyperlink()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(source, Cell.FromValue(new TextValue("plain")));
+        sheet.SetCell(target, Cell.FromValue(new TextValue("linked")));
+        sheet.Hyperlinks[target] = "https://example.com";
+        sheet.HyperlinkMetadata[target] = new HyperlinkMetadata(ScreenTip: "Open example");
+
+        var command = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(source, target),
+            FillCellsDirection.Right);
+
+        command.Apply(new SimpleCommandContext(workbook)).Success.Should().BeTrue();
+
+        sheet.GetCell(target)!.Value.Should().Be(new TextValue("plain"));
+        sheet.Hyperlinks.Should().NotContainKey(target);
+        sheet.HyperlinkMetadata.Should().NotContainKey(target);
+    }
+
+    [Fact]
     public void FillDown_RejectsLockedTargetsOnProtectedSheet()
     {
         var workbook = new Workbook("test");
