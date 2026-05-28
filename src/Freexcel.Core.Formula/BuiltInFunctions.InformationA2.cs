@@ -506,7 +506,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue IsevenScalar(ScalarValue value)
     {
-        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
+        if (!TryCoerceIsEvenOddNumber(value, out long n, out var error)) return error;
         return new BoolValue(n % 2 == 0);
     }
 
@@ -519,8 +519,32 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue IsoddScalar(ScalarValue value)
     {
-        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
+        if (!TryCoerceIsEvenOddNumber(value, out long n, out var error)) return error;
         return new BoolValue(n % 2 != 0);
+    }
+
+    private static bool TryCoerceIsEvenOddNumber(ScalarValue value, out long number, out ScalarValue error)
+    {
+        number = 0;
+        error = ErrorValue.Value;
+
+        double numeric;
+        try
+        {
+            numeric = ToNumber(value);
+        }
+        catch (FormulaEvalException)
+        {
+            return false;
+        }
+
+        if (!TryTruncateToLong(numeric, out number))
+        {
+            error = ErrorValue.Num;
+            return false;
+        }
+
+        return true;
     }
 
     private static RangeValue MapPredicateRange(RangeValue range, Func<ScalarValue, bool> predicate)

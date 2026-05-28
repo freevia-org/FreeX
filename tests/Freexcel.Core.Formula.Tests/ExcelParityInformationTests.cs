@@ -44,6 +44,26 @@ public sealed class ExcelParityInformationTests
         AssertColumn(_eval.Evaluate("=ISNONTEXT(A1:A4)", sheet), true, true, false, true);
     }
 
+    [Theory]
+    [InlineData("=ISEVEN(\"text\")")]
+    [InlineData("=ISODD(\"text\")")]
+    public void IsEvenAndIsOdd_ReturnValueForNonnumericText(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void IsEvenAndIsOdd_SpillValueErrorsForNonnumericText()
+    {
+        var sheet = Sheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("text"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
+
+        AssertColumn(_eval.Evaluate("=ISEVEN(A1:A3)", sheet), new BoolValue(true), ErrorValue.Value, new BoolValue(false));
+        AssertColumn(_eval.Evaluate("=ISODD(A1:A3)", sheet), new BoolValue(false), ErrorValue.Value, new BoolValue(true));
+    }
+
     [Fact]
     public void ErrorType_ReturnsExcelErrorCodes()
     {
@@ -118,12 +138,15 @@ public sealed class ExcelParityInformationTests
 
     private static Sheet Sheet() => new(SheetId.New(), "S");
 
-    private static void AssertColumn(ScalarValue value, params bool[] expected)
+    private static void AssertColumn(ScalarValue value, params bool[] expected) =>
+        AssertColumn(value, expected.Select(static value => (ScalarValue)new BoolValue(value)).ToArray());
+
+    private static void AssertColumn(ScalarValue value, params ScalarValue[] expected)
     {
         var range = value.Should().BeOfType<RangeValue>().Subject;
         range.RowCount.Should().Be(expected.Length);
         range.ColCount.Should().Be(1);
         for (int row = 0; row < expected.Length; row++)
-            range.At(row + 1, 1).Should().Be(new BoolValue(expected[row]));
+            range.At(row + 1, 1).Should().Be(expected[row]);
     }
 }
