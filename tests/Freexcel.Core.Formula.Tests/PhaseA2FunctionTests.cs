@@ -502,6 +502,17 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Info_Directory_ReturnsCurrentFolderPath()
+    {
+        var (wb, sheet) = MakeWb();
+        var expected = Environment.CurrentDirectory;
+        if (!System.IO.Path.EndsInDirectorySeparator(expected))
+            expected += System.IO.Path.DirectorySeparatorChar;
+
+        _eval.Evaluate("=INFO(\"directory\")", sheet, wb).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
     public void Info_Recalc_AutomaticByDefault()
     {
         var (wb, sheet) = MakeWb();
