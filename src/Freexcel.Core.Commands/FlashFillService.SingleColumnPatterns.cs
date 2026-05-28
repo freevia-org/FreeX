@@ -341,6 +341,35 @@ public static partial class FlashFillService
         };
     }
 
+    private static Func<string, string?>? TryExtractFinalDigitRun(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (source, expected) in examples)
+        {
+            if (!TryGetFinalDigitRun(source, out var digitRun) || digitRun != expected)
+                return null;
+        }
+
+        return source => TryGetFinalDigitRun(source, out var digitRun) ? digitRun : null;
+    }
+
+    private static bool TryGetFinalDigitRun(string source, out string digitRun)
+    {
+        digitRun = string.Empty;
+        var end = source.Length - 1;
+        while (end >= 0 && !char.IsDigit(source[end]))
+            end--;
+
+        if (end < 0)
+            return false;
+
+        var start = end;
+        while (start >= 0 && char.IsDigit(source[start]))
+            start--;
+
+        digitRun = source[(start + 1)..(end + 1)];
+        return digitRun.Length > 0;
+    }
+
     private static Func<string, string?>? TryDelimitedPartReorder(IReadOnlyList<(string Source, string Expected)> examples)
     {
         foreach (var sourceDelimiter in Delimiters)
