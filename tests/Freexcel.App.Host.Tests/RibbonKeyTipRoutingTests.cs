@@ -59,6 +59,18 @@ public sealed class RibbonKeyTipRoutingTests
         });
     }
 
+    [Fact]
+    public void CommandRouting_NormalizesWhitespace()
+    {
+        RunSta(() =>
+        {
+            var button = CreateButton(" FX ");
+
+            RibbonKeyTipRouting.ResolveKeyTipElement([button], " fx ").Should().BeSameAs(button);
+            RibbonKeyTipRouting.HasKeyTipPrefix([button], " f ").Should().BeTrue();
+        });
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData(" ")]
@@ -139,6 +151,19 @@ public sealed class RibbonKeyTipRoutingTests
             parent.Items.Add(CreateMenuItem("TA"));
 
             RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([parent], "TA").Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void MenuRouting_NormalizesWhitespace()
+    {
+        RunSta(() =>
+        {
+            var parent = CreateMenuItem(" H ");
+            parent.Items.Add(CreateMenuItem(" HG "));
+
+            RibbonKeyTipRouting.ResolveMenuItem([parent], " hg ").Should().BeSameAs(parent.Items[0]);
+            RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([parent], " h ").Should().BeTrue();
         });
     }
 
