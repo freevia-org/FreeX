@@ -68,6 +68,30 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputEncoding_PreservesUtf16Output()
+    {
+        using var source = StreamFromString("<rows><row name=\"Delta\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" encoding="utf-16" />
+              <xsl:template match="/rows">
+                <worksheet>
+                  <cell><xsl:value-of select="row/@name" /></cell>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        var bytes = transformed.ToArray();
+        bytes.Should().StartWith(Encoding.Unicode.GetPreamble());
+        Encoding.Unicode.GetString(bytes).Should()
+            .Contain("encoding=\"utf-16\"")
+            .And.Contain("<cell>Delta</cell>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_OutputAboveLimit_ReportsSafetyDiagnostic()
     {
         using var source = StreamFromString("<rows />");
