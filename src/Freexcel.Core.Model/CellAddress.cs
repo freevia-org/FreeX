@@ -36,51 +36,9 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
             return false;
         }
 
-        uint col = 0;
         var index = 0;
-        while (index < value.Length)
-        {
-            var c = value[index];
-            if (c is >= 'a' and <= 'z')
-                c = (char)(c - ('a' - 'A'));
-            if (c is < 'A' or > 'Z')
-                break;
-
-            col = col * 26 + (uint)(c - 'A' + 1);
-            if (col > MaxCol)
-            {
-                result = default;
-                return false;
-            }
-
-            index++;
-        }
-
-        if (index == 0 || index == value.Length)
-        {
-            result = default;
-            return false;
-        }
-
-        uint row = 0;
-        for (; index < value.Length; index++)
-        {
-            var c = value[index];
-            if (c is < '0' or > '9')
-            {
-                result = default;
-                return false;
-            }
-
-            row = row * 10 + (uint)(c - '0');
-            if (row > MaxRow)
-            {
-                result = default;
-                return false;
-            }
-        }
-
-        if (row == 0)
+        if (!TryReadColumnNumber(value, ref index, out var col) ||
+            !TryReadRowNumber(value[index..], out var row))
         {
             result = default;
             return false;
@@ -89,6 +47,7 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
         result = new CellAddress(sheet, row, col);
         return true;
     }
+
     /// <summary>
     /// Converts a column name (e.g. "A", "Z", "AA", "XFD") to a 1-based column number.
     /// </summary>
@@ -98,14 +57,61 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
         foreach (var c in name.ToUpperInvariant())
         {
             if (c < 'A' || c > 'Z') return 0; // non-letter would underflow uint arithmetic
-            if (result > MaxCol) return result; // already beyond valid range — avoids overflow
+            if (result > MaxCol) return result; // already beyond valid range - avoids overflow
             result = result * 26 + (uint)(c - 'A' + 1);
         }
         return result;
     }
 
+    private static bool TryReadColumnNumber(ReadOnlySpan<char> value, ref int index, out uint column)
+    {
+        column = 0;
+        var start = index;
+
+        while (index < value.Length)
+        {
+            var c = NormalizeColumnLetter(value[index]);
+            if (c is < 'A' or > 'Z')
+                break;
+
+            column = column * 26 + (uint)(c - 'A' + 1);
+            if (column > MaxCol)
+                return false;
+
+            index++;
+        }
+
+        return index > start;
+    }
+
+    private static bool TryReadRowNumber(ReadOnlySpan<char> value, out uint row)
+    {
+        row = 0;
+        if (value.IsEmpty)
+            return false;
+
+        foreach (var c in value)
+        {
+            if (c is < '0' or > '9')
+                return false;
+
+            var digit = (uint)(c - '0');
+            if (row > MaxRow / 10 || row == MaxRow / 10 && digit > MaxRow % 10)
+                return false;
+
+            row = row * 10 + digit;
+            if (row > MaxRow)
+                return false;
+        }
+
+        return row > 0;
+    }
+
+    private static char NormalizeColumnLetter(char c) =>
+        c is >= 'a' and <= 'z' ? (char)(c - ('a' - 'A')) : c;
+
     /// <summary>
-    /// Converts a 1-based column number to a column name (e.g. 1 → "A", 27 → "AA").
+    /// Converts a 1-based column number to a column name (e.g. 1 -> "A", 27 -> "AA").
     /// </summary>
     public static string NumberToColumnName(uint col)
     {
@@ -129,7 +135,6 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
         var rowCmp = Row.CompareTo(other.Row);
         return rowCmp != 0 ? rowCmp : Col.CompareTo(other.Col);
     }
-
 }
 
 /// <summary>

@@ -33,6 +33,26 @@ public class CellAddressTests
     }
 
     [Fact]
+    public void Parse_LowercaseA1_ReturnsCorrectRowAndCol()
+    {
+        var sheet = SheetId.New();
+        var addr = CellAddress.Parse("aa10", sheet);
+        addr.Row.Should().Be(10);
+        addr.Col.Should().Be(27);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("A")]
+    [InlineData("1")]
+    [InlineData("A1B")]
+    [InlineData("A999999999999999999999")]
+    public void TryParse_InvalidA1Notation_ReturnsFalse(string input)
+    {
+        CellAddress.TryParse(input, SheetId.New(), out _).Should().BeFalse();
+    }
+
+    [Fact]
     public void ColumnNameToNumber_A_Returns1()
     {
         CellAddress.ColumnNameToNumber("A").Should().Be(1);
