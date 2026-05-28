@@ -11,10 +11,14 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     public static MemoryStream Create(
         MemoryStream sourcePackage,
-        bool removeUnsupportedConditionalFormatting = false)
+        bool removeUnsupportedConditionalFormatting = false,
+        bool removeAllConditionalFormatting = false)
     {
         sourcePackage.Position = 0;
-        var requirements = GetSanitizationRequirements(sourcePackage, removeUnsupportedConditionalFormatting);
+        var requirements = GetSanitizationRequirements(
+            sourcePackage,
+            removeUnsupportedConditionalFormatting,
+            removeAllConditionalFormatting);
         if (!requirements.RequiresAny)
         {
             sourcePackage.Position = 0;
@@ -34,7 +38,9 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 XlsxPivotPackageCleaner.RemovePivotPackageMetadata(archive);
             if (requirements.HasChartExChartParts)
                 RemoveChartExDrawingRelationships(archive);
-            if (requirements.HasUnsupportedConditionalFormattingBlocks)
+            if (requirements.HasAllConditionalFormattingBlocks)
+                RemoveAllConditionalFormattingBlocks(archive);
+            else if (requirements.HasUnsupportedConditionalFormattingBlocks)
                 RemoveUnsupportedConditionalFormattingBlocks(archive);
             if (requirements.HasWorksheetDynamicFilters)
                 RemoveWorksheetDynamicFilters(archive);
@@ -46,7 +52,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static SanitizationRequirements GetSanitizationRequirements(
         Stream sourcePackage,
-        bool scanUnsupportedConditionalFormatting = true)
+        bool scanUnsupportedConditionalFormatting = true,
+        bool scanAllConditionalFormatting = false)
     {
         try
         {
@@ -54,12 +61,13 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return new SanitizationRequirements(
                 HasPivotPackageMetadata(archive),
                 HasChartExChartParts(archive),
+                scanAllConditionalFormatting && HasConditionalFormattingBlocks(archive),
                 scanUnsupportedConditionalFormatting && HasUnsupportedConditionalFormattingBlocks(archive),
                 HasWorksheetDynamicFilters(archive));
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, true);
+            return new SanitizationRequirements(true, true, scanAllConditionalFormatting, true, true);
         }
         finally
         {
@@ -71,10 +79,11 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     private readonly record struct SanitizationRequirements(
         bool HasPivotPackageMetadata,
         bool HasChartExChartParts,
+        bool HasAllConditionalFormattingBlocks,
         bool HasUnsupportedConditionalFormattingBlocks,
         bool HasWorksheetDynamicFilters)
     {
-        public bool RequiresAny => HasPivotPackageMetadata || HasChartExChartParts || HasUnsupportedConditionalFormattingBlocks || HasWorksheetDynamicFilters;
+        public bool RequiresAny => HasPivotPackageMetadata || HasChartExChartParts || HasAllConditionalFormattingBlocks || HasUnsupportedConditionalFormattingBlocks || HasWorksheetDynamicFilters;
     }
 
     private static bool HasPivotPackageMetadata(ZipArchive archive) =>
@@ -142,6 +151,35 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static bool HasUnsupportedConditionalFormattingBlocks(ZipArchive archive) =>
         XlsxConditionalFormatRuleSupport.HasUnsupportedRuleInWorksheets(archive, allowBlankType: false);
+
+    private static bool HasConditionalFormattingBlocks(ZipArchive archive) =>
+        archive.Entries
+            .Where(entry =>
+                entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Any(entry =>
+            {
+                using var stream = entry.Open();
+                using var reader = XmlReader.Create(stream, new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    IgnoreComments = true,
+                    IgnoreProcessingInstructions = true,
+                    IgnoreWhitespace = true,
+                });
+
+                while (reader.Read())
+                {
+                    if (reader.NodeType == XmlNodeType.Element &&
+                        string.Equals(reader.LocalName, "conditionalFormatting", StringComparison.Ordinal) &&
+                        string.Equals(reader.NamespaceURI, "http://schemas.openxmlformats.org/spreadsheetml/2006/main", StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
 
     private static bool HasWorksheetDynamicFilters(ZipArchive archive) =>
         archive.Entries
@@ -217,6 +255,31 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 continue;
 
             unsupportedBlocks.Remove();
+            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+        }
+    }
+
+    private static void RemoveAllConditionalFormattingBlocks(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(entry =>
+                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            var blocks = root
+                .Elements(worksheetNs + "conditionalFormatting")
+                .ToList();
+            if (blocks.Count == 0)
+                continue;
+
+            blocks.Remove();
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
     }
