@@ -91,7 +91,7 @@ public static partial class BuiltInFunctions
                 // In-memory workbook has no on-disk path; Excel compat is empty string.
                 return new TextValue("");
             case "format":
-                return new TextValue(CellFormatCode(style?.NumberFormat));
+                return new TextValue(CellFormatInfo(style?.NumberFormat));
             case "color":
                 return new NumberValue(CellNegativeSectionUsesColor(style?.NumberFormat) ? 1 : 0);
             case "parentheses":
@@ -120,6 +120,16 @@ public static partial class BuiltInFunctions
             HorizontalAlignment.Right => "\"",
             _ => ""
         };
+
+    private static string CellFormatInfo(string? numberFormat)
+    {
+        var code = CellFormatCode(numberFormat);
+        if (CellNegativeSectionUsesColor(numberFormat))
+            code += "-";
+        if (CellNegativeSectionUsesParentheses(numberFormat))
+            code += "()";
+        return code;
+    }
 
     private static string CellFormatCode(string? numberFormat)
     {
