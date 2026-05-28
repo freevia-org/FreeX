@@ -74,6 +74,28 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
+    public void AttachedLayoutMetadata_TakesPrecedenceOverLegacyTags()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var compactButton = new Button { Tag = "RibbonCompact:128:44" };
+            RibbonMetadata.SetCompactWidths(compactButton, 74, 32);
+
+            RibbonMetadata.TryGetCompactWidths(compactButton, out var fullWidth, out var compactWidth)
+                .Should()
+                .BeTrue();
+            fullWidth.Should().Be(74);
+            compactWidth.Should().Be(32);
+
+            var commandContent = new Grid { Tag = "RibbonCommandContent:L" };
+            RibbonMetadata.SetCommandContentLayout(commandContent, RibbonCommandContentLayout.Small);
+
+            RibbonMetadata.TryGetCommandContentLayout(commandContent, out var layout).Should().BeTrue();
+            layout.Should().Be(RibbonCommandContentLayout.Small);
+        });
+    }
+
+    [Fact]
     public void GroupName_UsesAttachedMetadataAndDoesNotInferIdentityFromCaptionShape()
     {
         StaTestRunner.Run(() =>
