@@ -37,9 +37,17 @@ internal static class NativePasswordHelper
         if (stored.StartsWith(Sha256Prefix, StringComparison.Ordinal))
         {
             var expectedHex = stored[Sha256Prefix.Length..];
-            Span<byte> expectedHash = stackalloc byte[SHA256.HashSizeInBytes];
-            if (!Convert.TryFromHexString(expectedHex, expectedHash, out var bytesWritten) ||
-                bytesWritten != SHA256.HashSizeInBytes)
+            byte[] expectedHash;
+            try
+            {
+                expectedHash = Convert.FromHexString(expectedHex);
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+
+            if (expectedHash.Length != SHA256.HashSizeInBytes)
             {
                 return false;
             }
