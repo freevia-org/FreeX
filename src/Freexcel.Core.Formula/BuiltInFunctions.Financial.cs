@@ -11,9 +11,7 @@ public static partial class BuiltInFunctions
     // ── Private helpers ─────────────────────────────────────────────────
 
     private static DateTime SerialToDate(double serial) =>
-        serial < 60
-            ? new DateTime(1899, 12, 30).AddDays(serial + 1)
-            : new DateTime(1899, 12, 30).AddDays(serial);
+        ExcelDateSystem.SerialToDate(serial);
 
     private static bool TryGetFinancialDate(double serial, out DateTime date)
     {
@@ -25,9 +23,7 @@ public static partial class BuiltInFunctions
     }
 
     private static double DateToSerial(DateTime d) =>
-        d < new DateTime(1900, 3, 1)
-            ? (d - new DateTime(1899, 12, 30)).TotalDays - 1
-            : (d - new DateTime(1899, 12, 30)).TotalDays;
+        ExcelDateSystem.DateToSerial(d);
 
     private static bool IsExcelFakeLeapDay(ScalarValue value)
     {
