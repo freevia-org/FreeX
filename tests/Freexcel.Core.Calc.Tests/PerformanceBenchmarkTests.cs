@@ -334,6 +334,34 @@ public class PerformanceBenchmarkTests
         text.Should().Be("a;bx");
     }
 
+    [Fact]
+    public void Benchmark_SingleSectionDateTimeFormat_AvoidsSectionParsingAllocation()
+    {
+        const int iterations = 10_000;
+        var value = new DateTimeValue(new DateTime(2026, 5, 29, 15, 4, 5).ToOADate());
+
+        NumberFormatter.Format(value, "yyyy-mm-dd hh:mm:ss");
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var formatted = NumberFormatter.Format(value, "yyyy-mm-dd hh:mm:ss");
+            if (formatted != "2026-05-29 15:04:05")
+                throw new Xunit.Sdk.XunitException("Single-section date/time format produced an unexpected value.");
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Single-section date/time format: {iterations:N0} iterations, {sw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
+
+        (allocated / iterations).Should().BeLessThan(
+            1_600,
+            "single-section date/time formats should skip section array and parsed-section scaffolding");
+    }
+
     /// <summary>
     /// Benchmark: Memory usage for 1,000,000 cells (values only, no formulas).
     /// Target: <200MB
