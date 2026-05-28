@@ -368,5 +368,5 @@ public partial class GridView
             gv.StopMarchTimer();
     }
 
-    // â”€â”€ Merge lookup (rebuilt once per render pass, O(1) per cell) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Merge lookup (rebuilt once per render pass, O(1) per cell)
 }
