@@ -52,6 +52,14 @@ public sealed class ExcelParityModernTextTests
     }
 
     [Theory]
+    [InlineData("=TEXTBEFORE(1/0,NA())")]
+    [InlineData("=TEXTAFTER(1/0,NA())")]
+    public void TextBeforeAfter_DirectTextArgumentErrorTakesPrecedenceOverDelimiterErrors(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Theory]
     [InlineData("=TEXTBEFORE(\"alpha\",\"a\",0)")]
     [InlineData("=TEXTAFTER(\"alpha\",\"a\",0)")]
     [InlineData("=TEXTBEFORE(\"alpha\",\"a\",6)")]
