@@ -44,6 +44,23 @@ public sealed class MenuKeyTipAssignerTests
     }
 
     [Fact]
+    public void NormalizesExistingKeyTipsBeforeDynamicMenuRouting()
+    {
+        RunSta(() =>
+        {
+            var copy = new MenuItem { Header = "Copy" };
+            RibbonTooltip.SetKeyTip(copy, " c ");
+            var clear = new MenuItem { Header = "Clear Contents" };
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([copy, clear]);
+
+            RibbonTooltip.GetKeyTip(copy).Should().Be("C");
+            copy.InputGestureText.Should().Be("C");
+            RibbonTooltip.GetKeyTip(clear).Should().Be("L");
+        });
+    }
+
+    [Fact]
     public void RepairsDuplicateExistingKeyTipsWithinDynamicMenuScope()
     {
         RunSta(() =>
