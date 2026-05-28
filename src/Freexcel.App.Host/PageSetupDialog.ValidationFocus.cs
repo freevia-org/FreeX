@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Windows.Controls;
-using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -9,9 +8,7 @@ public partial class PageSetupDialog
     private void FocusInvalidPrintArea()
     {
         PageSetupTabs.SelectedItem = SheetTab;
-        PrintAreaBox.Focus();
-        PrintAreaBox.SelectAll();
-        Keyboard.Focus(PrintAreaBox);
+        DialogFocus.FocusAndSelect(PrintAreaBox);
     }
 
     private void FocusInvalidPrintTitles()
@@ -20,17 +17,13 @@ public partial class PageSetupDialog
             ? ColumnsRepeatBox
             : RowsRepeatBox;
         PageSetupTabs.SelectedItem = SheetTab;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void FocusInvalidPageTabNumber(TextBox target)
     {
         PageSetupTabs.SelectedItem = PageTab;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void FocusInvalidScalingInput()
@@ -48,9 +41,7 @@ public partial class PageSetupDialog
         }
 
         PageSetupTabs.SelectedItem = PageTab;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void FocusInvalidMarginInput()
@@ -78,8 +69,6 @@ public partial class PageSetupDialog
     private void FocusMarginsTabTextBox(TextBox target)
     {
         PageSetupTabs.SelectedItem = MarginsTab;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 }

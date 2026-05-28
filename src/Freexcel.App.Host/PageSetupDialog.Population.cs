@@ -83,9 +83,7 @@ public partial class PageSetupDialog
         if (_initialFocusTarget == PageSetupInitialFocusTarget.RepeatRows)
         {
             PageSetupTabs.SelectedItem = SheetTab;
-            RowsRepeatBox.Focus();
-            RowsRepeatBox.SelectAll();
-            Keyboard.Focus(RowsRepeatBox);
+            DialogFocus.FocusAndSelect(RowsRepeatBox);
             return;
         }
 
@@ -95,9 +93,7 @@ public partial class PageSetupDialog
             var target = AdjustToRadioButton.IsChecked == true
                 ? ScalePercentBox
                 : FitPagesWideBox;
-            target.Focus();
-            target.SelectAll();
-            Keyboard.Focus(target);
+            DialogFocus.FocusAndSelect(target);
             return;
         }
 
