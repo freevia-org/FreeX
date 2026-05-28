@@ -16,6 +16,7 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\")]");
         script.Should().Contain("[string]$PublishMode = \"SingleFile\"");
         script.Should().Contain("AppInfo.cs");
+        script.Should().Contain("function ConvertTo-MsixPackageVersion");
         script.Should().Contain("rev-parse --short=8 HEAD");
         script.Should().Contain("$buildStamp = Get-Date -Format \"yyyyMMdd-HHmmss\"");
         script.Should().Contain("freexcel-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug");
@@ -51,6 +52,22 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("Compress-Archive");
         script.Should().Contain("Test-Path -LiteralPath $zipPath");
         script.Should().Contain("Get-FileHash");
+    }
+
+    [Fact]
+    public void PublishScript_NormalizesMsixVersionsWhenRunNumberExceedsPackagePartLimit()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        script.Should().Contain("$numericParts = [regex]::Matches($DisplayVersion, '\\d+') | ForEach-Object { [int64]$_.Value }");
+        script.Should().Contain("$msixParts = @(0L, 0L, 0L, 0L)");
+        script.Should().Contain("for ($i = 3; $i -gt 0; $i--)");
+        script.Should().Contain("$carry = [Math]::Floor($msixParts[$i] / 65536)");
+        script.Should().Contain("$msixParts[$i] = $msixParts[$i] % 65536");
+        script.Should().Contain("$msixParts[$i - 1] += $carry");
+        script.Should().Contain("throw \"MSIX version part '$($msixParts[0])' is outside the 0-65535 range.\"");
+        script.Should().Contain("$msixVersion = ConvertTo-MsixPackageVersion -DisplayVersion $Version");
     }
 
     [Fact]
