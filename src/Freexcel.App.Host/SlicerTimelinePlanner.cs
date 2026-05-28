@@ -59,17 +59,51 @@ public static class SlicerTimelinePlanner
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     public static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(Workbook workbook, Sheet activeSheet) =>
-        workbook.Slicers
-            .Where(slicer => slicer.DrawingAnchor is not null && IsConnectedToPivotOnSheet(slicer.SourcePivotTableName, activeSheet))
-            .ToList();
+        GetNativeVisualSlicers(workbook.Slicers, BuildActivePivotNameSet(activeSheet));
 
     public static IReadOnlyList<TimelineModel> GetNativeVisualTimelines(Workbook workbook, Sheet activeSheet) =>
-        workbook.Timelines
-            .Where(timeline => timeline.DrawingAnchor is not null && IsConnectedToPivotOnSheet(timeline.SourcePivotTableName, activeSheet))
-            .ToList();
+        GetNativeVisualTimelines(workbook.Timelines, BuildActivePivotNameSet(activeSheet));
 
-    private static bool IsConnectedToPivotOnSheet(string? pivotTableName, Sheet activeSheet) =>
-        !string.IsNullOrWhiteSpace(pivotTableName) &&
-        activeSheet.PivotTables.Any(pivot =>
-            string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
+    private static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(
+        IReadOnlyList<SlicerModel> slicers,
+        IReadOnlySet<string> activePivotNames)
+    {
+        var visible = new List<SlicerModel>();
+        foreach (var slicer in slicers)
+        {
+            if (slicer.DrawingAnchor is not null && IsConnectedToPivotOnSheet(slicer.SourcePivotTableName, activePivotNames))
+                visible.Add(slicer);
+        }
+
+        return visible;
+    }
+
+    private static IReadOnlyList<TimelineModel> GetNativeVisualTimelines(
+        IReadOnlyList<TimelineModel> timelines,
+        IReadOnlySet<string> activePivotNames)
+    {
+        var visible = new List<TimelineModel>();
+        foreach (var timeline in timelines)
+        {
+            if (timeline.DrawingAnchor is not null && IsConnectedToPivotOnSheet(timeline.SourcePivotTableName, activePivotNames))
+                visible.Add(timeline);
+        }
+
+        return visible;
+    }
+
+    private static HashSet<string> BuildActivePivotNameSet(Sheet activeSheet)
+    {
+        var pivotNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pivot in activeSheet.PivotTables)
+        {
+            if (!string.IsNullOrWhiteSpace(pivot.Name))
+                pivotNames.Add(pivot.Name);
+        }
+
+        return pivotNames;
+    }
+
+    private static bool IsConnectedToPivotOnSheet(string? pivotTableName, IReadOnlySet<string> activePivotNames) =>
+        !string.IsNullOrWhiteSpace(pivotTableName) && activePivotNames.Contains(pivotTableName);
 }

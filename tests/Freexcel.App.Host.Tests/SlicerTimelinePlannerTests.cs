@@ -115,4 +115,50 @@ public sealed class SlicerTimelinePlannerTests
             .Should()
             .Equal("Date Timeline");
     }
+
+    [Fact]
+    public void NativeVisualFilters_UsePivotNameLookupForLargeWorkbooks()
+    {
+        var workbook = new Workbook("NativeVisualFiltersLarge");
+        var activeSheet = workbook.AddSheet("Pivot");
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 0, 1, 0),
+            new DrawingAnchorPoint(4, 0, 8, 0));
+
+        for (var index = 0; index < 6000; index++)
+        {
+            activeSheet.PivotTables.Add(new PivotTableModel { Name = $"Pivot{index}" });
+            workbook.Slicers.Add(new SlicerModel
+            {
+                Name = $"Slicer{index}",
+                SourcePivotTableName = $"Pivot{index}",
+                DrawingAnchor = anchor
+            });
+            workbook.Timelines.Add(new TimelineModel
+            {
+                Name = $"Timeline{index}",
+                SourcePivotTableName = $"Pivot{index}",
+                DrawingAnchor = anchor
+            });
+        }
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var slicers = SlicerTimelinePlanner.GetNativeVisualSlicers(workbook, activeSheet);
+        var timelines = SlicerTimelinePlanner.GetNativeVisualTimelines(workbook, activeSheet);
+        stopwatch.Stop();
+
+        slicers.Should().HaveCount(6000);
+        timelines.Should().HaveCount(6000);
+        stopwatch.ElapsedMilliseconds.Should().BeLessThan(750);
+    }
+
+    [Fact]
+    public void NativeVisualFilters_AvoidNestedPivotScans()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SlicerTimelinePlanner.cs"));
+
+        source.Should().Contain("BuildActivePivotNameSet(activeSheet)");
+        source.Should().Contain("activePivotNames.Contains(pivotTableName)");
+        source.Should().NotContain("activeSheet.PivotTables.Any");
+    }
 }
