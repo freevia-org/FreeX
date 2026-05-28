@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -297,6 +299,29 @@ public sealed class TextToColumnsPlannerTests
         TextToColumnsPlanner.SplitFixedWidthText("East0042Open", [8, 4, 4])
             .Should()
             .Equal("East", "0042", "Open");
+    }
+
+    [Fact]
+    public void SplitText_SourceAvoidsDelimiterArrayAllocation()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsSplitter.cs"));
+
+        source.Should().Contain("private static bool IsDelimiter(char ch, string delimiters)");
+        source.Should().NotContain("delimiters.Distinct().ToArray()");
+    }
+
+    [Fact]
+    public void SplitText_LongSingleDelimiterInput_StaysWithinInteractiveBudget()
+    {
+        var row = string.Join(",", Enumerable.Range(0, 200).Select(index => $"Value{index}"));
+
+        var stopwatch = Stopwatch.StartNew();
+        for (var index = 0; index < 1_000; index++)
+            TextToColumnsPlanner.SplitText(row, ",", '"', false).Should().HaveCount(200);
+        stopwatch.Stop();
+
+        Console.WriteLine($"Text-to-columns single-delimiter split benchmark: {stopwatch.Elapsed.TotalMilliseconds:F2}ms for 1000 runs");
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(1));
     }
 
     [Fact]

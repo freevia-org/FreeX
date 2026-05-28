@@ -13,10 +13,6 @@ internal static class TextToColumnsSplitter
         char? textQualifier,
         bool treatConsecutiveDelimitersAsOne)
     {
-        var delimiterChars = string.IsNullOrEmpty(delimiters)
-            ? [',']
-            : delimiters.Distinct().ToArray();
-
         var parts = new List<string>();
         var current = new System.Text.StringBuilder();
         var inQualifiedText = false;
@@ -36,14 +32,14 @@ internal static class TextToColumnsSplitter
                 continue;
             }
 
-            if (!inQualifiedText && delimiterChars.Contains(ch))
+            if (!inQualifiedText && IsDelimiter(ch, delimiters))
             {
                 parts.Add(current.ToString());
                 current.Clear();
 
                 if (treatConsecutiveDelimitersAsOne)
                 {
-                    while (index + 1 < text.Length && delimiterChars.Contains(text[index + 1]))
+                    while (index + 1 < text.Length && IsDelimiter(text[index + 1], delimiters))
                         index++;
                 }
 
@@ -59,11 +55,7 @@ internal static class TextToColumnsSplitter
 
     public static string[] SplitFixedWidthText(string text, IReadOnlyList<int> breakPositions)
     {
-        var positions = breakPositions
-            .Where(position => position > 0)
-            .Distinct()
-            .Order()
-            .ToList();
+        var positions = NormalizeBreakPositions(breakPositions);
         if (positions.Count == 0)
             return [text];
 
@@ -83,5 +75,44 @@ internal static class TextToColumnsSplitter
             parts.Add(string.Empty);
 
         return parts.ToArray();
+    }
+
+    private static bool IsDelimiter(char ch, string delimiters)
+    {
+        if (string.IsNullOrEmpty(delimiters))
+            return ch == ',';
+
+        return delimiters.Length == 1
+            ? ch == delimiters[0]
+            : delimiters.IndexOf(ch) >= 0;
+    }
+
+    private static List<int> NormalizeBreakPositions(IReadOnlyList<int> breakPositions)
+    {
+        var positions = new List<int>(breakPositions.Count);
+        for (var index = 0; index < breakPositions.Count; index++)
+        {
+            var position = breakPositions[index];
+            if (position > 0)
+                positions.Add(position);
+        }
+
+        if (positions.Count <= 1)
+            return positions;
+
+        positions.Sort();
+        var writeIndex = 1;
+        for (var readIndex = 1; readIndex < positions.Count; readIndex++)
+        {
+            if (positions[readIndex] == positions[writeIndex - 1])
+                continue;
+
+            positions[writeIndex++] = positions[readIndex];
+        }
+
+        if (writeIndex < positions.Count)
+            positions.RemoveRange(writeIndex, positions.Count - writeIndex);
+
+        return positions;
     }
 }
