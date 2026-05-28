@@ -61,6 +61,25 @@ public sealed class WorkbookRangeTextCodecTests
     }
 
     [Fact]
+    public void TryParseMany_KeepsEscapedQuotesInsideQuotedSheetNames()
+    {
+        var defaultSheetId = SheetId.New();
+        var quotedSheetId = SheetId.New();
+
+        WorkbookRangeTextCodec.TryParseMany(
+            defaultSheetId,
+            "'Bob''s, Sheet'!A1,B2",
+            name => name == "Bob's, Sheet" ? quotedSheetId : null,
+            out var ranges).Should().BeTrue();
+
+        ranges.Should().HaveCount(2);
+        ranges[0].Start.Should().Be(new CellAddress(quotedSheetId, 1, 1));
+        ranges[0].End.Should().Be(new CellAddress(quotedSheetId, 1, 1));
+        ranges[1].Start.Should().Be(new CellAddress(defaultSheetId, 2, 2));
+        ranges[1].End.Should().Be(new CellAddress(defaultSheetId, 2, 2));
+    }
+
+    [Fact]
     public void TryParseMany_RejectsIfAnyRangeIsMalformed()
     {
         WorkbookRangeTextCodec.TryParseMany(SheetId.New(), "A1,not a range", _ => null, out _)
@@ -89,5 +108,19 @@ public sealed class WorkbookRangeTextCodecTests
                 currentSheetId,
                 sheetId => sheetId.Equals(salesSheetId) ? "Sales Q1" : null)
             .Should().Be("'Sales Q1'!A1:B2");
+    }
+
+    [Fact]
+    public void Format_EscapesQuotesInOtherSheetNames()
+    {
+        var currentSheetId = SheetId.New();
+        var quotedSheetId = SheetId.New();
+        var range = new GridRange(new CellAddress(quotedSheetId, 1, 1), new CellAddress(quotedSheetId, 1, 1));
+
+        WorkbookRangeTextCodec.Format(
+                range,
+                currentSheetId,
+                sheetId => sheetId.Equals(quotedSheetId) ? "Bob's Sheet" : null)
+            .Should().Be("'Bob''s Sheet'!A1:A1");
     }
 }
