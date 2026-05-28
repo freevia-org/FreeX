@@ -64,7 +64,7 @@ public static partial class ChartRenderer
         if (valueColumnCount < 3 || closeCol > endCol)
             return model;
 
-        var series = CreateStockPriceSeries(chart, hasOpenColumn);
+        var series = CreateStockPriceSeries(chart, hasOpenColumn, theme);
 
         for (uint row = dataStartRow; row <= endRow; row++)
         {
@@ -87,18 +87,18 @@ public static partial class ChartRenderer
         return model;
     }
 
-    private static HighLowSeries CreateStockPriceSeries(ChartModel chart, bool hasOpenColumn)
+    private static HighLowSeries CreateStockPriceSeries(ChartModel chart, bool hasOpenColumn, WorkbookTheme theme)
     {
         if (chart.ShowUpDownBars && hasOpenColumn)
         {
             return new CandleStickSeries
             {
                 Title = "Stock",
-                StrokeThickness = 1.5,
-                Color = OxyColors.Black,
-                IncreasingColor = OxyColors.White,
-                DecreasingColor = OxyColors.Black,
-                CandleWidth = 0.55
+                StrokeThickness = GetUpDownBarBorderThickness(chart),
+                Color = ToOxyColor(GetUpDownBarBorderColor(chart, theme)) ?? OxyColors.Black,
+                IncreasingColor = ToOxyColor(chart.UpBarFillThemeColor?.Resolve(theme) ?? chart.UpBarFillColor) ?? OxyColors.White,
+                DecreasingColor = ToOxyColor(chart.DownBarFillThemeColor?.Resolve(theme) ?? chart.DownBarFillColor) ?? OxyColors.Black,
+                CandleWidth = GetUpDownBarCandleWidth(chart)
             };
         }
 
@@ -109,6 +109,23 @@ public static partial class ChartRenderer
             Color = OxyColors.Black
         };
     }
+
+    private static double GetUpDownBarCandleWidth(ChartModel chart) =>
+        chart.UpDownBarGapWidth is { } gapWidth
+            ? Math.Clamp(100.0 / (100.0 + Math.Max(0, gapWidth)), 0.05, 0.95)
+            : 0.55;
+
+    private static double GetUpDownBarBorderThickness(ChartModel chart)
+    {
+        var thickness = Math.Max(chart.UpBarBorderThickness ?? 1.5, chart.DownBarBorderThickness ?? 1.5);
+        return double.IsFinite(thickness) ? Math.Clamp(thickness, 0, 20) : 1.5;
+    }
+
+    private static CellColor? GetUpDownBarBorderColor(ChartModel chart, WorkbookTheme theme) =>
+        chart.UpBarBorderThemeColor?.Resolve(theme)
+        ?? chart.UpBarBorderColor
+        ?? chart.DownBarBorderThemeColor?.Resolve(theme)
+        ?? chart.DownBarBorderColor;
 
     private static void AddStockVolumeSeries(
         PlotModel model,
