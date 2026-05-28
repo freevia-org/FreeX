@@ -98,9 +98,7 @@ public sealed class WatchWindowMessageFormatterTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_rangeBox.Focus();");
-        source.Should().Contain("_rangeBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rangeBox);");
     }
 
     [Fact]

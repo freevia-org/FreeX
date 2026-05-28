@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -61,8 +60,6 @@ public sealed class AddWatchDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _rangeBox.Focus();
-        _rangeBox.SelectAll();
-        Keyboard.Focus(_rangeBox);
+        DialogFocus.FocusAndSelect(_rangeBox);
     }
 }
