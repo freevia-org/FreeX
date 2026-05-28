@@ -136,7 +136,7 @@ public sealed class FormulaEvaluator
         "DAYS", "DAYS360", "YEARFRAC",
         "CEILING.MATH", "CEILING.PRECISE", "FLOOR.MATH", "FLOOR.PRECISE", "ISO.CEILING", "SQRTPI", "SERIESSUM",
         "RANDBETWEEN",
-        "N", "ERROR.TYPE",
+        "N", "TYPE", "ERROR.TYPE",
         "COMBIN", "COMBINA", "FACTDOUBLE", "PERMUT", "PERMUTATIONA",
         "ACOT", "ACOTH", "COT", "COTH", "CSC", "CSCH", "SEC", "SECH",
         "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT",

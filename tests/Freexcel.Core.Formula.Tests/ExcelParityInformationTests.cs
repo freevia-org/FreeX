@@ -106,6 +106,16 @@ public sealed class ExcelParityInformationTests
     }
 
     [Fact]
+    public void Type_ReturnsArrayCodeForRangeReferences()
+    {
+        var sheet = Sheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("x"));
+
+        _eval.Evaluate("=TYPE(A1:A2)", sheet).Should().Be(new NumberValue(64));
+    }
+
+    [Fact]
     public void Na_Type_N_Cell_Info_ReturnExcelCompatibleScalarValues()
     {
         _eval.Evaluate("=NA()", Sheet()).Should().Be(ErrorValue.NA);
