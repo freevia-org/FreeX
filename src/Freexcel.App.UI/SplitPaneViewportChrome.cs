@@ -109,7 +109,7 @@ public static class SplitPaneViewportChrome
             return null;
 
         if (hit.Part == SplitPaneScrollbarPart.Thumb)
-            return CalculateScrollTarget(chrome, pos);
+            return null;
 
         if (viewport.SplitPanes is not { } splitPanes)
             return null;
