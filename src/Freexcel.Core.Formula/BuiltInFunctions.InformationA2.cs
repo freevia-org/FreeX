@@ -128,7 +128,7 @@ public static partial class BuiltInFunctions
         var code = CellFormatCode(numberFormat);
         if (CellNegativeSectionUsesColor(numberFormat))
             code += "-";
-        if (CellNegativeSectionUsesParentheses(numberFormat))
+        if (CellPositiveOrAllSectionUsesParentheses(numberFormat))
             code += "()";
         return code;
     }
@@ -241,15 +241,24 @@ public static partial class BuiltInFunctions
     private static bool CellNegativeSectionUsesParentheses(string? numberFormat)
     {
         var negativeSection = GetCellNegativeFormatSection(numberFormat);
-        if (negativeSection is null) return false;
+        return negativeSection is not null && CellFormatSectionUsesParentheses(negativeSection);
+    }
 
+    private static bool CellPositiveOrAllSectionUsesParentheses(string? numberFormat)
+    {
+        var sections = SplitCellFormatSections(numberFormat);
+        return sections.Count > 0 && CellFormatSectionUsesParentheses(sections[0]);
+    }
+
+    private static bool CellFormatSectionUsesParentheses(string section)
+    {
         bool quoted = false;
         bool escaped = false;
         bool bracketed = false;
         bool hasOpen = false;
         bool hasClose = false;
 
-        foreach (var ch in negativeSection)
+        foreach (var ch in section)
         {
             if (escaped)
             {

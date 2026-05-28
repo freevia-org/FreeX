@@ -371,10 +371,12 @@ public class PhaseA2FunctionTests
 
     [Theory]
     [InlineData("#,##0;[Red]-#,##0", ",0-")]
-    [InlineData("0;(#,##0)", "F0()")]
-    [InlineData("0;[Red](#,##0)", "F0-()")]
+    [InlineData("0;(#,##0)", "F0")]
+    [InlineData("0;[Red](#,##0)", "F0-")]
+    [InlineData("(0);-#,##0", "F0()")]
+    [InlineData("(#,##0)", ",0()")]
     [InlineData("0;\"(\"#,##0\")\"", "F0")]
-    public void Cell_Format_AppendsExcelNegativeFormatSuffixes(string numberFormat, string expected)
+    public void Cell_Format_AppendsExcelDocumentedFormatSuffixes(string numberFormat, string expected)
     {
         var (wb, sheet) = MakeWb((1, 1, new NumberValue(-12)));
         var styleId = wb.RegisterStyle(new CellStyle { NumberFormat = numberFormat });
@@ -398,11 +400,13 @@ public class PhaseA2FunctionTests
     }
 
     [Theory]
-    [InlineData("#,##0;(#,##0)", 1)]
-    [InlineData("#,##0;[Red](#,##0)", 1)]
+    [InlineData("#,##0;(#,##0)", 0)]
+    [InlineData("#,##0;[Red](#,##0)", 0)]
+    [InlineData("(#,##0);-#,##0", 1)]
+    [InlineData("(#,##0)", 1)]
     [InlineData("#,##0;-#,##0", 0)]
-    [InlineData("#,##0;\"(\"#,##0\")\"", 0)]
-    public void Cell_Parentheses_ReportsNegativeNumberFormatParentheses(string numberFormat, double expected)
+    [InlineData("\"(\"#,##0\")\";(#,##0)", 0)]
+    public void Cell_Parentheses_ReportsPositiveOrAllValueParentheses(string numberFormat, double expected)
     {
         var (wb, sheet) = MakeWb((1, 1, new NumberValue(-12)));
         var styleId = wb.RegisterStyle(new CellStyle { NumberFormat = numberFormat });
