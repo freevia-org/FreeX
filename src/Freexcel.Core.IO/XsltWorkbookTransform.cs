@@ -5,15 +5,21 @@ namespace Freexcel.Core.IO;
 
 public static class XsltWorkbookTransform
 {
+    internal const long DefaultMaxOutputBytes = 64L * 1024L * 1024L;
+
     public static MemoryStream TransformToSpreadsheetXml(Stream sourceXml, Stream stylesheet)
+        => TransformToSpreadsheetXml(sourceXml, stylesheet, DefaultMaxOutputBytes);
+
+    internal static MemoryStream TransformToSpreadsheetXml(Stream sourceXml, Stream stylesheet, long maxOutputBytes)
     {
         ArgumentNullException.ThrowIfNull(sourceXml);
         ArgumentNullException.ThrowIfNull(stylesheet);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxOutputBytes, 1);
 
         var transform = LoadStylesheet(stylesheet);
         using var sourceReader = CreateSecureReader(sourceXml);
 
-        var output = new MemoryStream();
+        var output = new BoundedMemoryStream(maxOutputBytes);
         var outputSettings = transform.OutputSettings?.Clone() ?? new XmlWriterSettings();
         try
         {
@@ -29,6 +35,11 @@ public static class XsltWorkbookTransform
         {
             output.Dispose();
             throw new InvalidDataException("The XSLT transform failed. External document access and script are disabled.", ex);
+        }
+        catch (OutputLimitExceededException ex)
+        {
+            output.Dispose();
+            throw new InvalidDataException($"The XSLT transform output exceeded the {maxOutputBytes} byte safety limit.", ex);
         }
 
         output.Position = 0;
@@ -68,4 +79,33 @@ public static class XsltWorkbookTransform
 
         return XmlReader.Create(stream, readerSettings);
     }
+
+    private sealed class BoundedMemoryStream(long maxBytes) : MemoryStream
+    {
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            ThrowIfLimitExceeded(count);
+            base.Write(buffer, offset, count);
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            ThrowIfLimitExceeded(buffer.Length);
+            base.Write(buffer);
+        }
+
+        public override void WriteByte(byte value)
+        {
+            ThrowIfLimitExceeded(1);
+            base.WriteByte(value);
+        }
+
+        private void ThrowIfLimitExceeded(int bytesToWrite)
+        {
+            if (Math.Max(Length, Position + bytesToWrite) > maxBytes)
+                throw new OutputLimitExceededException();
+        }
+    }
+
+    private sealed class OutputLimitExceededException : IOException;
 }
