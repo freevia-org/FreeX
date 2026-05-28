@@ -100,7 +100,8 @@ public partial class MainWindow
     private static IReadOnlyList<FrameworkElement> GetRibbonAdaptiveGroups(StackPanel activePanel) =>
         activePanel.Children
             .OfType<FrameworkElement>()
-            .Where(e => e is not System.Windows.Shapes.Rectangle && !IsRibbonCollapsedGroupButton(e))
+            .Where(e => !IsRibbonCollapsedGroupButton(e) &&
+                        RibbonMetadata.IsRibbonGroup(e))
             .ToList();
 
     private IReadOnlyList<FrameworkElement> GetCachedRibbonAdaptiveGroups(StackPanel activePanel)
@@ -149,7 +150,11 @@ public partial class MainWindow
 
     private double GetRibbonAvailableWidth(StackPanel activePanel)
     {
-        var ribbonScrollViewer = FindVisualAncestor<ScrollViewer>(activePanel);
+        var ribbonScrollViewer = ReferenceEquals(_ribbonAdaptiveControlCachePanel, activePanel)
+            ? _ribbonAdaptiveScrollViewerCache
+            : null;
+        ribbonScrollViewer ??= FindVisualAncestor<ScrollViewer>(activePanel);
+        _ribbonAdaptiveScrollViewerCache = ribbonScrollViewer;
         var availableWidth = ribbonScrollViewer?.ActualWidth > 0
             ? ribbonScrollViewer.ActualWidth
             : ribbonScrollViewer?.ViewportWidth;
@@ -316,29 +321,53 @@ public partial class MainWindow
             button.Margin = footprint.Margin;
             button.Padding = footprint.Padding;
 
-            var textBlockRoot = button.Content as DependencyObject ?? button;
-            var textBlocks = EnumerateVisualDescendants(textBlockRoot)
-                .Concat(EnumerateLogicalDescendants(textBlockRoot))
-                .OfType<TextBlock>()
-                .Distinct();
+            if (TryGetCollapsedRibbonButtonCaption(button, out var caption))
+                ApplyCollapsedRibbonButtonCaptionFootprint(caption, footprint);
 
-            foreach (var textBlock in textBlocks)
-            {
-                if (RibbonMetadata.IsCommandLabel(textBlock))
-                {
-                    textBlock.Visibility = footprint.CaptionVisibility;
-                    textBlock.FontSize = footprint.CaptionFontSize;
-                    textBlock.MaxWidth = footprint.CaptionMaxWidth;
-                    textBlock.TextWrapping = TextWrapping.NoWrap;
-                    textBlock.TextTrimming = TextTrimming.CharacterEllipsis;
-                    textBlock.TextAlignment = TextAlignment.Center;
-                }
-                else if (RibbonMetadata.IsCommandIcon(textBlock) && !RibbonMetadata.IsCollapsedChevron(textBlock))
-                {
-                    textBlock.FontSize = footprint.IconFontSize;
-                }
-            }
+            if (TryGetCollapsedRibbonButtonTextIcon(button, out var icon))
+                icon.FontSize = footprint.IconFontSize;
         }
+    }
+
+    private static bool TryGetCollapsedRibbonButtonCaption(Button button, out TextBlock caption)
+    {
+        caption = null!;
+        if (button.Content is not Panel content)
+            return false;
+
+        caption = content.Children
+            .OfType<TextBlock>()
+            .FirstOrDefault(RibbonMetadata.IsCommandLabel)!;
+        return caption is not null;
+    }
+
+    private static bool TryGetCollapsedRibbonButtonTextIcon(Button button, out TextBlock icon)
+    {
+        icon = null!;
+        if (button.Content is not Panel content)
+            return false;
+
+        icon = content.Children
+            .OfType<TextBlock>()
+            .Concat(content.Children
+                .OfType<Border>()
+                .Select(border => border.Child)
+                .OfType<TextBlock>())
+            .FirstOrDefault(textBlock => RibbonMetadata.IsCommandIcon(textBlock) &&
+                                         !RibbonMetadata.IsCollapsedChevron(textBlock))!;
+        return icon is not null;
+    }
+
+    private static void ApplyCollapsedRibbonButtonCaptionFootprint(
+        TextBlock caption,
+        RibbonCollapsedGroupFootprint footprint)
+    {
+        caption.Visibility = footprint.CaptionVisibility;
+        caption.FontSize = footprint.CaptionFontSize;
+        caption.MaxWidth = footprint.CaptionMaxWidth;
+        caption.TextWrapping = TextWrapping.NoWrap;
+        caption.TextTrimming = TextTrimming.CharacterEllipsis;
+        caption.TextAlignment = TextAlignment.Center;
     }
 
     private void SetCollapsedRibbonButtonFootprintIfNeeded(IReadOnlyList<Button> collapsedButtons, double availableWidth)
@@ -702,26 +731,10 @@ public partial class MainWindow
 
     private static string GetRibbonGroupName(FrameworkElement group)
     {
-        if (group is Grid grid)
-        {
-            foreach (var border in grid.Children.OfType<Border>())
-            {
-                if (Grid.GetRow(border) == 1 &&
-                    border.Child is TextBlock groupLabel &&
-                    !string.IsNullOrWhiteSpace(groupLabel.Text))
-                {
-                    return groupLabel.Text.Trim();
-                }
-            }
-        }
+        if (RibbonMetadata.TryGetGroupName(group, out var groupName))
+            return groupName;
 
-        var label = EnumerateVisualDescendants(group)
-            .OfType<TextBlock>()
-            .LastOrDefault(textBlock => FindVisualAncestor<Border>(textBlock) is not null &&
-                                        FindVisualAncestor<ButtonBase>(textBlock) is null &&
-                                        textBlock.Style is not null);
-
-        return string.IsNullOrWhiteSpace(label?.Text) ? "Commands" : label.Text.Trim();
+        return "Commands";
     }
 
     private static string CreateGroupKeyTip(string groupName, ISet<string>? usedKeyTips = null)
@@ -772,19 +785,13 @@ public partial class MainWindow
             .Distinct()
             .Where(panel => FindVisualAncestor<Button>(panel) is not { } button ||
                             !RibbonMetadata.IsCollapsedGroupButton(button))
-            .OrderByDescending(panel => panel.Children.OfType<Grid>().Count(IsRibbonGroupGrid))
+            .OrderByDescending(panel => panel.Children.OfType<DependencyObject>().Count(RibbonMetadata.IsRibbonGroup))
             .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
-                                     panel.Children.OfType<Grid>().Any(IsRibbonGroupGrid));
+                                     panel.Children.OfType<DependencyObject>().Any(RibbonMetadata.IsRibbonGroup));
     }
 
     private static DependencyObject GetRibbonTabContentRoot(TabItem tabItem) =>
         tabItem.Content as DependencyObject ?? tabItem;
-
-    private static bool IsRibbonGroupGrid(Grid grid) =>
-        grid.Children.OfType<Border>().Any(border =>
-            Grid.GetRow(border) == 1 &&
-            border.Child is TextBlock groupLabel &&
-            !string.IsNullOrWhiteSpace(groupLabel.Text));
 
     private enum RibbonCompactLevel
     {
