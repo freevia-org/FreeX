@@ -162,7 +162,9 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue AscScalar(ScalarValue value) =>
-        TextResult(ConvertToHalfWidth(ToText(value)));
+        TextResult(ConvertDbcsWidthForCurrentCulture()
+            ? ConvertToHalfWidth(ToText(value))
+            : ToText(value));
 
     private static ScalarValue Dbcs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -172,7 +174,9 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue DbcsScalar(ScalarValue value) =>
-        TextResult(ConvertToFullWidth(ToText(value)));
+        TextResult(ConvertDbcsWidthForCurrentCulture()
+            ? ConvertToFullWidth(ToText(value))
+            : ToText(value));
 
     private static ScalarValue Phonetic(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -324,6 +328,19 @@ public static partial class BuiltInFunctions
         }
 
         return sb.ToString();
+    }
+
+    private static bool ConvertDbcsWidthForCurrentCulture() =>
+        IsDbcsCulture(CultureInfo.CurrentCulture) || IsDbcsCulture(CultureInfo.CurrentUICulture);
+
+    private static bool IsDbcsCulture(CultureInfo culture)
+    {
+        if (culture.Name.StartsWith("ja", StringComparison.OrdinalIgnoreCase) ||
+            culture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ||
+            culture.Name.StartsWith("ko", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return culture.TextInfo.ANSICodePage is 932 or 936 or 949 or 950 or 1361;
     }
 
     private static string ConvertToFullWidth(string text)
