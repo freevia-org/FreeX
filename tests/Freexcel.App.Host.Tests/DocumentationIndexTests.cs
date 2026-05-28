@@ -2,6 +2,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 
@@ -80,6 +81,24 @@ public sealed partial class DocumentationIndexTests
         report.Should().NotContain("| Documentation lines under `docs/` |");
         report.Should().NotContain("| Test methods marked `[Fact]` / `[Theory]` |");
         report.Should().NotContain("registered worktrees remain");
+    }
+
+    [Fact]
+    public void NewestStatusReport_ReleaseProgressMetadataMatchesJson()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var repositoryRoot = Directory.GetParent(docsDirectory)!.FullName;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var report = File.ReadAllText(newestStatusReport);
+        using var progressDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(repositoryRoot, "release", "progress.json")));
+        var overallCompletion = progressDocument.RootElement.GetProperty("overallCompletion").GetInt32();
+
+        report.Should().Contain("[release/progress.json](../release/progress.json)");
+        report.Should().Contain($"overallCompletion: {overallCompletion}");
+        report.Should().Contain($"Overall completion estimate is now **{overallCompletion}%**");
+        report.Should().Contain("`v0.7.<run>` stream");
     }
 
     [Fact]
