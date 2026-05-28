@@ -30,7 +30,7 @@ public sealed class FormulaEvaluator
     {
         "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
         "STDEV", "MEDIAN",
-        "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "XOR",
+        "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "XOR", "GCD", "LCM",
         "VAR", "VAR.S", "VARA", "VARP", "VAR.P", "VARPA", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
         "GEOMEAN", "HARMEAN", "AVEDEV",
         "MODE", "MODE.SNGL",
