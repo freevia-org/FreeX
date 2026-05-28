@@ -250,6 +250,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInvalidStepInput();");
         source.Should().Contain("private void FocusInvalidStepInput()");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_stepBox);");
     }
 
     [Fact]
@@ -276,6 +277,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("FocusInvalidStopInput();");
         source.Should().Contain("private void FocusInvalidStopInput()");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_stopBox);");
         source.Should().Contain("Enter a numeric stop value or leave it blank.");
     }
 
