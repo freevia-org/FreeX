@@ -87,6 +87,12 @@ public class PhaseDLambdaTests
     }
 
     [Fact]
+    public void Let_QuotedBindingName_ReturnsValueError()
+    {
+        Assert.Equal(ErrorValue.Value, Eval("=LET(\"x\", 5, x)"));
+    }
+
+    [Fact]
     public void Let_NameManagerCompatibleNames_ReturnCalculation()
     {
         Assert.Equal(8.0, Num(Eval("=LET(_total.1, 5, _total.1+3)")));
