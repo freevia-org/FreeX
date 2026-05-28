@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO;
 using FluentAssertions;
 using Freexcel.App.Host;
 using Freexcel.Core.Model;
@@ -6,6 +8,24 @@ namespace Freexcel.App.Host.Tests;
 
 public sealed class SheetTabListPlannerTests
 {
+    [Fact]
+    public void Build_AvoidsLinqMaterializationOnSheetTabRefreshPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SheetTabListPlanner.cs"));
+        var buildStart = source.IndexOf("public static SheetTabListPlan Build(", StringComparison.Ordinal);
+        var groupedStart = source.IndexOf("public static bool IsWorkbookGrouped(", StringComparison.Ordinal);
+        var buildSource = source[buildStart..groupedStart];
+        var adjacentStart = source.IndexOf("public static SheetId? AdjacentVisibleSheet(", StringComparison.Ordinal);
+        var groupStart = source.IndexOf("public static SheetKeyboardGroupSelectionPlan? SelectAdjacentVisibleSheetGroup(", StringComparison.Ordinal);
+        var adjacentSource = source[adjacentStart..groupStart];
+
+        buildSource.Should().NotContain(".Where(");
+        buildSource.Should().NotContain(".Select(");
+        buildSource.Should().NotContain(".ToList(");
+        adjacentSource.Should().NotContain(".Where(");
+        adjacentSource.Should().NotContain(".ToList(");
+    }
+
     [Fact]
     public void Build_EnsuresAtLeastOneVisibleSheetAndActiveVisibleSheet()
     {
@@ -123,5 +143,32 @@ public sealed class SheetTabListPlannerTests
         plan.Should().NotBeNull();
         plan!.CurrentSheetId.Should().Be(first.Id);
         plan.GroupedSheetIds.Should().Equal(first.Id);
+    }
+
+    [Fact]
+    public void Build_HandlesLargeSheetTabListsWithoutMaterializationPenalty()
+    {
+        var workbook = new Workbook("Book");
+        SheetId currentSheetId = default;
+        for (var index = 0; index < 2_000; index++)
+        {
+            var sheet = workbook.AddSheet($"Sheet{index + 1}");
+            if (index % 5 == 0)
+                sheet.IsHidden = true;
+            if (index == 1_501)
+                currentSheetId = sheet.Id;
+        }
+
+        var grouped = new HashSet<SheetId>();
+        var stopwatch = Stopwatch.StartNew();
+        for (var iteration = 0; iteration < 500; iteration++)
+        {
+            var plan = SheetTabListPlanner.Build(workbook, currentSheetId, grouped);
+            if (plan.CurrentSheetId != currentSheetId || plan.Tabs.Count != 1_600)
+                throw new InvalidOperationException("Sheet tab planner returned an unexpected large-workbook plan.");
+        }
+
+        stopwatch.Stop();
+        stopwatch.ElapsedMilliseconds.Should().BeLessThan(1_500);
     }
 }

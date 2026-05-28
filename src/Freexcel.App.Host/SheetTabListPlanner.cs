@@ -17,19 +17,35 @@ public static class SheetTabListPlanner
         SheetId currentSheetId,
         HashSet<SheetId> groupedSheetIds)
     {
-        if (workbook.Sheets.All(sheet => sheet.IsHidden) && workbook.Sheets.Count > 0)
-            workbook.Sheets[0].IsHidden = false;
-
-        if (workbook.GetSheet(currentSheetId)?.IsHidden == true)
-            currentSheetId = workbook.Sheets.First(sheet => !sheet.IsHidden).Id;
-
-        var visibleSheets = workbook.Sheets.Where(sheet => !sheet.IsHidden).ToList();
-        var visibleIds = visibleSheets.Select(sheet => sheet.Id).ToHashSet();
-        groupedSheetIds.RemoveWhere(id => !visibleIds.Contains(id));
-
-        var tabs = new List<SheetTabViewModel>();
-        foreach (var sheet in visibleSheets)
+        var sheets = workbook.Sheets;
+        var firstVisibleIndex = -1;
+        for (var index = 0; index < sheets.Count; index++)
         {
+            if (!sheets[index].IsHidden)
+            {
+                firstVisibleIndex = index;
+                break;
+            }
+        }
+
+        if (firstVisibleIndex < 0 && sheets.Count > 0)
+        {
+            sheets[0].IsHidden = false;
+            firstVisibleIndex = 0;
+        }
+
+        if (firstVisibleIndex >= 0 && workbook.GetSheet(currentSheetId)?.IsHidden == true)
+            currentSheetId = sheets[firstVisibleIndex].Id;
+
+        groupedSheetIds.RemoveWhere(id => workbook.GetSheet(id)?.IsHidden != false);
+
+        var tabs = new List<SheetTabViewModel>(sheets.Count);
+        for (var index = 0; index < sheets.Count; index++)
+        {
+            var sheet = sheets[index];
+            if (sheet.IsHidden)
+                continue;
+
             if (groupedSheetIds.Count == 0 && sheet.Id == currentSheetId)
                 groupedSheetIds.Add(sheet.Id);
 
@@ -48,8 +64,19 @@ public static class SheetTabListPlanner
         SheetId currentSheetId,
         IReadOnlySet<SheetId> groupedSheetIds)
     {
-        var groupedVisibleSheets = workbook.Sheets.Count(sheet => !sheet.IsHidden && groupedSheetIds.Contains(sheet.Id));
-        return groupedVisibleSheets > 1 && groupedSheetIds.Contains(currentSheetId);
+        if (!groupedSheetIds.Contains(currentSheetId))
+            return false;
+
+        var groupedVisibleSheets = 0;
+        var sheets = workbook.Sheets;
+        for (var index = 0; index < sheets.Count; index++)
+        {
+            var sheet = sheets[index];
+            if (!sheet.IsHidden && groupedSheetIds.Contains(sheet.Id) && ++groupedVisibleSheets > 1)
+                return true;
+        }
+
+        return false;
     }
 
     public static string GenerateUniqueSheetName(Workbook workbook)
@@ -66,16 +93,48 @@ public static class SheetTabListPlanner
 
     public static SheetId? AdjacentVisibleSheet(Workbook workbook, SheetId currentSheetId, int direction)
     {
-        var visibleSheets = workbook.Sheets.Where(sheet => !sheet.IsHidden).ToList();
-        if (visibleSheets.Count == 0)
+        var sheets = workbook.Sheets;
+        SheetId? firstVisible = null;
+        SheetId? secondVisible = null;
+        SheetId? previousVisible = null;
+        var foundCurrent = false;
+
+        for (var index = 0; index < sheets.Count; index++)
+        {
+            var sheet = sheets[index];
+            if (sheet.IsHidden)
+                continue;
+
+            firstVisible ??= sheet.Id;
+            if (firstVisible is not null && secondVisible is null && sheet.Id != firstVisible)
+                secondVisible = sheet.Id;
+
+            if (foundCurrent && direction > 0)
+                return sheet.Id;
+
+            if (sheet.Id == currentSheetId)
+            {
+                if (direction < 0)
+                    return previousVisible ?? sheet.Id;
+
+                if (direction == 0)
+                    return sheet.Id;
+
+                foundCurrent = true;
+            }
+
+            previousVisible = sheet.Id;
+        }
+
+        if (firstVisible is null)
             return null;
 
-        var index = visibleSheets.FindIndex(sheet => sheet.Id == currentSheetId);
-        if (index < 0)
-            index = 0;
+        if (foundCurrent)
+            return previousVisible;
 
-        var nextIndex = Math.Clamp(index + direction, 0, visibleSheets.Count - 1);
-        return visibleSheets[nextIndex].Id;
+        return direction > 0
+            ? secondVisible ?? firstVisible
+            : firstVisible;
     }
 
     public static SheetKeyboardGroupSelectionPlan? SelectAdjacentVisibleSheetGroup(
@@ -84,10 +143,15 @@ public static class SheetTabListPlanner
         SheetId? anchorSheetId,
         int direction)
     {
-        var visibleSheetIds = workbook.Sheets
-            .Where(sheet => !sheet.IsHidden)
-            .Select(sheet => sheet.Id)
-            .ToList();
+        var sheets = workbook.Sheets;
+        var visibleSheetIds = new List<SheetId>(sheets.Count);
+        for (var index = 0; index < sheets.Count; index++)
+        {
+            var sheet = sheets[index];
+            if (!sheet.IsHidden)
+                visibleSheetIds.Add(sheet.Id);
+        }
+
         if (visibleSheetIds.Count == 0)
             return null;
 
