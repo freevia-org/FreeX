@@ -604,6 +604,17 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void HyperlinkTextEntryDialogs_ExposeStableAutomationIdsAndHelpText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextEntryDialogs.cs"));
+
+        source.Should().Contain("AutomationProperties.SetAutomationId(_textBox, CreateAutomationId(title));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_textBox, CreateHelpText(label));");
+        source.Should().Contain("string.Concat(title.Where(char.IsLetterOrDigit)) + \"TextBox\"");
+        source.Should().Contain("$\"Enter {CreateAutomationName(label).ToLowerInvariant()}.\"");
+    }
+
+    [Fact]
     public void HyperlinkDialog_AcceptWarnsAndRefocusesBlankTarget()
     {
         var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
