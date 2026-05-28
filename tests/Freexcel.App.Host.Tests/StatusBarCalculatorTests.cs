@@ -96,6 +96,12 @@ public sealed class StatusBarCalculatorTests
         source.Should().NotContain(
             "GetUsedCells()",
             "status-bar refreshes happen during navigation and should not allocate a full used-cell dictionary");
+        source.Should().NotContain(
+            ".Where(",
+            "whole-column status calculations should avoid LINQ iterator chains in the hot path");
+        source.Should().NotContain(
+            ".Select(",
+            "whole-column status calculations should avoid LINQ iterator chains in the hot path");
     }
 
     [Fact]
