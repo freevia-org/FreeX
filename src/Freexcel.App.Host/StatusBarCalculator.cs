@@ -11,6 +11,9 @@ public static class StatusBarCalculator
 
     public static Stats Calculate(Sheet sheet, GridRange range)
     {
+        if (sheet.GetUsedRange() is not { } usedRange || !usedRange.Overlaps(range))
+            return new Stats(0, 0, 0, null, null, null);
+
         double sum = 0;
         int count = 0;
         int numericalCount = 0;
