@@ -103,6 +103,56 @@ public sealed class AccessibilityCheckerServiceTests
         issue.Message.Should().Be("Chart title should describe the chart.");
     }
 
+    [Fact]
+    public void FindIssues_FlagsLowContrastChartTitleText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            ChartAreaFillColor = new CellColor(130, 130, 130),
+            ChartTitleTextColor = new CellColor(120, 120, 120)
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastChartText).Subject;
+
+        issue.Location.Should().Be("A1:B4");
+        issue.Message.Should().Be("Chart title should have at least 4.5:1 contrast against its background.");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresChartTextWithSufficientContrast()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            ChartAreaFillColor = CellColor.White,
+            ChartTitleTextColor = CellColor.Black,
+            AxisTitleTextColor = CellColor.Black,
+            LegendTextColor = CellColor.Black,
+            LegendFillColor = CellColor.White
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastChartText);
+    }
+
     [Theory]
     [InlineData("Picture 1")]
     [InlineData("Image")]
