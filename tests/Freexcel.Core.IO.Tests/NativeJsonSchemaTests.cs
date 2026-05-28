@@ -89,6 +89,19 @@ public sealed class NativeJsonSchemaTests
         migratedDocument.RootElement.GetProperty("FileFormat").GetString().Should().Be("Freexcel.NativeJsonWorkbook");
     }
 
+    [Theory]
+    [InlineData("""{ "Name": "LegacyWithoutSheets" }""")]
+    [InlineData("""{ "Name": "LegacyWithNoValidSheets", "Sheets": [ { "Name": "" }, null ] }""")]
+    public void Load_AddsDefaultSheetWhenNativeJsonHasNoValidSheets(string json)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.Sheets.Should().ContainSingle();
+        workbook.GetSheetAt(0).Name.Should().Be("Sheet1");
+    }
+
     [Fact]
     public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
     {
