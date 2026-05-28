@@ -31,6 +31,20 @@ public sealed class CommandInventoryDocumentTests
     }
 
     [Fact]
+    public void DrawTab_MenuToolbarDelta_IsExplicitlyTrackedInInventory()
+    {
+        var inventory = LoadInventory();
+        var commandSurfaceDraw = inventory.CommandSurfaceTabs.Single(tab => tab.Name == "Draw");
+        var menuToolbarDraw = inventory.MenuToolbarTabs.Single(tab => tab.Name == "Draw");
+
+        menuToolbarDraw.Implemented.Should().Be(commandSurfaceDraw.Implemented + 1);
+        menuToolbarDraw.Partial.Should().Be(commandSurfaceDraw.Partial);
+        menuToolbarDraw.NotImplemented.Should().Be(commandSurfaceDraw.NotImplemented);
+        menuToolbarDraw.Deferred.Should().Be(commandSurfaceDraw.Deferred);
+        menuToolbarDraw.Excluded.Should().Be(commandSurfaceDraw.Excluded);
+    }
+
+    [Fact]
     public void MenuToolbarCoverageSummary_IsGeneratedFromInventory()
     {
         var inventory = LoadInventory();
