@@ -1,4 +1,3 @@
-using System.Linq;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -24,28 +23,42 @@ public static class StatusBarCalculator
         long totalCells = (long)(range.End.Row - range.Start.Row + 1)
                         * (long)(range.End.Col - range.Start.Col + 1);
 
-        IEnumerable<ScalarValue?> source = totalCells > 10_000
-            ? sheet.EnumerateCells()
-                   .Where(entry => range.Contains(entry.Address))
-                   .Select(entry => entry.Cell.Value)
-            : range.AllCells().Select(a => sheet.GetValue(a));
-
-        foreach (var value in source)
+        if (totalCells > 10_000)
         {
-            if (value is not null and not BlankValue)
-                count++;
-
-            if (value is NumberValue nv)
+            foreach (var (address, cell) in sheet.EnumerateCells())
             {
-                sum += nv.Value;
-                numericalCount++;
-                min = min is null ? nv.Value : Math.Min(min.Value, nv.Value);
-                max = max is null ? nv.Value : Math.Max(max.Value, nv.Value);
+                if (range.Contains(address))
+                    Accumulate(cell.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
             }
+        }
+        else
+        {
+            foreach (var address in range.AllCells())
+                Accumulate(sheet.GetValue(address), ref sum, ref count, ref numericalCount, ref min, ref max);
         }
 
         double? average = numericalCount > 0 ? sum / numericalCount : null;
         return new Stats(sum, count, numericalCount, average, min, max);
+    }
+
+    private static void Accumulate(
+        ScalarValue value,
+        ref double sum,
+        ref int count,
+        ref int numericalCount,
+        ref double? min,
+        ref double? max)
+    {
+        if (value is not BlankValue)
+            count++;
+
+        if (value is NumberValue nv)
+        {
+            sum += nv.Value;
+            numericalCount++;
+            min = min is null ? nv.Value : Math.Min(min.Value, nv.Value);
+            max = max is null ? nv.Value : Math.Max(max.Value, nv.Value);
+        }
     }
 
     public static string FormatNumber(double value)
