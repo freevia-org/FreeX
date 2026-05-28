@@ -114,6 +114,23 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void CalculateRowHeaderWidth_AvoidsLinqMetricScan()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
+        var calculateRowHeaderWidth = source[
+            source.IndexOf("public static double CalculateRowHeaderWidth", StringComparison.Ordinal)..
+            source.IndexOf("private const double ResizeHitZone", StringComparison.Ordinal)];
+
+        calculateRowHeaderWidth.Should().Contain("foreach (var row in viewport.RowMetrics)");
+        calculateRowHeaderWidth.Should().Contain("if (row.Row > maxRow)");
+        calculateRowHeaderWidth.Should().NotContain(".Max(");
+        GridView.CalculateRowHeaderWidth(new ViewportModel(
+            [],
+            [new RowMetric(999, 20, 0), new RowMetric(1_000, 20, 20)],
+            [])).Should().Be(36);
+    }
+
+    [Fact]
     public void RenderSparklines_AvoidsEmptyRenderAllocations()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Overlays.Sparklines.cs"));

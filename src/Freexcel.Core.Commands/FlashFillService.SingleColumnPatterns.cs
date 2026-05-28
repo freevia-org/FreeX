@@ -414,6 +414,16 @@ public static partial class FlashFillService
         return null;
     }
 
+    private static Func<string, string?>? TryFinalWhitespaceToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && tokens.Length >= 2 && e.Expected == tokens[^1]))
+            return null;
+
+        return source => TrySplitWhitespaceTokens(source, out var tokens) && tokens.Length >= 2
+            ? tokens[^1]
+            : null;
+    }
+
     private static Func<string, string?>? TryKnownTitleRemoval(IReadOnlyList<(string Source, string Expected)> examples)
     {
         if (!examples.All(e => TryRemoveKnownNameTitle(e.Source, out var name) && name == e.Expected))

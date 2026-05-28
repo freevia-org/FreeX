@@ -896,7 +896,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             var button = (Button)createButton.Invoke(null, [group, null])!;
 
             RibbonTooltip.GetTitle(button).Should().Be("Page Setup");
-            RibbonTooltip.GetKeyTip(button).Should().Be("PS");
+            RibbonTooltip.GetKeyTip(button).Should().Be("PA");
             button.ContextMenu.Should().NotBeNull();
             button.ContextMenu!.Items.Count.Should().Be(0, "collapsed group menus are populated lazily");
             button.ContextMenu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, button.ContextMenu));
