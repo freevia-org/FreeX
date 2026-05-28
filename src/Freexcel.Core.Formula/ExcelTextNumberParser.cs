@@ -20,10 +20,20 @@ internal static class ExcelTextNumberParser
     {
         var trimmed = text.Trim();
 
-        if (trimmed.EndsWith('%') &&
-            double.TryParse(trimmed[..^1].Trim(), NumberStyles.Any, UsCulture, out var pct))
+        int pctCount = 0;
+        while (trimmed.EndsWith('%'))
         {
-            number = pct / 100.0;
+            pctCount++;
+            trimmed = trimmed[..^1].TrimEnd();
+        }
+
+        if (pctCount > 0 &&
+            double.TryParse(trimmed, NumberStyles.Any, UsCulture, out var pct))
+        {
+            for (int i = 0; i < pctCount; i++)
+                pct /= 100.0;
+
+            number = pct;
             return true;
         }
 
