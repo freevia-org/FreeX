@@ -31,9 +31,11 @@ public sealed class PerformanceReviewMeasurementTests
                 "PERF COLUMN_RESIZE_PREVIEW " +
                 $"steps={result.StepCount} total_ms={result.TotalMilliseconds:F2} " +
                 $"mean_ms={result.MeanMilliseconds:F2} p95_ms={result.P95Milliseconds:F2} " +
-                $"max_ms={result.MaxMilliseconds:F2} allocated_bytes={result.AllocatedBytes:N0}");
+                $"max_ms={result.MaxMilliseconds:F2} allocated_bytes={result.AllocatedBytes:N0} " +
+                $"viewport_gets={result.ViewportCalls:N0}");
 
             result.StepCount.Should().Be(100);
+            result.ViewportCalls.Should().Be(0);
             result.TotalMilliseconds.Should().BeGreaterThan(0);
         });
     }
@@ -190,11 +192,13 @@ public sealed class PerformanceReviewMeasurementTests
     private sealed class ColumnResizePreviewHarness : IDisposable
     {
         private readonly MainWindow _window;
+        private readonly CountingViewportService _viewportService;
         private readonly MethodInfo _onColumnResizing;
 
-        private ColumnResizePreviewHarness(MainWindow window)
+        private ColumnResizePreviewHarness(MainWindow window, CountingViewportService viewportService)
         {
             _window = window;
+            _viewportService = viewportService;
             _onColumnResizing = typeof(MainWindow)
                 .GetMethod("OnColumnResizing", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "OnColumnResizing");
@@ -203,6 +207,7 @@ public sealed class PerformanceReviewMeasurementTests
         public MeasurementResult MeasurePreview(int iterations)
         {
             var timings = new List<double>(iterations);
+            _viewportService.Reset();
             var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
             var total = Stopwatch.StartNew();
             for (var i = 0; i < iterations; i++)
@@ -216,7 +221,11 @@ public sealed class PerformanceReviewMeasurementTests
             }
 
             total.Stop();
-            return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+            return MeasurementResult.From(
+                timings,
+                total.Elapsed.TotalMilliseconds,
+                GC.GetAllocatedBytesForCurrentThread() - allocatedBefore,
+                _viewportService.GetViewportCallCount);
         }
 
         public static ColumnResizePreviewHarness Create()
@@ -232,9 +241,10 @@ public sealed class PerformanceReviewMeasurementTests
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
+            var viewportService = new CountingViewportService(new ViewportService());
             var window = new MainWindow(
                 NullLogger<MainWindow>.Instance,
-                new ViewportService(),
+                viewportService,
                 new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
                 new RecalcEngine(graph, evaluator),
                 Array.Empty<IFileAdapter>(),
@@ -248,7 +258,8 @@ public sealed class PerformanceReviewMeasurementTests
             window.Show();
             window.UpdateLayout();
             PumpDispatcher();
-            return new ColumnResizePreviewHarness(window);
+            viewportService.Reset();
+            return new ColumnResizePreviewHarness(window, viewportService);
         }
 
         public void Dispose()
@@ -263,9 +274,14 @@ public sealed class PerformanceReviewMeasurementTests
         double MeanMilliseconds,
         double P95Milliseconds,
         double MaxMilliseconds,
-        long AllocatedBytes)
+        long AllocatedBytes,
+        int ViewportCalls = 0)
     {
-        public static MeasurementResult From(IReadOnlyList<double> timings, double totalMilliseconds, long allocatedBytes)
+        public static MeasurementResult From(
+            IReadOnlyList<double> timings,
+            double totalMilliseconds,
+            long allocatedBytes,
+            int viewportCalls = 0)
         {
             var ordered = timings.OrderBy(value => value).ToArray();
             var p95Index = Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1);
@@ -275,8 +291,25 @@ public sealed class PerformanceReviewMeasurementTests
                 timings.Average(),
                 ordered[p95Index],
                 ordered[^1],
-                allocatedBytes);
+                allocatedBytes,
+                viewportCalls);
         }
+    }
+
+    private sealed class CountingViewportService(IViewportService inner) : IViewportService
+    {
+        public int GetViewportCallCount { get; private set; }
+
+        public ViewportModel GetViewport(Workbook workbook, SheetId sheetId, ViewportRequest request)
+        {
+            GetViewportCallCount++;
+            return inner.GetViewport(workbook, sheetId, request);
+        }
+
+        public CellAddress? HitTest(Workbook workbook, SheetId sheetId, double x, double y, double zoom) =>
+            inner.HitTest(workbook, sheetId, x, y, zoom);
+
+        public void Reset() => GetViewportCallCount = 0;
     }
 
     private sealed class TestCommandContext(Workbook workbook) : ICommandContext
