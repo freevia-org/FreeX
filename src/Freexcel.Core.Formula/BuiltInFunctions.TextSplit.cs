@@ -81,6 +81,9 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue e) return e;
 
         var text = ToText(value);
+        if (text.Length == 0)
+            return TextResult("");
+
         var textLength = ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length;
         if (Math.Abs(options.InstanceNum) > textLength) return ErrorValue.Value;
 
