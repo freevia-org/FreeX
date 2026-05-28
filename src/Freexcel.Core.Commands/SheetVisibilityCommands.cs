@@ -30,7 +30,7 @@ public sealed class SetRowsHiddenCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenRows = Capture(sheet.HiddenRows, _startRow, _endRow);
+        _previousHiddenRows = RangeSnapshot.Capture(sheet.HiddenRows, _startRow, _endRow);
         for (uint row = _startRow; row <= _endRow; row++)
         {
             if (_hidden)
@@ -46,17 +46,9 @@ public sealed class SetRowsHiddenCommand : IWorkbookCommand
     {
         if (_previousHiddenRows is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        Restore(sheet.HiddenRows, _startRow, _endRow, _previousHiddenRows);
+        RangeSnapshot.Restore(sheet.HiddenRows, _startRow, _endRow, _previousHiddenRows);
     }
 
-    private static HashSet<uint> Capture(HashSet<uint> source, uint start, uint end) =>
-        source.Where(i => i >= start && i <= end).ToHashSet();
-
-    private static void Restore(HashSet<uint> target, uint start, uint end, HashSet<uint> snapshot)
-    {
-        target.RemoveWhere(i => i >= start && i <= end);
-        target.UnionWith(snapshot);
-    }
 }
 
 /// <summary>Hides or unhides columns with undo support.</summary>
@@ -87,7 +79,7 @@ public sealed class SetColumnsHiddenCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatColumns) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenCols = Capture(sheet.HiddenCols, _startCol, _endCol);
+        _previousHiddenCols = RangeSnapshot.Capture(sheet.HiddenCols, _startCol, _endCol);
         for (uint col = _startCol; col <= _endCol; col++)
         {
             if (_hidden)
@@ -103,15 +95,7 @@ public sealed class SetColumnsHiddenCommand : IWorkbookCommand
     {
         if (_previousHiddenCols is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        Restore(sheet.HiddenCols, _startCol, _endCol, _previousHiddenCols);
+        RangeSnapshot.Restore(sheet.HiddenCols, _startCol, _endCol, _previousHiddenCols);
     }
 
-    private static HashSet<uint> Capture(HashSet<uint> source, uint start, uint end) =>
-        source.Where(i => i >= start && i <= end).ToHashSet();
-
-    private static void Restore(HashSet<uint> target, uint start, uint end, HashSet<uint> snapshot)
-    {
-        target.RemoveWhere(i => i >= start && i <= end);
-        target.UnionWith(snapshot);
-    }
 }

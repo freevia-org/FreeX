@@ -32,7 +32,7 @@ public sealed class SetRowHeightCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHeights = Capture(sheet.RowHeights, _startRow, _endRow);
+        _previousHeights = RangeSnapshot.Capture(sheet.RowHeights, _startRow, _endRow);
         for (uint row = _startRow; row <= _endRow; row++)
         {
             if (_height.HasValue)
@@ -48,32 +48,12 @@ public sealed class SetRowHeightCommand : IWorkbookCommand
     {
         if (_previousHeights is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        Restore(sheet.RowHeights, _startRow, _endRow, _previousHeights);
+        RangeSnapshot.Restore(sheet.RowHeights, _startRow, _endRow, _previousHeights);
     }
 
     private static bool IsValidRowRange(uint startRow, uint endRow) =>
         startRow >= 1 && endRow <= CellAddress.MaxRow;
 
-    private static Dictionary<uint, double> Capture(Dictionary<uint, double> source, uint start, uint end)
-    {
-        var snapshot = new Dictionary<uint, double>();
-        for (uint i = start; i <= end; i++)
-        {
-            if (source.TryGetValue(i, out var value))
-                snapshot[i] = value;
-        }
-
-        return snapshot;
-    }
-
-    private static void Restore(Dictionary<uint, double> target, uint start, uint end, Dictionary<uint, double> snapshot)
-    {
-        for (uint i = start; i <= end; i++)
-            target.Remove(i);
-
-        foreach (var (key, value) in snapshot)
-            target[key] = value;
-    }
 }
 
 /// <summary>Sets or clears explicit column widths with undo support.</summary>
@@ -106,7 +86,7 @@ public sealed class SetColumnWidthCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatColumns) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousWidths = Capture(sheet.ColumnWidths, _startCol, _endCol);
+        _previousWidths = RangeSnapshot.Capture(sheet.ColumnWidths, _startCol, _endCol);
         for (uint col = _startCol; col <= _endCol; col++)
         {
             if (_width.HasValue)
@@ -122,30 +102,10 @@ public sealed class SetColumnWidthCommand : IWorkbookCommand
     {
         if (_previousWidths is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        Restore(sheet.ColumnWidths, _startCol, _endCol, _previousWidths);
+        RangeSnapshot.Restore(sheet.ColumnWidths, _startCol, _endCol, _previousWidths);
     }
 
     private static bool IsValidColumnRange(uint startCol, uint endCol) =>
         startCol >= 1 && endCol <= CellAddress.MaxCol;
 
-    private static Dictionary<uint, double> Capture(Dictionary<uint, double> source, uint start, uint end)
-    {
-        var snapshot = new Dictionary<uint, double>();
-        for (uint i = start; i <= end; i++)
-        {
-            if (source.TryGetValue(i, out var value))
-                snapshot[i] = value;
-        }
-
-        return snapshot;
-    }
-
-    private static void Restore(Dictionary<uint, double> target, uint start, uint end, Dictionary<uint, double> snapshot)
-    {
-        for (uint i = start; i <= end; i++)
-            target.Remove(i);
-
-        foreach (var (key, value) in snapshot)
-            target[key] = value;
-    }
 }
