@@ -441,6 +441,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth)");
         source.Should().Contain("GetCachedRibbonAdaptiveGroups(activePanel)");
         source.Should().Contain("GetCachedRibbonCollapsedGroupButtons(activePanel, groups, controlCacheKey)");
+        source.Should().Contain("_ribbonAdaptiveScrollViewerCache");
+        source.Should().Contain("ribbonScrollViewer ??= FindVisualAncestor<ScrollViewer>(activePanel)");
         source.Should().Contain("RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth)");
         source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth)");
         source.Should().Contain("CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates)");
@@ -449,6 +451,29 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().NotContain("width <= 2200.0");
         source.Should().NotContain("width += 8.0");
         source.Should().NotContain("RemoveRibbonCollapsedGroupButtons(activePanel)");
+    }
+
+    [Fact]
+    public void RibbonGroupDiscovery_UsesMetadataRatherThanVisualShapeDuringResize()
+    {
+        var ribbonSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
+        var adaptiveSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        var resources = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "MainWindowResources.xaml"));
+        var footprintUpdater = adaptiveSource.Substring(
+            adaptiveSource.IndexOf("private static void SetCollapsedRibbonButtonFootprint", StringComparison.Ordinal),
+            adaptiveSource.IndexOf("private void SetCollapsedRibbonButtonFootprintIfNeeded", StringComparison.Ordinal) -
+            adaptiveSource.IndexOf("private static void SetCollapsedRibbonButtonFootprint", StringComparison.Ordinal));
+
+        ribbonSource.Should().Contain("NormalizeRibbonGroupMetadata();");
+        ribbonSource.Should().Contain("EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>()");
+        ribbonSource.Should().NotContain("EnumerateVisualDescendants(this).OfType<ButtonBase>()");
+        adaptiveSource.Should().Contain("RibbonMetadata.IsRibbonGroup(e)");
+        adaptiveSource.Should().NotContain("System.Windows.Shapes.Rectangle");
+        adaptiveSource.Should().NotContain("FindVisualAncestor<Border>(textBlock)");
+        footprintUpdater.Should().Contain("TryGetCollapsedRibbonButtonCaption(button, out var caption)");
+        footprintUpdater.Should().NotContain("EnumerateVisualDescendants");
+        footprintUpdater.Should().NotContain("EnumerateLogicalDescendants");
+        resources.Should().Contain("Property=\"local:RibbonMetadata.Role\" Value=\"RibbonGroup\"");
     }
 
     [Fact]
@@ -786,6 +811,25 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void RibbonGroupMetadata_IsSeededForEveryVisibleRibbonTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 1100);
+
+                harness.ActiveRibbonGroupNames.Should().NotBeEmpty($"{tab} should expose metadata-backed ribbon groups");
+                harness.ActiveRibbonGroupNames.Should().OnlyContain(
+                    name => !string.IsNullOrWhiteSpace(name) && !string.Equals(name, "Commands", StringComparison.Ordinal),
+                    $"{tab} group names should be seeded from the existing group captions before adaptive layout runs");
+            }
+        });
+    }
+
+    [Fact]
     public void CollapsedRibbonGroupButtons_ShowDropdownGlyph()
     {
         StaTestRunner.Run(() =>
@@ -841,6 +885,14 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
                 .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
+        public IReadOnlyList<string> ActiveRibbonGroupNames =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<DependencyObject>()
+                .Where(RibbonMetadata.IsRibbonGroup)
+                .Select(group => RibbonMetadata.TryGetGroupName(group, out var name) ? name : "")
+                .Where(name => !string.IsNullOrWhiteSpace(name))
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupVisibleLabels =>
@@ -1153,19 +1205,16 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Distinct()
                     .Where(panel => FindVisualAncestor<Button>(panel) is not { } button ||
                                     !RibbonMetadata.IsCollapsedGroupButton(button))
-                    .OrderByDescending(panel => panel.Children.OfType<Grid>().Count(IsRibbonGroupGrid))
+                    .OrderByDescending(panel => panel.Children.OfType<DependencyObject>().Count(RibbonMetadata.IsRibbonGroup))
                     .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
-                                             panel.Children.OfType<Grid>().Any(IsRibbonGroupGrid))
+                                             panel.Children.OfType<DependencyObject>().Any(RibbonMetadata.IsRibbonGroup))
                 : null;
 
         private Grid? FindActiveRibbonGroup(string groupName) =>
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Grid>()
-                .FirstOrDefault(grid => grid.Children
-                    .OfType<Border>()
-                    .Any(border => Grid.GetRow(border) == 1 &&
-                                   border.Child is TextBlock label &&
-                                   string.Equals(label.Text, groupName, StringComparison.Ordinal)));
+                .FirstOrDefault(grid => RibbonMetadata.TryGetGroupName(grid, out var candidate) &&
+                                        string.Equals(candidate, groupName, StringComparison.Ordinal));
 
         public void SetRibbonWidth(double width)
         {
@@ -1442,12 +1491,6 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             return null;
         }
-
-        private static bool IsRibbonGroupGrid(Grid grid) =>
-            grid.Children.OfType<Border>().Any(border =>
-                Grid.GetRow(border) == 1 &&
-                border.Child is TextBlock groupLabel &&
-                !string.IsNullOrWhiteSpace(groupLabel.Text));
 
         private static bool IsEffectivelyVisible(DependencyObject element)
         {

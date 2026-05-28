@@ -74,6 +74,33 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
+    public void GroupName_UsesAttachedMetadataAndDoesNotInferIdentityFromCaptionShape()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var metadataGroup = new Grid();
+            RibbonMetadata.SetRole(metadataGroup, RibbonMetadataRole.RibbonGroup);
+            RibbonMetadata.SetGroupName(metadataGroup, "Clipboard");
+
+            RibbonMetadata.IsRibbonGroup(metadataGroup).Should().BeTrue();
+            RibbonMetadata.TryGetGroupName(metadataGroup, out var metadataName).Should().BeTrue();
+            metadataName.Should().Be("Clipboard");
+
+            var groupLikeGrid = new Grid();
+            var labelBorder = new Border
+            {
+                Child = new TextBlock { Text = "Font" }
+            };
+            Grid.SetRow(labelBorder, 1);
+            groupLikeGrid.Children.Add(labelBorder);
+
+            RibbonMetadata.IsRibbonGroup(groupLikeGrid).Should().BeFalse();
+            RibbonMetadata.TryGetGroupName(groupLikeGrid, out _).Should().BeFalse(
+                "caption shape alone should not make arbitrary grids participate in adaptive ribbon layout");
+        });
+    }
+
+    [Fact]
     public void LegacyRibbonIconChevron_IsNotTreatedAsCommandIconForFootprintScaling()
     {
         StaTestRunner.Run(() =>
