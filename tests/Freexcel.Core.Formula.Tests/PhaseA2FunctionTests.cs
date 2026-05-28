@@ -464,10 +464,15 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
-    public void Cell_Protect_UnprotectedSheet_ReturnsZero()
+    public void Cell_Protect_UnprotectedSheetStillReportsLockedStyle()
     {
         var (wb, sheet) = MakeWb();
-        _eval.Evaluate("=CELL(\"protect\",A1)", sheet, wb).Should().Be(new NumberValue(0));
+        var unlocked = wb.RegisterStyle(new CellStyle { Locked = false });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.GetCell(1, 2)!.StyleId = unlocked;
+
+        _eval.Evaluate("=CELL(\"protect\",A1)", sheet, wb).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=CELL(\"protect\",B1)", sheet, wb).Should().Be(new NumberValue(0));
     }
 
     // ── INFO ─────────────────────────────────────────────────────────────────

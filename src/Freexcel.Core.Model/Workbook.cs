@@ -433,9 +433,30 @@ public sealed class Workbook
     /// <summary>Reorder a sheet from one position to another.</summary>
     public void MoveSheet(int fromIndex, int toIndex)
     {
+        var activeSheetId = GetSheetIdForWorkbookViewIndex(ActiveSheetIndex);
+        var firstVisibleSheetId = GetSheetIdForWorkbookViewIndex(FirstVisibleSheetIndex);
         var sheet = _sheets[fromIndex];
         _sheets.RemoveAt(fromIndex);
         _sheets.Insert(toIndex, sheet);
+        ActiveSheetIndex = GetWorkbookViewIndexForSheetId(activeSheetId);
+        FirstVisibleSheetIndex = GetWorkbookViewIndexForSheetId(firstVisibleSheetId);
+    }
+
+    private SheetId? GetSheetIdForWorkbookViewIndex(int? sheetIndex)
+    {
+        if (sheetIndex is not { } index || index < 0 || index >= _sheets.Count)
+            return null;
+
+        return _sheets[index].Id;
+    }
+
+    private int? GetWorkbookViewIndexForSheetId(SheetId? sheetId)
+    {
+        if (sheetId is null)
+            return null;
+
+        var index = _sheets.FindIndex(sheet => sheet.Id == sheetId.Value);
+        return index < 0 ? null : index;
     }
 }
 

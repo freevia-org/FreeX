@@ -276,6 +276,41 @@ public class WorkbookTests
         wb.ActiveSheetIndex.Should().BeNull();
         wb.FirstVisibleSheetIndex.Should().BeNull();
     }
+
+    [Fact]
+    public void MoveSheet_RemapsWorkbookViewIndexesForMovedSheets()
+    {
+        var wb = new Workbook();
+        var first = wb.AddSheet("First");
+        var second = wb.AddSheet("Second");
+        var third = wb.AddSheet("Third");
+        wb.ActiveSheetIndex = 0;
+        wb.FirstVisibleSheetIndex = 2;
+
+        wb.MoveSheet(0, 2);
+
+        wb.Sheets.Select(sheet => sheet.Id).Should().Equal(second.Id, third.Id, first.Id);
+        wb.ActiveSheetIndex.Should().Be(2);
+        wb.FirstVisibleSheetIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void MoveSheet_RemapsWorkbookViewIndexesWhenAnotherSheetMovesAcrossThem()
+    {
+        var wb = new Workbook();
+        var first = wb.AddSheet("First");
+        var second = wb.AddSheet("Second");
+        var third = wb.AddSheet("Third");
+        var fourth = wb.AddSheet("Fourth");
+        wb.ActiveSheetIndex = 1;
+        wb.FirstVisibleSheetIndex = 2;
+
+        wb.MoveSheet(3, 0);
+
+        wb.Sheets.Select(sheet => sheet.Id).Should().Equal(fourth.Id, first.Id, second.Id, third.Id);
+        wb.ActiveSheetIndex.Should().Be(2);
+        wb.FirstVisibleSheetIndex.Should().Be(3);
+    }
 }
 
 public class SheetTests
