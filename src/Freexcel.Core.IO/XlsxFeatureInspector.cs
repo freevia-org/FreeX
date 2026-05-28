@@ -292,6 +292,12 @@ public static class XlsxFeatureInspector
                 continue;
             }
 
+            if (normalizedType.EndsWith("/model", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.DataModel;
+                continue;
+            }
+
             if (normalizedType.EndsWith("/threadedcomment", StringComparison.Ordinal) ||
                 normalizedType.EndsWith("/person", StringComparison.Ordinal))
             {
@@ -319,6 +325,23 @@ public static class XlsxFeatureInspector
                 normalizedType.Contains("/ui/extensibility", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.CustomRibbonUi;
+                continue;
+            }
+
+            if (normalizedType.EndsWith("/diagramdata", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/diagramlayout", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/diagramquickstyle", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/diagramcolors", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.SmartArtDiagrams;
+                continue;
+            }
+
+            if (normalizedType.EndsWith("/chartsheet", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/dialogsheet", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/xlmacrosheet", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.UnsupportedSheetTypes;
                 continue;
             }
 
