@@ -36,6 +36,7 @@ public static partial class FlashFillService
             ?? TryLabelValueExtraction(examples)
             ?? TryLabelQualifierRemoval(examples)
             ?? TryDelimitedPartReorder(examples)
+            ?? TryExtractFinalDottedToken(examples)
             ?? TryExtractByDelimiter(examples)
             ?? TryPrefixTrim(examples)
             ?? TrySuffixTrim(examples)
