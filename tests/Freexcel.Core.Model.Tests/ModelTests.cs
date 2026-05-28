@@ -314,6 +314,30 @@ public class SheetTests
     }
 
     [Fact]
+    public void GetMergeRegion_DoesNotExpandTallMergedRegionsPerCell()
+    {
+        var sheet = new Sheet(SheetId.New(), "Test");
+        var region = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
+        sheet.AddMergedRegion(region);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+
+        var found = sheet.GetMergeRegion(new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
+
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        found.Should().Be(region);
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(200));
+    }
+
+    [Fact]
     public void ReplaceMergedRegions_MaterializesLazyProjectionBeforeReplacing()
     {
         var sheet = new Sheet(SheetId.New(), "Test");
