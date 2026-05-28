@@ -50,7 +50,7 @@ public partial class PivotValueFilterDialog : Window
                 out var filter,
                 out var error))
         {
-            MessageBox.Show(this, error ?? "Enter a valid value filter.", "Value Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter a valid value filter.", "Value Filter");
             FocusInvalidValueFilterInput(error);
             return;
         }

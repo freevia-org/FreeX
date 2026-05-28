@@ -152,7 +152,7 @@ public sealed class AllowEditRangeDialog : Window
     {
         if (!ProtectionDialogPlanner.TryParseAllowEditRange(_rangeBox.Text, _sheetId, out var range))
         {
-            MessageBox.Show(this, "Enter a valid range.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter a valid range.", Title);
             FocusRangeInput();
             return;
         }

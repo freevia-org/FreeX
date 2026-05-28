@@ -189,7 +189,7 @@ public sealed class HyperlinkDialog : Window
 
     private void ShowInvalidInputWarning(string message)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         _targetBox.Focus();
         _targetBox.SelectAll();
         Keyboard.Focus(_targetBox);

@@ -236,7 +236,7 @@ public sealed partial class AdvancedFilterDialog : Window
                 out var result,
                 out var error))
         {
-            MessageBox.Show(this, error ?? "Enter valid filter ranges.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter valid filter ranges.", Title);
             FocusInvalidRangeInput(error);
             return;
         }

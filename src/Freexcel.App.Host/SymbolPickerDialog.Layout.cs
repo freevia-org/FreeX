@@ -251,7 +251,7 @@ public sealed partial class SymbolPickerDialog
 
     private void ShowInvalidCharacterCodeWarning(TextBox selectedCode)
     {
-        MessageBox.Show(this, "Enter a valid Unicode character code.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, "Enter a valid Unicode character code.", Title);
         selectedCode.Focus();
         selectedCode.SelectAll();
         Keyboard.Focus(selectedCode);

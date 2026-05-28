@@ -59,24 +59,14 @@ public sealed class ShapeGradientDialog : Window
     {
         if (!DrawingInputParser.TryParseRgbColor(_startColorBox.Text, out var startColor))
         {
-            MessageBox.Show(
-                this,
-                "Enter an RGB color as R,G,B.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter an RGB color as R,G,B.", Title);
             FocusInvalidColorInput(_startColorBox);
             return;
         }
 
         if (!DrawingInputParser.TryParseRgbColor(_endColorBox.Text, out var endColor))
         {
-            MessageBox.Show(
-                this,
-                "Enter an RGB color as R,G,B.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter an RGB color as R,G,B.", Title);
             FocusInvalidColorInput(_endColorBox);
             return;
         }

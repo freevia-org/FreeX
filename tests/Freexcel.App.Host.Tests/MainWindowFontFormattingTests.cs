@@ -26,7 +26,8 @@ public sealed class MainWindowFontFormattingTests
                 new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()),
                 [],
                 workbookRef,
-                initialWorkbook);
+                initialWorkbook,
+                NullUserMessageService.Instance);
 
             try
             {

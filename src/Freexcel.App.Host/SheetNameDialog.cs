@@ -77,7 +77,7 @@ public sealed class SheetNameDialog : Window
 
     private void ShowInvalidInputWarning(string message)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         _nameBox.Focus();
         _nameBox.SelectAll();
         Keyboard.Focus(_nameBox);

@@ -76,6 +76,6 @@ public sealed partial class SelectDataSourceDialog
             "Hidden rows and columns are not plotted. Empty cells are shown as gaps.",
             "Hidden and Empty Cell Settings",
             MessageBoxButton.OK,
-            MessageBoxImage.Information);
+            MessageBoxImage.Information); // owner is dynamic (static handler); DialogMessageHelper requires a non-null Window
     }
 }

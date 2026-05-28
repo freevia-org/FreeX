@@ -59,14 +59,14 @@ public sealed class HeaderFooterPictureFormatDialog : Window
     {
         if (!TryParsePositiveSize(_widthBox.Text, out var width))
         {
-            MessageBox.Show(this, "Enter positive width and height values.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter positive width and height values.", Title);
             FocusAndSelect(_widthBox);
             return;
         }
 
         if (!TryParsePositiveSize(_heightBox.Text, out var height))
         {
-            MessageBox.Show(this, "Enter positive width and height values.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter positive width and height values.", Title);
             FocusAndSelect(_heightBox);
             return;
         }

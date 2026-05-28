@@ -366,7 +366,7 @@ public sealed partial class PivotTableOptionsDialog : Window
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
         _tabs.SelectedItem = _layoutTab;
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);

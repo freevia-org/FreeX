@@ -257,7 +257,7 @@ public sealed class MoveChartDialog : Window
         }
         catch (ArgumentException ex)
         {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, ex.Message, Title);
             FocusInvalidTargetName();
             return;
         }

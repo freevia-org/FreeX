@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Media;
 using Freexcel.Core.Model;
 using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
@@ -48,6 +49,25 @@ public partial class GridView : FrameworkElement
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
         TextOptions.SetTextHintingMode(this, TextHintingMode.Fixed);
+    }
+
+    /// <summary>
+    /// Returns a custom automation peer that exposes the grid as a data-grid-style custom
+    /// control so that screen readers announce the name and control type correctly instead
+    /// of the default FrameworkElement peer (which reports a generic "custom" type).
+    /// </summary>
+    protected override AutomationPeer OnCreateAutomationPeer() => new GridViewAutomationPeer(this);
+
+    private sealed class GridViewAutomationPeer(GridView owner) : FrameworkElementAutomationPeer(owner)
+    {
+        protected override AutomationControlType GetAutomationControlTypeCore() =>
+            AutomationControlType.DataGrid;
+
+        protected override string GetClassNameCore() => nameof(GridView);
+
+        protected override bool IsContentElementCore() => true;
+
+        protected override bool IsControlElementCore() => true;
     }
 
     public const double ColHeaderHeight = 18;

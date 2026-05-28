@@ -47,7 +47,7 @@ public partial class PivotValueFieldSettingsDialog : Window
     {
         if (!PivotValueFieldSettingsInputParser.TryParseOptionalNumberFormatId(NumberFormatBox.Text, out var numberFormatId))
         {
-            MessageBox.Show(this, "Number format ID must be a whole number.", "Value Field Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Number format ID must be a whole number.", "Value Field Settings");
             FocusInvalidNumberFormatInput();
             return;
         }
@@ -61,7 +61,7 @@ public partial class PivotValueFieldSettingsDialog : Window
         var baseItem = PivotValueFieldSettingsDialogPlanner.ResolveBaseItem(showValuesAs, BaseItemBox.Text);
         if (!TryValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem, out var showValuesAsError))
         {
-            MessageBox.Show(this, showValuesAsError, "Value Field Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, showValuesAsError, "Value Field Settings");
             FocusInvalidShowValuesAsInput(baseFieldIndex);
             return;
         }

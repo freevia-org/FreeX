@@ -1188,7 +1188,7 @@ public sealed class MainWindowSourceHygieneTests
         File.Exists(commandSourcePath).Should().BeTrue();
         var commandSource = File.ReadAllText(commandSourcePath);
 
-        mainSource.Should().NotContain("private static void ShowCommandError(");
+        mainSource.Should().NotContain("void ShowCommandError(");
         mainSource.Should().NotContain("private bool TryExecuteCommand(");
         mainSource.Should().NotContain("private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds(");
         mainSource.Should().NotContain("private bool TryExecuteEditCells(");
@@ -1199,7 +1199,7 @@ public sealed class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void ExecuteRepeatLast(");
         mainSource.Should().NotContain("private IWorkbookCommand CreateSingleCellEditCommand(");
 
-        commandSource.Should().Contain("private static void ShowCommandError(");
+        commandSource.Should().Contain("private void ShowCommandError(");
         commandSource.Should().Contain("private bool TryExecuteCommand(");
         commandSource.Should().Contain("private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds(");
         commandSource.Should().Contain("private bool TryExecuteEditCells(");
@@ -2846,6 +2846,42 @@ public sealed class MainWindowSourceHygieneTests
         }
 
         throw new InvalidOperationException($"Could not find the end of {signature}.");
+    }
+
+    [Fact]
+    public void MainWindowCommandPartials_UseMessageServiceNotDirectMessageBox()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+
+        // Verify the service wiring exists in the constructor.
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        mainSource.Should().Contain("IUserMessageService messageService");
+        mainSource.Should().Contain("_messageService = messageService;");
+
+        // Each migrated partial must not call MessageBox.Show directly.
+        foreach (var partial in new[]
+        {
+            "MainWindow.CellsCommands.cs",
+            "MainWindow.ChartCommands.cs",
+            "MainWindow.CommandExecution.cs",
+            "MainWindow.DataCommands.cs",
+            "MainWindow.DataFilterCommands.cs",
+            "MainWindow.FormulaCommands.cs",
+            "MainWindow.HomeEditing.cs",
+            "MainWindow.PageLayout.cs",
+            "MainWindow.PivotChartCommands.cs",
+            "MainWindow.PivotCommands.cs",
+            "MainWindow.ReviewCommands.cs",
+            "MainWindow.ScenarioCommands.cs",
+            "MainWindow.SheetTabs.cs"
+        })
+        {
+            var partialPath = Path.Combine(appHostDirectory, partial);
+            if (!File.Exists(partialPath)) continue;
+            var partialSource = File.ReadAllText(partialPath);
+            partialSource.Should()
+                .NotContain("MessageBox.Show(", because: $"{partial} should delegate to _messageService");
+        }
     }
 
     private static int CountOccurrences(string source, string value)

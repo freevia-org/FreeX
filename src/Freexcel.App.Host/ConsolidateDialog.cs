@@ -152,7 +152,7 @@ public sealed partial class ConsolidateDialog : Window
                 out var references,
                 out var error))
         {
-            MessageBox.Show(this, error ?? "Enter a valid source range.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter a valid source range.", Title);
             FocusReferenceInput();
             return;
         }
@@ -186,7 +186,7 @@ public sealed partial class ConsolidateDialog : Window
     {
         if (HasPendingReferenceText(_referencesList.Items.Cast<string>(), _referenceBox.Text))
         {
-            MessageBox.Show(this, "Add the reference before clicking OK.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Add the reference before clicking OK.", Title);
             FocusPendingReferenceInput();
             return;
         }
@@ -203,7 +203,7 @@ public sealed partial class ConsolidateDialog : Window
                 out var result,
                 out var error))
         {
-            MessageBox.Show(this, error ?? "Enter valid consolidation ranges.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter valid consolidation ranges.", Title);
             FocusInvalidFinalValidation(error);
             return;
         }

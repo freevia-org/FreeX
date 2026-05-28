@@ -281,7 +281,8 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
                 new RecalcEngine(graph, evaluator),
                 [],
                 workbookRef,
-                workbook)
+                workbook,
+                NullUserMessageService.Instance)
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,

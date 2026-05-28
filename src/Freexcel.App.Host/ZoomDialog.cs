@@ -89,7 +89,7 @@ public sealed class ZoomDialog : Window
         var input = selectedPreset ?? _zoomBox.Text;
         if (!TryCreateResult(input, out var result, out var error))
         {
-            MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter a valid zoom percent.", Title);
             _customZoomButton.IsChecked = true;
             _zoomBox.Focus();
             _zoomBox.SelectAll();
