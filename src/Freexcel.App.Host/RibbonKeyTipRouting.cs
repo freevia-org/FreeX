@@ -23,9 +23,10 @@ public static class RibbonKeyTipRouting
         if (string.IsNullOrWhiteSpace(keyTip))
             return null;
 
+        var normalizedKeyTip = NormalizeKeyTip(keyTip);
         var candidates = elements.ToList();
         var matches = candidates
-            .Where(element => string.Equals(RibbonTooltip.GetKeyTip(element), keyTip, StringComparison.OrdinalIgnoreCase))
+            .Where(element => string.Equals(NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)), normalizedKeyTip, StringComparison.OrdinalIgnoreCase))
             .Take(2)
             .ToList();
 
@@ -33,9 +34,9 @@ public static class RibbonKeyTipRouting
             return matches[0];
 
         var longerMatchExists = candidates.Any(element =>
-            RibbonTooltip.GetKeyTip(element) is { } candidate &&
-            candidate.Length > keyTip.Length &&
-            candidate.StartsWith(keyTip, StringComparison.OrdinalIgnoreCase));
+            NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)) is { } candidate &&
+            candidate.Length > normalizedKeyTip.Length &&
+            candidate.StartsWith(normalizedKeyTip, StringComparison.OrdinalIgnoreCase));
 
         if (longerMatchExists)
             return null;
@@ -49,10 +50,14 @@ public static class RibbonKeyTipRouting
         if (string.IsNullOrWhiteSpace(keyTipPrefix))
             return false;
 
+        var normalizedPrefix = NormalizeKeyTip(keyTipPrefix);
         return elements.Any(element =>
-            RibbonTooltip.GetKeyTip(element) is { } keyTip &&
-            keyTip.StartsWith(keyTipPrefix, StringComparison.OrdinalIgnoreCase));
+            NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)) is { } keyTip &&
+            keyTip.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static string? NormalizeKeyTip(string? keyTip) =>
+        string.IsNullOrWhiteSpace(keyTip) ? null : keyTip.Trim();
 
     private static IEnumerable<MenuItem> FlattenMenuItems(IEnumerable<MenuItem> menuItems)
     {

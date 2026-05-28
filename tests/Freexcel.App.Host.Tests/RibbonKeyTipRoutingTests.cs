@@ -59,6 +59,20 @@ public sealed class RibbonKeyTipRoutingTests
         });
     }
 
+    [Fact]
+    public void CommandRouting_NormalizesWhitespaceInKeyTips()
+    {
+        RunSta(() =>
+        {
+            var button = CreateButton(" FX ");
+
+            RibbonKeyTipRouting.ResolveKeyTipElement([button], " f ").Should().BeNull(
+                "F remains a prefix while the full command keytip is still pending");
+            RibbonKeyTipRouting.HasKeyTipPrefix([button], " f ").Should().BeTrue();
+            RibbonKeyTipRouting.ResolveKeyTipElement([button], " fx ").Should().BeSameAs(button);
+        });
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData(" ")]
@@ -139,6 +153,22 @@ public sealed class RibbonKeyTipRoutingTests
             parent.Items.Add(CreateMenuItem("TA"));
 
             RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([parent], "TA").Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void MenuRouting_NormalizesWhitespaceInNestedKeyTips()
+    {
+        RunSta(() =>
+        {
+            var parent = CreateMenuItem(" H ");
+            var child = CreateMenuItem(" HG ");
+            parent.Items.Add(child);
+
+            RibbonKeyTipRouting.ResolveMenuItem([parent], " h ").Should().BeNull(
+                "parent menu keytips should still wait for padded nested choices after normalization");
+            RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([parent], " hg ").Should().BeTrue();
+            RibbonKeyTipRouting.ResolveMenuItem([parent], " hg ").Should().BeSameAs(child);
         });
     }
 
