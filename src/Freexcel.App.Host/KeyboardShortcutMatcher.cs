@@ -212,6 +212,7 @@ public enum KeyboardCommandShortcut
     InsertCurrentDate,
     InsertCurrentTime,
     ToggleShowFormulas,
+    ToggleOutlineSymbols,
     ActivatePreviousSheet,
     ActivateNextSheet,
     SelectPreviousSheetGroup,

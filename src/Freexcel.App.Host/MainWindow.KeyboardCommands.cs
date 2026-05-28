@@ -25,6 +25,7 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertCurrentDate, (_, _) => InsertCurrentDateOrTime(insertTime: false));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertCurrentTime, (_, _) => InsertCurrentDateOrTime(insertTime: true));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleShowFormulas, ShowFormulasBtn_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleOutlineSymbols, (_, _) => ToggleOutlineSymbolsShortcut());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ActivatePreviousSheet, (_, _) => ActivateAdjacentVisibleSheet(-1));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ActivateNextSheet, (_, _) => ActivateAdjacentVisibleSheet(1));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SelectPreviousSheetGroup, (_, _) => SelectAdjacentVisibleSheetGroup(-1));
