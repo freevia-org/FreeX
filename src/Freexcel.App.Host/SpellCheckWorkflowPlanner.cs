@@ -8,11 +8,22 @@ public static class SpellCheckWorkflowPlanner
     public static IReadOnlyList<SpellingIssue> FilterIssues(
         IEnumerable<SpellingIssue> issues,
         ISet<string> ignoredWords,
-        ISet<(CellAddress Address, string Word)> ignoredIssues) =>
-        issues
-            .Where(issue => !ignoredWords.Contains(issue.Word))
-            .Where(issue => !ignoredIssues.Contains((issue.Address, issue.Word)))
-            .ToList();
+        ISet<(CellAddress Address, string Word)> ignoredIssues)
+    {
+        var filtered = new List<SpellingIssue>();
+        foreach (var issue in issues)
+        {
+            if (ignoredWords.Contains(issue.Word) ||
+                ignoredIssues.Contains((issue.Address, issue.Word)))
+            {
+                continue;
+            }
+
+            filtered.Add(issue);
+        }
+
+        return filtered;
+    }
 
     public static (CellAddress Address, Cell NewCell) BuildReplacementEdit(
         SpellingIssue issue,

@@ -27,6 +27,34 @@ public sealed class SpellCheckWorkflowPlannerTests
     }
 
     [Fact]
+    public void FilterIssues_ScansLargeIssueListsInOnePass()
+    {
+        var sheet = SheetId.New();
+        var issues = Enumerable.Range(0, 5_000)
+            .Select(index => Issue(
+                new CellAddress(sheet, (uint)(index + 1), 1),
+                index % 5 == 0 ? "adn" : "teh",
+                $"{index} issue"))
+            .ToArray();
+        var ignoredIssues = issues
+            .Where((_, index) => index % 7 == 0)
+            .Select(issue => (issue.Address, issue.Word))
+            .ToHashSet();
+
+        var filtered = SpellCheckWorkflowPlanner.FilterIssues(
+            issues,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "adn" },
+            ignoredIssues);
+
+        filtered.Should().HaveCount(3_428);
+        foreach (var issue in filtered)
+        {
+            issue.Word.Equals("adn", StringComparison.OrdinalIgnoreCase).Should().BeFalse();
+            ignoredIssues.Contains((issue.Address, issue.Word)).Should().BeFalse();
+        }
+    }
+
+    [Fact]
     public void BuildReplacementEdit_AppliesCorrectionAsTextCellEdit()
     {
         var address = new CellAddress(SheetId.New(), 4, 2);
@@ -88,7 +116,9 @@ public sealed class SpellCheckWorkflowPlannerTests
             "Freexcel.App.Host",
             "SpellCheckWorkflowPlanner.cs"));
 
+        source.Should().Contain("var filtered = new List<SpellingIssue>();");
         source.Should().Contain("var editedAddresses = new HashSet<CellAddress>();");
+        source.Should().NotContain(".Where(");
         source.Should().NotContain(".GroupBy(");
     }
 
