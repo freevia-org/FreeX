@@ -35,7 +35,32 @@ internal static class XlsxCorpusFixtureFactory
         "generated-charts-001",
         "generated-pivots-001",
         "generated-structured-tables-001",
-        "generated-protection-page-setup-001"
+        "generated-protection-page-setup-001",
+        "generated-named-ranges-deep-003",
+        "generated-cf-multi-rules-003",
+        "generated-charts-multi-series-003",
+        "generated-dv-edge-cases-003",
+        "generated-merged-cells-formulas-003",
+        "generated-cross-sheet-refs-advanced-003",
+        "generated-array-formulas-003",
+        "generated-chart-scatter-bubble-003",
+        "generated-pivot-calculated-fields-003",
+        "generated-table-structured-refs-003",
+        "generated-formatting-advanced-003",
+        "generated-sparklines-advanced-003",
+        "generated-protection-advanced-003",
+        "generated-cf-with-dxf-styles-003",
+        "generated-formulas-cached-003",
+        "generated-chart-pie-doughnut-003",
+        "generated-hyperlinks-advanced-003",
+        "generated-comments-advanced-003",
+        "generated-table-autofilter-003",
+        "generated-multiple-sheets-003",
+        "generated-number-formats-003",
+        "generated-validation-messages-003",
+        "generated-row-column-groups-003",
+        "generated-mixed-chart-types-003",
+        "generated-large-named-ranges-003"
     };
 
     public static bool CanCreate(string id) => SupportedIds.Contains(id);
@@ -105,6 +130,12 @@ internal static class XlsxCorpusFixtureFactory
         "generated-embedded-objects-001" => true,
         "generated-custom-xml-001" => true,
         "generated-custom-docprops-001" => true,
+        "generated-cf-retention-package-003" => true,
+        "generated-chart-series-count-003" => true,
+        "generated-dv-count-package-003" => true,
+        "generated-table-ref-formulas-package-003" => true,
+        "generated-cross-sheet-range-package-003" => true,
+        "generated-named-range-count-package-003" => true,
         _ => false
     };
 
@@ -139,6 +170,31 @@ internal static class XlsxCorpusFixtureFactory
         "generated-pivots-001" => CreatePivots(),
         "generated-structured-tables-001" => CreateStructuredTables(),
         "generated-protection-page-setup-001" => CreateProtectionAndPageSetup(),
+        "generated-named-ranges-deep-003" => CreateNamedRangesDeep(),
+        "generated-cf-multi-rules-003" => CreateCfMultiRules(),
+        "generated-charts-multi-series-003" => CreateChartsMultiSeries(),
+        "generated-dv-edge-cases-003" => CreateDvEdgeCases(),
+        "generated-merged-cells-formulas-003" => CreateMergedCellsFormulas(),
+        "generated-cross-sheet-refs-advanced-003" => CreateCrossSheetRefsAdvanced(),
+        "generated-array-formulas-003" => CreateArrayFormulas(),
+        "generated-chart-scatter-bubble-003" => CreateChartScatterBubble(),
+        "generated-pivot-calculated-fields-003" => CreatePivotCalculatedFields(),
+        "generated-table-structured-refs-003" => CreateTableStructuredRefs(),
+        "generated-formatting-advanced-003" => CreateFormattingAdvanced(),
+        "generated-sparklines-advanced-003" => CreateSparklinesAdvanced(),
+        "generated-protection-advanced-003" => CreateProtectionAdvanced(),
+        "generated-cf-with-dxf-styles-003" => CreateCfWithDxfStyles(),
+        "generated-formulas-cached-003" => CreateFormulasCached(),
+        "generated-chart-pie-doughnut-003" => CreateChartPieDoughnut(),
+        "generated-hyperlinks-advanced-003" => CreateHyperlinksAdvanced(),
+        "generated-comments-advanced-003" => CreateCommentsAdvanced(),
+        "generated-table-autofilter-003" => CreateTableAutoFilter(),
+        "generated-multiple-sheets-003" => CreateMultipleSheets(),
+        "generated-number-formats-003" => CreateNumberFormats(),
+        "generated-validation-messages-003" => CreateValidationMessages(),
+        "generated-row-column-groups-003" => CreateRowColumnGroups(),
+        "generated-mixed-chart-types-003" => CreateMixedChartTypes(),
+        "generated-large-named-ranges-003" => CreateLargeNamedRanges(),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated XLSX corpus fixture exists for this id.")
     };
 
@@ -805,6 +861,121 @@ internal static class XlsxCorpusFixtureFactory
               </property>
             </Properties>
             """)),
+        "generated-cf-retention-package-003" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1"><c r="A1"><v>10</v></c></row>
+                <row r="2"><c r="A2"><v>20</v></c></row>
+                <row r="3"><c r="A3"><v>30</v></c></row>
+              </sheetData>
+              <conditionalFormatting sqref="A1:A3">
+                <cfRule type="cellIs" priority="1" operator="greaterThan" dxfId="0"><formula>25</formula></cfRule>
+                <cfRule type="cellIs" priority="2" operator="lessThan" dxfId="1"><formula>15</formula></cfRule>
+                <cfRule type="cellIs" priority="3" operator="equal" dxfId="0"><formula>20</formula></cfRule>
+                <cfRule type="formula" priority="4" dxfId="1"><formula>MOD(ROW(),2)=0</formula></cfRule>
+                <cfRule type="top10" priority="5" dxfId="0" rank="1"/>
+                <cfRule type="top10" priority="6" dxfId="1" rank="1" bottom="1"/>
+                <cfRule type="duplicateValues" priority="7" dxfId="0"/>
+                <cfRule type="uniqueValues" priority="8" dxfId="1"/>
+                <cfRule type="containsText" priority="9" operator="containsText" text="A" dxfId="0"><formula>NOT(ISERROR(SEARCH("A",A1)))</formula></cfRule>
+                <cfRule type="timePeriod" priority="10" timePeriod="last7Days" dxfId="1"/>
+                <cfRule type="aboveAverage" priority="11" dxfId="0"/>
+                <cfRule type="aboveAverage" priority="12" dxfId="1" aboveAverage="0"/>
+                <cfRule type="colorScale" priority="13"><colorScale><cfvo type="min"/><cfvo type="max"/><color rgb="FFF8696B"/><color rgb="FF63BE7B"/></colorScale></cfRule>
+                <cfRule type="dataBar" priority="14"><dataBar><cfvo type="min"/><cfvo type="max"/><color rgb="FF638EC6"/></dataBar></cfRule>
+                <cfRule type="iconSet" priority="15"><iconSet iconSet="3Arrows"/></cfRule>
+                <cfRule type="cellIs" priority="16" operator="notEqual" dxfId="0"><formula>0</formula></cfRule>
+              </conditionalFormatting>
+            </worksheet>
+            """)),
+        "generated-chart-series-count-003" => CreatePackage(("xl/charts/chart1.xml", """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:grouping val="clustered"/>
+                    <c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx></c:ser>
+                    <c:ser><c:idx val="1"/><c:order val="1"/><c:tx><c:strRef><c:f>Sheet1!$C$1</c:f></c:strRef></c:tx></c:ser>
+                    <c:ser><c:idx val="2"/><c:order val="2"/><c:tx><c:strRef><c:f>Sheet1!$D$1</c:f></c:strRef></c:tx></c:ser>
+                    <c:ser><c:idx val="3"/><c:order val="3"/><c:tx><c:strRef><c:f>Sheet1!$E$1</c:f></c:strRef></c:tx></c:ser>
+                    <c:ser><c:idx val="4"/><c:order val="4"/><c:tx><c:strRef><c:f>Sheet1!$F$1</c:f></c:strRef></c:tx></c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """)),
+        "generated-dv-count-package-003" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData><row r="1"><c r="A1" t="str"><v>Data</v></c></row></sheetData>
+              <dataValidations count="10">
+                <dataValidation type="list" sqref="B2:B10"><formula1>"A,B,C"</formula1></dataValidation>
+                <dataValidation type="whole" operator="between" sqref="C2:C10"><formula1>1</formula1><formula2>100</formula2></dataValidation>
+                <dataValidation type="decimal" operator="greaterThan" sqref="D2:D10"><formula1>0</formula1></dataValidation>
+                <dataValidation type="date" operator="greaterThanOrEqual" sqref="E2:E10"><formula1>DATE(2026,1,1)</formula1></dataValidation>
+                <dataValidation type="time" operator="between" sqref="F2:F10"><formula1>TIME(8,0,0)</formula1><formula2>TIME(18,0,0)</formula2></dataValidation>
+                <dataValidation type="textLength" operator="lessThanOrEqual" sqref="G2:G10"><formula1>50</formula1></dataValidation>
+                <dataValidation type="custom" sqref="H2:H10"><formula1>LEN(H2)>0</formula1></dataValidation>
+                <dataValidation type="list" sqref="I2:I10"><formula1>"Yes,No"</formula1></dataValidation>
+                <dataValidation type="whole" operator="greaterThan" sqref="J2:J10"><formula1>0</formula1></dataValidation>
+                <dataValidation type="decimal" operator="lessThan" sqref="K2:K10"><formula1>1000</formula1></dataValidation>
+              </dataValidations>
+            </worksheet>
+            """)),
+        "generated-table-ref-formulas-package-003" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1">
+                  <c r="A1" t="str"><v>Item</v></c>
+                  <c r="B1" t="str"><v>Price</v></c>
+                  <c r="C1" t="str"><v>Qty</v></c>
+                  <c r="D1" t="str"><v>Total</v></c>
+                </row>
+                <row r="2">
+                  <c r="A2" t="str"><v>Alpha</v></c>
+                  <c r="B2"><v>10</v></c>
+                  <c r="C2"><v>5</v></c>
+                  <c r="D2"><f>SalesTable[@Price]*SalesTable[@Qty]</f><v>50</v></c>
+                </row>
+                <row r="3">
+                  <c r="A3" t="str"><v>Beta</v></c>
+                  <c r="B3"><v>20</v></c>
+                  <c r="C3"><v>3</v></c>
+                  <c r="D3"><f>SalesTable[@Price]*SalesTable[@Qty]</f><v>60</v></c>
+                </row>
+              </sheetData>
+            </worksheet>
+            """)),
+        "generated-cross-sheet-range-package-003" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1"><c r="A1" t="str"><v>Region</v></c><c r="B1" t="str"><v>Sales</v></c></row>
+                <row r="2"><c r="A2" t="str"><v>North</v></c><c r="B2"><v>100</v></c></row>
+                <row r="3"><c r="A3" t="str"><v>South</v></c><c r="B3"><v>125</v></c></row>
+                <row r="5"><c r="A5" t="str"><v>Summary</v></c></row>
+                <row r="6"><c r="A6"><f>SUMIF(A2:A3,"North",B2:B3)</f><v>100</v></c></row>
+                <row r="7"><c r="A7"><f>SUMIF(A2:A3,"South",B2:B3)</f><v>125</v></c></row>
+              </sheetData>
+            </worksheet>
+            """)),
+        "generated-named-range-count-package-003" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <definedNames>
+                <definedName name="Range01">Sheet1!$A$1:$A$3</definedName>
+                <definedName name="Range02">Sheet1!$B$1:$B$3</definedName>
+                <definedName name="Range03">Sheet1!$C$1:$C$3</definedName>
+                <definedName name="Range04">Sheet1!$D$1:$D$3</definedName>
+                <definedName name="Range05">Sheet1!$E$1:$E$3</definedName>
+                <definedName name="Range06">Sheet1!$F$1:$F$3</definedName>
+                <definedName name="Range07">Sheet1!$G$1:$G$3</definedName>
+                <definedName name="Range08">Sheet1!$H$1:$H$3</definedName>
+                <definedName name="Range09">Sheet1!$I$1:$I$3</definedName>
+                <definedName name="Range10">Sheet1!$J$1:$J$3</definedName>
+                <definedName name="Range11">Sheet1!$K$1:$K$3</definedName>
+                <definedName name="Range12">Sheet1!$L$1:$L$3</definedName>
+              </definedNames>
+            </workbook>
+            """)),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated known-gap XLSX package fixture exists for this id.")
     };
 
@@ -923,7 +1094,13 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-custom-sheet-views-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-extension-list-001", StringComparison.OrdinalIgnoreCase) &&
-         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase));
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-table-ref-formulas-package-003", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-cross-sheet-range-package-003", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-named-range-count-package-003", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase));
 
     private static void EnsureKnownGapContentTypeOverrides(ZipArchive archive, IReadOnlyCollection<string> partNames)
     {
@@ -1322,6 +1499,30 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-unsupported-sheet-types-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyUnsupportedSheetTypesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-table-ref-formulas-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetTableRefFormulasFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-cross-sheet-range-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetCrossSheetRangeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-named-range-count-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyNamedRangeCountFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-chart-series-count-003", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyChartSeriesCountFixup(archive);
             return;
         }
 
@@ -4253,6 +4454,640 @@ internal static class XlsxCorpusFixtureFactory
         hidden.IsVeryHidden = true;
         hidden.CodeName = "HiddenMeta";
         hidden.TabColor = new CellColor(255, 192, 0);
+        return workbook;
+    }
+
+    private static void ApplyWorksheetTableRefFormulasFixup(ZipArchive archive)
+    {
+        // Table-ref formulas fixture: worksheet XML already in place via merge-through fixup; no additional fixup needed
+    }
+
+    private static void ApplyWorksheetCrossSheetRangeFixup(ZipArchive archive)
+    {
+        // Cross-sheet range fixture: worksheet XML already in place via merge-through fixup; no additional fixup needed
+    }
+
+    private static void ApplyNamedRangeCountFixup(ZipArchive archive)
+    {
+        // Named range count fixture: workbook XML already in place via merge-through fixup; apply workbook fixup
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null) return;
+        var workbookXml = LoadPackageXml(workbookEntry);
+
+        // Keep the sheets element from the Freexcel-saved workbook but add defined names
+        var definedNamesElement = workbookXml.Root?.Element(workbookNs + "definedNames");
+        if (definedNamesElement is null) return;
+
+        // Defined names are already in the XML via merge-through
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void ApplyChartSeriesCountFixup(ZipArchive archive)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(contentTypes, "/xl/charts/chart1.xml",
+                "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
+            EnsureContentTypeOverride(contentTypes, "/xl/drawings/drawing1.xml",
+                "application/vnd.openxmlformats-officedocument.drawing+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var drawingRelId = "rIdFreexcelChartSeriesCountDrawing1";
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            if (worksheetXml.Root?.Element(worksheetNs + "drawing") is null)
+            {
+                worksheetXml.Root?.Add(new XElement(worksheetNs + "drawing",
+                    new XAttribute(officeRelNs + "id", drawingRelId)));
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+            }
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(worksheetRelsXml, drawingRelId,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+            "../drawings/drawing1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        var drawingRelsPath = "xl/drawings/_rels/drawing1.xml.rels";
+        var drawingRelsXml = archive.GetEntry(drawingRelsPath) is { } drawingRelsEntry
+            ? LoadPackageXml(drawingRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(drawingRelsXml, "rIdFreexcelChart1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+            "../charts/chart1.xml");
+        ReplacePackageXml(archive, drawingRelsPath, drawingRelsXml);
+
+        var drawingPath = "xl/drawings/drawing1.xml";
+        if (archive.GetEntry(drawingPath) is null)
+        {
+            XNamespace xdrNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            XNamespace aDrawNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace r2Ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            var drawingXml = new XDocument(
+                new XElement(xdrNs + "wsDr",
+                    new XAttribute(XNamespace.Xmlns + "xdr", xdrNs.NamespaceName),
+                    new XAttribute(XNamespace.Xmlns + "a", aDrawNs.NamespaceName),
+                    new XAttribute(XNamespace.Xmlns + "r", r2Ns.NamespaceName),
+                    new XElement(xdrNs + "twoCellAnchor",
+                        new XElement(xdrNs + "from",
+                            new XElement(xdrNs + "col", "0"), new XElement(xdrNs + "colOff", "0"),
+                            new XElement(xdrNs + "row", "1"), new XElement(xdrNs + "rowOff", "0")),
+                        new XElement(xdrNs + "to",
+                            new XElement(xdrNs + "col", "7"), new XElement(xdrNs + "colOff", "0"),
+                            new XElement(xdrNs + "row", "15"), new XElement(xdrNs + "rowOff", "0")),
+                        new XElement(xdrNs + "graphicFrame",
+                            new XElement(xdrNs + "nvGraphicFramePr",
+                                new XElement(xdrNs + "cNvPr", new XAttribute("id", "2"), new XAttribute("name", "Chart 1")),
+                                new XElement(xdrNs + "cNvGraphicFramePr")),
+                            new XElement(xdrNs + "xfrm"),
+                            new XElement(aDrawNs + "graphic",
+                                new XElement(aDrawNs + "graphicData",
+                                    new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
+                                    new XElement(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/chart") + "chart",
+                                        new XAttribute(r2Ns + "id", "rIdFreexcelChart1"))))),
+                        new XElement(xdrNs + "clientData"))));
+            ReplacePackageXml(archive, drawingPath, drawingXml);
+        }
+    }
+
+    private static Workbook CreateNamedRangesDeep()
+    {
+        var workbook = NewWorkbook("generated-named-ranges-deep-003");
+        var data = workbook.AddSheet("Data");
+        var calc = workbook.AddSheet("Calc");
+        Set(data, "A1", new TextValue("North"));
+        Set(data, "B1", new NumberValue(100));
+        Set(data, "A2", new TextValue("South"));
+        Set(data, "B2", new NumberValue(125));
+        Set(data, "A3", new TextValue("West"));
+        Set(data, "B3", new NumberValue(90));
+        Set(data, "A4", new TextValue("East"));
+        Set(data, "B4", new NumberValue(110));
+        workbook.DefineNamedRange("AllRegions", Range(data, "A1", "A4"));
+        workbook.DefineNamedRange("AllSales", Range(data, "B1", "B4"));
+        workbook.DefineNamedRange("NorthSales", Range(data, "B1", "B1"));
+        workbook.DefineNamedRange("SouthSales", Range(data, "B2", "B2"));
+        workbook.DefineNamedRange("WestSales", Range(data, "B3", "B3"));
+        workbook.DefineNamedRange("EastSales", Range(data, "B4", "B4"));
+        Formula(calc, "A1", "SUM(AllSales)");
+        Formula(calc, "A2", "AVERAGE(AllSales)");
+        Formula(calc, "A3", "MAX(AllSales)");
+        Formula(calc, "A4", "MIN(AllSales)");
+        Formula(calc, "B1", "NorthSales+SouthSales");
+        Formula(calc, "B2", "WestSales+EastSales");
+        Formula(calc, "B3", "SUM(Data!B1:B4)");
+        Formula(calc, "B4", "INDEX(AllRegions,2)");
+        return workbook;
+    }
+
+    private static Workbook CreateCfMultiRules()
+    {
+        var workbook = NewWorkbook("generated-cf-multi-rules-003");
+        var sheet = workbook.AddSheet("CF Rules");
+        for (uint row = 1; row <= 10; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row * 10));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 1, RuleType = CfRuleType.CellValue, Operator = CfOperator.GreaterThan, Value1 = "80", FormatIfTrue = new CellStyle { FillColor = new CellColor(198, 239, 206) } });
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 2, RuleType = CfRuleType.CellValue, Operator = CfOperator.LessThan, Value1 = "30", FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 199, 206) } });
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 3, RuleType = CfRuleType.Formula, FormulaText = "MOD(ROW(A1),2)=0", FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 242, 204) } });
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 4, RuleType = CfRuleType.Top10, TopBottomRank = 3, AboveAverage = true });
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 5, RuleType = CfRuleType.DuplicateValues });
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 6, RuleType = CfRuleType.ColorScale, UseThreeColorScale = false, MinThresholdType = CfThresholdType.Min, MaxThresholdType = CfThresholdType.Max });
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 7, RuleType = CfRuleType.DataBar, DataBarMinThresholdType = CfThresholdType.Min, DataBarMaxThresholdType = CfThresholdType.Max });
+        var iconRule = new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 8, RuleType = CfRuleType.IconSet, IconSetStyle = "3TrafficLights1" };
+        iconRule.IconSetThresholds.AddRange([new CfThresholdModel(CfThresholdType.Number, "0"), new CfThresholdModel(CfThresholdType.Percent, "33"), new CfThresholdModel(CfThresholdType.Percent, "67")]);
+        sheet.ConditionalFormats.Add(iconRule);
+        return workbook;
+    }
+
+    private static Workbook CreateChartsMultiSeries()
+    {
+        var workbook = NewWorkbook("generated-charts-multi-series-003");
+        var sheet = workbook.AddSheet("Multi Series");
+        Set(sheet, "A1", new TextValue("Month")); Set(sheet, "B1", new TextValue("S1")); Set(sheet, "C1", new TextValue("S2")); Set(sheet, "D1", new TextValue("S3")); Set(sheet, "E1", new TextValue("S4"));
+        for (int r = 2; r <= 5; r++)
+        {
+            Set(sheet, $"A{r}", new TextValue($"Q{r - 1}"));
+            Set(sheet, $"B{r}", new NumberValue(100 + r * 10));
+            Set(sheet, $"C{r}", new NumberValue(80 + r * 8));
+            Set(sheet, $"D{r}", new NumberValue(60 + r * 6));
+            Set(sheet, $"E{r}", new NumberValue(40 + r * 4));
+        }
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Column, DataRange = Range(sheet, "A1", "E5"), Title = "4-Series Column", ShowLegend = true });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Line, DataRange = Range(sheet, "A1", "E5"), Title = "4-Series Line", ShowLegend = true });
+        return workbook;
+    }
+
+    private static Workbook CreateDvEdgeCases()
+    {
+        var workbook = NewWorkbook("generated-dv-edge-cases-003");
+        var sheet = workbook.AddSheet("DV Edge");
+        Set(sheet, "A1", new TextValue("Date")); Set(sheet, "B1", new TextValue("Time")); Set(sheet, "C1", new TextValue("TextLen")); Set(sheet, "D1", new TextValue("Dec")); Set(sheet, "E1", new TextValue("List"));
+        workbook.DefineNamedRange("DvChoices", Range(sheet, "G1", "G3"));
+        Set(sheet, "G1", new TextValue("Alpha")); Set(sheet, "G2", new TextValue("Beta")); Set(sheet, "G3", new TextValue("Gamma"));
+        sheet.DataValidations.Add(new DataValidation { AppliesTo = Range(sheet, "A2", "A20"), Type = DvType.Date, Operator = DvOperator.GreaterThanOrEqual, Formula1 = "DATE(2026,1,1)", ErrorTitle = "Invalid date", ErrorMessage = "Date must be on or after 2026-01-01." });
+        sheet.DataValidations.Add(new DataValidation { AppliesTo = Range(sheet, "B2", "B20"), Type = DvType.Time, Operator = DvOperator.Between, Formula1 = "TIME(8,0,0)", Formula2 = "TIME(18,0,0)" });
+        sheet.DataValidations.Add(new DataValidation { AppliesTo = Range(sheet, "C2", "C20"), Type = DvType.TextLength, Operator = DvOperator.LessThanOrEqual, Formula1 = "50" });
+        var listDv = new DataValidation { AppliesTo = Range(sheet, "D2", "D20"), Type = DvType.Decimal, Operator = DvOperator.Between, Formula1 = "0", Formula2 = "1" };
+        listDv.AdditionalRanges.Add(Range(sheet, "F2", "F20"));
+        sheet.DataValidations.Add(listDv);
+        sheet.DataValidations.Add(new DataValidation { AppliesTo = Range(sheet, "E2", "E20"), Type = DvType.List, Formula1 = "DvChoices", PromptTitle = "Pick item", PromptMessage = "Choose Alpha, Beta or Gamma." });
+        return workbook;
+    }
+
+    private static Workbook CreateMergedCellsFormulas()
+    {
+        // This fixture exercises merged regions alongside formulas that reference
+        // data on other sheets. Merged regions in XLSX only retain the top-left cell
+        // value after a round-trip, so the fixture only sets values in the top-left
+        // cell of each merge region.
+        var workbook = NewWorkbook("generated-merged-cells-formulas-003");
+        var sales = workbook.AddSheet("Sales");
+        var summary = workbook.AddSheet("Summary");
+        var budget = workbook.AddSheet("Budget");
+        // Sales sheet: A1 header row, data in rows 2-5.
+        // Regions A2:A3 and A4:A5 are merged; only A2/A4 hold the region label.
+        Set(sales, "A1", new TextValue("Region")); Set(sales, "B1", new TextValue("Product")); Set(sales, "C1", new TextValue("Amount"));
+        Set(sales, "A2", new TextValue("North")); Set(sales, "B2", new TextValue("A")); Set(sales, "C2", new NumberValue(100));
+        /* A3 is the covered cell of A2:A3 merge – leave empty */  Set(sales, "B3", new TextValue("B")); Set(sales, "C3", new NumberValue(120));
+        Set(sales, "A4", new TextValue("South")); Set(sales, "B4", new TextValue("A")); Set(sales, "C4", new NumberValue(90));
+        /* A5 is the covered cell of A4:A5 merge – leave empty */  Set(sales, "B5", new TextValue("B")); Set(sales, "C5", new NumberValue(85));
+        sales.AddMergedRegion(Range(sales, "A2", "A3"));
+        sales.AddMergedRegion(Range(sales, "A4", "A5"));
+        // Budget sheet: A1 is the top-left of A1:C1 merge – leave B1/C1 empty.
+        Set(budget, "A1", new TextValue("Budget Q1-Q2 Summary"));
+        Set(budget, "A2", new NumberValue(400)); Set(budget, "A3", new NumberValue(450));
+        budget.AddMergedRegion(Range(budget, "A1", "C1"));
+        // Summary sheet: formulas that reference Sales and Budget.
+        // C1:D2 is merged; only C1 is set (top-left of the region).
+        Formula(summary, "A1", "SUMIFS(Sales!C2:C5,Sales!A2:A5,\"North\")");
+        Formula(summary, "A2", "SUMIFS(Sales!C2:C5,Sales!A2:A5,\"South\")");
+        Formula(summary, "A3", "COUNTIFS(Sales!A2:A5,\"North\",Sales!B2:B5,\"A\")");
+        Formula(summary, "A4", "SUM(Sales!C2:C5)");
+        Formula(summary, "B1", "Budget!A2");
+        Formula(summary, "B2", "Budget!A3");
+        summary.AddMergedRegion(Range(summary, "C1", "D2"));
+        // Add a frozen header row on Sales and a hidden row on Budget to satisfy the structure tag assertions.
+        sales.FrozenRows = 1;
+        budget.HiddenRows.Add(3);
+        return workbook;
+    }
+
+    private static Workbook CreateCrossSheetRefsAdvanced()
+    {
+        var workbook = NewWorkbook("generated-cross-sheet-refs-advanced-003");
+        var lookup = workbook.AddSheet("Lookup");
+        var data = workbook.AddSheet("Data");
+        var report = workbook.AddSheet("Report");
+        Set(lookup, "A1", new TextValue("Code")); Set(lookup, "B1", new TextValue("Name")); Set(lookup, "C1", new TextValue("Rate"));
+        Set(lookup, "A2", new TextValue("X")); Set(lookup, "B2", new TextValue("Xray")); Set(lookup, "C2", new NumberValue(0.1));
+        Set(lookup, "A3", new TextValue("Y")); Set(lookup, "B3", new TextValue("Yankee")); Set(lookup, "C3", new NumberValue(0.15));
+        Set(lookup, "A4", new TextValue("Z")); Set(lookup, "B4", new TextValue("Zulu")); Set(lookup, "C4", new NumberValue(0.2));
+        workbook.DefineNamedRange("CodeTable", Range(lookup, "A1", "C4"));
+        Set(data, "A1", new TextValue("X")); Set(data, "B1", new NumberValue(500));
+        Set(data, "A2", new TextValue("Y")); Set(data, "B2", new NumberValue(300));
+        Set(data, "A3", new TextValue("Z")); Set(data, "B3", new NumberValue(200));
+        Formula(report, "A1", "VLOOKUP(Data!A1,CodeTable,2,FALSE)");
+        Formula(report, "A2", "VLOOKUP(Data!A2,CodeTable,2,FALSE)");
+        Formula(report, "B1", "INDEX(Lookup!C2:C4,MATCH(Data!A1,Lookup!A2:A4,0))");
+        Formula(report, "B2", "INDIRECT(\"Data!B\"&ROW())");
+        Formula(report, "C1", "SUM(Data!B1:B3)");
+        Formula(report, "C2", "SUMIF(Data!A1:A3,\"X\",Data!B1:B3)");
+        return workbook;
+    }
+
+    private static Workbook CreateArrayFormulas()
+    {
+        var workbook = NewWorkbook("generated-array-formulas-003");
+        var sheet = workbook.AddSheet("Arrays");
+        for (uint r = 1; r <= 5; r++) { Set(sheet, $"A{r}", new NumberValue(r * 10)); Set(sheet, $"B{r}", new NumberValue(r * 5)); }
+        Formula(sheet, "D1", "SUM(A1:A5*B1:B5)");
+        Formula(sheet, "D2", "SUM(IF(A1:A5>20,A1:A5,0))");
+        Formula(sheet, "D3", "SUM((A1:A5>20)*A1:A5)");
+        Formula(sheet, "D4", "SUM(A1:A5)/COUNT(A1:A5)");
+        Formula(sheet, "E1", "SUM(A1:A5*B1:B5)/SUM(A1:A5)");
+        return workbook;
+    }
+
+    private static Workbook CreateChartScatterBubble()
+    {
+        var workbook = NewWorkbook("generated-chart-scatter-bubble-003");
+        var sheet = workbook.AddSheet("Scatter Bubble");
+        Set(sheet, "A1", new TextValue("X")); Set(sheet, "B1", new TextValue("Y")); Set(sheet, "C1", new TextValue("Size"));
+        Set(sheet, "A2", new NumberValue(1)); Set(sheet, "B2", new NumberValue(3)); Set(sheet, "C2", new NumberValue(10));
+        Set(sheet, "A3", new NumberValue(2)); Set(sheet, "B3", new NumberValue(5)); Set(sheet, "C3", new NumberValue(20));
+        Set(sheet, "A4", new NumberValue(4)); Set(sheet, "B4", new NumberValue(2)); Set(sheet, "C4", new NumberValue(15));
+        Set(sheet, "A5", new NumberValue(3)); Set(sheet, "B5", new NumberValue(7)); Set(sheet, "C5", new NumberValue(25));
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Scatter, DataRange = Range(sheet, "A1", "B5"), Title = "Scatter XY", ShowLegend = true });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Bubble, DataRange = Range(sheet, "A1", "C5"), Title = "Bubble Chart", ShowLegend = true, BubbleScale = 80, ShowNegativeBubbles = false, BubbleSizeRepresents = ChartBubbleSizeRepresents.Area });
+        return workbook;
+    }
+
+    private static Workbook CreatePivotCalculatedFields()
+    {
+        var workbook = NewWorkbook("generated-pivot-calculated-fields-003");
+        var sheet = workbook.AddSheet("Pivot Calc");
+        Set(sheet, "A1", new TextValue("Region")); Set(sheet, "B1", new TextValue("Sales")); Set(sheet, "C1", new TextValue("Cost"));
+        Set(sheet, "A2", new TextValue("North")); Set(sheet, "B2", new NumberValue(200)); Set(sheet, "C2", new NumberValue(150));
+        Set(sheet, "A3", new TextValue("South")); Set(sheet, "B3", new NumberValue(180)); Set(sheet, "C3", new NumberValue(130));
+        Set(sheet, "A4", new TextValue("West")); Set(sheet, "B4", new NumberValue(160)); Set(sheet, "C4", new NumberValue(110));
+        Set(sheet, "A6", new TextValue("Region")); Set(sheet, "B6", new TextValue("Sum of Sales")); Set(sheet, "C6", new TextValue("Sum of Margin"));
+        Set(sheet, "A7", new TextValue("North")); Set(sheet, "B7", new NumberValue(200)); Set(sheet, "C7", new NumberValue(50));
+        Set(sheet, "A8", new TextValue("South")); Set(sheet, "B8", new NumberValue(180)); Set(sheet, "C8", new NumberValue(50));
+        Set(sheet, "A9", new TextValue("West")); Set(sheet, "B9", new NumberValue(160)); Set(sheet, "C9", new NumberValue(50));
+        Set(sheet, "A10", new TextValue("Grand Total")); Set(sheet, "B10", new NumberValue(540)); Set(sheet, "C10", new NumberValue(150));
+        var cache = new PivotCacheModel
+        {
+            CacheId = 3, SourceType = PivotCacheSourceType.WorksheetRange, SourceSheetName = sheet.Name,
+            SourceReference = "A1:C4", PackagePart = "xl/pivotCache/pivotCacheDefinition3.xml",
+            RecordCount = 3, CreatedVersion = 8, MinRefreshableVersion = 4
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["North", "South", "West"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Sales", ContainsNumber: true, MinValue: 160, MaxValue: 200));
+        cache.Fields.Add(new PivotCacheFieldModel("Cost", ContainsNumber: true, MinValue: 110, MaxValue: 150));
+        workbook.PivotCaches.Add(cache);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotCalcField", CacheId = 3, SourceRange = Range(sheet, "A1", "C4"),
+            TargetRange = Range(sheet, "A6", "C10"), PackagePart = "xl/pivotTables/pivotTable3.xml"
+        };
+        pivot.CalculatedFields.Add(new PivotCalculatedFieldModel("Margin", "Sales-Cost"));
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Sales", "sum", 4));
+        pivot.DataFields.Add(new PivotDataFieldModel(-1, "Sum of Margin", "sum", 4, "Margin"));
+        sheet.PivotTables.Add(pivot);
+        return workbook;
+    }
+
+    private static Workbook CreateTableStructuredRefs()
+    {
+        var workbook = NewWorkbook("generated-table-structured-refs-003");
+        var sheet = workbook.AddSheet("Table Refs");
+        Set(sheet, "A1", new TextValue("Product")); Set(sheet, "B1", new TextValue("Price")); Set(sheet, "C1", new TextValue("Qty")); Set(sheet, "D1", new TextValue("Revenue"));
+        Set(sheet, "A2", new TextValue("Alpha")); Set(sheet, "B2", new NumberValue(10)); Set(sheet, "C2", new NumberValue(50)); Set(sheet, "D2", new NumberValue(500));
+        Set(sheet, "A3", new TextValue("Beta")); Set(sheet, "B3", new NumberValue(15)); Set(sheet, "C3", new NumberValue(30)); Set(sheet, "D3", new NumberValue(450));
+        Set(sheet, "A4", new TextValue("Gamma")); Set(sheet, "B4", new NumberValue(20)); Set(sheet, "C4", new NumberValue(20)); Set(sheet, "D4", new NumberValue(400));
+        Set(sheet, "A5", new TextValue("Total")); Set(sheet, "B5", new NumberValue(45)); Set(sheet, "C5", new NumberValue(100)); Set(sheet, "D5", new NumberValue(1350));
+        var table = new StructuredTableModel { Id = 3, Name = "SalesRef", DisplayName = "SalesRef", Range = Range(sheet, "A1", "D5"), HasAutoFilter = true, TotalsRowShown = true, StyleName = "TableStyleMedium6", PackagePart = "xl/tables/table3.xml" };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Product", TotalsRowLabel: "Total"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Price", TotalsRowFunction: "sum"));
+        table.Columns.Add(new StructuredTableColumnModel(3, "Qty", TotalsRowFunction: "sum"));
+        table.Columns.Add(new StructuredTableColumnModel(4, "Revenue", TotalsRowFunction: "sum"));
+        sheet.StructuredTables.Add(table);
+        Formula(sheet, "F1", "SUM(SalesRef[Revenue])");
+        Formula(sheet, "F2", "AVERAGE(SalesRef[Price])");
+        Formula(sheet, "F3", "MAX(SalesRef[Qty])");
+        return workbook;
+    }
+
+    private static Workbook CreateFormattingAdvanced()
+    {
+        var workbook = NewWorkbook("generated-formatting-advanced-003");
+        var sheet = workbook.AddSheet("Adv Format");
+        var accountStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", HorizontalAlignment = HorizontalAlignment.Right });
+        var pctStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.00%", HorizontalAlignment = HorizontalAlignment.Right });
+        var sciStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.00E+00" });
+        var fracStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "# ??/??" });
+        var dateStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "[$-0409]mmm d yyyy" });
+        var rotStyle = workbook.RegisterStyle(new CellStyle { TextRotation = 45, Bold = true, FontColor = new CellColor(0, 70, 127) });
+        var indStyle = workbook.RegisterStyle(new CellStyle { IndentLevel = 3, Italic = true });
+        var diagStyle = workbook.RegisterStyle(new CellStyle { BorderLeft = new CellBorder(BorderStyle.Double, new CellColor(255, 0, 0)), BorderRight = new CellBorder(BorderStyle.Double, new CellColor(0, 0, 255)) });
+        Set(sheet, "A1", new NumberValue(1234.5), accountStyle);
+        Set(sheet, "A2", new NumberValue(0.123), pctStyle);
+        Set(sheet, "A3", new NumberValue(1234567), sciStyle);
+        Set(sheet, "A4", new NumberValue(1.5), fracStyle);
+        Set(sheet, "A5", DateTimeValue.FromDateTime(new DateTime(2026, 5, 28)), dateStyle);
+        Set(sheet, "B1", new TextValue("Rotated"), rotStyle);
+        Set(sheet, "B2", new TextValue("Indented"), indStyle);
+        Set(sheet, "B3", new TextValue("Diagonal"), diagStyle);
+        var themeAccent = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(180, 198, 231), FontColor = new CellColor(0, 0, 0) });
+        Set(sheet, "C1", new TextValue("Theme fill"), themeAccent);
+        return workbook;
+    }
+
+    private static Workbook CreateSparklinesAdvanced()
+    {
+        var workbook = NewWorkbook("generated-sparklines-advanced-003");
+        var sheet = workbook.AddSheet("Sparklines");
+        var data = new[] { new[] { 5, -2, 8, 1, 6 }, new[] { 3, 7, -1, 4, 9 }, new[] { 1, -3, 2, -1, 4 } };
+        for (int r = 0; r < 3; r++)
+            for (int c = 0; c < 5; c++)
+                sheet.SetCell(new CellAddress(sheet.Id, (uint)(r + 1), (uint)(c + 1)), new NumberValue(data[r][c]));
+        sheet.Sparklines.Add(new SparklineModel { DataRange = Range(sheet, "A1", "E1"), Location = Addr(sheet, "F1"), Kind = SparklineKind.Line });
+        sheet.Sparklines.Add(new SparklineModel { DataRange = Range(sheet, "A2", "E2"), Location = Addr(sheet, "F2"), Kind = SparklineKind.Column });
+        sheet.Sparklines.Add(new SparklineModel { DataRange = Range(sheet, "A3", "E3"), Location = Addr(sheet, "F3"), Kind = SparklineKind.WinLoss });
+        return workbook;
+    }
+
+    private static Workbook CreateProtectionAdvanced()
+    {
+        var workbook = NewWorkbook("generated-protection-advanced-003");
+        var sheet = workbook.AddSheet("Protected");
+        Set(sheet, "A1", new TextValue("Protected area"));
+        Set(sheet, "A2", new NumberValue(100));
+        Set(sheet, "B2", new NumberValue(200));
+        var lockedStyle = workbook.RegisterStyle(new CellStyle { Locked = true, FillColor = new CellColor(220, 230, 241) });
+        var unlockedStyle = workbook.RegisterStyle(new CellStyle { Locked = false, FillColor = new CellColor(235, 241, 222) });
+        sheet.GetCell(Addr(sheet, "A1"))!.StyleId = lockedStyle;
+        Set(sheet, "C2", new TextValue("Editable"), unlockedStyle);
+        Set(sheet, "C3", new TextValue("Also editable"), unlockedStyle);
+        sheet.IsProtected = true;
+        sheet.ProtectionPassword = "corpus123";
+        sheet.AllowEditRanges.Add(Range(sheet, "C2", "D10"));
+        sheet.AllowEditRanges.Add(Range(sheet, "E2", "F10"));
+        workbook.IsStructureProtected = true;
+        workbook.StructureProtectionPassword = "structure123";
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        Set(hidden, "A1", new TextValue("Hidden sheet content"));
+        return workbook;
+    }
+
+    private static Workbook CreateCfWithDxfStyles()
+    {
+        var workbook = NewWorkbook("generated-cf-with-dxf-styles-003");
+        var sheet = workbook.AddSheet("CF Styles");
+        for (uint r = 1; r <= 5; r++) Set(sheet, $"A{r}", new NumberValue(r * 20));
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A5"), Priority = 1, RuleType = CfRuleType.CellValue, Operator = CfOperator.GreaterThan, Value1 = "60", FormatIfTrue = new CellStyle { Bold = true, Italic = false, FontColor = new CellColor(0, 97, 0), FillColor = new CellColor(198, 239, 206), BorderBottom = new CellBorder(BorderStyle.Medium, new CellColor(0, 97, 0)) } });
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A5"), Priority = 2, RuleType = CfRuleType.CellValue, Operator = CfOperator.LessThan, Value1 = "40", FormatIfTrue = new CellStyle { Bold = false, Italic = true, FontColor = new CellColor(156, 0, 6), FillColor = new CellColor(255, 199, 206), BorderTop = new CellBorder(BorderStyle.Thin, new CellColor(156, 0, 6)), BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(156, 0, 6)) } });
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A5"), Priority = 3, RuleType = CfRuleType.Formula, FormulaText = "A1=60", FormatIfTrue = new CellStyle { Bold = true, Underline = true, FillColor = new CellColor(255, 235, 156) } });
+        return workbook;
+    }
+
+    private static Workbook CreateFormulasCached()
+    {
+        var workbook = NewWorkbook("generated-formulas-cached-003");
+        var sheet = workbook.AddSheet("Cached");
+        Set(sheet, "A1", new TextValue("Item")); Set(sheet, "B1", new NumberValue(10)); Set(sheet, "C1", new TextValue("Alpha"));
+        Set(sheet, "A2", new TextValue("Item")); Set(sheet, "B2", new NumberValue(20)); Set(sheet, "C2", new TextValue("Beta"));
+        Set(sheet, "A3", new TextValue("Other")); Set(sheet, "B3", new NumberValue(30)); Set(sheet, "C3", new TextValue("Alpha"));
+        Set(sheet, "A4", new TextValue("Item")); Set(sheet, "B4", new NumberValue(15)); Set(sheet, "C4", new TextValue("Gamma"));
+        Set(sheet, "A5", new TextValue("Other")); Set(sheet, "B5", new NumberValue(25)); Set(sheet, "C5", new TextValue("Beta"));
+        var lookupTable = workbook.AddSheet("LookupTable");
+        Set(lookupTable, "A1", new NumberValue(10)); Set(lookupTable, "B1", new TextValue("Ten"));
+        Set(lookupTable, "A2", new NumberValue(15)); Set(lookupTable, "B2", new TextValue("Fifteen"));
+        Set(lookupTable, "A3", new NumberValue(20)); Set(lookupTable, "B3", new TextValue("Twenty"));
+        Set(lookupTable, "A4", new NumberValue(25)); Set(lookupTable, "B4", new TextValue("TwentyFive"));
+        Set(lookupTable, "A5", new NumberValue(30)); Set(lookupTable, "B5", new TextValue("Thirty"));
+        Formula(sheet, "E1", "SUMIFS(B1:B5,A1:A5,\"Item\",C1:C5,\"Alpha\")");
+        Formula(sheet, "E2", "SUMIFS(B1:B5,A1:A5,\"Item\")");
+        Formula(sheet, "E3", "COUNTIFS(A1:A5,\"Item\",C1:C5,\"Alpha\")");
+        Formula(sheet, "E4", "VLOOKUP(20,LookupTable!A1:B5,2,FALSE)");
+        Formula(sheet, "E5", "VLOOKUP(18,LookupTable!A1:B5,2,TRUE)");
+        return workbook;
+    }
+
+    private static Workbook CreateChartPieDoughnut()
+    {
+        var workbook = NewWorkbook("generated-chart-pie-doughnut-003");
+        var sheet = workbook.AddSheet("Pie Charts");
+        Set(sheet, "A1", new TextValue("Category")); Set(sheet, "B1", new TextValue("Value"));
+        Set(sheet, "A2", new TextValue("Alpha")); Set(sheet, "B2", new NumberValue(30));
+        Set(sheet, "A3", new TextValue("Beta")); Set(sheet, "B3", new NumberValue(45));
+        Set(sheet, "A4", new TextValue("Gamma")); Set(sheet, "B4", new NumberValue(25));
+        Set(sheet, "A5", new TextValue("Delta")); Set(sheet, "B5", new NumberValue(20));
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Pie, DataRange = Range(sheet, "A1", "B5"), Title = "Pie Chart", ShowLegend = true, ShowDataLabels = true, DataLabelPosition = ChartDataLabelPosition.OutsideEnd });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Doughnut, DataRange = Range(sheet, "A1", "B5"), Title = "Doughnut Chart", ShowLegend = true });
+        return workbook;
+    }
+
+    private static Workbook CreateHyperlinksAdvanced()
+    {
+        var workbook = NewWorkbook("generated-hyperlinks-advanced-003");
+        var sheet1 = workbook.AddSheet("Links1");
+        var sheet2 = workbook.AddSheet("Links2");
+        var hStyle = RegisterHyperlinkStyle(workbook);
+        Set(sheet1, "A1", new TextValue("Web link"), hStyle);
+        sheet1.Hyperlinks[Addr(sheet1, "A1")] = "https://example.com/corpus";
+        sheet1.HyperlinkMetadata[Addr(sheet1, "A1")] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage, "Open example.com corpus page");
+        Set(sheet1, "A2", new TextValue("Email link"), hStyle);
+        sheet1.Hyperlinks[Addr(sheet1, "A2")] = "mailto:test@example.com";
+        sheet1.HyperlinkMetadata[Addr(sheet1, "A2")] = new HyperlinkMetadata(HyperlinkTargetKind.EmailAddress, "Send test email");
+        Set(sheet1, "A3", new TextValue("Sheet link"), hStyle);
+        sheet1.Hyperlinks[Addr(sheet1, "A3")] = "Links2!A1";
+        sheet1.HyperlinkMetadata[Addr(sheet1, "A3")] = new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument, "Jump to Links2", "Links2!A1");
+        Set(sheet1, "A4", new TextValue("Self link"), hStyle);
+        sheet1.Hyperlinks[Addr(sheet1, "A4")] = "Links1!A1";
+        sheet1.HyperlinkMetadata[Addr(sheet1, "A4")] = new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument, "Jump to top", "Links1!A1");
+        Set(sheet2, "A1", new TextValue("Back link"), hStyle);
+        sheet2.Hyperlinks[Addr(sheet2, "A1")] = "Links1!A1";
+        sheet2.HyperlinkMetadata[Addr(sheet2, "A1")] = new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument, "Return to Links1", "Links1!A1");
+        Set(sheet2, "A2", new TextValue("Another web"), hStyle);
+        sheet2.Hyperlinks[Addr(sheet2, "A2")] = "https://openxmlformats.org/";
+        sheet2.HyperlinkMetadata[Addr(sheet2, "A2")] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage, "Open OOXML spec");
+        return workbook;
+    }
+
+    private static Workbook CreateCommentsAdvanced()
+    {
+        var workbook = NewWorkbook("generated-comments-advanced-003");
+        var sheet1 = workbook.AddSheet("Notes1");
+        var sheet2 = workbook.AddSheet("Notes2");
+        Set(sheet1, "A1", new TextValue("Comment target 1"));
+        Set(sheet1, "B1", new TextValue("Comment target 2"));
+        Set(sheet1, "C1", new TextValue("Comment target 3"));
+        sheet1.Comments[Addr(sheet1, "A1")] = "First note on sheet one.";
+        sheet1.Comments[Addr(sheet1, "B1")] = "Second note: check formula.";
+        sheet1.Comments[Addr(sheet1, "C1")] = "Third note: review later.";
+        Set(sheet2, "A1", new TextValue("Sheet two item"));
+        Set(sheet2, "B2", new TextValue("Another item"));
+        sheet2.Comments[Addr(sheet2, "A1")] = "Cross-sheet note one.";
+        sheet2.Comments[Addr(sheet2, "B2")] = "Cross-sheet note two.";
+        return workbook;
+    }
+
+    private static Workbook CreateTableAutoFilter()
+    {
+        var workbook = NewWorkbook("generated-table-autofilter-003");
+        var sheet = workbook.AddSheet("AutoFilter");
+        Set(sheet, "A1", new TextValue("Region")); Set(sheet, "B1", new TextValue("Category")); Set(sheet, "C1", new TextValue("Amount"));
+        Set(sheet, "A2", new TextValue("North")); Set(sheet, "B2", new TextValue("Food")); Set(sheet, "C2", new NumberValue(100));
+        Set(sheet, "A3", new TextValue("South")); Set(sheet, "B3", new TextValue("Tech")); Set(sheet, "C3", new NumberValue(200));
+        Set(sheet, "A4", new TextValue("North")); Set(sheet, "B4", new TextValue("Tech")); Set(sheet, "C4", new NumberValue(150));
+        Set(sheet, "A5", new TextValue("West")); Set(sheet, "B5", new TextValue("Food")); Set(sheet, "C5", new NumberValue(120));
+        var table = new StructuredTableModel { Id = 4, Name = "FilterTable", DisplayName = "FilterTable", Range = Range(sheet, "A1", "C5"), HasAutoFilter = true, TotalsRowShown = false, StyleName = "TableStyleLight9", PackagePart = "xl/tables/table4.xml" };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Category"));
+        table.Columns.Add(new StructuredTableColumnModel(3, "Amount"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["North", "South"]));
+        sheet.FilterHiddenRows.Add(4);
+        sheet.FilterHiddenRows.Add(5);
+        sheet.StructuredTables.Add(table);
+        return workbook;
+    }
+
+    private static Workbook CreateMultipleSheets()
+    {
+        var workbook = NewWorkbook("generated-multiple-sheets-003");
+        var s1 = workbook.AddSheet("Sheet1");
+        var s2 = workbook.AddSheet("Sheet2");
+        var s3 = workbook.AddSheet("Summary");
+        var s4 = workbook.AddSheet("Hidden");
+        var s5 = workbook.AddSheet("Archive");
+        Set(s1, "A1", new TextValue("Alpha")); Set(s1, "B1", new NumberValue(10)); Set(s1, "B2", new NumberValue(20));
+        s1.TabColor = new CellColor(0, 112, 192); s1.FrozenRows = 1;
+        Set(s2, "A1", new TextValue("Beta")); Set(s2, "B1", new NumberValue(30)); Set(s2, "B2", new NumberValue(40));
+        s2.TabColor = new CellColor(255, 192, 0); s2.FrozenCols = 1;
+        Formula(s3, "A1", "SUM(Sheet1!B1:B2)"); Formula(s3, "A2", "SUM(Sheet2!B1:B2)"); Formula(s3, "A3", "Sheet1!B1+Sheet2!B1");
+        s3.TabColor = new CellColor(0, 176, 80);
+        Set(s4, "A1", new TextValue("Hidden content")); s4.IsHidden = true;
+        Set(s5, "A1", new TextValue("Archive")); Set(s5, "A2", new NumberValue(99));
+        s5.TabColor = new CellColor(128, 128, 128);
+        return workbook;
+    }
+
+    private static Workbook CreateNumberFormats()
+    {
+        var workbook = NewWorkbook("generated-number-formats-003");
+        var sheet = workbook.AddSheet("Formats");
+        var styles = new[]
+        {
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "#,##0.00" }),
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "0.00%" }),
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "0.00E+00" }),
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "yyyy-mm-dd" }),
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "m/d/yyyy" }),
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)" }),
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "# ??/??" }),
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "0.0\\%;" }),
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "[>=1000000]#.0,,\"M\";[>=1000]#.0,\"K\";#.0" }),
+            workbook.RegisterStyle(new CellStyle { NumberFormat = "@" })
+        };
+        // Both date format slots (index 3 and 4) use DateTimeValue with date formats ClosedXML recognizes.
+        var dateSerial = DateTimeValue.FromDateTime(new DateTime(2026, 5, 28));
+        var values = new ScalarValue[] { new NumberValue(1234.56), new NumberValue(0.1234), new NumberValue(1234567), dateSerial, dateSerial, new NumberValue(9876.54), new NumberValue(1.5), new NumberValue(0.75), new NumberValue(1500000), new TextValue("Text value") };
+        for (int i = 0; i < 10; i++)
+        {
+            uint r = (uint)(i + 1);
+            sheet.SetCell(new CellAddress(sheet.Id, r, 1), values[i]);
+            sheet.GetCell(new CellAddress(sheet.Id, r, 1))!.StyleId = styles[i];
+        }
+        return workbook;
+    }
+
+    private static Workbook CreateValidationMessages()
+    {
+        var workbook = NewWorkbook("generated-validation-messages-003");
+        var sheet = workbook.AddSheet("DV Messages");
+        Set(sheet, "A1", new TextValue("Name")); Set(sheet, "B1", new TextValue("Score")); Set(sheet, "C1", new TextValue("Status"));
+        sheet.DataValidations.Add(new DataValidation { AppliesTo = Range(sheet, "A2", "A20"), Type = DvType.TextLength, Operator = DvOperator.LessThanOrEqual, Formula1 = "30", ShowInputMessage = true, PromptTitle = "Name Limit", PromptMessage = "Names must be 30 characters or fewer.", ShowErrorMessage = true, AlertStyle = DvAlertStyle.Stop, ErrorTitle = "Name Too Long", ErrorMessage = "Please enter a name with 30 characters or fewer." });
+        sheet.DataValidations.Add(new DataValidation { AppliesTo = Range(sheet, "B2", "B20"), Type = DvType.WholeNumber, Operator = DvOperator.Between, Formula1 = "0", Formula2 = "100", ShowInputMessage = true, PromptTitle = "Score Range", PromptMessage = "Enter a score between 0 and 100.", ShowErrorMessage = true, AlertStyle = DvAlertStyle.Warning, ErrorTitle = "Score Out of Range", ErrorMessage = "Score should be between 0 and 100." });
+        sheet.DataValidations.Add(new DataValidation { AppliesTo = Range(sheet, "C2", "C20"), Type = DvType.List, Formula1 = "Pass,Fail,Pending", ShowInputMessage = true, PromptTitle = "Select Status", PromptMessage = "Choose Pass, Fail, or Pending.", ShowErrorMessage = true, AlertStyle = DvAlertStyle.Information, ErrorTitle = "Unknown Status", ErrorMessage = "Please select a recognized status value." });
+        return workbook;
+    }
+
+    private static Workbook CreateRowColumnGroups()
+    {
+        var workbook = NewWorkbook("generated-row-column-groups-003");
+        var sheet = workbook.AddSheet("Groups");
+        for (uint r = 1; r <= 10; r++) { Set(sheet, $"A{r}", new TextValue($"Item {r}")); Set(sheet, $"B{r}", new NumberValue(r * 10)); }
+        sheet.RowOutlineLevels[2] = 1; sheet.RowOutlineLevels[3] = 1; sheet.RowOutlineLevels[4] = 1;
+        sheet.RowOutlineLevels[6] = 2; sheet.RowOutlineLevels[7] = 2;
+        sheet.ColOutlineLevels[3] = 1; sheet.ColOutlineLevels[4] = 1;
+        sheet.HiddenRows.Add(6); sheet.HiddenRows.Add(7);
+        Formula(sheet, "C1", "SUBTOTAL(9,B2:B4)");
+        Formula(sheet, "C5", "SUBTOTAL(9,B6:B7)");
+        Formula(sheet, "C10", "SUM(B1:B9)");
+        return workbook;
+    }
+
+    private static Workbook CreateMixedChartTypes()
+    {
+        var workbook = NewWorkbook("generated-mixed-chart-types-003");
+        var sheet = workbook.AddSheet("Mix Charts");
+        Set(sheet, "A1", new TextValue("Month")); Set(sheet, "B1", new TextValue("Val"));
+        for (int r = 2; r <= 5; r++) { Set(sheet, $"A{r}", new TextValue($"M{r - 1}")); Set(sheet, $"B{r}", new NumberValue(r * 25)); Set(sheet, $"C{r}", new NumberValue(r * 15)); }
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Line, DataRange = Range(sheet, "A1", "B5"), Title = "Line" });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Area, DataRange = Range(sheet, "A1", "B5"), Title = "Area" });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Bar, DataRange = Range(sheet, "A1", "B5"), Title = "Bar" });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Scatter, DataRange = Range(sheet, "B1", "C5"), Title = "Scatter" });
+        return workbook;
+    }
+
+    private static Workbook CreateLargeNamedRanges()
+    {
+        var workbook = NewWorkbook("generated-large-named-ranges-003");
+        var sheet = workbook.AddSheet("Ranges");
+        for (uint r = 1; r <= 10; r++) { Set(sheet, $"A{r}", new NumberValue(r * 10)); Set(sheet, $"B{r}", new NumberValue(r * 5)); }
+        workbook.DefineNamedRange("Col_A", Range(sheet, "A1", "A10"));
+        workbook.DefineNamedRange("Col_B", Range(sheet, "B1", "B10"));
+        workbook.DefineNamedRange("Header_Row", Range(sheet, "A1", "B1"));
+        workbook.DefineNamedRange("Mid_Row", Range(sheet, "A5", "B5"));
+        workbook.DefineNamedRange("Last_Row", Range(sheet, "A10", "B10"));
+        workbook.DefineNamedRange("TopFive", Range(sheet, "A1", "B5"));
+        workbook.DefineNamedRange("BottomFive", Range(sheet, "A6", "B10"));
+        workbook.DefineNamedRange("AllData", Range(sheet, "A1", "B10"));
+        workbook.DefineNamedRange("Odd_Rows", Range(sheet, "A1", "A1"));
+        workbook.DefineNamedRange("Even_Rows", Range(sheet, "A2", "A2"));
+        var calc = workbook.AddSheet("Calc");
+        Formula(calc, "A1", "SUM(Col_A)");
+        Formula(calc, "A2", "AVERAGE(Col_B)");
+        Formula(calc, "A3", "SUM(TopFive)");
+        Formula(calc, "A4", "SUM(BottomFive)");
+        Formula(calc, "A5", "INDEX(AllData,3,1)");
+        Formula(calc, "A6", "VLOOKUP(50,Col_A,1,TRUE)");
+        Formula(calc, "A7", "SUM(Header_Row)");
+        Formula(calc, "A8", "SUM(Mid_Row)");
+        Formula(calc, "A9", "SUM(Last_Row)");
+        Formula(calc, "A10", "COUNT(AllData)");
         return workbook;
     }
 
