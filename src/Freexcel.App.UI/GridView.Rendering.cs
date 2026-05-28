@@ -40,6 +40,7 @@ public partial class GridView
 
         var rowHeaderWidth = ActualRowHeaderWidth;
         var columnHeaderHeight = EffectiveColHeaderHeight;
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var gridLeft = rowHeaderWidth;
         var gridTop = columnHeaderHeight;
         var gridRight = Viewport.ColMetrics.Count > 0
@@ -50,10 +51,10 @@ public partial class GridView
             : gridTop;
 
         if (ActualWidth > gridRight)
-            RenderLiveResizeColumnContinuation(dc, gridRight, gridTop);
+            RenderLiveResizeColumnContinuation(dc, gridRight, gridTop, pixelsPerDip);
 
         if (ActualHeight > gridBottom)
-            RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom);
+            RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom, pixelsPerDip);
 
         if (ActualWidth > gridRight && ActualHeight > gridBottom)
         {
@@ -65,7 +66,8 @@ public partial class GridView
     private void RenderLiveResizeColumnContinuation(
         DrawingContext dc,
         double startX,
-        double gridTop)
+        double gridTop,
+        double pixelsPerDip)
     {
         if (startX >= ActualWidth)
             return;
@@ -85,7 +87,7 @@ public partial class GridView
             {
                 var headerRect = new Rect(x, 0, width, EffectiveColHeaderHeight);
                 dc.DrawRectangle(HeaderBackgroundBrush, GridPen, headerRect);
-                DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect);
+                DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect, pixelsPerDip);
             }
 
             if (height > 0)
@@ -102,7 +104,8 @@ public partial class GridView
         DrawingContext dc,
         double gridLeft,
         double gridRight,
-        double startY)
+        double startY,
+        double pixelsPerDip)
     {
         if (startY >= ActualHeight)
             return;
@@ -122,7 +125,7 @@ public partial class GridView
             {
                 var headerRect = new Rect(0, y, ActualRowHeaderWidth, height);
                 dc.DrawRectangle(HeaderBackgroundBrush, GridPen, headerRect);
-                DrawLiveResizeHeaderText(dc, (++lastRow).ToString(CultureInfo.InvariantCulture), headerRect);
+                DrawLiveResizeHeaderText(dc, (++lastRow).ToString(CultureInfo.InvariantCulture), headerRect, pixelsPerDip);
             }
 
             if (width > 0)
@@ -163,12 +166,12 @@ public partial class GridView
         dc.DrawLine(GridPen, new Point(ActualWidth, EffectiveColHeaderHeight), new Point(ActualWidth, endY));
     }
 
-    private void DrawLiveResizeHeaderText(DrawingContext dc, string text, Rect rect)
+    private void DrawLiveResizeHeaderText(DrawingContext dc, string text, Rect rect, double pixelsPerDip)
     {
         if (string.IsNullOrWhiteSpace(text) || rect.Width <= 4 || rect.Height <= 4)
             return;
 
-        var formatted = GetDefaultFormattedText(text, 11, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        var formatted = GetDefaultFormattedText(text, 11, pixelsPerDip);
 
         dc.DrawText(formatted, new Point(
             rect.Left + Math.Max(2, (rect.Width - formatted.Width) / 2),
