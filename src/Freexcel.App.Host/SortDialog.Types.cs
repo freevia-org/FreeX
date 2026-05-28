@@ -11,7 +11,10 @@ public sealed record SortOnChoice(string Label);
 
 public sealed record SortColorChoice(string Label);
 
-public sealed record SortDialogOptions(bool CaseSensitive = false, bool LeftToRight = false);
+public sealed record SortDialogOptions(
+    bool CaseSensitive = false,
+    bool LeftToRight = false,
+    string FirstKeySortOrder = "Normal");
 
 public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyPropertyChanged
 {
