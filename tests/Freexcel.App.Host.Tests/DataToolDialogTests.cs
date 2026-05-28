@@ -2328,7 +2328,7 @@ public sealed class DataToolDialogTests
             button.ToolTip.Should().Be("Collapse dialog and select range");
 
             var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DialogReferencePicker.cs"));
-            pickerSource.Should().Contain("Keyboard.Focus(textBox);");
+            pickerSource.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
         });
     }
 
