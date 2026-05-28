@@ -749,39 +749,20 @@ public partial class MainWindow
     {
         var letters = groupName.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray();
         var candidates = new List<string>();
-
-        void AddCandidate(string candidate)
-        {
-            if (!string.IsNullOrWhiteSpace(candidate) &&
-                !candidates.Contains(candidate, StringComparer.OrdinalIgnoreCase))
-            {
-                candidates.Add(candidate);
-            }
-        }
-
-        var wordInitials = groupName
-            .Split([' ', '\t', '\r', '\n', '-', '_', '/', '&'], StringSplitOptions.RemoveEmptyEntries)
-            .Select(word => word.FirstOrDefault(char.IsLetterOrDigit))
-            .Where(initial => initial != default)
-            .Select(char.ToUpperInvariant)
-            .ToArray();
-        if (wordInitials.Length >= 2)
-            AddCandidate(new string([wordInitials[0], wordInitials[1]]));
-
         if (letters.Length >= 2)
         {
-            AddCandidate(new string([letters[0], letters[1]]));
+            candidates.Add(new string([letters[0], letters[1]]));
             for (var i = 2; i < letters.Length; i++)
-                AddCandidate(new string([letters[0], letters[i]]));
+                candidates.Add(new string([letters[0], letters[i]]));
         }
         else if (letters.Length == 1)
         {
-            AddCandidate(new string([letters[0]]));
+            candidates.Add(new string([letters[0]]));
         }
 
-        AddCandidate("G");
+        candidates.Add("G");
         for (var index = 1; index <= 9; index++)
-            AddCandidate($"G{index}");
+            candidates.Add($"G{index}");
 
         foreach (var candidate in candidates)
         {
