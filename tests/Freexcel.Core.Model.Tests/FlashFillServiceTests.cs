@@ -1818,6 +1818,26 @@ public sealed class FlashFillCommandTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_ExtractFinalDigitRun_HandlesLastFourAcrossMixedPhoneFormats()
+    {
+        var result = FlashFillService.Fill(
+            [("(555) 867-5309", "5309"), ("800-555-0100", "0100")],
+            ["212.555.1234", "main x6789"]);
+
+        result.Should().BeEquivalentTo(["1234", "6789"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractFinalDigitRun_ReturnsNullWhenRemainingHasNoDigits()
+    {
+        var result = FlashFillService.Fill(
+            [("(555) 867-5309", "5309"), ("800-555-0100", "0100")],
+            ["no extension"]);
+
+        result.Should().BeNull();
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
