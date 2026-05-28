@@ -22,7 +22,7 @@ internal static class WorkbookThemeDialogPlanner
             effects ?? string.Empty);
         error = null;
 
-        foreach (var slot in WorkbookThemeColorSlots)
+        foreach (var slot in WorkbookThemeColorSlots.All)
         {
             var text = colorTextBySlot.TryGetValue(slot, out var value)
                 ? value
@@ -55,21 +55,6 @@ internal static class WorkbookThemeDialogPlanner
         }
     }
 
-    private static readonly WorkbookThemeColorSlot[] WorkbookThemeColorSlots =
-    [
-        WorkbookThemeColorSlot.Dark1,
-        WorkbookThemeColorSlot.Light1,
-        WorkbookThemeColorSlot.Dark2,
-        WorkbookThemeColorSlot.Light2,
-        WorkbookThemeColorSlot.Accent1,
-        WorkbookThemeColorSlot.Accent2,
-        WorkbookThemeColorSlot.Accent3,
-        WorkbookThemeColorSlot.Accent4,
-        WorkbookThemeColorSlot.Accent5,
-        WorkbookThemeColorSlot.Accent6,
-        WorkbookThemeColorSlot.Hyperlink,
-        WorkbookThemeColorSlot.FollowedHyperlink
-    ];
 }
 
 internal sealed record WorkbookThemeDialogValidationError(
