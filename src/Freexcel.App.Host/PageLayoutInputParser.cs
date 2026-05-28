@@ -94,7 +94,7 @@ public static class PageLayoutInputParser
             return true;
 
         var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1 && uint.TryParse(parts[0], out var single))
+        if (parts.Length == 1 && TryParseRepeatRowToken(parts[0], out var single))
         {
             if (!IsValidRepeatRow(single))
                 return false;
@@ -103,7 +103,9 @@ public static class PageLayoutInputParser
             return true;
         }
 
-        if (parts.Length == 2 && uint.TryParse(parts[0], out var start) && uint.TryParse(parts[1], out var end))
+        if (parts.Length == 2 &&
+            TryParseRepeatRowToken(parts[0], out var start) &&
+            TryParseRepeatRowToken(parts[1], out var end))
         {
             if (!IsValidRepeatRow(start) || !IsValidRepeatRow(end))
                 return false;
@@ -127,10 +129,11 @@ public static class PageLayoutInputParser
         {
             try
             {
-                if (!IsColumnName(parts[0]))
+                var token = NormalizeAbsoluteReferenceToken(parts[0]);
+                if (!IsColumnName(token))
                     return false;
 
-                var single = CellAddress.ColumnNameToNumber(parts[0]);
+                var single = CellAddress.ColumnNameToNumber(token);
                 if (!IsValidRepeatColumn(single))
                     return false;
 
@@ -147,11 +150,13 @@ public static class PageLayoutInputParser
         {
             try
             {
-                if (!IsColumnName(parts[0]) || !IsColumnName(parts[1]))
+                var startToken = NormalizeAbsoluteReferenceToken(parts[0]);
+                var endToken = NormalizeAbsoluteReferenceToken(parts[1]);
+                if (!IsColumnName(startToken) || !IsColumnName(endToken))
                     return false;
 
-                var start = CellAddress.ColumnNameToNumber(parts[0]);
-                var end = CellAddress.ColumnNameToNumber(parts[1]);
+                var start = CellAddress.ColumnNameToNumber(startToken);
+                var end = CellAddress.ColumnNameToNumber(endToken);
                 if (!IsValidRepeatColumn(start) || !IsValidRepeatColumn(end))
                     return false;
 
@@ -259,6 +264,12 @@ public static class PageLayoutInputParser
 
     private static bool IsValidRepeatColumn(uint column) =>
         column is > 0 and <= CellAddress.MaxCol;
+
+    private static bool TryParseRepeatRowToken(string token, out uint row) =>
+        uint.TryParse(NormalizeAbsoluteReferenceToken(token), out row);
+
+    private static string NormalizeAbsoluteReferenceToken(string token) =>
+        token.Trim().TrimStart('$');
 
     private static bool IsColumnName(string text) =>
         text.Length > 0 && text.All(char.IsLetter);
