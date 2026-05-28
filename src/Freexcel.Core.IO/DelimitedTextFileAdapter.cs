@@ -2,8 +2,10 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
 
-public sealed class DelimitedTextFileAdapter(string extension, string formatName, char delimiter) : IFileAdapter
+public sealed class DelimitedTextFileAdapter(string extension, string formatName, char formatDelimiter) : IFileAdapter
 {
+    private readonly char delimiter = ValidateDelimiter(formatDelimiter);
+
     public string Extension { get; } = extension;
     public string FormatName { get; } = formatName;
 
@@ -17,4 +19,12 @@ public sealed class DelimitedTextFileAdapter(string extension, string formatName
 
     public void Save(Workbook workbook, Stream stream) =>
         DelimitedTextWorkbookWriter.Save(workbook, stream, delimiter);
+
+    private static char ValidateDelimiter(char delimiter)
+    {
+        if (delimiter is '\r' or '\n')
+            throw new ArgumentException("Delimited text field delimiter cannot be a line break.", nameof(delimiter));
+
+        return delimiter;
+    }
 }
