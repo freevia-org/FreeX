@@ -75,8 +75,11 @@ public sealed class PageLayoutInputParserTests
     [InlineData("1:2", true, 1, 2)]
     [InlineData("4", true, 4, 4)]
     [InlineData("5:3", true, 3, 5)]
+    [InlineData("1048576", true, 1048576, 1048576)]
     [InlineData("none", true, null, null)]
     [InlineData("0:2", false, null, null)]
+    [InlineData("1048577", false, null, null)]
+    [InlineData("1:1048577", false, null, null)]
     [InlineData("A:C", false, null, null)]
     public void TryParseRepeatRows_ParsesExcelStyleRowRanges(string input, bool expected, int? expectedStart, int? expectedEnd)
     {
@@ -90,8 +93,11 @@ public sealed class PageLayoutInputParserTests
     [InlineData("A:C", true, 1, 3)]
     [InlineData("D", true, 4, 4)]
     [InlineData("C:A", true, 1, 3)]
+    [InlineData("XFD", true, 16384, 16384)]
     [InlineData("clear", true, null, null)]
     [InlineData("1:2", false, null, null)]
+    [InlineData("XFE", false, null, null)]
+    [InlineData("A:XFE", false, null, null)]
     [InlineData("A:B:C", false, null, null)]
     public void TryParseRepeatColumns_ParsesExcelStyleColumnRanges(string input, bool expected, int? expectedStart, int? expectedEnd)
     {

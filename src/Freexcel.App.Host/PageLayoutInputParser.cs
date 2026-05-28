@@ -96,7 +96,7 @@ public static class PageLayoutInputParser
         var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 1 && uint.TryParse(parts[0], out var single))
         {
-            if (single == 0)
+            if (!IsValidRepeatRow(single))
                 return false;
 
             range = new WorksheetRepeatRange(single, single);
@@ -105,7 +105,7 @@ public static class PageLayoutInputParser
 
         if (parts.Length == 2 && uint.TryParse(parts[0], out var start) && uint.TryParse(parts[1], out var end))
         {
-            if (start == 0 || end == 0)
+            if (!IsValidRepeatRow(start) || !IsValidRepeatRow(end))
                 return false;
 
             range = new WorksheetRepeatRange(Math.Min(start, end), Math.Max(start, end));
@@ -131,6 +131,9 @@ public static class PageLayoutInputParser
                     return false;
 
                 var single = CellAddress.ColumnNameToNumber(parts[0]);
+                if (!IsValidRepeatColumn(single))
+                    return false;
+
                 range = new WorksheetRepeatRange(single, single);
                 return true;
             }
@@ -149,6 +152,9 @@ public static class PageLayoutInputParser
 
                 var start = CellAddress.ColumnNameToNumber(parts[0]);
                 var end = CellAddress.ColumnNameToNumber(parts[1]);
+                if (!IsValidRepeatColumn(start) || !IsValidRepeatColumn(end))
+                    return false;
+
                 range = new WorksheetRepeatRange(Math.Min(start, end), Math.Max(start, end));
                 return true;
             }
@@ -246,6 +252,12 @@ public static class PageLayoutInputParser
         row is > 0 and <= CellAddress.MaxRow;
 
     public static bool IsValidColumnBreak(uint column) =>
+        column is > 0 and <= CellAddress.MaxCol;
+
+    private static bool IsValidRepeatRow(uint row) =>
+        row is > 0 and <= CellAddress.MaxRow;
+
+    private static bool IsValidRepeatColumn(uint column) =>
         column is > 0 and <= CellAddress.MaxCol;
 
     private static bool IsColumnName(string text) =>
