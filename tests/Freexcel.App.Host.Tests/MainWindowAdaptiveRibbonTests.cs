@@ -25,8 +25,36 @@ public sealed class MainWindowAdaptiveRibbonTests
             harness.SetRibbonWidth(220);
 
             harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
-            harness.CollapsedRibbonGroupMenus.Should().Contain(menu => menu.Items.Count > 0);
+            harness.CollapsedRibbonGroupMenus.Should().NotBeEmpty();
             harness.CollapsedMenuHeaders("Editing").Should().Contain(["AutoSum", "Fill", "Clear", "Sort & Filter", "Find & Select"]);
+        });
+    }
+
+    [Fact]
+    public void CollapsedRibbonGroupMenu_BuildsItemsOnlyWhenOpened()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var group = new StackPanel();
+            RibbonMetadata.SetGroupName(group, "Editing");
+
+            var sourceButton = new Button();
+            RibbonTooltip.SetTitle(sourceButton, "AutoSum");
+            RibbonTooltip.SetKeyTip(sourceButton, "AS");
+            group.Children.Add(sourceButton);
+
+            var createMenu = typeof(MainWindow)
+                .GetMethod("CreateLazyCollapsedRibbonGroupMenu", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateLazyCollapsedRibbonGroupMenu");
+            var menu = (ContextMenu)createMenu.Invoke(null, [group])!;
+
+            menu.Items.Count.Should().Be(0, "collapsed groups should not clone menus during resize or tab switching");
+
+            menu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
+
+            menu.Items.OfType<MenuItem>()
+                .Select(item => item.Header?.ToString())
+                .Should().ContainSingle("AutoSum");
         });
     }
 
@@ -471,6 +499,9 @@ public sealed class MainWindowAdaptiveRibbonTests
         adaptiveSource.Should().Contain("RibbonMetadata.IsRibbonGroup(e)");
         adaptiveSource.Should().NotContain("System.Windows.Shapes.Rectangle");
         adaptiveSource.Should().NotContain("FindVisualAncestor<Border>(textBlock)");
+        adaptiveSource.Should().Contain("ContextMenu = CreateLazyCollapsedRibbonGroupMenu(group)");
+        adaptiveSource.Should().Contain("EnsureCollapsedRibbonGroupMenuItems(menu)");
+        adaptiveSource.Should().NotContain("ContextMenu = CreateCollapsedRibbonGroupMenu(group)");
         footprintUpdater.Should().Contain("TryGetCollapsedRibbonButtonCaption(button, out var caption)");
         footprintUpdater.Should().NotContain("EnumerateVisualDescendants");
         footprintUpdater.Should().NotContain("EnumerateLogicalDescendants");
@@ -500,6 +531,45 @@ public sealed class MainWindowAdaptiveRibbonTests
             arrangeAll.Items.OfType<MenuItem>()
                 .Where(item => !ReferenceEquals(item, tiled))
                 .Should().OnlyContain(item => item.IsChecked == false);
+        });
+    }
+
+    [Fact]
+    public void CollapsedRibbonMenuItems_DeferNestedMenuRefreshUntilSubmenuOpened()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var group = new StackPanel();
+            RibbonMetadata.SetGroupName(group, "Window");
+
+            var sourceButton = new Button();
+            RibbonTooltip.SetTitle(sourceButton, "Arrange All");
+            var sourceMenu = new ContextMenu();
+            var sourceChild = new MenuItem { Header = "Tiled", IsCheckable = true };
+            sourceMenu.Items.Add(sourceChild);
+            sourceMenu.Opened += (_, _) => sourceChild.IsChecked = true;
+            sourceButton.ContextMenu = sourceMenu;
+            group.Children.Add(sourceButton);
+
+            var createMenu = typeof(MainWindow)
+                .GetMethod("CreateLazyCollapsedRibbonGroupMenu", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateLazyCollapsedRibbonGroupMenu");
+            var menu = (ContextMenu)createMenu.Invoke(null, [group])!;
+
+            menu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
+            var arrangeAll = menu.Items.OfType<MenuItem>()
+                .Single(item => string.Equals(item.Header?.ToString(), "Arrange All", StringComparison.Ordinal));
+            var tiled = arrangeAll.Items.OfType<MenuItem>()
+                .Single(item => string.Equals(item.Header?.ToString(), "Tiled", StringComparison.Ordinal));
+            tiled.IsChecked.Should().BeFalse("cloned submenus should not run source Opened handlers while only the collapsed group menu opens");
+
+            menu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
+
+            tiled.IsChecked.Should().BeFalse("top-level menu opening should only refresh top-level source button state");
+
+            arrangeAll.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent, arrangeAll));
+
+            tiled.IsChecked.Should().BeTrue("the nested clone should refresh when that submenu is actually displayed");
         });
     }
 
@@ -828,6 +898,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             RibbonTooltip.GetTitle(button).Should().Be("Page Setup");
             RibbonTooltip.GetKeyTip(button).Should().Be("PA");
             button.ContextMenu.Should().NotBeNull();
+            button.ContextMenu!.Items.Count.Should().Be(0, "collapsed group menus are populated lazily");
+            button.ContextMenu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, button.ContextMenu));
             button.ContextMenu!.Items.OfType<MenuItem>().Single().Header.Should().Be("Page Setup");
         });
     }
@@ -989,7 +1061,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
-                .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
+                .SelectMany(button => OpenCollapsedMenu(button.ContextMenu)?.Items.OfType<MenuItem>() ?? [])
                 .Select(item => item.Header?.ToString() ?? "")
                 .Where(header => !string.IsNullOrWhiteSpace(header))
                 .ToList();
@@ -999,7 +1071,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
-                .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
+                .SelectMany(button => OpenCollapsedMenu(button.ContextMenu)?.Items.OfType<MenuItem>() ?? [])
                 .Select(item => item.Header?.ToString() ?? "")
                 .Where(header => !string.IsNullOrWhiteSpace(header))
                 .ToList();
@@ -1009,7 +1081,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
-                .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
+                .SelectMany(button => OpenCollapsedMenu(button.ContextMenu)?.Items.OfType<MenuItem>() ?? [])
                 .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
 
         public ContextMenu? CollapsedMenu(string groupName) =>
@@ -1020,10 +1092,24 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Select(button => button.ContextMenu)
                 .FirstOrDefault(menu => menu is not null);
 
+        public ContextMenu? CollapsedActiveMenu(string groupName) =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(IsVisibleCollapsedGroupButton)
+                .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
+                .Select(button => button.ContextMenu)
+                .FirstOrDefault(menu => menu is not null);
+
         public MenuItem? CollapsedMenuItem(string groupName, string header) =>
-            CollapsedMenu(groupName)?.Items
+            OpenCollapsedMenu(CollapsedMenu(groupName))?.Items
                 .OfType<MenuItem>()
                 .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+
+        private static ContextMenu? OpenCollapsedMenu(ContextMenu? menu)
+        {
+            menu?.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
+            return menu;
+        }
 
         public Button? VisibleOrCollapsedRibbonButton(string title) =>
             HomeRibbonChildren
