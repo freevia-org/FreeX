@@ -188,6 +188,21 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void GcdAndLcm_RangeArgumentsScanAllReferencedCellsLikeExcel()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(12)),
+            (2, 1, new NumberValue(18)),
+            (3, 1, new TextValue("ignored")),
+            (4, 1, new BoolValue(true)),
+            (1, 2, new NumberValue(4)),
+            (2, 2, new NumberValue(6)));
+
+        Number("=GCD(A1:A4)", sheet).Should().Be(6);
+        Number("=LCM(B1:B2)", sheet).Should().Be(12);
+    }
+
+    [Fact]
     public void Convert_UsesExcelUnitCategoriesAndPrefixes()
     {
         Number("=CONVERT(1,\"kg\",\"g\")").Should().Be(1000);

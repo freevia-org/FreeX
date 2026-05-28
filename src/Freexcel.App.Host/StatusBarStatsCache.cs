@@ -25,6 +25,18 @@ public sealed class StatusBarStatsCache
         return stats;
     }
 
+    public StatusBarCalculator.Stats GetOrCalculate(Sheet sheet, GridRange range, ulong revision)
+    {
+        var source = new Source(sheet, range, revision);
+        if (_lastSource == source && _lastStats is { } cached)
+            return cached;
+
+        var stats = StatusBarCalculator.Calculate(sheet, range);
+        _lastSource = source;
+        _lastStats = stats;
+        return stats;
+    }
+
     public void Clear()
     {
         _lastSource = null;
