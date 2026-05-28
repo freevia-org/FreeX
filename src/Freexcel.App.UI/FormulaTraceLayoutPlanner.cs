@@ -10,7 +10,7 @@ public static class FormulaTraceLayoutPlanner
         IReadOnlyList<FormulaTraceArrow> arrows,
         SheetId sheetId)
     {
-        var layouts = new List<FormulaTraceArrowLayout>();
+        var layouts = new List<FormulaTraceArrowLayout>(arrows.Count);
         var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
         var useMetricLookups = arrows.Count > 1;
         Dictionary<uint, RowMetric>? rowLookup = null;
@@ -115,10 +115,10 @@ public static class FormulaTraceLayoutPlanner
     {
         var row = useMetricLookups
             ? GetRowMetric(viewport, address.Row, ref rowLookup)
-            : viewport.RowMetrics.FirstOrDefault(r => r.Row == address.Row);
+            : FindRowMetric(viewport.RowMetrics, address.Row);
         var col = useMetricLookups
             ? GetColMetric(viewport, address.Col, ref colLookup)
-            : viewport.ColMetrics.FirstOrDefault(c => c.Col == address.Col);
+            : FindColMetric(viewport.ColMetrics, address.Col);
         if (row is null || col is null)
         {
             rect = Rect.Empty;
@@ -177,6 +177,17 @@ public static class FormulaTraceLayoutPlanner
         return rowLookup.TryGetValue(row, out var metric) ? metric : null;
     }
 
+    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> rows, uint row)
+    {
+        foreach (var metric in rows)
+        {
+            if (metric.Row == row)
+                return metric;
+        }
+
+        return null;
+    }
+
     private static ColMetric? GetColMetric(
         ViewportModel viewport,
         uint col,
@@ -184,5 +195,16 @@ public static class FormulaTraceLayoutPlanner
     {
         colLookup ??= BuildColMetricLookup(viewport);
         return colLookup.TryGetValue(col, out var metric) ? metric : null;
+    }
+
+    private static ColMetric? FindColMetric(IReadOnlyList<ColMetric> columns, uint col)
+    {
+        foreach (var metric in columns)
+        {
+            if (metric.Col == col)
+                return metric;
+        }
+
+        return null;
     }
 }

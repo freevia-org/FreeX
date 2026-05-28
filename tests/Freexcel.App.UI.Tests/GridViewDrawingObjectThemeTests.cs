@@ -427,7 +427,7 @@ public sealed class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectHitTesting_UsesIndexedReverseLoops()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.UI", "GridView.ObjectDrag.cs"));
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.ObjectDrag.cs"));
         var hitTestBlock = source[
             source.IndexOf("private (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) HitTestDrawingObject", StringComparison.Ordinal)..
             source.IndexOf("private static bool ContainsInclusive", StringComparison.Ordinal)];

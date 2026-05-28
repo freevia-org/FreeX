@@ -367,6 +367,25 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void FormulaTraceLayoutPlanner_AvoidsPerArrowLinqMetricScans()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "FormulaTraceLayoutPlanner.cs"));
+        var calculateLayouts = source[
+            source.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateLayouts", StringComparison.Ordinal)..
+            source.IndexOf("public static CellAddress? HitTestMarker", StringComparison.Ordinal)];
+        var tryGetCellRect = source[
+            source.IndexOf("private static bool TryGetCellRect", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryGetMarkerHit", StringComparison.Ordinal)];
+
+        calculateLayouts.Should().Contain("new List<FormulaTraceArrowLayout>(arrows.Count)");
+        tryGetCellRect.Should().Contain("FindRowMetric(viewport.RowMetrics, address.Row)");
+        tryGetCellRect.Should().Contain("FindColMetric(viewport.ColMetrics, address.Col)");
+        tryGetCellRect.Should().NotContain("FirstOrDefault");
+        source.Should().Contain("private static RowMetric? FindRowMetric");
+        source.Should().Contain("private static ColMetric? FindColMetric");
+    }
+
+    [Fact]
     public void SplitPaneCellLayoutPlanner_BoundsTallMergeWorkToVisibleCells()
     {
         var sheetId = SheetId.New();
