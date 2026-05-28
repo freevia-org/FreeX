@@ -115,10 +115,11 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 if (cell.Value is not BlankValue || cell.FormulaText is not null)
                     sheet.SetCell(new CellAddress(sheet.Id, rowIndex, columnIndex), cell);
 
-                if (TryReadMergeRange(sheet.Id, rowIndex, columnIndex, cellElement, out var mergeRange))
+                var mergeAcross = ReadMergeExtent(cellElement, SpreadsheetMergeAcrossAttribute);
+                if (TryReadMergeRange(sheet.Id, rowIndex, columnIndex, cellElement, mergeAcross, out var mergeRange))
                     sheet.AddMergedRegion(mergeRange);
 
-                columnIndex++;
+                columnIndex = AdvanceColumnIndex(columnIndex, mergeAcross);
             }
 
             rowIndex++;
@@ -196,10 +197,10 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         uint row,
         uint column,
         XElement cellElement,
+        uint mergeAcross,
         out GridRange range)
     {
         range = default;
-        var mergeAcross = ReadMergeExtent(cellElement, SpreadsheetMergeAcrossAttribute);
         var mergeDown = ReadMergeExtent(cellElement, SpreadsheetMergeDownAttribute);
         if (mergeAcross == 0 && mergeDown == 0)
             return false;
@@ -222,6 +223,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         return uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
             ? value
             : 0u;
+    }
+
+    private static uint AdvanceColumnIndex(uint columnIndex, uint mergeAcross)
+    {
+        if (mergeAcross >= CellAddress.MaxCol || columnIndex > CellAddress.MaxCol - mergeAcross)
+            return CellAddress.MaxCol + 1;
+
+        return columnIndex + mergeAcross + 1;
     }
 
     private static XElement ToWorksheetElement(Sheet sheet) =>
