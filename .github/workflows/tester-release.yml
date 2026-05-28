@@ -221,6 +221,14 @@ jobs:
 
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
           The MSIX package is unsigned for local packaging validation; signing and Store submission remain release-gate tasks.
+
+          Public-preview accessibility gate:
+          - Keyboard-only smoke validation recorded.
+          - Screen-reader smoke validation recorded.
+          - UI Automation catalog review recorded.
+          - Known accessibility issues listed with affected workflow and planned follow-up.
+
+          If any gate item is not complete, treat this build as internal-only and do not promote it as a public-preview candidate.
           "@
           $extraNotes = $env:FREEXCEL_RELEASE_NOTES
           if (-not [string]::IsNullOrWhiteSpace($extraNotes)) {
