@@ -440,7 +440,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         wndProc.Should().Contain("SheetGrid.IsLiveResizing = true;");
         wndProc.Should().Contain("msg == WM_EXITSIZEMOVE && _isInWindowResizeMoveLoop");
         wndProc.Should().Contain("_isInWindowResizeMoveLoop = false;");
-        wndProc.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange();");
+        wndProc.Should().Contain("CompleteRibbonResizeCompaction();");
+        wndProc.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange();");
         wndProc.Should().Contain("CompleteViewportResizeRefresh();");
     }
 
