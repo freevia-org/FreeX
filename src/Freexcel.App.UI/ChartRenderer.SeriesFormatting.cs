@@ -1,3 +1,4 @@
+using System.Globalization;
 using OxyPlot;
 using OxyPlot.Annotations;
 using OxyPlot.Axes;
@@ -358,7 +359,7 @@ public static partial class ChartRenderer
         for (uint r = dataStartRow; r <= endRow; r++, i++)
         {
             if (cellLookup.TryGetValue((r, col), out var cell)
-                && double.TryParse(cell.DisplayText, out var v))
+                && double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
             {
                 var point = new DataPoint(i, v);
                 series.Points.Add(point);

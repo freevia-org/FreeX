@@ -359,6 +359,78 @@ public sealed class ChartRendererTests
         }
     }
 
+    [Fact]
+    public void ChartRenderer_ParsesInvariantDecimalValuesUnderNonInvariantCulture()
+    {
+        RunWithCulture("de-DE", () =>
+        {
+            var sheetId = SheetId.New();
+            var columnModel = BuildPlotModel(new ChartModel
+            {
+                Type = ChartType.Column,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+            }, new ViewportModel(
+                [
+                    Cell(1, 1, "Category"), Cell(1, 2, "Sales"),
+                    Cell(2, 1, "A"), Cell(2, 2, "1.5"),
+                    Cell(3, 1, "B"), Cell(3, 2, "2.5")
+                ],
+                [],
+                []));
+            columnModel.Series.OfType<RectangleBarSeries>().Single().Items
+                .Select(item => item.Y1)
+                .Should().Equal(1.5, 2.5);
+
+            var scatterModel = BuildPlotModel(new ChartModel
+            {
+                Type = ChartType.Scatter,
+                FirstColIsCategories = false,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+            }, new ViewportModel(
+                [
+                    Cell(1, 1, "X"), Cell(1, 2, "Y"),
+                    Cell(2, 1, "1.5"), Cell(2, 2, "10.5"),
+                    Cell(3, 1, "2.5"), Cell(3, 2, "20.5")
+                ],
+                [],
+                []));
+            scatterModel.Series.OfType<ScatterSeries>().Single().Points
+                .Select(point => (point.X, point.Y))
+                .Should().Equal((1.5, 10.5), (2.5, 20.5));
+
+            var radarModel = BuildPlotModel(new ChartModel
+            {
+                Type = ChartType.Radar,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+            }, new ViewportModel(
+                [
+                    Cell(1, 1, "Metric"), Cell(1, 2, "Score"),
+                    Cell(2, 1, "A"), Cell(2, 2, "1.5"),
+                    Cell(3, 1, "B"), Cell(3, 2, "2.5")
+                ],
+                [],
+                []));
+            radarModel.Series.OfType<LineSeries>().Single().Points
+                .Select(point => point.Y)
+                .Should().Equal(1.5, 2.5, 1.5);
+
+            var stackedModel = BuildPlotModel(new ChartModel
+            {
+                Type = ChartType.PercentStackedBar,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3)),
+                ShowDataLabels = true
+            }, new ViewportModel(
+                [
+                    Cell(1, 1, "Quarter"), Cell(1, 2, "North"), Cell(1, 3, "South"),
+                    Cell(2, 1, "Q1"), Cell(2, 2, "1.5"), Cell(2, 3, "2.5")
+                ],
+                [],
+                []));
+            stackedModel.Annotations.OfType<TextAnnotation>().Select(annotation => annotation.Text)
+                .Should().BeEquivalentTo("1.5", "2.5");
+        });
+    }
+
     [Theory]
     [InlineData(ChartBlankDisplayMode.Gap, 3, true, false)]
     [InlineData(ChartBlankDisplayMode.Span, 2, false, false)]
@@ -2654,4 +2726,21 @@ public sealed class ChartRendererTests
 
     private static ChartDataCell ChartCell(SheetId sheetId, uint row, uint col, string text) =>
         new(sheetId, row, col, text);
+
+    private static void RunWithCulture(string cultureName, Action action)
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureName);
+            action();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
 }

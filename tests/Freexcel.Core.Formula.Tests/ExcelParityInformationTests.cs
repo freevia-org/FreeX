@@ -125,6 +125,21 @@ public sealed class ExcelParityInformationTests
         _eval.Evaluate("=CELL(\"address\",B2)", Sheet()).Should().Be(new TextValue("$B$2"));
     }
 
+    [Fact]
+    public void CellProtect_ReportsLockedCellStyleIndependentOfSheetProtection()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Input");
+        var unlocked = workbook.RegisterStyle(new CellStyle { Locked = false });
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.GetCell(new CellAddress(sheet.Id, 1, 2))!.StyleId = unlocked;
+
+        _eval.Evaluate("=CELL(\"protect\",A1)", sheet, workbook).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=CELL(\"protect\",B1)", sheet, workbook).Should().Be(new NumberValue(0));
+    }
+
     [Theory]
     [InlineData("=INFO(\"memavail\")")]
     [InlineData("=INFO(\"memused\")")]
