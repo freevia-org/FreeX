@@ -146,19 +146,19 @@ public sealed class FormatPictureDialog : Window
         if (string.Equals(error, "Enter a numeric rotation in degrees.", StringComparison.Ordinal))
         {
             _tabs.SelectedItem = _sizeTab;
-            FocusAndSelect(_rotationBox);
+            DialogFocus.FocusAndSelect(_rotationBox);
             return;
         }
 
         if (string.Equals(error, "Enter positive width and height values.", StringComparison.Ordinal))
         {
             _tabs.SelectedItem = _sizeTab;
-            FocusAndSelect(ResolveInvalidSizeInput());
+            DialogFocus.FocusAndSelect(ResolveInvalidSizeInput());
             return;
         }
 
         _tabs.SelectedItem = _cropTab;
-        FocusAndSelect(ResolveInvalidCropInput(error));
+        DialogFocus.FocusAndSelect(ResolveInvalidCropInput(error));
     }
 
     private TextBox ResolveInvalidSizeInput()
@@ -191,13 +191,6 @@ public sealed class FormatPictureDialog : Window
         }
 
         return _cropLeftBox;
-    }
-
-    private static void FocusAndSelect(TextBox box)
-    {
-        box.Focus();
-        box.SelectAll();
-        Keyboard.Focus(box);
     }
 
     private void FocusInitialKeyboardTarget()
