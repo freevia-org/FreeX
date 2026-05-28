@@ -39,6 +39,12 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$progressPath = \"release/progress.json\"");
         workflow.Should().Contain("$releaseProgress = Get-Content -LiteralPath $progressPath -Raw | ConvertFrom-Json");
         workflow.Should().Contain("$overallCompletion = [int]$releaseProgress.overallCompletion");
+        workflow.Should().Contain("$releasePatchBase = [int]$releaseProgress.releasePatchBase");
+        workflow.Should().Contain("$channel = [string]$releaseProgress.channel");
+        workflow.Should().Contain("release/progress.json major must be non-negative.");
+        workflow.Should().Contain("release/progress.json overallCompletion must be between 0 and 100.");
+        workflow.Should().Contain("release/progress.json releasePatchBase must be non-negative.");
+        workflow.Should().Contain("Unsupported release channel '$channel'.");
         workflow.Should().Contain("elseif ($overallCompletion -ge 93) { $minor = 7 }");
         workflow.Should().Contain("elseif ($overallCompletion -ge 90) { $minor = 6 }");
         workflow.Should().Contain("$versionLabel = \"$major.$minor.$releasePatch\"");

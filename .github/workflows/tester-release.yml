@@ -78,12 +78,27 @@ jobs:
 
             $major = [int]$releaseProgress.major
             $overallCompletion = [int]$releaseProgress.overallCompletion
+            $releasePatchBase = [int]$releaseProgress.releasePatchBase
+            $channel = [string]$releaseProgress.channel
+            if ($major -lt 0) {
+              throw "release/progress.json major must be non-negative."
+            }
+            if ($overallCompletion -lt 0 -or $overallCompletion -gt 100) {
+              throw "release/progress.json overallCompletion must be between 0 and 100."
+            }
+            if ($releasePatchBase -lt 0) {
+              throw "release/progress.json releasePatchBase must be non-negative."
+            }
+            if ($channel -ne "test") {
+              throw "Unsupported release channel '$channel'."
+            }
+
             if ($overallCompletion -ge 99) { $minor = 9 }
             elseif ($overallCompletion -ge 96) { $minor = 8 }
             elseif ($overallCompletion -ge 93) { $minor = 7 }
             elseif ($overallCompletion -ge 90) { $minor = 6 }
             else { $minor = 5 }
-            $releasePatch = [int]$releaseProgress.releasePatchBase + $runNumber
+            $releasePatch = $releasePatchBase + $runNumber
             $versionLabel = "$major.$minor.$releasePatch"
           }
 
