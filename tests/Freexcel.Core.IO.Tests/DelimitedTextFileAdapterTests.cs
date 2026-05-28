@@ -248,7 +248,7 @@ public sealed class DelimitedTextFileAdapterTests
     public void Load_UsesExcelLikeTextCoercionForErrorLiterals()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#N/A\t#DIV/0!\t#REF!\t#CIRCULAR!\t#GETTING_DATA\r\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#N/A\t#DIV/0!\t#REF!\t#CIRCULAR!\t#FIELD!\t#BLOCKED!\t#GETTING_DATA\r\n"));
 
         var workbook = adapter.Load(stream);
         var sheet = workbook.Sheets.Single();
@@ -257,7 +257,9 @@ public sealed class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(ErrorValue.DivByZero);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(ErrorValue.Ref);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 4)).Should().Be(ErrorValue.Circular);
-        sheet.GetValue(new CellAddress(sheet.Id, 1, 5)).Should().Be(new ErrorValue("#GETTING_DATA"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 5)).Should().Be(new ErrorValue("#FIELD!"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 6)).Should().Be(new ErrorValue("#BLOCKED!"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 7)).Should().Be(new ErrorValue("#GETTING_DATA"));
     }
 
     [Fact]
@@ -735,6 +737,8 @@ public sealed class DelimitedTextFileAdapterTests
     [InlineData(" TRUE ")]
     [InlineData("2026-05-17")]
     [InlineData("#N/A")]
+    [InlineData("#FIELD!")]
+    [InlineData("#BLOCKED!")]
     public void Save_RoundTripsCoercionLikeTextFieldsAsLiteralText(string text)
     {
         var workbook = new Workbook("Book1");

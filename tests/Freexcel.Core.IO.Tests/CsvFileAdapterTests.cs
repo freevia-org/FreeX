@@ -799,6 +799,8 @@ public sealed class CsvFileAdapterTests
     [InlineData("sep=\t")]
     [InlineData("#N/A")]
     [InlineData("#DIV/0!")]
+    [InlineData("#FIELD!")]
+    [InlineData("#BLOCKED!")]
     [InlineData("#GETTING_DATA")]
     [InlineData(" #N/A ")]
     public void Save_RoundTripsErrorLikeTextFieldsAsLiteralText(string text)

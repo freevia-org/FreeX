@@ -300,6 +300,8 @@ internal static class DelimitedTextWorkbookWriter
                trimmed.Equals("#CIRCULAR!", StringComparison.OrdinalIgnoreCase) ||
                trimmed.Equals("#SPILL!", StringComparison.OrdinalIgnoreCase) ||
                trimmed.Equals("#CALC!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#FIELD!", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("#BLOCKED!", StringComparison.OrdinalIgnoreCase) ||
                trimmed.Equals("#GETTING_DATA", StringComparison.OrdinalIgnoreCase);
     }
 
