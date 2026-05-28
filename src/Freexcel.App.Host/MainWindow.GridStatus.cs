@@ -30,11 +30,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var stats = _statusBarStatsCache.GetOrCreate(
-            sheet,
-            range,
-            _navigationCacheRevision,
-            () => StatusBarCalculator.Calculate(sheet, range));
+        var stats = _statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision);
 
         if (stats.Count == 0)
         {

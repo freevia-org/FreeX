@@ -87,6 +87,9 @@ public sealed class Workbook
     /// <summary>Unique identifier for this workbook instance.</summary>
     public WorkbookId Id { get; }
 
+    /// <summary>Return whether a sheet name contains a character Excel does not allow.</summary>
+    public static bool ContainsInvalidSheetNameCharacter(string name) => name.IndexOfAny(InvalidSheetNameChars) >= 0;
+
     /// <summary>File name or title of the workbook.</summary>
     public string Name { get; set; }
 
@@ -278,7 +281,7 @@ public sealed class Workbook
         if (name.Length > 31)
             return "Sheet name is invalid: it cannot exceed 31 characters.";
 
-        if (name.IndexOfAny(InvalidSheetNameChars) >= 0)
+        if (ContainsInvalidSheetNameCharacter(name))
             return "Sheet name is invalid: it cannot contain : \\ / ? * [ or ].";
 
         if (name.StartsWith('\'') || name.EndsWith('\''))
