@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -38,6 +39,7 @@ public class TextEntryDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _textBox.Text = initialText ?? "";
+        AutomationProperties.SetName(_textBox, CreateAutomationName(label));
         Content = ObjectSizeDialog.CreateSingleInputContent(label, _textBox, () =>
         {
             Result = CreateResult(_textBox.Text);
@@ -47,6 +49,11 @@ public class TextEntryDialog : Window
     }
 
     public static TextEntryDialogResult CreateResult(string? text) => new((text ?? "").Trim());
+
+    private static string CreateAutomationName(string label) =>
+        label.Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace(":", string.Empty, StringComparison.Ordinal)
+            .Trim();
 
     private void FocusInitialKeyboardTarget()
     {
