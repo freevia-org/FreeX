@@ -18,7 +18,7 @@ internal static class XlsxRelationshipReader
             if (string.IsNullOrWhiteSpace(id) ||
                 string.IsNullOrWhiteSpace(target) ||
                 targets.ContainsKey(id) ||
-                string.Equals(element.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                IsExternalRelationship(element, target))
             {
                 continue;
             }
@@ -27,6 +27,15 @@ internal static class XlsxRelationshipReader
         }
 
         return targets;
+    }
+
+    private static bool IsExternalRelationship(XElement relationship, string target)
+    {
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
+               !string.IsNullOrWhiteSpace(uri.Scheme);
     }
 
     public static Dictionary<string, string> LoadTargets(
