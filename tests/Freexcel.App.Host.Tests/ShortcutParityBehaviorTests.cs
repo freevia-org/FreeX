@@ -263,14 +263,13 @@ public sealed class ShortcutParityBehaviorTests
     }
 
     [Fact]
-    public void DataFilterCommands_DirectlyUseFilterInputParserForTopBottomAverageAndCriterionFilters()
+    public void DataFilterCommands_UsesFilterPromptPlannerForTopBottomAverageAndCriterionFilters()
     {
         var source = File.ReadAllText(
             WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
 
-        source.Should().Contain("FilterInputParser.TryParseTopBottom");
-        source.Should().Contain("FilterInputParser.TryParseAverage");
-        source.Should().Contain("FilterInputParser.TryParseCriterion");
+        source.Should().Contain("FilterPromptPlanner.TryPlan");
+        source.Should().Contain("promptPlan.CreateCommand");
     }
 
     // --- Ctrl+Q (Quick Analysis) ---
