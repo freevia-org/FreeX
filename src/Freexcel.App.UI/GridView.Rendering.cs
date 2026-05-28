@@ -163,19 +163,12 @@ public partial class GridView
         dc.DrawLine(GridPen, new Point(ActualWidth, EffectiveColHeaderHeight), new Point(ActualWidth, endY));
     }
 
-    private static void DrawLiveResizeHeaderText(DrawingContext dc, string text, Rect rect)
+    private void DrawLiveResizeHeaderText(DrawingContext dc, string text, Rect rect)
     {
         if (string.IsNullOrWhiteSpace(text) || rect.Width <= 4 || rect.Height <= 4)
             return;
 
-        var formatted = new FormattedText(
-            text,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            DefaultTypeface,
-            11,
-            TextBrush,
-            1);
+        var formatted = GetDefaultFormattedText(text, 11, VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
         dc.DrawText(formatted, new Point(
             rect.Left + Math.Max(2, (rect.Width - formatted.Width) / 2),
@@ -507,12 +500,14 @@ public partial class GridView
                     ToDisplayFontSize(6));
             }
 
-            var text = new FormattedText(
-                cell.DisplayText,
-                CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                typeface, fontSize, textBrush,
-                pixelsPerDip);
+            var text = style is null
+                ? GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)
+                : new FormattedText(
+                    cell.DisplayText,
+                    CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    typeface, fontSize, textBrush,
+                    pixelsPerDip);
 
             if (BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);

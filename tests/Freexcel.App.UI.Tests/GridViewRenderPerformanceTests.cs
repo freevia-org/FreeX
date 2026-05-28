@@ -186,6 +186,22 @@ public sealed class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<CellBorder, Pen> _borderPenCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<Brush, Pen> _underlinePenCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();");
+    }
+
+    [Fact]
+    public void DefaultTextLayouts_AreCachedAcrossRenderPasses()
+    {
+        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.TextLayoutCache.cs"));
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var headers = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.Headers.cs"));
+
+        cacheSource.Should().Contain("private FormattedText GetDefaultFormattedText");
+        cacheSource.Should().Contain("_defaultTextLayoutCache.TryGetValue");
+        cacheSource.Should().Contain("_defaultTextLayoutCache.Count >= DefaultTextLayoutCacheLimit");
+        rendering.Should().Contain("style is null");
+        rendering.Should().Contain("GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)");
+        headers.Should().Contain("GetDefaultFormattedText(");
     }
 
     [Fact]
