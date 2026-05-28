@@ -22,6 +22,9 @@ public sealed class GoalSeekCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (!double.IsFinite(_newValue))
+            return new CommandOutcome(false, ErrorMessage: "Goal Seek result must be a finite number.");
+
         var sheet = ctx.GetSheet(_changingCell.Sheet);
         if (sheet is null)
             return new CommandOutcome(false, ErrorMessage: "Sheet no longer exists.");
