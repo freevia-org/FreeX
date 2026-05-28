@@ -138,7 +138,7 @@ public static partial class BuiltInFunctions
         if (matchMode is not (0 or 1))
             return ErrorValue.Value;
 
-        var padWith = args.Count > 5
+        var padWith = args.Count > 5 && args[5] is not BlankValue
             ? SingleValueOrErrorAsValue(args[5], out error)
             : ErrorValue.NA;
         if (padWith is null) return error;
