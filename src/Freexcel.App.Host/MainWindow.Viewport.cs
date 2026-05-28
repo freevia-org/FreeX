@@ -63,7 +63,12 @@ public partial class MainWindow
     {
         int notches = ViewportScrollCalculator.NormalizeWheelNotches(e.Delta);
         if (SheetGrid.Viewport is { } wheelViewport)
-            _activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(wheelViewport, e.GetPosition(SheetGrid));
+        {
+            var wheelPos = e.GetPosition(SheetGrid);
+            _activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestViewportCell(wheelViewport, _currentSheetId, wheelPos) is null
+                ? Freexcel.App.UI.SplitPaneRegion.BottomRight
+                : Freexcel.App.UI.GridView.HitTestSplitPaneRegion(wheelViewport, wheelPos);
+        }
 
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {

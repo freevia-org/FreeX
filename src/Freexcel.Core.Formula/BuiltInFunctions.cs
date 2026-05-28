@@ -611,9 +611,11 @@ public static partial class BuiltInFunctions
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
     private static readonly string[] SpecialFunctionNames = ["LET", "LAMBDA"];
+    private static readonly IReadOnlyCollection<string> FunctionNames =
+        Array.AsReadOnly(Functions.Keys.Concat(SpecialFunctionNames).ToArray());
 
     /// <summary>Recognized built-in and special-form function names.</summary>
-    public static IReadOnlyCollection<string> Names => Functions.Keys.Concat(SpecialFunctionNames).ToArray();
+    public static IReadOnlyCollection<string> Names => FunctionNames;
 
     /// <summary>True if the function recalculates on every pass regardless of input changes.</summary>
     public static bool IsVolatile(string name) => VolatileFunctions.Contains(name);

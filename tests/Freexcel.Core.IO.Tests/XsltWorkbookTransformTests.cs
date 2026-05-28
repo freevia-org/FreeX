@@ -119,6 +119,29 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputDeclaration_CanBeOmitted()
+    {
+        using var source = StreamFromString("<rows><row name=\"Hotel\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <worksheet>
+                  <cell><xsl:value-of select="row/@name" /></cell>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .StartWith("<worksheet>")
+            .And.Contain("<cell>Hotel</cell>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_IdentityTransform_PreservesXmlSpaceTextWhitespace()
     {
         using var source = StreamFromString("<rows><row xml:space=\"preserve\">  Foxtrot  </row></rows>");
