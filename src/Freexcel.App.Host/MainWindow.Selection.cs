@@ -787,12 +787,22 @@ public partial class MainWindow
     {
         var pos = e.GetPosition(SheetGrid);
         var hitAddr = HitTestCell(pos);
-        if (!_dragSelectActive || e.LeftButton != MouseButtonState.Pressed)
+        if (!_dragSelectActive)
         {
             if (hitAddr.HasValue)
                 UpdateCommentPreview(hitAddr.Value);
             else
                 ClearCommentPreview();
+            return;
+        }
+
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            _formatPainterTargetSelectionActive = false;
+            _dragSelectActive = false;
+            _dragSelectAddsAdditionalRange = false;
+            SheetGrid.ReleaseMouseCapture();
+            CompleteDragSelectionStatusRefresh();
             return;
         }
 
