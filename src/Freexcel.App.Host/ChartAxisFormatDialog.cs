@@ -4,6 +4,7 @@ using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
+using static Freexcel.App.Host.ChartDialogInputParser;
 using static Freexcel.App.Host.ChartDialogHelpers;
 
 namespace Freexcel.App.Host;
@@ -317,59 +318,6 @@ public sealed class ChartAxisFormatDialog : Window
             lineColor,
             lineThickness);
         DialogResult = true;
-    }
-
-    private static bool TryReadNullableDouble(TextBox textBox, out double? value)
-    {
-        value = null;
-        var text = textBox.Text.Trim();
-        if (string.IsNullOrEmpty(text) || text.Equals("auto", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (!double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-            || !double.IsFinite(parsed))
-        {
-            return false;
-        }
-
-        value = parsed;
-        return true;
-    }
-
-    private static bool TryReadOptionalColor(TextBox textBox, out CellColor? color) =>
-        ColorInputParser.TryParseOptionalHexColor(textBox.Text, out color);
-
-    private static bool TryReadNullablePositiveDouble(TextBox textBox, out double? value)
-    {
-        if (!TryReadNullableDouble(textBox, out value))
-            return false;
-
-        return value is null or > 0;
-    }
-
-    private static bool TryReadPositiveDouble(TextBox textBox, out double value)
-    {
-        value = 0;
-        return double.TryParse(
-                textBox.Text,
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out value)
-            && double.IsFinite(value)
-            && value > 0;
-    }
-
-    private static bool TryReadClampedDouble(TextBox textBox, double min, double max, out double value)
-    {
-        value = 0;
-        return double.TryParse(
-                textBox.Text,
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out value)
-            && double.IsFinite(value)
-            && value >= min
-            && value <= max;
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
