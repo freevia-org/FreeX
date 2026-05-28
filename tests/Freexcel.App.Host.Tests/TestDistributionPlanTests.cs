@@ -44,4 +44,20 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("custom `Main`");
         source.Should().Contain("no background update download");
     }
+
+    [Fact]
+    public void DistributionPlan_DocumentsAccessibilityValidationGate()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md"));
+        var outstanding = File.ReadAllText(WorkspaceFileLocator.Find("docs", "OUTSTANDING_BUILD.md"));
+
+        source.Should().Contain("| 8. Accessibility validation | Required before public preview |");
+        source.Should().Contain("Keyboard-only smoke validation");
+        source.Should().Contain("Screen-reader smoke validation");
+        source.Should().Contain("UI Automation catalog review");
+        source.Should().Contain("known-issues section");
+        source.Should().Contain("internal-only");
+        outstanding.Should().Contain("documented accessibility validation gate");
+        outstanding.Should().Contain("keyboard-only, screen-reader, UI Automation catalog, and known-issues");
+    }
 }
