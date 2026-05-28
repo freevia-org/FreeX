@@ -51,6 +51,27 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void NewestStatusReport_UsesBranchNeutralMainlineMetadata()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var report = File.ReadAllText(newestStatusReport);
+
+        report.Should().Contain("Mainline observed: branch-neutral `origin/main` snapshot");
+        report.Should().NotContain("codex/");
+        report.Should().NotContain("Build-lane worktree");
+        report.Should().NotContain("| Local branches |");
+        report.Should().NotContain("| Registered worktrees |");
+        report.Should().NotContain("| Source lines under `src/` |");
+        report.Should().NotContain("| Test lines under `tests/` |");
+        report.Should().NotContain("| Documentation lines under `docs/` |");
+        report.Should().NotContain("| Test methods marked `[Fact]` / `[Theory]` |");
+        report.Should().NotContain("registered worktrees remain");
+    }
+
+    [Fact]
     public void NewestStatusReport_RepositoryMetricsMatchTrackedSources()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
@@ -69,11 +90,6 @@ public sealed partial class DocumentationIndexTests
         metrics["C# source files under `src/`"].Should().Be(sourceFiles.Length);
         metrics["C# test files under `tests/`"].Should().Be(testFiles.Length);
         metrics["Markdown docs under `docs/`"].Should().Be(docsFiles.Length);
-        metrics["Source lines under `src/`"].Should().Be(CountLines(repositoryRoot, sourceFiles));
-        metrics["Test lines under `tests/`"].Should().Be(CountLines(repositoryRoot, testFiles));
-        metrics["Documentation lines under `docs/`"].Should().Be(CountLines(repositoryRoot, docsFiles));
-        metrics["Test methods marked `[Fact]` / `[Theory]`"].Should().Be(
-            testFiles.Sum(file => FactOrTheoryAttribute().Matches(File.ReadAllText(Path.Combine(repositoryRoot, ToPlatformPath(file)))).Count));
     }
 
     [Fact]
