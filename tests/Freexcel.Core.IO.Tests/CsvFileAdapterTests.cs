@@ -700,6 +700,8 @@ public sealed class CsvFileAdapterTests
     [InlineData("$42.00")]
     [InlineData("+$42.00")]
     [InlineData("-$42.00")]
+    [InlineData(" +$42.00 ")]
+    [InlineData(" -$42.00 ")]
     [InlineData("($42.25)")]
     [InlineData(" ($42.25) ")]
     public void Save_RoundTripsCurrencyTextFieldsAsLiteralText(string text)
@@ -797,6 +799,8 @@ public sealed class CsvFileAdapterTests
     [InlineData("sep=\t")]
     [InlineData("#N/A")]
     [InlineData("#DIV/0!")]
+    [InlineData("#FIELD!")]
+    [InlineData("#BLOCKED!")]
     [InlineData("#GETTING_DATA")]
     [InlineData(" #N/A ")]
     public void Save_RoundTripsErrorLikeTextFieldsAsLiteralText(string text)

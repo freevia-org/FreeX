@@ -18,27 +18,41 @@ public static class StatusBarCalculator
         int numericalCount = 0;
         double? min = null, max = null;
 
+        var scanRange = Intersect(range, usedRange);
+
         // For large ranges (full rows/cols/sheet) iterate only used cells to avoid
         // enumerating billions of empty addresses.
-        long totalCells = (long)(range.End.Row - range.Start.Row + 1)
-                        * (long)(range.End.Col - range.Start.Col + 1);
+        long totalCells = scanRange.CellCount;
 
         if (totalCells > 10_000)
         {
             foreach (var (address, cell) in sheet.EnumerateCells())
             {
-                if (range.Contains(address))
+                if (scanRange.Contains(address))
                     Accumulate(cell.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
             }
         }
         else
         {
-            foreach (var address in range.AllCells())
+            foreach (var address in scanRange.AllCells())
                 Accumulate(sheet.GetValue(address), ref sum, ref count, ref numericalCount, ref min, ref max);
         }
 
         double? average = numericalCount > 0 ? sum / numericalCount : null;
         return new Stats(sum, count, numericalCount, average, min, max);
+    }
+
+    private static GridRange Intersect(GridRange range, GridRange usedRange)
+    {
+        return new GridRange(
+            new CellAddress(
+                range.Start.Sheet,
+                Math.Max(range.Start.Row, usedRange.Start.Row),
+                Math.Max(range.Start.Col, usedRange.Start.Col)),
+            new CellAddress(
+                range.Start.Sheet,
+                Math.Min(range.End.Row, usedRange.End.Row),
+                Math.Min(range.End.Col, usedRange.End.Col)));
     }
 
     private static void Accumulate(
