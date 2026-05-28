@@ -17,6 +17,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly FillCellsDirection _direction;
     private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
 
     public string Label => _direction switch
     {
@@ -44,18 +45,37 @@ public sealed class FillCellsCommand : IWorkbookCommand
             return new CommandOutcome(false, "The sheet is protected.");
 
         _snapshot = [];
+        _hyperlinkSnapshot = [];
         foreach (var target in targets)
         {
             _snapshot.Add((target, sheet.GetCell(target)?.Clone()));
+            _hyperlinkSnapshot.Add((
+                target,
+                sheet.Hyperlinks.TryGetValue(target, out var oldTarget),
+                oldTarget,
+                sheet.HyperlinkMetadata.TryGetValue(target, out var oldMetadata),
+                oldMetadata));
+
             var source = GetSourceAddress(target);
             var sourceCell = sheet.GetCell(source);
             if (sourceCell is null)
             {
                 sheet.ClearCell(target);
+                sheet.Hyperlinks.Remove(target);
+                sheet.HyperlinkMetadata.Remove(target);
                 continue;
             }
 
             sheet.SetCell(target, CloneForTarget(sourceCell, source, target, sheet.Name));
+            if (sheet.Hyperlinks.TryGetValue(source, out var sourceTarget))
+                sheet.Hyperlinks[target] = sourceTarget;
+            else
+                sheet.Hyperlinks.Remove(target);
+
+            if (sheet.HyperlinkMetadata.TryGetValue(source, out var sourceMetadata))
+                sheet.HyperlinkMetadata[target] = sourceMetadata;
+            else
+                sheet.HyperlinkMetadata.Remove(target);
         }
 
         return new CommandOutcome(true, AffectedCells: targets);
@@ -73,6 +93,22 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 sheet.ClearCell(address);
             else
                 sheet.SetCell(address, oldCell.Clone());
+        }
+
+        if (_hyperlinkSnapshot is null)
+            return;
+
+        foreach (var (address, hadTarget, target, hadMetadata, metadata) in _hyperlinkSnapshot)
+        {
+            if (hadTarget && target is not null)
+                sheet.Hyperlinks[address] = target;
+            else
+                sheet.Hyperlinks.Remove(address);
+
+            if (hadMetadata && metadata is not null)
+                sheet.HyperlinkMetadata[address] = metadata;
+            else
+                sheet.HyperlinkMetadata.Remove(address);
         }
     }
 
