@@ -34,7 +34,9 @@ internal static class NativeJsonScalarValueMapper
             "n" => TryParseFiniteNumber(value, out var d)
                 ? new NumberValue(d)
                 : new TextValue(value),
-            "b" => new BoolValue(value == "TRUE"),
+            "b" => bool.TryParse(value, out var b)
+                ? new BoolValue(b)
+                : new TextValue(value),
             "t" => new TextValue(value),
             "e" => value switch
             {
