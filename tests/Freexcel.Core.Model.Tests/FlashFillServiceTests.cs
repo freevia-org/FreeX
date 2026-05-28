@@ -825,6 +825,32 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameTitles_RemovesTitleFromVariableLengthNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Dr. Ada Lovelace", "Ada Lovelace"),
+                ("Prof Grace Brewster Hopper", "Grace Brewster Hopper")
+            ],
+            ["Ms. Katherine Coleman Johnson"]);
+
+        result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownNameTitles_ReturnsNullForUntitledRemainingNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Dr. Ada Lovelace", "Ada Lovelace"),
+                ("Prof Grace Hopper", "Grace Hopper")
+            ],
+            ["Katherine Johnson"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_ThreePartNames_ReturnsNullForAmbiguousTokenCounts()
     {
         var result = FlashFillService.Fill(

@@ -52,6 +52,20 @@ public sealed class ExcelParityInformationTests
     }
 
     [Fact]
+    public void ErrorType_ClassifiesLoadedModernExcelErrors()
+    {
+        var sheet = Sheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new ErrorValue("#FIELD!"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new ErrorValue("#BLOCKED!"));
+
+        var result = _eval.Evaluate("=ERROR.TYPE(A1:A2)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.At(1, 1).Should().Be(new NumberValue(13));
+        result.At(2, 1).Should().Be(new NumberValue(15));
+    }
+
+    [Fact]
     public void Na_Type_N_Cell_Info_ReturnExcelCompatibleScalarValues()
     {
         _eval.Evaluate("=NA()", Sheet()).Should().Be(ErrorValue.NA);

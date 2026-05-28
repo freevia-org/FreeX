@@ -83,9 +83,7 @@ public sealed class PageSetupDialogXamlTests
 
         source.Should().Contain("PageSetupInitialFocusTarget.RepeatRows");
         source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
-        source.Should().Contain("RowsRepeatBox.Focus();");
-        source.Should().Contain("RowsRepeatBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(RowsRepeatBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(RowsRepeatBox);");
         handlerSource.Should().Contain("PrintTitlesBtn_Click");
         handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.RepeatRows);");
         handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);");
@@ -103,9 +101,7 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("AdjustToRadioButton.IsChecked == true");
         source.Should().Contain("? ScalePercentBox");
         source.Should().Contain(": FitPagesWideBox");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
         handlerSource.Should().Contain("ScaleToFitBtn_Click");
         handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit);");
     }
@@ -224,9 +220,7 @@ public sealed class PageSetupDialogXamlTests
         var pickerHandlerSource = source[
             source.IndexOf("private void RangePickerButton_Click", StringComparison.Ordinal)..
             source.IndexOf("public static PageSetupRangeSelectionRequest", StringComparison.Ordinal)];
-        pickerHandlerSource.Should().Contain("target.Focus()");
-        pickerHandlerSource.Should().Contain("target.SelectAll()");
-        pickerHandlerSource.Should().Contain("Keyboard.Focus(target)");
+        pickerHandlerSource.Should().Contain("DialogFocus.FocusAndSelect(target)");
     }
 
     [Fact]
@@ -310,9 +304,7 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("FocusInvalidPrintArea();");
         source.Should().Contain("private void FocusInvalidPrintArea()");
         source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
-        source.Should().Contain("PrintAreaBox.Focus();");
-        source.Should().Contain("PrintAreaBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(PrintAreaBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(PrintAreaBox);");
     }
 
     [Fact]
@@ -323,9 +315,7 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("FocusInvalidPrintTitles();");
         source.Should().Contain("private void FocusInvalidPrintTitles()");
         source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -339,9 +329,7 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("FocusInvalidPageTabNumber(PrintQualityBox);");
         source.Should().Contain("private void FocusInvalidPageTabNumber(TextBox target)");
         source.Should().Contain("PageSetupTabs.SelectedItem = PageTab;");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -356,9 +344,7 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("private void FocusInvalidMarginInput()");
         source.Should().Contain("private void FocusMarginsTabTextBox(TextBox target)");
         source.Should().Contain("PageSetupTabs.SelectedItem = MarginsTab;");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -372,9 +358,7 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("ScalePercentBox");
         source.Should().Contain("FitPagesWideBox");
         source.Should().Contain("FitPagesTallBox");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]

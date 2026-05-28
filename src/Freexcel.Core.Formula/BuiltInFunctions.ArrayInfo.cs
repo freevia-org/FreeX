@@ -62,7 +62,9 @@ public static partial class BuiltInFunctions
             "#N/A"    => new NumberValue(7),
             "#GETTING_DATA" => new NumberValue(8),
             "#SPILL!" => new NumberValue(9),
+            "#FIELD!" => new NumberValue(13),
             "#CALC!" => new NumberValue(14),
+            "#BLOCKED!" => new NumberValue(15),
             _ => ErrorValue.NA
         };
     }
