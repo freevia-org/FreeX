@@ -583,6 +583,27 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void HyperlinkDialog_ScreenTipAndBookmarkButtonsExposeAutomationMetadata()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_screenTipButton, \"Set ScreenTip\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_screenTipButton, \"Set the text shown when pointing to the hyperlink.\");");
+        source.Should().Contain("AutomationProperties.SetName(_bookmarkButton, \"Select place in document\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_bookmarkButton, \"Choose a bookmark, defined name, or cell reference in this workbook.\");");
+    }
+
+    [Fact]
+    public void HyperlinkTextEntryDialogs_NameEntryBoxFromAccessKeyLabel()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextEntryDialogs.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_textBox, CreateAutomationName(label));");
+        source.Should().Contain("label.Replace(\"_\", string.Empty, StringComparison.Ordinal)");
+        source.Should().Contain(".Replace(\":\", string.Empty, StringComparison.Ordinal)");
+    }
+
+    [Fact]
     public void HyperlinkDialog_AcceptWarnsAndRefocusesBlankTarget()
     {
         var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");

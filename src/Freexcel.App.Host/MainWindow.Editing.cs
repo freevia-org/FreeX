@@ -374,7 +374,7 @@ public partial class MainWindow
         if (intent.Action == ExcelEditKeyAction.CommitSelection)
         {
             FormulaBar.Text = _inlineEditor!.Text;
-            if (CommitEditAcrossSelection())
+            if (CommitEditAcrossSelection(fillFormulaEditCellOnly: formulaRangeEntryActive))
             {
                 HideInlineEditor(commit: false);
                 ClearFormulaRangeEntryState();
@@ -559,7 +559,7 @@ public partial class MainWindow
             }
             else if (intent.Action == ExcelEditKeyAction.CommitSelection)
             {
-                if (CommitEditAcrossSelection())
+                if (CommitEditAcrossSelection(fillFormulaEditCellOnly: formulaRangeEntryActive))
                     ClearFormulaRangeEntryState();
                 e.Handled = true;
             }
@@ -658,10 +658,10 @@ public partial class MainWindow
         return committed;
     }
 
-    private bool CommitEditAcrossSelection()
+    private bool CommitEditAcrossSelection(bool fillFormulaEditCellOnly = false)
     {
         if (SheetGrid.SelectedRange is not { } range) return false;
-        if (_formulaEditCell is { } formulaCell)
+        if (fillFormulaEditCellOnly && _formulaEditCell is { } formulaCell)
         {
             var formulaText = FormulaBar.Text;
             if (!TryCreateCellFromEntryText(formulaCell, formulaText, out var newCell))

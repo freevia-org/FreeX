@@ -2608,12 +2608,6 @@
                                             local:RibbonTooltip.Description="Combine values from multiple ranges into a single summary range.">
                                         <TextBlock Text="Consolidate" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SubtotalBtn_Click"
-                                            local:RibbonTooltip.Title="Subtotal"
-                                            local:RibbonTooltip.KeyTip="B"
-                                            local:RibbonTooltip.Description="Insert subtotal rows for grouped data in the selected range.">
-                                        <TextBlock Text="Subtotal" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data Tools" Style="{StaticResource GroupLbl}"/></Border>
@@ -2662,6 +2656,10 @@
                                             local:RibbonTooltip.Title="Ungroup"
                                             local:RibbonTooltip.KeyTip="U"
                                             local:RibbonTooltip.Description="Remove grouping from selected rows or whole selected columns (Alt+Shift+Left Arrow)."/>
+                                    <Button Content="Subtotal" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SubtotalBtn_Click"
+                                            local:RibbonTooltip.Title="Subtotal"
+                                            local:RibbonTooltip.KeyTip="B"
+                                            local:RibbonTooltip.Description="Insert subtotal rows for grouped data in the selected range."/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Collapse" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CollapseGroupBtn_Click"

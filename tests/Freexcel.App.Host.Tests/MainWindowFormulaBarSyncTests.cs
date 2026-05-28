@@ -66,11 +66,54 @@ public sealed class MainWindowFormulaBarSyncTests
         });
     }
 
+    [Fact]
+    public void CtrlEnterFormulaBarEdit_FillsSelectedRangeWhenNotChoosingFormulaReferences()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(1, 1, 2, 2);
+            harness.SetFormulaEditCell(1, 1);
+            harness.SetFormulaBarText("filled");
+
+            harness.CommitEditAcrossSelection(fillFormulaEditCellOnly: false).Should().BeTrue();
+
+            harness.CellText(1, 1).Should().Be("filled");
+            harness.CellText(1, 2).Should().Be("filled");
+            harness.CellText(2, 1).Should().Be("filled");
+            harness.CellText(2, 2).Should().Be("filled");
+        });
+    }
+
+    [Fact]
+    public void CtrlEnterFormulaReferenceEntry_CommitsOnlyOriginalEditCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(3, 3, 4, 4);
+            harness.SetFormulaEditCell(1, 1);
+            harness.SetFormulaBarText("=C3");
+
+            harness.CommitEditAcrossSelection(fillFormulaEditCellOnly: true).Should().BeTrue();
+
+            harness.CellFormula(1, 1).Should().Be("C3");
+            harness.CellFormula(3, 3).Should().BeNull();
+            harness.CellFormula(3, 4).Should().BeNull();
+            harness.CellFormula(4, 3).Should().BeNull();
+            harness.CellFormula(4, 4).Should().BeNull();
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
         private readonly FieldInfo _workbookField;
+        private readonly FieldInfo _formulaEditCellField;
         private readonly FieldInfo _inlineEditorField;
+        private readonly MethodInfo _commitEditAcrossSelection;
         private readonly MethodInfo _setActiveCell;
         private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _executeClearSelection;
@@ -81,9 +124,15 @@ public sealed class MainWindowFormulaBarSyncTests
             _workbookField = typeof(MainWindow)
                 .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
+            _formulaEditCellField = typeof(MainWindow)
+                .GetField("_formulaEditCell", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_formulaEditCell");
             _inlineEditorField = typeof(MainWindow)
                 .GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
+            _commitEditAcrossSelection = typeof(MainWindow)
+                .GetMethod("CommitEditAcrossSelection", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CommitEditAcrossSelection");
             _setActiveCell = typeof(MainWindow)
                 .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
@@ -113,11 +162,43 @@ public sealed class MainWindowFormulaBarSyncTests
                 : null;
         }
 
+        public string? CellFormula(uint row, uint col)
+        {
+            var sheet = Workbook.Sheets[0];
+            return sheet.GetCell(new CellAddress(sheet.Id, row, col))?.FormulaText;
+        }
+
         public void SelectActiveCell(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
             _setActiveCell.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
             PumpDispatcher();
+        }
+
+        public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
+        {
+            var sheet = Workbook.Sheets[0];
+            var range = new GridRange(
+                new CellAddress(sheet.Id, startRow, startCol),
+                new CellAddress(sheet.Id, endRow, endCol));
+            var grid = (SheetGridView)_window.FindName("SheetGrid");
+            grid.SelectedRanges = null;
+            grid.SelectedRange = range;
+            PumpDispatcher();
+        }
+
+        public void SetFormulaEditCell(uint row, uint col)
+        {
+            var sheet = Workbook.Sheets[0];
+            _formulaEditCellField.SetValue(_window, new CellAddress(sheet.Id, row, col));
+            PumpDispatcher();
+        }
+
+        public bool CommitEditAcrossSelection(bool fillFormulaEditCellOnly)
+        {
+            var committed = (bool)_commitEditAcrossSelection.Invoke(_window, [fillFormulaEditCellOnly])!;
+            PumpDispatcher();
+            return committed;
         }
 
         public void ShowInlineEditor(uint row, uint col)

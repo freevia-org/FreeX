@@ -7,16 +7,19 @@ public static class ZoomLevelMapper
     public const double MinZoomPercent = 10.0;
     public const double DefaultZoomPercent = 100.0;
     public const double MaxZoomPercent = 400.0;
+    private const double MinSliderValue = 0.0;
+    private const double MidSliderValue = 100.0;
+    private const double MaxSliderValue = 200.0;
 
     public static double ClampZoomPercent(double zoomPercent) =>
-        Math.Max(MinZoomPercent, Math.Min(MaxZoomPercent, zoomPercent));
+        Clamp(zoomPercent, MinZoomPercent, MaxZoomPercent);
 
     public static double SliderToZoomPercent(double sliderValue)
     {
-        sliderValue = Math.Max(0.0, Math.Min(200.0, sliderValue));
-        return sliderValue <= 100.0
-            ? MinZoomPercent + sliderValue / 100.0 * (DefaultZoomPercent - MinZoomPercent)
-            : DefaultZoomPercent + (sliderValue - 100.0) / 100.0 * (MaxZoomPercent - DefaultZoomPercent);
+        sliderValue = Clamp(sliderValue, MinSliderValue, MaxSliderValue);
+        return sliderValue <= MidSliderValue
+            ? MinZoomPercent + sliderValue / MidSliderValue * (DefaultZoomPercent - MinZoomPercent)
+            : DefaultZoomPercent + (sliderValue - MidSliderValue) / MidSliderValue * (MaxZoomPercent - DefaultZoomPercent);
     }
 
     public static double ZoomPercentToSlider(double zoomPercent)
@@ -44,4 +47,7 @@ public static class ZoomLevelMapper
         zoomPercent = parsed;
         return true;
     }
+
+    private static double Clamp(double value, double min, double max) =>
+        Math.Max(min, Math.Min(max, value));
 }

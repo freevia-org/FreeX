@@ -100,6 +100,44 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsSpreadsheetMlCellHyperlinks()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Links">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell ss:HRef="https://example.com/report" ss:HRefScreenTip="Open report">
+                      <ss:Data ss:Type="String">Report</ss:Data>
+                    </ss:Cell>
+                    <ss:Cell ss:HRef="#Links!R1C1">
+                      <ss:Data ss:Type="String">Back</ss:Data>
+                    </ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        var externalAddress = new CellAddress(sheet.Id, 1, 1);
+        var internalAddress = new CellAddress(sheet.Id, 1, 2);
+        sheet.GetCell(externalAddress)!.Value.Should().Be(new TextValue("Report"));
+        sheet.Hyperlinks[externalAddress].Should().Be("https://example.com/report");
+        sheet.HyperlinkMetadata[externalAddress].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open report",
+            ""));
+        sheet.Hyperlinks[internalAddress].Should().Be("#Links!R1C1");
+        sheet.HyperlinkMetadata[internalAddress].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "",
+            "Links!R1C1"));
+    }
+
+    [Fact]
     public void Load_AdvancesImplicitCellIndexPastMergeAcrossSpan()
     {
         using var stream = StreamFromString("""
@@ -228,6 +266,46 @@ public sealed class SpreadsheetXmlFileAdapterTests
             .Select(region => (region.Start.Row, region.Start.Col, region.End.Row, region.End.Col))
             .Should()
             .Equal((1u, 1u, 2u, 3u), (4u, 4u, 4u, 5u));
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlCellHyperlinks()
+    {
+        var workbook = new Workbook("XmlLinks");
+        var sheet = workbook.AddSheet("Links");
+        var externalAddress = new CellAddress(sheet.Id, 1, 1);
+        var mailAddress = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(externalAddress, new TextValue("Report"));
+        sheet.Hyperlinks[externalAddress] = "https://example.com/report";
+        sheet.HyperlinkMetadata[externalAddress] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open report",
+            "");
+        sheet.SetCell(mailAddress, new TextValue("Email"));
+        sheet.Hyperlinks[mailAddress] = "mailto:team@example.com";
+        sheet.HyperlinkMetadata[mailAddress] = new HyperlinkMetadata(HyperlinkTargetKind.EmailAddress);
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var reportCell = document.Descendants(ss + "Cell")
+            .Single(cell => cell.Element(ss + "Data")?.Value == "Report");
+        reportCell.Attribute(ss + "HRef")!.Value.Should().Be("https://example.com/report");
+        reportCell.Attribute(ss + "HRefScreenTip")!.Value.Should().Be("Open report");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedExternalAddress = new CellAddress(loadedSheet.Id, 1, 1);
+        var loadedMailAddress = new CellAddress(loadedSheet.Id, 2, 1);
+        loadedSheet.Hyperlinks[loadedExternalAddress].Should().Be("https://example.com/report");
+        loadedSheet.HyperlinkMetadata[loadedExternalAddress].ScreenTip.Should().Be("Open report");
+        loadedSheet.Hyperlinks[loadedMailAddress].Should().Be("mailto:team@example.com");
+        loadedSheet.HyperlinkMetadata[loadedMailAddress].LinkType.Should().Be(HyperlinkTargetKind.EmailAddress);
     }
 
     [Fact]

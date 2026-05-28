@@ -59,6 +59,14 @@ public sealed class ExcelParityModernTextTests
         _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
     }
 
+    [Theory]
+    [InlineData("=TEXTBEFORE(\"😀\",\"x\",2)")]
+    [InlineData("=TEXTAFTER(\"😀\",\"x\",-2)")]
+    public void TextBeforeAfter_InstanceNumCountsSurrogatePairsAsSingleTextElements(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+    }
+
     [Fact]
     public void TextBeforeAfter_SpillOverTextRanges()
     {

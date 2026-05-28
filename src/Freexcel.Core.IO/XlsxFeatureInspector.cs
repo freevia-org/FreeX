@@ -148,6 +148,12 @@ public static class XlsxFeatureInspector
             yield break;
         }
 
+        if (normalized is "docmetadata/labelinfo.xml")
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.SensitivityLabels);
+            yield break;
+        }
+
         if (normalized is "docprops/custom.xml" &&
             CustomPropertiesHaveSensitivityLabels(entry))
         {

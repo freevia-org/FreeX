@@ -62,6 +62,8 @@ public partial class MainWindow
     private void SheetGrid_MouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
         int notches = ViewportScrollCalculator.NormalizeWheelNotches(e.Delta);
+        if (SheetGrid.Viewport is { } wheelViewport)
+            _activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(wheelViewport, e.GetPosition(SheetGrid));
 
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
