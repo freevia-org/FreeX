@@ -381,6 +381,9 @@ public sealed class ExcelParityModernTextTests
     [Theory]
     [InlineData("=REGEXREPLACE(\"abc-123-def\",\"[0-9]+\",\"###\")", "abc-###-def")]
     [InlineData("=REGEXREPLACE(\"one two three\",\"\\w+\",\"X\",2)", "one X three")]
+    [InlineData("=REGEXREPLACE(\"one two three\",\"\\w+\",\"X\",-1)", "one two X")]
+    [InlineData("=REGEXREPLACE(\"one two three\",\"\\w+\",\"X\",-2)", "one X three")]
+    [InlineData("=REGEXREPLACE(\"one two three\",\"\\w+\",\"X\",-4)", "one two three")]
     [InlineData("=REGEXREPLACE(\"John Smith\",\"(\\w+)\\s+(\\w+)\",\"$2, $1\")", "Smith, John")]
     [InlineData("=REGEXREPLACE(\"Alpha\",\"alpha\",\"beta\",0,1)", "beta")]
     [InlineData("=REGEXREPLACE(\"abc\",\"[0-9]+\",\"#\",1)", "abc")]
@@ -389,13 +392,25 @@ public sealed class ExcelParityModernTextTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
     }
 
+    [Fact]
+    public void RegexReplace_NegativeOccurrenceSpillsOverTextRanges()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("A-100-B-200")),
+            (2, 1, new TextValue("C-300-D-400")));
+
+        AssertColumn(
+            _eval.Evaluate("=REGEXREPLACE(A1:A2,\"[0-9]+\",\"#\",-1)", sheet),
+            new TextValue("A-100-B-#"),
+            new TextValue("C-300-D-#"));
+    }
+
     [Theory]
     [InlineData("=REGEXTEST(\"abc\",\"[\")")]
     [InlineData("=REGEXEXTRACT(\"abc\",\"[\",0)")]
     [InlineData("=REGEXREPLACE(\"abc\",\"[\",\"x\")")]
     [InlineData("=REGEXTEST(\"abc\",\"abc\",2)")]
     [InlineData("=REGEXEXTRACT(\"abc\",\"abc\",3)")]
-    [InlineData("=REGEXREPLACE(\"abc\",\"abc\",\"x\",-1)")]
     public void RegexFunctions_ReturnValueForInvalidPatternOrMode(string formula)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);

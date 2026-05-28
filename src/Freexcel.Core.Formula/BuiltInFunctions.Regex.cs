@@ -83,8 +83,6 @@ public static partial class BuiltInFunctions
 
         if (!TryGetOptionalInteger(args, 3, defaultValue: 0, out int occurrence, out error))
             return error;
-        if (occurrence < 0)
-            return ErrorValue.Value;
 
         if (args[0] is RangeValue textRange)
             return MapUnaryTextRange(textRange, value => RegexReplaceScalar(value, regex, ToText(replacement), occurrence));
@@ -101,10 +99,11 @@ public static partial class BuiltInFunctions
             return TextResult(regex.Replace(text, replacement));
 
         var matches = regex.Matches(text);
-        if (matches.Count < occurrence)
+        var matchIndex = occurrence > 0 ? occurrence - 1 : matches.Count + occurrence;
+        if (matchIndex < 0 || matchIndex >= matches.Count)
             return TextResult(text);
 
-        var match = matches[occurrence - 1];
+        var match = matches[matchIndex];
         return TextResult(
             text[..match.Index] +
             match.Result(replacement) +
