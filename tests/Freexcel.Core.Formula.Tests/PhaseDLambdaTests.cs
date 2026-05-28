@@ -166,10 +166,17 @@ public class PhaseDLambdaTests
 
     [Theory]
     [InlineData("=LET(f, LAMBDA(c, c), f(1))")]
+    [InlineData("=LET(f, LAMBDA(r, r), f(1))")]
     [InlineData("=LET(f, LAMBDA(r1c1, r1c1), f(1))")]
     public void Lambda_R1C1ReferenceStyleParameterNames_ReturnValueError(string formula)
     {
         Assert.Equal(ErrorValue.Value, Eval(formula));
+    }
+
+    [Fact]
+    public void Lambda_DottedParameterName_ReturnsValueError()
+    {
+        Assert.Equal(ErrorValue.Value, Eval("=LET(f, LAMBDA(arg.1, arg.1), f(1))"));
     }
 
     [Theory]

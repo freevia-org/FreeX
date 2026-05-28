@@ -2226,12 +2226,20 @@ public sealed class FormulaEvaluator
 
     private static bool IsValidLocalFunctionName(string? name)
     {
-        if (!IsValidLambdaParameterName(name)) return false;
+        if (!IsValidExcelLocalName(name)) return false;
 
         return !ConflictsWithR1C1Reference(name!);
     }
 
     private static bool IsValidLambdaParameterName(string? name)
+    {
+        if (!IsValidExcelLocalName(name)) return false;
+        if (name!.Contains('.', StringComparison.Ordinal)) return false;
+
+        return !ConflictsWithR1C1Reference(name);
+    }
+
+    private static bool IsValidExcelLocalName(string? name)
     {
         if (string.IsNullOrEmpty(name)) return false;
 
