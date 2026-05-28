@@ -22,7 +22,11 @@ public sealed class MainWindowMouseSelectionSourceTests
         var mouseMove = source[mouseMoveStart..helperStart];
         mouseMove.Should().Contain("var pos = e.GetPosition(SheetGrid);");
         mouseMove.Should().Contain("var hitAddr = HitTestCell(pos);");
+        mouseMove.Should().Contain("e.Handled = true;");
         mouseMove.Should().Contain("RequestSelectionDragAutoScroll(pos);");
+        mouseMove.LastIndexOf("e.Handled = true;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal));
 
         var helper = source[helperStart..previewStart];
         helper.Should().Contain("Freexcel.App.UI.GridView.CalculateAutofillEdgeScrollIntent");

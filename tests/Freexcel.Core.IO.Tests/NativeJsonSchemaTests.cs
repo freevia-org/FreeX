@@ -109,6 +109,24 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_UsesCurrentStreamPositionAndLeavesOutputStreamOpen()
+    {
+        var workbook = new Workbook("OffsetSave");
+        workbook.AddSheet("Sheet1");
+        var prefixBytes = Encoding.UTF8.GetBytes("ignored");
+        using var stream = new MemoryStream();
+        stream.Write(prefixBytes);
+
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        stream.CanWrite.Should().BeTrue();
+        stream.ToArray().Take(prefixBytes.Length).Should().Equal(prefixBytes);
+        using var document = JsonDocument.Parse(stream.ToArray().AsMemory(prefixBytes.Length));
+        document.RootElement.GetProperty("Name").GetString().Should().Be("OffsetSave");
+        document.RootElement.GetProperty("FileFormat").GetString().Should().Be("Freexcel.NativeJsonWorkbook");
+    }
+
+    [Fact]
     public void Load_RejectsUnsupportedFutureNativeJsonSchema()
     {
         const string futureJson = """

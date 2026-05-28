@@ -332,6 +332,26 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_UsesCurrentStreamPositionAndLeavesOutputStreamOpen()
+    {
+        var workbook = new Workbook("OffsetSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Gamma"));
+        var prefixBytes = Encoding.UTF8.GetBytes("ignored");
+        using var stream = new MemoryStream();
+        stream.Write(prefixBytes);
+
+        new SpreadsheetXmlFileAdapter().Save(workbook, stream);
+
+        stream.CanWrite.Should().BeTrue();
+        stream.ToArray().Take(prefixBytes.Length).Should().Equal(prefixBytes);
+        stream.Position = prefixBytes.Length;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        document.Descendants(ss + "Data").Single().Value.Should().Be("Gamma");
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesSafeXsltAndLoadsSpreadsheetMlOutput()
     {
         using var source = StreamFromString("""

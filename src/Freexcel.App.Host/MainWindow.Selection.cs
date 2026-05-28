@@ -812,6 +812,7 @@ public partial class MainWindow
             return;
         }
 
+        e.Handled = true;
         RequestSelectionDragAutoScroll(pos);
 
         if (_selectionAnchor is not { } anchor) return;
