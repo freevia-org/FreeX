@@ -111,4 +111,22 @@ public sealed class XmlNativeBagSerializerTests
         roundTripAttrs.Should().ContainKey("nativeOnly").WhoseValue.Should().Be("preserved");
         roundTripChildren.Should().Equal("<valid id=\"1\" />", "<alsoValid><child /></alsoValid>");
     }
+
+    [Fact]
+    public void ApplyToElement_PreservedChildXml_RetainsCommentsAndProcessingInstructions()
+    {
+        var childXml = "<ext><?freexcel keep=\"true\"?><!--keep me--><inner /></ext>";
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [childXml]);
+        var target = new XElement("root");
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        changed.Should().BeTrue();
+        target.Elements().Should().ContainSingle();
+        target.Elements().Single()
+            .ToString(SaveOptions.DisableFormatting)
+            .Should().Be(childXml);
+    }
 }
