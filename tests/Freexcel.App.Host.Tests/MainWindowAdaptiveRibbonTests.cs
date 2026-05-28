@@ -826,7 +826,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             var button = (Button)createButton.Invoke(null, [group, null])!;
 
             RibbonTooltip.GetTitle(button).Should().Be("Page Setup");
-            RibbonTooltip.GetKeyTip(button).Should().Be("PS");
+            RibbonTooltip.GetKeyTip(button).Should().Be("PA");
             button.ContextMenu.Should().NotBeNull();
             button.ContextMenu!.Items.OfType<MenuItem>().Single().Header.Should().Be("Page Setup");
         });
