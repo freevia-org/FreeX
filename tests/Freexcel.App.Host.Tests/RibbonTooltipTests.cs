@@ -101,6 +101,32 @@ public sealed class RibbonTooltipTests
         });
     }
 
+    [Fact]
+    public void TryOpenSubmenuForKeyTip_OpensAncestorSubmenusForNestedMatches()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Color Scales" };
+            var child = new MenuItem { Header = "More Rules" };
+            var grandchild = new MenuItem { Header = "Custom Scale..." };
+            RibbonTooltip.SetKeyTip(grandchild, "CS");
+            grandchild.Items.Add(new MenuItem { Header = "Format Rule..." });
+            child.Items.Add(grandchild);
+            parent.Items.Add(child);
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "CS", out var openedSubmenu).Should().BeTrue();
+            openedSubmenu.Should().BeSameAs(grandchild);
+            parent.IsSubmenuOpen.Should().BeTrue();
+            child.IsSubmenuOpen.Should().BeTrue();
+            grandchild.IsSubmenuOpen.Should().BeTrue();
+            menu.IsOpen = false;
+        });
+    }
+
     private static void RunSta(Action action)
     {
         Exception? exception = null;
