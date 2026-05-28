@@ -107,6 +107,21 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
             .BeLessThan(wheelHandler.IndexOf("CanScrollSplitPaneRegion", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void MainWindowEnsureCellVisible_ScansVisibleMetricsWithoutAllocatingFilteredLists()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+        var ensureCellVisible = source[
+            source.IndexOf("private void EnsureCellVisible", StringComparison.Ordinal)..
+            source.IndexOf("// \u2500\u2500 Navigation helpers", StringComparison.Ordinal)];
+
+        ensureCellVisible.Should().Contain("GetScrollableRowWindow(vp, frozenRows, addr.Row)");
+        ensureCellVisible.Should().Contain("GetScrollableColumnWindow(vp, frozenCols, addr.Col)");
+        ensureCellVisible.Should().NotContain(".Where(");
+        ensureCellVisible.Should().NotContain(".ToList()");
+        ensureCellVisible.Should().NotContain(".Any(");
+    }
+
     [Theory]
     [InlineData(30, 1)]
     [InlineData(-30, -1)]
