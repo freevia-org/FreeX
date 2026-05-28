@@ -10,7 +10,7 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
     [InlineData(761, RibbonCollapsedGroupFootprintMode.Compact, 44, Visibility.Visible, 9, 40, 18, "compact")]
     [InlineData(920, RibbonCollapsedGroupFootprintMode.Compact, 44, Visibility.Visible, 9, 40, 18, "compact")]
     [InlineData(921, RibbonCollapsedGroupFootprintMode.Normal, 64, Visibility.Visible, 10, 60, 22, "normal")]
-    public void CreateFootprint_MapsExcelWidthBandsToCollapsedGroupPresentation(
+    internal void CreateFootprint_MapsExcelWidthBandsToCollapsedGroupPresentation(
         double availableWidth,
         RibbonCollapsedGroupFootprintMode expectedMode,
         double expectedWidth,
@@ -36,7 +36,7 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
     [InlineData(42, 900, 42)]
     [InlineData(72, 1200, 68)]
     [InlineData(60, 1200, 60)]
-    public void GetPlannedWidth_CapsMeasuredCollapsedWidthForAdaptivePlanning(
+    internal void GetPlannedWidth_CapsMeasuredCollapsedWidthForAdaptivePlanning(
         double measuredWidth,
         double availableWidth,
         double expectedWidth)

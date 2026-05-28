@@ -48,7 +48,7 @@ internal readonly record struct RibbonCollapsedGroupFootprint(
     double CaptionMaxWidth,
     double IconFontSize);
 
-internal enum RibbonCollapsedGroupFootprintMode
+public enum RibbonCollapsedGroupFootprintMode
 {
     Captionless,
     Compact,
