@@ -33,4 +33,17 @@ public sealed class RibbonResizeThresholdGateTests
             .Should()
             .BeFalse();
     }
+
+    [Theory]
+    [InlineData(1500, 650)]
+    [InlineData(650, 1500)]
+    public void CrossedAnyThreshold_DetectsResizeJumpsAcrossBreakpointBands(
+        double previousWidth,
+        double currentWidth)
+    {
+        RibbonResizeThresholdGate
+            .CrossedAnyThreshold(previousWidth, currentWidth, [760, 920, 1120, 1320])
+            .Should()
+            .BeTrue();
+    }
 }
