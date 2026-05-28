@@ -133,10 +133,12 @@ public class ViewportStyleTests
             source.IndexOf("private static List<RowMetric> BuildFrozenAwareRowMetrics", StringComparison.Ordinal)..
             source.IndexOf("private static List<RowMetric> BuildRowMetrics", StringComparison.Ordinal)];
 
-        frozenMetricHelpers.Should().Contain("CombineRows(pinnedRows, bodyRows)");
-        frozenMetricHelpers.Should().Contain("CombineColumns(pinnedColumns, bodyColumns)");
+        frozenMetricHelpers.Should().Contain("CombineRowsWithOffset(");
+        frozenMetricHelpers.Should().Contain("CombineColumnsWithOffset(");
         frozenMetricHelpers.Should().Contain("new List<RowMetric>(pinnedRows.Count + bodyRows.Count)");
         frozenMetricHelpers.Should().Contain("new List<ColMetric>(pinnedColumns.Count + bodyColumns.Count)");
+        frozenMetricHelpers.Should().NotContain("OffsetRows(");
+        frozenMetricHelpers.Should().NotContain("OffsetColumns(");
         frozenMetricHelpers.Should().NotContain("Concat(");
         frozenMetricHelpers.Should().NotContain(".Select(");
         frozenMetricHelpers.Should().NotContain(".ToList()");

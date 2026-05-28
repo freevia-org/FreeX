@@ -71,6 +71,22 @@ public class XlsxFeatureInspectorTests
         report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
     }
 
+    [Fact]
+    public void Inspect_ChartStyleAndColorPartsAlone_DoNotReportUnsupportedChart()
+    {
+        using var package = CreatePackageWithContent(
+            ("xl/charts/style1.xml", """
+                <c:chartStyle xmlns:c="http://schemas.microsoft.com/office/drawing/2012/chartStyle"/>
+                """),
+            ("xl/charts/colors1.xml", """
+                <c:colorStyle xmlns:c="http://schemas.microsoft.com/office/drawing/2012/chartStyle"/>
+                """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
+    }
+
     [Theory]
     [InlineData("histogramChart")]
     [InlineData("waterfallChart")]
@@ -303,6 +319,22 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RelationshipOnlyDigitalSignatureReference_DetectsDigitalSignatures()
+    {
+        using var package = CreatePackageWithContent(("_rels/.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdSignatureOrigin"
+                            Type="http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin"
+                            Target="_xmlsignatures/origin.sigs"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.DigitalSignatures);
+    }
+
+    [Fact]
     public void Inspect_CustomRibbonUiPackage_DetectsCustomRibbonUi()
     {
         using var package = CreatePackage("customUI/customUI.xml");
@@ -328,6 +360,22 @@ public class XlsxFeatureInspectorTests
     public void Inspect_WebPublishItemsPackage_DetectsLiveWebQueries()
     {
         using var package = CreatePackage("xl/webPublishItems.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.LiveWebQueries);
+    }
+
+    [Fact]
+    public void Inspect_RelationshipOnlyWebPublishItemsReference_DetectsLiveWebQueries()
+    {
+        using var package = CreatePackageWithContent(("xl/worksheets/_rels/sheet1.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdWebPublishItems"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/webPublishItems"
+                            Target="../webPublishItems.xml"/>
+            </Relationships>
+            """));
 
         var report = XlsxFeatureInspector.Inspect(package);
 
@@ -570,6 +618,45 @@ public class XlsxFeatureInspectorTests
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.ThreadedComments);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.CustomRibbonUi);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.OfficeAddIns);
+    }
+
+    [Fact]
+    public void Inspect_RelationshipOnlyModelDiagramAndSheetReferences_DetectsUnsupportedFeatures()
+    {
+        using var package = CreatePackageWithContent(("xl/_rels/workbook.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdModel"
+                            Type="http://schemas.microsoft.com/office/2011/relationships/model"
+                            Target="model/item.data"/>
+              <Relationship Id="rIdChartSheet"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet"
+                            Target="chartsheets/sheet1.xml"/>
+              <Relationship Id="rIdDialogSheet"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet"
+                            Target="dialogSheets/sheet2.xml"/>
+              <Relationship Id="rIdMacroSheet"
+                            Type="http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet"
+                            Target="macroSheets/sheet3.xml"/>
+            </Relationships>
+            """), ("xl/drawings/_rels/drawing1.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdDiagramData"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
+                            Target="../diagrams/data1.xml"/>
+              <Relationship Id="rIdDiagramLayout"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
+                            Target="../diagrams/layout1.xml"/>
+              <Relationship Id="rIdDiagramQuickStyle"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle"
+                            Target="../diagrams/quickStyle1.xml"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.DataModel);
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.SmartArtDiagrams);
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);
     }
 
     private static MemoryStream CreatePackage(params string[] entries)

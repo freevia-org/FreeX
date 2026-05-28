@@ -764,6 +764,23 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void CollapsedRibbonGroupButtons_KeepKeyTipsWithinSelectedTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 220);
+
+                harness.CollapsedActiveRibbonGroupsWithoutKeyTips.Should().BeEmpty(
+                    $"{tab} collapsed group buttons should remain reachable through command-scope keytips after adaptive layout changes");
+            }
+        });
+    }
+
+    [Fact]
     public void CollapsedRibbonGroups_ShowGroupCaptionsAtNormalNarrowWidths()
     {
         StaTestRunner.Run(() =>
@@ -914,6 +931,15 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => new CollapsedGroupKeyTip(RibbonTooltip.GetTitle(button) ?? "", RibbonTooltip.GetKeyTip(button) ?? ""))
                 .Where(pair => !string.IsNullOrWhiteSpace(pair.GroupName) && !string.IsNullOrWhiteSpace(pair.KeyTip))
+                .ToList();
+
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutKeyTips =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(IsVisibleCollapsedGroupButton)
+                .Where(button => string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(button)))
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutDropdownGlyph =>
