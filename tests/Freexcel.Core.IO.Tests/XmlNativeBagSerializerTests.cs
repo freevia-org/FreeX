@@ -21,4 +21,56 @@ public sealed class XmlNativeBagSerializerTests
             .ToString(SaveOptions.DisableFormatting)
             .Should().Be("<ext><inner>  spaced  </inner><inner xml:space=\"preserve\"> keep  </inner></ext>");
     }
+
+    [Fact]
+    public void SerializeDeserialize_NamespacedChildren_PreservesOrderAndXml()
+    {
+        var attrs = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["customFlag"] = "keep"
+        };
+        var children = new List<string>
+        {
+            "<fx:first xmlns:fx=\"urn:freexcel:test\" id=\"1\"><fx:leaf /></fx:first>",
+            "<second xmlns=\"urn:freexcel:test-default\" id=\"2\" />"
+        };
+
+        var bagValue = XmlNativeBagSerializer.Serialize(attrs, children);
+
+        var (roundTripAttrs, roundTripChildren) = XmlNativeBagSerializer.Deserialize(bagValue);
+        roundTripAttrs.Should().ContainKey("customFlag").WhoseValue.Should().Be("keep");
+        roundTripChildren.Should().HaveCount(2);
+
+        var first = XElement.Parse(roundTripChildren[0], LoadOptions.PreserveWhitespace);
+        var second = XElement.Parse(roundTripChildren[1], LoadOptions.PreserveWhitespace);
+
+        first.Name.Should().Be(XName.Get("first", "urn:freexcel:test"));
+        first.Attribute("id")?.Value.Should().Be("1");
+        first.Elements().Single().Name.Should().Be(XName.Get("leaf", "urn:freexcel:test"));
+        second.Name.Should().Be(XName.Get("second", "urn:freexcel:test-default"));
+        second.Attribute("id")?.Value.Should().Be("2");
+    }
+
+    [Fact]
+    public void SerializeDeserialize_NamespacedAttributes_CanBeAppliedToElement()
+    {
+        var namespacedAttribute = XName.Get("flag", "urn:freexcel:test").ToString();
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["plainFlag"] = "plain",
+                [namespacedAttribute] = "namespaced"
+            });
+        var target = new XElement("root");
+
+        var (roundTripAttrs, roundTripChildren) = XmlNativeBagSerializer.Deserialize(bagValue);
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        roundTripAttrs.Should().ContainKey("plainFlag").WhoseValue.Should().Be("plain");
+        roundTripAttrs.Should().ContainKey(namespacedAttribute).WhoseValue.Should().Be("namespaced");
+        roundTripChildren.Should().BeEmpty();
+        changed.Should().BeTrue();
+        target.Attribute("plainFlag")?.Value.Should().Be("plain");
+        target.Attribute(XName.Get("flag", "urn:freexcel:test"))?.Value.Should().Be("namespaced");
+    }
 }
