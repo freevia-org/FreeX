@@ -700,6 +700,8 @@ public sealed class CsvFileAdapterTests
     [InlineData("$42.00")]
     [InlineData("+$42.00")]
     [InlineData("-$42.00")]
+    [InlineData(" +$42.00 ")]
+    [InlineData(" -$42.00 ")]
     [InlineData("($42.25)")]
     [InlineData(" ($42.25) ")]
     public void Save_RoundTripsCurrencyTextFieldsAsLiteralText(string text)

@@ -181,6 +181,7 @@ internal static class DelimitedTextWorkbookWriter
         IsBooleanLikeText(value) ||
         IsDateTimeLikeText(value) ||
         IsUnsignedCurrencyText(value) ||
+        IsSignedCurrencyText(value) ||
         IsPercentageText(value) ||
         IsNumericLikeText(value) ||
         IsParenthesizedCurrencyText(value) ||
@@ -255,6 +256,18 @@ internal static class DelimitedTextWorkbookWriter
 
     private static bool IsNumericLikeText(string value) =>
         double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out _);
+
+    private static bool IsSignedCurrencyText(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length > 1 &&
+               trimmed[0] is '+' or '-' &&
+               double.TryParse(
+                   trimmed,
+                   NumberStyles.Currency,
+                   CultureInfo.GetCultureInfo("en-US"),
+                   out _);
+    }
 
     private static bool IsPercentageText(string value)
     {
