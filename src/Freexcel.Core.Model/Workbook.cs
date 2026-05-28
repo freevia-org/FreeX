@@ -349,7 +349,41 @@ public sealed class Workbook
         if (idx < 0) return false;
         _sheets.RemoveAt(idx);
         _sheetById.Remove(sheetId);
+        RemoveNamedRangesForSheet(sheetId);
+        AdjustWorkbookViewSheetIndexes(idx);
         return true;
+    }
+
+    private void RemoveNamedRangesForSheet(SheetId sheetId)
+    {
+        foreach (var (name, range) in NamedRanges.ToList())
+        {
+            if (range.Start.Sheet == sheetId || range.End.Sheet == sheetId)
+                RemoveNamedRange(name);
+        }
+    }
+
+    private void AdjustWorkbookViewSheetIndexes(int removedIndex)
+    {
+        ActiveSheetIndex = AdjustSheetIndexAfterRemoval(ActiveSheetIndex, removedIndex);
+        FirstVisibleSheetIndex = AdjustSheetIndexAfterRemoval(FirstVisibleSheetIndex, removedIndex);
+    }
+
+    private int? AdjustSheetIndexAfterRemoval(int? sheetIndex, int removedIndex)
+    {
+        if (sheetIndex is null)
+            return null;
+
+        if (_sheets.Count == 0)
+            return null;
+
+        if (sheetIndex.Value > removedIndex)
+            return Math.Min(sheetIndex.Value - 1, _sheets.Count - 1);
+
+        if (sheetIndex.Value == removedIndex)
+            return Math.Min(removedIndex, _sheets.Count - 1);
+
+        return Math.Min(sheetIndex.Value, _sheets.Count - 1);
     }
 
     /// <summary>Get a sheet by ID, or null if not found.</summary>
