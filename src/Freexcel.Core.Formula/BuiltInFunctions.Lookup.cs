@@ -62,6 +62,88 @@ public static partial class BuiltInFunctions
         return new NumberValue(1);
     }
 
+    private static ScalarValue SheetFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count == 0)
+            return TryGetCurrentSheetIndex(ctx, out var currentIndex)
+                ? new NumberValue(currentIndex)
+                : ErrorValue.NA;
+
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range)
+        {
+            var sheetName = range.SheetName ?? ctx.CurrentSheet?.Name;
+            return sheetName is not null && TryGetSheetIndex(ctx, sheetName, out var rangeIndex)
+                ? new NumberValue(rangeIndex)
+                : ErrorValue.NA;
+        }
+
+        var requestedSheetName = ToText(args[0]);
+        return TryGetSheetIndex(ctx, requestedSheetName, out var sheetIndex)
+            ? new NumberValue(sheetIndex)
+            : ErrorValue.NA;
+    }
+
+    private static ScalarValue SheetsFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count == 0)
+        {
+            if (ctx.CurrentWorkbook is not null) return new NumberValue(ctx.CurrentWorkbook.SheetCount);
+            return ctx.CurrentSheet is not null ? new NumberValue(1) : ErrorValue.NA;
+        }
+
+        if (args[0] is ErrorValue e) return e;
+        return args[0] is RangeValue ? new NumberValue(1) : ErrorValue.Value;
+    }
+
+    private static bool TryGetCurrentSheetIndex(IEvalContext ctx, out int index)
+    {
+        index = 0;
+        var currentSheet = ctx.CurrentSheet;
+        if (currentSheet is null) return false;
+
+        if (ctx.CurrentWorkbook is null)
+        {
+            index = 1;
+            return true;
+        }
+
+        for (var i = 0; i < ctx.CurrentWorkbook.Sheets.Count; i++)
+        {
+            if (ctx.CurrentWorkbook.Sheets[i].Id != currentSheet.Id) continue;
+            index = i + 1;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetSheetIndex(IEvalContext ctx, string sheetName, out int index)
+    {
+        index = 0;
+        if (ctx.CurrentWorkbook is null)
+        {
+            if (ctx.CurrentSheet is not null &&
+                string.Equals(ctx.CurrentSheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))
+            {
+                index = 1;
+                return true;
+            }
+
+            return false;
+        }
+
+        for (var i = 0; i < ctx.CurrentWorkbook.Sheets.Count; i++)
+        {
+            if (!string.Equals(ctx.CurrentWorkbook.Sheets[i].Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                continue;
+            index = i + 1;
+            return true;
+        }
+
+        return false;
+    }
+
     private static ScalarValue Vlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[1] is ErrorValue e1) return e1;
