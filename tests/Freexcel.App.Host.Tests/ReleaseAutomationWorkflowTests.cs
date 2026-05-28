@@ -15,6 +15,11 @@ public sealed class ReleaseAutomationWorkflowTests
 
         workflow.Should().Contain("workflow_dispatch:");
         workflow.Should().Contain("release_notes:");
+        workflow.Should().Contain("public_preview_candidate:");
+        workflow.Should().Contain("accessibility_keyboard_only:");
+        workflow.Should().Contain("accessibility_screen_reader:");
+        workflow.Should().Contain("accessibility_uia_catalog:");
+        workflow.Should().Contain("accessibility_known_issues:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: write");
         workflow.Should().NotContain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24");
@@ -80,11 +85,18 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("FREEXCEL_RELEASE_NOTES: ${{ inputs.release_notes }}");
         workflow.Should().Contain("$extraNotes = $env:FREEXCEL_RELEASE_NOTES");
         workflow.Should().Contain("Public-preview accessibility gate:");
-        workflow.Should().Contain("Keyboard-only smoke validation recorded.");
-        workflow.Should().Contain("Screen-reader smoke validation recorded.");
-        workflow.Should().Contain("UI Automation catalog review recorded.");
-        workflow.Should().Contain("Known accessibility issues listed with affected workflow and planned follow-up.");
-        workflow.Should().Contain("treat this build as internal-only and do not promote it as a public-preview candidate");
+        workflow.Should().Contain("$publicPreviewCandidate = \"${{ inputs.public_preview_candidate }}\" -eq \"true\"");
+        workflow.Should().Contain("\"Keyboard-only smoke validation\" = \"${{ inputs.accessibility_keyboard_only }}\" -eq \"true\"");
+        workflow.Should().Contain("\"Screen-reader smoke validation\" = \"${{ inputs.accessibility_screen_reader }}\" -eq \"true\"");
+        workflow.Should().Contain("\"UI Automation catalog review\" = \"${{ inputs.accessibility_uia_catalog }}\" -eq \"true\"");
+        workflow.Should().Contain("\"Known accessibility issues reviewed/listed\" = \"${{ inputs.accessibility_known_issues }}\" -eq \"true\"");
+        workflow.Should().Contain("Public-preview promotion requires completed accessibility gate inputs");
+        workflow.Should().Contain("Keyboard-only smoke validation: $keyboardOnlyStatus.");
+        workflow.Should().Contain("Screen-reader smoke validation: $screenReaderStatus.");
+        workflow.Should().Contain("UI Automation catalog review: $uiaCatalogStatus.");
+        workflow.Should().Contain("Known accessibility issues reviewed/listed: $knownIssuesStatus.");
+        workflow.Should().Contain("this build is public-preview eligible");
+        workflow.Should().Contain("This build is internal-only unless release notes separately document a completed public-preview accessibility gate.");
     }
 
     [Fact]
