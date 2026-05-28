@@ -3388,7 +3388,10 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Grid Grid.Column="0" ClipToBounds="True">
-                <ui:GridView x:Name="SheetGrid"/>
+                <ui:GridView x:Name="SheetGrid"
+                             AutomationProperties.Name="Worksheet"
+                             AutomationProperties.AutomationId="SheetGrid"
+                             AutomationProperties.HelpText="Spreadsheet grid. Use arrow keys to navigate cells, F2 to edit, and Tab/Enter to move focus."/>
                 <DockPanel VerticalAlignment="Bottom"
                            LastChildFill="True"
                            IsHitTestVisible="False"
@@ -3782,6 +3785,9 @@
                                     <Grid x:Name="TabChrome"
                                           Cursor="Hand"
                                           Focusable="True"
+                                          AutomationProperties.Name="{Binding Name}"
+                                          AutomationProperties.AutomationId="{Binding Name}"
+                                          AutomationProperties.HelpText="Select this sheet. Right-click or press Shift+F10 for sheet tab options."
                                           MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
                                           MouseMove="SheetTab_MouseMove"
                                           MouseLeftButtonUp="SheetTab_MouseLeftButtonUp"
