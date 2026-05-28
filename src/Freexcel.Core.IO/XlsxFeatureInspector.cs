@@ -285,6 +285,12 @@ public static class XlsxFeatureInspector
                 continue;
             }
 
+            if (normalizedType.Contains("/digital-signature/", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.DigitalSignatures;
+                continue;
+            }
+
             if (normalizedType.EndsWith("/querytable", StringComparison.Ordinal) ||
                 normalizedType.EndsWith("/connections", StringComparison.Ordinal))
             {

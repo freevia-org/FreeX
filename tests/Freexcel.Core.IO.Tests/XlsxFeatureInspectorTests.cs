@@ -303,6 +303,22 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RelationshipOnlyDigitalSignatureReference_DetectsDigitalSignatures()
+    {
+        using var package = CreatePackageWithContent(("_rels/.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdSignatureOrigin"
+                            Type="http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin"
+                            Target="_xmlsignatures/origin.sigs"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.DigitalSignatures);
+    }
+
+    [Fact]
     public void Inspect_CustomRibbonUiPackage_DetectsCustomRibbonUi()
     {
         using var package = CreatePackage("customUI/customUI.xml");
