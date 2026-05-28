@@ -38,6 +38,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$progressPath = \"release/progress.json\"");
         workflow.Should().Contain("$releaseProgress = Get-Content -LiteralPath $progressPath -Raw | ConvertFrom-Json");
         workflow.Should().Contain("$overallCompletion = [int]$releaseProgress.overallCompletion");
+        workflow.Should().Contain("elseif ($overallCompletion -ge 93) { $minor = 7 }");
         workflow.Should().Contain("elseif ($overallCompletion -ge 90) { $minor = 6 }");
         workflow.Should().Contain("$versionLabel = \"$major.$minor.$releasePatch\"");
         workflow.Should().Contain("$releaseStamp = Get-Date -AsUTC -Format \"yyyy-MM-dd-HH-mm-ss\"");
@@ -127,7 +128,7 @@ public sealed class ReleaseAutomationWorkflowTests
         var root = document.RootElement;
 
         root.GetProperty("major").GetInt32().Should().Be(0);
-        root.GetProperty("overallCompletion").GetInt32().Should().BeInRange(90, 92);
+        root.GetProperty("overallCompletion").GetInt32().Should().BeInRange(93, 95);
         root.GetProperty("releasePatchBase").GetInt32().Should().BeGreaterThanOrEqualTo(0);
         root.GetProperty("releasePatchSource").GetString().Should().Be("github_run_number");
         root.GetProperty("channel").GetString().Should().Be("test");
