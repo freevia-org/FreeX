@@ -215,6 +215,16 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
+    public void GetPriorityProtectedGroupNames_PrefersDataToolsAndForecastAtNarrowWidths()
+    {
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
+
+        var protectedGroups = RibbonAdaptivePriorityPlanner.GetPriorityProtectedGroupNames(groupNames, 900);
+
+        protectedGroups.Should().Equal("Data Tools", "Forecast");
+    }
+
+    [Fact]
     public void ApplyBreakpointOverrides_KeepsReviewAccessibilityVisibleAtMediumWidths()
     {
         var groupNames = new[] { "Proofing", "Accessibility", "Comments", "Notes", "Protect" };
