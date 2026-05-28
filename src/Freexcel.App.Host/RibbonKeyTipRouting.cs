@@ -20,6 +20,9 @@ public static class RibbonKeyTipRouting
     private static T? ResolveSingle<T>(IEnumerable<T> elements, string keyTip, bool preferLongerPrefix)
         where T : DependencyObject
     {
+        if (string.IsNullOrWhiteSpace(keyTip))
+            return null;
+
         var candidates = elements.ToList();
         var matches = candidates
             .Where(element => string.Equals(RibbonTooltip.GetKeyTip(element), keyTip, StringComparison.OrdinalIgnoreCase))
@@ -41,10 +44,15 @@ public static class RibbonKeyTipRouting
     }
 
     private static bool HasPrefix<T>(IEnumerable<T> elements, string keyTipPrefix)
-        where T : DependencyObject =>
-        elements.Any(element =>
+        where T : DependencyObject
+    {
+        if (string.IsNullOrWhiteSpace(keyTipPrefix))
+            return false;
+
+        return elements.Any(element =>
             RibbonTooltip.GetKeyTip(element) is { } keyTip &&
             keyTip.StartsWith(keyTipPrefix, StringComparison.OrdinalIgnoreCase));
+    }
 
     private static IEnumerable<MenuItem> FlattenMenuItems(IEnumerable<MenuItem> menuItems)
     {
