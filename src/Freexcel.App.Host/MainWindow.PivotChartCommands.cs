@@ -16,11 +16,9 @@ public partial class MainWindow
         var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange);
         if (pivotTable is null)
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "Select a cell inside an existing PivotTable, or open a workbook with a PivotTable on the active sheet.",
-                "Insert PivotChart",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Insert PivotChart");
             return;
         }
 
@@ -40,11 +38,9 @@ public partial class MainWindow
     {
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "Select a cell inside an existing PivotTable before changing a PivotChart type.",
-                "Change PivotChart Type",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Change PivotChart Type");
             return;
         }
 
@@ -53,11 +49,9 @@ public partial class MainWindow
             string.Equals(item.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase));
         if (chart is null)
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "Insert or select a PivotChart connected to this PivotTable before changing its type.",
-                "Change PivotChart Type",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Change PivotChart Type");
             return;
         }
 
@@ -75,22 +69,18 @@ public partial class MainWindow
     {
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "Select a cell inside an existing PivotTable before changing PivotChart options.",
-                "PivotChart Options",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "PivotChart Options");
             return;
         }
 
         var chart = FindPivotChartForPivotTable(sheet, pivotTable);
         if (chart is null)
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "Insert or select a PivotChart connected to this PivotTable before changing its options.",
-                "PivotChart Options",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "PivotChart Options");
             return;
         }
 

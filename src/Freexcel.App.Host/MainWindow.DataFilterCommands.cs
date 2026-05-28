@@ -106,7 +106,7 @@ public partial class MainWindow
     {
         if (_lastAutoFilterRange is not { } range || _lastAutoFilterCommandFactory is null)
         {
-            MessageBox.Show("Apply a filter before using Reapply.", "Reapply Filter", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Apply a filter before using Reapply.", "Reapply Filter");
             return;
         }
 
@@ -178,20 +178,46 @@ public partial class MainWindow
 
         if (!string.IsNullOrWhiteSpace(filterText))
         {
-            var parsed = FilterPromptPlanner.TryPlan(value, out var plan, out var error);
-            if (!parsed)
+            if (IsTopBottomFilterText(filterText))
             {
-                MessageBox.Show(error ?? "Enter a supported filter criterion.",
-                    title, MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
+                if (!FilterInputParser.TryParseTopBottom(value, out var count, out var top, out var percent, out var topBottomError))
+                {
+                    _messageService.ShowWarning(topBottomError ?? "Enter a supported filter criterion.", title);
+                    return false;
+                }
+
+                if (!TryExecuteRememberedAutoFilterCommand(
+                        "Filter",
+                        range,
+                        currentRange => percent
+                            ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset, count, top)
+                            : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset, count, top)))
+                    return false;
+                return true;
             }
 
-            if (plan is not null && plan.Kind != FilterPromptPlanKind.AllowedValues)
+            if (FilterInputParser.TryParseAverage(value, out var aboveAverage))
             {
                 if (!TryExecuteRememberedAutoFilterCommand(
                         "Filter",
                         range,
-                        currentRange => plan.CreateCommand(_currentSheetId, currentRange, filterColOffset)))
+                        currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset, aboveAverage)))
+                    return false;
+                return true;
+            }
+
+            if (IsCriterionFilterText(filterText))
+            {
+                if (!FilterInputParser.TryParseCriterion(value, out var criterion, out var criterionError) || criterion is null)
+                {
+                    _messageService.ShowWarning(criterionError ?? "Enter a supported filter criterion.", title);
+                    return false;
+                }
+
+                if (!TryExecuteRememberedAutoFilterCommand(
+                        "Filter",
+                        range,
+                        currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset, criterion)))
                     return false;
                 return true;
             }
@@ -199,7 +225,7 @@ public partial class MainWindow
 
         if (string.IsNullOrWhiteSpace(filterText) && result.SelectedValues.Count == 0)
         {
-            MessageBox.Show("Select at least one filter item.", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            _messageService.ShowWarning("Select at least one filter item.", title);
             return false;
         }
 
@@ -220,7 +246,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            MessageBox.Show("Select a range first.", "CF Rule");
+            _messageService.ShowWarning("Select a range first.", "CF Rule");
             return;
         }
 
@@ -416,4 +442,38 @@ public partial class MainWindow
         dlg.ShowDialog();
         UpdateViewport();
     }
+
+    private static bool IsTopBottomFilterText(string filterText) =>
+        filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCriterionFilterText(string filterText) =>
+        filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
+        filterText.Equals("nonblank", StringComparison.OrdinalIgnoreCase) ||
+        filterText.Equals("non-blank", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("and:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("or:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("date=", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("date<>", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("date>=", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("date>", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("date<=", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("date<", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("datebetween:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("contains:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("notcontains:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("begins:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("equals:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("<>", StringComparison.Ordinal) ||
+        filterText.StartsWith(">=", StringComparison.Ordinal) ||
+        filterText.StartsWith("<=", StringComparison.Ordinal) ||
+        filterText.StartsWith('>') ||
+        filterText.StartsWith('<') ||
+        filterText.StartsWith('=');
 }

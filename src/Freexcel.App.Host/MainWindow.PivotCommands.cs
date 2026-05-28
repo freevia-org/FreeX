@@ -16,21 +16,17 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || SheetGrid.SelectedRange is not { } sourceRange)
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "Select a source range with a header row before creating a PivotTable.",
-                "Insert PivotTable",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Insert PivotTable");
             return;
         }
 
         if (sourceRange.RowCount < 2 || sourceRange.ColCount < 2)
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "PivotTable source data must include at least two columns and a header row.",
-                "Insert PivotTable",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Insert PivotTable");
             return;
         }
 
@@ -45,7 +41,7 @@ public partial class MainWindow
 
         if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.SourceRangeText, out var dialogSourceRange))
         {
-            MessageBox.Show("Enter a valid PivotTable source range.", "Insert PivotTable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _messageService.ShowWarning("Enter a valid PivotTable source range.", "Insert PivotTable");
             return;
         }
 
@@ -85,7 +81,7 @@ public partial class MainWindow
         if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.DestinationRangeText, out var targetRange) ||
             targetRange.Start.Sheet != _currentSheetId)
         {
-            MessageBox.Show("Enter a destination cell on the active worksheet.", "Insert PivotTable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _messageService.ShowWarning("Enter a destination cell on the active worksheet.", "Insert PivotTable");
             return;
         }
 
@@ -138,11 +134,9 @@ public partial class MainWindow
         var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange);
         if (pivotTable is null)
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "Select a cell inside an existing PivotTable, or open a workbook with a PivotTable on the active sheet.",
-                "Refresh PivotTable",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Refresh PivotTable");
             return;
         }
 
@@ -165,11 +159,9 @@ public partial class MainWindow
         {
             if (showMessage)
             {
-                MessageBox.Show(
+                _messageService.ShowInfo(
                     "Select a value cell inside an existing PivotTable before showing detail rows.",
-                    "Show PivotTable Details",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                    "Show PivotTable Details");
             }
 
             return false;
@@ -255,11 +247,9 @@ public partial class MainWindow
         var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
         if (pivotTable is null)
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "Select a cell inside an existing PivotTable before showing the field list.",
-                "PivotTable Fields",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "PivotTable Fields");
             return;
         }
 
@@ -793,11 +783,7 @@ public partial class MainWindow
     {
         if (dataFields.Count == 0)
         {
-            MessageBox.Show(
-                "A PivotTable requires at least one value field.",
-                "PivotTable Fields",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            _messageService.ShowInfo("A PivotTable requires at least one value field.", "PivotTable Fields");
             return;
         }
 

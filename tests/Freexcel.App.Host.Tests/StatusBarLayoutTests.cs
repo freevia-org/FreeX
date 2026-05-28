@@ -94,7 +94,8 @@ public sealed class StatusBarLayoutTests
                 new RecalcEngine(graph, evaluator),
                 [],
                 workbookRef,
-                workbook);
+                workbook,
+                NullUserMessageService.Instance);
 
             try
             {
@@ -448,7 +449,8 @@ public sealed class StatusBarLayoutTests
                 new RecalcEngine(graph, evaluator),
                 [],
                 workbookRef,
-                workbook)
+                workbook,
+                NullUserMessageService.Instance)
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,

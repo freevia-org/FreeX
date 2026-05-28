@@ -125,7 +125,7 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount)");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter the number of sheets to include from 1 to 255.\", OptSheetCount);");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, Control target)");
-        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("if (target is TextBox textBox)");
         source.Should().Contain("textBox.SelectAll();");
         source.Should().Contain("else if (target is ComboBox comboBox)");

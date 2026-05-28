@@ -179,12 +179,7 @@ public sealed class ChartTrendlineOptionsDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        MessageBox.Show(
-            this,
-            message,
-            Title,
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);

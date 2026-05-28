@@ -416,10 +416,10 @@ public static partial class FlashFillService
 
     private static Func<string, string?>? TryFinalWhitespaceToken(IReadOnlyList<(string Source, string Expected)> examples)
     {
-        if (!examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && tokens.Length >= 2 && e.Expected == tokens[^1]))
+        if (!examples.All(e => TrySplitVariableWhitespaceTokens(e.Source, out var tokens) && tokens.Length >= 2 && e.Expected == tokens[^1]))
             return null;
 
-        return source => TrySplitWhitespaceTokens(source, out var tokens) && tokens.Length >= 2
+        return source => TrySplitVariableWhitespaceTokens(source, out var tokens) && tokens.Length >= 2
             ? tokens[^1]
             : null;
     }
@@ -714,6 +714,12 @@ public static partial class FlashFillService
     {
         tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         return tokens.Length == 3 && tokens.All(token => token.Length > 0);
+    }
+
+    private static bool TrySplitVariableWhitespaceTokens(string source, out string[] tokens)
+    {
+        tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length >= 2 && tokens.All(token => token.Length > 0);
     }
 
     private static string ExtractDigits(string value) =>

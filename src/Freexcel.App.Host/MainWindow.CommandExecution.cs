@@ -8,12 +8,11 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
-    private static void ShowCommandError(CommandOutcome outcome, string title)
+    private void ShowCommandError(CommandOutcome outcome, string title)
     {
         if (outcome.Success) return;
 
-        MessageBox.Show(outcome.ErrorMessage ?? "The command could not be completed.",
-            title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        _messageService.ShowWarning(outcome.ErrorMessage ?? "The command could not be completed.", title);
     }
 
     private bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)

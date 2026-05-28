@@ -1402,7 +1402,8 @@ public sealed class MainWindowAdaptiveRibbonTests
                 new RecalcEngine(graph, evaluator),
                 [],
                 workbookRef,
-                workbook);
+                workbook,
+                NullUserMessageService.Instance);
 
             window.Width = 1280;
             window.Height = 720;

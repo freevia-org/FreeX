@@ -153,7 +153,7 @@ public sealed class SubtotalDialog : Window
         }
         catch (ArgumentException ex)
         {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, ex.Message, Title);
             FocusInvalidInput(ex.Message);
             return;
         }

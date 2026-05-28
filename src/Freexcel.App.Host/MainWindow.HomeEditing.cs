@@ -98,9 +98,10 @@ public partial class MainWindow
         var startValue = sheet.GetValue(range.Start.Row, range.Start.Col);
         if (startValue is not NumberValue and not DateTimeValue)
         {
-            MessageBox.Show("Select a numeric or date cell to start a series.", "Fill Series", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowWarning("Select a numeric or date cell to start a series.", "Fill Series");
             return;
         }
+
 
         var dialog = new FillSeriesStepDialog { Owner = this };
         if (dialog.ShowDialog() != true)
@@ -259,7 +260,7 @@ public partial class MainWindow
         if (matches.Count == 0)
         {
             if (showEmptyMessage)
-                MessageBox.Show("No cells found.", "Go To Special", MessageBoxButton.OK, MessageBoxImage.Information);
+                _messageService.ShowInfo("No cells found.", "Go To Special");
             return;
         }
 

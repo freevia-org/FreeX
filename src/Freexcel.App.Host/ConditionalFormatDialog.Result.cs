@@ -236,7 +236,7 @@ public partial class ConditionalFormatDialog
 
     private bool ShowInvalidInputWarning(string message, TextBox? target)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         if (target is null)
             return false;
 

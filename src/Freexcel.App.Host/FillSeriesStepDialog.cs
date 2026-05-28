@@ -185,12 +185,7 @@ public sealed class FillSeriesStepDialog : Window
                 out var result,
                 out var error))
         {
-            MessageBox.Show(
-                this,
-                error ?? "Enter a numeric step value.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter a numeric step value.", Title);
             if (string.Equals(error, "Enter a numeric stop value or leave it blank.", StringComparison.Ordinal))
                 FocusInvalidStopInput();
             else

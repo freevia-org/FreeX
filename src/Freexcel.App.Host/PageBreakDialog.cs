@@ -79,12 +79,7 @@ public sealed class PageBreakDialog : Window
         {
             if (!PageLayoutInputParser.TryParseColumnBreakValue(_columnBreakBox.Text, out var columnBreak))
             {
-                MessageBox.Show(
-                    this,
-                    "Enter a column number or letter within the worksheet for the page break.",
-                    Title,
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                DialogMessageHelper.ShowWarning(this, "Enter a column number or letter within the worksheet for the page break.", Title);
                 FocusInvalidBreakInput(_columnBreakBox);
                 return;
             }
@@ -96,12 +91,7 @@ public sealed class PageBreakDialog : Window
             if (!uint.TryParse(_rowBreakBox.Text.Trim(), out var rowBreak) ||
                 !PageLayoutInputParser.IsValidRowBreak(rowBreak))
             {
-                MessageBox.Show(
-                    this,
-                    "Enter a row number within the worksheet for the page break.",
-                    Title,
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                DialogMessageHelper.ShowWarning(this, "Enter a row number within the worksheet for the page break.", Title);
                 FocusInvalidBreakInput(_rowBreakBox);
                 return;
             }

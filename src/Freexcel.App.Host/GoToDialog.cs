@@ -141,7 +141,7 @@ public sealed partial class GoToDialog : Window
     {
         if (!TryParseReferenceRange(_addressBox.Text, _sheetId, _definedNames, out var range))
         {
-            MessageBox.Show(this, "Reference is not valid.", "Go To", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Reference is not valid.", "Go To");
             FocusReferenceInput();
             return;
         }

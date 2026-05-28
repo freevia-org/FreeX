@@ -162,7 +162,7 @@ public partial class WorkbookThemeDialog : Window
 
     private void ShowInvalidThemeColor(WorkbookThemeDialogValidationError error)
     {
-        MessageBox.Show(this, error.Message, "Customize Theme", MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, error.Message, "Customize Theme");
         var field = ThemeColorFields().FirstOrDefault(field => field.Slot == error.Slot);
         if (field.TextBox is not null)
             FocusInvalidColorInput(field.TextBox);

@@ -92,7 +92,7 @@ public sealed class ChartBarFormatDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);
@@ -216,7 +216,7 @@ public sealed class ChartPieFormatDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);
@@ -293,7 +293,7 @@ public sealed class ChartBubbleFormatDialog : Window
         if (!int.TryParse(_bubbleScaleBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var scale)
             || scale < 1 || scale > 300)
         {
-            MessageBox.Show(this, "Enter a bubble scale from 1 to 300.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter a bubble scale from 1 to 300.", Title);
             _bubbleScaleBox.Focus();
             _bubbleScaleBox.SelectAll();
             Keyboard.Focus(_bubbleScaleBox);
@@ -443,7 +443,7 @@ public sealed class ChartStockFormatDialog : Window
 
     private void ShowInvalidInputWarning(string message, TextBox target)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);

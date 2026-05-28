@@ -71,12 +71,7 @@ public sealed class ObjectSizeDialog : Window
     {
         if (!TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var result))
         {
-            MessageBox.Show(
-                this,
-                "Enter positive width and height values.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter positive width and height values.", Title);
             FocusInvalidSizeInput(ResolveInvalidSizeInput());
             return;
         }
@@ -215,12 +210,7 @@ public sealed class RotationDialog : Window
     {
         if (!TryParseRotation(_rotationBox.Text, out var result))
         {
-            MessageBox.Show(
-                this,
-                "Enter a numeric rotation value.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter a numeric rotation value.", Title);
             FocusInvalidRotationInput();
             return;
         }
@@ -287,12 +277,7 @@ public sealed class PictureCropDialog : Window
         var input = string.Join(", ", _cropLeftBox.Text, _cropTopBox.Text, _cropRightBox.Text, _cropBottomBox.Text);
         if (!TryCreateResult(input, out var result, out var error))
         {
-            MessageBox.Show(
-                this,
-                error ?? "Enter four crop percentages.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter four crop percentages.", Title);
             FocusInvalidCropInput(ResolveInvalidCropInput(error));
             return;
         }

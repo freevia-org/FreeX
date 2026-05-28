@@ -41,7 +41,7 @@ public partial class HeaderFooterDialog
         var picture = GetPictureForActiveBox();
         if (picture is null)
         {
-            MessageBox.Show(this, "Insert a header or footer picture before formatting it.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogMessageHelper.ShowInfo(this, "Insert a header or footer picture before formatting it.", Title);
             FocusActiveTextBox();
             return;
         }

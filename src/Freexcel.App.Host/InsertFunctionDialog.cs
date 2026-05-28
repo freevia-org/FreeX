@@ -180,7 +180,7 @@ public sealed class InsertFunctionDialog : Window
             ? "Select a function to see its syntax and description. Use search or category filtering to narrow the list."
             : $"{entry.Name}()\n\n{entry.Description}";
 
-        MessageBox.Show(this, message, "Function Help", MessageBoxButton.OK, MessageBoxImage.Information);
+        DialogMessageHelper.ShowInfo(this, message, "Function Help");
     }
 
 }

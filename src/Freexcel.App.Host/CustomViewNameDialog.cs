@@ -80,7 +80,7 @@ public sealed class CustomViewNameDialog : Window
             _hiddenFilterSettingsBox.IsChecked == true);
         if (string.IsNullOrWhiteSpace(Result.ViewName))
         {
-            MessageBox.Show(this, "Enter a view name.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter a view name.", Title);
             FocusNameInput();
             return;
         }
