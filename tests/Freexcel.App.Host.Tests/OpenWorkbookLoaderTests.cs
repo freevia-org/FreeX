@@ -85,6 +85,17 @@ public sealed class OpenWorkbookLoaderTests
         }
     }
 
+    [Fact]
+    public void WorkbookFormulaScanner_UsesSheetFormulaCountsInsteadOfScanningCells()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "WorkbookFormulaScanner.cs"));
+
+        source.Should().Contain("sheet.HasFormulas");
+        source.Should().NotContain("EnumerateCells");
+        source.Should().NotContain(".Any(");
+    }
+
     [Theory]
     [InlineData(".xlt", "Excel 97-2003 Template")]
     [InlineData(".xltx", "Excel Template")]

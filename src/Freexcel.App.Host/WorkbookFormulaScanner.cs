@@ -4,6 +4,14 @@ namespace Freexcel.App.Host;
 
 public static class WorkbookFormulaScanner
 {
-    public static bool HasFormulas(Workbook workbook) =>
-        workbook.Sheets.Any(sheet => sheet.EnumerateCells().Any(entry => entry.Cell.HasFormula));
+    public static bool HasFormulas(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheet.HasFormulas)
+                return true;
+        }
+
+        return false;
+    }
 }
