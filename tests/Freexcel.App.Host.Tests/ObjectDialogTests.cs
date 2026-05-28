@@ -740,9 +740,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_textBox.Focus();");
-        source.Should().Contain("_textBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_textBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_textBox);");
     }
 
     private static string ReadObjectDialogSources() =>
