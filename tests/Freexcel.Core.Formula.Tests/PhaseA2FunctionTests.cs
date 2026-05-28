@@ -397,6 +397,32 @@ public class PhaseA2FunctionTests
         _eval.Evaluate("=CELL(\"parentheses\",A1)", sheet, wb).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData(HorizontalAlignment.Left, "'")]
+    [InlineData(HorizontalAlignment.Center, "^")]
+    [InlineData(HorizontalAlignment.Right, "\"")]
+    [InlineData(HorizontalAlignment.General, "")]
+    [InlineData(HorizontalAlignment.Justify, "")]
+    [InlineData(HorizontalAlignment.Distributed, "")]
+    public void Cell_Prefix_ReturnsHorizontalAlignmentCode(HorizontalAlignment alignment, string expected)
+    {
+        var (wb, sheet) = MakeWb((1, 1, new TextValue("text")));
+        var styleId = wb.RegisterStyle(new CellStyle { HorizontalAlignment = alignment });
+        sheet.GetCell(1, 1)!.StyleId = styleId;
+
+        _eval.Evaluate("=CELL(\"prefix\",A1)", sheet, wb).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void Cell_Prefix_UsesStyleOnlyCells()
+    {
+        var (wb, sheet) = MakeWb();
+        var styleId = wb.RegisterStyle(new CellStyle { HorizontalAlignment = HorizontalAlignment.Center });
+        sheet.SetStyleOnly(1, 1, styleId);
+
+        _eval.Evaluate("=CELL(\"prefix\",A1)", sheet, wb).Should().Be(new TextValue("^"));
+    }
+
     [Fact]
     public void Cell_Protect_UnprotectedSheet_ReturnsZero()
     {

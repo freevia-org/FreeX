@@ -97,7 +97,7 @@ public static partial class BuiltInFunctions
             case "parentheses":
                 return new NumberValue(CellNegativeSectionUsesParentheses(style?.NumberFormat) ? 1 : 0);
             case "prefix":
-                return new TextValue("");
+                return new TextValue(CellPrefixCode(style));
             default:
                 return ErrorValue.Value;
         }
@@ -111,6 +111,15 @@ public static partial class BuiltInFunctions
         var styleOnly = sheet.GetStyleOnly(row, col);
         return styleOnly is null ? CellStyle.Default : ctx.CurrentWorkbook.GetStyle(styleOnly.Value);
     }
+
+    private static string CellPrefixCode(CellStyle? style) =>
+        (style?.HorizontalAlignment ?? HorizontalAlignment.General) switch
+        {
+            HorizontalAlignment.Left => "'",
+            HorizontalAlignment.Center => "^",
+            HorizontalAlignment.Right => "\"",
+            _ => ""
+        };
 
     private static string CellFormatCode(string? numberFormat)
     {
