@@ -954,6 +954,36 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void ContextualRibbonTabs_SeedGroupMetadataAndCollapsedKeyTips()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.ShowPivotContextualTabs();
+
+            foreach (var tab in new[] { "PivotTable Analyze", "Design" })
+            {
+                harness.SelectRibbonTab(tab, 1100);
+
+                harness.ActiveRibbonGroupNames.Should().NotBeEmpty($"{tab} should participate in static ribbon normalization when contextual tabs become visible");
+                harness.ActiveRibbonGroupNames.Should().OnlyContain(
+                    name => !string.IsNullOrWhiteSpace(name) && !string.Equals(name, "Commands", StringComparison.Ordinal),
+                    $"{tab} group names should be seeded from contextual group captions before adaptive layout runs");
+
+                harness.SelectRibbonTab(tab, 220);
+
+                harness.CollapsedActiveRibbonGroupsWithoutKeyTips.Should().BeEmpty(
+                    $"{tab} collapsed contextual groups should remain reachable through command-scope keytips");
+                harness.CollapsedActiveRibbonGroupKeyTips
+                    .GroupBy(pair => pair.KeyTip, StringComparer.OrdinalIgnoreCase)
+                    .Where(group => group.Count() > 1)
+                    .Should()
+                    .BeEmpty($"{tab} collapsed contextual group keytips should remain unique within the selected tab");
+            }
+        });
+    }
+
+    [Fact]
     public void CollapsedRibbonGroupButtons_ShowDropdownGlyph()
     {
         StaTestRunner.Run(() =>
@@ -1406,6 +1436,17 @@ public sealed class MainWindowAdaptiveRibbonTests
         public void NormalizeRibbonSurface()
         {
             _normalizeRibbonSurface.Invoke(_window, [true]);
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
+        public void ShowPivotContextualTabs()
+        {
+            if (_window.FindName("PivotTableAnalyzeTab") is TabItem analyzeTab)
+                analyzeTab.Visibility = Visibility.Visible;
+            if (_window.FindName("PivotTableDesignTab") is TabItem designTab)
+                designTab.Visibility = Visibility.Visible;
+
             _window.UpdateLayout();
             PumpDispatcher();
         }
