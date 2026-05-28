@@ -64,16 +64,17 @@ public partial class GridView
         DrawingContext dc,
         Rect rect,
         CellStyle? style,
-        Dictionary<CellColor, SolidColorBrush>? brushCache = null)
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null,
+        Dictionary<CellColor, Pen>? fillPatternPenCache = null)
     {
         if (style is null || style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
             return;
 
         var color = style.FillPatternColor ?? CellColor.Black;
-        var pen = new Pen(BrushForCellColor(color, brushCache), 0.75);
+        var pen = FillPatternPenForCellColor(color, brushCache, fillPatternPenCache);
         const double step = 6;
 
-        dc.PushClip(new RectangleGeometry(rect));
+        dc.PushClip(FrozenRectangleGeometry(rect));
         switch (style.FillPatternStyle)
         {
             case CellFillPatternStyle.Gray0625:
@@ -93,18 +94,16 @@ public partial class GridView
                 break;
             case CellFillPatternStyle.LightHorizontal:
             case CellFillPatternStyle.DarkHorizontal:
-                for (var y = rect.Top + step; y < rect.Bottom; y += step)
-                    dc.DrawLine(pen, new Point(rect.Left, y), new Point(rect.Right, y));
+                DrawHorizontalPattern(dc, rect, pen, step);
                 break;
             case CellFillPatternStyle.LightVertical:
             case CellFillPatternStyle.DarkVertical:
-                for (var x = rect.Left + step; x < rect.Right; x += step)
-                    dc.DrawLine(pen, new Point(x, rect.Top), new Point(x, rect.Bottom));
+                DrawVerticalPattern(dc, rect, pen, step);
                 break;
             case CellFillPatternStyle.LightGrid:
             case CellFillPatternStyle.DarkGrid:
-                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightHorizontal, FillPatternColor = color }, brushCache);
-                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightVertical, FillPatternColor = color }, brushCache);
+                DrawHorizontalPattern(dc, rect, pen, step);
+                DrawVerticalPattern(dc, rect, pen, step);
                 break;
             case CellFillPatternStyle.LightDown:
             case CellFillPatternStyle.DarkDown:
@@ -121,6 +120,40 @@ public partial class GridView
                 break;
         }
         dc.Pop();
+    }
+
+    private static Pen FillPatternPenForCellColor(
+        CellColor color,
+        Dictionary<CellColor, SolidColorBrush>? brushCache,
+        Dictionary<CellColor, Pen>? fillPatternPenCache)
+    {
+        if (fillPatternPenCache is not null && fillPatternPenCache.TryGetValue(color, out var cached))
+            return cached;
+
+        var pen = new Pen(BrushForCellColor(color, brushCache), 0.75);
+        if (pen.CanFreeze)
+            pen.Freeze();
+        fillPatternPenCache?.Add(color, pen);
+        return pen;
+    }
+
+    private static RectangleGeometry FrozenRectangleGeometry(Rect rect)
+    {
+        var geometry = new RectangleGeometry(rect);
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static void DrawHorizontalPattern(DrawingContext dc, Rect rect, Pen pen, double step)
+    {
+        for (var y = rect.Top + step; y < rect.Bottom; y += step)
+            dc.DrawLine(pen, new Point(rect.Left, y), new Point(rect.Right, y));
+    }
+
+    private static void DrawVerticalPattern(DrawingContext dc, Rect rect, Pen pen, double step)
+    {
+        for (var x = rect.Left + step; x < rect.Right; x += step)
+            dc.DrawLine(pen, new Point(x, rect.Top), new Point(x, rect.Bottom));
     }
 
     private static void DrawDiagonalPattern(DrawingContext dc, Rect rect, Pen pen, bool descending)

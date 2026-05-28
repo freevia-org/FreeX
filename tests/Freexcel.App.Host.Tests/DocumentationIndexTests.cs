@@ -31,6 +31,7 @@ public sealed partial class DocumentationIndexTests
         readme.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
         readme.Should().Contain("[XLSX_TEST_CORPUS_PLAN.md](XLSX_TEST_CORPUS_PLAN.md)");
         readme.Should().Contain("[CODE_REVIEW_COMPREHENSIVE_2026-05-28.md](CODE_REVIEW_COMPREHENSIVE_2026-05-28.md)");
+        readme.Should().Contain("[TESTER_RELEASE_CHECKLIST.md](TESTER_RELEASE_CHECKLIST.md)");
         readme.Should().Contain("[CODE_REVIEW.md](CODE_REVIEW.md)");
         readme.Should().Contain("[DECISIONS/008-code-review-hardening-2026-05-28.md](DECISIONS/008-code-review-hardening-2026-05-28.md)");
         readme.Should().Contain("[PERF_BASELINE.md](PERF_BASELINE.md)");
@@ -94,11 +95,38 @@ public sealed partial class DocumentationIndexTests
         var report = File.ReadAllText(newestStatusReport);
         using var progressDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(repositoryRoot, "release", "progress.json")));
         var overallCompletion = progressDocument.RootElement.GetProperty("overallCompletion").GetInt32();
+        var expectedReleaseStream = GetExpectedTesterReleaseStream(overallCompletion);
 
         report.Should().Contain("[release/progress.json](../release/progress.json)");
         report.Should().Contain($"overallCompletion: {overallCompletion}");
         report.Should().Contain($"Overall completion estimate is now **{overallCompletion}%**");
-        report.Should().Contain("`v0.7.<run>` stream");
+        report.Should().Contain($"`{expectedReleaseStream}` stream");
+    }
+
+    [Fact]
+    public void ReleaseFacingDocs_UseTesterReleaseStreamFromProgressMetadata()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var repositoryRoot = Directory.GetParent(docsDirectory)!.FullName;
+        using var progressDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(repositoryRoot, "release", "progress.json")));
+        var expectedReleaseStream = GetExpectedTesterReleaseStream(progressDocument.RootElement.GetProperty("overallCompletion").GetInt32());
+
+        var releaseFacingDocs = new[]
+        {
+            "OUTSTANDING_BUILD.md",
+            "TEST_DISTRIBUTION_PLAN.md",
+            Path.GetFileName(Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md").Order(StringComparer.Ordinal).Last())
+        };
+
+        foreach (var doc in releaseFacingDocs)
+        {
+            var source = File.ReadAllText(Path.Combine(docsDirectory, doc));
+
+            source.Should().Contain(
+                expectedReleaseStream,
+                "{0} should describe the same tester stream that release/progress.json drives",
+                doc);
+        }
     }
 
     [Fact]
@@ -226,6 +254,7 @@ public sealed partial class DocumentationIndexTests
             "XLSX_CORPUS_REPORT.md",
             "XLSX_TEST_CORPUS_PLAN.md",
             "TEST_DISTRIBUTION_PLAN.md",
+            "TESTER_RELEASE_CHECKLIST.md",
             "PERF_BASELINE.md"
         };
 
@@ -344,6 +373,17 @@ public sealed partial class DocumentationIndexTests
 
     private static string ToPlatformPath(string path) =>
         path.Replace('/', Path.DirectorySeparatorChar);
+
+    private static string GetExpectedTesterReleaseStream(int overallCompletion)
+    {
+        var minor = overallCompletion >= 99 ? 9
+            : overallCompletion >= 96 ? 8
+            : overallCompletion >= 93 ? 7
+            : overallCompletion >= 90 ? 6
+            : 5;
+
+        return $"v0.{minor}.<run>";
+    }
 
     private static IReadOnlyList<string> ReadNumberedBoldItems(IReadOnlyList<string> lines, string sectionHeading)
     {

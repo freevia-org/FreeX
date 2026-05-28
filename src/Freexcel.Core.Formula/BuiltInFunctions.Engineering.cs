@@ -299,13 +299,13 @@ public static partial class BuiltInFunctions
         if (radixValue is ErrorValue e1) return e1;
         if (minLengthValue is ErrorValue e2) return e2;
 
-        if (!TryGetEngineeringInteger(numberValue, out var number)) return ErrorValue.Num;
-        if (!TryGetEngineeringInteger(radixValue, out var radix)) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(numberValue, out var number)) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(radixValue, out var radix)) return ErrorValue.Num;
         if (number < 0 || number >= TwoToThe53 || radix is < 2 or > 36) return ErrorValue.Num;
 
         var converted = FormatUnsignedBase(number, (int)radix);
         if (minLengthValue is BlankValue) return new TextValue(converted);
-        if (!TryGetEngineeringInteger(minLengthValue, out var minLength) || minLength < 0 || minLength > 255) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(minLengthValue, out var minLength) || minLength < 0 || minLength > 255) return ErrorValue.Num;
         return new TextValue(converted.PadLeft((int)Math.Max(minLength, converted.Length), '0'));
     }
 
@@ -320,7 +320,7 @@ public static partial class BuiltInFunctions
     {
         if (textValue is ErrorValue e0) return e0;
         if (radixValue is ErrorValue e1) return e1;
-        if (!TryGetEngineeringInteger(radixValue, out var radix) || radix is < 2 or > 36) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(radixValue, out var radix) || radix is < 2 or > 36) return ErrorValue.Num;
 
         var text = ToText(textValue).Trim();
         if (text.Length == 0 || text.Length > 255) return ErrorValue.Num;

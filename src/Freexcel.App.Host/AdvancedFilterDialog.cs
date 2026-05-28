@@ -68,8 +68,14 @@ public sealed partial class AdvancedFilterDialog : Window
 
         _listRangeBox.Text = defaultListRange;
         AutomationProperties.SetName(_listRangeBox, "List range");
+        AutomationProperties.SetAutomationId(_listRangeBox, "AdvancedFilterListRangeBox");
+        AutomationProperties.SetHelpText(_listRangeBox, "Enter the list range to filter, including column labels.");
         AutomationProperties.SetName(_criteriaRangeBox, "Criteria range");
+        AutomationProperties.SetAutomationId(_criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
+        AutomationProperties.SetHelpText(_criteriaRangeBox, "Enter the criteria range, including criteria labels.");
         AutomationProperties.SetName(_copyToBox, "Copy to");
+        AutomationProperties.SetAutomationId(_copyToBox, "AdvancedFilterCopyToBox");
+        AutomationProperties.SetHelpText(_copyToBox, "Enter the destination cell or one-row header range when copying filtered records.");
         var root = new DockPanel { Margin = new Thickness(12) };
         DockPanel.SetDock(root, Dock.Top);
 

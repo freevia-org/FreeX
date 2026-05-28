@@ -182,6 +182,21 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
+    public void ApplyBreakpointOverrides_RecognizesPageLayoutProfileWhenSheetOptionsAreAbsent()
+    {
+        var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Arrange" };
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1120,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
+
+        RibbonAdaptiveTabProfiles.ResolveProfileName(groupNames).Should().Be("Page Layout");
+        states[Array.IndexOf(groupNames, "Page Setup")].Should().Be(
+            RibbonAdaptiveGroupState.Full,
+            "Page Setup is the primary Page Layout command block and should not depend on Sheet Options being detected");
+    }
+
+    [Fact]
     public void ApplyBreakpointOverrides_RestoresPageSetupAfterPlannerCollapse()
     {
         var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange" };
@@ -212,6 +227,16 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         states[Array.IndexOf(groupNames, "Data Tools")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Forecast")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Outline")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
+    public void GetPriorityProtectedGroupNames_PrefersDataToolsAndForecastAtNarrowWidths()
+    {
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
+
+        var protectedGroups = RibbonAdaptivePriorityPlanner.GetPriorityProtectedGroupNames(groupNames, 900);
+
+        protectedGroups.Should().Equal("Data Tools", "Forecast");
     }
 
     [Fact]
@@ -306,5 +331,34 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Theory]
+    [InlineData("Clipboard|Font|Alignment|Number|Styles|Cells|Editing", "Home")]
+    [InlineData("Tables|Illustrations|Charts|Links", "Insert")]
+    [InlineData("Function Library|Defined Names|Formula Auditing|Calculation", "Formulas")]
+    [InlineData("Get & Transform Data|Queries & Connections|Data Types|Sort & Filter|Data Tools|Forecast|Outline", "Data")]
+    [InlineData("Themes|Page Setup|Scale to Fit|Sheet Options|Arrange", "Page Layout")]
+    [InlineData("Proofing|Accessibility|Comments|Notes|Protect", "Review")]
+    [InlineData("Workbook Views|Show|Zoom|Window|Macros", "View")]
+    [InlineData("Tools|Pens|Convert|Arrange|Format", "Draw")]
+    [InlineData("Help", "Tiny")]
+    public void Profiles_ResolveKnownRibbonTabGroupSets(string groupNameList, string expectedProfile)
+    {
+        RibbonAdaptiveTabProfiles
+            .ResolveProfileName(groupNameList.Split('|'))
+            .Should()
+            .Be(expectedProfile);
+    }
+
+    [Fact]
+    public void Profiles_ExposeTabAndCollapsedPresentationBreakpointsForResizeGate()
+    {
+        var thresholds = RibbonAdaptiveTabProfiles.GetBreakpointThresholds(
+            ["Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast", "Outline"]);
+
+        thresholds.Should().Contain([700, 760, 900, 920, 1120, 1320]);
+        thresholds.Should().BeInAscendingOrder();
+        thresholds.Should().OnlyHaveUniqueItems();
     }
 }

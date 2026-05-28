@@ -247,8 +247,13 @@ public static partial class BuiltInFunctions
         if (decSep == grpSep) return ErrorValue.Value;
         if (grpSep.Contains(decSep)) return ErrorValue.Value;
 
-        // Strip whitespace (Excel allows whitespace anywhere)
-        text = text.Replace(" ", "").Replace("\t", "");
+        // Excel ignores these ASCII spacing controls in NUMBERVALUE text, but not
+        // every Unicode whitespace character such as NBSP.
+        text = text
+            .Replace(" ", "")
+            .Replace("\t", "")
+            .Replace("\n", "")
+            .Replace("\r", "");
         bool accountingNegative = text.StartsWith('(') && text.EndsWith(')');
         if (accountingNegative)
             text = text[1..^1];

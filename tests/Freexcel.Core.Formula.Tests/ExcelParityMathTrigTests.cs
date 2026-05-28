@@ -174,6 +174,20 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void Round_UsesExcelDecimalMidpointSemantics()
+    {
+        Number("=ROUND(1.005,2)").Should().Be(1.01);
+        Number("=ROUND(9995,-1)").Should().Be(10000);
+    }
+
+    [Fact]
+    public void Mround_UsesExcelDecimalMidpointSemantics()
+    {
+        Number("=MROUND(6.05,0.1)").Should().BeApproximately(6.1, 1e-12);
+        Number("=MROUND(-6.05,-0.1)").Should().BeApproximately(-6.1, 1e-12);
+    }
+
+    [Fact]
     public void Convert_UsesExcelUnitCategoriesAndPrefixes()
     {
         Number("=CONVERT(1,\"kg\",\"g\")").Should().Be(1000);

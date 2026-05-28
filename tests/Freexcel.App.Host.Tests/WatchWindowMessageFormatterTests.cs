@@ -1,5 +1,8 @@
 using FluentAssertions;
 using System.IO;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -89,6 +92,54 @@ public sealed class WatchWindowMessageFormatterTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AddWatchDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Selected range\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_rangeBox, \"AddWatchSelectedRangeBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, \"Shows the selected worksheet cells that will be watched.\");");
+    }
+
+    [Fact]
+    public void AddWatchDialog_CommandButtonsExposeExcelStyleAutomationMetadata()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AddWatchDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(add, \"Add\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(add, \"AddWatchAddButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(add, \"Add the selected cells to the Watch Window.\");");
+        source.Should().Contain("var cancel = new Button { Content = \"_Cancel\", Width = 76, IsCancel = true };");
+        source.Should().Contain("AutomationProperties.SetName(cancel, \"Cancel\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancel, \"AddWatchCancelButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(cancel, \"Close the Add Watch dialog without adding cells.\");");
+    }
+
+    [Fact]
+    public void AddWatchDialog_RuntimeControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AddWatchDialog("Sheet1!$A$1:$B$2");
+            try
+            {
+                var rangeBox = FindLogicalDescendants<TextBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "AddWatchSelectedRangeBox");
+                var buttons = FindLogicalDescendants<Button>(dialog)
+                    .ToDictionary(button => AutomationProperties.GetAutomationId(button));
+
+                rangeBox.Text.Should().Be("Sheet1!$A$1:$B$2");
+                AutomationProperties.GetName(rangeBox).Should().Be("Selected range");
+                AutomationProperties.GetHelpText(rangeBox).Should().Be("Shows the selected worksheet cells that will be watched.");
+
+                buttons["AddWatchAddButton"].IsDefault.Should().BeTrue();
+                AutomationProperties.GetName(buttons["AddWatchAddButton"]).Should().Be("Add");
+                AutomationProperties.GetHelpText(buttons["AddWatchAddButton"]).Should().Be("Add the selected cells to the Watch Window.");
+
+                buttons["AddWatchCancelButton"].IsCancel.Should().BeTrue();
+                AutomationProperties.GetName(buttons["AddWatchCancelButton"]).Should().Be("Cancel");
+                AutomationProperties.GetHelpText(buttons["AddWatchCancelButton"]).Should().Be("Close the Add Watch dialog without adding cells.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -147,5 +198,17 @@ public sealed class WatchWindowMessageFormatterTests
         source.Should().Contain("RestoreSelection(selectedAddresses);");
         source.Should().Contain("private void RestoreSelection(IReadOnlySet<CellAddress> selectedAddresses)");
         source.Should().Contain("_listView.SelectedItems.Add(row);");
+    }
+
+    private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindLogicalDescendants<T>(child))
+                yield return descendant;
+        }
     }
 }

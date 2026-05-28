@@ -83,7 +83,9 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("=> ExecuteFillCells(FillCellsDirection.Right)");
         source.Should().Contain("=> ExecuteFillCells(FillCellsDirection.Up)");
         source.Should().Contain("=> ExecuteFillCells(FillCellsDirection.Left)");
-        source.Should().Contain("FillSeriesPlanner.BuildLinearSeriesEdits(currentSheet, currentRange, dialog.Result.Step)");
+        source.Should().Contain("FillSeriesPlanner.BuildSeriesEdits(");
+        source.Should().Contain("dialog.Result");
+        source.Should().Contain("Select a numeric or date cell to start a series.");
         source.Should().Contain("private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();");
         source.Should().Contain("currentRange => CreateFlashFillCommand(sheet, currentRange)");
         source.Should().Contain("private void SortAZMenuItem_Click(object sender, RoutedEventArgs e)    => SortAscButton_Click(sender, e);");
@@ -101,8 +103,8 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("new ClearCommentsCommand(sheetId, currentRange)");
         source.Should().Contain("new ClearHyperlinksCommand(sheetId, currentRange)");
         source.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? [])");
-        source.Should().Contain("new ClearCommentsCommand(_currentSheetId, currentRange)");
-        source.Should().Contain("new ClearHyperlinksCommand(_currentSheetId, currentRange)");
+        source.Should().Contain("new ClearCommentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))");
+        source.Should().Contain("new ClearHyperlinksCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))");
     }
 
     private static string ExtractButtonElementByClickHandler(string xaml, string clickHandler)

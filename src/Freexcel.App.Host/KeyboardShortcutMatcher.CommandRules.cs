@@ -27,6 +27,7 @@ public static partial class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.InsertCurrentDate, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.OemSemicolon),
         new(KeyboardCommandShortcut.InsertCurrentTime, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.OemSemicolon),
         new(KeyboardCommandShortcut.ToggleShowFormulas, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Oem3),
+        new(KeyboardCommandShortcut.ToggleOutlineSymbols, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.D8),
         new(KeyboardCommandShortcut.ActivatePreviousSheet, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.PageUp),
         new(KeyboardCommandShortcut.ActivateNextSheet, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.PageDown),
         new(KeyboardCommandShortcut.SelectPreviousSheetGroup, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.PageUp),

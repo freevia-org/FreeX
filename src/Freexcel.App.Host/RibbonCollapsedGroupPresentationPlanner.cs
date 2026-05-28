@@ -4,6 +4,8 @@ namespace Freexcel.App.Host;
 
 internal static class RibbonCollapsedGroupPresentationPlanner
 {
+    public static IReadOnlyList<double> BreakpointThresholds { get; } = [760, 920];
+
     public static RibbonCollapsedGroupFootprint CreateFootprint(double availableWidth)
     {
         var compact = availableWidth <= 920;
@@ -26,7 +28,7 @@ internal static class RibbonCollapsedGroupPresentationPlanner
     public static double GetPlannedWidth(double measuredCollapsedWidth, double availableWidth)
     {
         var plannedWidth = availableWidth <= 920 ? 46 : 68;
-        return Math.Min(measuredCollapsedWidth, plannedWidth);
+        return Math.Min(Math.Max(0, measuredCollapsedWidth), plannedWidth);
     }
 
     public static string GetCacheKey(double availableWidth) =>

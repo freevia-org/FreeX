@@ -12,6 +12,8 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue TextBeforeAfter(IReadOnlyList<ScalarValue> args, bool before)
     {
+        if (args[0] is ErrorValue textError) return textError;
+
         if (!TryTextBeforeAfterOptions(args, out var options, out var optionsError))
             return optionsError;
 
@@ -81,6 +83,9 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue e) return e;
 
         var text = ToText(value);
+        if (text.Length == 0)
+            return TextResult("");
+
         var textLength = ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length;
         if (Math.Abs(options.InstanceNum) > textLength) return ErrorValue.Value;
 
@@ -138,7 +143,7 @@ public static partial class BuiltInFunctions
         if (matchMode is not (0 or 1))
             return ErrorValue.Value;
 
-        var padWith = args.Count > 5
+        var padWith = args.Count > 5 && args[5] is not BlankValue
             ? SingleValueOrErrorAsValue(args[5], out error)
             : ErrorValue.NA;
         if (padWith is null) return error;

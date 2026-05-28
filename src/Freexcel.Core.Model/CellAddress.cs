@@ -4,7 +4,7 @@ namespace Freexcel.Core.Model;
 /// Represents a cell address within a specific sheet.
 /// Row and Col are 1-based to match Excel's convention.
 /// </summary>
-public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint Col) : IComparable<CellAddress>
+public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : IComparable<CellAddress>
 {
     /// <summary>Maximum supported columns (16,384 = XFD in Excel).</summary>
     public const uint MaxCol = 16_384;
@@ -36,51 +36,9 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
             return false;
         }
 
-        uint col = 0;
         var index = 0;
-        while (index < value.Length)
-        {
-            var c = value[index];
-            if (c is >= 'a' and <= 'z')
-                c = (char)(c - ('a' - 'A'));
-            if (c is < 'A' or > 'Z')
-                break;
-
-            col = col * 26 + (uint)(c - 'A' + 1);
-            if (col > MaxCol)
-            {
-                result = default;
-                return false;
-            }
-
-            index++;
-        }
-
-        if (index == 0 || index == value.Length)
-        {
-            result = default;
-            return false;
-        }
-
-        uint row = 0;
-        for (; index < value.Length; index++)
-        {
-            var c = value[index];
-            if (c is < '0' or > '9')
-            {
-                result = default;
-                return false;
-            }
-
-            row = row * 10 + (uint)(c - '0');
-            if (row > MaxRow)
-            {
-                result = default;
-                return false;
-            }
-        }
-
-        if (row == 0)
+        if (!TryReadColumnNumber(value, ref index, out var col) ||
+            !TryReadRowNumber(value[index..], out var row))
         {
             result = default;
             return false;
@@ -89,38 +47,134 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
         result = new CellAddress(sheet, row, col);
         return true;
     }
+
     /// <summary>
     /// Converts a column name (e.g. "A", "Z", "AA", "XFD") to a 1-based column number.
     /// </summary>
     public static uint ColumnNameToNumber(string name)
     {
         uint result = 0;
-        foreach (var c in name.ToUpperInvariant())
+        foreach (var raw in name)
         {
+            var c = NormalizeColumnLetter(raw);
             if (c < 'A' || c > 'Z') return 0; // non-letter would underflow uint arithmetic
-            if (result > MaxCol) return result; // already beyond valid range — avoids overflow
+            if (result > MaxCol) return result; // already beyond valid range - avoids overflow
             result = result * 26 + (uint)(c - 'A' + 1);
         }
         return result;
     }
 
+    private static bool TryReadColumnNumber(ReadOnlySpan<char> value, ref int index, out uint column)
+    {
+        column = 0;
+        var start = index;
+
+        while (index < value.Length)
+        {
+            var c = NormalizeColumnLetter(value[index]);
+            if (c is < 'A' or > 'Z')
+                break;
+
+            column = column * 26 + (uint)(c - 'A' + 1);
+            if (column > MaxCol)
+                return false;
+
+            index++;
+        }
+
+        return index > start;
+    }
+
+    private static bool TryReadRowNumber(ReadOnlySpan<char> value, out uint row)
+    {
+        row = 0;
+        if (value.IsEmpty)
+            return false;
+
+        foreach (var c in value)
+        {
+            if (c is < '0' or > '9')
+                return false;
+
+            var digit = (uint)(c - '0');
+            if (row > MaxRow / 10 || row == MaxRow / 10 && digit > MaxRow % 10)
+                return false;
+
+            row = row * 10 + digit;
+            if (row > MaxRow)
+                return false;
+        }
+
+        return row > 0;
+    }
+
+    private static char NormalizeColumnLetter(char c) =>
+        c is >= 'a' and <= 'z' ? (char)(c - ('a' - 'A')) : c;
+
     /// <summary>
-    /// Converts a 1-based column number to a column name (e.g. 1 → "A", 27 → "AA").
+    /// Converts a 1-based column number to a column name (e.g. 1 -> "A", 27 -> "AA").
     /// </summary>
     public static string NumberToColumnName(uint col)
     {
-        var result = "";
-        while (col > 0)
-        {
-            col--;
-            result = (char)('A' + col % 26) + result;
-            col /= 26;
-        }
-        return result;
+        var columnLength = GetColumnNameLength(col);
+        Span<char> buffer = stackalloc char[(int)columnLength];
+        WriteColumnName(col, buffer);
+        return new string(buffer);
     }
 
     /// <summary>Format as A1 notation (e.g. "B7").</summary>
-    public string ToA1() => $"{NumberToColumnName(Col)}{Row}";
+    public string ToA1()
+    {
+        var columnLength = GetColumnNameLength(Col);
+        var rowLength = GetRowDigitCount(Row);
+        return string.Create((int)(columnLength + rowLength), (Col, Row, columnLength), static (buffer, state) =>
+        {
+            var (col, row, colLength) = state;
+            WriteColumnName(col, buffer[..(int)colLength]);
+
+            var rowIndex = buffer.Length;
+            do
+            {
+                buffer[--rowIndex] = (char)('0' + row % 10);
+                row /= 10;
+            }
+            while (row > 0);
+        });
+    }
+
+    private static void WriteColumnName(uint col, Span<char> destination)
+    {
+        for (var index = destination.Length - 1; index >= 0; index--)
+        {
+            col--;
+            destination[index] = (char)('A' + col % 26);
+            col /= 26;
+        }
+    }
+
+    private static uint GetColumnNameLength(uint col)
+    {
+        uint length = 0;
+        while (col > 0)
+        {
+            length++;
+            col = (col - 1) / 26;
+        }
+
+        return length;
+    }
+
+    private static uint GetRowDigitCount(uint row)
+    {
+        uint length = 1;
+        while (row >= 10)
+        {
+            length++;
+            row /= 10;
+        }
+
+        return length;
+    }
 
     public override string ToString() => ToA1();
 
@@ -129,71 +183,4 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
         var rowCmp = Row.CompareTo(other.Row);
         return rowCmp != 0 ? rowCmp : Col.CompareTo(other.Col);
     }
-
-}
-
-/// <summary>
-/// Represents a rectangular range of cells.
-/// Start is always the top-left corner; End is always the bottom-right corner.
-/// </summary>
-public readonly record struct GridRange
-{
-    public CellAddress Start { get; }
-    public CellAddress End   { get; }
-
-    public GridRange(CellAddress a, CellAddress b)
-    {
-        // Normalize so Start is always top-left, End is always bottom-right
-        Start = new CellAddress(a.Sheet, Math.Min(a.Row, b.Row), Math.Min(a.Col, b.Col));
-        End   = new CellAddress(a.Sheet, Math.Max(a.Row, b.Row), Math.Max(a.Col, b.Col));
-    }
-
-    /// <summary>Number of rows in this range.</summary>
-    public uint RowCount => End.Row - Start.Row + 1;
-
-    /// <summary>Number of columns in this range.</summary>
-    public uint ColCount => End.Col - Start.Col + 1;
-
-    /// <summary>Total number of cells in this range.</summary>
-    public long CellCount => (long)RowCount * ColCount;
-
-    /// <summary>
-    /// Enumerate all cell addresses in this range, row by row.
-    /// </summary>
-    public IEnumerable<CellAddress> AllCells()
-    {
-        for (var r = Start.Row; r <= End.Row; r++)
-        {
-            for (var c = Start.Col; c <= End.Col; c++)
-            {
-                yield return new CellAddress(Start.Sheet, r, c);
-            }
-        }
-    }
-
-    /// <summary>Check if a cell address falls within this range.</summary>
-    public bool Contains(CellAddress addr) =>
-        addr.Sheet == Start.Sheet &&
-        addr.Row >= Start.Row && addr.Row <= End.Row &&
-        addr.Col >= Start.Col && addr.Col <= End.Col;
-
-    /// <summary>Check if this range overlaps (shares at least one cell with) another range on the same sheet.</summary>
-    public bool Overlaps(GridRange other) =>
-        Start.Sheet == other.Start.Sheet &&
-        Start.Row <= other.End.Row && End.Row >= other.Start.Row &&
-        Start.Col <= other.End.Col && End.Col >= other.Start.Col;
-
-    /// <summary>Parse a range string like "A1:C10" into a GridRange.</summary>
-    public static GridRange Parse(string rangeText, SheetId sheet)
-    {
-        var parts = rangeText.Split(':');
-        if (parts.Length != 2)
-            throw new FormatException($"Invalid range notation: '{rangeText}'");
-
-        var start = CellAddress.Parse(parts[0], sheet);
-        var end = CellAddress.Parse(parts[1], sheet);
-        return new GridRange(start, end);
-    }
-
-    public override string ToString() => $"{Start.ToA1()}:{End.ToA1()}";
 }

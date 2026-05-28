@@ -6,7 +6,17 @@ namespace Freexcel.App.Host;
 
 public sealed class SortOptionsDialog : Window
 {
+    private static readonly string[] FirstKeySortOrders =
+    [
+        "Normal",
+        "Sun, Mon, Tue, Wed, Thu, Fri, Sat",
+        "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday",
+        "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec",
+        "January, February, March, April, May, June, July, August, September, October, November, December"
+    ];
+
     private readonly CheckBox _caseSensitiveBox;
+    private readonly ComboBox _firstKeySortOrderBox;
     private readonly RadioButton _topToBottomButton;
     private readonly RadioButton _leftToRightButton;
 
@@ -18,7 +28,7 @@ public sealed class SortOptionsDialog : Window
         Result = current;
         Title = "Sort Options";
         Width = 330;
-        Height = 210;
+        Height = 260;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -35,6 +45,19 @@ public sealed class SortOptionsDialog : Window
             Margin = new Thickness(0, 0, 0, 10)
         };
         body.Children.Add(_caseSensitiveBox);
+
+        body.Children.Add(new TextBlock
+        {
+            Text = "First key sort order",
+            Margin = new Thickness(0, 0, 0, 3)
+        });
+        _firstKeySortOrderBox = new ComboBox
+        {
+            ItemsSource = FirstKeySortOrders,
+            SelectedItem = NormalizeFirstKeySortOrder(current.FirstKeySortOrder),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        body.Children.Add(_firstKeySortOrderBox);
 
         _topToBottomButton = new RadioButton { Content = "Sort top to _bottom", IsChecked = !current.LeftToRight };
         _leftToRightButton = new RadioButton { Content = "Sort left to _right", IsChecked = current.LeftToRight };
@@ -59,12 +82,16 @@ public sealed class SortOptionsDialog : Window
         {
             Result = new SortDialogOptions(
                 CaseSensitive: _caseSensitiveBox.IsChecked == true,
-                LeftToRight: _leftToRightButton.IsChecked == true);
+                LeftToRight: _leftToRightButton.IsChecked == true,
+                FirstKeySortOrder: _firstKeySortOrderBox.SelectedItem as string ?? "Normal");
             DialogResult = true;
         }, buttonWidth: 72));
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
+
+    private static string NormalizeFirstKeySortOrder(string? value) =>
+        FirstKeySortOrders.FirstOrDefault(order => string.Equals(order, value, StringComparison.Ordinal)) ?? "Normal";
 
     private void FocusInitialKeyboardTarget()
     {

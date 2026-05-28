@@ -60,9 +60,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_thresholdBox.Focus();");
-        source.Should().Contain("_thresholdBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_thresholdBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_thresholdBox);");
     }
 
     [Fact]
@@ -70,12 +68,13 @@ public sealed class RemainingDialogTests
     {
         RowHeightDialog.TryCreateResult("-1", out _, out var error).Should().BeFalse();
 
-        error.Should().Be("Enter a row height from 0 to 409.");
+        error.Should().Be("Enter a row height from 0 to 409.5.");
     }
 
     [Theory]
     [InlineData("0", 0)]
     [InlineData("409", 409)]
+    [InlineData("409.5", 409.5)]
     public void RowHeightDialog_TryCreateResult_AcceptsExcelRowHeightBounds(string input, double expected)
     {
         RowHeightDialog.TryCreateResult(input, out var result, out var error).Should().BeTrue(error);
@@ -86,9 +85,9 @@ public sealed class RemainingDialogTests
     [Fact]
     public void RowHeightDialog_TryCreateResult_RejectsOversizedExcelRowHeight()
     {
-        RowHeightDialog.TryCreateResult("409.1", out _, out var error).Should().BeFalse();
+        RowHeightDialog.TryCreateResult("409.6", out _, out var error).Should().BeFalse();
 
-        error.Should().Be("Enter a row height from 0 to 409.");
+        error.Should().Be("Enter a row height from 0 to 409.5.");
     }
 
     [Fact]
@@ -98,9 +97,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_heightBox.Focus();");
-        source.Should().Contain("_heightBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_heightBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
     }
 
     [Theory]
@@ -110,7 +107,7 @@ public sealed class RemainingDialogTests
     {
         RowHeightDialog.TryCreateResult(input, out _, out var error).Should().BeFalse();
 
-        error.Should().Be("Enter a row height from 0 to 409.");
+        error.Should().Be("Enter a row height from 0 to 409.5.");
     }
 
     [Fact]
@@ -119,6 +116,14 @@ public sealed class RemainingDialogTests
         ColumnWidthDialog.TryCreateResult("8.5", out var result, out _).Should().BeTrue();
 
         result.Should().Be(new ColumnWidthDialogResult(8.5));
+    }
+
+    [Fact]
+    public void ColumnWidthDialog_TryCreateResult_RejectsNegativeWidth()
+    {
+        ColumnWidthDialog.TryCreateResult("-1", out _, out var error).Should().BeFalse();
+
+        error.Should().Be("Enter a column width from 0 to 255.");
     }
 
     [Theory]
@@ -146,9 +151,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_widthBox.Focus();");
-        source.Should().Contain("_widthBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_widthBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_widthBox);");
     }
 
     [Theory]
@@ -184,6 +187,41 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void FillSeriesStepDialog_FieldLabelsUseUniqueAccessKeys()
+    {
+        var labels = new[]
+        {
+            "_Rows",
+            "_Columns",
+            "_Linear",
+            "_Growth",
+            "_Date",
+            "_AutoFill",
+            "Da_y",
+            "_Weekday",
+            "_Month",
+            "Y_ear",
+            "Step _value:",
+            "S_top value:"
+        };
+
+        labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
+
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+        foreach (var label in labels)
+            source.Should().Contain(label);
+    }
+
+    [Fact]
+    public void FillSeriesStepDialog_InputFieldsExposeAutomationNames()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_stepBox, \"Step value\");");
+        source.Should().Contain("AutomationProperties.SetName(_stopBox, \"Stop value\");");
+    }
+
+    [Fact]
     public void FillSeriesStepDialogOpenedFromKeyboard_FocusesSelectedSeriesDirection()
     {
         var source = ReadRemainingDialogSources();
@@ -213,6 +251,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("error ?? \"Enter a numeric step value.\"");
         source.Should().Contain("FocusInvalidStepInput();");
         source.Should().Contain("private void FocusInvalidStepInput()");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_stepBox);");
     }
 
     [Fact]
@@ -239,6 +278,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("FocusInvalidStopInput();");
         source.Should().Contain("private void FocusInvalidStopInput()");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_stopBox);");
         source.Should().Contain("Enter a numeric stop value or leave it blank.");
     }
 
@@ -310,8 +350,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("checkedPreset.Focus();");
         source.Should().Contain("Keyboard.Focus(checkedPreset);");
         source.Should().Contain("else");
-        source.Should().Contain("_zoomBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_zoomBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_zoomBox);");
     }
 
     [Fact]
@@ -343,6 +382,35 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ZoomDialogCustomPercentFocus_SelectsCustomChoiceOverPreset()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ZoomDialog(100);
+            try
+            {
+                dialog.Show();
+                PumpDispatcher();
+
+                var customButton = GetField<RadioButton>(dialog, "_customZoomButton");
+                var zoomBox = GetField<TextBox>(dialog, "_zoomBox");
+
+                customButton.IsChecked.Should().BeFalse();
+                zoomBox.Focus();
+                Keyboard.Focus(zoomBox);
+                PumpDispatcher();
+
+                customButton.IsChecked.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+                PumpDispatcher();
+            }
+        });
+    }
+
+    [Fact]
     public void ZoomDialog_InvalidCustomInput_ShowsParserErrorAndRefocusesEntry()
     {
         var source = ReadRemainingDialogSources();
@@ -350,8 +418,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("TryCreateResult(input, out var result, out var error)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, error ?? \"Enter a valid zoom percent.\"");
         source.Should().Contain("_customZoomButton.IsChecked = true");
-        source.Should().Contain("_zoomBox.Focus();");
-        source.Should().Contain("_zoomBox.SelectAll();");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_zoomBox);");
     }
 
     [Fact]
@@ -413,11 +480,8 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_rowBreakBox.Focus();");
-        source.Should().Contain("_rowBreakBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_rowBreakBox);");
-        source.Should().Contain("_columnBreakBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(_columnBreakBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rowBreakBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_columnBreakBox);");
         source.Should().Contain("_resetAllButton.Focus();");
     }
 
@@ -442,6 +506,47 @@ public sealed class RemainingDialogTests
         source.Should().Contain("FocusInvalidBreakInput(_rowBreakBox);");
         source.Should().Contain("FocusInvalidBreakInput(_columnBreakBox);");
         source.Should().Contain("private static void FocusInvalidBreakInput(TextBox textBox)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
+    }
+
+    [Fact]
+    public void PageBreakDialog_EnablesOnlyTheSelectedBreakEntry()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PageBreakDialog("row 12");
+
+            var rowButton = GetField<RadioButton>(dialog, "_insertRowButton");
+            var columnButton = GetField<RadioButton>(dialog, "_insertColumnButton");
+            var resetButton = GetField<RadioButton>(dialog, "_resetAllButton");
+            var rowBox = GetField<TextBox>(dialog, "_rowBreakBox");
+            var columnBox = GetField<TextBox>(dialog, "_columnBreakBox");
+
+            rowButton.IsChecked.Should().BeTrue();
+            rowBox.IsEnabled.Should().BeTrue();
+            columnBox.IsEnabled.Should().BeFalse();
+
+            columnButton.IsChecked = true;
+            rowBox.IsEnabled.Should().BeFalse();
+            columnBox.IsEnabled.Should().BeTrue();
+
+            resetButton.IsChecked = true;
+            rowBox.IsEnabled.Should().BeFalse();
+            columnBox.IsEnabled.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void PageBreakDialog_UpdateBreakInputAvailabilityTracksExcelActionChoice()
+    {
+        var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
+
+        source.Should().Contain("_insertRowButton.Checked += (_, _) => UpdateBreakInputAvailability();");
+        source.Should().Contain("_insertColumnButton.Checked += (_, _) => UpdateBreakInputAvailability();");
+        source.Should().Contain("_resetAllButton.Checked += (_, _) => UpdateBreakInputAvailability();");
+        source.Should().Contain("private void UpdateBreakInputAvailability()");
+        source.Should().Contain("_rowBreakBox.IsEnabled = _insertRowButton.IsChecked == true;");
+        source.Should().Contain("_columnBreakBox.IsEnabled = _insertColumnButton.IsChecked == true;");
     }
 
     [Fact]
@@ -451,14 +556,14 @@ public sealed class RemainingDialogTests
             .Should()
             .Contain("Goal Seek found a solution")
             .And.Contain("Target value: 100")
-            .And.Contain("Current formula result: 100")
+            .And.Contain("Current value: 100")
             .And.Contain("Changing cell value: 42.25");
 
         GoalSeekStatusDialog.CreateMessage(new(false, 11, 98.5, 32), targetValue: 100)
             .Should()
             .Contain("could not find a solution")
             .And.Contain("Target value: 100")
-            .And.Contain("Current formula result: 98.5")
+            .And.Contain("Current value: 98.5")
             .And.Contain("Changing cell value: 11");
     }
 
@@ -471,6 +576,18 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = \"_Restore Original Values\"");
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("IsCancel = true");
+    }
+
+    [Fact]
+    public void GoalSeekStatusDialog_ExposesAutomationMetadataForStatusAndActions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetAutomationId(statusBlock, \"GoalSeekStatusSummary\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(keepButton, \"GoalSeekKeepResultButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(restoreButton, \"GoalSeekRestoreOriginalValuesButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekStatusOkButton\");");
+        source.Should().Contain("Reports whether Goal Seek reached the target value.");
     }
 
     [Fact]
@@ -497,7 +614,7 @@ public sealed class RemainingDialogTests
         var source = ReadStatusDialogSources();
 
         source.Should().Contain("Target value:");
-        source.Should().Contain("Current formula result:");
+        source.Should().Contain("Current value:");
         source.Should().Contain("Changing cell value:");
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
@@ -709,9 +826,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_periodsBox.Focus();");
-        source.Should().Contain("_periodsBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_periodsBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_periodsBox);");
     }
 
     [Fact]
@@ -734,6 +849,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("error ?? \"Enter a positive whole number of forecast periods.\"");
         source.Should().Contain("FocusInvalidPeriodsInput();");
         source.Should().Contain("private void FocusInvalidPeriodsInput()");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_periodsBox);");
     }
 
     [Fact]
@@ -746,11 +862,13 @@ public sealed class RemainingDialogTests
         rowSource.Should().Contain("error ?? \"Enter a row height from 0 to 409.\"");
         rowSource.Should().Contain("FocusInvalidHeightInput();");
         rowSource.Should().Contain("private void FocusInvalidHeightInput()");
+        rowSource.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
 
         columnSource.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         columnSource.Should().Contain("error ?? \"Enter a column width from 0 to 255.\"");
         columnSource.Should().Contain("FocusInvalidWidthInput();");
         columnSource.Should().Contain("private void FocusInvalidWidthInput()");
+        columnSource.Should().Contain("DialogFocus.FocusAndSelect(_widthBox);");
     }
 
     [Fact]
@@ -971,9 +1089,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_nameBox.Focus();");
-        source.Should().Contain("_nameBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_nameBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_nameBox);");
     }
 
     [Fact]
@@ -996,6 +1112,8 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_sheetBox, \"Unhide sheet\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_sheetBox, \"UnhideSheetList\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_sheetBox, \"Select the hidden worksheet to make visible.\");");
     }
 
     [Fact]
@@ -1018,6 +1136,39 @@ public sealed class RemainingDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_sheetBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_sheetBox);");
+    }
+
+    [Fact]
+    public void UnhideSheetDialog_OkButtonTracksSelectedSheet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new UnhideSheetDialog(["Hidden 1", "Hidden 2"]);
+            var sheetBox = GetField<ListBox>(dialog, "_sheetBox");
+            var okButton = GetField<Button>(dialog, "_okButton");
+
+            okButton.IsDefault.Should().BeTrue();
+            okButton.IsEnabled.Should().BeTrue();
+
+            sheetBox.SelectedItem = null;
+            okButton.IsEnabled.Should().BeFalse();
+
+            sheetBox.SelectedItem = "Hidden 2";
+            okButton.IsEnabled.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void UnhideSheetDialog_ActionButtonsExposeAutomationMetadata()
+    {
+        var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
+
+        source.Should().Contain("private readonly Button _okButton");
+        source.Should().Contain("private readonly Button _cancelButton");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_okButton, \"UnhideSheetOkButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_okButton, \"Unhide the selected worksheet.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_cancelButton, \"UnhideSheetCancelButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cancelButton, \"Close the Unhide Sheet dialog without changing worksheet visibility.\");");
     }
 
     [Fact]
@@ -1115,6 +1266,40 @@ public sealed class RemainingDialogTests
         source.Should().Contain("CreateIgnoreAllResult");
         source.Should().Contain("CreateReplaceAllResult(word, _replacementBox.Text)");
         source.Should().Contain("CreateAddResult");
+        source.Should().Contain("RefreshChangeButtonState");
+    }
+
+    [Fact]
+    public void SpellCheckDialog_DisablesChangeActionsUntilReplacementTextExists()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SpellCheckDialog("mispelled", "");
+            dialog.Show();
+            try
+            {
+                var replacementBox = GetField<TextBox>(dialog, "_replacementBox");
+                var changeButton = GetField<Button>(dialog, "_changeButton");
+                var changeAllButton = GetField<Button>(dialog, "_changeAllButton");
+
+                changeButton.IsEnabled.Should().BeFalse();
+                changeAllButton.IsEnabled.Should().BeFalse();
+
+                replacementBox.Text = "misspelled";
+
+                changeButton.IsEnabled.Should().BeTrue();
+                changeAllButton.IsEnabled.Should().BeTrue();
+
+                replacementBox.Text = " ";
+
+                changeButton.IsEnabled.Should().BeFalse();
+                changeAllButton.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -1158,9 +1343,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_suggestionsBox.Items.Count > 0");
         source.Should().Contain("_suggestionsBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_suggestionsBox);");
-        source.Should().Contain("_replacementBox.Focus();");
-        source.Should().Contain("_replacementBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_replacementBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_replacementBox);");
     }
 
     [Fact]

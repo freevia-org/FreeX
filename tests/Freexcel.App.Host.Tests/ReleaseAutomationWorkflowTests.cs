@@ -15,6 +15,11 @@ public sealed class ReleaseAutomationWorkflowTests
 
         workflow.Should().Contain("workflow_dispatch:");
         workflow.Should().Contain("release_notes:");
+        workflow.Should().Contain("public_preview_candidate:");
+        workflow.Should().Contain("accessibility_keyboard_only:");
+        workflow.Should().Contain("accessibility_screen_reader:");
+        workflow.Should().Contain("accessibility_uia_catalog:");
+        workflow.Should().Contain("accessibility_known_issues:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: write");
         workflow.Should().NotContain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24");
@@ -23,10 +28,18 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("dotnet restore Freexcel.slnx");
         workflow.Should().Contain("dotnet build Freexcel.slnx --configuration Release --no-restore");
         workflow.Should().Contain("dotnet test Freexcel.slnx --configuration Release --no-build");
+        workflow.Should().Contain("if: always()");
+        workflow.Should().Contain("name: freexcel-${{ github.run_id }}-${{ github.run_attempt }}-test-results");
+        workflow.Should().Contain("path: \"**/TestResults/tests.trx\"");
+        workflow.Should().Contain("if-no-files-found: warn");
         workflow.Should().Contain("tools/Publish-UserTestBuild.ps1");
         workflow.Should().Contain("-RuntimeIdentifier win-x64");
         workflow.Should().Contain("-PublishMode SingleFile");
-        workflow.Should().Contain("Publish unsigned local MSIX");
+        workflow.Should().Contain("Publish MSIX package");
+        workflow.Should().Contain("secrets.FREEXCEL_MSIX_CERTIFICATE_BASE64");
+        workflow.Should().Contain("secrets.FREEXCEL_MSIX_CERTIFICATE_PASSWORD");
+        workflow.Should().Contain("vars.FREEXCEL_MSIX_TIMESTAMP_URL");
+        workflow.Should().Contain("-MsixCertificatePath");
         workflow.Should().Contain("-PublishMode Msix");
         workflow.Should().Contain("Freexcel-latest-win-x64.exe");
         workflow.Should().Contain("Freexcel-latest-win-x64.exe.sha256");
@@ -72,11 +85,18 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("FREEXCEL_RELEASE_NOTES: ${{ inputs.release_notes }}");
         workflow.Should().Contain("$extraNotes = $env:FREEXCEL_RELEASE_NOTES");
         workflow.Should().Contain("Public-preview accessibility gate:");
-        workflow.Should().Contain("Keyboard-only smoke validation recorded.");
-        workflow.Should().Contain("Screen-reader smoke validation recorded.");
-        workflow.Should().Contain("UI Automation catalog review recorded.");
-        workflow.Should().Contain("Known accessibility issues listed with affected workflow and planned follow-up.");
-        workflow.Should().Contain("treat this build as internal-only and do not promote it as a public-preview candidate");
+        workflow.Should().Contain("$publicPreviewCandidate = \"${{ inputs.public_preview_candidate }}\" -eq \"true\"");
+        workflow.Should().Contain("\"Keyboard-only smoke validation\" = \"${{ inputs.accessibility_keyboard_only }}\" -eq \"true\"");
+        workflow.Should().Contain("\"Screen-reader smoke validation\" = \"${{ inputs.accessibility_screen_reader }}\" -eq \"true\"");
+        workflow.Should().Contain("\"UI Automation catalog review\" = \"${{ inputs.accessibility_uia_catalog }}\" -eq \"true\"");
+        workflow.Should().Contain("\"Known accessibility issues reviewed/listed\" = \"${{ inputs.accessibility_known_issues }}\" -eq \"true\"");
+        workflow.Should().Contain("Public-preview promotion requires completed accessibility gate inputs");
+        workflow.Should().Contain("Keyboard-only smoke validation: $keyboardOnlyStatus.");
+        workflow.Should().Contain("Screen-reader smoke validation: $screenReaderStatus.");
+        workflow.Should().Contain("UI Automation catalog review: $uiaCatalogStatus.");
+        workflow.Should().Contain("Known accessibility issues reviewed/listed: $knownIssuesStatus.");
+        workflow.Should().Contain("this build is public-preview eligible");
+        workflow.Should().Contain("This build is internal-only unless release notes separately document a completed public-preview accessibility gate.");
     }
 
     [Fact]
@@ -92,19 +112,29 @@ public sealed class ReleaseAutomationWorkflowTests
     }
 
     [Fact]
-    public void UserTestPublishScript_CanPackageUnsignedLocalMsix()
+    public void UserTestPublishScript_CanPackageAndOptionallySignLocalMsix()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
         var script = File.ReadAllText(scriptPath);
 
         script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\")]");
+        script.Should().Contain("[string]$MsixCertificatePath = $env:FREEXCEL_MSIX_CERTIFICATE_PATH");
+        script.Should().Contain("[string]$MsixCertificatePassword = $env:FREEXCEL_MSIX_CERTIFICATE_PASSWORD");
+        script.Should().Contain("[string]$MsixTimestampUrl = $env:FREEXCEL_MSIX_TIMESTAMP_URL");
         script.Should().Contain("$artifactMsixPath = Join-Path $artifactRoot \"$artifactName.msix\"");
+        script.Should().Contain("function ConvertTo-MsixPackageVersion");
+        script.Should().Contain("$msixVersion = ConvertTo-MsixPackageVersion -DisplayVersion $Version");
+        script.Should().Contain("$msixParts[$i] = $msixParts[$i] % 65536");
         script.Should().Contain("<Identity Name=\"Freexcel.Tester\" Publisher=\"CN=FreexcelLocal\" Version=\"$msixVersion\" />");
         script.Should().Contain("EntryPoint=\"Windows.FullTrustApplication\"");
         script.Should().Contain("<rescap:Capability Name=\"runFullTrust\" />");
         script.Should().Contain("Get-Command makeappx.exe");
         script.Should().Contain("makeappx.exe was not found. Install the Windows SDK");
         script.Should().Contain("pack /d $publishDir /p $artifactMsixPath /o");
+        script.Should().Contain("Get-Command signtool.exe");
+        script.Should().Contain("signtool.exe was not found. Install the Windows SDK to sign MSIX packages.");
+        script.Should().Contain("$signArgs = @(\"sign\", \"/fd\", \"SHA256\", \"/f\", $MsixCertificatePath)");
+        script.Should().Contain("Created unsigned local MSIX; pass -MsixCertificatePath to sign it.");
         script.Should().Contain("Set-Content -LiteralPath \"$artifactMsixPath.sha256\"");
     }
 
@@ -116,7 +146,9 @@ public sealed class ReleaseAutomationWorkflowTests
 
         workflow.Should().Contain("Download the stable latest asset: Freexcel-latest-win-x64.exe");
         workflow.Should().Contain("Checksum for the latest single-file asset: Freexcel-latest-win-x64.exe.sha256");
-        workflow.Should().Contain("Unsigned local MSIX package: Freexcel-latest-win-x64.msix");
+        workflow.Should().Contain("MSIX package: Freexcel-latest-win-x64.msix");
+        workflow.Should().Contain("signed when the release workflow has certificate secrets configured");
+        workflow.Should().Contain("otherwise it remains unsigned for local packaging validation");
 
         var prereleaseInput = Regex.Match(workflow, @"(?ms)^\s+prerelease:\s*$.*?^\s+type:\s+boolean\s*$");
         prereleaseInput.Success.Should().BeTrue("the workflow should expose a prerelease dispatch input");
@@ -161,5 +193,7 @@ public sealed class ReleaseAutomationWorkflowTests
         plan.Should().Contain("Latest tester download");
         plan.Should().Contain("Freexcel-latest-win-x64.exe");
         plan.Should().Contain("https://github.com/tony-xmelon/Freexcel/releases/latest/download/Freexcel-latest-win-x64.exe");
+        plan.Should().Contain("FREEXCEL_MSIX_CERTIFICATE_BASE64");
+        plan.Should().Contain("Installer trust validation and Store-style submission remain release-gate work.");
     }
 }

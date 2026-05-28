@@ -148,10 +148,11 @@ public partial class MainWindow
             return;
         }
 
-        _activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(viewport, pos);
         var hitAddress = Freexcel.App.UI.GridView.HitTestViewportCell(viewport, _currentSheetId, pos);
         if (hitAddress is { } newAddr)
         {
+            _activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(viewport, pos);
+
             if (TryApplyFormulaRangeSelection(newAddr, extendSelection: (Keyboard.Modifiers & ModifierKeys.Shift) != 0))
             {
                 _dragSelectActive = true;
@@ -720,7 +721,7 @@ public partial class MainWindow
             new CellAddress(_currentSheetId,
                 Math.Max(anchor.Row, to.Row), Math.Max(anchor.Col, to.Col)));
         CellAddressBox.Text = FormatRangeReference(anchor, to);
-        RefreshStatusBar();
+        RefreshStatusBarAfterDragSelectionChange();
     }
 
     private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
@@ -749,6 +750,26 @@ public partial class MainWindow
         FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(target), target);
         FocusSheetGridIfNeeded();
         RefreshToolbar();
+        RefreshStatusBarAfterDragSelectionChange();
+    }
+
+    private void RefreshStatusBarAfterDragSelectionChange()
+    {
+        if (_dragSelectActive)
+        {
+            _dragSelectStatusRefreshPending = true;
+            return;
+        }
+
+        RefreshStatusBar();
+    }
+
+    private void CompleteDragSelectionStatusRefresh()
+    {
+        if (!_dragSelectStatusRefreshPending)
+            return;
+
+        _dragSelectStatusRefreshPending = false;
         RefreshStatusBar();
     }
 
@@ -823,6 +844,7 @@ public partial class MainWindow
             _dragSelectActive = false;
             _dragSelectAddsAdditionalRange = false;
             SheetGrid.ReleaseMouseCapture();
+            CompleteDragSelectionStatusRefresh();
 
             if (SheetGrid.SelectedRange is { } selectedRange)
                 TryApplyFormatPainter(selectedRange);
@@ -835,6 +857,7 @@ public partial class MainWindow
         _dragSelectActive = false;
         _dragSelectAddsAdditionalRange = false;
         SheetGrid.ReleaseMouseCapture();
+        CompleteDragSelectionStatusRefresh();
         if (_borderDrawMode != BorderDrawMode.None && SheetGrid.SelectedRange is { } borderDrawRange)
         {
             ApplyBorderDrawMode(borderDrawRange);

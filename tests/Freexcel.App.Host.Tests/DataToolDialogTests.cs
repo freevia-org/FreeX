@@ -446,9 +446,9 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void TextToColumnsResultFactory_ForwardsFixedWidthBreakWorkToPlanner()
+    public void TextToColumnsDialogHelpers_ForwardFixedWidthBreakWorkToPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialogResultFactory.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.Helpers.cs"));
 
         source.Should().Contain("TextToColumnsDialogPlanner.BuildPreviewRows");
         source.Should().Contain("TextToColumnsDialogPlanner.TryParseDestination");
@@ -546,6 +546,18 @@ public sealed class DataToolDialogTests
         TextToColumnsDialog.TryParseDestination("", defaultDestination, out _).Should().BeFalse();
 
         TextToColumnsDialog.TryParseDestination(" F2 ", defaultDestination, out var parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
+        TextToColumnsDialog.TryParseDestination("$F$2", defaultDestination, out parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
+        TextToColumnsDialog.TryParseDestination("F$2", defaultDestination, out parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
+        TextToColumnsDialog.TryParseDestination("$F2", defaultDestination, out parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
+        TextToColumnsDialog.TryParseDestination("R2C6", defaultDestination, out parsedDestination).Should().BeTrue();
         parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
 
         TextToColumnsDialog.TryParseDestination(" ", defaultDestination, out _).Should().BeFalse();
@@ -1169,6 +1181,37 @@ public sealed class DataToolDialogTests
                 textBoxes[2].IsEnabled.Should().BeFalse();
                 copyToPicker.IsEnabled.Should().BeFalse();
                 uniqueRecordsOnly.IsChecked.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_ExposesAccessibleReferenceFields()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AdvancedFilterDialog(SheetId.New(), "A1:C12");
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                textBoxes.Select(AutomationProperties.GetAutomationId)
+                    .Should()
+                    .ContainInOrder(
+                        "AdvancedFilterListRangeBox",
+                        "AdvancedFilterCriteriaRangeBox",
+                        "AdvancedFilterCopyToBox");
+                textBoxes.Select(AutomationProperties.GetHelpText)
+                    .Should()
+                    .ContainInOrder(
+                        "Enter the list range to filter, including column labels.",
+                        "Enter the criteria range, including criteria labels.",
+                        "Enter the destination cell or one-row header range when copying filtered records.");
             }
             finally
             {
@@ -2284,7 +2327,7 @@ public sealed class DataToolDialogTests
             button.ToolTip.Should().Be("Collapse dialog and select range");
 
             var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DialogReferencePicker.cs"));
-            pickerSource.Should().Contain("Keyboard.Focus(textBox);");
+            pickerSource.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
         });
     }
 

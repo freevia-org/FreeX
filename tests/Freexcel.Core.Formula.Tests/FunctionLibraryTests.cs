@@ -17,6 +17,25 @@ public class FunctionLibraryTests
 {
     private readonly FormulaEvaluator _eval = new();
 
+    private sealed class CultureScope : IDisposable
+    {
+        private readonly System.Globalization.CultureInfo _originalCulture = System.Globalization.CultureInfo.CurrentCulture;
+        private readonly System.Globalization.CultureInfo _originalUiCulture = System.Globalization.CultureInfo.CurrentUICulture;
+
+        public CultureScope(string cultureName)
+        {
+            var culture = System.Globalization.CultureInfo.GetCultureInfo(cultureName);
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+            System.Globalization.CultureInfo.CurrentUICulture = culture;
+        }
+
+        public void Dispose()
+        {
+            System.Globalization.CultureInfo.CurrentCulture = _originalCulture;
+            System.Globalization.CultureInfo.CurrentUICulture = _originalUiCulture;
+        }
+    }
+
     private static Sheet MakeSheet(params (int row, int col, ScalarValue val)[] cells)
     {
         var sheet = new Sheet(SheetId.New(), "S");
@@ -823,6 +842,19 @@ public class FunctionLibraryTests
             (2, 1, new TextValue("banana")),
             (3, 1, new TextValue("apple")));
         _eval.Evaluate("=COUNTIF(A1:A3,\"apple\")", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void CountifAndSumif_TextErrorCriteriaMatchErrorCells()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA), (1, 2, new NumberValue(10)),
+            (2, 1, ErrorValue.Value), (2, 2, new NumberValue(20)),
+            (3, 1, new TextValue("#N/A")), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=COUNTIF(A1:A3,\"#N/A\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=COUNTIF(A1:A3,\"#VALUE!\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SUMIF(A1:A3,\"#N/A\",B1:B3)", sheet).Should().Be(new NumberValue(40));
     }
 
     [Fact]
@@ -5923,6 +5955,29 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Concat_RangeArguments_FlattenCellsInExcelOrder()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 2, new NumberValue(2)),
+            (2, 1, new BoolValue(true)),
+            (2, 2, BlankValue.Instance),
+            (3, 1, new TextValue("z")));
+
+        _eval.Evaluate("=CONCAT(A1:B2,\"-\",A3)", sheet).Should().Be(new TextValue("a2TRUE-z"));
+    }
+
+    [Fact]
+    public void Concat_RangeArgumentErrors_Propagate()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 2, ErrorValue.NA));
+
+        _eval.Evaluate("=CONCAT(A1:B1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Concat_DirectTodayResult_UsesDateSerialText()
     {
         var expected = DateTime.Today.ToOADate().ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -6002,6 +6057,21 @@ public class FunctionLibraryTests
 
     [Fact] public void T_Number_ReturnsEmpty() =>
         _eval.Evaluate("=T(42)", MakeSheet()).Should().Be(new TextValue(""));
+
+    [Fact]
+    public void T_RangeArgument_PropagatesElementErrors()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("hello")),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(42)));
+
+        AssertColumn(
+            _eval.Evaluate("=T(A1:A3)", sheet),
+            new TextValue("hello"),
+            ErrorValue.NA,
+            new TextValue(""));
+    }
 
     [Fact]
     public void Hyperlink_ReturnsDisplayTextWhenFriendlyNameIsProvided()
@@ -7696,6 +7766,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TorowAndTocol_IgnoreScalarErrorsLikeSingleCellArrays()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=TOROW(NA(),2)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=TOCOL(NA(),2)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=TOROW(NA())", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=TOCOL(NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Tocol_InvalidIgnoreMode_ReturnsValueError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
@@ -8599,15 +8680,37 @@ public class FunctionLibraryTests
     // ── ASC / DBCS / PHONETIC / BAHTTEXT ─────────────────────────────────────
 
     [Fact]
-    public void Asc_ConvertsFullWidthAsciiAndKanaToHalfWidthText()
+    public void Asc_NonDbcsCultureLeavesTextUnchanged()
     {
+        using var culture = new CultureScope("en-US");
+
+        _eval.Evaluate("=ASC(\"ＡＢＣ１２３\")", MakeSheet())
+            .Should().Be(new TextValue("ＡＢＣ１２３"));
+    }
+
+    [Fact]
+    public void Dbcs_NonDbcsCultureLeavesTextUnchanged()
+    {
+        using var culture = new CultureScope("en-US");
+
+        _eval.Evaluate("=DBCS(\"ABC123\")", MakeSheet())
+            .Should().Be(new TextValue("ABC123"));
+    }
+
+    [Fact]
+    public void Asc_DbcsCultureConvertsFullWidthAsciiAndKanaToHalfWidthText()
+    {
+        using var culture = new CultureScope("ja-JP");
+
         _eval.Evaluate("=ASC(\"ＡＢＣ１２３！　アイウ\")", MakeSheet())
             .Should().Be(new TextValue("ABC123! ｱｲｳ"));
     }
 
     [Fact]
-    public void Dbcs_ConvertsHalfWidthAsciiAndKanaToFullWidthText()
+    public void Dbcs_DbcsCultureConvertsHalfWidthAsciiAndKanaToFullWidthText()
     {
+        using var culture = new CultureScope("ja-JP");
+
         _eval.Evaluate("=DBCS(\"ABC123! ｱｲｳ\")", MakeSheet())
             .Should().Be(new TextValue("ＡＢＣ１２３！　アイウ"));
     }
@@ -8820,6 +8923,19 @@ public class FunctionLibraryTests
     public void Numbervalue_MultiCharacterSeparators_UseFirstCharacterLikeExcel() =>
         _eval.Evaluate("=NUMBERVALUE(\"1.234,56\",\",ignored\",\".ignored\")", MakeSheet())
             .Should().Be(new NumberValue(1234.56));
+
+    [Theory]
+    [InlineData("=NUMBERVALUE(\"1\t234\")")]
+    [InlineData("=NUMBERVALUE(\"1\n234\")")]
+    [InlineData("=NUMBERVALUE(\"1\r234\")")]
+    public void Numbervalue_StripsExcelAsciiSpacingControlsAnywhere(string formula) =>
+        _eval.Evaluate(formula, MakeSheet())
+            .Should().Be(new NumberValue(1234));
+
+    [Fact]
+    public void Numbervalue_DoesNotStripNonBreakingSpace() =>
+        _eval.Evaluate("=NUMBERVALUE(\"1\u00A0234\")", MakeSheet())
+            .Should().Be(ErrorValue.Value);
 
     [Fact]
     public void Numbervalue_SameShapeSeparatorArguments_SpillsElementwise()

@@ -68,9 +68,7 @@ public sealed class GoalSeekDialogXamlTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("SetCellBox.Focus();");
-        source.Should().Contain("SetCellBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(SetCellBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(SetCellBox);");
     }
 
     [Fact]
@@ -81,9 +79,7 @@ public sealed class GoalSeekDialogXamlTests
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, error, \"Goal Seek\");");
         source.Should().Contain("FocusInvalidInput(error);");
         source.Should().Contain("private void FocusInvalidInput(string error)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -94,9 +90,7 @@ public sealed class GoalSeekDialogXamlTests
             source.IndexOf("private void RangePickerButton_Click", StringComparison.Ordinal)..
             source.IndexOf("public static GoalSeekRangeSelectionRequest", StringComparison.Ordinal)];
 
-        handlerSource.Should().Contain("target.Focus();");
-        handlerSource.Should().Contain("target.SelectAll();");
-        handlerSource.Should().Contain("Keyboard.Focus(target);");
+        handlerSource.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]

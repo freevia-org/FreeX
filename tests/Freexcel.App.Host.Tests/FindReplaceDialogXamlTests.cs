@@ -390,9 +390,7 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -406,9 +404,7 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("FocusSearchBox();");
         source.Should().Contain("private void FocusSearchBox()");
         source.Should().Contain("var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     private static XDocument LoadDialogXaml() =>

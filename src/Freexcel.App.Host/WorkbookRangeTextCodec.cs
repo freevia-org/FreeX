@@ -44,6 +44,11 @@ public static class WorkbookRangeTextCodec
         return TryParseRangeParts(parts, sheetId, out range);
     }
 
+    public static bool TryParseOnCurrentSheet(SheetId sheetId, string input, out GridRange range) =>
+        TryParse(sheetId, input, RejectSheetReference, out range);
+
+    private static SheetId? RejectSheetReference(string _) => null;
+
     private static bool TryResolveReferenceSheet(
         SheetId defaultSheetId,
         string reference,
@@ -72,8 +77,13 @@ public static class WorkbookRangeTextCodec
         range = default;
         try
         {
-            var start = CellAddress.Parse(parts[0], sheetId);
-            var end = parts.Length == 1 ? start : CellAddress.Parse(parts[1], sheetId);
+            if (!CellReferenceInputParser.TryParseCell(parts[0], sheetId, out var start))
+                return false;
+
+            var end = start;
+            if (parts.Length == 2 && !CellReferenceInputParser.TryParseCell(parts[1], sheetId, out end))
+                return false;
+
             range = new GridRange(start, end);
             return true;
         }

@@ -704,6 +704,36 @@ public class FormulaEvaluatorTests
     }
 
     [Fact]
+    public void ExcelFutureFunctionPrefix_EvaluatesCanonicalBuiltInFunction()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+
+        _evaluator.Evaluate("=_xlfn.XLOOKUP(\"B\",A1:A2,B1:B2)", sheet)
+            .Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
+    public void ExcelFutureWorksheetFunctionPrefix_EvaluatesDynamicArrayFunction()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("skip"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new BoolValue(false));
+
+        var result = _evaluator.Evaluate("=_xlfn._xlws.FILTER(A1:A2,B1:B2)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(1);
+        result.At(1, 1).Should().Be(new TextValue("keep"));
+    }
+
+    [Fact]
     public void ErrorPropagates_ThroughArithmetic()
     {
         var sheet = new Sheet(SheetId.New(), "S");

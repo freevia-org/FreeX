@@ -80,8 +80,13 @@ public static class FilterPromptPlanner
         filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
         filterText.Equals("nonblank", StringComparison.OrdinalIgnoreCase) ||
         filterText.Equals("non-blank", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("and:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("or:", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("date=", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("date<>", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("date>=", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("date>", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("date<=", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("date<", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("datebetween:", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("contains:", StringComparison.OrdinalIgnoreCase) ||
@@ -92,6 +97,9 @@ public static class FilterPromptPlanner
         filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("<>", StringComparison.Ordinal) ||
+        filterText.StartsWith(">=", StringComparison.Ordinal) ||
+        filterText.StartsWith("<=", StringComparison.Ordinal) ||
         filterText.StartsWith('>') ||
         filterText.StartsWith('<') ||
         filterText.StartsWith('=');

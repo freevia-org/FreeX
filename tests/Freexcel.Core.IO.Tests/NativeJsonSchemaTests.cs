@@ -112,6 +112,83 @@ public sealed class NativeJsonSchemaTests
             .WithMessage("*schema version*999*");
     }
 
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    public void Load_TreatsNonFiniteNativeJsonNumbersAsText(string value)
+    {
+        var json = $$"""
+            {
+              "Name": "NonFinite",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": [
+                    { "Address": "A1", "Value": "{{value}}", "ValueType": "n" }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.GetSheetAt(0).GetCell(1, 1)!.Value.Should().Be(new TextValue(value));
+    }
+
+    [Theory]
+    [InlineData("TRUE", true)]
+    [InlineData("false", false)]
+    public void Load_ParsesNativeJsonBooleanCellsCaseInsensitively(string value, bool expected)
+    {
+        var json = $$"""
+            {
+              "Name": "BooleanCell",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": [
+                    { "Address": "A1", "Value": "{{value}}", "ValueType": "b" }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.GetSheetAt(0).GetCell(1, 1)!.Value.Should().Be(new BoolValue(expected));
+    }
+
+    [Fact]
+    public void Load_TreatsMalformedNativeJsonBooleanCellsAsText()
+    {
+        const string json = """
+            {
+              "Name": "BooleanCell",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": [
+                    { "Address": "A1", "Value": "not-bool", "ValueType": "b" }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.GetSheetAt(0).GetCell(1, 1)!.Value.Should().Be(new TextValue("not-bool"));
+    }
+
     private static string FindWorkspaceFile(params string[] parts)
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);

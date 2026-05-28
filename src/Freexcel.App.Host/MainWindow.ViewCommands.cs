@@ -79,6 +79,20 @@ public partial class MainWindow
         FormulaBarBorder.Visibility = _options.ShowFormulaBar ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    private void ToggleOutlineSymbolsShortcut()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+
+        var next = !(sheet.ShowOutlineSymbols ?? true);
+        if (!TryExecuteGroupedSheetCommand(
+                "Show Outline Symbols",
+                sheetId => new SetWorksheetOutlineSymbolsCommand(sheetId, next)))
+            return;
+
+        UpdateViewport();
+    }
+
     private void NormalViewBtn_Click(object sender, RoutedEventArgs e) =>
         SetWorksheetViewMode(WorksheetViewMode.Normal);
 

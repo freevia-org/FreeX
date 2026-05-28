@@ -325,6 +325,21 @@ public sealed class TextToColumnsPlannerTests
     }
 
     [Fact]
+    public void SplitText_UnqualifiedInput_AvoidsBuilderAndListOverhead()
+    {
+        var row = string.Join(",", Enumerable.Range(0, 200).Select(index => $"Value{index}"));
+
+        TextToColumnsPlanner.SplitText(row, ",", '"', false).Should().HaveCount(200);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < 500; index++)
+            TextToColumnsPlanner.SplitText(row, ",", '"', false).Should().HaveCount(200);
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Console.WriteLine($"Text-to-columns unqualified split allocations: {allocatedBytes:N0} bytes for 500 runs");
+        allocatedBytes.Should().BeLessThan(7_000_000);
+    }
+
+    [Fact]
     public void BuildFixedWidthEdits_SplitsTextAcrossColumns()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

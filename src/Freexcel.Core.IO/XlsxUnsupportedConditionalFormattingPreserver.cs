@@ -20,7 +20,11 @@ internal static class XlsxUnsupportedConditionalFormattingPreserver
             var sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
             var unsupportedBlocks = sourceWorksheetXml.Root?
                 .Elements(worksheetNs + "conditionalFormatting")
-                .Where(block => ConditionalFormattingHasUnsupportedRule(block, worksheetNs))
+                .Where(block => XlsxConditionalFormatRuleSupport.ConditionalFormattingHasUnsupportedRule(
+                    block,
+                    worksheetNs,
+                    allowBlankType: true,
+                    comparison: StringComparison.Ordinal))
                 .ToList()
                 ?? [];
             if (unsupportedBlocks.Count == 0)
@@ -46,16 +50,4 @@ internal static class XlsxUnsupportedConditionalFormattingPreserver
         }
     }
 
-    private static bool ConditionalFormattingHasUnsupportedRule(XElement block, XNamespace worksheetNs) =>
-        block.Elements(worksheetNs + "cfRule")
-            .Select(rule => rule.Attribute("type")?.Value)
-            .Any(type => !IsSupportedConditionalFormatRuleType(type));
-
-    private static bool IsSupportedConditionalFormatRuleType(string? type) =>
-        string.IsNullOrWhiteSpace(type) ||
-        type is "cellIs" or "expression" or "colorScale" or "dataBar" or "iconSet" or
-            "aboveAverage" or "top10" or "uniqueValues" or "duplicateValues" or
-            "containsText" or "notContainsText" or "beginsWith" or "endsWith" or
-            "timePeriod" or "containsBlanks" or "notContainsBlanks" or
-            "containsErrors" or "notContainsErrors";
 }

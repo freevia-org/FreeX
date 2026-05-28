@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using FluentAssertions;
 using Freexcel.App.UI;
@@ -319,6 +320,117 @@ public sealed class ChartRendererTests
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
     }
 
+    [Fact]
+    public void SurfaceRenderer_ParsesInvariantDecimalValues()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("de-DE");
+            var sheetId = SheetId.New();
+            var chart = new ChartModel
+            {
+                Type = ChartType.Surface,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3))
+            };
+
+            var model = BuildPlotModel(chart, new ViewportModel(
+                [
+                    Cell(1, 1, "Quarter"),
+                    Cell(1, 2, "North"),
+                    Cell(1, 3, "South"),
+                    Cell(2, 1, "Q1"),
+                    Cell(2, 2, "1.5"),
+                    Cell(2, 3, "2.5")
+                ],
+                [],
+                []));
+
+            var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+            series.Items.Should().HaveCount(2);
+            series.Items.Select(item => item.Color).Should().OnlyHaveUniqueItems();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public void ChartRenderer_ParsesInvariantDecimalValuesUnderNonInvariantCulture()
+    {
+        RunWithCulture("de-DE", () =>
+        {
+            var sheetId = SheetId.New();
+            var columnModel = BuildPlotModel(new ChartModel
+            {
+                Type = ChartType.Column,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+            }, new ViewportModel(
+                [
+                    Cell(1, 1, "Category"), Cell(1, 2, "Sales"),
+                    Cell(2, 1, "A"), Cell(2, 2, "1.5"),
+                    Cell(3, 1, "B"), Cell(3, 2, "2.5")
+                ],
+                [],
+                []));
+            columnModel.Series.OfType<RectangleBarSeries>().Single().Items
+                .Select(item => item.Y1)
+                .Should().Equal(1.5, 2.5);
+
+            var scatterModel = BuildPlotModel(new ChartModel
+            {
+                Type = ChartType.Scatter,
+                FirstColIsCategories = false,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+            }, new ViewportModel(
+                [
+                    Cell(1, 1, "X"), Cell(1, 2, "Y"),
+                    Cell(2, 1, "1.5"), Cell(2, 2, "10.5"),
+                    Cell(3, 1, "2.5"), Cell(3, 2, "20.5")
+                ],
+                [],
+                []));
+            scatterModel.Series.OfType<ScatterSeries>().Single().Points
+                .Select(point => (point.X, point.Y))
+                .Should().Equal((1.5, 10.5), (2.5, 20.5));
+
+            var radarModel = BuildPlotModel(new ChartModel
+            {
+                Type = ChartType.Radar,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+            }, new ViewportModel(
+                [
+                    Cell(1, 1, "Metric"), Cell(1, 2, "Score"),
+                    Cell(2, 1, "A"), Cell(2, 2, "1.5"),
+                    Cell(3, 1, "B"), Cell(3, 2, "2.5")
+                ],
+                [],
+                []));
+            radarModel.Series.OfType<LineSeries>().Single().Points
+                .Select(point => point.Y)
+                .Should().Equal(1.5, 2.5, 1.5);
+
+            var stackedModel = BuildPlotModel(new ChartModel
+            {
+                Type = ChartType.PercentStackedBar,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3)),
+                ShowDataLabels = true
+            }, new ViewportModel(
+                [
+                    Cell(1, 1, "Quarter"), Cell(1, 2, "North"), Cell(1, 3, "South"),
+                    Cell(2, 1, "Q1"), Cell(2, 2, "1.5"), Cell(2, 3, "2.5")
+                ],
+                [],
+                []));
+            stackedModel.Annotations.OfType<TextAnnotation>().Select(annotation => annotation.Text)
+                .Should().BeEquivalentTo("1.5", "2.5");
+        });
+    }
+
     [Theory]
     [InlineData(ChartBlankDisplayMode.Gap, 3, true, false)]
     [InlineData(ChartBlankDisplayMode.Span, 2, false, false)]
@@ -491,6 +603,48 @@ public sealed class ChartRendererTests
             .Select(annotation => annotation.Text)
             .Should()
             .Contain(["North | South", "Q1 | 10 | 20", "Q2 | 30 | 40"]);
+    }
+
+    [Fact]
+    public void ColumnRenderer_AppliesChartDataTableDirectStyle()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            DataTable = new ChartDataTableModel
+            {
+                ShowOutline = true,
+                FillColor = new CellColor(255, 242, 204),
+                BorderColor = new CellColor(191, 144, 0),
+                BorderThickness = 2.5,
+                TextColor = new CellColor(112, 48, 160),
+                FontSize = 11.5
+            }
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        var dataTableAnnotations = model.Annotations
+            .OfType<TextAnnotation>()
+            .Where(annotation => annotation.Text?.Contains("North", StringComparison.Ordinal) == true ||
+                                 annotation.Text?.Contains("Q1", StringComparison.Ordinal) == true)
+            .ToList();
+        dataTableAnnotations.Should().HaveCount(2);
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.Background == OxyColor.FromRgb(255, 242, 204));
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.Stroke == OxyColor.FromRgb(191, 144, 0));
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.StrokeThickness == 2.5);
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.TextColor == OxyColor.FromRgb(112, 48, 160));
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.FontSize == 11.5);
     }
 
     [Fact]
@@ -2531,6 +2685,54 @@ public sealed class ChartRendererTests
         series.Items[1].Close.Should().Be(11);
     }
 
+    [Fact]
+    public void StockRenderer_AppliesUpDownBarFormattingToCandlesticks()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.OpenHighLowClose,
+            ShowUpDownBars = true,
+            UpDownBarGapWidth = 150,
+            UpBarFillColor = new CellColor(226, 239, 218),
+            UpBarBorderColor = new CellColor(84, 130, 53),
+            UpBarBorderThickness = 2.25,
+            DownBarFillColor = new CellColor(248, 203, 173),
+            DownBarBorderColor = new CellColor(192, 0, 0),
+            DownBarBorderThickness = 1.25,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 5))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Open"),
+                Cell(1, 3, "High"),
+                Cell(1, 4, "Low"),
+                Cell(1, 5, "Close"),
+                Cell(2, 1, "2026-01-02"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "15"),
+                Cell(2, 4, "9"),
+                Cell(2, 5, "13"),
+                Cell(3, 1, "2026-01-05"),
+                Cell(3, 2, "13"),
+                Cell(3, 3, "18"),
+                Cell(3, 4, "12"),
+                Cell(3, 5, "11")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<CandleStickSeries>().Subject;
+        series.IncreasingColor.Should().Be(OxyColor.FromRgb(226, 239, 218));
+        series.DecreasingColor.Should().Be(OxyColor.FromRgb(248, 203, 173));
+        series.Color.Should().Be(OxyColor.FromRgb(84, 130, 53));
+        series.StrokeThickness.Should().Be(2.25);
+        series.CandleWidth.Should().BeApproximately(0.4, 0.0001);
+    }
+
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
     {
         var method = typeof(ChartRenderer).GetMethod(
@@ -2566,4 +2768,21 @@ public sealed class ChartRendererTests
 
     private static ChartDataCell ChartCell(SheetId sheetId, uint row, uint col, string text) =>
         new(sheetId, row, col, text);
+
+    private static void RunWithCulture(string cultureName, Action action)
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureName);
+            action();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
 }

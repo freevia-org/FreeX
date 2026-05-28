@@ -214,9 +214,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_heightBox.Focus();");
-        source.Should().Contain("_heightBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_heightBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
     }
 
     [Fact]
@@ -232,6 +230,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
         source.Should().Contain("private static bool TryParsePositiveSize(string text)");
         source.Should().Contain("private static void FocusInvalidSizeInput(TextBox textBox)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
     }
 
     [Fact]
@@ -292,9 +291,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_startColorBox.Focus();");
-        source.Should().Contain("_startColorBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_startColorBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_startColorBox);");
     }
 
     [Fact]
@@ -307,6 +304,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("FocusInvalidColorInput(_startColorBox);");
         source.Should().Contain("FocusInvalidColorInput(_endColorBox);");
         source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(colorBox);");
     }
 
     [Fact]
@@ -335,9 +333,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(\"_Degrees:\", _rotationBox, Accept)");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_rotationBox.Focus();");
-        source.Should().Contain("_rotationBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_rotationBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
     }
 
     [Fact]
@@ -349,6 +345,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("Enter a numeric rotation value.");
         source.Should().Contain("FocusInvalidRotationInput();");
         source.Should().Contain("private void FocusInvalidRotationInput()");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
     }
 
     [Fact]
@@ -390,9 +387,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_cropLeftBox.Focus();");
-        source.Should().Contain("_cropLeftBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_cropLeftBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_cropLeftBox);");
     }
 
     [Fact]
@@ -409,6 +404,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("return _cropRightBox;");
         source.Should().Contain("return _cropBottomBox;");
         source.Should().Contain("private static void FocusInvalidCropInput(TextBox textBox)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
     }
 
     [Fact]
@@ -497,18 +493,18 @@ public sealed class ObjectDialogTests
         source.Should().Contain("private void FocusInvalidInput(string? error)");
         source.Should().Contain("_tabs.SelectedItem = _sizeTab;");
         source.Should().Contain("_tabs.SelectedItem = _cropTab;");
-        source.Should().Contain("FocusAndSelect(_rotationBox);");
-        source.Should().Contain("FocusAndSelect(ResolveInvalidSizeInput());");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(ResolveInvalidSizeInput());");
         source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
         source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
         source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
-        source.Should().Contain("FocusAndSelect(ResolveInvalidCropInput(error));");
+        source.Should().Contain("DialogFocus.FocusAndSelect(ResolveInvalidCropInput(error));");
         source.Should().Contain("private TextBox ResolveInvalidCropInput(string? error)");
         source.Should().Contain("return _cropLeftBox;");
         source.Should().Contain("return _cropTopBox;");
         source.Should().Contain("return _cropRightBox;");
         source.Should().Contain("return _cropBottomBox;");
-        source.Should().Contain("Keyboard.Focus(box);");
+        source.Should().NotContain("private static void FocusAndSelect(TextBox box)");
     }
 
     [Fact]
@@ -645,9 +641,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_targetBox.Focus();");
-        source.Should().Contain("_targetBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_targetBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_targetBox);");
     }
 
     [Fact]
@@ -732,9 +726,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_textBox.Focus();");
-        source.Should().Contain("_textBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_textBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_textBox);");
     }
 
     private static string ReadObjectDialogSources() =>

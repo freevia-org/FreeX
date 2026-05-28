@@ -29,18 +29,23 @@ public static partial class FlashFillService
             ?? TryKnownTitleAndSuffixRemoval(examples)
             ?? TryKnownTitleRemoval(examples)
             ?? TryKnownNameSuffixRemoval(examples)
+            ?? TrySplitPascalCaseWords(examples)
             ?? TryEmailDisplayName(examples)
             ?? TryEmailLocalPartWithoutPlusTag(examples)
+            ?? TryEmailDomainStem(examples)
             ?? TryDigitMask(examples)
             ?? TryStripThousandSeparators(examples)
             ?? TryExtractDigitsOnly(examples)
+            ?? TryExtractFinalDigitRun(examples)
             ?? TryThreeTokenNameInitial(examples)
             ?? TryThreeTokenNameDropMiddle(examples)
+            ?? TryFinalWhitespaceToken(examples)
             ?? TryPairedDelimiterExtraction(examples)
             ?? TryPairedDelimiterRemoval(examples)
             ?? TryLabelValueExtraction(examples)
             ?? TryLabelQualifierRemoval(examples)
             ?? TryDelimitedPartReorder(examples)
+            ?? TryRemoveFinalDottedToken(examples)
             ?? TryExtractFinalDottedToken(examples)
             ?? TryExtractByDelimiter(examples)
             ?? TryPrefixTrim(examples)
@@ -90,6 +95,9 @@ public static partial class FlashFillService
 
         if (TryFirstInitialLastEmailPattern(exampleSources, exampleOutputs) is { } initialLastEmailPattern)
             patterns.Insert(7, initialLastEmailPattern);
+
+        if (TryFirstLastInitialEmailPattern(exampleSources, exampleOutputs) is { } firstLastInitialEmailPattern)
+            patterns.Insert(8, firstLastInitialEmailPattern);
 
         if (TryLastFirstInitialEmailPattern(exampleSources, exampleOutputs) is { } lastInitialEmailPattern)
             patterns.Add(lastInitialEmailPattern);
@@ -175,6 +183,30 @@ public static partial class FlashFillService
                 exampleSources,
                 exampleOutputs,
                 s => (s[1] + separator + GetFirstInitial(s[0])).ToLowerInvariant());
+            if (pattern is not null)
+                return pattern;
+        }
+
+        return null;
+    }
+
+    private static Func<IReadOnlyList<string>, string>? TryFirstLastInitialEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs)
+    {
+        var compactPattern = TrySharedDomainEmailPattern(
+            exampleSources,
+            exampleOutputs,
+            s => (s[0] + GetFirstInitial(s[1])).ToLowerInvariant());
+        if (compactPattern is not null)
+            return compactPattern;
+
+        foreach (var separator in new[] { '.', '_', '-' })
+        {
+            var pattern = TrySharedDomainEmailPattern(
+                exampleSources,
+                exampleOutputs,
+                s => (s[0] + separator + GetFirstInitial(s[1])).ToLowerInvariant());
             if (pattern is not null)
                 return pattern;
         }

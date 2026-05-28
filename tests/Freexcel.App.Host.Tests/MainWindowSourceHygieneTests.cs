@@ -1135,7 +1135,7 @@ public sealed class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void OnRowResized(");
         mainSource.Should().NotContain("private void OnPageMarginsChanged(");
         mainSource.Should().NotContain("private void CaptureColumnResizeSnapshot(");
-        mainSource.Should().NotContain("private void RestoreRowResizeSnapshot(");
+        mainSource.Should().NotContain("private void CaptureRowResizeSnapshot(");
 
         gridSource.Should().Contain("private void RefreshStatusBar(");
         gridSource.Should().Contain("private void OnColumnResizing(");
@@ -1144,7 +1144,7 @@ public sealed class MainWindowSourceHygieneTests
         gridSource.Should().Contain("private void OnRowResized(");
         gridSource.Should().Contain("private void OnPageMarginsChanged(");
         gridSource.Should().Contain("private void CaptureColumnResizeSnapshot(");
-        gridSource.Should().Contain("private void RestoreRowResizeSnapshot(");
+        gridSource.Should().Contain("private void CaptureRowResizeSnapshot(");
         gridSource.Should().Contain("StatusBarCalculator");
     }
 
@@ -1239,7 +1239,7 @@ public sealed class MainWindowSourceHygieneTests
         dataFilterSource.Should().Contain("private void ValidationButton_Click(");
         dataFilterSource.Should().Contain("private void ClearFilterButton_Click(");
         dataFilterSource.Should().Contain("private void NamedRangesButton_Click(");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
+        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
     }
 
     [Fact]
@@ -1595,21 +1595,21 @@ public sealed class MainWindowSourceHygieneTests
         navigationEnd.Should().BeGreaterThan(navigationStart);
         var navigationSource = source[navigationStart..navigationEnd];
 
-        xaml.Should().Contain("x:Name=\"SheetNavLeftBtn\" Grid.Column=\"0\"");
-        xaml.Should().Contain("x:Name=\"SheetTabsScroller\" Grid.Column=\"1\"");
+        xaml.Should().Contain("x:Name=\"SheetNavLeftBtn\" Grid.Column=\"1\"");
+        xaml.Should().Contain("x:Name=\"SheetTabsScroller\" Grid.Column=\"2\"");
         xaml.Should().Contain("HorizontalScrollBarVisibility=\"Hidden\"");
         xaml.Should().Contain("ScrollChanged=\"SheetTabsScroller_ScrollChanged\"");
         xaml.Should().Contain("SizeChanged=\"SheetTabsScroller_SizeChanged\"");
-        xaml.Should().Contain("x:Name=\"AddSheetButton\" Grid.Column=\"2\"");
-        xaml.Should().Contain("Padding=\"10,3,10,1\"");
-        xaml.Should().Contain("MinWidth=\"36\"");
-        xaml.Should().Contain("MinHeight=\"22\"");
-        xaml.Should().Contain("Opacity=\"0.82\"");
+        xaml.Should().Contain("x:Name=\"AddSheetButton\" Grid.Column=\"3\"");
+        xaml.Should().Contain("Padding=\"12,1,12,3\"");
+        xaml.Should().Contain("MinWidth=\"86\"");
+        xaml.Should().Contain("MinHeight=\"27\"");
+        xaml.Should().Contain("Opacity=\"0.9\"");
         xaml.Should().NotContain("x:Name=\"AddSheetButton\" Grid.Column=\"2\" Content=\"+\" Width=\"28\" Height=\"22\"");
-        xaml.Should().Contain("CornerRadius=\"3,3,0,0\"");
-        xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"4\"");
+        xaml.Should().Contain("CornerRadius=\"0,0,4,4\"");
+        xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"5\"");
         xaml.Should().Contain("HorizontalAlignment=\"Right\"");
-        xaml.Should().Contain("<ScrollBar x:Name=\"HorizontalScroll\" Grid.Column=\"5\"");
+        xaml.Should().Contain("<ScrollBar x:Name=\"HorizontalScroll\" Grid.Column=\"6\"");
         xaml.IndexOf("x:Name=\"AddSheetButton\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"SheetNavRightBtn\"", StringComparison.Ordinal));
         xaml.Should().Contain("Visibility=\"Hidden\"");
@@ -1792,7 +1792,9 @@ public sealed class MainWindowSourceHygieneTests
         insertSource.Should().Contain("ShowOwnedMessage(\"The hyperlink target could not be found.\"");
         insertSource.Should().Contain("ShowOwnedMessage(\"The hyperlink target could not be opened.\"");
         ExtractMethodSource(insertSource, "private bool TryOpenHyperlink(").Should().NotContain("MessageBox.Show(");
-        selectionSource.Should().Contain("(Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryOpenHyperlink(newAddr)");
+        selectionSource.Should().Contain("else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)");
+        selectionSource.Should().Contain("if (TryOpenHyperlink(newAddr))");
+        selectionSource.Should().Contain("e.Handled = true;");
     }
 
     [Fact]
@@ -2294,9 +2296,8 @@ public sealed class MainWindowSourceHygieneTests
 
         editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
         dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseTopBottom");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseAverage");
+        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
+        dataFilterSource.Should().Contain("FilterInputParser.ParseAllowedValues");
     }
 
     [Fact]

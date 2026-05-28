@@ -294,6 +294,21 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void PageSetupRangeSelectionFormatter_FormatsSingleCellPrintAreaWithoutRangeSeparator()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 4, 3);
+        var range = new GridRange(address, address);
+
+        PageSetupRangeSelectionFormatter.Format(
+                PageSetupRangeSelectionTarget.PrintArea,
+                range,
+                useR1C1ReferenceStyle: false)
+            .Should()
+            .Be("$C$4");
+    }
+
+    [Fact]
     public void PageSetupDialogInvalidPrintArea_SelectsSheetTabPrintAreaBox()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));

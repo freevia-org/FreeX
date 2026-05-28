@@ -182,9 +182,7 @@ public sealed class HyperlinkDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _targetBox.Focus();
-        _targetBox.SelectAll();
-        Keyboard.Focus(_targetBox);
+        DialogFocus.FocusAndSelect(_targetBox);
     }
 
     private void ShowInvalidInputWarning(string message)

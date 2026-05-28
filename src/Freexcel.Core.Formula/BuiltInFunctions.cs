@@ -40,8 +40,11 @@ public static partial class BuiltInFunctions
         ["ABS"]         = (Abs, 1, 1),
         ["CONCAT"]      = (Concat, 1, 255),
         ["LEN"]         = (Len, 1, 1),
+        ["LENB"]        = (LenB, 1, 1),
         ["LEFT"]        = (Left, 1, 2),
+        ["LEFTB"]       = (LeftB, 1, 2),
         ["RIGHT"]       = (Right, 1, 2),
+        ["RIGHTB"]      = (RightB, 1, 2),
         ["NOW"]         = (Now, 0, 0),
         ["TODAY"]       = (Today, 0, 0),
         ["RAND"]        = (Rand, 0, 0),
@@ -72,8 +75,11 @@ public static partial class BuiltInFunctions
         ["ARABIC"]      = (Arabic, 1, 1),
         ["SUBSTITUTE"]  = (Substitute, 3, 4),
         ["FIND"]        = (Find, 2, 3),
+        ["FINDB"]       = (FindB, 2, 3),
         ["SEARCH"]      = (Search, 2, 3),
+        ["SEARCHB"]     = (SearchB, 2, 3),
         ["MID"]         = (Mid, 3, 3),
+        ["MIDB"]        = (MidB, 3, 3),
         ["REPT"]        = (Rept, 2, 2),
         ["ROMAN"]       = (Roman, 1, 2),
         ["VALUE"]       = (ValueFunc, 1, 1),
@@ -298,6 +304,7 @@ public static partial class BuiltInFunctions
         ["ISEVEN"]      = (Iseven, 1, 1),
         ["ISODD"]       = (Isodd, 1, 1),
         ["REPLACE"]     = (Replace, 4, 4),
+        ["REPLACEB"]    = (ReplaceB, 4, 4),
         ["CONCATENATE"] = (Concatenate, 1, 255),
         ["T"]           = (TFunc, 1, 1),
         ["HYPERLINK"]   = (Hyperlink, 1, 2),
@@ -392,6 +399,7 @@ public static partial class BuiltInFunctions
         ["ERFC.PRECISE"] = (ErfcFunc, 1, 1),
         ["GESTEP"]      = (Gestep, 1, 2),
         ["IMABS"]       = (ImAbs, 1, 1),
+        ["IMARGUMENT"]  = (ImArgument, 1, 1),
         ["IMAGINARY"]   = (Imaginary, 1, 1),
         ["IMCONJUGATE"] = (ImConjugate, 1, 1),
         ["IMCOS"]       = (ImCos, 1, 1),
@@ -603,9 +611,11 @@ public static partial class BuiltInFunctions
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
     private static readonly string[] SpecialFunctionNames = ["LET", "LAMBDA"];
+    private static readonly IReadOnlyCollection<string> FunctionNames =
+        Array.AsReadOnly(Functions.Keys.Concat(SpecialFunctionNames).ToArray());
 
     /// <summary>Recognized built-in and special-form function names.</summary>
-    public static IReadOnlyCollection<string> Names => Functions.Keys.Concat(SpecialFunctionNames).ToArray();
+    public static IReadOnlyCollection<string> Names => FunctionNames;
 
     /// <summary>True if the function recalculates on every pass regardless of input changes.</summary>
     public static bool IsVolatile(string name) => VolatileFunctions.Contains(name);

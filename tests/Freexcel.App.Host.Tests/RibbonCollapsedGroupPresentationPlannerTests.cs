@@ -32,6 +32,7 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
     }
 
     [Theory]
+    [InlineData(-8, 900, 0)]
     [InlineData(72, 900, 46)]
     [InlineData(42, 900, 42)]
     [InlineData(72, 1200, 68)]

@@ -146,6 +146,7 @@ public sealed class FlashFillServiceTests
     [Theory]
     [InlineData("Smith, John", "John", "Doe, Jane", "Jane", "Brown, Bob", "Bob")]
     [InlineData("SKU-001; Retail; West", "Retail", "SKU-002; Wholesale; East", "Wholesale", "SKU-003; Online; North", "Online")]
+    [InlineData("SKU-001 | Retail | West", "Retail", "SKU-002 | Wholesale | East", "Wholesale", "SKU-003 | Online | North", "Online")]
     public void Fill_ExtractDelimitedToken_TrimsTokenEdges(
         string source1,
         string expected1,
@@ -437,6 +438,45 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDisplayName_ConvertsMultiTokenUserNameToProperName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.byron.lovelace@contoso.com", "Ada Byron Lovelace"),
+                ("grace.brewster.hopper@contoso.com", "Grace Brewster Hopper")
+            ],
+            ["alan.mathison.turing@contoso.com"]);
+
+        result.Should().BeEquivalentTo(["Alan Mathison Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_SplitPascalCaseWords_InsertsWordSpaces()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("AdaLovelace", "Ada Lovelace"),
+                ("GraceHopper", "Grace Hopper")
+            ],
+            ["AlanTuring", "KatherineJohnson"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing", "Katherine Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_SplitPascalCaseWords_ReturnsNullWhenRemainingHasNoCaseBoundary()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("AdaLovelace", "Ada Lovelace"),
+                ("GraceHopper", "Grace Hopper")
+            ],
+            ["alan"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_EmailLocalPartWithoutPlusTag_ExtractsUntaggedUserName()
     {
         var result = FlashFillService.Fill(
@@ -458,6 +498,45 @@ public sealed class FlashFillServiceTests
                 ("grace+navy@contoso.com", "grace")
             ],
             ["alan@contoso.com"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmailDomainStem_ExtractsOrganizationFromEmailDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada@contoso.com", "contoso"),
+                ("grace@fabrikam.org", "fabrikam")
+            ],
+            ["alan@northwind.net", "katherine@adatum.co"]);
+
+        result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmailDomainStem_PreservesSubdomainStemBeforeTopLevelDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada@sales.contoso.com", "sales.contoso"),
+                ("grace@research.fabrikam.org", "research.fabrikam")
+            ],
+            ["alan@labs.northwind.net"]);
+
+        result.Should().BeEquivalentTo(["labs.northwind"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmailDomainStem_ReturnsNullWhenRemainingDomainHasNoSuffix()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada@contoso.com", "contoso"),
+                ("grace@fabrikam.org", "fabrikam")
+            ],
+            ["alan@localhost"]);
 
         result.Should().BeNull();
     }
@@ -851,6 +930,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_FullNames_ExtractsLastNameAcrossVariableTokenCounts()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "Lovelace"),
+                ("Grace Hopper", "Hopper")
+            ],
+            ["Katherine Coleman Johnson"]);
+
+        result.Should().BeEquivalentTo(["Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameTitles_RemovesTitleFromVariableLengthNames()
     {
         var result = FlashFillService.Fill(
@@ -1125,6 +1217,43 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void FillFromColumns_FirstLastInitialEmail_LearnsConstantDomainFromExamples()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["adal@contoso.com", "graceh@contoso.com"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["alant@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData(".", "alan.t@contoso.com")]
+    [InlineData("_", "alan_t@contoso.com")]
+    [InlineData("-", "alan-t@contoso.com")]
+    public void FillFromColumns_FirstLastInitialSeparatedEmail_LearnsSeparatorAndConstantDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            [$"ada{separator}l@contoso.com", $"grace{separator}h@contoso.com"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void FillFromColumns_LastFirstInitialEmail_LearnsConstantDomainFromExamples()
     {
         var result = FlashFillService.FillFromColumns(
@@ -1202,6 +1331,22 @@ public sealed class FlashFillServiceTests
                 ["Grace", "Hopper"]
             ],
             ["lovelacea@contoso.com", "hopperg@example.org"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstLastInitialEmail_ReturnsNullWhenExampleDomainsDiffer()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["adal@contoso.com", "graceh@example.org"],
             [
                 ["Alan", "Turing"]
             ]);
@@ -1345,6 +1490,26 @@ public sealed class FlashFillServiceTests
             ["Brown"]);
 
         result.Should().BeEquivalentTo(["Brown Ltd"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_RemoveFinalDottedToken_DropsVariableFileExtensions()
+    {
+        var result = FlashFillService.Fill(
+            [("north.xlsx", "north"), ("sales.summary.csv", "sales.summary")],
+            ["ops.backup.tsv", "budget.final.v2.txt"]);
+
+        result.Should().BeEquivalentTo(["ops.backup", "budget.final.v2"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_RemoveFinalDottedToken_ReturnsNullWhenRemainingHasNoExtension()
+    {
+        var result = FlashFillService.Fill(
+            [("north.xlsx", "north"), ("sales.summary.csv", "sales.summary")],
+            ["README"]);
+
+        result.Should().BeNull();
     }
 
     // ── Substring extraction ──────────────────────────────────────────────────
@@ -1676,6 +1841,26 @@ public sealed class FlashFillCommandTests
         var result = FlashFillService.Fill(
             [("(555) 867-5309", "5558675309"), ("(800) 555-0100", "8005550100")],
             ["no digits here"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_ExtractFinalDigitRun_HandlesLastFourAcrossMixedPhoneFormats()
+    {
+        var result = FlashFillService.Fill(
+            [("(555) 867-5309", "5309"), ("800-555-0100", "0100")],
+            ["212.555.1234", "main x6789"]);
+
+        result.Should().BeEquivalentTo(["1234", "6789"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractFinalDigitRun_ReturnsNullWhenRemainingHasNoDigits()
+    {
+        var result = FlashFillService.Fill(
+            [("(555) 867-5309", "5309"), ("800-555-0100", "0100")],
+            ["no extension"]);
 
         result.Should().BeNull();
     }

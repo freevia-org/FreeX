@@ -27,11 +27,28 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
+    [InlineData("=BASE(7.9,2)", "111")]
+    [InlineData("=BASE(15,2.9,8.9)", "00001111")]
+    [InlineData("=BASE(35,36.9)", "Z")]
+    public void BaseFunction_TruncatesFractionalArguments(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
     [InlineData("=DECIMAL(\"FF\",16)", 255)]
     [InlineData("=DECIMAL(111,2)", 7)]
     [InlineData("=DECIMAL(\"zap\",36)", 45745)]
     [InlineData("=DECIMAL(\"00FF\",16)", 255)]
     public void DecimalFunction_ReturnsExcelNumber(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=DECIMAL(\"11\",2.9)", 3)]
+    [InlineData("=DECIMAL(\"Z\",36.9)", 35)]
+    public void DecimalFunction_TruncatesFractionalRadix(string formula, double expected)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
     }
@@ -272,6 +289,17 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
+    [InlineData("=IMARGUMENT(\"1+i\")", 0.7853981633974483)]
+    [InlineData("=IMARGUMENT(\"1-i\")", -0.7853981633974483)]
+    [InlineData("=IMARGUMENT(\"-1+i\")", 2.356194490192345)]
+    [InlineData("=IMARGUMENT(\"-1-i\")", -2.356194490192345)]
+    [InlineData("=IMARGUMENT(4)", 0)]
+    public void ComplexArgumentFunction_ReturnsExcelRadians(string formula, double expected)
+    {
+        AssertNumberApproximately(_eval.Evaluate(formula, MakeSheet()), expected);
+    }
+
+    [Theory]
     [InlineData("=IMCONJUGATE(\"3+4i\")", "3-4i")]
     [InlineData("=IMSUM(\"3+6i\",\"5-2i\")", "8+4i")]
     [InlineData("=IMSUB(\"13+4i\",\"5+3i\")", "8+i")]
@@ -377,6 +405,7 @@ public sealed class ExcelParityEngineeringTests
             (3, 1, ErrorValue.NA));
 
         AssertColumn(_eval.Evaluate("=IMREAL(A1:A2)", sheet), new NumberValue(3), new NumberValue(5));
+        AssertColumnApproximately(_eval.Evaluate("=IMARGUMENT(A1:A2)", sheet), Math.Atan2(4, 3), Math.Atan2(-2, 5));
         AssertColumn(_eval.Evaluate("=IMLOG10(A1:A2)", sheet), _eval.Evaluate("=IMLOG10(A1)", sheet), _eval.Evaluate("=IMLOG10(A2)", sheet));
         AssertColumn(_eval.Evaluate("=IMEXP(A1:A3)", sheet), _eval.Evaluate("=IMEXP(A1)", sheet), _eval.Evaluate("=IMEXP(A2)", sheet), ErrorValue.NA);
         AssertColumn(_eval.Evaluate("=IMCOS(A1:A2)", sheet), _eval.Evaluate("=IMCOS(A1)", sheet), _eval.Evaluate("=IMCOS(A2)", sheet));
@@ -401,6 +430,8 @@ public sealed class ExcelParityEngineeringTests
     [Theory]
     [InlineData("=COMPLEX(1,2,\"x\")", "#VALUE!")]
     [InlineData("=IMREAL(\"not complex\")", "#NUM!")]
+    [InlineData("=IMARGUMENT(\"not complex\")", "#NUM!")]
+    [InlineData("=IMARGUMENT(0)", "#DIV/0!")]
     [InlineData("=IMDIV(\"1+i\",\"0\")", "#NUM!")]
     [InlineData("=IMLN(\"0\")", "#NUM!")]
     [InlineData("=IMLOG10(\"0\")", "#NUM!")]
@@ -518,6 +549,7 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=BASE(7,2,NA())")]
     [InlineData("=DECIMAL(NA(),16)")]
     [InlineData("=DECIMAL(\"FF\",NA())")]
+    [InlineData("=IMARGUMENT(NA())")]
     [InlineData("=IMEXP(NA())")]
     [InlineData("=IMLN(NA())")]
     [InlineData("=IMLOG10(NA())")]

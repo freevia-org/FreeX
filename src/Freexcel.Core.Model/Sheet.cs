@@ -31,9 +31,10 @@ public sealed partial class Sheet
     private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
     private readonly Dictionary<(uint Row, uint Col), StyleId> _styleOnly = [];
-    private Dictionary<(uint Row, uint Col), GridRange>? _mergeIndex;
+    private MergeRegionIndex? _mergeIndex;
     private GridRange? _usedRangeCache;
     private bool _usedRangeCacheDirty = true;
+    private int _formulaCellCount;
 
     /// <summary>Unique identifier for this sheet.</summary>
     public SheetId Id { get; }
@@ -427,9 +428,10 @@ public sealed partial class Sheet
     public void SetCell(CellAddress address, ScalarValue value)
     {
         ClearSpillRange(address);
-        MarkUsedRangeDirty();
+        TrackUsedRangeCellSet(address.Row, address.Col);
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
+            TrackFormulaCellReplacement(existing, hasNewFormula: false);
             existing.Value = value;
             existing.FormulaText = null;
             existing.IgnoreFormulaError = false;
@@ -448,15 +450,17 @@ public sealed partial class Sheet
     public void SetFormula(CellAddress address, string formulaText)
     {
         ClearSpillRange(address);
-        MarkUsedRangeDirty();
+        TrackUsedRangeCellSet(address.Row, address.Col);
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
+            TrackFormulaCellReplacement(existing, hasNewFormula: true);
             existing.FormulaText = formulaText;
             existing.IgnoreFormulaError = false;
         }
         else
         {
             _cells[(address.Row, address.Col)] = Cell.FromFormula(formulaText);
+            _formulaCellCount++;
         }
         _styleOnly.Remove((address.Row, address.Col));
     }
@@ -465,7 +469,12 @@ public sealed partial class Sheet
     public void SetCell(CellAddress address, Cell cell)
     {
         ClearSpillRange(address);
-        MarkUsedRangeDirty();
+        TrackUsedRangeCellSet(address.Row, address.Col);
+        if (_cells.TryGetValue((address.Row, address.Col), out var existing))
+            TrackFormulaCellReplacement(existing, cell.HasFormula);
+        else if (cell.HasFormula)
+            _formulaCellCount++;
+
         _cells[(address.Row, address.Col)] = cell;
         _styleOnly.Remove((address.Row, address.Col));
     }
@@ -474,16 +483,24 @@ public sealed partial class Sheet
     public void ClearCell(uint row, uint col)
     {
         ClearSpillRange(new CellAddress(Id, row, col));
-        if (_cells.Remove((row, col)))
-            MarkUsedRangeDirty();
+        if (_cells.Remove((row, col), out var removed))
+        {
+            if (removed.HasFormula)
+                _formulaCellCount--;
+            TrackUsedRangeCellCleared(row, col);
+        }
     }
 
     /// <summary>Remove a cell at the given address.</summary>
     public void ClearCell(CellAddress address)
     {
         ClearSpillRange(address);
-        if (_cells.Remove((address.Row, address.Col)))
-            MarkUsedRangeDirty();
+        if (_cells.Remove((address.Row, address.Col), out var removed))
+        {
+            if (removed.HasFormula)
+                _formulaCellCount--;
+            TrackUsedRangeCellCleared(address.Row, address.Col);
+        }
     }
 
     /// <summary>
@@ -585,6 +602,12 @@ public sealed partial class Sheet
     /// <summary>Total number of non-empty cells.</summary>
     public int CellCount => _cells.Count;
 
+    /// <summary>Number of cells that currently contain formulas.</summary>
+    public int FormulaCellCount => _formulaCellCount;
+
+    /// <summary>Whether any cell on the sheet currently contains a formula.</summary>
+    public bool HasFormulas => _formulaCellCount > 0;
+
     /// <summary>Get all non-empty cells as a dictionary keyed by CellAddress.</summary>
     public Dictionary<CellAddress, Cell> GetUsedCells()
     {
@@ -625,7 +648,53 @@ public sealed partial class Sheet
         return _usedRangeCache;
     }
 
-    private void MarkUsedRangeDirty() => _usedRangeCacheDirty = true;
+    private void TrackUsedRangeCellSet(uint row, uint col)
+    {
+        if (_usedRangeCacheDirty)
+            return;
+
+        if (_usedRangeCache is not { } range)
+        {
+            _usedRangeCache = new GridRange(
+                new CellAddress(Id, row, col),
+                new CellAddress(Id, row, col));
+            return;
+        }
+
+        if (row >= range.Start.Row &&
+            row <= range.End.Row &&
+            col >= range.Start.Col &&
+            col <= range.End.Col)
+        {
+            return;
+        }
+
+        _usedRangeCache = new GridRange(
+            new CellAddress(Id, Math.Min(range.Start.Row, row), Math.Min(range.Start.Col, col)),
+            new CellAddress(Id, Math.Max(range.End.Row, row), Math.Max(range.End.Col, col)));
+    }
+
+    private void TrackUsedRangeCellCleared(uint row, uint col)
+    {
+        if (_usedRangeCacheDirty || _usedRangeCache is not { } range)
+            return;
+
+        if (row == range.Start.Row ||
+            row == range.End.Row ||
+            col == range.Start.Col ||
+            col == range.End.Col)
+        {
+            _usedRangeCacheDirty = true;
+        }
+    }
+
+    private void TrackFormulaCellReplacement(Cell existing, bool hasNewFormula)
+    {
+        if (existing.HasFormula == hasNewFormula)
+            return;
+
+        _formulaCellCount += hasNewFormula ? 1 : -1;
+    }
 
 }
 

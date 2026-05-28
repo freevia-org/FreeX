@@ -33,6 +33,26 @@ public class CellAddressTests
     }
 
     [Fact]
+    public void Parse_LowercaseA1_ReturnsCorrectRowAndCol()
+    {
+        var sheet = SheetId.New();
+        var addr = CellAddress.Parse("aa10", sheet);
+        addr.Row.Should().Be(10);
+        addr.Col.Should().Be(27);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("A")]
+    [InlineData("1")]
+    [InlineData("A1B")]
+    [InlineData("A999999999999999999999")]
+    public void TryParse_InvalidA1Notation_ReturnsFalse(string input)
+    {
+        CellAddress.TryParse(input, SheetId.New(), out _).Should().BeFalse();
+    }
+
+    [Fact]
     public void ColumnNameToNumber_A_Returns1()
     {
         CellAddress.ColumnNameToNumber("A").Should().Be(1);
@@ -48,6 +68,28 @@ public class CellAddressTests
     public void ColumnNameToNumber_AA_Returns27()
     {
         CellAddress.ColumnNameToNumber("AA").Should().Be(27);
+    }
+
+    [Fact]
+    public void ColumnNameToNumber_RepeatedLowercaseCalls_DoNotAllocate()
+    {
+        CellAddress.ColumnNameToNumber("xfd").Should().Be(CellAddress.MaxCol);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 100_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        uint result = 0;
+        for (var i = 0; i < repetitions; i++)
+            result = CellAddress.ColumnNameToNumber("xfd");
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.Should().Be(CellAddress.MaxCol);
+        Console.WriteLine(
+            $"ColumnNameToNumber lowercase repeated {repetitions:N0}x: {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(1_000);
     }
 
     [Fact]
@@ -67,6 +109,63 @@ public class CellAddressTests
         var sheet = SheetId.New();
         var addr = new CellAddress(sheet, 7, 2);
         addr.ToA1().Should().Be("B7");
+    }
+
+    [Theory]
+    [InlineData(1u, 1u, "A1")]
+    [InlineData(CellAddress.MaxRow, CellAddress.MaxCol, "XFD1048576")]
+    public void ToA1_FormatsExcelBounds(uint row, uint col, string expected)
+    {
+        var sheet = SheetId.New();
+        var addr = new CellAddress(sheet, row, col);
+
+        addr.ToA1().Should().Be(expected);
+    }
+
+    [Fact]
+    public void ToA1_RepeatedCalls_AllocateOnlyResultStrings()
+    {
+        var sheet = SheetId.New();
+        var addr = new CellAddress(sheet, CellAddress.MaxRow, CellAddress.MaxCol);
+        addr.ToA1().Should().Be("XFD1048576");
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 100_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        string result = "";
+        for (var i = 0; i < repetitions; i++)
+            result = addr.ToA1();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.Should().Be("XFD1048576");
+        Console.WriteLine(
+            $"ToA1 repeated {repetitions:N0}x: {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(6_500_000);
+    }
+
+    [Fact]
+    public void NumberToColumnName_RepeatedCalls_AllocateOnlyResultStrings()
+    {
+        CellAddress.NumberToColumnName(CellAddress.MaxCol).Should().Be("XFD");
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 100_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        string result = "";
+        for (var i = 0; i < repetitions; i++)
+            result = CellAddress.NumberToColumnName(CellAddress.MaxCol);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.Should().Be("XFD");
+        Console.WriteLine(
+            $"NumberToColumnName repeated {repetitions:N0}x: {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(5_500_000);
     }
 }
 
@@ -177,6 +276,41 @@ public class WorkbookTests
         wb.ActiveSheetIndex.Should().BeNull();
         wb.FirstVisibleSheetIndex.Should().BeNull();
     }
+
+    [Fact]
+    public void MoveSheet_RemapsWorkbookViewIndexesForMovedSheets()
+    {
+        var wb = new Workbook();
+        var first = wb.AddSheet("First");
+        var second = wb.AddSheet("Second");
+        var third = wb.AddSheet("Third");
+        wb.ActiveSheetIndex = 0;
+        wb.FirstVisibleSheetIndex = 2;
+
+        wb.MoveSheet(0, 2);
+
+        wb.Sheets.Select(sheet => sheet.Id).Should().Equal(second.Id, third.Id, first.Id);
+        wb.ActiveSheetIndex.Should().Be(2);
+        wb.FirstVisibleSheetIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void MoveSheet_RemapsWorkbookViewIndexesWhenAnotherSheetMovesAcrossThem()
+    {
+        var wb = new Workbook();
+        var first = wb.AddSheet("First");
+        var second = wb.AddSheet("Second");
+        var third = wb.AddSheet("Third");
+        var fourth = wb.AddSheet("Fourth");
+        wb.ActiveSheetIndex = 1;
+        wb.FirstVisibleSheetIndex = 2;
+
+        wb.MoveSheet(3, 0);
+
+        wb.Sheets.Select(sheet => sheet.Id).Should().Equal(fourth.Id, first.Id, second.Id, third.Id);
+        wb.ActiveSheetIndex.Should().Be(2);
+        wb.FirstVisibleSheetIndex.Should().Be(3);
+    }
 }
 
 public class SheetTests
@@ -212,6 +346,30 @@ public class SheetTests
         var found  = sheet.GetMergeRegion(target);
         found.Should().NotBeNull("cell at row 500 col 1 is inside a merge region");
         found!.Value.Start.Row.Should().Be(500);
+    }
+
+    [Fact]
+    public void GetMergeRegion_DoesNotExpandTallMergedRegionsPerCell()
+    {
+        var sheet = new Sheet(SheetId.New(), "Test");
+        var region = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
+        sheet.AddMergedRegion(region);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+
+        var found = sheet.GetMergeRegion(new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
+
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        found.Should().Be(region);
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(200));
     }
 
     [Fact]
@@ -265,6 +423,25 @@ public class SheetTests
     }
 
     [Fact]
+    public void GetUsedRange_KeepsCachedBoundsAfterInteriorCellsChange()
+    {
+        var sheet = new Sheet(SheetId.New(), "Test");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("start"));
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 20), new TextValue("interior"));
+        sheet.SetCell(new CellAddress(sheet.Id, 20, 30), new TextValue("end"));
+        sheet.GetUsedRange().Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 20, 30)));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 20), new TextValue("updated"));
+        sheet.ClearCell(new CellAddress(sheet.Id, 10, 20));
+
+        sheet.GetUsedRange().Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 20, 30)));
+    }
+
+    [Fact]
     public void GetUsedRange_RepeatedCallsReuseCachedBounds()
     {
         var sheet = new Sheet(SheetId.New(), "Large");
@@ -295,6 +472,45 @@ public class SheetTests
             new CellAddress(sheet.Id, 200, 100)));
         Console.WriteLine(
             $"GetUsedRange cached repeated {repetitions}x over {sheet.CellCount:N0} cells: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(1_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
+    }
+
+    [Fact]
+    public void GetUsedRange_InterleavedInteriorWritesReuseCachedBounds()
+    {
+        var sheet = new Sheet(SheetId.New(), "Large");
+        for (uint row = 1; row <= 200; row++)
+        {
+            for (uint col = 1; col <= 100; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row + col));
+        }
+
+        var expected = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 200, 100));
+        sheet.GetUsedRange().Should().Be(expected);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 10_000;
+        var replacement = new NumberValue(123);
+        var address = new CellAddress(sheet.Id, 100, 50);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        GridRange? range = null;
+        for (var i = 0; i < repetitions; i++)
+        {
+            sheet.SetCell(address, replacement);
+            range = sheet.GetUsedRange();
+        }
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        range.Should().Be(expected);
+        Console.WriteLine(
+            $"GetUsedRange interleaved interior writes {repetitions}x over {sheet.CellCount:N0} cells: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
         allocated.Should().BeLessThan(1_000);
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
     }
@@ -334,6 +550,43 @@ public class CellAddressBoundsTests
         // the early-exit guard; the result must exceed MaxCol but not wrap.
         var result = CellAddress.ColumnNameToNumber("ZZZZZZZ");
         result.Should().BeGreaterThan(CellAddress.MaxCol, "long column names must return a value > MaxCol, not an overflow-wrapped one");
+    }
+}
+
+public class GridRangeTests
+{
+    [Fact]
+    public void Constructor_NormalizesStartAndEnd()
+    {
+        var sheet = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheet, 10, 5),
+            new CellAddress(sheet, 3, 2));
+
+        range.Start.Should().Be(new CellAddress(sheet, 3, 2));
+        range.End.Should().Be(new CellAddress(sheet, 10, 5));
+    }
+
+    [Fact]
+    public void Parse_ReturnsNormalizedRange()
+    {
+        var sheet = SheetId.New();
+
+        var range = GridRange.Parse("C4:A1", sheet);
+
+        range.Start.Should().Be(new CellAddress(sheet, 1, 1));
+        range.End.Should().Be(new CellAddress(sheet, 4, 3));
+    }
+
+    [Fact]
+    public void Parse_InvalidRangeSeparator_ThrowsFormatException()
+    {
+        var sheet = SheetId.New();
+
+        var act = () => GridRange.Parse("A1:B2:C3", sheet);
+
+        act.Should().Throw<FormatException>()
+            .WithMessage("Invalid range notation:*");
     }
 }
 

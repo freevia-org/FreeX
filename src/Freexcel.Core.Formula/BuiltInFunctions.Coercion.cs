@@ -122,12 +122,31 @@ public static partial class BuiltInFunctions
 
     private static double RoundWithExcelDigits(double number, int digits)
     {
+        if (TryToExcelDecimal(number, out var decimalNumber) && digits <= 28)
+        {
+            if (digits >= 0)
+                return (double)Math.Round(decimalNumber, digits, MidpointRounding.AwayFromZero);
+
+            var decimalFactor = DecimalPower10(-digits);
+            if (decimalFactor is not null)
+                return (double)(Math.Round(decimalNumber / decimalFactor.Value, 0, MidpointRounding.AwayFromZero) * decimalFactor.Value);
+        }
+
         if (digits >= 0)
             return Math.Round(number, digits, MidpointRounding.AwayFromZero);
 
         double factor = Math.Pow(10, -digits);
         if (!double.IsFinite(factor)) return 0.0;
         return Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor;
+    }
+
+    private static decimal? DecimalPower10(int exponent)
+    {
+        if (exponent is < 0 or > 28) return null;
+        decimal result = 1m;
+        for (var i = 0; i < exponent; i++)
+            result *= 10m;
+        return result;
     }
 
     private static int CompareScalar(ScalarValue a, ScalarValue b)

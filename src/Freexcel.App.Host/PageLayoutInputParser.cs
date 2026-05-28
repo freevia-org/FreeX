@@ -88,86 +88,28 @@ public static class PageLayoutInputParser
 
     public static bool TryParseRepeatRows(string input, out WorksheetRepeatRange? range)
     {
-        range = null;
         var normalized = input.Trim();
         if (IsClearInput(normalized))
+        {
+            range = null;
             return true;
+        }
 
         var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1 && TryParseRepeatRowToken(parts[0], out var single))
-        {
-            if (!IsValidRepeatRow(single))
-                return false;
-
-            range = new WorksheetRepeatRange(single, single);
-            return true;
-        }
-
-        if (parts.Length == 2 &&
-            TryParseRepeatRowToken(parts[0], out var start) &&
-            TryParseRepeatRowToken(parts[1], out var end))
-        {
-            if (!IsValidRepeatRow(start) || !IsValidRepeatRow(end))
-                return false;
-
-            range = new WorksheetRepeatRange(Math.Min(start, end), Math.Max(start, end));
-            return true;
-        }
-
-        return false;
+        return TryParseRepeatRange(parts, TryParseRepeatRowToken, IsValidRepeatRow, out range);
     }
 
     public static bool TryParseRepeatColumns(string input, out WorksheetRepeatRange? range)
     {
-        range = null;
         var normalized = input.Trim();
         if (IsClearInput(normalized))
+        {
+            range = null;
             return true;
+        }
 
         var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1)
-        {
-            try
-            {
-                var token = NormalizeAbsoluteReferenceToken(parts[0]);
-                if (!TryParseRepeatColumnToken(token, out var single))
-                    return false;
-
-                if (!IsValidRepeatColumn(single))
-                    return false;
-
-                range = new WorksheetRepeatRange(single, single);
-                return true;
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
-        }
-
-        if (parts.Length == 2)
-        {
-            try
-            {
-                var startToken = NormalizeAbsoluteReferenceToken(parts[0]);
-                var endToken = NormalizeAbsoluteReferenceToken(parts[1]);
-                if (!TryParseRepeatColumnToken(startToken, out var start) ||
-                    !TryParseRepeatColumnToken(endToken, out var end))
-                    return false;
-
-                if (!IsValidRepeatColumn(start) || !IsValidRepeatColumn(end))
-                    return false;
-
-                range = new WorksheetRepeatRange(Math.Min(start, end), Math.Max(start, end));
-                return true;
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
-        }
-
-        return false;
+        return TryParseRepeatRange(parts, TryParseNormalizedRepeatColumnToken, IsValidRepeatColumn, out range);
     }
 
     public static bool TryParseOptionalPrintArea(string input, SheetId sheetId, out GridRange? printArea)
@@ -304,6 +246,36 @@ public static class PageLayoutInputParser
     private static bool IsValidRepeatColumn(uint column) =>
         column is > 0 and <= CellAddress.MaxCol;
 
+    private static bool TryParseRepeatRange(
+        string[] parts,
+        TryParseRepeatToken tryParseToken,
+        Func<uint, bool> isValid,
+        out WorksheetRepeatRange? range)
+    {
+        range = null;
+        if (parts.Length is not 1 and not 2)
+            return false;
+
+        try
+        {
+            if (!tryParseToken(parts[0], out var start) || !isValid(start))
+                return false;
+
+            var end = start;
+            if (parts.Length == 2 && (!tryParseToken(parts[1], out end) || !isValid(end)))
+                return false;
+
+            range = new WorksheetRepeatRange(Math.Min(start, end), Math.Max(start, end));
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private delegate bool TryParseRepeatToken(string token, out uint value);
+
     private static bool TryParseRepeatRowToken(string token, out uint row) =>
         TryParseR1C1RowReference(token, out row) ||
         uint.TryParse(NormalizeAbsoluteReferenceToken(token), out row);
@@ -323,6 +295,9 @@ public static class PageLayoutInputParser
         return true;
     }
 
+    private static bool TryParseNormalizedRepeatColumnToken(string token, out uint column) =>
+        TryParseRepeatColumnToken(NormalizeAbsoluteReferenceToken(token), out column);
+
     private static string NormalizeAbsoluteReferenceToken(string token) =>
         token.Trim().TrimStart('$');
 
@@ -332,42 +307,9 @@ public static class PageLayoutInputParser
     private static bool TryParseAbsoluteCellReference(string token, SheetId sheetId, out CellAddress address)
     {
         address = default;
-        var normalized = NormalizeAbsoluteCellReferenceToken(token);
+        var normalized = AbsoluteCellReferenceNormalizer.Normalize(token);
         return normalized is not null && CellAddress.TryParse(normalized, sheetId, out address) ||
                TryParseR1C1CellReference(token, sheetId, out address);
-    }
-
-    private static string? NormalizeAbsoluteCellReferenceToken(string token)
-    {
-        var value = token.AsSpan().Trim();
-        if (value.IsEmpty)
-            return null;
-
-        Span<char> buffer = stackalloc char[value.Length];
-        var index = 0;
-        var write = 0;
-
-        if (value[index] == '$')
-            index++;
-
-        var columnStart = index;
-        while (index < value.Length && char.IsLetter(value[index]))
-            buffer[write++] = value[index++];
-
-        if (index == columnStart)
-            return null;
-
-        if (index < value.Length && value[index] == '$')
-            index++;
-
-        var rowStart = index;
-        while (index < value.Length && char.IsDigit(value[index]))
-            buffer[write++] = value[index++];
-
-        if (index == rowStart || index != value.Length)
-            return null;
-
-        return new string(buffer[..write]);
     }
 
     private static bool TryParseR1C1CellReference(string token, SheetId sheetId, out CellAddress address)

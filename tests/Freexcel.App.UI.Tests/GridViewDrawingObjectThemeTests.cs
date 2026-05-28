@@ -425,6 +425,20 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectHitTesting_UsesIndexedReverseLoops()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.ObjectDrag.cs"));
+        var hitTestBlock = source[
+            source.IndexOf("private (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) HitTestDrawingObject", StringComparison.Ordinal)..
+            source.IndexOf("private static bool ContainsInclusive", StringComparison.Ordinal)];
+
+        hitTestBlock.Should().Contain("for (var i = TextBoxes.Count - 1; i >= 0; i--)");
+        hitTestBlock.Should().Contain("for (var i = Pictures.Count - 1; i >= 0; i--)");
+        hitTestBlock.Should().Contain("for (var i = DrawingShapes.Count - 1; i >= 0; i--)");
+        hitTestBlock.Should().NotContain(".Reverse()");
+    }
+
+    [Fact]
     public void GridObjectDragPlanner_CalculatesMoveResizeAndHandleTargets()
     {
         var start = new Rect(10, 20, 80, 40);

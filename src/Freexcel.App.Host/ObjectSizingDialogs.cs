@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -83,9 +82,7 @@ public sealed class ObjectSizeDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _heightBox.Focus();
-        _heightBox.SelectAll();
-        Keyboard.Focus(_heightBox);
+        DialogFocus.FocusAndSelect(_heightBox);
     }
 
     private TextBox ResolveInvalidSizeInput()
@@ -105,9 +102,7 @@ public sealed class ObjectSizeDialog : Window
 
     private static void FocusInvalidSizeInput(TextBox textBox)
     {
-        textBox.Focus();
-        textBox.SelectAll();
-        Keyboard.Focus(textBox);
+        DialogFocus.FocusAndSelect(textBox);
     }
 
     private void WidthBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -231,9 +226,7 @@ public sealed class RotationDialog : Window
 
     private void FocusInvalidRotationInput()
     {
-        _rotationBox.Focus();
-        _rotationBox.SelectAll();
-        Keyboard.Focus(_rotationBox);
+        DialogFocus.FocusAndSelect(_rotationBox);
     }
 }
 
@@ -295,9 +288,7 @@ public sealed class PictureCropDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _cropLeftBox.Focus();
-        _cropLeftBox.SelectAll();
-        Keyboard.Focus(_cropLeftBox);
+        DialogFocus.FocusAndSelect(_cropLeftBox);
     }
 
     private TextBox ResolveInvalidCropInput(string? error)
@@ -319,9 +310,7 @@ public sealed class PictureCropDialog : Window
 
     private static void FocusInvalidCropInput(TextBox textBox)
     {
-        textBox.Focus();
-        textBox.SelectAll();
-        Keyboard.Focus(textBox);
+        DialogFocus.FocusAndSelect(textBox);
     }
 
     private StackPanel CreateCropContent(Action accept)

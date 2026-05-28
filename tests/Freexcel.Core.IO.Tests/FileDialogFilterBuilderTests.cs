@@ -7,6 +7,34 @@ namespace Freexcel.Core.IO.Tests;
 public sealed class FileDialogFilterBuilderTests
 {
     [Fact]
+    public void BuildOpenFilter_WithNoOpenFormats_ReturnsAllFilesFilter()
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new FakeAdapter([
+                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: false, CanSave: false)
+            ])
+        };
+
+        FileDialogFilterBuilder.BuildOpenFilter(adapters)
+            .Should().Be("All files (*.*)|*.*");
+    }
+
+    [Fact]
+    public void BuildSaveFilter_WithNoSaveFormats_ReturnsEmptyFilter()
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new FakeAdapter([
+                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+            ])
+        };
+
+        FileDialogFilterBuilder.BuildSaveFilter(adapters)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildOpenFilter_IncludesAllOpenExtensionsGroupedByFormat()
     {
         var adapters = new IFileAdapter[]
@@ -132,6 +160,8 @@ public sealed class FileDialogFilterBuilderTests
     [Theory]
     [InlineData("xlsx", ".xlsx")]
     [InlineData(" .CSV ", ".CSV")]
+    [InlineData("*.XLSX", ".XLSX")]
+    [InlineData(" *.csv ", ".csv")]
     [InlineData(".fxl", ".fxl")]
     [InlineData("   ", "")]
     public void FileFormatResolver_NormalizesExtensionsForFilterAndAdapterMatching(string extension, string expected)
@@ -178,7 +208,7 @@ public sealed class FileDialogFilterBuilderTests
 
     [Theory]
     [InlineData("xlsx", typeof(XlsxFileAdapter), ".xlsx")]
-    [InlineData(".CSV", typeof(CsvFileAdapter), ".csv")]
+    [InlineData("*.CSV", typeof(CsvFileAdapter), ".csv")]
     [InlineData(".xml", typeof(SpreadsheetXmlFileAdapter), ".xml")]
     [InlineData(".fxl", typeof(NativeJsonAdapter), ".fxl")]
     public void FindSaveAdapter_RealAdaptersResolveOnlySaveCapableFormats(

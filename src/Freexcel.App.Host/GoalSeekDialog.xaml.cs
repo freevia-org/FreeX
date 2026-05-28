@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -39,9 +38,7 @@ public partial class GoalSeekDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        SetCellBox.Focus();
-        SetCellBox.SelectAll();
-        Keyboard.Focus(SetCellBox);
+        DialogFocus.FocusAndSelect(SetCellBox);
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
@@ -70,9 +67,7 @@ public partial class GoalSeekDialog : Window
     private void FocusInvalidInput(string error)
     {
         var target = ResolveInvalidInputTarget(error);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private TextBox ResolveInvalidInputTarget(string error)
@@ -95,9 +90,7 @@ public partial class GoalSeekDialog : Window
         var target = targetName == nameof(SetCellBox) ? SetCellBox : ChangingCellBox;
         RangeSelectionRequest = CreateRangeSelectionRequest(GetRangeSelectionTarget(targetName), target.Text);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     public void ApplyRangeSelection(GoalSeekRangeSelectionTarget target, CellAddress address)
@@ -107,9 +100,7 @@ public partial class GoalSeekDialog : Window
             : ChangingCellBox;
 
         textBox.Text = address.ToA1();
-        textBox.Focus();
-        textBox.SelectAll();
-        Keyboard.Focus(textBox);
+        DialogFocus.FocusAndSelect(textBox);
     }
 
     public static GoalSeekRangeSelectionRequest CreateRangeSelectionRequest(

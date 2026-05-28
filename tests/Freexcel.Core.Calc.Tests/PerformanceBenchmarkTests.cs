@@ -167,6 +167,80 @@ public class PerformanceBenchmarkTests
     }
 
     [Fact]
+    public void Benchmark_ExactFormulaChainRecalcOrder_AvoidsPrecedentDedupeAllocation()
+    {
+        var graph = new DependencyGraph();
+        var sheetId = SheetId.New();
+        var root = new CellAddress(sheetId, 1, 1);
+        var previous = root;
+        const uint formulaCount = 1_000;
+        const int iterations = 100;
+
+        for (uint row = 2; row <= formulaCount + 1; row++)
+        {
+            var current = new CellAddress(sheetId, row, 1);
+            graph.SetDependencies(current, [previous]);
+            previous = current;
+        }
+
+        graph.GetRecalcOrder([root]);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var plan = graph.GetRecalcOrder([root]);
+            if (plan.OrderedCells.Count != formulaCount || plan.CyclicCells.Count != 0)
+                throw new Xunit.Sdk.XunitException("Formula chain recalc order should include every downstream formula exactly once.");
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Exact formula chain recalc order: {iterations} iterations, {formulaCount:N0} formulas, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes allocated, " +
+            $"{allocated / iterations:N0} bytes/iteration");
+
+        (allocated / iterations).Should().BeLessThan(
+            240_000,
+            "exact-only formula chains should not allocate a dedupe HashSet for each formula precedent");
+    }
+
+    [Fact]
+    public void Benchmark_IdleRecalcWithoutChangedOrVolatileCells_IsAllocationFree()
+    {
+        var workbook = new Workbook();
+        workbook.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        const int iterations = 10_000;
+
+        engine.Recalculate(workbook, []);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var report = engine.Recalculate(workbook, []);
+            if (report.RecalculatedCells.Count != 0 ||
+                report.Errors.Count != 0 ||
+                report.CyclicCells.Count != 0)
+            {
+                throw new Xunit.Sdk.XunitException("Idle recalc should not report recalculated cells, errors, or cycles.");
+            }
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Idle recalc: {iterations:N0} iterations, {sw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
+
+        allocated.Should().BeLessThan(
+            1_024,
+            "idle recalculation should bypass dependency traversal collection allocation");
+    }
+
+    [Fact]
     public void Benchmark_LargeRangeDependencyRebuild_UsesCompactRangeTracking()
     {
         var workbook = new Workbook("Benchmark");

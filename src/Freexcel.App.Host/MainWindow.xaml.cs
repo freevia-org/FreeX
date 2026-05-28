@@ -66,6 +66,7 @@ public partial class MainWindow : Window
     private bool _endMode;
     private bool _dragSelectActive;
     private bool _dragSelectAddsAdditionalRange;
+    private bool _dragSelectStatusRefreshPending;
     private Freexcel.App.UI.SplitPaneRegion _activeSplitPaneRegion = Freexcel.App.UI.SplitPaneRegion.BottomRight;
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
     private readonly List<FormulaTraceArrow> _formulaTraceArrows = [];
@@ -91,11 +92,14 @@ public partial class MainWindow : Window
     private string? _lastRibbonAdaptiveAppliedStateKey;
     private string? _ribbonAdaptiveControlCacheKey;
     private StackPanel? _ribbonAdaptiveControlCachePanel;
+    private ScrollViewer? _ribbonAdaptiveScrollViewerCache;
     private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;
     private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;
     private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
     private string? _lastRibbonCollapsedFootprintMode;
     private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
+    private bool _ribbonAdaptiveStateDiffInvalidated;
+    private bool _ribbonResizeCompactFallbackPending;
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;
@@ -180,6 +184,7 @@ public partial class MainWindow : Window
         SheetGrid.RowAutoFitRequested += OnRowAutoFitRequested;
         SheetGrid.ColumnResizing += OnColumnResizing;
         SheetGrid.RowResizing    += OnRowResizing;
+        SheetGrid.ResizeCanceled += OnResizeCanceled;
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;

@@ -75,6 +75,46 @@ public class AutofillCommandTests
     }
 
     [Fact]
+    public void FillNumberSeries_Up_ContinuesStepFromSourceRange()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(7));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 4, 1));
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(3));
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void FillNumberSeries_Left_ContinuesStepFromSourceRange()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new NumberValue(11));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 3),
+            new CellAddress(sheet.Id, 1, 4));
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetValue(1, 2).Should().Be(new NumberValue(5));
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
     public void FillDateSeries_Down_ContinuesDayStepFromSourceRange()
     {
         var (_, sheet, ctx) = Setup();
@@ -146,6 +186,60 @@ public class AutofillCommandTests
         new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
 
         sheet.GetCell(2, 1)!.FormulaText.Should().Be("$A$1+B2");
+    }
+
+    [Fact]
+    public void FillFormula_Up_DecrementsRowReferences()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(source, Cell.FromFormula("A3+B3"));
+
+        var sourceRange = new GridRange(source, source);
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetCell(2, 1)!.FormulaText.Should().Be("A2+B2");
+        sheet.GetCell(1, 1)!.FormulaText.Should().Be("A1+B1");
+    }
+
+    [Fact]
+    public void FillFormula_Left_DecrementsColumnReferences()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(source, Cell.FromFormula("C1+D1"));
+
+        var sourceRange = new GridRange(source, source);
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetCell(1, 2)!.FormulaText.Should().Be("B1+C1");
+        sheet.GetCell(1, 1)!.FormulaText.Should().Be("A1+B1");
+    }
+
+    [Fact]
+    public void Autofill_RejectsDetachedFillRange()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(source, new NumberValue(10));
+        var target = new CellAddress(sheet.Id, 4, 1);
+
+        var outcome = new AutofillCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new GridRange(target, target)).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("adjacent");
+        sheet.GetCell(target).Should().BeNull();
     }
 
     [Fact]

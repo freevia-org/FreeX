@@ -32,7 +32,10 @@ public sealed class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
-        reader.ReadToEnd().Should().Contain("Alpha");
+        var xml = reader.ReadToEnd();
+        xml.Should().Contain("Alpha");
+        xml.Should().Contain("<ss:Workbook");
+        xml.Should().Contain("xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\"");
     }
 
     [Fact]
@@ -44,6 +47,143 @@ public sealed class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         transformed.Position.Should().Be(0);
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputSettings_PreservesCDataSections()
+    {
+        using var source = StreamFromString("<rows><row note=\"A &lt; B &amp; C\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" cdata-section-elements="note" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <worksheet>
+                  <note><xsl:value-of select="row/@note" /></note>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("<note><![CDATA[A < B & C]]></note>");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputEncoding_PreservesUtf16Output()
+    {
+        using var source = StreamFromString("<rows><row name=\"Delta\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" encoding="utf-16" />
+              <xsl:template match="/rows">
+                <worksheet>
+                  <cell><xsl:value-of select="row/@name" /></cell>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        var bytes = transformed.ToArray();
+        bytes.Should().StartWith(Encoding.Unicode.GetPreamble());
+        Encoding.Unicode.GetString(bytes).Should()
+            .Contain("encoding=\"utf-16\"")
+            .And.Contain("<cell>Delta</cell>");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputDeclaration_PreservesStandaloneFlag()
+    {
+        using var source = StreamFromString("<rows><row name=\"Echo\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" standalone="yes" />
+              <xsl:template match="/rows">
+                <worksheet>
+                  <cell><xsl:value-of select="row/@name" /></cell>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .StartWith("<?xml")
+            .And.Contain("standalone=\"yes\"")
+            .And.Contain("<cell>Echo</cell>");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputDeclaration_CanBeOmitted()
+    {
+        using var source = StreamFromString("<rows><row name=\"Hotel\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <worksheet>
+                  <cell><xsl:value-of select="row/@name" /></cell>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .StartWith("<worksheet>")
+            .And.Contain("<cell>Hotel</cell>");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetTextOutput_PreservesRawText()
+    {
+        using var source = StreamFromString("<rows><row name=\"India &amp; Juliet\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="text" />
+              <xsl:template match="/rows">
+                <xsl:value-of select="row/@name" />
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Be("India & Juliet");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_IdentityTransform_PreservesXmlSpaceTextWhitespace()
+    {
+        using var source = StreamFromString("<rows><row xml:space=\"preserve\">  Foxtrot  </row></rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("<row xml:space=\"preserve\">  Foxtrot  </row>");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_IdentityTransform_PreservesCommentsAndProcessingInstructions()
+    {
+        using var source = StreamFromString("<rows><?freexcel keep=\"true\"?><!--keep me--><row name=\"Golf\" /></rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var xml = reader.ReadToEnd();
+        xml.Should().Contain("<?freexcel keep=\"true\"?>");
+        xml.Should().Contain("<!--keep me-->");
     }
 
     [Fact]

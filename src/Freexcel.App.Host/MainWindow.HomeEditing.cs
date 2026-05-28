@@ -93,15 +93,19 @@ public partial class MainWindow
 
     private void FillSeriesMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        // Basic: fill a linear series starting from selected cell
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        var startVal = sheet.GetValue(range.Start.Row, range.Start.Col) as NumberValue;
-        if (startVal is null) { _messageService.ShowWarning("Select a cell with a numeric value to start a series."); return; }
+        var startValue = sheet.GetValue(range.Start.Row, range.Start.Col);
+        if (startValue is not NumberValue and not DateTimeValue)
+        {
+            _messageService.ShowWarning("Select a numeric or date cell to start a series.", "Fill Series");
+            return;
+        }
+
+
         var dialog = new FillSeriesStepDialog { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        var step = dialog.Result.Step;
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Fill Series",
@@ -111,7 +115,10 @@ public partial class MainWindow
                     var currentSheet = _workbook.GetSheet(_currentSheetId);
                     List<(CellAddress Address, Cell NewCell)> edits = currentSheet is null
                         ? []
-                        : FillSeriesPlanner.BuildLinearSeriesEdits(currentSheet, currentRange, dialog.Result.Step);
+                        : FillSeriesPlanner.BuildSeriesEdits(
+                            currentSheet,
+                            currentRange,
+                            dialog.Result);
                     var targetSheetIds = CurrentGroupedEditSheetIds();
                     return targetSheetIds.Count > 1
                         ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
@@ -303,10 +310,9 @@ public partial class MainWindow
     private void ClearCommentsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Clear Comments",
-                range,
-                currentRange => new ClearCommentsCommand(_currentSheetId, currentRange)))
+                sheetId => new ClearCommentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
             return;
 
         UpdateViewport();
@@ -315,10 +321,19 @@ public partial class MainWindow
     private void ClearHyperlinksMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Clear Hyperlinks",
-                range,
-                currentRange => new ClearHyperlinksCommand(_currentSheetId, currentRange)))
+                sheetId => new ClearHyperlinksCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+            return;
+        UpdateViewport();
+    }
+
+    private void RemoveHyperlinks()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Remove Hyperlinks",
+                sheetId => new RemoveHyperlinksCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
             return;
         UpdateViewport();
     }

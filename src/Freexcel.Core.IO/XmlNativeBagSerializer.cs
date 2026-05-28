@@ -117,7 +117,7 @@ internal static class XmlNativeBagSerializer
                     continue;
                 try
                 {
-                    target.Add(XElement.Parse(childXml));
+                    target.Add(XElement.Parse(childXml, LoadOptions.PreserveWhitespace));
                 }
                 catch { }
             }

@@ -125,7 +125,7 @@ public sealed class RotatePictureCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture was not found.");
 
         _previousRotationDegrees = picture.RotationDegrees;
-        picture.RotationDegrees = Normalize(_rotationDegrees);
+        picture.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [picture.Anchor]);
     }
@@ -139,11 +139,6 @@ public sealed class RotatePictureCommand : IWorkbookCommand
         _applied = false;
     }
 
-    private static double Normalize(double value)
-    {
-        var normalized = value % 360;
-        return normalized < 0 ? normalized + 360 : normalized;
-    }
 }
 
 public sealed class SetPictureLockAspectRatioCommand : IWorkbookCommand

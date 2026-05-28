@@ -30,11 +30,12 @@ public sealed class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
         var setup = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("// Pass 1: backgrounds", StringComparison.Ordinal)];
+            source.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
 
-        setup.Should().Contain("BuildRenderCellStyleLookup(Viewport!.Cells)");
-        setup.Should().Contain("BuildRenderRowMetricLookup(Viewport.RowMetrics)");
-        setup.Should().Contain("BuildRenderColumnMetricLookup(Viewport.ColMetrics)");
+        setup.Should().Contain("GetRenderCellLookups(viewport)");
+        setup.Should().Contain("var styleLookup = lookups.Styles;");
+        setup.Should().Contain("var rowLookupAll = lookups.Rows;");
+        setup.Should().Contain("var colLookupAll = lookups.Columns;");
         setup.Should().NotContain(".Where(");
         setup.Should().NotContain(".ToDictionary(");
 
@@ -113,6 +114,23 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void CalculateRowHeaderWidth_AvoidsLinqMetricScan()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
+        var calculateRowHeaderWidth = source[
+            source.IndexOf("public static double CalculateRowHeaderWidth", StringComparison.Ordinal)..
+            source.IndexOf("private const double ResizeHitZone", StringComparison.Ordinal)];
+
+        calculateRowHeaderWidth.Should().Contain("foreach (var row in viewport.RowMetrics)");
+        calculateRowHeaderWidth.Should().Contain("if (row.Row > maxRow)");
+        calculateRowHeaderWidth.Should().NotContain(".Max(");
+        GridView.CalculateRowHeaderWidth(new ViewportModel(
+            [],
+            [new RowMetric(999, 20, 0), new RowMetric(1_000, 20, 20)],
+            [])).Should().Be(36);
+    }
+
+    [Fact]
     public void RenderSparklines_AvoidsEmptyRenderAllocations()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Overlays.Sparklines.cs"));
@@ -178,6 +196,22 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void LiveResizeContinuation_ReusesPixelsPerDipForSyntheticHeaders()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var continuation = rendering[
+            rendering.IndexOf("private void RenderLiveResizeContinuation", StringComparison.Ordinal)..
+            rendering.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)];
+
+        continuation.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        continuation.Should().Contain("RenderLiveResizeColumnContinuation(dc, gridRight, gridTop, pixelsPerDip);");
+        continuation.Should().Contain("RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom, pixelsPerDip);");
+        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect, pixelsPerDip);");
+        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, (++lastRow).ToString(CultureInfo.InvariantCulture), headerRect, pixelsPerDip);");
+        continuation.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
+    }
+
+    [Fact]
     public void RenderCaches_AreClassLevelFieldsNotLocalAllocations()
     {
         var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
@@ -186,6 +220,24 @@ public sealed class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<CellBorder, Pen> _borderPenCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<Brush, Pen> _underlinePenCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();");
+        gridViewSource.Should().Contain("private RenderCellLookupCache? _renderCellLookupCache;");
+        gridViewSource.Should().Contain("private OccupiedCellLookupCache? _occupiedCellLookupCache;");
+    }
+
+    [Fact]
+    public void DefaultTextLayouts_AreCachedAcrossRenderPasses()
+    {
+        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.TextLayoutCache.cs"));
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var headers = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.Headers.cs"));
+
+        cacheSource.Should().Contain("private FormattedText GetDefaultFormattedText");
+        cacheSource.Should().Contain("_defaultTextLayoutCache.TryGetValue");
+        cacheSource.Should().Contain("_defaultTextLayoutCache.Count >= DefaultTextLayoutCacheLimit");
+        rendering.Should().Contain("style is null");
+        rendering.Should().Contain("GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)");
+        headers.Should().Contain("GetDefaultFormattedText(");
     }
 
     [Fact]
@@ -194,7 +246,7 @@ public sealed class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("// Pass 1: backgrounds", StringComparison.Ordinal)];
+            source.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("_brushCache.Clear();");
         renderCells.Should().Contain("_borderPenCache.Clear();");
@@ -204,6 +256,46 @@ public sealed class GridViewRenderPerformanceTests
         renderCells.Should().NotContain("new Dictionary<CellBorder, Pen>");
         renderCells.Should().NotContain("new Dictionary<CellTypefaceKey, Typeface>");
         renderCells.Should().NotContain("new Dictionary<Brush, Pen>");
+    }
+
+    [Fact]
+    public void RenderCells_CachesStableViewportLookupsAcrossRepaints()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.RenderLookupCache.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Properties.cs"));
+        var renderCells = rendering[
+            rendering.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("GetRenderCellLookups(viewport)");
+        rendering.Should().Contain("ReferenceEquals(cached.Viewport, viewport)");
+        rendering.Should().Contain("GetOccupiedCellLookup(viewport, EditingCell)");
+        cacheSource.Should().Contain("private sealed record RenderCellLookupCache");
+        cacheSource.Should().Contain("private sealed record OccupiedCellLookupCache");
+        propertiesSource.Should().Contain("OnViewportChanged");
+        propertiesSource.Should().Contain("grid.ClearRenderLookupCache();");
+    }
+
+    [Fact]
+    public void RenderCells_BatchesDefaultBackgroundAndGridLines()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("// Pass 2: explicit cell borders", StringComparison.Ordinal)];
+        var backgroundBase = source[
+            source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)..
+            source.IndexOf("private static Dictionary<(uint Row, uint Col), CellStyle>", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("var rowHeaderWidth = ActualRowHeaderWidth;");
+        renderCells.Should().Contain("var columnHeaderHeight = EffectiveColHeaderHeight;");
+        renderCells.Should().Contain("RenderCellBackgroundBase(dc, rowHeaderWidth, columnHeaderHeight);");
+        renderCells.Should().Contain("if (bg is null && !merge.HasValue)");
+        renderCells.Should().Contain("continue;");
+        backgroundBase.Should().Contain("dc.DrawRectangle(Brushes.White, null, rect);");
+        backgroundBase.Should().Contain("foreach (var row in Viewport.RowMetrics)");
+        backgroundBase.Should().Contain("foreach (var column in Viewport.ColMetrics)");
     }
 
     [Fact]
@@ -228,6 +320,28 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("_brushCache, _borderPenCache");
+    }
+
+    [Fact]
+    public void RenderCells_ReusesFillPatternPensWithinRenderPass()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var cellStyles = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.CellStyles.cs"));
+        var renderCells = rendering[
+            rendering.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
+        var drawFillPattern = cellStyles[
+            cellStyles.IndexOf("private static void DrawFillPattern", StringComparison.Ordinal)..
+            cellStyles.IndexOf("private static Pen FillPatternPenForCellColor", StringComparison.Ordinal)];
+
+        gridViewSource.Should().Contain("private readonly Dictionary<CellColor, Pen> _fillPatternPenCache = new();");
+        renderCells.Should().Contain("_fillPatternPenCache.Clear();");
+        rendering.Should().Contain("DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache)");
+        cellStyles.Should().Contain("FillPatternPenForCellColor(color, brushCache, fillPatternPenCache)");
+        cellStyles.Should().Contain("pen.Freeze();");
+        drawFillPattern.Should().NotContain("new Pen(");
+        drawFillPattern.Should().NotContain("new CellStyle");
     }
 
     [Fact]
@@ -329,6 +443,23 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCharts_ReusesCachedChartImagesAcrossRepaints()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
+        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.DrawingObjects.cs"));
+        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.ChartRenderCache.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Properties.cs"));
+
+        gridViewSource.Should().Contain("private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();");
+        drawingSource.Should().Contain("GetCachedChartImage(chart, Viewport, WorkbookTheme)");
+        drawingSource.Should().NotContain("ChartRenderer.Render(chart, Viewport, WorkbookTheme)");
+        cacheSource.Should().Contain("_chartRenderCache.TryGetValue");
+        cacheSource.Should().Contain("ChartRenderer.Render(chart, viewport, theme)");
+        propertiesSource.Should().Contain("OnChartRenderCacheInputChanged");
+        propertiesSource.Should().Contain("grid.ClearChartRenderCache();");
+    }
+
+    [Fact]
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Overlays.cs"));
@@ -342,6 +473,25 @@ public sealed class GridViewRenderPerformanceTests
         renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.RowMetrics)");
         renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.ColMetrics)");
         renderManualPageBreaks.Should().NotContain("FirstOrDefault");
+    }
+
+    [Fact]
+    public void FormulaTraceLayoutPlanner_AvoidsPerArrowLinqMetricScans()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "FormulaTraceLayoutPlanner.cs"));
+        var calculateLayouts = source[
+            source.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateLayouts", StringComparison.Ordinal)..
+            source.IndexOf("public static CellAddress? HitTestMarker", StringComparison.Ordinal)];
+        var tryGetCellRect = source[
+            source.IndexOf("private static bool TryGetCellRect", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryGetMarkerHit", StringComparison.Ordinal)];
+
+        calculateLayouts.Should().Contain("new List<FormulaTraceArrowLayout>(arrows.Count)");
+        tryGetCellRect.Should().Contain("FindRowMetric(viewport.RowMetrics, address.Row)");
+        tryGetCellRect.Should().Contain("FindColMetric(viewport.ColMetrics, address.Col)");
+        tryGetCellRect.Should().NotContain("FirstOrDefault");
+        source.Should().Contain("private static RowMetric? FindRowMetric");
+        source.Should().Contain("private static ColMetric? FindColMetric");
     }
 
     [Fact]

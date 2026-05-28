@@ -59,7 +59,34 @@ public sealed class FormulaParityCatalogTests
         var inScopeCount = ReadDocumentedFunctions()
             .Count(entry => !entry.Status.StartsWith("Excluded", StringComparison.OrdinalIgnoreCase));
 
-        inScopeCount.Should().Be(479);
+        inScopeCount.Should().Be(487);
+    }
+
+    [Fact]
+    public void FunctionParityDocument_CategorySummariesMatchFunctionRows()
+    {
+        var documented = ReadDocumentedFunctionsBySection();
+        var summary = ReadCoverageSummary();
+
+        foreach (var (category, counts) in summary.Where(entry => entry.Key != "TOTAL"))
+        {
+            var section = SummaryCategoryToSection(category);
+            documented.Should().ContainKey(section);
+
+            var rows = documented[section];
+            counts.Implemented.Should().Be(rows.Count(entry => entry.Status.StartsWith("Implemented", StringComparison.OrdinalIgnoreCase)), category);
+            counts.Partial.Should().Be(rows.Count(entry => entry.Status.StartsWith("Partial", StringComparison.OrdinalIgnoreCase)), category);
+            counts.NotImplemented.Should().Be(rows.Count(entry => entry.Status.StartsWith("Not Implemented", StringComparison.OrdinalIgnoreCase)), category);
+            counts.Excluded.Should().Be(rows.Count(entry => entry.Status.StartsWith("Excluded", StringComparison.OrdinalIgnoreCase)), category);
+            counts.InScopeTotal.Should().Be(rows.Count(entry => !entry.Status.StartsWith("Excluded", StringComparison.OrdinalIgnoreCase)), category);
+        }
+
+        var totals = summary["TOTAL"];
+        totals.Implemented.Should().Be(summary.Where(entry => entry.Key != "TOTAL").Sum(entry => entry.Value.Implemented));
+        totals.Partial.Should().Be(summary.Where(entry => entry.Key != "TOTAL").Sum(entry => entry.Value.Partial));
+        totals.NotImplemented.Should().Be(summary.Where(entry => entry.Key != "TOTAL").Sum(entry => entry.Value.NotImplemented));
+        totals.Excluded.Should().Be(summary.Where(entry => entry.Key != "TOTAL").Sum(entry => entry.Value.Excluded));
+        totals.InScopeTotal.Should().Be(summary.Where(entry => entry.Key != "TOTAL").Sum(entry => entry.Value.InScopeTotal));
     }
 
     private static IReadOnlyList<(string Name, string Status)> ReadDocumentedFunctions()
@@ -84,6 +111,92 @@ public sealed class FormulaParityCatalogTests
 
         return rows;
     }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<(string Name, string Status)>> ReadDocumentedFunctionsBySection()
+    {
+        var path = FindWorkspaceFile("docs", "FUNCTION_PARITY.md");
+        var sections = new Dictionary<string, List<(string Name, string Status)>>(StringComparer.Ordinal);
+        var currentSection = "";
+        var rowPattern = new Regex(@"^\|\s*(?<name>[A-Z][A-Z0-9._]*)\s*\|\s*(?<status>[^|]+?)\s*\|$");
+        var sectionPattern = new Regex(@"^##\s+(?<section>.+?)\s*$");
+
+        foreach (var line in File.ReadLines(path))
+        {
+            var sectionMatch = sectionPattern.Match(line);
+            if (sectionMatch.Success)
+            {
+                currentSection = sectionMatch.Groups["section"].Value.Trim();
+                sections.TryAdd(currentSection, []);
+                continue;
+            }
+
+            var rowMatch = rowPattern.Match(line);
+            if (!rowMatch.Success)
+                continue;
+
+            var name = rowMatch.Groups["name"].Value.Trim();
+            var status = rowMatch.Groups["status"].Value.Trim();
+            if (name == "Function" || name == "TOTAL")
+                continue;
+
+            sections[currentSection].Add((name, status));
+        }
+
+        return sections.ToDictionary(
+            entry => entry.Key,
+            entry => (IReadOnlyList<(string Name, string Status)>)entry.Value,
+            StringComparer.Ordinal);
+    }
+
+    private static IReadOnlyDictionary<string, CoverageSummaryCounts> ReadCoverageSummary()
+    {
+        var path = FindWorkspaceFile("docs", "FUNCTION_PARITY.md");
+        var rows = new Dictionary<string, CoverageSummaryCounts>(StringComparer.Ordinal);
+        var inSummary = false;
+
+        foreach (var line in File.ReadLines(path))
+        {
+            if (line.StartsWith("## Coverage Summary", StringComparison.Ordinal))
+            {
+                inSummary = true;
+                continue;
+            }
+
+            if (inSummary && line.StartsWith("## ", StringComparison.Ordinal))
+                break;
+            if (!inSummary || !line.StartsWith("|", StringComparison.Ordinal))
+                continue;
+
+            var cells = line.Trim().Trim('|').Split('|').Select(cell => cell.Trim().Trim('*')).ToArray();
+            if (cells.Length != 7 || cells[0] == "---" || cells[0] == "Category")
+                continue;
+
+            rows[cells[0]] = new CoverageSummaryCounts(
+                ParseCount(cells[1]),
+                ParseCount(cells[2]),
+                ParseCount(cells[3]),
+                ParseCount(cells[4]),
+                ParseCount(cells[5]));
+        }
+
+        return rows;
+    }
+
+    private static string SummaryCategoryToSection(string category) => category switch
+    {
+        "Lambda / Advanced" => "Lambda / Advanced Calculation",
+        _ => category
+    };
+
+    private static int ParseCount(string value) =>
+        int.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+
+    private readonly record struct CoverageSummaryCounts(
+        int Implemented,
+        int Partial,
+        int NotImplemented,
+        int Excluded,
+        int InScopeTotal);
 
     private static string FindWorkspaceFile(params string[] relativeParts)
     {

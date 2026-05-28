@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -51,9 +50,7 @@ internal static class DialogReferencePicker
         string automationName,
         Action<DialogReferencePickerRequest>? requestSelection = null)
     {
-        textBox.Focus();
-        textBox.SelectAll();
-        Keyboard.Focus(textBox);
+        DialogFocus.FocusAndSelect(textBox);
         var request = new DialogReferencePickerRequest(textBox, automationName, textBox.Text);
         requestSelection?.Invoke(request);
         return request;

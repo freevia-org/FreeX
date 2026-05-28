@@ -50,9 +50,7 @@ public sealed partial class FindReplaceDialog : Window
     private void FocusSearchBox()
     {
         var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void FindNext_Click(object sender, RoutedEventArgs e) => FindNext();

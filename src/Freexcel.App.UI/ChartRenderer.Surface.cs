@@ -1,3 +1,4 @@
+using System.Globalization;
 using OxyPlot;
 using OxyPlot.Axes;
 using OxyPlot.Series;
@@ -64,7 +65,7 @@ public static partial class ChartRenderer
             for (uint row = dataStartRow; row <= endRow; row++, categoryIndex++)
             {
                 if (cellLookup.TryGetValue((row, col), out var cell) &&
-                    double.TryParse(cell.DisplayText, out var value))
+                    double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
                     surfaceValues.Add((categoryIndex, scanSeriesIndex, value));
             }
         }

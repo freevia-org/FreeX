@@ -27,9 +27,6 @@ public static partial class BuiltInFunctions
         var number = ToNumber(value);
         if (!double.IsFinite(number)) return ErrorValue.Num;
         if (digits > 15) return new NumberValue(number);
-        if (digits >= 0)
-            return NumberResult(Math.Round(number, digits, MidpointRounding.AwayFromZero));
-
         return NumberResult(RoundWithExcelDigits(number, digits));
     }
 
@@ -1028,7 +1025,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(n) || !double.IsFinite(m)) return ErrorValue.Num;
         if (m == 0) return new NumberValue(0);
         if (n != 0 && (n < 0) != (m < 0)) return ErrorValue.Num;
-        return NumberResult(Math.Round(n / m, MidpointRounding.AwayFromZero) * m);
+        return NumberResult(MroundWithExcelDigits(n, m));
     }
 
     private static ScalarValue Combin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1157,5 +1154,27 @@ public static partial class BuiltInFunctions
         int iabs = (int)abs;
         if (iabs % 2 != 0) iabs++;
         return new NumberValue(sign * iabs);
+    }
+
+    private static double MroundWithExcelDigits(double number, double multiple)
+    {
+        if (!TryToExcelDecimal(number, out var n) || !TryToExcelDecimal(multiple, out var m) || m == 0m)
+            return Math.Round(number / multiple, MidpointRounding.AwayFromZero) * multiple;
+
+        var quotient = n / m;
+        var roundedQuotient = Math.Round(quotient, 0, MidpointRounding.AwayFromZero);
+        return (double)(roundedQuotient * m);
+    }
+
+    private static bool TryToExcelDecimal(double value, out decimal result)
+    {
+        result = 0m;
+        if (!double.IsFinite(value)) return false;
+
+        return decimal.TryParse(
+            value.ToString("G15", System.Globalization.CultureInfo.InvariantCulture),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out result);
     }
 }

@@ -85,8 +85,6 @@ public sealed class SheetNameDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _nameBox.Focus();
-        _nameBox.SelectAll();
-        Keyboard.Focus(_nameBox);
+        DialogFocus.FocusAndSelect(_nameBox);
     }
 }

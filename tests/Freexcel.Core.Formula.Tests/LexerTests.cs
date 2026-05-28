@@ -31,6 +31,16 @@ public class LexerTests
         tokens[1].Type.Should().Be(TokenType.OpenParen);
     }
 
+    [Theory]
+    [InlineData("=_xlfn.XLOOKUP(\"B\",A1:A2,B1:B2)", "XLOOKUP")]
+    [InlineData("=_xlfn._xlws.FILTER(A1:A2,B1:B2)", "FILTER")]
+    public void Tokenizes_ExcelFutureFunctionPrefixesAsCanonicalFunctionNames(string formula, string expectedName)
+    {
+        var tokens = new Lexer(formula).Tokenize();
+        tokens[0].Type.Should().Be(TokenType.FunctionName);
+        tokens[0].Value.Should().Be(expectedName);
+    }
+
     [Fact]
     public void Tokenizes_ComparisonOperators()
     {

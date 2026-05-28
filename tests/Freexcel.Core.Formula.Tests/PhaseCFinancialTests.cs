@@ -619,6 +619,12 @@ public class PhaseCFinancialTests
     public void Dollarde_FractionZero_ReturnsDivByZeroError()
         => CalcError("DOLLARDE(1.02,0)").Should().Be("#DIV/0!");
 
+    [Theory]
+    [InlineData("DOLLARDE(1.02,-0.5)")]
+    [InlineData("DOLLARFR(1.0625,-0.5)")]
+    public void DollarFractionHelpers_NegativeFractionBeforeTruncation_ReturnsNumError(string formula)
+        => CalcError(formula).Should().Be("#NUM!");
+
     // ── DISC ─────────────────────────────────────────────────────────────
 
     [Fact]

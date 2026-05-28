@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -96,8 +95,6 @@ public sealed class CustomViewNameDialog : Window
 
     private void FocusNameInput()
     {
-        _nameBox.Focus();
-        _nameBox.SelectAll();
-        Keyboard.Focus(_nameBox);
+        DialogFocus.FocusAndSelect(_nameBox);
     }
 }

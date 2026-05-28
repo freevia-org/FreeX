@@ -62,11 +62,11 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         _snapshot = PivotCalculatedItemsSnapshot.Capture(pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
 
-        Replace(pivotTable.RowFields, _rowFields);
-        Replace(pivotTable.ColumnFields, _columnFields);
-        Replace(pivotTable.PageFields, _pageFields);
-        Replace(pivotTable.CalculatedFields, _calculatedFields);
-        Replace(pivotTable.CalculatedItems, _calculatedItems);
+        PivotTableCommandCollections.Replace(pivotTable.RowFields, _rowFields);
+        PivotTableCommandCollections.Replace(pivotTable.ColumnFields, _columnFields);
+        PivotTableCommandCollections.Replace(pivotTable.PageFields, _pageFields);
+        PivotTableCommandCollections.Replace(pivotTable.CalculatedFields, _calculatedFields);
+        PivotTableCommandCollections.Replace(pivotTable.CalculatedItems, _calculatedItems);
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
@@ -93,12 +93,6 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         _targetSnapshot = null;
     }
 
-    private static void Replace<T>(List<T> target, IReadOnlyList<T> source)
-    {
-        target.Clear();
-        target.AddRange(source);
-    }
-
     private sealed record PivotCalculatedItemsSnapshot(
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
@@ -116,11 +110,11 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
 
         public void Restore(PivotTableModel pivotTable)
         {
-            Replace(pivotTable.RowFields, RowFields);
-            Replace(pivotTable.ColumnFields, ColumnFields);
-            Replace(pivotTable.PageFields, PageFields);
-            Replace(pivotTable.CalculatedFields, CalculatedFields);
-            Replace(pivotTable.CalculatedItems, CalculatedItems);
+            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
+            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
+            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
+            PivotTableCommandCollections.Replace(pivotTable.CalculatedFields, CalculatedFields);
+            PivotTableCommandCollections.Replace(pivotTable.CalculatedItems, CalculatedItems);
         }
     }
 }

@@ -15,12 +15,16 @@ public sealed class ExcelParityModernTextTests
     [InlineData("=TEXTBEFORE(\"Socrates\",\" \",,,1)", "Socrates")]
     [InlineData("=TEXTBEFORE(\"abc\",\"\",1)", "")]
     [InlineData("=TEXTBEFORE(\"abc\",\"\",-1)", "abc")]
+    [InlineData("=TEXTBEFORE(\"\",\"x\")", "")]
+    [InlineData("=TEXTBEFORE(\"\",\"\",-1)", "")]
     [InlineData("=TEXTAFTER(\"Little Red Riding Hood's red hood\",\"Red\")", " Riding Hood's red hood")]
     [InlineData("=TEXTAFTER(\"Little red Riding Hood's red hood\",\"red\",2)", " hood")]
     [InlineData("=TEXTAFTER(\"Little red Riding Hood's red hood\",\"red\",-2)", " Riding Hood's red hood")]
     [InlineData("=TEXTAFTER(\"Marcus Aurelius\",\" \",,,1)", "Aurelius")]
     [InlineData("=TEXTAFTER(\"abc\",\"\",1)", "abc")]
     [InlineData("=TEXTAFTER(\"abc\",\"\",-1)", "")]
+    [InlineData("=TEXTAFTER(\"\",\"x\")", "")]
+    [InlineData("=TEXTAFTER(\"\",\"\",1)", "")]
     public void TextBeforeAfter_ReturnDocumentedExcelResults(string formula, string expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
@@ -45,6 +49,14 @@ public sealed class ExcelParityModernTextTests
     public void TextBeforeAfter_ReturnNaWhenDelimiterIsMissing(string formula)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Theory]
+    [InlineData("=TEXTBEFORE(1/0,NA())")]
+    [InlineData("=TEXTAFTER(1/0,NA())")]
+    public void TextBeforeAfter_DirectTextArgumentErrorTakesPrecedenceOverDelimiterErrors(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.DivByZero);
     }
 
     [Theory]
@@ -76,6 +88,44 @@ public sealed class ExcelParityModernTextTests
 
         AssertColumn(_eval.Evaluate("=TEXTBEFORE(A1:A2,\"-\")", sheet), new TextValue("a"), new TextValue("c"));
         AssertColumn(_eval.Evaluate("=TEXTAFTER(A1:A2,\"-\")", sheet), new TextValue("b"), new TextValue("d"));
+    }
+
+    [Theory]
+    [InlineData("=LENB(\"A\u754cB\")", 4)]
+    [InlineData("=FINDB(\"\u754c\",\"A\u754cB\")", 2)]
+    [InlineData("=SEARCHB(\"?B\",\"A\u754cB\")", 2)]
+    public void ByteTextFunctions_CountDbcsCharactersAsTwoBytes(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=LEFTB(\"A\u754cB\",3)", "A\u754c")]
+    [InlineData("=RIGHTB(\"A\u754cB\",3)", "\u754cB")]
+    [InlineData("=MIDB(\"A\u754cB\",2,2)", "\u754c")]
+    [InlineData("=REPLACEB(\"A\u754cB\",2,2,\"X\")", "AXB")]
+    public void ByteTextFunctions_SliceAndReplaceByDbcsByteOffsets(string formula, string expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void ByteTextFunctions_SpillOverTextRanges()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("A\u754c")),
+            (2, 1, new TextValue("BC")));
+
+        AssertColumn(_eval.Evaluate("=LENB(A1:A2)", sheet), new NumberValue(3), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=LEFTB(A1:A2,2)", sheet), new TextValue("A"), new TextValue("BC"));
+    }
+
+    [Theory]
+    [InlineData("=CODE(\"\u0100\")")]
+    [InlineData("=CODE(\"\u754c\")")]
+    public void Code_ReturnsAnsiReplacementCodeForUnmappableUnicodeCharacters(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(63));
     }
 
     [Fact]
@@ -127,6 +177,15 @@ public sealed class ExcelParityModernTextTests
     public void Textsplit_DefaultPaddingIsNa()
     {
         var rv = _eval.Evaluate("=TEXTSPLIT(\"a,b;c\",\",\",\";\")", Sheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rv.At(2, 2).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Textsplit_ExplicitlyOmittedPaddingDefaultsToNa()
+    {
+        var rv = _eval.Evaluate("=TEXTSPLIT(\"a,b;c\",\",\",\";\",,,)", Sheet())
             .Should().BeOfType<RangeValue>().Subject;
 
         rv.At(2, 2).Should().Be(ErrorValue.NA);
@@ -245,9 +304,25 @@ public sealed class ExcelParityModernTextTests
     }
 
     [Fact]
+    public void ValueToText_TreatsSingleCellReferencesAsScalarValues()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("Hello")),
+            (2, 1, new BoolValue(true)),
+            (3, 1, ErrorValue.Value));
+
+        _eval.Evaluate("=VALUETOTEXT(A1,0)", sheet).Should().Be(new TextValue("Hello"));
+        _eval.Evaluate("=VALUETOTEXT(A1,1)", sheet).Should().Be(new TextValue("\"Hello\""));
+        _eval.Evaluate("=VALUETOTEXT(A2,1)", sheet).Should().Be(new TextValue("TRUE"));
+        _eval.Evaluate("=VALUETOTEXT(A3,1)", sheet).Should().Be(new TextValue("#VALUE!"));
+    }
+
+    [Fact]
     public void ValueToText_FormatsErrorsAndArrayValues()
     {
         _eval.Evaluate("=VALUETOTEXT(NA(),0)", Sheet()).Should().Be(new TextValue("#N/A"));
+        _eval.Evaluate("=VALUETOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},0)", Sheet())
+            .Should().Be(new TextValue("TRUE, #VALUE!, 1234, Seattle"));
         _eval.Evaluate("=VALUETOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},1)", Sheet())
             .Should().Be(new TextValue("{TRUE,#VALUE!;1234,\"Seattle\"}"));
     }
@@ -340,6 +415,9 @@ public sealed class ExcelParityModernTextTests
     [Theory]
     [InlineData("=REGEXREPLACE(\"abc-123-def\",\"[0-9]+\",\"###\")", "abc-###-def")]
     [InlineData("=REGEXREPLACE(\"one two three\",\"\\w+\",\"X\",2)", "one X three")]
+    [InlineData("=REGEXREPLACE(\"one two three\",\"\\w+\",\"X\",-1)", "one two X")]
+    [InlineData("=REGEXREPLACE(\"one two three\",\"\\w+\",\"X\",-2)", "one X three")]
+    [InlineData("=REGEXREPLACE(\"one two three\",\"\\w+\",\"X\",-4)", "one two three")]
     [InlineData("=REGEXREPLACE(\"John Smith\",\"(\\w+)\\s+(\\w+)\",\"$2, $1\")", "Smith, John")]
     [InlineData("=REGEXREPLACE(\"Alpha\",\"alpha\",\"beta\",0,1)", "beta")]
     [InlineData("=REGEXREPLACE(\"abc\",\"[0-9]+\",\"#\",1)", "abc")]
@@ -348,13 +426,25 @@ public sealed class ExcelParityModernTextTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
     }
 
+    [Fact]
+    public void RegexReplace_NegativeOccurrenceSpillsOverTextRanges()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("A-100-B-200")),
+            (2, 1, new TextValue("C-300-D-400")));
+
+        AssertColumn(
+            _eval.Evaluate("=REGEXREPLACE(A1:A2,\"[0-9]+\",\"#\",-1)", sheet),
+            new TextValue("A-100-B-#"),
+            new TextValue("C-300-D-#"));
+    }
+
     [Theory]
     [InlineData("=REGEXTEST(\"abc\",\"[\")")]
     [InlineData("=REGEXEXTRACT(\"abc\",\"[\",0)")]
     [InlineData("=REGEXREPLACE(\"abc\",\"[\",\"x\")")]
     [InlineData("=REGEXTEST(\"abc\",\"abc\",2)")]
     [InlineData("=REGEXEXTRACT(\"abc\",\"abc\",3)")]
-    [InlineData("=REGEXREPLACE(\"abc\",\"abc\",\"x\",-1)")]
     public void RegexFunctions_ReturnValueForInvalidPatternOrMode(string formula)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);

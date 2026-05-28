@@ -81,7 +81,7 @@ public partial class PivotValueFieldSettingsDialog : Window
     private void FocusInvalidNumberFormatInput()
     {
         ValueFieldTabs.SelectedItem = NumberFormatTab;
-        FocusAndSelect(NumberFormatBox);
+        DialogFocus.FocusAndSelect(NumberFormatBox);
     }
 
     private void FocusInvalidShowValuesAsInput(int? baseFieldIndex)
@@ -94,14 +94,7 @@ public partial class PivotValueFieldSettingsDialog : Window
             return;
         }
 
-        FocusAndSelect(BaseItemBox);
-    }
-
-    private static void FocusAndSelect(System.Windows.Controls.TextBox target)
-    {
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(BaseItemBox);
     }
 
     private void NumberFormatPresetBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -115,9 +108,7 @@ public partial class PivotValueFieldSettingsDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        CustomNameBox.Focus();
-        CustomNameBox.SelectAll();
-        Keyboard.Focus(CustomNameBox);
+        DialogFocus.FocusAndSelect(CustomNameBox);
     }
 
     private void NumberFormatButton_Click(object sender, RoutedEventArgs e)

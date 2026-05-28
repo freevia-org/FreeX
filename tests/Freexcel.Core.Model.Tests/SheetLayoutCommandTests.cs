@@ -125,6 +125,17 @@ public class SheetLayoutCommandTests
     }
 
     [Fact]
+    public void SetRowHeightCommand_AcceptsExcelMaximumHeight()
+    {
+        var (_, sheet, ctx) = Setup();
+
+        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, 409.5).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.RowHeights[1].Should().Be(409.5);
+    }
+
+    [Fact]
     public void SetRowHeightCommand_WithNullHeightClearsOverridesAndUndoRestores()
     {
         var (_, sheet, ctx) = Setup();
@@ -142,6 +153,41 @@ public class SheetLayoutCommandTests
 
         sheet.RowHeights[1].Should().Be(19);
         sheet.RowHeights[2].Should().Be(21);
+    }
+
+    [Fact]
+    public void SetRowHeightCommand_WithZeroHeightHidesRowsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.RowHeights[1] = 19;
+        sheet.HiddenRows.Add(2);
+
+        var cmd = new SetRowHeightCommand(sheet.Id, 1, 2, height: 0);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.RowHeights.Should().NotContainKey(1);
+        sheet.RowHeights.Should().NotContainKey(2);
+        sheet.HiddenRows.Should().BeEquivalentTo([1u, 2u]);
+
+        cmd.Revert(ctx);
+
+        sheet.RowHeights[1].Should().Be(19);
+        sheet.RowHeights.Should().NotContainKey(2);
+        sheet.HiddenRows.Should().BeEquivalentTo([2u]);
+    }
+
+    [Fact]
+    public void SetRowHeightCommand_WithPositiveHeightUnhidesRows()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.HiddenRows.Add(1);
+
+        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, height: 25).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.RowHeights[1].Should().Be(25);
+        sheet.HiddenRows.Should().NotContain(1);
     }
 
     [Fact]
@@ -167,14 +213,73 @@ public class SheetLayoutCommandTests
     }
 
     [Fact]
-    public void SetColumnWidthCommand_RejectsNonPositiveWidth()
+    public void SetColumnWidthCommand_WithZeroWidthHidesColumnsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.ColumnWidths[1] = 10;
+        sheet.HiddenCols.Add(2);
+
+        var cmd = new SetColumnWidthCommand(sheet.Id, 1, 2, width: 0);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ColumnWidths.Should().NotContainKey(1);
+        sheet.ColumnWidths.Should().NotContainKey(2);
+        sheet.HiddenCols.Should().BeEquivalentTo([1u, 2u]);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnWidths[1].Should().Be(10);
+        sheet.ColumnWidths.Should().NotContainKey(2);
+        sheet.HiddenCols.Should().BeEquivalentTo([2u]);
+    }
+
+    [Fact]
+    public void SetColumnWidthCommand_WithPositiveWidthUnhidesColumns()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.HiddenCols.Add(1);
+
+        var outcome = new SetColumnWidthCommand(sheet.Id, 1, 1, width: 12).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ColumnWidths[1].Should().Be(12);
+        sheet.HiddenCols.Should().NotContain(1);
+    }
+
+    [Fact]
+    public void SetColumnWidthCommand_RejectsNegativeWidth()
     {
         var (_, sheet, ctx) = Setup();
 
-        var outcome = new SetColumnWidthCommand(sheet.Id, 1, 1, 0).Apply(ctx);
+        var outcome = new SetColumnWidthCommand(sheet.Id, 1, 1, -1).Apply(ctx);
 
         outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Contain("positive");
+        outcome.ErrorMessage.Should().Contain("0 to 255");
+        sheet.ColumnWidths.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetRowHeightCommand_RejectsHeightAboveExcelMaximum()
+    {
+        var (_, sheet, ctx) = Setup();
+
+        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, 409.6).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("0 to 409.5");
+        sheet.RowHeights.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetColumnWidthCommand_RejectsWidthAboveExcelMaximum()
+    {
+        var (_, sheet, ctx) = Setup();
+
+        var outcome = new SetColumnWidthCommand(sheet.Id, 1, 1, 255.1).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("0 to 255");
         sheet.ColumnWidths.Should().BeEmpty();
     }
 

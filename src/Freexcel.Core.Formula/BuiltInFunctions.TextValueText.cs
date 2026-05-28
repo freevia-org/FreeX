@@ -12,8 +12,11 @@ public static partial class BuiltInFunctions
         if (!TryGetValueTextFormat(args, out int format, out var error))
             return error;
 
+        if (args[0] is RangeValue { RowCount: 1, ColCount: 1 } singleCellRange)
+            return TextResult(ValueText(singleCellRange.Cells[0, 0], format == 1));
+
         if (args[0] is RangeValue range)
-            return TextResult(StrictArrayText(range));
+            return TextResult(format == 1 ? StrictArrayText(range) : ConciseArrayText(range));
 
         return TextResult(ValueText(args[0], format == 1));
     }

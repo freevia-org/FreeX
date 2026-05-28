@@ -4,7 +4,10 @@ param(
     [string]$OutputRoot = "artifacts\releases",
     [string]$Version = "",
     [ValidateSet("SingleFile", "Folder", "Msix")]
-    [string]$PublishMode = "SingleFile"
+    [string]$PublishMode = "SingleFile",
+    [string]$MsixCertificatePath = $env:FREEXCEL_MSIX_CERTIFICATE_PATH,
+    [string]$MsixCertificatePassword = $env:FREEXCEL_MSIX_CERTIFICATE_PASSWORD,
+    [string]$MsixTimestampUrl = $env:FREEXCEL_MSIX_TIMESTAMP_URL
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +16,41 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "src\Freexcel.App.Host\Freexcel.App.Host.csproj"
 $appInfoPath = Join-Path $repoRoot "src\Freexcel.App.Host\AppInfo.cs"
 $appInfo = Get-Content -LiteralPath $appInfoPath -Raw
+
+function ConvertTo-MsixPackageVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DisplayVersion
+    )
+
+    $numericParts = [regex]::Matches($DisplayVersion, '\d+') | ForEach-Object { [int64]$_.Value }
+    if ($numericParts.Count -eq 0) {
+        throw "MSIX packaging requires a numeric version, but '$DisplayVersion' contains no numeric parts."
+    }
+
+    $msixParts = @(0L, 0L, 0L, 0L)
+    for ($i = 0; $i -lt [Math]::Min(4, $numericParts.Count); $i++) {
+        if ($numericParts[$i] -lt 0) {
+            throw "MSIX version part '$($numericParts[$i])' is outside the 0-65535 range."
+        }
+
+        $msixParts[$i] = $numericParts[$i]
+    }
+
+    for ($i = 3; $i -gt 0; $i--) {
+        if ($msixParts[$i] -gt 65535) {
+            $carry = [Math]::Floor($msixParts[$i] / 65536)
+            $msixParts[$i] = $msixParts[$i] % 65536
+            $msixParts[$i - 1] += $carry
+        }
+    }
+
+    if ($msixParts[0] -gt 65535) {
+        throw "MSIX version part '$($msixParts[0])' is outside the 0-65535 range."
+    }
+
+    return ($msixParts | ForEach-Object { [string]$_ }) -join "."
+}
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
     $versionMatch = [regex]::Match($appInfo, 'VersionText\s*=\s*"(?<version>[^"]+)"')
@@ -125,20 +163,7 @@ if ($PublishMode -eq "Msix") {
     [IO.File]::WriteAllBytes((Join-Path $assetsDir "Square44x44Logo.png"), $pngBytes)
     [IO.File]::WriteAllBytes((Join-Path $assetsDir "Square150x150Logo.png"), $pngBytes)
 
-    $numericParts = [regex]::Matches($Version, '\d+') | ForEach-Object { $_.Value }
-    if ($numericParts.Count -eq 0) {
-        throw "MSIX packaging requires a numeric version, but '$Version' contains no numeric parts."
-    }
-
-    $msixParts = @()
-    for ($i = 0; $i -lt 4; $i++) {
-        $part = if ($i -lt $numericParts.Count) { [int]$numericParts[$i] } else { 0 }
-        if ($part -lt 0 -or $part -gt 65535) {
-            throw "MSIX version part '$part' is outside the 0-65535 range."
-        }
-        $msixParts += $part
-    }
-    $msixVersion = $msixParts -join "."
+    $msixVersion = ConvertTo-MsixPackageVersion -DisplayVersion $Version
     $msixExeName = Split-Path -Leaf $launchExePath
 
     $manifestPath = Join-Path $publishDir "AppxManifest.xml"
@@ -193,6 +218,43 @@ if ($PublishMode -eq "Msix") {
     }
     if (-not (Test-Path -LiteralPath $artifactMsixPath)) {
         throw "makeappx did not create $artifactMsixPath"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($MsixCertificatePath)) {
+        if (-not (Test-Path -LiteralPath $MsixCertificatePath)) {
+            throw "MSIX signing certificate was not found at $MsixCertificatePath"
+        }
+
+        $signToolCommand = Get-Command signtool.exe -ErrorAction SilentlyContinue
+        $signToolPath = if ($null -ne $signToolCommand) { $signToolCommand.Source } else { $null }
+        if ($null -eq $signToolPath) {
+            $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+            if (Test-Path -LiteralPath $kitRoot) {
+                $signToolPath = Get-ChildItem -LiteralPath $kitRoot -Recurse -Filter signtool.exe |
+                    Sort-Object FullName -Descending |
+                    Select-Object -First 1 -ExpandProperty FullName
+            }
+        }
+        if ($null -eq $signToolPath) {
+            throw "signtool.exe was not found. Install the Windows SDK to sign MSIX packages."
+        }
+
+        $signArgs = @("sign", "/fd", "SHA256", "/f", $MsixCertificatePath)
+        if (-not [string]::IsNullOrWhiteSpace($MsixCertificatePassword)) {
+            $signArgs += @("/p", $MsixCertificatePassword)
+        }
+        if (-not [string]::IsNullOrWhiteSpace($MsixTimestampUrl)) {
+            $signArgs += @("/tr", $MsixTimestampUrl, "/td", "SHA256")
+        }
+        $signArgs += $artifactMsixPath
+
+        & $signToolPath @signArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "signtool sign failed with exit code $LASTEXITCODE"
+        }
+        Write-Host "Signed $artifactMsixPath"
+    } else {
+        Write-Host "Created unsigned local MSIX; pass -MsixCertificatePath to sign it."
     }
 
     $hash = Get-FileHash -LiteralPath $artifactMsixPath -Algorithm SHA256

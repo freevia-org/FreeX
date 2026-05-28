@@ -83,6 +83,35 @@ public sealed class SetWorksheetViewOptionsCommand : IWorkbookCommand
     }
 }
 
+/// <summary>Sets whether worksheet outline symbols are shown.</summary>
+public sealed class SetWorksheetOutlineSymbolsCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly bool _showOutlineSymbols;
+    private bool? _previousShowOutlineSymbols;
+
+    public string Label => "Show Outline Symbols";
+
+    public SetWorksheetOutlineSymbolsCommand(SheetId sheetId, bool showOutlineSymbols)
+    {
+        _sheetId = sheetId;
+        _showOutlineSymbols = showOutlineSymbols;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        _previousShowOutlineSymbols = sheet.ShowOutlineSymbols;
+        sheet.ShowOutlineSymbols = _showOutlineSymbols;
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        ctx.GetSheet(_sheetId).ShowOutlineSymbols = _previousShowOutlineSymbols;
+    }
+}
+
 /// <summary>Sets worksheet zoom with undo support.</summary>
 public sealed class SetWorksheetZoomCommand : IWorkbookCommand
 {

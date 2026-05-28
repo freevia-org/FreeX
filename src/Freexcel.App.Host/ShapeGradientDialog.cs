@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -77,16 +76,12 @@ public sealed class ShapeGradientDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _startColorBox.Focus();
-        _startColorBox.SelectAll();
-        Keyboard.Focus(_startColorBox);
+        DialogFocus.FocusAndSelect(_startColorBox);
     }
 
     private static void FocusInvalidColorInput(TextBox colorBox)
     {
-        colorBox.Focus();
-        colorBox.SelectAll();
-        Keyboard.Focus(colorBox);
+        DialogFocus.FocusAndSelect(colorBox);
     }
 
     private StackPanel CreateContent()

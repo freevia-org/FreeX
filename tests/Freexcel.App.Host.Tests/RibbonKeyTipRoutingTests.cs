@@ -74,6 +74,20 @@ public sealed class RibbonKeyTipRoutingTests
     }
 
     [Fact]
+    public void ResolveMenuItem_ResolvesExactMenuItemWhenNoLongerPrefixExists()
+    {
+        RunSta(() =>
+        {
+            var first = CreateMenuItem("A");
+            var second = CreateMenuItem("B");
+
+            var resolved = RibbonKeyTipRouting.ResolveMenuItem([first, second], "A");
+
+            resolved.Should().BeSameAs(first);
+        });
+    }
+
+    [Fact]
     public void ResolveMenuItem_ResolvesNestedLeafAfterParentPrefix()
     {
         RunSta(() =>
@@ -85,6 +99,20 @@ public sealed class RibbonKeyTipRoutingTests
             var resolved = RibbonKeyTipRouting.ResolveMenuItem([parent], "HG");
 
             resolved.Should().BeSameAs(child);
+        });
+    }
+
+    [Fact]
+    public void ResolveMenuItem_RejectsDuplicateExactMatches()
+    {
+        RunSta(() =>
+        {
+            var first = CreateMenuItem("C");
+            var second = CreateMenuItem("C");
+
+            var resolved = RibbonKeyTipRouting.ResolveMenuItem([first, second], "C");
+
+            resolved.Should().BeNull("duplicate menu keytips cannot route deterministically");
         });
     }
 

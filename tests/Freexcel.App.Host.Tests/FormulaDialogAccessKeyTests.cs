@@ -46,6 +46,56 @@ public sealed class FormulaDialogAccessKeyTests
     }
 
     [Fact]
+    public void CreateNamesFromSelectionDialog_TryCreateResult_RejectsEmptyLabelSelection()
+    {
+        CreateNamesFromSelectionDialog.TryCreateResult(
+                useTopRow: false,
+                useLeftColumn: false,
+                useBottomRow: false,
+                useRightColumn: false,
+                out _,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Select at least one row or column label position.");
+    }
+
+    [Fact]
+    public void CreateNamesFromSelectionDialog_TryCreateResult_CapturesSelectedLabelPositions()
+    {
+        CreateNamesFromSelectionDialog.TryCreateResult(
+                useTopRow: false,
+                useLeftColumn: true,
+                useBottomRow: false,
+                useRightColumn: true,
+                out var result,
+                out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Should().Be(new CreateNamesFromSelectionDialogResult(
+            UseTopRow: false,
+            UseLeftColumn: true,
+            UseBottomRow: false,
+            UseRightColumn: true));
+    }
+
+    [Fact]
+    public void CreateNamesFromSelectionDialogInvalidSelection_WarnsAndRefocusesTopRowChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateNamesFromSelectionDialog.cs"));
+
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept");
+        source.Should().Contain("if (!TryCreateResult(");
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInitialKeyboardTarget();");
+        source.Should().Contain("DialogResult = true;");
+    }
+
+    [Fact]
     public void EvaluateFormulaDialog_ExposesKeyboardAccessKeysForActions()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));

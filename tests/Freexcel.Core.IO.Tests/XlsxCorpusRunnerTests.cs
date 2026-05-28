@@ -605,7 +605,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(46, "the generated metadata-pass manifest currently declares forty-six deterministic package-retention rows");
+        rows.Should().HaveCount(52, "the generated metadata-pass manifest currently declares fifty-two deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -646,6 +646,62 @@ public class XlsxCorpusRunnerTests
                 options => options.WithStrictOrdering(),
                 row.Id);
         }
+    }
+
+    [Fact]
+    public void GeneratedCfRetentionPackage_RetainsSixteenCfRulesInXml()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-cf-retention-package-003");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        worksheetEntry.Should().NotBeNull("generated-cf-retention-package-003 must contain xl/worksheets/sheet1.xml");
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var cfRules = worksheetXml.Descendants(sheetNs + "cfRule").ToArray();
+        cfRules.Should().HaveCount(16, "generated-cf-retention-package-003 embeds sixteen cfRule elements across its conditionalFormatting blocks");
+    }
+
+    [Fact]
+    public void GeneratedChartSeriesCountPackage_RetainsFiveSeriesInChartXml()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-chart-series-count-003");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var chartEntry = archive.Entries.FirstOrDefault(e => e.FullName.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+        chartEntry.Should().NotBeNull("generated-chart-series-count-003 must contain at least one chart part under xl/charts/");
+
+        XDocument chartXml;
+        using (var stream = chartEntry!.Open())
+            chartXml = XDocument.Load(stream);
+
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var serElements = chartXml.Descendants()
+            .Where(e => e.Name.LocalName == "ser" && e.Name.Namespace == chartNs)
+            .ToArray();
+        serElements.Should().HaveCount(5, "generated-chart-series-count-003 embeds five <c:ser> elements in its chart XML");
+    }
+
+    [Fact]
+    public void GeneratedDvCountPackage_RetainsTenDataValidationRulesInXml()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-dv-count-package-003");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        worksheetEntry.Should().NotBeNull("generated-dv-count-package-003 must contain xl/worksheets/sheet1.xml");
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dvElements = worksheetXml.Descendants(sheetNs + "dataValidation").ToArray();
+        dvElements.Should().HaveCount(10, "generated-dv-count-package-003 embeds ten dataValidation elements in its worksheet XML");
     }
 
     [Theory]

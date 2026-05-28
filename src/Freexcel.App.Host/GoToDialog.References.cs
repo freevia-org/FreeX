@@ -6,22 +6,13 @@ public sealed partial class GoToDialog
 {
     public static bool TryParseAddress(string text, SheetId sheetId, out CellAddress address)
     {
-        try
+        if (CellReferenceInputParser.TryParseCell(text, sheetId, out address))
         {
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                address = default;
-                return false;
-            }
-
-            address = CellAddress.Parse(text.Trim(), sheetId);
             return true;
         }
-        catch
-        {
-            address = default;
-            return false;
-        }
+
+        address = default;
+        return false;
     }
 
     public static IReadOnlyList<string> BuildReferenceChoices(
@@ -80,7 +71,7 @@ public sealed partial class GoToDialog
         }
 
         if (!string.IsNullOrWhiteSpace(text) &&
-            WorkbookRangeTextCodec.TryParse(sheetId, text, _ => null, out range))
+            WorkbookRangeTextCodec.TryParseOnCurrentSheet(sheetId, text, out range))
             return true;
 
         if (definedNames is not null &&

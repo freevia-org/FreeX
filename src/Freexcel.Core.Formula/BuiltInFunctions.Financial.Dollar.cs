@@ -14,14 +14,17 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue DollardeScalar(ScalarValue dollarValue, ScalarValue fractionValue)
     {
-        double f = Math.Truncate(ToNumber(fractionValue));
-        return DollardeScalar(dollarValue, f);
+        double rawFraction = ToNumber(fractionValue);
+        return DollardeScalar(dollarValue, rawFraction);
     }
 
-    private static ScalarValue DollardeScalar(ScalarValue dollarValue, double f)
+    private static ScalarValue DollardeScalar(ScalarValue dollarValue, double rawFraction)
     {
         double d = ToNumber(dollarValue);
-        if (!double.IsFinite(d) || !double.IsFinite(f)) return ErrorValue.Num;
+        if (!double.IsFinite(d) || !double.IsFinite(rawFraction)) return ErrorValue.Num;
+        if (rawFraction < 0) return ErrorValue.Num;
+
+        double f = Math.Truncate(rawFraction);
         if (f < 0) return ErrorValue.Num;
         if (f == 0) return ErrorValue.DivByZero;
         double intPart  = Math.Truncate(d);
@@ -39,14 +42,17 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue DollarfrScalar(ScalarValue dollarValue, ScalarValue fractionValue)
     {
-        double f = Math.Truncate(ToNumber(fractionValue));
-        return DollarfrScalar(dollarValue, f);
+        double rawFraction = ToNumber(fractionValue);
+        return DollarfrScalar(dollarValue, rawFraction);
     }
 
-    private static ScalarValue DollarfrScalar(ScalarValue dollarValue, double f)
+    private static ScalarValue DollarfrScalar(ScalarValue dollarValue, double rawFraction)
     {
         double d = ToNumber(dollarValue);
-        if (!double.IsFinite(d) || !double.IsFinite(f)) return ErrorValue.Num;
+        if (!double.IsFinite(d) || !double.IsFinite(rawFraction)) return ErrorValue.Num;
+        if (rawFraction < 0) return ErrorValue.Num;
+
+        double f = Math.Truncate(rawFraction);
         if (f < 0) return ErrorValue.Num;
         if (f == 0) return ErrorValue.DivByZero;
         double intPart  = Math.Truncate(d);

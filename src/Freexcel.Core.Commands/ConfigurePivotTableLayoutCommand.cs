@@ -47,10 +47,10 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         _snapshot = PivotLayoutSnapshot.Capture(pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
 
-        Replace(pivotTable.RowFields, _rowFields);
-        Replace(pivotTable.ColumnFields, _columnFields);
-        Replace(pivotTable.PageFields, _pageFields);
-        Replace(pivotTable.DataFields, _dataFields);
+        PivotTableCommandCollections.Replace(pivotTable.RowFields, _rowFields);
+        PivotTableCommandCollections.Replace(pivotTable.ColumnFields, _columnFields);
+        PivotTableCommandCollections.Replace(pivotTable.PageFields, _pageFields);
+        PivotTableCommandCollections.Replace(pivotTable.DataFields, _dataFields);
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
         foreach (var chart in sheet.Charts.Where(chart =>
@@ -75,12 +75,6 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         _targetSnapshot = null;
     }
 
-    private static void Replace<T>(List<T> target, IReadOnlyList<T> source)
-    {
-        target.Clear();
-        target.AddRange(source);
-    }
-
     private sealed record PivotLayoutSnapshot(
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
@@ -96,10 +90,10 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
 
         public void Restore(PivotTableModel pivotTable)
         {
-            Replace(pivotTable.RowFields, RowFields);
-            Replace(pivotTable.ColumnFields, ColumnFields);
-            Replace(pivotTable.PageFields, PageFields);
-            Replace(pivotTable.DataFields, DataFields);
+            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
+            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
+            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
+            PivotTableCommandCollections.Replace(pivotTable.DataFields, DataFields);
         }
     }
 }

@@ -77,32 +77,60 @@ public static class ChartTrendlineCalculator
     private static IReadOnlyList<DataPoint> CalculateLinearTrendline(IReadOnlyList<DataPoint> points)
     {
         var n = points.Count;
-        var sumX = points.Sum(point => point.X);
-        var sumY = points.Sum(point => point.Y);
-        var sumXY = points.Sum(point => point.X * point.Y);
-        var sumXX = points.Sum(point => point.X * point.X);
+        var sumX = 0.0;
+        var sumY = 0.0;
+        var sumXY = 0.0;
+        var sumXX = 0.0;
+        var minX = double.PositiveInfinity;
+        var maxX = double.NegativeInfinity;
+        for (var i = 0; i < points.Count; i++)
+        {
+            var point = points[i];
+            sumX += point.X;
+            sumY += point.Y;
+            sumXY += point.X * point.Y;
+            sumXX += point.X * point.X;
+            minX = Math.Min(minX, point.X);
+            maxX = Math.Max(maxX, point.X);
+        }
+
         var denominator = (n * sumXX) - (sumX * sumX);
         if (Math.Abs(denominator) < double.Epsilon)
             return [];
 
         var slope = ((n * sumXY) - (sumX * sumY)) / denominator;
         var intercept = (sumY - (slope * sumX)) / n;
-        var minX = points.Min(point => point.X);
-        var maxX = points.Max(point => point.X);
         return [new DataPoint(minX, intercept + slope * minX), new DataPoint(maxX, intercept + slope * maxX)];
     }
 
     private static IReadOnlyList<DataPoint> CalculateExponentialTrendline(IReadOnlyList<DataPoint> points)
     {
-        var positivePoints = points.Where(point => point.Y > 0).ToList();
-        if (positivePoints.Count < 2)
+        var n = 0;
+        var sumX = 0.0;
+        var sumLogY = 0.0;
+        var sumXLogY = 0.0;
+        var sumXX = 0.0;
+        var minX = double.PositiveInfinity;
+        var maxX = double.NegativeInfinity;
+        for (var i = 0; i < points.Count; i++)
+        {
+            var point = points[i];
+            if (point.Y <= 0)
+                continue;
+
+            var logY = Math.Log(point.Y);
+            n++;
+            sumX += point.X;
+            sumLogY += logY;
+            sumXLogY += point.X * logY;
+            sumXX += point.X * point.X;
+            minX = Math.Min(minX, point.X);
+            maxX = Math.Max(maxX, point.X);
+        }
+
+        if (n < 2)
             return [];
 
-        var n = positivePoints.Count;
-        var sumX = positivePoints.Sum(point => point.X);
-        var sumLogY = positivePoints.Sum(point => Math.Log(point.Y));
-        var sumXLogY = positivePoints.Sum(point => point.X * Math.Log(point.Y));
-        var sumXX = positivePoints.Sum(point => point.X * point.X);
         var denominator = (n * sumXX) - (sumX * sumX);
         if (Math.Abs(denominator) < double.Epsilon)
             return [];
@@ -110,30 +138,43 @@ public static class ChartTrendlineCalculator
         var b = ((n * sumXLogY) - (sumX * sumLogY)) / denominator;
         var logA = (sumLogY - (b * sumX)) / n;
         var a = Math.Exp(logA);
-        var minX = positivePoints.Min(point => point.X);
-        var maxX = positivePoints.Max(point => point.X);
         return [new DataPoint(minX, a * Math.Exp(b * minX)), new DataPoint(maxX, a * Math.Exp(b * maxX))];
     }
 
     private static IReadOnlyList<DataPoint> CalculateLogarithmicTrendline(IReadOnlyList<DataPoint> points)
     {
-        var positiveXPoints = points.Where(point => point.X > 0).ToList();
-        if (positiveXPoints.Count < 2)
+        var n = 0;
+        var sumLogX = 0.0;
+        var sumY = 0.0;
+        var sumLogXY = 0.0;
+        var sumLogXLogX = 0.0;
+        var minX = double.PositiveInfinity;
+        var maxX = double.NegativeInfinity;
+        for (var i = 0; i < points.Count; i++)
+        {
+            var point = points[i];
+            if (point.X <= 0)
+                continue;
+
+            var logX = Math.Log(point.X);
+            n++;
+            sumLogX += logX;
+            sumY += point.Y;
+            sumLogXY += logX * point.Y;
+            sumLogXLogX += logX * logX;
+            minX = Math.Min(minX, point.X);
+            maxX = Math.Max(maxX, point.X);
+        }
+
+        if (n < 2)
             return [];
 
-        var n = positiveXPoints.Count;
-        var sumLogX = positiveXPoints.Sum(point => Math.Log(point.X));
-        var sumY = positiveXPoints.Sum(point => point.Y);
-        var sumLogXY = positiveXPoints.Sum(point => Math.Log(point.X) * point.Y);
-        var sumLogXLogX = positiveXPoints.Sum(point => Math.Log(point.X) * Math.Log(point.X));
         var denominator = (n * sumLogXLogX) - (sumLogX * sumLogX);
         if (Math.Abs(denominator) < double.Epsilon)
             return [];
 
         var slope = ((n * sumLogXY) - (sumLogX * sumY)) / denominator;
         var intercept = (sumY - (slope * sumLogX)) / n;
-        var minX = positiveXPoints.Min(point => point.X);
-        var maxX = positiveXPoints.Max(point => point.X);
         return [
             new DataPoint(minX, intercept + slope * Math.Log(minX)),
             new DataPoint(maxX, intercept + slope * Math.Log(maxX))];
@@ -141,15 +182,33 @@ public static class ChartTrendlineCalculator
 
     private static IReadOnlyList<DataPoint> CalculatePowerTrendline(IReadOnlyList<DataPoint> points)
     {
-        var positivePoints = points.Where(point => point.X > 0 && point.Y > 0).ToList();
-        if (positivePoints.Count < 2)
+        var n = 0;
+        var sumLogX = 0.0;
+        var sumLogY = 0.0;
+        var sumLogXLogY = 0.0;
+        var sumLogXLogX = 0.0;
+        var minX = double.PositiveInfinity;
+        var maxX = double.NegativeInfinity;
+        for (var i = 0; i < points.Count; i++)
+        {
+            var point = points[i];
+            if (point.X <= 0 || point.Y <= 0)
+                continue;
+
+            var logX = Math.Log(point.X);
+            var logY = Math.Log(point.Y);
+            n++;
+            sumLogX += logX;
+            sumLogY += logY;
+            sumLogXLogY += logX * logY;
+            sumLogXLogX += logX * logX;
+            minX = Math.Min(minX, point.X);
+            maxX = Math.Max(maxX, point.X);
+        }
+
+        if (n < 2)
             return [];
 
-        var n = positivePoints.Count;
-        var sumLogX = positivePoints.Sum(point => Math.Log(point.X));
-        var sumLogY = positivePoints.Sum(point => Math.Log(point.Y));
-        var sumLogXLogY = positivePoints.Sum(point => Math.Log(point.X) * Math.Log(point.Y));
-        var sumLogXLogX = positivePoints.Sum(point => Math.Log(point.X) * Math.Log(point.X));
         var denominator = (n * sumLogXLogX) - (sumLogX * sumLogX);
         if (Math.Abs(denominator) < double.Epsilon)
             return [];
@@ -157,8 +216,6 @@ public static class ChartTrendlineCalculator
         var b = ((n * sumLogXLogY) - (sumLogX * sumLogY)) / denominator;
         var logA = (sumLogY - (b * sumLogX)) / n;
         var a = Math.Exp(logA);
-        var minX = positivePoints.Min(point => point.X);
-        var maxX = positivePoints.Max(point => point.X);
         return [
             new DataPoint(minX, a * Math.Pow(minX, b)),
             new DataPoint(maxX, a * Math.Pow(maxX, b))];
@@ -170,11 +227,22 @@ public static class ChartTrendlineCalculator
         if (points.Count < windowSize)
             return [];
 
-        var trendPoints = new List<DataPoint>();
+        var trendPoints = new List<DataPoint>(points.Count - windowSize + 1);
+        var runningTotal = 0.0;
         for (var i = windowSize - 1; i < points.Count; i++)
         {
-            var average = points.Skip(i - windowSize + 1).Take(windowSize).Average(point => point.Y);
-            trendPoints.Add(new DataPoint(points[i].X, average));
+            if (i == windowSize - 1)
+            {
+                for (var windowIndex = 0; windowIndex < windowSize; windowIndex++)
+                    runningTotal += points[windowIndex].Y;
+            }
+            else
+            {
+                runningTotal += points[i].Y;
+                runningTotal -= points[i - windowSize].Y;
+            }
+
+            trendPoints.Add(new DataPoint(points[i].X, runningTotal / windowSize));
         }
 
         return trendPoints;

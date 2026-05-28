@@ -263,6 +263,9 @@ public partial class MainWindow
             case WorksheetContextMenuAction.ClearHyperlinks:
                 ClearHyperlinksMenuItem_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.RemoveHyperlinks:
+                RemoveHyperlinks();
+                break;
             case WorksheetContextMenuAction.ClearContents:
                 ExecuteClearSelection();
                 break;

@@ -21,6 +21,16 @@ public sealed class GoToDialogsTests
         address.Should().Be(new CellAddress(sheetId, 5, 2));
     }
 
+    [Fact]
+    public void TryParseAddress_AcceptsExcelAbsoluteA1Reference()
+    {
+        var sheetId = SheetId.New();
+
+        GoToDialog.TryParseAddress("$B$5", sheetId, out var address).Should().BeTrue();
+
+        address.Should().Be(new CellAddress(sheetId, 5, 2));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("NotACell")]
@@ -69,6 +79,16 @@ public sealed class GoToDialogsTests
         var sheetId = SheetId.New();
 
         GoToDialog.TryParseReferenceRange("A1:C3", sheetId, definedNames: null, out var range).Should().BeTrue();
+
+        range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)));
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_AcceptsExcelAbsoluteA1Range()
+    {
+        var sheetId = SheetId.New();
+
+        GoToDialog.TryParseReferenceRange("$A$1:$C$3", sheetId, definedNames: null, out var range).Should().BeTrue();
 
         range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)));
     }
