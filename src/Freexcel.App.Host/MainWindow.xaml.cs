@@ -7,6 +7,7 @@ using Freexcel.Core.Calc;
 using Freexcel.Core.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
+using Freexcel.App.UI;
 
 namespace Freexcel.App.Host;
 
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
     private readonly ICommandBus _commandBus;
+    private readonly IUserMessageService _messageService;
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
     private readonly IAppDiagnostics? _diagnostics;
@@ -137,6 +139,7 @@ public partial class MainWindow : Window
         IEnumerable<IFileAdapter> fileAdapters,
         WorkbookRef workbookRef,
         Workbook workbook,
+        IUserMessageService messageService,
         IAppDiagnostics? diagnostics = null,
         AppDiagnosticsMetadata? diagnosticsMetadata = null,
         AppDiagnosticsOptions? diagnosticsOptions = null)
@@ -144,6 +147,7 @@ public partial class MainWindow : Window
         _logger = logger;
         _viewportService = viewportService;
         _commandBus = commandBus;
+        _messageService = messageService;
         _recalcEngine = recalcEngine;
         _fileAdapters = fileAdapters;
         _diagnostics = diagnostics;

@@ -24,7 +24,7 @@ public partial class MainWindow
                 ignoredIssues);
             if (issues.Count == 0)
             {
-                MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
+                _messageService.ShowInfo("Spelling check is complete.", "Spell Check");
                 return;
             }
 
@@ -93,8 +93,7 @@ public partial class MainWindow
         var target = GetTargetAltTextObject(_currentSheetId);
         if (target is null)
         {
-            MessageBox.Show("No picture, shape, or text box is anchored at the selected cell.",
-                "Alt Text", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("No picture, shape, or text box is anchored at the selected cell.", "Alt Text");
             return;
         }
 
@@ -150,7 +149,7 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
-        MessageBox.Show($"Comment added to {addr.ToA1()}.", "Comment", MessageBoxButton.OK, MessageBoxImage.Information);
+        _messageService.ShowInfo($"Comment added to {addr.ToA1()}.", "Comment");
     }
 
     private void ReviewNewThreadedCommentBtn_Click(object sender, RoutedEventArgs e)
@@ -245,12 +244,12 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
         {
-            MessageBox.Show("No comments on this sheet.", "Comments", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("No comments on this sheet.", "Comments");
             return;
         }
 
         var text = CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments);
-        MessageBox.Show(text, "Comments", MessageBoxButton.OK, MessageBoxImage.Information);
+        _messageService.ShowInfo(text, "Comments");
     }
 
     private void NavigateComment(bool previous)
@@ -258,7 +257,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
         {
-            MessageBox.Show("No comments on this sheet.", "Comments", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("No comments on this sheet.", "Comments");
             return;
         }
 
@@ -295,7 +294,7 @@ public partial class MainWindow
             return;
         }
 
-        MessageBox.Show(action.SuccessMessage, action.Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        _messageService.ShowInfo(action.SuccessMessage, action.Title);
         RefreshSheetProtectionUi();
     }
 
@@ -313,7 +312,7 @@ public partial class MainWindow
         if (!TryExecuteCommand(action.Command, action.Title))
             return;
 
-        MessageBox.Show(action.SuccessMessage, action.Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        _messageService.ShowInfo(action.SuccessMessage, action.Title);
         RefreshWorkbookProtectionUi();
         RefreshSheetTabs();
     }
@@ -356,7 +355,7 @@ public partial class MainWindow
         if (!TryExecuteCommand(command, "Allow Edit Ranges"))
             return;
 
-        MessageBox.Show(successMessage, "Allow Edit Ranges", MessageBoxButton.OK, MessageBoxImage.Information);
+        _messageService.ShowInfo(successMessage, "Allow Edit Ranges");
     }
 
     private void ApplyAllowEditRangeSelection(AllowEditRangeDialog? dialog, AllowEditRangeSelectionRequest request)
@@ -406,11 +405,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                $"Failed to open Windows Share:\n{ex.Message}",
-                "Share Workbook",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            _messageService.ShowError($"Failed to open Windows Share:\n{ex.Message}", "Share Workbook");
         }
     }
 

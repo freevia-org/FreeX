@@ -13,11 +13,7 @@ public partial class MainWindow
     {
         var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString() ?? "This command";
         var message = DeferredCommandMessages.WorkbookTheme(commandName);
-        MessageBox.Show(
-            message.Body,
-            message.Title,
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        _messageService.ShowInfo(message.Body, message.Title);
     }
 
     private void ThemeBtn_Click(object sender, RoutedEventArgs e)
