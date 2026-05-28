@@ -100,6 +100,25 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void MouseUpSelectionIgnoresNonLeftButtonsBeforeCompletingDrag()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseUp = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal)..];
+
+        mouseUp.Should().Contain("if (e.ChangedButton != MouseButton.Left)");
+        mouseUp.Should().Contain("return;");
+        mouseUp.IndexOf("if (e.ChangedButton != MouseButton.Left)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseUp.IndexOf("if (_formatPainterTargetSelectionActive)", StringComparison.Ordinal));
+        mouseUp.IndexOf("if (e.ChangedButton != MouseButton.Left)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseUp.IndexOf("if (!_dragSelectActive)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MouseDownUpdatesActiveSplitPaneRegionOnlyAfterCellHit()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(

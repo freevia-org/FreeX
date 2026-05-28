@@ -851,6 +851,9 @@ public partial class MainWindow
 
     private void SheetGrid_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Left)
+            return;
+
         if (_formatPainterTargetSelectionActive)
         {
             _formatPainterTargetSelectionActive = false;
