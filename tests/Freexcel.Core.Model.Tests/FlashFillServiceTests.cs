@@ -437,6 +437,32 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_SplitPascalCaseWords_InsertsWordSpaces()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("AdaLovelace", "Ada Lovelace"),
+                ("GraceHopper", "Grace Hopper")
+            ],
+            ["AlanTuring", "KatherineJohnson"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing", "Katherine Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_SplitPascalCaseWords_ReturnsNullWhenRemainingHasNoCaseBoundary()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("AdaLovelace", "Ada Lovelace"),
+                ("GraceHopper", "Grace Hopper")
+            ],
+            ["alan"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_EmailLocalPartWithoutPlusTag_ExtractsUntaggedUserName()
     {
         var result = FlashFillService.Fill(

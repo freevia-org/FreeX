@@ -189,6 +189,43 @@ public static partial class FlashFillService
         return s => TryFormatDottedEmailUserName(s, out var displayName) ? displayName : null;
     }
 
+    private static Func<string, string?>? TrySplitPascalCaseWords(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TrySplitPascalCaseWords(e.Source, out var words) && words == e.Expected))
+            return null;
+
+        return source => TrySplitPascalCaseWords(source, out var words) ? words : null;
+    }
+
+    private static bool TrySplitPascalCaseWords(string source, out string words)
+    {
+        words = string.Empty;
+        if (source.Length < 2 || source.Any(char.IsWhiteSpace))
+            return false;
+
+        var split = new List<char>(source.Length + 4);
+        var insertedSeparator = false;
+        for (var i = 0; i < source.Length; i++)
+        {
+            var current = source[i];
+            if (i > 0 &&
+                char.IsUpper(current) &&
+                char.IsLower(source[i - 1]))
+            {
+                split.Add(' ');
+                insertedSeparator = true;
+            }
+
+            split.Add(current);
+        }
+
+        if (!insertedSeparator)
+            return false;
+
+        words = new string(split.ToArray());
+        return words.Length > source.Length;
+    }
+
     private static bool TryFormatDottedEmailUserName(string source, out string displayName)
     {
         displayName = string.Empty;
