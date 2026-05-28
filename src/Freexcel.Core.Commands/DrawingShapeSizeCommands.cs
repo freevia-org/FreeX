@@ -85,7 +85,7 @@ public sealed class RotateDrawingShapeCommand : IWorkbookCommand
             return new CommandOutcome(false, "Drawing shape was not found.");
 
         _previousRotationDegrees = shape.RotationDegrees;
-        shape.RotationDegrees = Normalize(_rotationDegrees);
+        shape.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
     }
@@ -99,9 +99,4 @@ public sealed class RotateDrawingShapeCommand : IWorkbookCommand
         _applied = false;
     }
 
-    private static double Normalize(double value)
-    {
-        var normalized = value % 360;
-        return normalized < 0 ? normalized + 360 : normalized;
-    }
 }

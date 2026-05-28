@@ -1171,7 +1171,12 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue TScalar(ScalarValue value) =>
-        value is TextValue t ? TextResult(t.Value) : new TextValue("");
+        value switch
+        {
+            ErrorValue e => e,
+            TextValue t => TextResult(t.Value),
+            _ => new TextValue("")
+        };
 
     private static ScalarValue Hyperlink(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
