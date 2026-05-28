@@ -1125,6 +1125,43 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void FillFromColumns_FirstLastInitialEmail_LearnsConstantDomainFromExamples()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["adal@contoso.com", "graceh@contoso.com"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["alant@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData(".", "alan.t@contoso.com")]
+    [InlineData("_", "alan_t@contoso.com")]
+    [InlineData("-", "alan-t@contoso.com")]
+    public void FillFromColumns_FirstLastInitialSeparatedEmail_LearnsSeparatorAndConstantDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            [$"ada{separator}l@contoso.com", $"grace{separator}h@contoso.com"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void FillFromColumns_LastFirstInitialEmail_LearnsConstantDomainFromExamples()
     {
         var result = FlashFillService.FillFromColumns(
@@ -1202,6 +1239,22 @@ public sealed class FlashFillServiceTests
                 ["Grace", "Hopper"]
             ],
             ["lovelacea@contoso.com", "hopperg@example.org"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstLastInitialEmail_ReturnsNullWhenExampleDomainsDiffer()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["adal@contoso.com", "graceh@example.org"],
             [
                 ["Alan", "Turing"]
             ]);

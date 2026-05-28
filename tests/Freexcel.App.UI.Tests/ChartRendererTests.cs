@@ -2531,6 +2531,54 @@ public sealed class ChartRendererTests
         series.Items[1].Close.Should().Be(11);
     }
 
+    [Fact]
+    public void StockRenderer_AppliesUpDownBarFormattingToCandlesticks()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.OpenHighLowClose,
+            ShowUpDownBars = true,
+            UpDownBarGapWidth = 150,
+            UpBarFillColor = new CellColor(226, 239, 218),
+            UpBarBorderColor = new CellColor(84, 130, 53),
+            UpBarBorderThickness = 2.25,
+            DownBarFillColor = new CellColor(248, 203, 173),
+            DownBarBorderColor = new CellColor(192, 0, 0),
+            DownBarBorderThickness = 1.25,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 5))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Open"),
+                Cell(1, 3, "High"),
+                Cell(1, 4, "Low"),
+                Cell(1, 5, "Close"),
+                Cell(2, 1, "2026-01-02"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "15"),
+                Cell(2, 4, "9"),
+                Cell(2, 5, "13"),
+                Cell(3, 1, "2026-01-05"),
+                Cell(3, 2, "13"),
+                Cell(3, 3, "18"),
+                Cell(3, 4, "12"),
+                Cell(3, 5, "11")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<CandleStickSeries>().Subject;
+        series.IncreasingColor.Should().Be(OxyColor.FromRgb(226, 239, 218));
+        series.DecreasingColor.Should().Be(OxyColor.FromRgb(248, 203, 173));
+        series.Color.Should().Be(OxyColor.FromRgb(84, 130, 53));
+        series.StrokeThickness.Should().Be(2.25);
+        series.CandleWidth.Should().BeApproximately(0.4, 0.0001);
+    }
+
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
     {
         var method = typeof(ChartRenderer).GetMethod(
