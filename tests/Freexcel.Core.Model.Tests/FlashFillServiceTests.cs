@@ -568,6 +568,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ThreePartNames_ExtractsMiddleInitial()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "B."),
+                ("Grace Murray Hopper", "M.")
+            ],
+            ["Katherine Coleman Johnson"]);
+
+        result.Should().BeEquivalentTo(["C."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_ThreePartNames_ReturnsNullForAmbiguousTokenCounts()
     {
         var result = FlashFillService.Fill(

@@ -224,6 +224,14 @@ public static partial class FlashFillService
         return null;
     }
 
+    private static Func<string, string?>? TryThreeTokenNameInitial(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && e.Expected == GetFirstInitial(tokens[1]) + "."))
+            return source => TrySplitWhitespaceTokens(source, out var tokens) ? GetFirstInitial(tokens[1]) + "." : null;
+
+        return null;
+    }
+
     private static Func<string, string?>? TryDigitMask(IReadOnlyList<(string Source, string Expected)> examples)
     {
         string? mask = null;
