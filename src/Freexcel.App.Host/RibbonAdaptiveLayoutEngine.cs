@@ -106,7 +106,7 @@ internal static class RibbonAdaptiveLayoutEngine
         {
         }
 
-        if (protectedGroupIndexes.Count > 0)
+        if (StatesFit(groups, states, fixedChromeWidth, availableWidth))
             return;
 
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
