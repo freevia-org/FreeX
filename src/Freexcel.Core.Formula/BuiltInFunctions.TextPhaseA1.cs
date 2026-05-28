@@ -266,6 +266,11 @@ public static partial class BuiltInFunctions
             text = text[..^1];
         }
 
+        var decimalIndex = text.IndexOf(decSep, StringComparison.Ordinal);
+        if (decimalIndex >= 0 &&
+            text.IndexOf(grpSep, decimalIndex + decSep.Length, StringComparison.Ordinal) >= 0)
+            return ErrorValue.Value;
+
         // Remove all group separator characters
         text = text.Replace(grpSep, string.Empty, StringComparison.Ordinal);
         // Substitute decimal separator with '.'
