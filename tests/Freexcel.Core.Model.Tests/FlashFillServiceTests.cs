@@ -838,6 +838,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameTitles_RemovesTitleFromSingleTokenNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Dr. Lovelace", "Lovelace"),
+                ("Prof Hopper", "Hopper")
+            ],
+            ["Ms. Johnson"]);
+
+        result.Should().BeEquivalentTo(["Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameTitles_ReturnsNullForUntitledRemainingNames()
     {
         var result = FlashFillService.Fill(
@@ -861,6 +874,19 @@ public sealed class FlashFillServiceTests
             ["Katherine Coleman Johnson Sr."]);
 
         result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownNameSuffixes_RemovesSuffixFromSingleTokenNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Lovelace Jr.", "Lovelace"),
+                ("Hopper III", "Hopper")
+            ],
+            ["Johnson Sr."]);
+
+        result.Should().BeEquivalentTo(["Johnson"], o => o.WithStrictOrdering());
     }
 
     [Fact]

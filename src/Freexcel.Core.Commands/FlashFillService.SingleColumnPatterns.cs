@@ -277,7 +277,7 @@ public static partial class FlashFillService
     {
         name = string.Empty;
         var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length < 3)
+        if (tokens.Length < 2)
             return false;
 
         var title = tokens[0].TrimEnd('.');
@@ -300,7 +300,7 @@ public static partial class FlashFillService
     {
         name = string.Empty;
         var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length < 3)
+        if (tokens.Length < 2)
             return false;
 
         var suffix = tokens[^1].TrimEnd('.');
