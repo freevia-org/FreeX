@@ -775,6 +775,22 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void FillFromColumns_FirstLastWithPeriodLowercase_NormalizesProperCaseNames()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["ada.lovelace", "grace.hopper"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["alan.turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void FillFromColumns_FirstLastInitials_BuildsInitials()
     {
         var result = FlashFillService.FillFromColumns(
