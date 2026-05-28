@@ -8896,6 +8896,19 @@ public class FunctionLibraryTests
         _eval.Evaluate("=NUMBERVALUE(\"1.234,56\",\",ignored\",\".ignored\")", MakeSheet())
             .Should().Be(new NumberValue(1234.56));
 
+    [Theory]
+    [InlineData("=NUMBERVALUE(\"1\t234\")")]
+    [InlineData("=NUMBERVALUE(\"1\n234\")")]
+    [InlineData("=NUMBERVALUE(\"1\r234\")")]
+    public void Numbervalue_StripsExcelAsciiSpacingControlsAnywhere(string formula) =>
+        _eval.Evaluate(formula, MakeSheet())
+            .Should().Be(new NumberValue(1234));
+
+    [Fact]
+    public void Numbervalue_DoesNotStripNonBreakingSpace() =>
+        _eval.Evaluate("=NUMBERVALUE(\"1\u00A0234\")", MakeSheet())
+            .Should().Be(ErrorValue.Value);
+
     [Fact]
     public void Numbervalue_SameShapeSeparatorArguments_SpillsElementwise()
     {
