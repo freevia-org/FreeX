@@ -74,6 +74,30 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_NormalizesInvalidBlankDuplicateAndLongWorksheetNames()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="'Bad:/?*[]Name'"><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="bad:/?*[]name"><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="   "><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="''"><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"><ss:Table/></ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal(
+            "Bad______Name",
+            "bad______name (1)",
+            "Sheet3",
+            "Sheet",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345");
+        workbook.Sheets.Select(sheet => sheet.Name).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
     public void Load_ReadsSpreadsheetMlMergeAcrossAndMergeDown()
     {
         using var stream = StreamFromString("""
