@@ -319,13 +319,16 @@ public partial class MainWindow
 
             foreach (var textBlock in textBlocks)
             {
-                if (textBlock.Tag?.ToString() == "RibbonLabel")
+                if (RibbonMetadata.IsCommandLabel(textBlock))
                 {
                     textBlock.Visibility = footprint.CaptionVisibility;
                     textBlock.FontSize = footprint.CaptionFontSize;
                     textBlock.MaxWidth = footprint.CaptionMaxWidth;
+                    textBlock.TextWrapping = TextWrapping.NoWrap;
+                    textBlock.TextTrimming = TextTrimming.CharacterEllipsis;
+                    textBlock.TextAlignment = TextAlignment.Center;
                 }
-                else if (textBlock.Tag?.ToString() == "RibbonIcon" && textBlock.Text != "\uE70D")
+                else if (RibbonMetadata.IsCommandIcon(textBlock) && !RibbonMetadata.IsCollapsedChevron(textBlock))
                 {
                     textBlock.FontSize = footprint.IconFontSize;
                 }
@@ -477,16 +480,28 @@ public partial class MainWindow
     }
 
     private static bool IsRibbonCollapsedGroupButton(FrameworkElement element) =>
-        element.Tag is string tag && string.Equals(tag, "RibbonCollapsedGroupButton", StringComparison.Ordinal);
+        RibbonMetadata.IsCollapsedGroupButton(element);
 
     private static Button CreateRibbonCollapsedGroupButton(FrameworkElement group, ISet<string>? usedKeyTips = null)
     {
         var groupName = GetRibbonGroupName(group);
         var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
         var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
+        var label = new TextBlock
+        {
+            Text = groupName,
+            FontSize = 12,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextAlignment = TextAlignment.Center,
+            MaxWidth = 60,
+            LineHeight = 14,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+        };
+        RibbonMetadata.SetRole(label, RibbonMetadataRole.CommandLabel);
+
         var button = new Button
         {
-            Tag = "RibbonCollapsedGroupButton",
             Width = 64,
             Height = 76,
             Margin = new Thickness(1, 0, 3, 0),
@@ -514,20 +529,11 @@ public partial class MainWindow
                         VerticalAlignment = System.Windows.VerticalAlignment.Center,
                         Margin = new Thickness(0, 0, 0, 2)
                     },
-                    new TextBlock
-                    {
-                        Text = groupName,
-                        Tag = "RibbonLabel",
-                        FontSize = 12,
-                        TextWrapping = TextWrapping.Wrap,
-                        TextAlignment = TextAlignment.Center,
-                        MaxWidth = 60,
-                        LineHeight = 14,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center
-                    }
+                    label
                 }
             }
         };
+        RibbonMetadata.SetRole(button, RibbonMetadataRole.CollapsedGroupButton);
 
         button.SetResourceReference(StyleProperty, "RibbonTallButton");
         RibbonTooltip.SetTitle(button, groupName);
@@ -759,7 +765,8 @@ public partial class MainWindow
             .Concat(EnumerateLogicalDescendants(contentRoot))
             .OfType<StackPanel>()
             .Distinct()
-            .Where(panel => FindVisualAncestor<Button>(panel) is not { Tag: "RibbonCollapsedGroupButton" })
+            .Where(panel => FindVisualAncestor<Button>(panel) is not { } button ||
+                            !RibbonMetadata.IsCollapsedGroupButton(button))
             .OrderByDescending(panel => panel.Children.OfType<Grid>().Count(IsRibbonGroupGrid))
             .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
                                      panel.Children.OfType<Grid>().Any(IsRibbonGroupGrid));
@@ -787,7 +794,6 @@ public partial class MainWindow
         private readonly TextBlock _chevron = new()
         {
             Text = "\uE70D",
-            Tag = "RibbonIcon",
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
             FontSize = 8,
             Width = 8,
@@ -800,6 +806,7 @@ public partial class MainWindow
         public RibbonCollapsedGroupChevronAdorner(UIElement adornedElement)
             : base(adornedElement)
         {
+            RibbonMetadata.SetRole(_chevron, RibbonMetadataRole.CollapsedChevron);
             _children = new VisualCollection(this) { _chevron };
             IsHitTestVisible = false;
         }
@@ -827,8 +834,8 @@ public partial class MainWindow
     {
         foreach (var element in EnumerateVisualDescendants(group).OfType<FrameworkElement>())
         {
-            if (element is TextBlock { Tag: string labelTag } label &&
-                string.Equals(labelTag, "RibbonLabel", StringComparison.Ordinal))
+            if (element is TextBlock label &&
+                RibbonMetadata.IsCommandLabel(label))
             {
                 label.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
                 continue;
@@ -836,11 +843,11 @@ public partial class MainWindow
 
             if (element is ButtonBase button)
             {
-                var isLargeButton = button.Content is StackPanel cs &&
-                    string.Equals(cs.Tag?.ToString(), "RibbonCommandContent:L", StringComparison.Ordinal);
+                var isLargeButton = button.Content is DependencyObject contentRoot &&
+                    RibbonMetadata.TryGetCommandContentLayout(contentRoot, out var layout) &&
+                    layout == RibbonCommandContentLayout.Large;
 
-                if (button.Tag is string tag &&
-                    RibbonCommandPresentationPlanner.TryParseCompactWidths(tag, out var fullWidth, out var compactWidth))
+                if (RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth))
                 {
                     button.Width = level switch
                     {
@@ -871,11 +878,14 @@ public partial class MainWindow
                 textBlock.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
         }
 
-        var contentTag = (button.Content as FrameworkElement)?.Tag?.ToString() ?? "";
-        bool isSmallOrMedium = contentTag is "RibbonCommandContent:S" or "RibbonCommandContent:M";
+        var contentLayout = RibbonCommandContentLayout.None;
+        var hasContentLayout = button.Content is DependencyObject contentRoot &&
+            RibbonMetadata.TryGetCommandContentLayout(contentRoot, out contentLayout);
+        bool isSmallOrMedium = contentLayout is RibbonCommandContentLayout.Small or RibbonCommandContentLayout.Medium;
 
         if (button.Content is Grid smallGrid &&
-            string.Equals(contentTag, "RibbonCommandContent:S", StringComparison.Ordinal))
+            hasContentLayout &&
+            contentLayout == RibbonCommandContentLayout.Small)
         {
             ApplySmallButtonCompactLayout(smallGrid, button, level);
         }
@@ -895,7 +905,8 @@ public partial class MainWindow
         }
 
         if (button.Content is StackPanel largeStack &&
-            string.Equals(largeStack.Tag?.ToString(), "RibbonCommandContent:L", StringComparison.Ordinal))
+            hasContentLayout &&
+            contentLayout == RibbonCommandContentLayout.Large)
         {
             ApplyLargeButtonCompactLayout(largeStack, button, level);
         }
@@ -906,9 +917,17 @@ public partial class MainWindow
         ButtonBase button,
         RibbonCompactLevel level)
     {
-        if (contentGrid.ColumnDefinitions.Count >= 2)
+        var spacerColumn = contentGrid.ColumnDefinitions
+            .Cast<ColumnDefinition>()
+            .FirstOrDefault(RibbonMetadata.IsCommandSpacer);
+        if (spacerColumn is null && contentGrid.ColumnDefinitions.Count >= 2)
         {
-            contentGrid.ColumnDefinitions[1].Width = level == RibbonCompactLevel.IconOnly
+            spacerColumn = contentGrid.ColumnDefinitions[1];
+        }
+
+        if (spacerColumn is not null)
+        {
+            spacerColumn.Width = level == RibbonCompactLevel.IconOnly
                 ? new GridLength(0)
                 : new GridLength(5);
         }
@@ -928,9 +947,13 @@ public partial class MainWindow
     private static void ApplyLargeButtonCompactLayout(
         StackPanel contentStack, ButtonBase button, RibbonCompactLevel level)
     {
-        if (contentStack.Children.Count < 2 ||
-            contentStack.Children[0] is not Border iconSlot ||
-            contentStack.Children[1] is not TextBlock labelBlock)
+        var iconSlot = contentStack.Children
+            .OfType<Border>()
+            .FirstOrDefault(RibbonMetadata.IsCommandIcon);
+        var labelBlock = contentStack.Children
+            .OfType<TextBlock>()
+            .FirstOrDefault(RibbonMetadata.IsCommandLabel);
+        if (iconSlot is null || labelBlock is null)
         {
             return;
         }
@@ -979,13 +1002,10 @@ public partial class MainWindow
 
     private static bool IsRibbonButtonLabel(TextBlock textBlock)
     {
-        if (textBlock.Tag is string tag)
-        {
-            if (string.Equals(tag, "RibbonLabel", StringComparison.Ordinal))
-                return true;
-            if (string.Equals(tag, "RibbonIcon", StringComparison.Ordinal))
-                return false;
-        }
+        if (RibbonMetadata.IsCommandLabel(textBlock))
+            return true;
+        if (RibbonMetadata.IsCommandIcon(textBlock))
+            return false;
 
         var text = textBlock.Text?.Trim();
         if (string.IsNullOrEmpty(text) || text.Length <= 1)

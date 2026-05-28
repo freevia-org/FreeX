@@ -32,7 +32,7 @@ internal static class RibbonAdaptiveLayoutEngine
         IReadOnlyList<RibbonAdaptiveGroup> groups,
         double fixedChromeWidth)
     {
-        var thresholds = new SortedSet<double> { 700, 760, 900, 920, 1120, 1300, 1320, 1500 };
+        var thresholds = new SortedSet<double>(RibbonAdaptiveTabProfiles.GetBreakpointThresholds(GetGroupNames(groups)));
         foreach (var width in EnumerateThresholdCandidates(groups, fixedChromeWidth))
         {
             var layout = Plan(width, groups, fixedChromeWidth);
