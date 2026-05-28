@@ -512,6 +512,7 @@ public static partial class BuiltInFunctions
         '\u0153' => 156,
         '\u017E' => 158,
         '\u0178' => 159,
-        _ => ch
+        <= '\u00FF' => ch,
+        _ => 63
     };
 }

@@ -112,6 +112,14 @@ public sealed class ExcelParityModernTextTests
         AssertColumn(_eval.Evaluate("=LEFTB(A1:A2,2)", sheet), new TextValue("A"), new TextValue("BC"));
     }
 
+    [Theory]
+    [InlineData("=CODE(\"\u0100\")")]
+    [InlineData("=CODE(\"\u754c\")")]
+    public void Code_ReturnsAnsiReplacementCodeForUnmappableUnicodeCharacters(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(63));
+    }
+
     [Fact]
     public void Textsplit_SplitsColumnsRowsAndPadsRaggedRows()
     {
