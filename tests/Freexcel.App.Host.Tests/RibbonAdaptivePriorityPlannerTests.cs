@@ -19,6 +19,17 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
+    public void ApplyRuntimePriorityStates_IgnoresOverridesOutsidePlannedStateRange()
+    {
+        var states = RibbonAdaptivePriorityPlanner.ApplyRuntimePriorityStates(
+            900,
+            ["Tables", "Illustrations", "Add-ins", "Charts"],
+            [RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.Full]);
+
+        states.Should().Equal(RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.Full);
+    }
+
+    [Fact]
     public void RuntimeVisibilityOverrides_KeepDataToolsIconOnlyAtMediumWidths()
     {
         var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
