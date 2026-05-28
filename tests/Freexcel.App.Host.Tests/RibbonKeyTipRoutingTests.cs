@@ -59,6 +59,20 @@ public sealed class RibbonKeyTipRoutingTests
         });
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void CommandRouting_IgnoresBlankKeyTipInput(string keyTip)
+    {
+        RunSta(() =>
+        {
+            var button = CreateButton("A");
+
+            RibbonKeyTipRouting.ResolveKeyTipElement([button], keyTip).Should().BeNull();
+            RibbonKeyTipRouting.HasKeyTipPrefix([button], keyTip).Should().BeFalse();
+        });
+    }
+
     [Fact]
     public void ResolveMenuItem_WaitsWhenNestedLongerPrefixExists()
     {
@@ -125,6 +139,20 @@ public sealed class RibbonKeyTipRoutingTests
             parent.Items.Add(CreateMenuItem("TA"));
 
             RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([parent], "TA").Should().BeTrue();
+        });
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void MenuRouting_IgnoresBlankKeyTipInput(string keyTip)
+    {
+        RunSta(() =>
+        {
+            var item = CreateMenuItem("A");
+
+            RibbonKeyTipRouting.ResolveMenuItem([item], keyTip).Should().BeNull();
+            RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([item], keyTip).Should().BeFalse();
         });
     }
 
