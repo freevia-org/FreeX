@@ -75,6 +75,14 @@ public static class XlsxFeatureInspector
             yield break;
         }
 
+        if (normalized.EndsWith(".rels", StringComparison.Ordinal))
+        {
+            foreach (var featureKind in InspectRelationships(entry))
+                yield return Feature(featureKind);
+
+            yield break;
+        }
+
         if (normalized.StartsWith("xl/pivottables/", StringComparison.Ordinal) ||
             normalized.StartsWith("xl/pivotcache/", StringComparison.Ordinal))
         {
@@ -245,6 +253,82 @@ public static class XlsxFeatureInspector
     private static bool IsChartPart(string normalizedPackagePart) =>
         normalizedPackagePart.StartsWith("xl/charts/", StringComparison.Ordinal) ||
         normalizedPackagePart.StartsWith("xl/drawings/charts/", StringComparison.Ordinal);
+
+    private static IEnumerable<XlsxUnsupportedFeatureKind> InspectRelationships(ZipArchiveEntry entry)
+    {
+        XNamespace relationshipsNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument relationshipsXml;
+        try
+        {
+            using var stream = entry.Open();
+            relationshipsXml = XDocument.Load(stream);
+        }
+        catch
+        {
+            yield break;
+        }
+
+        foreach (var relationship in relationshipsXml.Root?.Elements(relationshipsNs + "Relationship") ?? [])
+        {
+            var type = relationship.Attribute("Type")?.Value;
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(type))
+                continue;
+
+            var normalizedType = type.Trim().ToLowerInvariant();
+            var normalizedTarget = target?.Replace('\\', '/').Trim().ToLowerInvariant() ?? string.Empty;
+
+            if (normalizedType.EndsWith("/vbaproject", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.Macros;
+                continue;
+            }
+
+            if (normalizedType.EndsWith("/querytable", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/connections", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.PowerQuery;
+                continue;
+            }
+
+            if (normalizedType.EndsWith("/threadedcomment", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/person", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.ThreadedComments;
+                continue;
+            }
+
+            if (normalizedType.EndsWith("/control", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/activexcontrol", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/ctrlprop", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.FormControls;
+                continue;
+            }
+
+            if (normalizedType.EndsWith("/oleobject", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/package", StringComparison.Ordinal) &&
+                normalizedTarget.Contains("embeddings/", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.EmbeddedObjects;
+                continue;
+            }
+
+            if (normalizedType.EndsWith("/customui", StringComparison.Ordinal) ||
+                normalizedType.Contains("/ui/extensibility", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.CustomRibbonUi;
+                continue;
+            }
+
+            if (normalizedType.EndsWith("/webextension", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/taskpane", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.OfficeAddIns;
+            }
+        }
+    }
 
     private static bool IsSupportedChartPart(ZipArchiveEntry entry)
     {
