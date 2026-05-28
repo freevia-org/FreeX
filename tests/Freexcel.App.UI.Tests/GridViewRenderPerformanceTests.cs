@@ -315,6 +315,20 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void ChartRenderer_BuildsChartCellLookupWithoutLinqFiltering()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "ChartRenderer.cs"));
+        var buildLookup = source[
+            source.IndexOf("private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup", StringComparison.Ordinal)..
+            source.IndexOf("private static LineSeries CreateLineSeries", StringComparison.Ordinal)];
+
+        buildLookup.Should().Contain("foreach (var cell in viewport.ChartDataCells)");
+        buildLookup.Should().Contain("if (cell.SheetId != sheetId)");
+        buildLookup.Should().NotContain(".Where(");
+        buildLookup.Should().NotContain(".Select(");
+    }
+
+    [Fact]
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Overlays.cs"));

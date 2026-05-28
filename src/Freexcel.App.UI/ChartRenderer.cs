@@ -479,8 +479,12 @@ public static partial class ChartRenderer
         var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>();
         if (viewport.ChartDataCells is { Count: > 0 })
         {
-            foreach (var cell in viewport.ChartDataCells.Where(cell => cell.SheetId == chart.DataRange.Start.Sheet))
+            var sheetId = chart.DataRange.Start.Sheet;
+            foreach (var cell in viewport.ChartDataCells)
             {
+                if (cell.SheetId != sheetId)
+                    continue;
+
                 lookup[(cell.Row, cell.Col)] = new DisplayCell(
                     cell.Row,
                     cell.Col,
