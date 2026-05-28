@@ -7,6 +7,34 @@ namespace Freexcel.Core.IO.Tests;
 public sealed class FileDialogFilterBuilderTests
 {
     [Fact]
+    public void BuildOpenFilter_WithNoOpenFormats_ReturnsAllFilesFilter()
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new FakeAdapter([
+                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: false, CanSave: false)
+            ])
+        };
+
+        FileDialogFilterBuilder.BuildOpenFilter(adapters)
+            .Should().Be("All files (*.*)|*.*");
+    }
+
+    [Fact]
+    public void BuildSaveFilter_WithNoSaveFormats_ReturnsEmptyFilter()
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new FakeAdapter([
+                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+            ])
+        };
+
+        FileDialogFilterBuilder.BuildSaveFilter(adapters)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildOpenFilter_IncludesAllOpenExtensionsGroupedByFormat()
     {
         var adapters = new IFileAdapter[]

@@ -2,26 +2,18 @@ namespace Freexcel.Core.IO;
 
 public static class FileDialogFilterBuilder
 {
+    private const string AllFilesFilterEntry = "All files (*.*)|*.*";
+
     public static string BuildOpenFilter(IEnumerable<IFileAdapter> adapters)
     {
-        var formats = GetFormats(adapters, static format => format.CanOpen).ToList();
-
-        var parts = new List<string>();
-
-        if (formats.Count > 0)
-            parts.Add(BuildAllSupportedFilterEntry(formats));
-
-        parts.AddRange(formats.Select(BuildFormatFilterEntry));
-        parts.Add("All files (*.*)|*.*");
-        return string.Join('|', parts);
+        var formats = GetFormats(adapters, static format => format.CanOpen);
+        return BuildFilter(formats, includeAllSupported: true, includeAllFiles: true);
     }
 
     public static string BuildSaveFilter(IEnumerable<IFileAdapter> adapters)
     {
-        var parts = GetFormats(adapters, static format => format.CanSave)
-            .Select(BuildFormatFilterEntry);
-
-        return string.Join('|', parts);
+        var formats = GetFormats(adapters, static format => format.CanSave);
+        return BuildFilter(formats, includeAllSupported: false, includeAllFiles: false);
     }
 
     public static IFileAdapter? FindOpenAdapter(
@@ -43,10 +35,28 @@ public static class FileDialogFilterBuilder
     public static string SafeFileTypeFromExtension(string extension) =>
         FileFormatResolver.SafeFileTypeFromExtension(extension);
 
-    private static IEnumerable<FileFormatDescriptor> GetFormats(
+    private static List<FileFormatDescriptor> GetFormats(
         IEnumerable<IFileAdapter> adapters,
         Func<FileFormatDescriptor, bool> predicate) =>
-        adapters.SelectMany(adapter => adapter.Formats).Where(predicate);
+        adapters.SelectMany(adapter => adapter.Formats).Where(predicate).ToList();
+
+    private static string BuildFilter(
+        IReadOnlyCollection<FileFormatDescriptor> formats,
+        bool includeAllSupported,
+        bool includeAllFiles)
+    {
+        var parts = new List<string>(formats.Count + 2);
+
+        if (includeAllSupported && formats.Count > 0)
+            parts.Add(BuildAllSupportedFilterEntry(formats));
+
+        parts.AddRange(formats.Select(BuildFormatFilterEntry));
+
+        if (includeAllFiles)
+            parts.Add(AllFilesFilterEntry);
+
+        return string.Join('|', parts);
+    }
 
     private static string BuildAllSupportedFilterEntry(IEnumerable<FileFormatDescriptor> formats)
     {
