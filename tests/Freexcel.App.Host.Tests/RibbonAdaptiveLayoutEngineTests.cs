@@ -101,6 +101,27 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             RibbonAdaptiveGroupState.Full);
     }
 
+    [Fact]
+    public void TryCollapseOneMoreGroup_PreservesFirstGroupWhenRequested()
+    {
+        var states = new[]
+        {
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed
+        };
+
+        var collapsed = RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(
+            states,
+            preserveFirstGroup: true);
+
+        collapsed.Should().BeFalse();
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed);
+    }
+
     [Theory]
     [InlineData(RibbonAdaptiveGroupState.Collapsed, RibbonAdaptiveGroupState.IconOnly, true)]
     [InlineData(RibbonAdaptiveGroupState.IconOnly, RibbonAdaptiveGroupState.SmallWithLabels, true)]
