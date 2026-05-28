@@ -32,7 +32,10 @@ public sealed class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
-        reader.ReadToEnd().Should().Contain("Alpha");
+        var xml = reader.ReadToEnd();
+        xml.Should().Contain("Alpha");
+        xml.Should().Contain("<ss:Workbook");
+        xml.Should().Contain("xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\"");
     }
 
     [Fact]
