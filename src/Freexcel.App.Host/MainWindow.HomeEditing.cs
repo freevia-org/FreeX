@@ -111,7 +111,12 @@ public partial class MainWindow
                     var currentSheet = _workbook.GetSheet(_currentSheetId);
                     List<(CellAddress Address, Cell NewCell)> edits = currentSheet is null
                         ? []
-                        : FillSeriesPlanner.BuildLinearSeriesEdits(currentSheet, currentRange, dialog.Result.Step);
+                        : FillSeriesPlanner.BuildLinearSeriesEdits(
+                            currentSheet,
+                            currentRange,
+                            dialog.Result.Step,
+                            dialog.Result.SeriesIn,
+                            dialog.Result.StopValue);
                     var targetSheetIds = CurrentGroupedEditSheetIds();
                     return targetSheetIds.Count > 1
                         ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
