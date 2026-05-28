@@ -72,4 +72,30 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Full);
     }
+
+    [Fact]
+    public void Plan_RelaxesProtectedFallbacksWhenPriorityGroupsStillOverflow()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Get & Transform Data", 170, 130, 78, 58),
+            new RibbonAdaptiveGroup("Queries & Connections", 155, 118, 70, 58),
+            new RibbonAdaptiveGroup("Data Types", 140, 110, 66, 58),
+            new RibbonAdaptiveGroup("Sort & Filter", 150, 112, 72, 58),
+            new RibbonAdaptiveGroup("Data Tools", 500, 168, 92, 58),
+            new RibbonAdaptiveGroup("Forecast", 420, 96, 58, 58),
+            new RibbonAdaptiveGroup("Outline", 120, 92, 54, 58)
+        };
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(820, groups, fixedChromeWidth: 42);
+        var groupNames = groups.Select(group => group.Name).ToArray();
+
+        layout.PlannedWidth.Should().BeLessThanOrEqualTo(820);
+        layout.States[Array.IndexOf(groupNames, "Data Tools")]
+            .Should()
+            .NotBe(RibbonAdaptiveGroupState.Full);
+        layout.States[Array.IndexOf(groupNames, "Forecast")]
+            .Should()
+            .NotBe(RibbonAdaptiveGroupState.Full);
+    }
 }
