@@ -5,6 +5,16 @@ namespace Freexcel.App.Host.Tests;
 public sealed class RibbonAdaptiveLayoutEngineTests
 {
     [Fact]
+    public void Plan_ReturnsEmptyLayoutForEmptyGroupSet()
+    {
+        var layout = RibbonAdaptiveLayoutEngine.Plan(900, [], fixedChromeWidth: 36);
+
+        layout.States.Should().BeEmpty();
+        layout.PlannedWidth.Should().Be(0);
+        layout.RequiresMeasuredCorrection.Should().BeFalse();
+    }
+
+    [Fact]
     public void Plan_CombinesMeasuredWidthsBreakpointsAndPriorityFallbacks()
     {
         var groups = new[]
