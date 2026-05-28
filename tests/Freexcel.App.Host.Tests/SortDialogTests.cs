@@ -476,11 +476,41 @@ public sealed class SortDialogTests
 
         optionsSource.Should().Contain("Title = \"Sort Options\"");
         optionsSource.Should().Contain("_Case sensitive");
+        optionsSource.Should().Contain("First key sort order");
+        optionsSource.Should().Contain("Sun, Mon, Tue, Wed, Thu, Fri, Sat");
+        optionsSource.Should().Contain("January, February, March, April, May, June, July, August, September, October, November, December");
         optionsSource.Should().Contain("Sort top to _bottom");
         optionsSource.Should().Contain("Sort left to _right");
         optionsSource.Should().Contain("Result = new SortDialogOptions");
+        optionsSource.Should().Contain("FirstKeySortOrder:");
         optionsSource.Should().NotContain("IsEnabled = false");
         optionsSource.Should().NotContain("Unsupported Excel options");
+    }
+
+    [Fact]
+    public void SortOptionsDialog_PreservesFirstKeySortOrderChoice()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var current = new SortDialogOptions(
+                CaseSensitive: true,
+                LeftToRight: true,
+                FirstKeySortOrder: "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec");
+            var dialog = new SortOptionsDialog(current);
+            dialog.Loaded += (_, _) =>
+            {
+                var combo = GetControl<ComboBox>(dialog, "_firstKeySortOrderBox");
+                combo.SelectedItem.Should().Be(current.FirstKeySortOrder);
+                combo.SelectedItem = "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday";
+                dialog.Dispatcher.BeginInvoke(() => ClickDefaultButton(dialog));
+            };
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.Result.Should().Be(new SortDialogOptions(
+                CaseSensitive: true,
+                LeftToRight: true,
+                FirstKeySortOrder: "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday"));
+        });
     }
 
     [Fact]
@@ -521,5 +551,32 @@ public sealed class SortDialogTests
         var field = typeof(SortDialog).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static T GetControl<T>(SortOptionsDialog dialog, string name)
+        where T : class
+    {
+        var field = typeof(SortOptionsDialog).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static void ClickDefaultButton(DependencyObject root)
+    {
+        var button = FindVisualChildren<Button>(root).First(candidate => candidate.IsDefault);
+        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T typedChild)
+                yield return typedChild;
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
     }
 }
