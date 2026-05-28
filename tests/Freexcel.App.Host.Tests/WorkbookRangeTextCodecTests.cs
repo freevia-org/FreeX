@@ -42,6 +42,25 @@ public sealed class WorkbookRangeTextCodecTests
     }
 
     [Fact]
+    public void TryParseOnCurrentSheet_ParsesUnqualifiedRanges()
+    {
+        var sheetId = SheetId.New();
+
+        WorkbookRangeTextCodec.TryParseOnCurrentSheet(sheetId, "C3:D4", out var range).Should().BeTrue();
+
+        range.Start.Should().Be(new CellAddress(sheetId, 3, 3));
+        range.End.Should().Be(new CellAddress(sheetId, 4, 4));
+    }
+
+    [Fact]
+    public void TryParseOnCurrentSheet_RejectsSheetQualifiedRanges()
+    {
+        WorkbookRangeTextCodec.TryParseOnCurrentSheet(SheetId.New(), "Other!A1:B2", out _)
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
     public void TryParseMany_AcceptsCommaSeparatedRangesAcrossSheets()
     {
         var defaultSheetId = SheetId.New();

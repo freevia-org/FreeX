@@ -80,7 +80,7 @@ public sealed partial class GoToDialog
         }
 
         if (!string.IsNullOrWhiteSpace(text) &&
-            WorkbookRangeTextCodec.TryParse(sheetId, text, _ => null, out range))
+            WorkbookRangeTextCodec.TryParseOnCurrentSheet(sheetId, text, out range))
             return true;
 
         if (definedNames is not null &&

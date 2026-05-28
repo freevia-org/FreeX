@@ -30,7 +30,7 @@ public static class AdvancedFilterInputParser
         if (string.IsNullOrWhiteSpace(input))
             return true;
 
-        if (!WorkbookRangeTextCodec.TryParse(sheetId, input, _ => null, out var parsed))
+        if (!WorkbookRangeTextCodec.TryParseOnCurrentSheet(sheetId, input, out var parsed))
             return false;
 
         if (parsed.Start.Row != parsed.End.Row)

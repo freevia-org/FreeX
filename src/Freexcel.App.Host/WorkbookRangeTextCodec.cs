@@ -44,6 +44,11 @@ public static class WorkbookRangeTextCodec
         return TryParseRangeParts(parts, sheetId, out range);
     }
 
+    public static bool TryParseOnCurrentSheet(SheetId sheetId, string input, out GridRange range) =>
+        TryParse(sheetId, input, RejectSheetReference, out range);
+
+    private static SheetId? RejectSheetReference(string _) => null;
+
     private static bool TryResolveReferenceSheet(
         SheetId defaultSheetId,
         string reference,
