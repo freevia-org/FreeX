@@ -11,17 +11,7 @@ internal static class TextToColumnsDialogResultFactory
         IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
         TextToColumnsAdvancedOptions? advancedOptions = null)
     {
-        var delimiter = delimiterKind switch
-        {
-            TextToColumnsDelimiterKind.Comma => ",",
-            TextToColumnsDelimiterKind.Semicolon => ";",
-            TextToColumnsDelimiterKind.Tab => "\t",
-            TextToColumnsDelimiterKind.Space => " ",
-            TextToColumnsDelimiterKind.Custom => string.IsNullOrEmpty(customDelimiter)
-                ? throw new ArgumentException("Custom delimiter is required.", nameof(customDelimiter))
-                : customDelimiter,
-            _ => throw new ArgumentOutOfRangeException(nameof(delimiterKind), delimiterKind, "Unsupported delimiter.")
-        };
+        var delimiter = TextToColumnsDelimiterPlanner.DelimiterFor(delimiterKind, customDelimiter);
 
         return new TextToColumnsDialogResult(
             delimiterKind,
@@ -40,17 +30,10 @@ internal static class TextToColumnsDialogResultFactory
         IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
         TextToColumnsAdvancedOptions? advancedOptions = null)
     {
-        var kinds = delimiterKinds.Distinct().ToList();
-        if (kinds.Count == 0)
-            throw new ArgumentException("Select at least one delimiter.", nameof(delimiterKinds));
-
-        var delimiters = string.Concat(kinds.Select(kind => CreateResult(kind, customDelimiter).Delimiter));
-        var primaryKind = kinds.Contains(TextToColumnsDelimiterKind.Custom)
-            ? TextToColumnsDelimiterKind.Custom
-            : kinds[0];
+        var delimiterPlan = TextToColumnsDelimiterPlanner.CreatePlan(delimiterKinds, customDelimiter);
         return new TextToColumnsDialogResult(
-            primaryKind,
-            delimiters,
+            delimiterPlan.PrimaryKind,
+            delimiterPlan.Delimiters,
             TextQualifier: textQualifier,
             TreatConsecutiveDelimitersAsOne: treatConsecutiveDelimitersAsOne,
             Destination: destination,

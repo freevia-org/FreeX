@@ -39,6 +39,25 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDelimiterPlanner_BuildsDistinctDelimiterPlan()
+    {
+        var plan = TextToColumnsDelimiterPlanner.CreatePlan(
+            [
+                TextToColumnsDelimiterKind.Space,
+                TextToColumnsDelimiterKind.Comma,
+                TextToColumnsDelimiterKind.Space,
+                TextToColumnsDelimiterKind.Custom
+            ],
+            "|");
+
+        plan.Should().Be(new TextToColumnsDelimiterPlan(TextToColumnsDelimiterKind.Custom, " ,|"));
+        TextToColumnsDelimiterPlanner.DelimiterFor(TextToColumnsDelimiterKind.Tab).Should().Be("\t");
+        var act = () => TextToColumnsDelimiterPlanner.DelimiterFor(TextToColumnsDelimiterKind.Custom);
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("Custom delimiter is required.*");
+    }
+
+    [Fact]
     public void TextToColumnsResult_RejectsEmptyDelimiterSelection()
     {
         var act = () => TextToColumnsDialog.CreateResult([]);
