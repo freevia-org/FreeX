@@ -61,6 +61,23 @@ public sealed class MenuKeyTipAssignerTests
     }
 
     [Fact]
+    public void AssignsOnlyTypeableAsciiKeyTipsFromMenuHeaders()
+    {
+        RunSta(() =>
+        {
+            var accented = new MenuItem { Header = "Éclair" };
+            var symbolOnly = new MenuItem { Header = "★" };
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([accented, symbolOnly]);
+
+            RibbonTooltip.GetKeyTip(accented).Should().Be("C");
+            RibbonKeyTipMode.ToKeyTipToken(Key.C).Should().Be(RibbonTooltip.GetKeyTip(accented));
+            RibbonTooltip.GetKeyTip(symbolOnly).Should().Be("1");
+            RibbonKeyTipMode.ToKeyTipToken(Key.D1).Should().Be(RibbonTooltip.GetKeyTip(symbolOnly));
+        });
+    }
+
+    [Fact]
     public void RepairsDuplicateExistingKeyTipsWithinDynamicMenuScope()
     {
         RunSta(() =>
