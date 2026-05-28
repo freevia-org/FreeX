@@ -172,6 +172,33 @@ public static class PageLayoutInputParser
         return false;
     }
 
+    public static bool TryParseOptionalPrintArea(string input, SheetId sheetId, out GridRange? printArea)
+    {
+        printArea = null;
+        var normalized = input.Trim();
+        if (normalized.Length == 0)
+            return true;
+
+        var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length is < 1 or > 2)
+            return false;
+
+        if (!TryParseAbsoluteCellReference(parts[0], sheetId, out var start))
+            return false;
+
+        if (parts.Length == 1)
+        {
+            printArea = new GridRange(start, start);
+            return true;
+        }
+
+        if (!TryParseAbsoluteCellReference(parts[1], sheetId, out var end))
+            return false;
+
+        printArea = new GridRange(start, end);
+        return true;
+    }
+
     public static string FormatScaleToFit(WorksheetScaleToFit scaleToFit) =>
         scaleToFit.ScalePercent.HasValue
             ? scaleToFit.ScalePercent.Value.ToString(CultureInfo.InvariantCulture)
@@ -273,4 +300,44 @@ public static class PageLayoutInputParser
 
     private static bool IsColumnName(string text) =>
         text.Length > 0 && text.All(char.IsLetter);
+
+    private static bool TryParseAbsoluteCellReference(string token, SheetId sheetId, out CellAddress address)
+    {
+        address = default;
+        var normalized = NormalizeAbsoluteCellReferenceToken(token);
+        return normalized is not null && CellAddress.TryParse(normalized, sheetId, out address);
+    }
+
+    private static string? NormalizeAbsoluteCellReferenceToken(string token)
+    {
+        var value = token.AsSpan().Trim();
+        if (value.IsEmpty)
+            return null;
+
+        Span<char> buffer = stackalloc char[value.Length];
+        var index = 0;
+        var write = 0;
+
+        if (value[index] == '$')
+            index++;
+
+        var columnStart = index;
+        while (index < value.Length && char.IsLetter(value[index]))
+            buffer[write++] = value[index++];
+
+        if (index == columnStart)
+            return null;
+
+        if (index < value.Length && value[index] == '$')
+            index++;
+
+        var rowStart = index;
+        while (index < value.Length && char.IsDigit(value[index]))
+            buffer[write++] = value[index++];
+
+        if (index == rowStart || index != value.Length)
+            return null;
+
+        return new string(buffer[..write]);
+    }
 }

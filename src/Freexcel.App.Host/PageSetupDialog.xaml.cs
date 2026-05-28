@@ -187,7 +187,7 @@ public partial class PageSetupDialog : Window
             return;
         }
 
-        if (!TryParseOptionalPrintArea(PrintAreaBox.Text, out var printArea))
+        if (!PageLayoutInputParser.TryParseOptionalPrintArea(PrintAreaBox.Text, _sheetId, out var printArea))
         {
             MessageBox.Show(this, "Enter print area as a cell range like A1:C10, or leave it blank.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -252,27 +252,6 @@ public partial class PageSetupDialog : Window
         RequestedAction = requestedAction;
         DialogResult = true;
         Close();
-    }
-
-    private bool TryParseOptionalPrintArea(string input, out GridRange? printArea)
-    {
-        var trimmed = input.Trim();
-        if (trimmed.Length == 0)
-        {
-            printArea = null;
-            return true;
-        }
-
-        try
-        {
-            printArea = GridRange.Parse(trimmed, _sheetId);
-            return true;
-        }
-        catch (FormatException)
-        {
-            printArea = null;
-            return false;
-        }
     }
 
 }

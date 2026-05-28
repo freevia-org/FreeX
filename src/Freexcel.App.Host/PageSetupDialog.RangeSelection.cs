@@ -18,12 +18,10 @@ public partial class PageSetupDialog
 
         if (_requestRangeSelection is null && _currentSelection is { } selection)
         {
-            target.Text = targetName switch
-            {
-                nameof(RowsRepeatBox) => $"${selection.Start.Row}:${selection.End.Row}",
-                nameof(ColumnsRepeatBox) => $"${CellAddress.NumberToColumnName(selection.Start.Col)}:${CellAddress.NumberToColumnName(selection.End.Col)}",
-                _ => selection.ToString()
-            };
+            target.Text = PageSetupRangeSelectionFormatter.Format(
+                GetRangeSelectionTarget(targetName),
+                selection,
+                useR1C1ReferenceStyle: false);
         }
 
         target.Focus();

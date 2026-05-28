@@ -219,9 +219,8 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("PageSetupRangeSelectionRequest");
         source.Should().Contain("RangeSelectionRequest = CreateRangeSelectionRequest");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
-        source.Should().Contain("target.Text = targetName switch");
-        source.Should().Contain("selection.ToString()");
-        source.Should().Contain("CellAddress.NumberToColumnName(selection.Start.Col)");
+        source.Should().Contain("target.Text = PageSetupRangeSelectionFormatter.Format(");
+        source.Should().Contain("GetRangeSelectionTarget(targetName)");
         var pickerHandlerSource = source[
             source.IndexOf("private void RangePickerButton_Click", StringComparison.Ordinal)..
             source.IndexOf("public static PageSetupRangeSelectionRequest", StringComparison.Ordinal)];
@@ -279,7 +278,7 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Theory]
-    [InlineData(PageSetupRangeSelectionTarget.PrintArea, false, "B2:D8")]
+    [InlineData(PageSetupRangeSelectionTarget.PrintArea, false, "$B$2:$D$8")]
     [InlineData(PageSetupRangeSelectionTarget.RepeatRows, false, "$2:$8")]
     [InlineData(PageSetupRangeSelectionTarget.RepeatColumns, false, "$B:$D")]
     [InlineData(PageSetupRangeSelectionTarget.RepeatRows, true, "R2:R8")]
