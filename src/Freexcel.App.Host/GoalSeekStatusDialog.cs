@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Calc;
 
@@ -19,12 +20,16 @@ public sealed class GoalSeekStatusDialog : Window
         ShowInTaskbar = false;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock
+        var statusBlock = new TextBlock
         {
             Text = CreateMessage(result, targetValue),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
-        });
+        };
+        AutomationProperties.SetName(statusBlock, "Goal Seek status");
+        AutomationProperties.SetAutomationId(statusBlock, "GoalSeekStatusSummary");
+        AutomationProperties.SetHelpText(statusBlock, "Reports whether Goal Seek reached the target value.");
+        stack.Children.Add(statusBlock);
 
         var buttons = new StackPanel
         {
@@ -41,6 +46,9 @@ public sealed class GoalSeekStatusDialog : Window
                 Margin = new Thickness(4, 0, 0, 0),
                 IsDefault = true
             };
+            AutomationProperties.SetName(keepButton, "Keep Result");
+            AutomationProperties.SetAutomationId(keepButton, "GoalSeekKeepResultButton");
+            AutomationProperties.SetHelpText(keepButton, "Keep the Goal Seek result in the changing cell.");
             keepButton.Click += (_, _) =>
             {
                 ApplyResult = true;
@@ -55,6 +63,9 @@ public sealed class GoalSeekStatusDialog : Window
                 Margin = new Thickness(4, 0, 0, 0),
                 IsCancel = true
             };
+            AutomationProperties.SetName(restoreButton, "Restore Original Values");
+            AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
+            AutomationProperties.SetHelpText(restoreButton, "Restore the original workbook values before Goal Seek ran.");
             buttons.Children.Add(restoreButton);
         }
         else
@@ -67,6 +78,9 @@ public sealed class GoalSeekStatusDialog : Window
                 IsDefault = true,
                 IsCancel = true
             };
+            AutomationProperties.SetName(okButton, "OK");
+            AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
+            AutomationProperties.SetHelpText(okButton, "Close the Goal Seek status dialog.");
             okButton.Click += (_, _) => DialogResult = false;
             buttons.Children.Add(okButton);
         }
@@ -82,11 +96,11 @@ public sealed class GoalSeekStatusDialog : Window
     public static string CreateMessage(GoalSeekResult result, double targetValue)
     {
         var target = targetValue.ToString("G10", CultureInfo.InvariantCulture);
-        var currentFormulaResult = result.ActualResult.ToString("G10", CultureInfo.InvariantCulture);
+        var currentValue = result.ActualResult.ToString("G10", CultureInfo.InvariantCulture);
         var changingCellValue = result.FoundValue.ToString("G10", CultureInfo.InvariantCulture);
         return result.Converged
-            ? $"Goal Seek found a solution.\nTarget value: {target}\nCurrent formula result: {currentFormulaResult}\nChanging cell value: {changingCellValue}"
-            : $"Goal Seek could not find a solution.\nTarget value: {target}\nCurrent formula result: {currentFormulaResult}\nChanging cell value: {changingCellValue}";
+            ? $"Goal Seek found a solution.\nTarget value: {target}\nCurrent value: {currentValue}\nChanging cell value: {changingCellValue}"
+            : $"Goal Seek could not find a solution.\nTarget value: {target}\nCurrent value: {currentValue}\nChanging cell value: {changingCellValue}";
     }
 
     private void FocusInitialKeyboardTarget()
