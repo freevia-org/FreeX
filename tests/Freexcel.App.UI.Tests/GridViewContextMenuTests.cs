@@ -25,8 +25,10 @@ public sealed class GridViewContextMenuTests
     {
         var inputSource = File.ReadAllText(FindWorkspaceFile(
             "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var cellFallbackStart = inputSource.IndexOf("if (HitTestViewportCell(Viewport, default, pos) is { } contextCell)", StringComparison.Ordinal);
         var rightClickBlock = inputSource[
-            inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..];
+            cellFallbackStart..
+            inputSource.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal)];
 
         rightClickBlock.Should().Contain("HitTestViewportCell(Viewport, default, pos)");
         rightClickBlock.Should().Contain("ContextMenuRequested?.Invoke(contextCell, pos);");
