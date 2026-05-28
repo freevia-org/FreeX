@@ -577,6 +577,10 @@ public sealed class FormulaEvaluator
         var lambdaBinding = context.TryResolveLambdaBinding(functionName);
         if (lambdaBinding is LambdaValue lv)
             return InvokeLambdaWithArgs(lv, node.Arguments, context);
+        if (lambdaBinding is ErrorValue bindingError)
+            return bindingError;
+        if (lambdaBinding is not null)
+            return ErrorValue.Value;
 
         // LET and LAMBDA are AST-aware special forms not in the built-in registry.
         if (functionName is "LET" or "LAMBDA")
@@ -2190,7 +2194,9 @@ public sealed class FormulaEvaluator
                 _                => null
             };
             if (name is not { } localName || !IsValidLocalFunctionName(localName)) return ErrorValue.Value;
-            bindings[localName] = EvaluateArrayOperand(node.Arguments[i * 2 + 1], scoped);
+            var value = EvaluateArrayOperand(node.Arguments[i * 2 + 1], scoped);
+            if (value is ErrorValue error) return error;
+            bindings[localName] = value;
         }
 
         return EvaluateNode(node.Arguments[^1], scoped);

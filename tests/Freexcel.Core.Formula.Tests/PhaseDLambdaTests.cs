@@ -409,7 +409,7 @@ public class PhaseDLambdaTests
     [Fact]
     public void MakeArray_MultiplicationTable()
     {
-        var result = Rv(Eval("=MAKEARRAY(3, 4, LAMBDA(r, c, r*c))"));
+        var result = Rv(Eval("=MAKEARRAY(3, 4, LAMBDA(rowNum, colNum, rowNum*colNum))"));
         Assert.Equal(3, result.RowCount);
         Assert.Equal(4, result.ColCount);
         Assert.Equal(1.0, Num(result.At(1, 1)));
@@ -421,7 +421,7 @@ public class PhaseDLambdaTests
     [Fact]
     public void MakeArray_RowPlusCol()
     {
-        var result = Rv(Eval("=MAKEARRAY(2, 2, LAMBDA(r, c, r+c))"));
+        var result = Rv(Eval("=MAKEARRAY(2, 2, LAMBDA(rowNum, colNum, rowNum+colNum))"));
         Assert.Equal(2.0, Num(result.At(1, 1)));   // 1+1
         Assert.Equal(3.0, Num(result.At(1, 2)));   // 1+2
         Assert.Equal(3.0, Num(result.At(2, 1)));   // 2+1
@@ -431,7 +431,7 @@ public class PhaseDLambdaTests
     [Fact]
     public void MakeArray_AcceptsSpilledScalarDimensions()
     {
-        var result = Rv(Eval("=MAKEARRAY(SEQUENCE(1,,2), SEQUENCE(1,,3), LAMBDA(r, c, r+c))"));
+        var result = Rv(Eval("=MAKEARRAY(SEQUENCE(1,,2), SEQUENCE(1,,3), LAMBDA(rowNum, colNum, rowNum+colNum))"));
 
         Assert.Equal(2, result.RowCount);
         Assert.Equal(3, result.ColCount);
@@ -443,20 +443,20 @@ public class PhaseDLambdaTests
     [Fact]
     public void MakeArray_ZeroRows_ReturnsValueError()
     {
-        Assert.Equal(ErrorValue.Value, Eval("=MAKEARRAY(0, 3, LAMBDA(r, c, 1))"));
+        Assert.Equal(ErrorValue.Value, Eval("=MAKEARRAY(0, 3, LAMBDA(rowNum, colNum, 1))"));
     }
 
     [Fact]
     public void MakeArray_RowOrColumnError_PropagatesError()
     {
-        Assert.Equal(ErrorValue.NA, Eval("=MAKEARRAY(NA(), 3, LAMBDA(r, c, 1))"));
-        Assert.Equal(ErrorValue.DivByZero, Eval("=MAKEARRAY(3, 1/0, LAMBDA(r, c, 1))"));
+        Assert.Equal(ErrorValue.NA, Eval("=MAKEARRAY(NA(), 3, LAMBDA(rowNum, colNum, 1))"));
+        Assert.Equal(ErrorValue.DivByZero, Eval("=MAKEARRAY(3, 1/0, LAMBDA(rowNum, colNum, 1))"));
     }
 
     [Fact]
     public void MakeArray_CoercesNumericTextDimensions()
     {
-        var result = Rv(Eval("=MAKEARRAY(\"2\", \"2\", LAMBDA(r, c, r+c))"));
+        var result = Rv(Eval("=MAKEARRAY(\"2\", \"2\", LAMBDA(rowNum, colNum, rowNum+colNum))"));
 
         Assert.Equal(2, result.RowCount);
         Assert.Equal(2, result.ColCount);
@@ -470,7 +470,7 @@ public class PhaseDLambdaTests
         Set(16, 1, new NumberValue(1));
         Set(16, 2, new NumberValue(2));
 
-        Assert.Equal(ErrorValue.Calc, Eval("=MAKEARRAY(2, 1, LAMBDA(r, c, HSTACK(r,c)))"));
+        Assert.Equal(ErrorValue.Calc, Eval("=MAKEARRAY(2, 1, LAMBDA(rowNum, colNum, HSTACK(rowNum,colNum)))"));
     }
 
     // ── Edge cases ──────────────────────────────────────────────────────────
