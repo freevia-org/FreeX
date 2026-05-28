@@ -40,8 +40,8 @@ public class PhaseDLambdaTests
     [Fact]
     public void Let_ThreeBindings()
     {
-        // a=1, b=2, c=a+b=3, a+b+c=6
-        var result = Eval("=LET(a, 1, b, 2, c, a+b, a+b+c)");
+        // a=1, b=2, total=a+b=3, a+b+total=6
+        var result = Eval("=LET(a, 1, b, 2, total, a+b, a+b+total)");
         Assert.Equal(6.0, Num(result));
     }
 
@@ -74,6 +74,22 @@ public class PhaseDLambdaTests
     public void Let_EvenArgCount_ReturnsValueError()
     {
         Assert.Equal(ErrorValue.Value, Eval("=LET(x, 5, y, 3)"));
+    }
+
+    [Theory]
+    [InlineData("=LET(c, 5, c)")]
+    [InlineData("=LET(r, 5, r)")]
+    [InlineData("=LET(c1, 5, c1)")]
+    [InlineData("=LET(r1c1, 5, r1c1)")]
+    public void Let_R1C1ReferenceStyleNames_ReturnValueError(string formula)
+    {
+        Assert.Equal(ErrorValue.Value, Eval(formula));
+    }
+
+    [Fact]
+    public void Let_NameManagerCompatibleNames_ReturnCalculation()
+    {
+        Assert.Equal(8.0, Num(Eval("=LET(_total.1, 5, _total.1+3)")));
     }
 
     // ── LAMBDA ──────────────────────────────────────────────────────────────
@@ -123,6 +139,14 @@ public class PhaseDLambdaTests
     {
         var result = Eval("=LET(f, LAMBDA(x, x+1), f(1, 2))");
         Assert.Equal(ErrorValue.Value, result);
+    }
+
+    [Theory]
+    [InlineData("=LET(f, LAMBDA(c, c), f(1))")]
+    [InlineData("=LET(f, LAMBDA(r1c1, r1c1), f(1))")]
+    public void Lambda_R1C1ReferenceStyleParameterNames_ReturnValueError(string formula)
+    {
+        Assert.Equal(ErrorValue.Value, Eval(formula));
     }
 
     [Fact]
