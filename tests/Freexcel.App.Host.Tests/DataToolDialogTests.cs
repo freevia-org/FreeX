@@ -320,9 +320,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("private void FocusInvalidDestinationInput()");
         source.Should().Contain("_wizardStep = 3;");
         source.Should().Contain("UpdateWizardStep();");
-        source.Should().Contain("_destinationBox.Focus();");
-        source.Should().Contain("_destinationBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_destinationBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_destinationBox);");
     }
 
     [Fact]
@@ -337,9 +335,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("private void FocusInvalidFixedWidthBreaksInput()");
         source.Should().Contain("_wizardStep = 2;");
         source.Should().Contain("_fixedWidthButton.IsChecked = true;");
-        source.Should().Contain("_fixedWidthBreaksBox.Focus();");
-        source.Should().Contain("_fixedWidthBreaksBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_fixedWidthBreaksBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_fixedWidthBreaksBox);");
     }
 
     [Fact]
@@ -354,9 +350,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_wizardStep = 2;");
         source.Should().Contain("_delimitedButton.IsChecked = true;");
         source.Should().Contain("_otherBox.IsChecked = true;");
-        source.Should().Contain("_customBox.Focus();");
-        source.Should().Contain("_customBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_customBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_customBox);");
     }
 
     [Fact]
