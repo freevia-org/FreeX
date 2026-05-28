@@ -89,6 +89,20 @@ public sealed class RibbonKeyTipRoutingTests
     }
 
     [Fact]
+    public void ResolveMenuItem_RejectsDuplicateExactMatches()
+    {
+        RunSta(() =>
+        {
+            var first = CreateMenuItem("C");
+            var second = CreateMenuItem("C");
+
+            var resolved = RibbonKeyTipRouting.ResolveMenuItem([first, second], "C");
+
+            resolved.Should().BeNull("duplicate menu keytips cannot route deterministically");
+        });
+    }
+
+    [Fact]
     public void HasMenuItemKeyTipPrefix_SearchesNestedMenuItems()
     {
         RunSta(() =>
