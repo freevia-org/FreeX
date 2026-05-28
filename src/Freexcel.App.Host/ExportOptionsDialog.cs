@@ -133,14 +133,14 @@ internal sealed class ExportOptionsDialog : Window
             if (_pagesRangeButton.IsChecked == true &&
                 !ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error))
             {
-                MessageBox.Show(this, error, "Export Options", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogMessageHelper.ShowWarning(this, error, "Export Options");
                 FocusInvalidPageRangeInput(error);
                 return;
             }
 
             if (!ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError))
             {
-                MessageBox.Show(this, pdfLanguageError, "Export Options", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogMessageHelper.ShowWarning(this, pdfLanguageError, "Export Options");
                 FocusInvalidPdfLanguageInput();
                 return;
             }

@@ -56,12 +56,7 @@ public sealed class ForecastSheetDialog : Window
     {
         if (!TryCreateResult(_periodsBox.Text, out var result, out var error))
         {
-            MessageBox.Show(
-                this,
-                error ?? "Enter a positive whole number of forecast periods.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter a positive whole number of forecast periods.", Title);
             FocusInvalidPeriodsInput();
             return;
         }

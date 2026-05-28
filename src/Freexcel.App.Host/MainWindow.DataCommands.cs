@@ -112,11 +112,9 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TextToColumnsDialog.CanConvertRange(range))
         {
-            MessageBox.Show(
+            _messageService.ShowInfo(
                 "Text to Columns works on one column at a time. Select a single column of cells and try again.",
-                "Text to Columns",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Text to Columns");
             return;
         }
 
@@ -132,11 +130,7 @@ public partial class MainWindow
         var edits = BuildTextToColumnsEdits(currentRange, dialog.Result);
         if (sheet is not null &&
             TextToColumnsPlanner.FindOverwriteTargets(sheet, edits, currentRange).Count > 0 &&
-            MessageBox.Show(
-                "There's already data here. Do you want to replace it?",
-                "Text to Columns",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            !_messageService.AskYesNo("There's already data here. Do you want to replace it?", "Text to Columns"))
         {
             return;
         }
@@ -385,7 +379,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            MessageBox.Show("Select a range with a header row and data rows.", "Subtotal", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Select a range with a header row and data rows.", "Subtotal");
             return;
         }
 
@@ -488,8 +482,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            MessageBox.Show("Select a two-column range with headers and at least two data rows.",
-                "Forecast Sheet", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Select a two-column range with headers and at least two data rows.", "Forecast Sheet");
             return;
         }
 
@@ -519,8 +512,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            MessageBox.Show("Select the data table range, including the formula row and input values.",
-                "Data Table", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Select the data table range, including the formula row and input values.", "Data Table");
             return;
         }
 

@@ -571,8 +571,7 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("FindOverwriteTargets");
         source.Should().Contain("There's already data here. Do you want to replace it?");
-        source.Should().Contain("MessageBoxButton.YesNo");
-        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("_messageService.AskYesNo");
         source.Should().Contain("BuildTextToColumnsEdits");
     }
 
@@ -1621,7 +1620,7 @@ public sealed class DataToolDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
 
         source.Should().Contain("HasPendingReferenceText(_referencesList.Items.Cast<string>(), _referenceBox.Text)");
-        source.Should().Contain("MessageBox.Show(this, \"Add the reference before clicking OK.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Add the reference before clicking OK.\"");
         source.Should().Contain("FocusPendingReferenceInput();");
         source.Should().Contain("private void FocusPendingReferenceInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_referenceBox);");

@@ -146,7 +146,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
         Result = selected with { HasHeaders = _hasHeadersBox.IsChecked == true };
         if (Result.SelectedColumnOffsets.Count == 0)
         {
-            MessageBox.Show(this, "Select at least one column.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Select at least one column.", Title);
             FocusFirstColumnChoice();
             return;
         }

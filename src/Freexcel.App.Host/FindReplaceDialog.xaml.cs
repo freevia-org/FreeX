@@ -226,12 +226,7 @@ public sealed partial class FindReplaceDialog : Window
         if (failure is null)
             return false;
 
-        MessageBox.Show(
-            this,
-            failure.ErrorMessage ?? "The replacement could not be completed.",
-            Title,
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, failure.ErrorMessage ?? "The replacement could not be completed.", Title);
         FocusSearchBox();
         return true;
     }
@@ -240,7 +235,7 @@ public sealed partial class FindReplaceDialog : Window
 
     private bool ShowBlankSearchWarning()
     {
-        MessageBox.Show(this, "Enter text in Find what.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, "Enter text in Find what.", Title);
         FocusSearchBox();
         return true;
     }

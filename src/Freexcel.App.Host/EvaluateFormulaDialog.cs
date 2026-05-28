@@ -158,12 +158,9 @@ public sealed class EvaluateFormulaDialog : Window
 
     private void ShowFormulaHelp()
     {
-        MessageBox.Show(
-            this,
+        DialogMessageHelper.ShowInfo(this,
             "Evaluate Formula shows the selected formula one calculation step at a time. Use Evaluate to advance, Step In when a nested formula can be inspected, Step Out to return to the previous step, and Restart to begin again.",
-            "Evaluate Formula Help",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+            "Evaluate Formula Help");
     }
 
     private void FocusInitialKeyboardTarget()

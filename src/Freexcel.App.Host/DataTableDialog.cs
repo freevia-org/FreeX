@@ -230,7 +230,7 @@ public sealed class DataTableDialog : Window
     {
         if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var error))
         {
-            MessageBox.Show(this, error ?? "Enter valid data table cells.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter valid data table cells.", Title);
             FocusInvalidInput(error);
             return;
         }

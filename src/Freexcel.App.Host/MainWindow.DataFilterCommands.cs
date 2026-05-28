@@ -106,7 +106,7 @@ public partial class MainWindow
     {
         if (_lastAutoFilterRange is not { } range || _lastAutoFilterCommandFactory is null)
         {
-            MessageBox.Show("Apply a filter before using Reapply.", "Reapply Filter", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Apply a filter before using Reapply.", "Reapply Filter");
             return;
         }
 
@@ -182,8 +182,7 @@ public partial class MainWindow
             {
                 if (!FilterInputParser.TryParseTopBottom(value, out var count, out var top, out var percent, out var topBottomError))
                 {
-                    MessageBox.Show(topBottomError ?? "Enter a supported filter criterion.",
-                        title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                    _messageService.ShowWarning(topBottomError ?? "Enter a supported filter criterion.", title);
                     return false;
                 }
 
@@ -211,8 +210,7 @@ public partial class MainWindow
             {
                 if (!FilterInputParser.TryParseCriterion(value, out var criterion, out var criterionError) || criterion is null)
                 {
-                    MessageBox.Show(criterionError ?? "Enter a supported filter criterion.",
-                        title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                    _messageService.ShowWarning(criterionError ?? "Enter a supported filter criterion.", title);
                     return false;
                 }
 
@@ -227,7 +225,7 @@ public partial class MainWindow
 
         if (string.IsNullOrWhiteSpace(filterText) && result.SelectedValues.Count == 0)
         {
-            MessageBox.Show("Select at least one filter item.", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            _messageService.ShowWarning("Select at least one filter item.", title);
             return false;
         }
 
@@ -248,7 +246,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            MessageBox.Show("Select a range first.", "CF Rule");
+            _messageService.ShowWarning("Select a range first.", "CF Rule");
             return;
         }
 
