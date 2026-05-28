@@ -12,6 +12,11 @@ internal sealed record SelectionPaneDialogReorderPlan(
     IReadOnlyList<Guid> OrderedIds,
     IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
 
+internal sealed record SelectionPaneDragMovePlan(
+    int DraggedIndex,
+    int TargetIndex,
+    IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
+
 internal static class SelectionPaneDialogStatePlanner
 {
     public static IReadOnlyList<SelectionPaneDialogItemState> FilterItems(
@@ -49,25 +54,18 @@ internal static class SelectionPaneDialogStatePlanner
         Guid draggedId,
         Guid targetId)
     {
-        var moves = CreateDragMoveChanges(
-            items.Select(item => (item.Kind, item.Id)).ToList(),
-            draggedId,
-            targetId);
-        if (moves.Count == 0)
-            return null;
-
-        var draggedIndex = FindIndex(items, draggedId);
-        var targetIndex = FindIndex(items, targetId);
-        if (draggedIndex < 0 || targetIndex < 0)
+        var dragPlan = CreateDragMovePlan(items, draggedId, targetId);
+        if (dragPlan is null)
             return null;
 
         var orderedIds = items.Select(item => item.Id).ToList();
-        var dragged = orderedIds[draggedIndex];
-        orderedIds.RemoveAt(draggedIndex);
-        if (draggedIndex < targetIndex)
+        var dragged = orderedIds[dragPlan.DraggedIndex];
+        orderedIds.RemoveAt(dragPlan.DraggedIndex);
+        var targetIndex = dragPlan.TargetIndex;
+        if (dragPlan.DraggedIndex < targetIndex)
             targetIndex--;
         orderedIds.Insert(targetIndex, dragged);
-        return new SelectionPaneDialogReorderPlan(orderedIds, moves);
+        return new SelectionPaneDialogReorderPlan(orderedIds, dragPlan.MoveChanges);
     }
 
     public static int FindSameKindMoveTargetIndex(
@@ -126,25 +124,56 @@ internal static class SelectionPaneDialogStatePlanner
     public static IReadOnlyList<SelectionPaneMoveChange> CreateDragMoveChanges(
         IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> currentOrder,
         Guid draggedId,
+        Guid targetId) =>
+        CreateDragMovePlan(currentOrder, draggedId, targetId)?.MoveChanges ?? [];
+
+    private static SelectionPaneDragMovePlan? CreateDragMovePlan(
+        IReadOnlyList<SelectionPaneDialogItemState> items,
+        Guid draggedId,
         Guid targetId)
     {
-        var draggedIndex = FindIndex(currentOrder, draggedId);
-        var targetIndex = FindIndex(currentOrder, targetId);
+        var (draggedIndex, targetIndex) = FindDragIndexes(items, draggedId, targetId);
         if (draggedIndex < 0 || targetIndex < 0 || draggedIndex == targetIndex)
-            return [];
+            return null;
+
+        var dragged = items[draggedIndex];
+        var target = items[targetIndex];
+        if (dragged.Kind != target.Kind)
+            return null;
+
+        return CreateDragMovePlan(dragged.Kind, dragged.Id, draggedIndex, targetIndex);
+    }
+
+    private static SelectionPaneDragMovePlan? CreateDragMovePlan(
+        IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> currentOrder,
+        Guid draggedId,
+        Guid targetId)
+    {
+        var (draggedIndex, targetIndex) = FindDragIndexes(currentOrder, draggedId, targetId);
+        if (draggedIndex < 0 || targetIndex < 0 || draggedIndex == targetIndex)
+            return null;
 
         var dragged = currentOrder[draggedIndex];
         var target = currentOrder[targetIndex];
         if (dragged.Kind != target.Kind)
-            return [];
+            return null;
 
-        var moves = new List<SelectionPaneMoveChange>();
+        return CreateDragMovePlan(dragged.Kind, dragged.Id, draggedIndex, targetIndex);
+    }
+
+    private static SelectionPaneDragMovePlan CreateDragMovePlan(
+        SelectionPaneObjectKind kind,
+        Guid draggedId,
+        int draggedIndex,
+        int targetIndex)
+    {
+        var moves = new List<SelectionPaneMoveChange>(Math.Abs(draggedIndex - targetIndex));
         var forward = draggedIndex > targetIndex;
         var step = forward ? -1 : 1;
         for (var index = draggedIndex; index != targetIndex; index += step)
-            moves.Add(new SelectionPaneMoveChange(dragged.Kind, dragged.Id, forward));
+            moves.Add(new SelectionPaneMoveChange(kind, draggedId, forward));
 
-        return moves;
+        return new SelectionPaneDragMovePlan(draggedIndex, targetIndex, moves);
     }
 
     private static bool MatchesSearch(SelectionPaneDialogItemState item, string search) =>
@@ -175,15 +204,48 @@ internal static class SelectionPaneDialogStatePlanner
         return -1;
     }
 
-    private static int FindIndex(IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> items, Guid id)
+    private static (int DraggedIndex, int TargetIndex) FindDragIndexes(
+        IReadOnlyList<SelectionPaneDialogItemState> items,
+        Guid draggedId,
+        Guid targetId)
     {
+        var draggedIndex = -1;
+        var targetIndex = -1;
         for (var index = 0; index < items.Count; index++)
         {
-            if (items[index].Id == id)
-                return index;
+            var id = items[index].Id;
+            if (id == draggedId)
+                draggedIndex = index;
+            else if (id == targetId)
+                targetIndex = index;
+
+            if (draggedIndex >= 0 && targetIndex >= 0)
+                break;
         }
 
-        return -1;
+        return (draggedIndex, targetIndex);
+    }
+
+    private static (int DraggedIndex, int TargetIndex) FindDragIndexes(
+        IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> items,
+        Guid draggedId,
+        Guid targetId)
+    {
+        var draggedIndex = -1;
+        var targetIndex = -1;
+        for (var index = 0; index < items.Count; index++)
+        {
+            var id = items[index].Id;
+            if (id == draggedId)
+                draggedIndex = index;
+            else if (id == targetId)
+                targetIndex = index;
+
+            if (draggedIndex >= 0 && targetIndex >= 0)
+                break;
+        }
+
+        return (draggedIndex, targetIndex);
     }
 
     private static string NormalizeName(string name) => name.Trim();

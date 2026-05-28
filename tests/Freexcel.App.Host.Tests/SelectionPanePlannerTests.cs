@@ -86,6 +86,32 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialogStatePlanner_PlanDragReorder_HandlesLargeListsWithConsolidatedLookup()
+    {
+        const int itemCount = 5_000;
+        var items = Enumerable.Range(0, itemCount)
+            .Select(index => DialogState(SelectionPaneObjectKind.Picture, $"Picture {index}", isVisible: true))
+            .ToArray();
+        var dragged = items[^1];
+        var target = items[0];
+
+        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+            items,
+            draggedId: dragged.Id,
+            targetId: target.Id);
+
+        plan.Should().NotBeNull();
+        plan!.OrderedIds[0].Should().Be(dragged.Id);
+        plan.OrderedIds[1].Should().Be(target.Id);
+        plan.OrderedIds.Should().HaveCount(itemCount);
+        plan.MoveChanges.Should().HaveCount(itemCount - 1);
+        plan.MoveChanges.Should().OnlyContain(move =>
+            move.Kind == SelectionPaneObjectKind.Picture &&
+            move.Id == dragged.Id &&
+            move.Forward);
+    }
+
+    [Fact]
     public void BuildItems_ListsVisibleObjectsTopToBottomWithExcelLikeNames()
     {
         var wb = new Workbook("test");
@@ -237,6 +263,21 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("TryGetValue(state.Id");
         source.Should().NotContain("originalItems.FirstOrDefault(item => item.Id == state.Id)");
         source.Should().NotContain("itemsById.ContainsKey(state.Id)");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_PlannerConsolidatesDragReorderIndexLookups()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "Freexcel.App.Host",
+            "SelectionPaneDialog.Planning.cs"));
+
+        source.Should().Contain("private static (int DraggedIndex, int TargetIndex) FindDragIndexes");
+        source.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId);");
+        source.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");
+        source.Should().NotContain("var draggedIndex = FindIndex(items, draggedId);");
+        source.Should().NotContain("var targetIndex = FindIndex(items, targetId);");
     }
 
     [Fact]
