@@ -1161,6 +1161,40 @@ public sealed class RemainingDialogTests
         source.Should().Contain("CreateIgnoreAllResult");
         source.Should().Contain("CreateReplaceAllResult(word, _replacementBox.Text)");
         source.Should().Contain("CreateAddResult");
+        source.Should().Contain("RefreshChangeButtonState");
+    }
+
+    [Fact]
+    public void SpellCheckDialog_DisablesChangeActionsUntilReplacementTextExists()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SpellCheckDialog("mispelled", "");
+            dialog.Show();
+            try
+            {
+                var replacementBox = GetField<TextBox>(dialog, "_replacementBox");
+                var changeButton = GetField<Button>(dialog, "_changeButton");
+                var changeAllButton = GetField<Button>(dialog, "_changeAllButton");
+
+                changeButton.IsEnabled.Should().BeFalse();
+                changeAllButton.IsEnabled.Should().BeFalse();
+
+                replacementBox.Text = "misspelled";
+
+                changeButton.IsEnabled.Should().BeTrue();
+                changeAllButton.IsEnabled.Should().BeTrue();
+
+                replacementBox.Text = " ";
+
+                changeButton.IsEnabled.Should().BeFalse();
+                changeAllButton.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
