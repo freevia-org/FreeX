@@ -47,12 +47,32 @@ public static partial class BuiltInFunctions
         return new NumberValue(ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length);
     }
 
+    private static ScalarValue LenB(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args[0] is RangeValue range)
+            return MapUnaryTextRange(range, LenBScalar);
+
+        return LenBScalar(args[0]);
+    }
+
+    private static ScalarValue LenBScalar(ScalarValue value) =>
+        new NumberValue(CountDbcsBytes(ToText(value)));
+
     private static ScalarValue Left(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
         var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
         return MapBinaryMathArgs(args[0], countArg, LeftScalarWithCount);
+    }
+
+    private static ScalarValue LeftB(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, LeftBScalarWithCount);
     }
 
     private static ScalarValue LeftScalarWithCount(ScalarValue value, ScalarValue countValue)
@@ -83,6 +103,14 @@ public static partial class BuiltInFunctions
         return MapBinaryMathArgs(args[0], countArg, RightScalarWithCount);
     }
 
+    private static ScalarValue RightB(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, RightBScalarWithCount);
+    }
+
     private static ScalarValue RightScalarWithCount(ScalarValue value, ScalarValue countValue)
     {
         if (value is ErrorValue valueError) return valueError;
@@ -102,6 +130,27 @@ public static partial class BuiltInFunctions
             ? AdvanceTextElements(text, 0, Math.Max(0, CountTextElements(text) - count))
             : text.Length - count;
         return TextResult(text[start..]);
+    }
+
+    private static ScalarValue LeftBScalarWithCount(ScalarValue value, ScalarValue countValue) =>
+        ByteSliceScalarWithCount(value, countValue, fromRight: false);
+
+    private static ScalarValue RightBScalarWithCount(ScalarValue value, ScalarValue countValue) =>
+        ByteSliceScalarWithCount(value, countValue, fromRight: true);
+
+    private static ScalarValue ByteSliceScalarWithCount(ScalarValue value, ScalarValue countValue, bool fromRight)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (countValue is ErrorValue countError) return countError;
+        var rawCount = ToNumber(countValue);
+        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        var byteCount = (int)rawCount;
+        if (byteCount < 0) return ErrorValue.Value;
+
+        var text = ToText(value);
+        return fromRight
+            ? TextResult(SliceDbcsBytes(text, Math.Max(0, CountDbcsBytes(text) - byteCount), byteCount))
+            : TextResult(SliceDbcsBytes(text, 0, byteCount));
     }
 
     private static RangeValue MapTextSliceRange(RangeValue range, int count, bool fromRight)
@@ -437,6 +486,9 @@ public static partial class BuiltInFunctions
         return FindScalarWithArgs(args[0], args[1], startArg);
     }
 
+    private static ScalarValue FindB(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        FindSearchB(args, useWildcards: false);
+
     private static ScalarValue FindScalarWithArgs(ScalarValue findValue, ScalarValue withinValue, ScalarValue startValue)
     {
         if (findValue is ErrorValue findError) return findError;
@@ -491,6 +543,38 @@ public static partial class BuiltInFunctions
         return SearchScalarWithArgs(args[0], args[1], startArg);
     }
 
+    private static ScalarValue SearchB(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        FindSearchB(args, useWildcards: true);
+
+    private static ScalarValue FindSearchB(IReadOnlyList<ScalarValue> args, bool useWildcards)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[1] is ErrorValue withinError) return withinError;
+        if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
+        var startArg = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(1);
+        return MapTernaryTextArgs(args[0], args[1], startArg, (findValue, withinValue, startValue) =>
+            FindSearchBScalarWithArgs(findValue, withinValue, startValue, useWildcards));
+    }
+
+    private static ScalarValue FindSearchBScalarWithArgs(
+        ScalarValue findValue,
+        ScalarValue withinValue,
+        ScalarValue startValue,
+        bool useWildcards)
+    {
+        if (findValue is ErrorValue findError) return findError;
+        if (withinValue is ErrorValue withinError) return withinError;
+        if (startValue is ErrorValue startError) return startError;
+        double rawStart = ToNumber(startValue);
+        if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
+        int startByte = (int)rawStart;
+        if (startByte < 1) return ErrorValue.Value;
+
+        return useWildcards
+            ? SearchBText(ToText(findValue), ToText(withinValue), startByte)
+            : FindBText(ToText(findValue), ToText(withinValue), startByte);
+    }
+
     private static ScalarValue SearchScalarWithArgs(ScalarValue findValue, ScalarValue withinValue, ScalarValue startValue)
     {
         if (findValue is ErrorValue findError) return findError;
@@ -537,6 +621,32 @@ public static partial class BuiltInFunctions
         return new NumberValue(hasSurrogatePair ? OneBasedTextPositionFromUtf16Index(withinText, match.Index) : match.Index + 1);
     }
 
+    private static ScalarValue FindBText(string findText, string withinText, int startByte)
+    {
+        if (findText.Length == 0)
+            return startByte <= CountDbcsBytes(withinText) + 1 ? new NumberValue(startByte) : ErrorValue.Value;
+
+        int startIdx = DbcsByteOffsetToUtf16Index(withinText, startByte - 1);
+        if (startIdx >= withinText.Length) return ErrorValue.Value;
+        int pos = withinText.IndexOf(findText, startIdx, StringComparison.Ordinal);
+        return pos < 0 ? ErrorValue.Value : new NumberValue(DbcsBytePositionFromUtf16Index(withinText, pos));
+    }
+
+    private static ScalarValue SearchBText(string findText, string withinText, int startByte)
+    {
+        if (findText.Length == 0)
+            return startByte <= CountDbcsBytes(withinText) + 1 ? new NumberValue(startByte) : ErrorValue.Value;
+
+        int startIdx = DbcsByteOffsetToUtf16Index(withinText, startByte - 1);
+        if (startIdx >= withinText.Length) return ErrorValue.Value;
+        var regex = SearchCache.GetOrAdd(findText, pattern =>
+        {
+            return new Regex(WildcardToRegexPattern(pattern, anchored: false), RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        });
+        var match = regex.Match(withinText, startIdx);
+        return match.Success ? new NumberValue(DbcsBytePositionFromUtf16Index(withinText, match.Index)) : ErrorValue.Value;
+    }
+
     private static ScalarValue Mid(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
@@ -557,6 +667,26 @@ public static partial class BuiltInFunctions
         if (start >= text.Length) return new TextValue("");
         int actualLen = Math.Min(numChars, text.Length - start);
         return TextResult(text.Substring(start, actualLen));
+    }
+
+    private static ScalarValue MidB(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[1] is ErrorValue startError) return startError;
+        if (args[2] is ErrorValue lengthError) return lengthError;
+        return MapTernaryTextArgs(args[0], args[1], args[2], MidBScalarWithArgs);
+    }
+
+    private static ScalarValue MidBScalarWithArgs(ScalarValue value, ScalarValue startValue, ScalarValue lengthValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (startValue is ErrorValue startError) return startError;
+        if (lengthValue is ErrorValue lengthError) return lengthError;
+        double rawStart = ToNumber(startValue);
+        double rawLen = ToNumber(lengthValue);
+        if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
+        if (rawStart < 1 || rawLen < 0 || rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
+        return TextResult(SliceDbcsBytes(ToText(value), (int)rawStart - 1, (int)rawLen));
     }
 
     private static RangeValue MapMidRange(RangeValue range, int startNum, int numChars)
@@ -761,6 +891,85 @@ public static partial class BuiltInFunctions
     private static bool IsSurrogatePairAt(string text, int index) =>
         index + 1 < text.Length && char.IsHighSurrogate(text[index]) && char.IsLowSurrogate(text[index + 1]);
 
+    private static int CountDbcsBytes(string text)
+    {
+        int bytes = 0;
+        for (int index = 0; index < text.Length;)
+        {
+            bytes += DbcsByteWidthAt(text, index);
+            index += IsSurrogatePairAt(text, index) ? 2 : 1;
+        }
+
+        return bytes;
+    }
+
+    private static int DbcsByteWidthAt(string text, int index)
+    {
+        if (IsSurrogatePairAt(text, index)) return 2;
+        var ch = text[index];
+        return ch <= '\u00ff' || (ch >= '\uff61' && ch <= '\uff9f') ? 1 : 2;
+    }
+
+    private static int DbcsByteOffsetToUtf16Index(string text, int byteOffset)
+    {
+        int bytes = 0;
+        for (int index = 0; index < text.Length;)
+        {
+            int width = DbcsByteWidthAt(text, index);
+            if (bytes + width > byteOffset)
+                return bytes == byteOffset ? index : index + (IsSurrogatePairAt(text, index) ? 2 : 1);
+
+            bytes += width;
+            index += IsSurrogatePairAt(text, index) ? 2 : 1;
+        }
+
+        return text.Length;
+    }
+
+    private static int DbcsBytePositionFromUtf16Index(string text, int utf16Index)
+    {
+        int bytes = 0;
+        for (int index = 0; index < utf16Index && index < text.Length;)
+        {
+            bytes += DbcsByteWidthAt(text, index);
+            index += IsSurrogatePairAt(text, index) ? 2 : 1;
+        }
+
+        return bytes + 1;
+    }
+
+    private static string SliceDbcsBytes(string text, int startByteOffset, int byteCount)
+    {
+        int endByteOffset = startByteOffset + byteCount;
+        int start = text.Length;
+        int end = text.Length;
+        int bytes = 0;
+        for (int index = 0; index < text.Length;)
+        {
+            int width = DbcsByteWidthAt(text, index);
+            int nextBytes = bytes + width;
+            int nextIndex = index + (IsSurrogatePairAt(text, index) ? 2 : 1);
+            if (start == text.Length && bytes >= startByteOffset)
+                start = index;
+            if (nextBytes > endByteOffset)
+            {
+                end = index;
+                break;
+            }
+
+            if (nextBytes <= endByteOffset)
+                end = nextIndex;
+
+            bytes = nextBytes;
+            index = nextIndex;
+        }
+
+        if (startByteOffset >= bytes && start == text.Length)
+            start = end = text.Length;
+        if (end < start) end = start;
+        return text[start..end];
+    }
+
     private static ScalarValue Rept(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
@@ -834,6 +1043,37 @@ public static partial class BuiltInFunctions
         return ReplaceText(ToText(value), startNum, numChars, ToText(newTextValue));
     }
 
+    private static ScalarValue ReplaceB(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
+        if (args[3] is ErrorValue e3) return e3;
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], ReplaceBScalarWithArgs);
+    }
+
+    private static ScalarValue ReplaceBScalarWithArgs(
+        ScalarValue value,
+        ScalarValue startValue,
+        ScalarValue numBytesValue,
+        ScalarValue newTextValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (startValue is ErrorValue startError) return startError;
+        if (numBytesValue is ErrorValue numBytesError) return numBytesError;
+        if (newTextValue is ErrorValue newTextError) return newTextError;
+        double rawStart = ToNumber(startValue);
+        double rawNumBytes = ToNumber(numBytesValue);
+        if (!double.IsFinite(rawStart) || !double.IsFinite(rawNumBytes)) return ErrorValue.Value;
+        if (rawStart > int.MaxValue || rawNumBytes > int.MaxValue) return ErrorValue.Value;
+
+        int startByte = (int)rawStart;
+        int numBytes = (int)rawNumBytes;
+        if (startByte < 1 || numBytes < 0) return ErrorValue.Value;
+
+        return ReplaceBText(ToText(value), startByte, numBytes, ToText(newTextValue));
+    }
+
     private static RangeValue MapReplaceRange(RangeValue range, int startNum, int numChars, string newText)
     {
         var cells = new ScalarValue[range.RowCount, range.ColCount];
@@ -856,6 +1096,13 @@ public static partial class BuiltInFunctions
         int end = hasSurrogatePair
             ? AdvanceTextElements(text, start, numChars)
             : Math.Min(start + numChars, text.Length);
+        return TextResult(text[..start] + newText + text[end..]);
+    }
+
+    private static ScalarValue ReplaceBText(string text, int startByte, int numBytes, string newText)
+    {
+        int start = DbcsByteOffsetToUtf16Index(text, startByte - 1);
+        int end = DbcsByteOffsetToUtf16Index(text, startByte - 1 + numBytes);
         return TextResult(text[..start] + newText + text[end..]);
     }
 

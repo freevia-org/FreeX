@@ -78,6 +78,36 @@ public sealed class ExcelParityModernTextTests
         AssertColumn(_eval.Evaluate("=TEXTAFTER(A1:A2,\"-\")", sheet), new TextValue("b"), new TextValue("d"));
     }
 
+    [Theory]
+    [InlineData("=LENB(\"A\u754cB\")", 4)]
+    [InlineData("=FINDB(\"\u754c\",\"A\u754cB\")", 2)]
+    [InlineData("=SEARCHB(\"?B\",\"A\u754cB\")", 2)]
+    public void ByteTextFunctions_CountDbcsCharactersAsTwoBytes(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=LEFTB(\"A\u754cB\",3)", "A\u754c")]
+    [InlineData("=RIGHTB(\"A\u754cB\",3)", "\u754cB")]
+    [InlineData("=MIDB(\"A\u754cB\",2,2)", "\u754c")]
+    [InlineData("=REPLACEB(\"A\u754cB\",2,2,\"X\")", "AXB")]
+    public void ByteTextFunctions_SliceAndReplaceByDbcsByteOffsets(string formula, string expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void ByteTextFunctions_SpillOverTextRanges()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("A\u754c")),
+            (2, 1, new TextValue("BC")));
+
+        AssertColumn(_eval.Evaluate("=LENB(A1:A2)", sheet), new NumberValue(3), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=LEFTB(A1:A2,2)", sheet), new TextValue("A"), new TextValue("BC"));
+    }
+
     [Fact]
     public void Textsplit_SplitsColumnsRowsAndPadsRaggedRows()
     {
