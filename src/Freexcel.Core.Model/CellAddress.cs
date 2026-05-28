@@ -116,15 +116,10 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
     /// </summary>
     public static string NumberToColumnName(uint col)
     {
-        Span<char> buffer = stackalloc char[7];
-        var index = buffer.Length;
-        while (col > 0)
-        {
-            col--;
-            buffer[--index] = (char)('A' + col % 26);
-            col /= 26;
-        }
-        return new string(buffer[index..]);
+        var columnLength = GetColumnNameLength(col);
+        Span<char> buffer = stackalloc char[(int)columnLength];
+        WriteColumnName(col, buffer);
+        return new string(buffer);
     }
 
     /// <summary>Format as A1 notation (e.g. "B7").</summary>
@@ -135,12 +130,7 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
         return string.Create((int)(columnLength + rowLength), (Col, Row, columnLength), static (buffer, state) =>
         {
             var (col, row, colLength) = state;
-            for (var index = (int)colLength - 1; index >= 0; index--)
-            {
-                col--;
-                buffer[index] = (char)('A' + col % 26);
-                col /= 26;
-            }
+            WriteColumnName(col, buffer[..(int)colLength]);
 
             var rowIndex = buffer.Length;
             do
@@ -150,6 +140,16 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
             }
             while (row > 0);
         });
+    }
+
+    private static void WriteColumnName(uint col, Span<char> destination)
+    {
+        for (var index = destination.Length - 1; index >= 0; index--)
+        {
+            col--;
+            destination[index] = (char)('A' + col % 26);
+            col /= 26;
+        }
     }
 
     private static uint GetColumnNameLength(uint col)
