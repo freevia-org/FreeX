@@ -130,6 +130,16 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void CurrentPlanningDocs_DoNotListCompletedPieDataLabelAnglesAsOutstanding()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var outstandingBuild = File.ReadAllText(Path.Combine(docsDirectory, "OUTSTANDING_BUILD.md"));
+
+        outstandingBuild.Should().NotContain("Arbitrary pie/doughnut data-label text angles");
+        outstandingBuild.Should().Contain("Richer tick placement beyond renderer constraints.");
+    }
+
+    [Fact]
     public void DocsReadme_LinksReleaseFacingUserDocs()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
