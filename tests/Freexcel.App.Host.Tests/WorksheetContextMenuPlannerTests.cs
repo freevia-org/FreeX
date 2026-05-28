@@ -322,7 +322,7 @@ public sealed class WorksheetContextMenuPlannerTests
         withLink.Single(command => command.Header == "Edit Hyperlink...")
             .Action.Should().Be(WorksheetContextMenuAction.Hyperlink);
         withLink.Single(command => command.Header == "Remove Hyperlink")
-            .Action.Should().Be(WorksheetContextMenuAction.ClearHyperlinks);
+            .Action.Should().Be(WorksheetContextMenuAction.RemoveHyperlinks);
     }
 
     [Fact]

@@ -188,7 +188,7 @@ public static class WorksheetContextMenuPlanner
             ? [
                 new("Open Hyperlink", WorksheetContextMenuAction.OpenHyperlink, AccessHeader: "_Open Hyperlink"),
                 new("Edit Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Edit Hyperlink..."),
-                new("Remove Hyperlink", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "_Remove Hyperlink")
+                new("Remove Hyperlink", WorksheetContextMenuAction.RemoveHyperlinks, AccessHeader: "_Remove Hyperlink")
             ]
             : [
                 new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink...")
@@ -275,6 +275,7 @@ public enum WorksheetContextMenuAction
     ClearFormats,
     ClearComments,
     ClearHyperlinks,
+    RemoveHyperlinks,
     ClearContents,
     FormatPicture,
     CropPicture,

@@ -87,6 +87,52 @@ public sealed class HyperlinkCommandTests
     }
 
     [Fact]
+    public void RemoveHyperlinksCommand_RemovesHyperlinkAndResetsHyperlinkStyle()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var hyperlinkStyle = wb.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            Underline = true,
+            DoubleUnderline = true,
+            FontColor = wb.Theme.ResolveColor(WorkbookThemeColorSlot.Hyperlink)
+        });
+        var cell = Cell.FromValue(new TextValue("Example"));
+        cell.StyleId = hyperlinkStyle;
+        sheet.SetCell(addr, cell);
+        sheet.Hyperlinks[addr] = "https://example.com";
+        sheet.HyperlinkMetadata[addr] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Example",
+            "https://example.com");
+
+        var command = new RemoveHyperlinksCommand(sheet.Id, new GridRange(addr, addr));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(addr).Should().Be(new TextValue("Example"));
+        sheet.Hyperlinks.Should().NotContainKey(addr);
+        sheet.HyperlinkMetadata.Should().NotContainKey(addr);
+        var style = wb.GetStyle(sheet.GetCell(addr)!.StyleId);
+        style.Bold.Should().BeTrue();
+        style.Underline.Should().BeFalse();
+        style.DoubleUnderline.Should().BeFalse();
+        style.FontColor.Should().Be(CellColor.Black);
+
+        command.Revert(ctx);
+
+        sheet.Hyperlinks[addr].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[addr].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Example",
+            "https://example.com"));
+        wb.GetStyle(sheet.GetCell(addr)!.StyleId).Underline.Should().BeTrue();
+    }
+
+    [Fact]
     public void ClearHyperlinksCommand_RejectsLockedHyperlinkCellsOnProtectedSheet()
     {
         var wb = new Workbook("test");

@@ -321,6 +321,16 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void RemoveHyperlinks()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Remove Hyperlinks",
+                sheetId => new RemoveHyperlinksCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+            return;
+        UpdateViewport();
+    }
+
     private void ClearValues()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
