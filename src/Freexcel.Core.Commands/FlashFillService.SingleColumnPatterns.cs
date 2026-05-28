@@ -273,6 +273,23 @@ public static partial class FlashFillService
         return source => TryRemoveKnownNameTitle(source, out var name) ? name : null;
     }
 
+    private static Func<string, string?>? TryKnownTitleAndSuffixRemoval(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e =>
+                TryRemoveKnownNameTitle(e.Source, out var withoutTitle) &&
+                TryRemoveKnownNameSuffix(withoutTitle, out var name) &&
+                name == e.Expected))
+        {
+            return null;
+        }
+
+        return source =>
+            TryRemoveKnownNameTitle(source, out var withoutTitle) &&
+            TryRemoveKnownNameSuffix(withoutTitle, out var name)
+                ? name
+                : null;
+    }
+
     private static bool TryRemoveKnownNameTitle(string source, out string name)
     {
         name = string.Empty;
