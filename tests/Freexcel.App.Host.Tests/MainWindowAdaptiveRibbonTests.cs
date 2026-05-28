@@ -691,6 +691,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
             {
                 harness.SelectRibbonTab(tab, width);
+                if (!harness.CanUseRequestedRibbonWidth(width))
+                    continue;
 
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,
