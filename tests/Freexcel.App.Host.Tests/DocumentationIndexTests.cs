@@ -48,6 +48,7 @@ public sealed partial class DocumentationIndexTests
         report.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
         report.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
         report.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
+        report.Should().Contain("[TEST_DISTRIBUTION_PLAN.md](TEST_DISTRIBUTION_PLAN.md)");
     }
 
     [Fact]
@@ -193,7 +194,8 @@ public sealed partial class DocumentationIndexTests
             "MENU_TOOLBAR_PARITY.md",
             "FIDELITY_CONTRACT.md",
             "XLSX_CORPUS_REPORT.md",
-            "XLSX_TEST_CORPUS_PLAN.md"
+            "XLSX_TEST_CORPUS_PLAN.md",
+            "TEST_DISTRIBUTION_PLAN.md"
         };
 
         foreach (var doc in currentDocs)
