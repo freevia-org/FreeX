@@ -141,6 +141,26 @@ public sealed class RibbonTooltipTests
         });
     }
 
+    [Fact]
+    public void TryOpenSubmenuForKeyTip_IgnoresDisabledSubmenus()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Disabled Menu", IsEnabled = false };
+            RibbonTooltip.SetKeyTip(parent, "D");
+            parent.Items.Add(new MenuItem { Header = "Child" });
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "D", out var openedSubmenu).Should().BeFalse();
+            openedSubmenu.Should().BeNull();
+            parent.IsSubmenuOpen.Should().BeFalse();
+            menu.IsOpen = false;
+        });
+    }
+
     private static void RunSta(Action action)
     {
         Exception? exception = null;

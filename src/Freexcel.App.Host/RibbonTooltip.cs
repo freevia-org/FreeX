@@ -40,6 +40,9 @@ public static class RibbonTooltip
     {
         foreach (var item in menu.Items.OfType<MenuItem>())
         {
+            if (!item.IsEnabled)
+                continue;
+
             if (string.Equals(GetKeyTip(item), keyTip, StringComparison.OrdinalIgnoreCase) &&
                 item.Items.Count > 0)
             {
