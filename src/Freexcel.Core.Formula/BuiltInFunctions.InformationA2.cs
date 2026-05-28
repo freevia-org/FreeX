@@ -418,7 +418,7 @@ public static partial class BuiltInFunctions
             case "memavail":
             case "memused":
             case "totmem":
-                return new NumberValue(0);
+                return ErrorValue.NA;
             default:
                 return ErrorValue.Value;
         }

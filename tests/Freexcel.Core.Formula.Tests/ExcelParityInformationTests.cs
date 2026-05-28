@@ -61,6 +61,15 @@ public sealed class ExcelParityInformationTests
         _eval.Evaluate("=CELL(\"address\",B2)", Sheet()).Should().Be(new TextValue("$B$2"));
     }
 
+    [Theory]
+    [InlineData("=INFO(\"memavail\")")]
+    [InlineData("=INFO(\"memused\")")]
+    [InlineData("=INFO(\"totmem\")")]
+    public void Info_ObsoleteMemoryTypes_ReturnNotAvailable(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.NA);
+    }
+
     [Fact]
     public void SheetAndSheets_ReturnWorkbookSheetOrdinals()
     {
