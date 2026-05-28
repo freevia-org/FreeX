@@ -95,9 +95,10 @@ public sealed class HyperlinkDialog : Window
         string? screenTip = "",
         string? bookmark = "")
     {
-        var normalizedTarget = target.Trim();
+        var trimmedTarget = target.Trim();
+        var normalizedTarget = NormalizeTargetForLinkType(trimmedTarget, linkType);
         var normalizedDisplay = string.IsNullOrWhiteSpace(displayText)
-            ? normalizedTarget
+            ? CreateDefaultDisplayText(trimmedTarget, linkType)
             : displayText.Trim();
         return new HyperlinkDialogResult(
             linkType,
@@ -203,6 +204,27 @@ public sealed class HyperlinkDialog : Window
             address.IndexOf('@') == address.LastIndexOf('@') &&
             address.LastIndexOf('.') > address.IndexOf('@') + 1 &&
             address.IndexOfAny([' ', '\t', '\r', '\n']) < 0;
+    }
+
+    private static string NormalizeTargetForLinkType(string target, HyperlinkLinkType linkType)
+    {
+        if (linkType != HyperlinkLinkType.EmailAddress ||
+            target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(target))
+            return target;
+
+        return "mailto:" + target;
+    }
+
+    private static string CreateDefaultDisplayText(string target, HyperlinkLinkType linkType)
+    {
+        if (linkType != HyperlinkLinkType.EmailAddress ||
+            !target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+            return target;
+
+        var address = target["mailto:".Length..];
+        var queryStart = address.IndexOf('?', StringComparison.Ordinal);
+        return queryStart < 0 ? address : address[..queryStart];
     }
 
     private static Grid DialogGrid(int inputRows)
