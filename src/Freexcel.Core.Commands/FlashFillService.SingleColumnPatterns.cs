@@ -28,7 +28,12 @@ public static partial class FlashFillService
         "II",
         "III",
         "IV",
-        "V"
+        "V",
+        "PhD",
+        "Ph.D",
+        "MD",
+        "M.D",
+        "Esq"
     };
 
     private static readonly (char Open, char Close)[] PairedDelimiters =
