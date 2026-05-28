@@ -48,6 +48,9 @@ internal sealed class ExportOptionsDialog : Window
             AutomationProperties.SetHelpText(_selectionButton, "Select a cell range before exporting the selection.");
         }
 
+        AutomationProperties.SetName(_fromPageBox, "From page");
+        AutomationProperties.SetName(_toPageBox, "To page");
+
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = "Publish what", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
         stack.Children.Add(_activeSheetButton);
@@ -66,7 +69,11 @@ internal sealed class ExportOptionsDialog : Window
         _fromPageBox.IsEnabled = false;
         _toPageBox.IsEnabled = false;
         _allPagesButton.Checked += (_, _) => SetPageRangeFieldsEnabled(false);
-        _pagesRangeButton.Checked += (_, _) => SetPageRangeFieldsEnabled(true);
+        _pagesRangeButton.Checked += (_, _) =>
+        {
+            SetPageRangeFieldsEnabled(true);
+            DialogFocus.FocusAndSelect(_fromPageBox);
+        };
 
         stack.Children.Add(new TextBlock { Text = "PDF/XPS options", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 4) });
         stack.Children.Add(_documentPropertiesBox);
