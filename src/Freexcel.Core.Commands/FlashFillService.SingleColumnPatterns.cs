@@ -267,6 +267,14 @@ public static partial class FlashFillService
         return source => TryExtractEmailLocalPartWithoutPlusTag(source, out var localPart) ? localPart : null;
     }
 
+    private static Func<string, string?>? TryEmailDomainStem(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryExtractEmailDomainStem(e.Source, out var domainStem) && domainStem == e.Expected))
+            return null;
+
+        return source => TryExtractEmailDomainStem(source, out var domainStem) ? domainStem : null;
+    }
+
     private static bool TryExtractEmailLocalPartWithoutPlusTag(string source, out string localPart)
     {
         localPart = string.Empty;
@@ -280,6 +288,26 @@ public static partial class FlashFillService
 
         localPart = source[..plusIndex];
         return localPart.Length > 0;
+    }
+
+    private static bool TryExtractEmailDomainStem(string source, out string domainStem)
+    {
+        domainStem = string.Empty;
+
+        var atIndex = source.IndexOf('@', StringComparison.Ordinal);
+        if (atIndex <= 0 || atIndex == source.Length - 1)
+            return false;
+
+        var domain = source[(atIndex + 1)..].Trim();
+        if (domain.Length == 0 || domain.Any(char.IsWhiteSpace))
+            return false;
+
+        var lastDotIndex = domain.LastIndexOf('.');
+        if (lastDotIndex <= 0 || lastDotIndex == domain.Length - 1)
+            return false;
+
+        domainStem = domain[..lastDotIndex];
+        return domainStem.Length > 0;
     }
 
     private static Func<string, string?>? TryStripThousandSeparators(IReadOnlyList<(string Source, string Expected)> examples)

@@ -32,6 +32,7 @@ public static partial class FlashFillService
             ?? TrySplitPascalCaseWords(examples)
             ?? TryEmailDisplayName(examples)
             ?? TryEmailLocalPartWithoutPlusTag(examples)
+            ?? TryEmailDomainStem(examples)
             ?? TryDigitMask(examples)
             ?? TryStripThousandSeparators(examples)
             ?? TryExtractDigitsOnly(examples)

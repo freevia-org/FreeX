@@ -489,6 +489,45 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDomainStem_ExtractsOrganizationFromEmailDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada@contoso.com", "contoso"),
+                ("grace@fabrikam.org", "fabrikam")
+            ],
+            ["alan@northwind.net", "katherine@adatum.co"]);
+
+        result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmailDomainStem_PreservesSubdomainStemBeforeTopLevelDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada@sales.contoso.com", "sales.contoso"),
+                ("grace@research.fabrikam.org", "research.fabrikam")
+            ],
+            ["alan@labs.northwind.net"]);
+
+        result.Should().BeEquivalentTo(["labs.northwind"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmailDomainStem_ReturnsNullWhenRemainingDomainHasNoSuffix()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada@contoso.com", "contoso"),
+                ("grace@fabrikam.org", "fabrikam")
+            ],
+            ["alan@localhost"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_DelimitedWordsInitials_BuildsInitials()
     {
         var result = FlashFillService.Fill(
