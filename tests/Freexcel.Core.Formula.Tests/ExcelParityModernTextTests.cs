@@ -248,6 +248,8 @@ public sealed class ExcelParityModernTextTests
     public void ValueToText_FormatsErrorsAndArrayValues()
     {
         _eval.Evaluate("=VALUETOTEXT(NA(),0)", Sheet()).Should().Be(new TextValue("#N/A"));
+        _eval.Evaluate("=VALUETOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},0)", Sheet())
+            .Should().Be(new TextValue("TRUE, #VALUE!, 1234, Seattle"));
         _eval.Evaluate("=VALUETOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},1)", Sheet())
             .Should().Be(new TextValue("{TRUE,#VALUE!;1234,\"Seattle\"}"));
     }
