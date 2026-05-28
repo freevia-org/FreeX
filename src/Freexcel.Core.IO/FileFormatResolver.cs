@@ -28,6 +28,9 @@ public static class FileFormatResolver
         if (extension.Length == 0)
             return "";
 
+        if (extension.StartsWith("*.", StringComparison.Ordinal))
+            extension = extension[1..];
+
         return extension.StartsWith(".", StringComparison.Ordinal)
             ? extension
             : $".{extension}";
