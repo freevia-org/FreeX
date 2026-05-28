@@ -40,11 +40,28 @@ public sealed class NativePasswordHelperTests
     }
 
     [Fact]
+    public void VerifyPassword_AcceptsLowercaseHashedStored()
+    {
+        var stored = NativePasswordHelper.HashPassword("correct").ToLowerInvariant();
+
+        NativePasswordHelper.VerifyPassword(stored, "correct").Should().BeTrue();
+    }
+
+    [Fact]
     public void VerifyPassword_WrongPasswordReturnsFalse_ForHashedStored()
     {
         var stored = NativePasswordHelper.HashPassword("correct");
 
         NativePasswordHelper.VerifyPassword(stored, "wrong").Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("sha256:")]
+    [InlineData("sha256:not-hex")]
+    [InlineData("sha256:ABCDEF")]
+    public void VerifyPassword_MalformedHashedStoredReturnsFalse(string stored)
+    {
+        NativePasswordHelper.VerifyPassword(stored, "correct").Should().BeFalse();
     }
 
     [Fact]
