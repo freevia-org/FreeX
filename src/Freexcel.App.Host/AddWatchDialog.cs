@@ -28,9 +28,16 @@ public sealed class AddWatchDialog : Window
         root.Children.Add(buttons);
 
         var add = new Button { Content = "_Add", Width = 76, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        AutomationProperties.SetName(add, "Add");
+        AutomationProperties.SetAutomationId(add, "AddWatchAddButton");
+        AutomationProperties.SetHelpText(add, "Add the selected cells to the Watch Window.");
         add.Click += (_, _) => DialogResult = true;
         buttons.Children.Add(add);
-        buttons.Children.Add(new Button { Content = "_Cancel", Width = 76, IsCancel = true });
+        var cancel = new Button { Content = "_Cancel", Width = 76, IsCancel = true };
+        AutomationProperties.SetName(cancel, "Cancel");
+        AutomationProperties.SetAutomationId(cancel, "AddWatchCancelButton");
+        AutomationProperties.SetHelpText(cancel, "Close the Add Watch dialog without adding cells.");
+        buttons.Children.Add(cancel);
 
         var body = new StackPanel();
         root.Children.Add(body);
@@ -38,6 +45,8 @@ public sealed class AddWatchDialog : Window
         _rangeBox.IsReadOnly = true;
         _rangeBox.Margin = new Thickness(0, 0, 0, 8);
         AutomationProperties.SetName(_rangeBox, "Selected range");
+        AutomationProperties.SetAutomationId(_rangeBox, "AddWatchSelectedRangeBox");
+        AutomationProperties.SetHelpText(_rangeBox, "Shows the selected worksheet cells that will be watched.");
         body.Children.Add(new Label
         {
             Content = "Selected _range:",
