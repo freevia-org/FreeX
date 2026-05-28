@@ -1299,9 +1299,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_suggestionsBox.Items.Count > 0");
         source.Should().Contain("_suggestionsBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_suggestionsBox);");
-        source.Should().Contain("_replacementBox.Focus();");
-        source.Should().Contain("_replacementBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_replacementBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_replacementBox);");
     }
 
     [Fact]
