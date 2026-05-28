@@ -309,11 +309,8 @@ public partial class MainWindow
             _ => group.FullWidth
         };
 
-    private static double GetCollapsedRibbonButtonFootprintWidth(RibbonAdaptiveGroup group, double availableWidth)
-    {
-        var plannedWidth = availableWidth <= 920 ? 46 : 68;
-        return Math.Min(group.CollapsedWidth, plannedWidth);
-    }
+    private static double GetCollapsedRibbonButtonFootprintWidth(RibbonAdaptiveGroup group, double availableWidth) =>
+        RibbonCollapsedGroupPresentationPlanner.GetPlannedWidth(group.CollapsedWidth, availableWidth);
 
     private static void ApplyRibbonMeasuredOverflowFallback(
         StackPanel activePanel,
@@ -532,13 +529,12 @@ public partial class MainWindow
 
     private static void SetCollapsedRibbonButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)
     {
-        var compactFootprint = availableWidth <= 920;
-        var hideCaption = availableWidth <= 760;
+        var footprint = RibbonCollapsedGroupPresentationPlanner.CreateFootprint(availableWidth);
         foreach (var button in collapsedButtons)
         {
-            button.Width = compactFootprint ? 44 : 64;
-            button.Margin = compactFootprint ? new Thickness(0, 0, 2, 0) : new Thickness(1, 0, 3, 0);
-            button.Padding = compactFootprint ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
+            button.Width = footprint.Width;
+            button.Margin = footprint.Margin;
+            button.Padding = footprint.Padding;
 
             var textBlockRoot = button.Content as DependencyObject ?? button;
             var textBlocks = EnumerateVisualDescendants(textBlockRoot)
@@ -550,13 +546,13 @@ public partial class MainWindow
             {
                 if (textBlock.Tag?.ToString() == "RibbonLabel")
                 {
-                    textBlock.Visibility = hideCaption ? Visibility.Collapsed : Visibility.Visible;
-                    textBlock.FontSize = compactFootprint ? 9 : 10;
-                    textBlock.MaxWidth = compactFootprint ? 40 : 60;
+                    textBlock.Visibility = footprint.CaptionVisibility;
+                    textBlock.FontSize = footprint.CaptionFontSize;
+                    textBlock.MaxWidth = footprint.CaptionMaxWidth;
                 }
                 else if (textBlock.Tag?.ToString() == "RibbonIcon" && textBlock.Text != "\uE70D")
                 {
-                    textBlock.FontSize = compactFootprint ? 18 : 22;
+                    textBlock.FontSize = footprint.IconFontSize;
                 }
             }
         }
@@ -573,7 +569,7 @@ public partial class MainWindow
     }
 
     private static string GetCollapsedRibbonFootprintMode(double availableWidth) =>
-        availableWidth <= 760 ? "captionless" : availableWidth <= 920 ? "compact" : "normal";
+        RibbonCollapsedGroupPresentationPlanner.GetCacheKey(availableWidth);
 
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
     {
