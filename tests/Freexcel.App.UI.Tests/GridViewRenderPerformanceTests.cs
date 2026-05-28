@@ -284,6 +284,37 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void ResizeDragInput_ReusesMetricScanHelpersWithoutLinqIterators()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var resizeMove = source[
+            source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest CalculateAutofillEdgeScrollIntent", StringComparison.Ordinal)];
+        var resizeStart = source[
+            source.IndexOf("if (target != ResizeTarget.None)", StringComparison.Ordinal)..
+            source.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)];
+
+        resizeMove.Should().Contain("FindColMetric(Viewport!.ColMetrics, _resizeIndex)");
+        resizeMove.Should().Contain("FindRowMetric(Viewport!.RowMetrics, _resizeIndex)");
+        resizeMove.Should().NotContain("FirstOrDefault");
+        resizeStart.Should().Contain("FindColMetric(Viewport!.ColMetrics, index)");
+        resizeStart.Should().Contain("FindRowMetric(Viewport!.RowMetrics, index)");
+        resizeStart.Should().NotContain(".First(");
+    }
+
+    [Fact]
+    public void PivotChartFieldButtonHitTest_ScansChartsBackToFrontWithoutLinqIterators()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.HitTesting.cs"));
+        var hitTest = source[
+            source.IndexOf("public static (ChartModel Chart, string FieldButton)? HitTestPivotChartFieldButton", StringComparison.Ordinal)..];
+
+        hitTest.Should().Contain("for (var i = charts.Count - 1; i >= 0; i--)");
+        hitTest.Should().NotContain(".Where(");
+        hitTest.Should().NotContain(".Reverse(");
+    }
+
+    [Fact]
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Overlays.cs"));
