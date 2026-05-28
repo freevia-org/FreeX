@@ -61,6 +61,12 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("Additional tester notes:");
         workflow.Should().Contain("FREEXCEL_RELEASE_NOTES: ${{ inputs.release_notes }}");
         workflow.Should().Contain("$extraNotes = $env:FREEXCEL_RELEASE_NOTES");
+        workflow.Should().Contain("Public-preview accessibility gate:");
+        workflow.Should().Contain("Keyboard-only smoke validation recorded.");
+        workflow.Should().Contain("Screen-reader smoke validation recorded.");
+        workflow.Should().Contain("UI Automation catalog review recorded.");
+        workflow.Should().Contain("Known accessibility issues listed with affected workflow and planned follow-up.");
+        workflow.Should().Contain("treat this build as internal-only and do not promote it as a public-preview candidate");
     }
 
     [Fact]
