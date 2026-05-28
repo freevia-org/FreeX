@@ -89,6 +89,7 @@ public partial class MainWindow : Window
     private string? _lastRibbonAdaptiveAppliedStateKey;
     private string? _ribbonAdaptiveControlCacheKey;
     private StackPanel? _ribbonAdaptiveControlCachePanel;
+    private ScrollViewer? _ribbonAdaptiveScrollViewerCache;
     private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;
     private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;
     private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;

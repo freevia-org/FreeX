@@ -166,6 +166,9 @@ public partial class MainWindow
         if (RibbonTabs is null)
             return 0;
 
+        if (TryGetCachedRibbonResizeWidth(out var cachedWidth))
+            return cachedWidth;
+
         if (GetActiveRibbonPanel() is { } activePanel &&
             FindVisualAncestor<ScrollViewer>(activePanel) is { } scrollViewer)
         {
@@ -177,6 +180,37 @@ public partial class MainWindow
         }
 
         return RibbonTabs.ActualWidth;
+    }
+
+    private bool TryGetCachedRibbonResizeWidth(out double width)
+    {
+        width = 0;
+        if (_ribbonAdaptiveControlCachePanel is not { IsVisible: true } ||
+            _ribbonAdaptiveScrollViewerCache is not { } scrollViewer ||
+            !IsCachedRibbonSurfaceSelected())
+        {
+            return false;
+        }
+
+        width = scrollViewer.ActualWidth > 0 ? scrollViewer.ActualWidth : scrollViewer.ViewportWidth;
+        if (width <= 0)
+            return false;
+
+        if (RibbonTabs.ActualWidth > 0)
+            width = Math.Min(width, Math.Max(0, RibbonTabs.ActualWidth - 12));
+
+        return width > 0;
+    }
+
+    private bool IsCachedRibbonSurfaceSelected()
+    {
+        if (RibbonTabs?.SelectedItem is not TabItem selectedTab ||
+            _ribbonAdaptiveControlCachePanel is not { } cachedPanel)
+        {
+            return false;
+        }
+
+        return ReferenceEquals(FindVisualAncestor<TabItem>(cachedPanel), selectedTab);
     }
 
     private void PrepareSelectedRibbonTabForImmediateCompaction()
