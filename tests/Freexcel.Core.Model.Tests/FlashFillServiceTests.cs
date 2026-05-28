@@ -851,6 +851,32 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameSuffixes_RemovesSuffixFromVariableLengthNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace Jr.", "Ada Lovelace"),
+                ("Grace Brewster Hopper, III", "Grace Brewster Hopper")
+            ],
+            ["Katherine Coleman Johnson Sr."]);
+
+        result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownNameSuffixes_ReturnsNullForUnsuffixedRemainingNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace Jr.", "Ada Lovelace"),
+                ("Grace Hopper Sr.", "Grace Hopper")
+            ],
+            ["Katherine Johnson"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_ThreePartNames_ReturnsNullForAmbiguousTokenCounts()
     {
         var result = FlashFillService.Fill(
