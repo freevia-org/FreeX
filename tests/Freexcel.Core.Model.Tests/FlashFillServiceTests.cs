@@ -146,6 +146,7 @@ public sealed class FlashFillServiceTests
     [Theory]
     [InlineData("Smith, John", "John", "Doe, Jane", "Jane", "Brown, Bob", "Bob")]
     [InlineData("SKU-001; Retail; West", "Retail", "SKU-002; Wholesale; East", "Wholesale", "SKU-003; Online; North", "Online")]
+    [InlineData("SKU-001 | Retail | West", "Retail", "SKU-002 | Wholesale | East", "Wholesale", "SKU-003 | Online | North", "Online")]
     public void Fill_ExtractDelimitedToken_TrimsTokenEdges(
         string source1,
         string expected1,
