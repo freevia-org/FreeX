@@ -17,6 +17,25 @@ public class FunctionLibraryTests
 {
     private readonly FormulaEvaluator _eval = new();
 
+    private sealed class CultureScope : IDisposable
+    {
+        private readonly System.Globalization.CultureInfo _originalCulture = System.Globalization.CultureInfo.CurrentCulture;
+        private readonly System.Globalization.CultureInfo _originalUiCulture = System.Globalization.CultureInfo.CurrentUICulture;
+
+        public CultureScope(string cultureName)
+        {
+            var culture = System.Globalization.CultureInfo.GetCultureInfo(cultureName);
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+            System.Globalization.CultureInfo.CurrentUICulture = culture;
+        }
+
+        public void Dispose()
+        {
+            System.Globalization.CultureInfo.CurrentCulture = _originalCulture;
+            System.Globalization.CultureInfo.CurrentUICulture = _originalUiCulture;
+        }
+    }
+
     private static Sheet MakeSheet(params (int row, int col, ScalarValue val)[] cells)
     {
         var sheet = new Sheet(SheetId.New(), "S");
@@ -8633,15 +8652,37 @@ public class FunctionLibraryTests
     // ── ASC / DBCS / PHONETIC / BAHTTEXT ─────────────────────────────────────
 
     [Fact]
-    public void Asc_ConvertsFullWidthAsciiAndKanaToHalfWidthText()
+    public void Asc_NonDbcsCultureLeavesTextUnchanged()
     {
+        using var culture = new CultureScope("en-US");
+
+        _eval.Evaluate("=ASC(\"ＡＢＣ１２３\")", MakeSheet())
+            .Should().Be(new TextValue("ＡＢＣ１２３"));
+    }
+
+    [Fact]
+    public void Dbcs_NonDbcsCultureLeavesTextUnchanged()
+    {
+        using var culture = new CultureScope("en-US");
+
+        _eval.Evaluate("=DBCS(\"ABC123\")", MakeSheet())
+            .Should().Be(new TextValue("ABC123"));
+    }
+
+    [Fact]
+    public void Asc_DbcsCultureConvertsFullWidthAsciiAndKanaToHalfWidthText()
+    {
+        using var culture = new CultureScope("ja-JP");
+
         _eval.Evaluate("=ASC(\"ＡＢＣ１２３！　アイウ\")", MakeSheet())
             .Should().Be(new TextValue("ABC123! ｱｲｳ"));
     }
 
     [Fact]
-    public void Dbcs_ConvertsHalfWidthAsciiAndKanaToFullWidthText()
+    public void Dbcs_DbcsCultureConvertsHalfWidthAsciiAndKanaToFullWidthText()
     {
+        using var culture = new CultureScope("ja-JP");
+
         _eval.Evaluate("=DBCS(\"ABC123! ｱｲｳ\")", MakeSheet())
             .Should().Be(new TextValue("ＡＢＣ１２３！　アイウ"));
     }
