@@ -148,6 +148,42 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void SplitPaneDividerMouseDownCapturesDragBeforeAutofillAndResize()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseDownBlock = source[
+            source.IndexOf("if (Viewport is not null && HitTestSplitDividerHandle", StringComparison.Ordinal)..
+            source.IndexOf("if (SelectedRange.HasValue && IsOnAutofillHandle(pos))", StringComparison.Ordinal)];
+
+        mouseDownBlock.Should().Contain("_splitDividerDragHandle = splitHandle;");
+        mouseDownBlock.Should().Contain("CaptureMouse();");
+        mouseDownBlock.Should().Contain("e.Handled = true;");
+        mouseDownBlock.Should().Contain("splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll");
+        mouseDownBlock.Should().Contain("splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE");
+        mouseDownBlock.Should().Contain(": Cursors.SizeNS;");
+    }
+
+    [Fact]
+    public void SplitPaneDividerMouseUpRaisesMoveEventAndClearsCaptureState()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var mouseUpBlock = source[
+            source.IndexOf("if (_splitDividerDragHandle != SplitDividerHandle.None)", mouseUpStart, StringComparison.Ordinal)..
+            source.IndexOf("if (_splitPaneScrollbarDragging)", mouseUpStart, StringComparison.Ordinal)];
+
+        mouseUpBlock.Should().Contain("CalculateSplitDividerDragTarget(Viewport, _splitDividerDragHandle, pos)");
+        mouseUpBlock.Should().Contain("SplitDividerMoved?.Invoke(target.Row, target.Column);");
+        mouseUpBlock.Should().Contain("_splitDividerDragHandle = SplitDividerHandle.None;");
+        mouseUpBlock.Should().Contain("Cursor = null;");
+        mouseUpBlock.Should().Contain("ReleaseMouseCapture();");
+        mouseUpBlock.Should().Contain("InvalidateVisual();");
+        mouseUpBlock.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
     public void AutofillDragMouseMoveKeepsCrossCursorAndHandlesEvent()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -232,6 +268,9 @@ public sealed class GridViewPointerCursorTests
         mouseLeave.Should().Contain("_objectDragKind == ObjectDragKind.None");
         mouseLeave.Should().Contain("!_autofillDragging");
         mouseLeave.Should().Contain("_resizeTarget == ResizeTarget.None");
+        mouseLeave.Should().Contain("!_marginDragEdge.HasValue");
+        mouseLeave.Should().Contain("_splitDividerDragHandle == SplitDividerHandle.None");
+        mouseLeave.Should().Contain("!_splitPaneScrollbarDragging");
         mouseLeave.Should().Contain("Cursor = null;");
     }
 
