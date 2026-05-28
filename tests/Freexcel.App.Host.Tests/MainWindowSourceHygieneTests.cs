@@ -1239,7 +1239,7 @@ public sealed class MainWindowSourceHygieneTests
         dataFilterSource.Should().Contain("private void ValidationButton_Click(");
         dataFilterSource.Should().Contain("private void ClearFilterButton_Click(");
         dataFilterSource.Should().Contain("private void NamedRangesButton_Click(");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
+        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
     }
 
     [Fact]
@@ -2296,9 +2296,8 @@ public sealed class MainWindowSourceHygieneTests
 
         editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
         dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseTopBottom");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseAverage");
+        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
+        dataFilterSource.Should().Contain("FilterInputParser.ParseAllowedValues");
     }
 
     [Fact]
