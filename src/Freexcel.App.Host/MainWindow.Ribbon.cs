@@ -428,8 +428,10 @@ public partial class MainWindow
             return false;
 
         var label = commandName;
-        var layoutKind = commandButton.Height is > 0 and <= 34 &&
-                         (hadUnreplacedIcon || hadRibbonCommandLabel)
+        var layoutKind = IsFixedHeightIconOnlyRibbonButton(commandButton, hadUnreplacedIcon, hadRibbonCommandLabel) ||
+                         (!hadUnreplacedIcon &&
+                          hadRibbonCommandLabel &&
+                          commandButton.Height is > 0 and <= 34)
             ? RibbonCommandLayoutKind.Small
             : RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
         ApplyRibbonCommandSize(commandButton, layoutKind);
@@ -471,6 +473,16 @@ public partial class MainWindow
         return content is FrameworkElement element &&
                element.Tag is string tag &&
                tag.StartsWith("RibbonCommandContent", StringComparison.Ordinal);
+    }
+
+    private static bool IsFixedHeightIconOnlyRibbonButton(
+        ButtonBase button,
+        bool hadUnreplacedIcon,
+        bool hadRibbonCommandLabel)
+    {
+        return hadUnreplacedIcon &&
+               !hadRibbonCommandLabel &&
+               button is FrameworkElement { Height: > 0 and <= 34 };
     }
 
     private static bool ContainsRibbonCommandLabel(object? content)

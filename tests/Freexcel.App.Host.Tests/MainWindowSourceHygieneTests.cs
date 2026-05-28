@@ -358,7 +358,9 @@ public sealed class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");
         dataCommandsSource.Should().Contain("RefreshStatusBar();");
         dataCommandsSource.Should().Contain("ShowOwnedMessage(\"No import adapters are available.\"");
-        dataCommandsSource.Should().Contain("ShowOwnedMessage($\"Failed to import data:");
+        dataCommandsSource.Should().Contain("ImportFailureDiagnosticFactory.FromException(ext, ex)");
+        dataCommandsSource.Should().Contain("ShowOwnedMessage(diagnostic.UserMessage");
+        dataCommandsSource.Should().Contain("errorDetail: diagnostic.Detail");
     }
 
     [Fact]

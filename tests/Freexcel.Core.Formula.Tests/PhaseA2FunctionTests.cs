@@ -327,12 +327,15 @@ public class PhaseA2FunctionTests
         _eval.Evaluate(formula, sheet, wb).Should().Be(ErrorValue.Value);
     }
 
-    [Fact]
-    public void Cell_Width_ReturnsColumnWidth()
+    [Theory]
+    [InlineData(12.4, 12)]
+    [InlineData(12.5, 13)]
+    public void Cell_Width_ReturnsColumnWidthRoundedToInteger(double width, double expected)
     {
         var (wb, sheet) = MakeWb();
-        sheet.ColumnWidths[1] = 12.5;
-        _eval.Evaluate("=CELL(\"width\",A1)", sheet, wb).Should().Be(new NumberValue(12.5));
+        sheet.ColumnWidths[1] = width;
+
+        _eval.Evaluate("=CELL(\"width\",A1)", sheet, wb).Should().Be(new NumberValue(expected));
     }
 
     [Fact]
