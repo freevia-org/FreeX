@@ -10,7 +10,7 @@ namespace Freexcel.Core.IO.Tests;
 /// </summary>
 public sealed class XlsxLoadWarningsTests
 {
-    // ── XlsxLoadResult record ────────────────────────────────────────────────
+    // XlsxLoadResult record
 
     [Fact]
     public void XlsxLoadResult_HasWarnings_IsFalse_WhenWarningsEmpty()
@@ -43,7 +43,7 @@ public sealed class XlsxLoadWarningsTests
         resultNoWarnings.Workbook.Should().BeSameAs(workbook);
     }
 
-    // ── LoadWithWarnings round-trip (clean file → no warnings) ───────────────
+    // LoadWithWarnings round-trip: clean file produces no warnings
 
     [Fact]
     public void LoadWithWarnings_CleanFile_ReturnsNoWarnings()
@@ -73,7 +73,7 @@ public sealed class XlsxLoadWarningsTests
         cell1.Should().Be(cell2);
     }
 
-    // ── IFileAdapter.Load() delegates to LoadWithWarnings ───────────────────
+    // IFileAdapter.Load() delegates to LoadWithWarnings
 
     [Fact]
     public void Load_IsConsistentWithLoadWithWarnings_Workbook()
@@ -87,7 +87,7 @@ public sealed class XlsxLoadWarningsTests
         workbook.Sheets.Should().HaveCount(1);
     }
 
-    // ── Source-level regression: no more Debug.WriteLine in catch blocks ─────
+    // Source-level regression: no more Debug.WriteLine in catch blocks
 
     [Fact]
     public void XlsxFileAdapterSource_DoesNotContainDebugWriteLineInCatchBlocks()
@@ -113,7 +113,7 @@ public sealed class XlsxLoadWarningsTests
         adapterSource.Should().Contain("warnings.Add(");
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // Helpers
 
     private static byte[] SaveWorkbookToBytes(IFileAdapter adapter, Workbook workbook)
     {

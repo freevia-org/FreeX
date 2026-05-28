@@ -61,6 +61,30 @@ public sealed class ExcelParityInformationTests
         _eval.Evaluate("=CELL(\"address\",B2)", Sheet()).Should().Be(new TextValue("$B$2"));
     }
 
+    [Fact]
+    public void SheetAndSheets_ReturnWorkbookSheetOrdinals()
+    {
+        var workbook = new Workbook();
+        var first = workbook.AddSheet("Input");
+        var second = workbook.AddSheet("Data");
+        workbook.AddSheet("Summary");
+
+        _eval.Evaluate("=SHEET()", second, workbook).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SHEET(\"Summary\")", first, workbook).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=SHEET(Data!B2)", first, workbook).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SHEETS()", second, workbook).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=SHEETS(Data!B2:C4)", first, workbook).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Sheet_ReturnsNotAvailableForMissingSheetName()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Input");
+
+        _eval.Evaluate("=SHEET(\"Missing\")", sheet, workbook).Should().Be(ErrorValue.NA);
+    }
+
     private static Sheet Sheet() => new(SheetId.New(), "S");
 
     private static void AssertColumn(ScalarValue value, params bool[] expected)
