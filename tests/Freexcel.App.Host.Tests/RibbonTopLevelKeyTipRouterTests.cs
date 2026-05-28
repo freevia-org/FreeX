@@ -44,4 +44,17 @@ public sealed class RibbonTopLevelKeyTipRouterTests
             .Should()
             .BeTrue();
     }
+
+    [Theory]
+    [InlineData("H", new[] { "F", "H", "N" })]
+    [InlineData("JA", new[] { "J", "JA", "JD" })]
+    [InlineData("W", new[] { "F", "", null, "W" })]
+    public void HasLongerVisibleKeyTipPrefix_DoesNotDeferExactOrUnrelatedRoutes(
+        string prefix,
+        string?[] keyTips)
+    {
+        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(prefix, keyTips)
+            .Should()
+            .BeFalse("ordinary top-level keytips should route when no visible longer prefix exists");
+    }
 }
