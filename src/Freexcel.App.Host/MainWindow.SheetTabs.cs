@@ -184,6 +184,7 @@ public partial class MainWindow
     private void UpdateSheetTabNavigation()
     {
         UpdateSheetTabViewportWidth();
+        UpdateSheetTabsGridRuleGeometry();
         var canScroll = SheetTabsScroller.ScrollableWidth > SheetTabScrollEpsilon;
         SheetNavLeftBtn.Visibility = canScroll && SheetTabsScroller.HorizontalOffset > SheetTabScrollEpsilon
             ? Visibility.Visible
@@ -219,6 +220,62 @@ public partial class MainWindow
 
         SheetTabsScroller.Width = targetWidth;
         Dispatcher.BeginInvoke(UpdateSheetTabNavigation, DispatcherPriority.Loaded);
+    }
+
+    private void UpdateSheetTabsGridRuleGeometry()
+    {
+        if (SheetTabsGridRule.ActualWidth <= 0)
+            return;
+
+        var activeTab = _sheetTabs.FirstOrDefault(tab => tab.Id == _currentSheetId);
+        if (activeTab is null ||
+            SheetTabsControl.ItemContainerGenerator.ContainerFromItem(activeTab) is not FrameworkElement container ||
+            container.ActualWidth <= 0)
+        {
+            SheetTabsGridRule.Data = new LineGeometry(new Point(0, 0.5), new Point(SheetTabsGridRule.ActualWidth, 0.5));
+            return;
+        }
+
+        var containerBounds = container.TransformToAncestor(SheetTabsRowGrid)
+            .TransformBounds(new Rect(new Point(0, 0), container.RenderSize));
+        var ruleBounds = SheetTabsGridRule.TransformToAncestor(SheetTabsRowGrid)
+            .TransformBounds(new Rect(new Point(0, 0), SheetTabsGridRule.RenderSize));
+        var width = SheetTabsGridRule.ActualWidth;
+        var left = Math.Clamp(containerBounds.Left - ruleBounds.Left, 0, width);
+        var right = Math.Clamp(containerBounds.Right - ruleBounds.Left, 0, width);
+        if (right - left < 24)
+        {
+            SheetTabsGridRule.Data = new LineGeometry(new Point(0, 0.5), new Point(width, 0.5));
+            return;
+        }
+
+        const double top = 0.5;
+        const double shoulderWidth = 8.0;
+        const double shoulderDrop = 3.0;
+
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(new Point(0, top), false, false);
+            context.LineTo(new Point(left, top), true, true);
+            context.BezierTo(
+                new Point(left + shoulderWidth, top),
+                new Point(left + shoulderWidth, shoulderDrop),
+                new Point(left + shoulderWidth, shoulderDrop),
+                true,
+                true);
+            context.BeginFigure(new Point(right - shoulderWidth, shoulderDrop), false, false);
+            context.BezierTo(
+                new Point(right - shoulderWidth, shoulderDrop),
+                new Point(right - shoulderWidth, top),
+                new Point(right, top),
+                true,
+                true);
+            context.LineTo(new Point(width, top), true, true);
+        }
+
+        geometry.Freeze();
+        SheetTabsGridRule.Data = geometry;
     }
 
     private void BringCurrentSheetTabIntoView()
