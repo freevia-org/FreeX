@@ -104,6 +104,27 @@ public static partial class FlashFillService
         return null;
     }
 
+    private static Func<string, string?>? TryExtractFinalDottedToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFinalDottedToken(e.Source, out var token) && token == e.Expected))
+            return null;
+
+        return source => TryGetFinalDottedToken(source, out var token) ? token : null;
+    }
+
+    private static bool TryGetFinalDottedToken(string source, out string token)
+    {
+        var parts = source.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 2)
+        {
+            token = string.Empty;
+            return false;
+        }
+
+        token = parts[^1];
+        return token.Length > 0;
+    }
+
     private static Func<string, string?>? TryEmailDisplayName(IReadOnlyList<(string Source, string Expected)> examples)
     {
         if (!examples.All(e => TryFormatDottedEmailUserName(e.Source, out var displayName) && displayName == e.Expected))
