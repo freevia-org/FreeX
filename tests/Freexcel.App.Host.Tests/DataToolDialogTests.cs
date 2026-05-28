@@ -376,6 +376,8 @@ public sealed class DataToolDialogTests
     [InlineData("0,4", 12)]
     [InlineData("4,12", 12)]
     [InlineData("", 12)]
+    [InlineData("   ", 12)]
+    [InlineData("1", 1)]
     public void TextToColumnsResult_RejectsInvalidFixedWidthBreakPositions(string text, int maxLength)
     {
         TextToColumnsDialog.TryParseFixedWidthBreakPositions(text, maxLength, out var positions).Should().BeFalse();

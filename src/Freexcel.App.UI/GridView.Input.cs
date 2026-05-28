@@ -405,23 +405,13 @@ public partial class GridView
             return;
         }
 
-        if (pos.X < ActualRowHeaderWidth || pos.Y < EffectiveColHeaderHeight) { base.OnMouseRightButtonDown(e); return; }
-
-        foreach (var rm in Viewport.RowMetrics)
+        if (HitTestViewportCell(Viewport, default, pos) is { } contextCell)
         {
-            double top = rm.TopOffset + EffectiveColHeaderHeight;
-            if (pos.Y < top || pos.Y >= top + rm.Height) continue;
-            foreach (var cm in Viewport.ColMetrics)
-            {
-                double left = cm.LeftOffset + ActualRowHeaderWidth;
-                if (pos.X >= left && pos.X < left + cm.Width)
-                {
-                    ContextMenuRequested?.Invoke(new CellAddress(default, rm.Row, cm.Col), pos);
-                    e.Handled = true;
-                    return;
-                }
-            }
+            ContextMenuRequested?.Invoke(contextCell, pos);
+            e.Handled = true;
+            return;
         }
+
         base.OnMouseRightButtonDown(e);
     }
 
