@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -59,6 +60,36 @@ public sealed class SpellCheckWorkflowPlannerTests
         edits.Select(edit => edit.Address).Should().Equal(firstAddress, secondAddress);
         edits[0].NewCell.Value.Should().Be(new TextValue("the and the"));
         edits[1].NewCell.Value.Should().Be(new TextValue("THE value"));
+    }
+
+    [Fact]
+    public void BuildReplaceAllEdits_ScansLargeIssueListsWithoutGroupingAllocation()
+    {
+        var sheet = SheetId.New();
+        var issues = Enumerable.Range(0, 5_000)
+            .Select(index =>
+            {
+                var address = new CellAddress(sheet, (uint)(index / 2 + 1), 1);
+                return Issue(address, index % 3 == 0 ? "TEH" : "adn", $"{index} TEH value");
+            })
+            .ToArray();
+
+        var edits = SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, "teh", "the");
+
+        edits.Should().HaveCount(1_667);
+        edits.Select(edit => edit.Address).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void BuildReplaceAllEdits_UsesSinglePassAddressDeduplication()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "Freexcel.App.Host",
+            "SpellCheckWorkflowPlanner.cs"));
+
+        source.Should().Contain("var editedAddresses = new HashSet<CellAddress>();");
+        source.Should().NotContain(".GroupBy(");
     }
 
     private static SpellingIssue Issue(CellAddress address, string word, string cellText) =>
