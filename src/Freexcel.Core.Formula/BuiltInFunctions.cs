@@ -157,6 +157,7 @@ public static partial class BuiltInFunctions
         ["COLUMN"]      = (Column, 0, 1),
         ["ROWS"]        = (Rows, 1, 1),
         ["COLUMNS"]     = (Columns, 1, 1),
+        ["AREAS"]       = (Areas, 1, 1),
         ["SHEET"]       = (SheetFunc, 0, 1),
         ["SHEETS"]      = (SheetsFunc, 0, 1),
 

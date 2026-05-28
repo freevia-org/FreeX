@@ -94,7 +94,7 @@ public sealed class FormulaEvaluator
         "DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET",
         "DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP",
         "DVAR", "DVARP",
-        "ROW", "COLUMN", "ROWS", "COLUMNS", "SHEET", "SHEETS", "COUNTBLANK",
+        "ROW", "COLUMN", "ROWS", "COLUMNS", "AREAS", "SHEET", "SHEETS", "COUNTBLANK",
         "AGGREGATE", "CELL", "GETPIVOTDATA",
         "TTEST", "T.TEST", "ZTEST", "Z.TEST", "FTEST", "F.TEST", "CHITEST", "CHISQ.TEST",
         "FREQUENCY",
@@ -160,7 +160,7 @@ public sealed class FormulaEvaluator
 
     private static readonly HashSet<string> SingleCellReferenceRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "ROW", "COLUMN", "ROWS", "COLUMNS", "SHEET", "SHEETS", "COUNTBLANK", "CELL", "GETPIVOTDATA"
+        "ROW", "COLUMN", "ROWS", "COLUMNS", "AREAS", "SHEET", "SHEETS", "COUNTBLANK", "CELL", "GETPIVOTDATA"
     };
 
     /// <summary>
@@ -1345,7 +1345,7 @@ public sealed class FormulaEvaluator
         out ScalarValue result)
     {
         result = BlankValue.Instance;
-        if (node.Arguments.Count != 1 || functionName is not ("ROWS" or "COLUMNS"))
+        if (node.Arguments.Count != 1 || functionName is not ("ROWS" or "COLUMNS" or "AREAS"))
             return false;
 
         if (!TryAsRangeRef(node.Arguments[0], out var range))
@@ -1354,6 +1354,12 @@ public sealed class FormulaEvaluator
         if (range.SheetName is not null && !context.SheetExists(range.SheetName))
         {
             result = ErrorValue.Ref;
+            return true;
+        }
+
+        if (functionName == "AREAS")
+        {
+            result = new NumberValue(1);
             return true;
         }
 
