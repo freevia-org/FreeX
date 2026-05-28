@@ -198,7 +198,8 @@ public sealed class PerformanceReviewMeasurementTests
                 new RecalcEngine(graph, evaluator),
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
-                workbook);
+                workbook,
+                new NullUserMessageService());
 
             window.Width = 1500;
             window.Height = 720;
@@ -273,7 +274,8 @@ public sealed class PerformanceReviewMeasurementTests
                 new RecalcEngine(graph, evaluator),
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
-                workbook)
+                workbook,
+                new NullUserMessageService())
             {
                 Width = 1280,
                 Height = 720
@@ -358,7 +360,8 @@ public sealed class PerformanceReviewMeasurementTests
                 new RecalcEngine(graph, evaluator),
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
-                workbook)
+                workbook,
+                new NullUserMessageService())
             {
                 Width = 1280,
                 Height = 720
