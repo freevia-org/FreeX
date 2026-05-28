@@ -90,6 +90,25 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
+    {
+        using var stream = PositionedStreamFromString("ignored", """
+            {
+              "Name": "Offset",
+              "Sheets": [
+                { "Name": "Sheet1" }
+              ]
+            }
+            """);
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.Name.Should().Be("Offset");
+        workbook.GetSheetAt(0).Name.Should().Be("Sheet1");
+        stream.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void Load_RejectsUnsupportedFutureNativeJsonSchema()
     {
         const string futureJson = """
@@ -187,6 +206,15 @@ public sealed class NativeJsonSchemaTests
         var workbook = new NativeJsonAdapter().Load(stream);
 
         workbook.GetSheetAt(0).GetCell(1, 1)!.Value.Should().Be(new TextValue("not-bool"));
+    }
+
+    private static MemoryStream PositionedStreamFromString(string prefix, string value)
+    {
+        var prefixBytes = Encoding.UTF8.GetBytes(prefix);
+        var valueBytes = Encoding.UTF8.GetBytes(value);
+        var stream = new MemoryStream(prefixBytes.Concat(valueBytes).ToArray());
+        stream.Position = prefixBytes.Length;
+        return stream;
     }
 
     private static string FindWorkspaceFile(params string[] parts)

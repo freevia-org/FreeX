@@ -309,6 +309,29 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
+    {
+        using var stream = PositionedStreamFromString("ignored", """
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Offset">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="String">Gamma</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Offset");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Gamma"));
+        stream.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesSafeXsltAndLoadsSpreadsheetMlOutput()
     {
         using var source = StreamFromString("""
