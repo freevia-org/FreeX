@@ -1154,7 +1154,7 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
-    public void PieRenderer_AnglesInsideDataLabelsWhenRotationIsRequested()
+    public void PieRenderer_RotatesInsideDataLabelsWhenRotationIsRequested()
     {
         var sheetId = SheetId.New();
         var chart = new ChartModel
@@ -1176,8 +1176,50 @@ public sealed class ChartRendererTests
             [],
             []));
 
-        model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject
-            .AreInsideLabelsAngled.Should().BeTrue();
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        series.AreInsideLabelsAngled.Should().BeFalse();
+        series.InsideLabelFormat.Should().BeEmpty();
+        model.Annotations.OfType<TextAnnotation>().Should().ContainSingle().Which.TextRotation.Should().Be(45);
+    }
+
+    [Theory]
+    [InlineData(ChartType.Pie)]
+    [InlineData(ChartType.Doughnut)]
+    public void PieRenderer_UsesTextAnnotationsForArbitraryDataLabelAngles(ChartType chartType)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = chartType,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowDataLabels = true,
+            DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
+            DataLabelAngle = 37,
+            ShowDataLabelCategoryName = true,
+            ShowDataLabelPercentage = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "25"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "75")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        series.InsideLabelFormat.Should().BeEmpty();
+        series.OutsideLabelFormat.Should().BeEmpty();
+
+        var annotations = model.Annotations.OfType<TextAnnotation>().ToList();
+        annotations.Should().HaveCount(2);
+        annotations.Should().OnlyContain(annotation => annotation.TextRotation == 37);
+        annotations[0].Text.Should().Be("Q1, 25%");
+        annotations[1].Text.Should().Be("Q2, 75%");
     }
 
     [Fact]

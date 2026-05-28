@@ -98,17 +98,18 @@ public static partial class ChartRenderer
                     ChartDataLabelPosition.InsideEnd => 0.8,
                     _ => 0.8
                 },
-                AreInsideLabelsAngled = Math.Abs(chart.DataLabelAngle) > 0.5,
-                InsideLabelFormat = chart.ShowDataLabels && chart.DataLabelPosition != ChartDataLabelPosition.OutsideEnd
+                AreInsideLabelsAngled = ShouldUseNativePieLabels(chart) && Math.Abs(chart.DataLabelAngle) > 0.5,
+                InsideLabelFormat = ShouldUseNativePieLabels(chart) && chart.DataLabelPosition != ChartDataLabelPosition.OutsideEnd
                     ? ChartDataLabelFormatter.GetPieLabelFormat(chart, pieSeriesName)
                     : "",
-                OutsideLabelFormat = chart.ShowDataLabels && chart.DataLabelPosition == ChartDataLabelPosition.OutsideEnd
+                OutsideLabelFormat = ShouldUseNativePieLabels(chart) && chart.DataLabelPosition == ChartDataLabelPosition.OutsideEnd
                     ? ChartDataLabelFormatter.GetPieLabelFormat(chart, pieSeriesName)
                     : ""
             };
             var pieFormat = GetSeriesFormat(chart, 0);
             ApplyPieFormat(pieSeries, pieFormat, theme);
             ApplyPieDataLabelStyle(pieSeries, chart, theme);
+            var pieLabelPoints = new List<PieDataLabelPoint>();
             for (uint r = dataStartRow; r <= endRow; r++)
             {
                 if (!cellLookup.TryGetValue((r, dataStartCol), out var cell)) continue;
@@ -124,8 +125,10 @@ public static partial class ChartRenderer
                 else
                     slice.Fill = PieSlicePalette[sliceIndex % PieSlicePalette.Length];
                 pieSeries.Slices.Add(slice);
+                pieLabelPoints.Add(new PieDataLabelPoint(label, v));
             }
             model.Series.Add(pieSeries);
+            AddPieDataLabelAnnotations(model, chart, theme, pieSeriesName, pieLabelPoints);
             return model;
         }
 
