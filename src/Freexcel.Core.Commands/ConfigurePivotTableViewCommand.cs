@@ -42,9 +42,9 @@ public sealed class ConfigurePivotTableViewCommand : IWorkbookCommand
         _snapshot = PivotViewSnapshot.Capture(pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
 
-        Replace(pivotTable.LabelFilters, _labelFilters);
-        Replace(pivotTable.ValueFilters, _valueFilters);
-        Replace(pivotTable.Sorts, _sorts);
+        PivotTableCommandCollections.Replace(pivotTable.LabelFilters, _labelFilters);
+        PivotTableCommandCollections.Replace(pivotTable.ValueFilters, _valueFilters);
+        PivotTableCommandCollections.Replace(pivotTable.Sorts, _sorts);
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
         foreach (var chart in sheet.Charts.Where(chart =>
@@ -70,12 +70,6 @@ public sealed class ConfigurePivotTableViewCommand : IWorkbookCommand
         _targetSnapshot = null;
     }
 
-    private static void Replace<T>(List<T> target, IReadOnlyList<T> source)
-    {
-        target.Clear();
-        target.AddRange(source);
-    }
-
     private sealed record PivotViewSnapshot(
         IReadOnlyList<PivotLabelFilterModel> LabelFilters,
         IReadOnlyList<PivotValueFilterModel> ValueFilters,
@@ -89,9 +83,9 @@ public sealed class ConfigurePivotTableViewCommand : IWorkbookCommand
 
         public void Restore(PivotTableModel pivotTable)
         {
-            Replace(pivotTable.LabelFilters, LabelFilters);
-            Replace(pivotTable.ValueFilters, ValueFilters);
-            Replace(pivotTable.Sorts, Sorts);
+            PivotTableCommandCollections.Replace(pivotTable.LabelFilters, LabelFilters);
+            PivotTableCommandCollections.Replace(pivotTable.ValueFilters, ValueFilters);
+            PivotTableCommandCollections.Replace(pivotTable.Sorts, Sorts);
         }
     }
 }

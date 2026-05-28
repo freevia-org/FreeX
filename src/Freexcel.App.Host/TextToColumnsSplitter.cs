@@ -13,13 +13,16 @@ internal static class TextToColumnsSplitter
         char? textQualifier,
         bool treatConsecutiveDelimitersAsOne)
     {
+        if (textQualifier is not { } qualifier || text.IndexOf(qualifier) < 0)
+            return SplitUnqualifiedText(text, delimiters, treatConsecutiveDelimitersAsOne);
+
         var parts = new List<string>();
         var current = new System.Text.StringBuilder();
         var inQualifiedText = false;
         for (var index = 0; index < text.Length; index++)
         {
             var ch = text[index];
-            if (textQualifier is { } qualifier && ch == qualifier)
+            if (ch == qualifier)
             {
                 if (inQualifiedText && index + 1 < text.Length && text[index + 1] == qualifier)
                 {
@@ -51,6 +54,58 @@ internal static class TextToColumnsSplitter
 
         parts.Add(current.ToString());
         return parts.ToArray();
+    }
+
+    private static string[] SplitUnqualifiedText(
+        string text,
+        string delimiters,
+        bool treatConsecutiveDelimitersAsOne)
+    {
+        var partCount = CountUnqualifiedParts(text, delimiters, treatConsecutiveDelimitersAsOne);
+        var parts = new string[partCount];
+        var start = 0;
+        var writeIndex = 0;
+
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (!IsDelimiter(text[index], delimiters))
+                continue;
+
+            parts[writeIndex++] = text.Substring(start, index - start);
+
+            if (treatConsecutiveDelimitersAsOne)
+            {
+                while (index + 1 < text.Length && IsDelimiter(text[index + 1], delimiters))
+                    index++;
+            }
+
+            start = index + 1;
+        }
+
+        parts[writeIndex] = text.Substring(start);
+        return parts;
+    }
+
+    private static int CountUnqualifiedParts(
+        string text,
+        string delimiters,
+        bool treatConsecutiveDelimitersAsOne)
+    {
+        var count = 1;
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (!IsDelimiter(text[index], delimiters))
+                continue;
+
+            count++;
+            if (treatConsecutiveDelimitersAsOne)
+            {
+                while (index + 1 < text.Length && IsDelimiter(text[index + 1], delimiters))
+                    index++;
+            }
+        }
+
+        return count;
     }
 
     public static string[] SplitFixedWidthText(string text, IReadOnlyList<int> breakPositions)

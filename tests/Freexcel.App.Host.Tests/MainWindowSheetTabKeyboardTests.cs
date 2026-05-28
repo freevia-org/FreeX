@@ -56,7 +56,8 @@ public sealed class MainWindowSheetTabKeyboardTests
             var addBounds = BoundsRelativeToWindow(addSheet, window);
             var rightNavBounds = BoundsRelativeToWindow(rightNav, window);
 
-            addBounds.Left.Should().BeApproximately(scrollerBounds.Right + 2, 1.0);
+            addBounds.Left.Should().BeLessThan(scrollerBounds.Right, "the ghost tab intentionally overlaps the clipped tab viewport so it reads as the next tab");
+            addBounds.Right.Should().BeGreaterThan(scrollerBounds.Right);
             rightNavBounds.Left.Should().BeGreaterThan(addBounds.Right);
             rightNavBounds.Left.Should().BeGreaterThan(addBounds.Right + 20);
             addSheet.ActualWidth.Should().BeGreaterThan(34);

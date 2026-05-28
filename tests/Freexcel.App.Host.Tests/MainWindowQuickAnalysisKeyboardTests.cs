@@ -43,7 +43,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.IconSet);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
-            harness.FocusMenuItem("Column");
+            harness.FocusMenuItem("Column", "Charts");
 
             harness.FocusedMenuHeader.Should().Be("Column");
             harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ColumnChart);
