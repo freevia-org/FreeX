@@ -99,11 +99,8 @@ public static class ChartTypeSupport
         if (chart.Type == ChartType.Bubble)
             return Math.Max(0, (int)(chart.DataRange.End.Col - chart.DataRange.Start.Col) / 2);
 
-        var startCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
-        if (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories)
-            startCol++;
-
-        return startCol > chart.DataRange.End.Col
+        var startCol = GetSeriesValueStartColumn(chart);
+        return IsPastEndColumn(chart, startCol)
             ? 0
             : (int)(chart.DataRange.End.Col - startCol + 1);
     }
@@ -150,10 +147,8 @@ public static class ChartTypeSupport
 
     private static IReadOnlyList<uint> GetSeriesValueColumns(ChartModel chart)
     {
-        var startCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
-        if (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories)
-            startCol++;
-        if (startCol > chart.DataRange.End.Col)
+        var startCol = GetSeriesValueStartColumn(chart);
+        if (IsPastEndColumn(chart, startCol))
             return [];
 
         var columns = new List<uint>();
@@ -161,4 +156,15 @@ public static class ChartTypeSupport
             columns.Add(col);
         return columns;
     }
+
+    private static uint GetSeriesValueStartColumn(ChartModel chart)
+    {
+        var startCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
+        return chart.Type == ChartType.Scatter && !chart.FirstColIsCategories
+            ? startCol + 1
+            : startCol;
+    }
+
+    private static bool IsPastEndColumn(ChartModel chart, uint column) =>
+        column > chart.DataRange.End.Col;
 }
