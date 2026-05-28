@@ -17,6 +17,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static readonly XName SpreadsheetTypeAttribute = SpreadsheetNs + "Type";
     private static readonly XName SpreadsheetMergeAcrossAttribute = SpreadsheetNs + "MergeAcross";
     private static readonly XName SpreadsheetMergeDownAttribute = SpreadsheetNs + "MergeDown";
+    private static readonly XName SpreadsheetHrefAttribute = SpreadsheetNs + "HRef";
+    private static readonly XName SpreadsheetHrefScreenTipAttribute = SpreadsheetNs + "HRefScreenTip";
 
     public string Extension => ".xml";
     public string FormatName => "XML Spreadsheet 2003";
@@ -111,9 +113,20 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 if (columnIndex > CellAddress.MaxCol)
                     break;
 
+                var address = new CellAddress(sheet.Id, rowIndex, columnIndex);
                 var cell = ReadCell(cellElement);
-                if (cell.Value is not BlankValue || cell.FormulaText is not null)
-                    sheet.SetCell(new CellAddress(sheet.Id, rowIndex, columnIndex), cell);
+                var hyperlinkTarget = cellElement.Attribute(SpreadsheetHrefAttribute)?.Value;
+                if (cell.Value is not BlankValue || cell.FormulaText is not null || !string.IsNullOrWhiteSpace(hyperlinkTarget))
+                    sheet.SetCell(address, cell);
+
+                if (!string.IsNullOrWhiteSpace(hyperlinkTarget))
+                {
+                    sheet.Hyperlinks[address] = hyperlinkTarget.Trim();
+                    sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+                        GetHyperlinkTargetKind(hyperlinkTarget),
+                        cellElement.Attribute(SpreadsheetHrefScreenTipAttribute)?.Value?.Trim() ?? "",
+                        GetHyperlinkBookmark(hyperlinkTarget));
+                }
 
                 var mergeAcross = ReadMergeExtent(cellElement, SpreadsheetMergeAcrossAttribute);
                 if (TryReadMergeRange(sheet.Id, rowIndex, columnIndex, cellElement, mergeAcross, out var mergeRange))
@@ -260,8 +273,30 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 continue;
 
             mergeStarts.TryGetValue((address.Row, address.Col), out var mergeRange);
+            sheet.Hyperlinks.TryGetValue(address, out var hyperlinkTarget);
+            sheet.HyperlinkMetadata.TryGetValue(address, out var hyperlinkMetadata);
             emitted.Add((address.Row, address.Col));
-            cells.Add(new SpreadsheetXmlCell(address.Row, address.Col, cell, mergeRange));
+            cells.Add(new SpreadsheetXmlCell(address.Row, address.Col, cell, mergeRange, hyperlinkTarget, hyperlinkMetadata));
+        }
+
+        foreach (var (address, hyperlinkTarget) in sheet.Hyperlinks
+                     .Where(entry => !emitted.Contains((entry.Key.Row, entry.Key.Col)))
+                     .OrderBy(entry => entry.Key.Row)
+                     .ThenBy(entry => entry.Key.Col))
+        {
+            if (IsCoveredByMergeNonAnchor(sheet, address))
+                continue;
+
+            mergeStarts.TryGetValue((address.Row, address.Col), out var mergeRange);
+            sheet.HyperlinkMetadata.TryGetValue(address, out var hyperlinkMetadata);
+            emitted.Add((address.Row, address.Col));
+            cells.Add(new SpreadsheetXmlCell(
+                address.Row,
+                address.Col,
+                Cell.FromValue(BlankValue.Instance),
+                mergeRange,
+                hyperlinkTarget,
+                hyperlinkMetadata));
         }
 
         foreach (var mergeRange in sheet.MergedRegions
@@ -273,7 +308,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 mergeRange.Start.Row,
                 mergeRange.Start.Col,
                 Cell.FromValue(BlankValue.Instance),
-                mergeRange));
+                mergeRange,
+                HyperlinkTarget: null,
+                HyperlinkMetadata: null));
         }
 
         foreach (var cell in cells.OrderBy(cell => cell.Row).ThenBy(cell => cell.Col))
@@ -306,6 +343,13 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
         if (cell.Cell.FormulaText is { Length: > 0 } formulaText)
             element.SetAttributeValue(SpreadsheetFormulaAttribute, formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText : $"={formulaText}");
+
+        if (!string.IsNullOrWhiteSpace(cell.HyperlinkTarget))
+        {
+            element.SetAttributeValue(SpreadsheetHrefAttribute, cell.HyperlinkTarget);
+            if (!string.IsNullOrWhiteSpace(cell.HyperlinkMetadata?.ScreenTip))
+                element.SetAttributeValue(SpreadsheetHrefScreenTipAttribute, cell.HyperlinkMetadata.ScreenTip);
+        }
 
         if (cell.Cell.Value is not BlankValue)
             element.Add(ToDataElement(cell.Cell.Value));
@@ -360,5 +404,24 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         return sanitized.Length <= 31 ? sanitized : sanitized[..31];
     }
 
-    private readonly record struct SpreadsheetXmlCell(uint Row, uint Col, Cell Cell, GridRange? MergeRange);
+    private static HyperlinkTargetKind GetHyperlinkTargetKind(string target)
+    {
+        if (target.StartsWith("#", StringComparison.Ordinal))
+            return HyperlinkTargetKind.PlaceInThisDocument;
+
+        return target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
+            ? HyperlinkTargetKind.EmailAddress
+            : HyperlinkTargetKind.ExistingFileOrWebPage;
+    }
+
+    private static string GetHyperlinkBookmark(string target) =>
+        target.StartsWith("#", StringComparison.Ordinal) ? target[1..] : "";
+
+    private readonly record struct SpreadsheetXmlCell(
+        uint Row,
+        uint Col,
+        Cell Cell,
+        GridRange? MergeRange,
+        string? HyperlinkTarget,
+        HyperlinkMetadata? HyperlinkMetadata);
 }
