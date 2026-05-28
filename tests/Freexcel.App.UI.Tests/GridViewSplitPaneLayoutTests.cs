@@ -419,6 +419,21 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneScrollbarLayoutPlanner_ClampsVisibleSpanToRangeWhenCalculatingThumb()
+    {
+        var track = new Rect(100, 20, 200, 10);
+
+        var thumb = SplitPaneScrollbarLayoutPlanner.CalculateThumb(
+            SplitPaneScrollbarOrientation.Horizontal,
+            track,
+            firstVisibleIndex: 50,
+            visibleCount: 500,
+            maxIndex: 200);
+
+        thumb.Should().Be(new Rect(track.Left + 1, track.Top + 1, track.Width - 2, track.Height - 2));
+    }
+
+    [Fact]
     public void CalculateSplitPaneScrollbarChrome_SizesThumbsFromVisibleSpan()
     {
         var viewport = SplitViewport();
