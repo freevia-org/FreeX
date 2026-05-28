@@ -6046,6 +6046,21 @@ public class FunctionLibraryTests
         _eval.Evaluate("=T(42)", MakeSheet()).Should().Be(new TextValue(""));
 
     [Fact]
+    public void T_RangeArgument_PropagatesElementErrors()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("hello")),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(42)));
+
+        AssertColumn(
+            _eval.Evaluate("=T(A1:A3)", sheet),
+            new TextValue("hello"),
+            ErrorValue.NA,
+            new TextValue(""));
+    }
+
+    [Fact]
     public void Hyperlink_ReturnsDisplayTextWhenFriendlyNameIsProvided()
     {
         _eval.Evaluate("=HYPERLINK(\"https://example.com\",\"Example\")", MakeSheet())
