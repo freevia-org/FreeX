@@ -244,9 +244,14 @@ public sealed class PageLayoutInputParserTests
     [InlineData("", true, null)]
     [InlineData("auto", true, null)]
     [InlineData("300", true, 300)]
+    [InlineData("300 dpi", true, 300)]
+    [InlineData(" 600 DPI ", true, 600)]
     [InlineData("0", false, null)]
     [InlineData("-1", false, null)]
     [InlineData("600.5", false, null)]
+    [InlineData("600.5 dpi", false, null)]
+    [InlineData("0 dpi", false, null)]
+    [InlineData("dpi", false, null)]
     public void TryParseOptionalPrintQuality_ParsesAutoOrPositiveIntegerDpi(
         string input,
         bool expected,
