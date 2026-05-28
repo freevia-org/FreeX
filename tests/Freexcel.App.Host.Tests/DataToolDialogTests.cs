@@ -1191,6 +1191,37 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialog_ExposesAccessibleReferenceFields()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AdvancedFilterDialog(SheetId.New(), "A1:C12");
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                textBoxes.Select(AutomationProperties.GetAutomationId)
+                    .Should()
+                    .ContainInOrder(
+                        "AdvancedFilterListRangeBox",
+                        "AdvancedFilterCriteriaRangeBox",
+                        "AdvancedFilterCopyToBox");
+                textBoxes.Select(AutomationProperties.GetHelpText)
+                    .Should()
+                    .ContainInOrder(
+                        "Enter the list range to filter, including column labels.",
+                        "Enter the criteria range, including criteria labels.",
+                        "Enter the destination cell or one-row header range when copying filtered records.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void AdvancedFilterDialogOpenedFromKeyboard_FocusesInPlaceAction()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
