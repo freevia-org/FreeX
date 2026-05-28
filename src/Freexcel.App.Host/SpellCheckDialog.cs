@@ -22,6 +22,8 @@ public sealed class SpellCheckDialog : Window
     private readonly TextBox _notInDictionaryBox = new();
     private readonly TextBox _replacementBox = new();
     private readonly ListBox _suggestionsBox = new();
+    private readonly Button _changeButton = new() { Content = "_Change", Width = 90, IsDefault = true };
+    private readonly Button _changeAllButton = new() { Content = "Change A_ll", Width = 90 };
 
     public SpellCheckDialogResult Result { get; private set; }
 
@@ -43,6 +45,7 @@ public sealed class SpellCheckDialog : Window
         AutomationProperties.SetAutomationId(_notInDictionaryBox, "SpellCheckNotInDictionaryBox");
         AutomationProperties.SetHelpText(_notInDictionaryBox, "Shows the word that was not found in the dictionary.");
         _replacementBox.Text = suggestion;
+        _replacementBox.TextChanged += (_, _) => RefreshChangeButtonState();
         AutomationProperties.SetName(_replacementBox, "Change to");
         AutomationProperties.SetAutomationId(_replacementBox, "SpellCheckReplacementBox");
         AutomationProperties.SetHelpText(_replacementBox, "Enter the replacement text for the misspelled word.");
@@ -64,6 +67,7 @@ public sealed class SpellCheckDialog : Window
         _suggestionsBox.MouseDoubleClick += (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text));
 
         Content = CreateSpellCheckContent(word);
+        RefreshChangeButtonState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -86,6 +90,13 @@ public sealed class SpellCheckDialog : Window
     {
         Result = result;
         DialogResult = true;
+    }
+
+    private void RefreshChangeButtonState()
+    {
+        var hasReplacement = !string.IsNullOrWhiteSpace(_replacementBox.Text);
+        _changeButton.IsEnabled = hasReplacement;
+        _changeAllButton.IsEnabled = hasReplacement;
     }
 
     private void FocusInitialKeyboardTarget()
@@ -121,8 +132,8 @@ public sealed class SpellCheckDialog : Window
         var actionButtons = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Ignore _Once", Width = 118 }, "SpellCheckIgnoreOnceButton", "Ignore this occurrence.", (_, _) => Accept(CreateIgnoreResult())));
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Ignore _All", Width = 90 }, "SpellCheckIgnoreAllButton", "Ignore all occurrences.", (_, _) => Accept(CreateIgnoreAllResult())));
-        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Change", Width = 90, IsDefault = true }, "SpellCheckChangeButton", "Replace this occurrence.", (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
-        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Change A_ll", Width = 90 }, "SpellCheckChangeAllButton", "Replace all occurrences.", (_, _) => Accept(CreateReplaceAllResult(word, _replacementBox.Text))));
+        actionButtons.Children.Add(CreateSpellingButton(_changeButton, "SpellCheckChangeButton", "Replace this occurrence.", (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
+        actionButtons.Children.Add(CreateSpellingButton(_changeAllButton, "SpellCheckChangeAllButton", "Replace all occurrences.", (_, _) => Accept(CreateReplaceAllResult(word, _replacementBox.Text))));
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Add to _Dictionary", Width = 118 }, "SpellCheckAddToDictionaryButton", "Add the word to the custom dictionary.", (_, _) => Accept(CreateAddResult(word))));
         var cancelButton = new Button { Content = "Ca_ncel", Width = 90, IsCancel = true, Margin = new Thickness(0, 8, 0, 0) };
         AutomationProperties.SetName(cancelButton, "Cancel spelling");
