@@ -15,12 +15,16 @@ public sealed class ExcelParityModernTextTests
     [InlineData("=TEXTBEFORE(\"Socrates\",\" \",,,1)", "Socrates")]
     [InlineData("=TEXTBEFORE(\"abc\",\"\",1)", "")]
     [InlineData("=TEXTBEFORE(\"abc\",\"\",-1)", "abc")]
+    [InlineData("=TEXTBEFORE(\"\",\"x\")", "")]
+    [InlineData("=TEXTBEFORE(\"\",\"\",-1)", "")]
     [InlineData("=TEXTAFTER(\"Little Red Riding Hood's red hood\",\"Red\")", " Riding Hood's red hood")]
     [InlineData("=TEXTAFTER(\"Little red Riding Hood's red hood\",\"red\",2)", " hood")]
     [InlineData("=TEXTAFTER(\"Little red Riding Hood's red hood\",\"red\",-2)", " Riding Hood's red hood")]
     [InlineData("=TEXTAFTER(\"Marcus Aurelius\",\" \",,,1)", "Aurelius")]
     [InlineData("=TEXTAFTER(\"abc\",\"\",1)", "abc")]
     [InlineData("=TEXTAFTER(\"abc\",\"\",-1)", "")]
+    [InlineData("=TEXTAFTER(\"\",\"x\")", "")]
+    [InlineData("=TEXTAFTER(\"\",\"\",1)", "")]
     public void TextBeforeAfter_ReturnDocumentedExcelResults(string formula, string expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
