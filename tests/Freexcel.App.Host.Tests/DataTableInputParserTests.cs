@@ -30,7 +30,13 @@ public sealed class DataTableInputParserTests
 
     [Theory]
     [InlineData(" C5 ", true, 5, 3)]
+    [InlineData("$C$5", true, 5, 3)]
+    [InlineData("C$5", true, 5, 3)]
+    [InlineData("$C5", true, 5, 3)]
+    [InlineData("R5C3", true, 5, 3)]
     [InlineData("bad", false, 0, 0)]
+    [InlineData("$C", false, 0, 0)]
+    [InlineData("R0C3", false, 0, 0)]
     public void TryParseCell_ParsesTrimmedCellAddress(string input, bool expected, uint row, uint col)
     {
         var result = DataTableInputParser.TryParseCell(input, SheetId, out var address);

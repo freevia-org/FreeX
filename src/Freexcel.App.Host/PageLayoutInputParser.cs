@@ -197,6 +197,9 @@ public static class PageLayoutInputParser
         return true;
     }
 
+    public static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address) =>
+        TryParseR1C1CellReference(input, sheetId, out address);
+
     public static string FormatScaleToFit(WorksheetScaleToFit scaleToFit) =>
         scaleToFit.ScalePercent.HasValue
             ? scaleToFit.ScalePercent.Value.ToString(CultureInfo.InvariantCulture)
