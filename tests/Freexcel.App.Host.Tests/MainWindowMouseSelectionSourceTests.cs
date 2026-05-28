@@ -59,4 +59,34 @@ public sealed class MainWindowMouseSelectionSourceTests
         mouseMove.Should().Contain("AddOrMoveAdditionalSelection(hitAddr.Value, extendSelection: true);");
         mouseUp.Should().Contain("_dragSelectAddsAdditionalRange = false;");
     }
+
+    [Fact]
+    public void DragSelectionDefersStatusRefreshUntilMouseUp()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        var extendSelection = selectionSource[
+            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+        var addSelection = selectionSource[
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
+        var refreshHelper = selectionSource[
+            selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private CellAddress? HitTestCell", StringComparison.Ordinal)];
+        var mouseUp = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal)..];
+
+        windowSource.Should().Contain("private bool _dragSelectStatusRefreshPending;");
+        extendSelection.Should().Contain("RefreshStatusBarAfterDragSelectionChange();");
+        addSelection.Should().Contain("RefreshStatusBarAfterDragSelectionChange();");
+        refreshHelper.Should().Contain("if (_dragSelectActive)");
+        refreshHelper.Should().Contain("_dragSelectStatusRefreshPending = true;");
+        refreshHelper.Should().Contain("CompleteDragSelectionStatusRefresh");
+        refreshHelper.Should().Contain("RefreshStatusBar();");
+        mouseUp.Should().Contain("CompleteDragSelectionStatusRefresh();");
+    }
 }

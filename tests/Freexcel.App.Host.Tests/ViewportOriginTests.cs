@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -5,6 +6,17 @@ namespace Freexcel.App.Host.Tests;
 
 public sealed class ViewportOriginTests
 {
+    [Fact]
+    public void CreateViewport_SkipsObjectDataWhenObjectsAreNotRendered()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+        var createViewport = source[
+            source.IndexOf("private ViewportModel CreateViewport", StringComparison.Ordinal)..
+            source.IndexOf("private SplitPaneViewportOffsets? GetSplitPaneViewportOffsets", StringComparison.Ordinal)];
+
+        createViewport.Should().Contain("IncludeObjects: _options.ObjectsDisplay == FreexcelObjectDisplay.All");
+    }
+
     [Fact]
     public void CalculateViewportOrigin_DoesNotScrollToFrozenPaneBoundary()
     {

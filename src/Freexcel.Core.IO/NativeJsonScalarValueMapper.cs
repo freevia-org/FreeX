@@ -31,7 +31,7 @@ internal static class NativeJsonScalarValueMapper
 
         return type switch
         {
-            "n" => double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var d)
+            "n" => TryParseFiniteNumber(value, out var d)
                 ? new NumberValue(d)
                 : new TextValue(value),
             "b" => new BoolValue(value == "TRUE"),
@@ -47,10 +47,14 @@ internal static class NativeJsonScalarValueMapper
                 "#NUM!" => ErrorValue.Num,
                 _ => new ErrorValue(value)
             },
-            _ => double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var dn)
+            _ => TryParseFiniteNumber(value, out var dn)
                 ? new NumberValue(dn)
                 : bool.TryParse(value, out var db) ? new BoolValue(db)
                 : new TextValue(value)
         };
     }
+
+    private static bool TryParseFiniteNumber(string value, out double number) =>
+        double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out number) &&
+        double.IsFinite(number);
 }

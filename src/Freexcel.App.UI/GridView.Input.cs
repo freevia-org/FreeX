@@ -566,4 +566,17 @@ public partial class GridView
         base.OnMouseLeave(e);
     }
 
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        if (_resizeTarget != ResizeTarget.None)
+        {
+            _resizeTarget = ResizeTarget.None;
+            Cursor = null;
+            ResizeCanceled?.Invoke();
+            InvalidateVisual();
+        }
+
+        base.OnLostMouseCapture(e);
+    }
+
 }

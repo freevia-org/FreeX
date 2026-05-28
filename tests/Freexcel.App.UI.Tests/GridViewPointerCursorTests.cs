@@ -330,6 +330,23 @@ public sealed class GridViewPointerCursorTests
         mouseLeave.Should().Contain("Cursor = null;");
     }
 
+    [Fact]
+    public void LostMouseCaptureCancelsActiveResize()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var eventsSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Events.cs"));
+        var lostCapture = source[
+            source.IndexOf("protected override void OnLostMouseCapture", StringComparison.Ordinal)..];
+
+        eventsSource.Should().Contain("public event Action? ResizeCanceled;");
+        lostCapture.Should().Contain("if (_resizeTarget != ResizeTarget.None)");
+        lostCapture.Should().Contain("_resizeTarget = ResizeTarget.None;");
+        lostCapture.Should().Contain("ResizeCanceled?.Invoke();");
+        lostCapture.Should().Contain("InvalidateVisual();");
+    }
+
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
