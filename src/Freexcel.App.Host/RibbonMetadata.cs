@@ -152,10 +152,15 @@ public static class RibbonMetadata
         return layout != RibbonCommandContentLayout.None;
     }
 
-    private static bool HasRole(DependencyObject element, RibbonMetadataRole role, string legacyTag) =>
-        GetRole(element) == role ||
-        element is FrameworkElement { Tag: string tag } &&
-        string.Equals(tag, legacyTag, StringComparison.Ordinal);
+    private static bool HasRole(DependencyObject element, RibbonMetadataRole role, string legacyTag)
+    {
+        var metadataRole = GetRole(element);
+        if (metadataRole != RibbonMetadataRole.None)
+            return metadataRole == role;
+
+        return element is FrameworkElement { Tag: string tag } &&
+               string.Equals(tag, legacyTag, StringComparison.Ordinal);
+    }
 
     public static bool TryParseCompactTag(string tag, out double fullWidth, out double compactWidth)
     {
