@@ -149,6 +149,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Space, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectAll)]
     [InlineData(Key.Space, ModifierKeys.Control, KeyboardSelectionShortcut.SelectWholeColumns)]
     [InlineData(Key.Space, ModifierKeys.Shift, KeyboardSelectionShortcut.SelectWholeRows)]
+    [InlineData(Key.Multiply, ModifierKeys.Control, KeyboardSelectionShortcut.SelectCurrentRegion)]
     [InlineData(Key.Multiply, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
     [InlineData(Key.D8, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
     [InlineData(Key.D8, ModifierKeys.Control, null)]
