@@ -44,8 +44,7 @@ public sealed class ZoomDialog : Window
         else
         {
             _customZoomButton.Focus();
-            _zoomBox.SelectAll();
-            Keyboard.Focus(_zoomBox);
+            DialogFocus.FocusAndSelect(_zoomBox);
         }
     }
 
@@ -91,9 +90,7 @@ public sealed class ZoomDialog : Window
         {
             MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             _customZoomButton.IsChecked = true;
-            _zoomBox.Focus();
-            _zoomBox.SelectAll();
-            Keyboard.Focus(_zoomBox);
+            DialogFocus.FocusAndSelect(_zoomBox);
             return;
         }
 

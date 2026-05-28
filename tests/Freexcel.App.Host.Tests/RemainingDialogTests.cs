@@ -349,8 +349,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("checkedPreset.Focus();");
         source.Should().Contain("Keyboard.Focus(checkedPreset);");
         source.Should().Contain("else");
-        source.Should().Contain("_zoomBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_zoomBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_zoomBox);");
     }
 
     [Fact]
@@ -389,8 +388,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("TryCreateResult(input, out var result, out var error)");
         source.Should().Contain("MessageBox.Show(this, error");
         source.Should().Contain("_customZoomButton.IsChecked = true");
-        source.Should().Contain("_zoomBox.Focus();");
-        source.Should().Contain("_zoomBox.SelectAll();");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_zoomBox);");
     }
 
     [Fact]
