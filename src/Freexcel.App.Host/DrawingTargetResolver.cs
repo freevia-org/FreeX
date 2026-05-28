@@ -10,9 +10,10 @@ public static class DrawingTargetResolver
             return null;
 
         return GetSelectedOrLast(
-            sheet.Pictures.Where(picture => picture.IsVisible).ToList(),
+            sheet.Pictures,
             selectedAnchor,
-            picture => picture.Anchor);
+            picture => picture.Anchor,
+            picture => picture.IsVisible);
     }
 
     public static DrawingShapeModel? GetTargetDrawingShape(Sheet? sheet, CellAddress? selectedAnchor)
@@ -21,9 +22,10 @@ public static class DrawingTargetResolver
             return null;
 
         return GetSelectedOrLast(
-            sheet.DrawingShapes.Where(shape => shape.IsVisible).ToList(),
+            sheet.DrawingShapes,
             selectedAnchor,
-            shape => shape.Anchor);
+            shape => shape.Anchor,
+            shape => shape.IsVisible);
     }
 
     public static DrawingObjectTarget? GetTargetDrawingObject(
@@ -55,34 +57,46 @@ public static class DrawingTargetResolver
             return null;
 
         return GetSelectedOrLast(
-            sheet.TextBoxes.Where(textBox => textBox.IsVisible).ToList(),
+            sheet.TextBoxes,
             selectedAnchor,
-            textBox => textBox.Anchor);
+            textBox => textBox.Anchor,
+            textBox => textBox.IsVisible);
     }
 
     private static T? GetSelectedOrLast<T>(
         IReadOnlyList<T> items,
         CellAddress? selectedAnchor,
-        Func<T, CellAddress> getAnchor)
+        Func<T, CellAddress> getAnchor,
+        Func<T, bool> isVisible)
         where T : class
     {
-        if (items.Count == 0)
-            return null;
-
+        T? lastVisible = null;
         if (selectedAnchor is { } selected)
         {
-            var anchored = items.LastOrDefault(item =>
+            for (var index = items.Count - 1; index >= 0; index--)
             {
-                var anchor = getAnchor(item);
-                return anchor.Row == selected.Row &&
-                       anchor.Col == selected.Col;
-            });
+                var item = items[index];
+                if (!isVisible(item))
+                    continue;
 
-            if (anchored is not null)
-                return anchored;
+                var anchor = getAnchor(item);
+                if (anchor.Row == selected.Row && anchor.Col == selected.Col)
+                    return item;
+
+                lastVisible ??= item;
+            }
+        }
+        else
+        {
+            for (var index = items.Count - 1; index >= 0; index--)
+            {
+                var item = items[index];
+                if (isVisible(item))
+                    return item;
+            }
         }
 
-        return items[^1];
+        return lastVisible;
     }
 }
 

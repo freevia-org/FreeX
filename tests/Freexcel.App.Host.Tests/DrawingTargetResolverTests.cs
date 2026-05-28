@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -112,5 +114,37 @@ public sealed class DrawingTargetResolverTests
         target.Id.Should().Be(textBox.Id);
         target.Width.Should().Be(90);
         target.Height.Should().Be(40);
+    }
+
+    [Fact]
+    public void ResolverScansVisibleItemsWithoutAllocatingFilteredLists()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DrawingTargetResolver.cs"));
+
+        source.Should().NotContain(".Where(");
+        source.Should().NotContain(".ToList()");
+        source.Should().NotContain("LastOrDefault");
+    }
+
+    [Fact]
+    public void GetTargetPicture_UsesFastReverseScanForLargeDrawingLists()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (var index = 1u; index <= 5_000; index++)
+        {
+            sheet.Pictures.Add(new PictureModel { Anchor = new CellAddress(sheet.Id, index, 1) });
+        }
+
+        var selected = new CellAddress(sheet.Id, 5_000, 1);
+
+        var stopwatch = Stopwatch.StartNew();
+        for (var iteration = 0; iteration < 10_000; iteration++)
+        {
+            DrawingTargetResolver.GetTargetPicture(sheet, selected).Should().BeSameAs(sheet.Pictures[^1]);
+        }
+
+        stopwatch.Stop();
+        Console.WriteLine($"Drawing target reverse lookup: {stopwatch.ElapsedMilliseconds}ms for 10000 lookups");
+        stopwatch.ElapsedMilliseconds.Should().BeLessThan(250);
     }
 }
