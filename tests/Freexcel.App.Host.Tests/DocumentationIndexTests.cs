@@ -31,6 +31,7 @@ public sealed partial class DocumentationIndexTests
         readme.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
         readme.Should().Contain("[XLSX_TEST_CORPUS_PLAN.md](XLSX_TEST_CORPUS_PLAN.md)");
         readme.Should().Contain("[CODE_REVIEW_COMPREHENSIVE_2026-05-28.md](CODE_REVIEW_COMPREHENSIVE_2026-05-28.md)");
+        readme.Should().Contain("[TESTER_RELEASE_CHECKLIST.md](TESTER_RELEASE_CHECKLIST.md)");
         readme.Should().Contain("[CODE_REVIEW.md](CODE_REVIEW.md)");
         readme.Should().Contain("[DECISIONS/008-code-review-hardening-2026-05-28.md](DECISIONS/008-code-review-hardening-2026-05-28.md)");
         readme.Should().Contain("[PERF_BASELINE.md](PERF_BASELINE.md)");
@@ -253,6 +254,7 @@ public sealed partial class DocumentationIndexTests
             "XLSX_CORPUS_REPORT.md",
             "XLSX_TEST_CORPUS_PLAN.md",
             "TEST_DISTRIBUTION_PLAN.md",
+            "TESTER_RELEASE_CHECKLIST.md",
             "PERF_BASELINE.md"
         };
 
