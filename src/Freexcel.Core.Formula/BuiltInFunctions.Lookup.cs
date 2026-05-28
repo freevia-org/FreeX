@@ -520,6 +520,8 @@ public static partial class BuiltInFunctions
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
         if (useA1 && TryParseA1FullRowRangeRef(refText, out startRow, out endRow))
             return BuildIndirectRange(ctx, sheetName, startRow, 1, endRow, CellAddress.MaxCol);
+        if (useA1 && TryParseA1FullColumnRangeRef(refText, out startCol, out endCol))
+            return BuildIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, endCol);
         if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
 
@@ -599,6 +601,16 @@ public static partial class BuiltInFunctions
             && TryParseA1RowNumber(refText[(colon + 1)..], out endRow);
     }
 
+    private static bool TryParseA1FullColumnRangeRef(string refText, out uint startCol, out uint endCol)
+    {
+        startCol = endCol = 0;
+        int colon = refText.IndexOf(':');
+        if (colon < 0 || colon != refText.LastIndexOf(':')) return false;
+
+        return TryParseA1ColumnName(refText[..colon], out startCol)
+            && TryParseA1ColumnName(refText[(colon + 1)..], out endCol);
+    }
+
     private static bool TryParseA1RowNumber(string text, out uint row)
     {
         row = 0;
@@ -607,6 +619,17 @@ public static partial class BuiltInFunctions
         if (text.StartsWith('$')) text = text[1..];
         if (text.Length == 0 || text.Any(ch => !char.IsDigit(ch))) return false;
         return uint.TryParse(text, out row) && row is >= 1 and <= CellAddress.MaxRow;
+    }
+
+    private static bool TryParseA1ColumnName(string text, out uint col)
+    {
+        col = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        text = text.Trim();
+        if (text.StartsWith('$')) text = text[1..];
+        if (text.Length == 0 || text.Any(ch => !char.IsLetter(ch))) return false;
+        col = CellAddress.ColumnNameToNumber(text.ToUpperInvariant());
+        return col is >= 1 and <= CellAddress.MaxCol;
     }
 
     private static bool TryParseR1C1RangeRef(
