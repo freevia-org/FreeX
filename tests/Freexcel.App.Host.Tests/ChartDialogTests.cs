@@ -391,9 +391,7 @@ public sealed class ChartDialogTests
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
-        dialogSource.Should().Contain("_rangeBox.Focus();");
-        dialogSource.Should().Contain("_rangeBox.SelectAll();");
-        dialogSource.Should().Contain("Keyboard.Focus(_rangeBox);");
+        dialogSource.Should().Contain("FocusRangeSelectionInput(_rangeBox);");
     }
 
     [Fact]
@@ -547,9 +545,7 @@ public sealed class ChartDialogTests
 
         dialogSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
         dialogSource.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
-        dialogSource.Should().Contain("target.Focus();");
-        dialogSource.Should().Contain("target.SelectAll();");
-        dialogSource.Should().Contain("Keyboard.Focus(target);");
+        dialogSource.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]

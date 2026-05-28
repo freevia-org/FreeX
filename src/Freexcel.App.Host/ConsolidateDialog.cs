@@ -134,9 +134,7 @@ public sealed partial class ConsolidateDialog : Window
 
     private static void FocusRangeSelectionInput(TextBox target)
     {
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void FocusInitialKeyboardTarget()

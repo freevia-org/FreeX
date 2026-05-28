@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -127,9 +126,7 @@ public sealed class SparklineDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _dataRangeBox.Focus();
-        _dataRangeBox.SelectAll();
-        Keyboard.Focus(_dataRangeBox);
+        FocusRangeSelectionInput(_dataRangeBox);
     }
 
     private static StackPanel CreateRangePickerRow(TextBox textBox, Button pickerButton)
@@ -162,8 +159,6 @@ public sealed class SparklineDialog : Window
 
     private static void FocusRangeSelectionInput(TextBox textBox)
     {
-        textBox.Focus();
-        textBox.SelectAll();
-        Keyboard.Focus(textBox);
+        DialogFocus.FocusAndSelect(textBox);
     }
 }

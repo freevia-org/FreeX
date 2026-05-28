@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -270,9 +269,7 @@ public sealed class PivotTableDialog : Window
 
     private static void FocusRangeSelectionInput(TextBox target)
     {
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void UpdateDestinationState()
@@ -282,8 +279,6 @@ public sealed class PivotTableDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _sourceRangeBox.Focus();
-        _sourceRangeBox.SelectAll();
-        Keyboard.Focus(_sourceRangeBox);
+        FocusRangeSelectionInput(_sourceRangeBox);
     }
 }

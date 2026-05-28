@@ -126,9 +126,7 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_sourceRangeBox.Focus();");
-        source.Should().Contain("_sourceRangeBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_sourceRangeBox);");
+        source.Should().Contain("FocusRangeSelectionInput(_sourceRangeBox);");
     }
 
     [Fact]
@@ -141,9 +139,7 @@ public sealed class PivotWorkflowDialogTests
 
         handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
         source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -157,9 +153,7 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sourceSheetId, _sourceRangeBox.Text, ResolveSheetIdByName, out _)");
         source.Should().Contain("destinationRange.Start.Sheet != _sourceSheetId");
         source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -305,9 +299,7 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_sourceBox.Focus();");
-        source.Should().Contain("_sourceBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_sourceBox);");
+        source.Should().Contain("FocusRangeSelectionInput(_sourceBox);");
     }
 
     [Fact]
@@ -320,9 +312,7 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("FocusRangeSelectionInput(request.Target);");
         source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]

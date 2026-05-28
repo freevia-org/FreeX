@@ -325,9 +325,7 @@ public partial class DataValidationDialog : Window
 
     private static void FocusRangeSelectionInput(TextBox textBox)
     {
-        textBox.Focus();
-        textBox.SelectAll();
-        Keyboard.Focus(textBox);
+        DialogFocus.FocusAndSelect(textBox);
     }
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)

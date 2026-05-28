@@ -178,9 +178,7 @@ public sealed partial class AdvancedFilterDialog : Window
 
     private static void FocusRangeSelectionInput(TextBox target)
     {
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void FocusInitialKeyboardTarget()
@@ -222,9 +220,7 @@ public sealed partial class AdvancedFilterDialog : Window
             target = _listRangeBox;
         }
 
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void Accept()

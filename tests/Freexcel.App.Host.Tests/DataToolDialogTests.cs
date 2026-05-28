@@ -209,9 +209,7 @@ public sealed class DataToolDialogTests
 
         handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
         source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -1206,9 +1204,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("private void FocusInvalidRangeInput(string? error)");
         source.Should().Contain("Criteria range must include headers and at least one criteria row.");
         source.Should().Contain("_copyToAnotherLocationButton.IsChecked = true;");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -1221,9 +1217,7 @@ public sealed class DataToolDialogTests
 
         handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
         source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -1633,9 +1627,7 @@ public sealed class DataToolDialogTests
 
         handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
         source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -2000,9 +1992,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("private void FocusInvalidInput(string? error)");
         source.Should().Contain("Column input cell cannot be inside the data table range.");
         source.Should().Contain("Row and column input cells must be different.");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]
@@ -2015,9 +2005,7 @@ public sealed class DataToolDialogTests
 
         handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
         source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Fact]

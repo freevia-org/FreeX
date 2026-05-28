@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -94,9 +93,7 @@ public sealed partial class SelectDataSourceDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _rangeBox.Focus();
-        _rangeBox.SelectAll();
-        Keyboard.Focus(_rangeBox);
+        FocusRangeSelectionInput(_rangeBox);
     }
 
     private DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
@@ -118,9 +115,7 @@ public sealed partial class SelectDataSourceDialog : Window
 
     private static void FocusRangeSelectionInput(TextBox target)
     {
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private bool ValidateInputs()

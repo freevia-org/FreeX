@@ -883,9 +883,7 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_dataRangeBox.Focus();");
-        source.Should().Contain("_dataRangeBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_dataRangeBox);");
+        source.Should().Contain("FocusRangeSelectionInput(_dataRangeBox);");
     }
 
     [Fact]
@@ -897,9 +895,7 @@ public sealed class RemainingDialogTests
         handlerSource.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest);");
         handlerSource.Should().Contain("FocusRangeSelectionInput(textBox);");
         source.Should().Contain("private static void FocusRangeSelectionInput(TextBox textBox)");
-        source.Should().Contain("textBox.Focus();");
-        source.Should().Contain("textBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(textBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
     }
 
     [Fact]
