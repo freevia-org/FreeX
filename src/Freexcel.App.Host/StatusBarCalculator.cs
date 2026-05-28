@@ -24,16 +24,19 @@ public static class StatusBarCalculator
 
         if (sheet.CellCount < totalCells)
         {
-            foreach (var (address, cell) in sheet.EnumerateCells())
+            foreach (var (row, col) in sheet.GetOccupiedCells())
             {
-                if (scanRange.Contains(address))
+                if (Contains(scanRange, row, col) && sheet.GetCell(row, col) is { } cell)
                     Accumulate(cell.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
             }
         }
         else
         {
-            foreach (var address in scanRange.AllCells())
-                Accumulate(sheet.GetValue(address), ref sum, ref count, ref numericalCount, ref min, ref max);
+            for (var row = scanRange.Start.Row; row <= scanRange.End.Row; row++)
+            {
+                for (var col = scanRange.Start.Col; col <= scanRange.End.Col; col++)
+                    Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max);
+            }
         }
 
         double? average = numericalCount > 0 ? sum / numericalCount : null;
@@ -52,6 +55,10 @@ public static class StatusBarCalculator
                 Math.Min(range.End.Row, usedRange.End.Row),
                 Math.Min(range.End.Col, usedRange.End.Col)));
     }
+
+    private static bool Contains(GridRange range, uint row, uint col) =>
+        row >= range.Start.Row && row <= range.End.Row &&
+        col >= range.Start.Col && col <= range.End.Col;
 
     private static void Accumulate(
         ScalarValue value,
