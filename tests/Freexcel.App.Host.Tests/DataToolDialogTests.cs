@@ -1848,6 +1848,27 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void DataTableDialog_ParsesExcelAbsoluteAndR1C1InputCells()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
+
+        var parsed = DataTableDialog.TryParse(
+            sheetId,
+            range,
+            rowInputCellText: "$A$1",
+            columnInputCellText: "R1C6",
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.RowInputCell.Should().Be(new CellAddress(sheetId, 1, 1));
+        result.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 6));
+    }
+
+    [Fact]
     public void DataTableDialog_RejectsMissingInputCells()
     {
         var sheetId = SheetId.New();
