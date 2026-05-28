@@ -66,15 +66,33 @@ public sealed class ObjectDialogTests
     }
 
     [Theory]
-    [InlineData("review@example.test")]
-    [InlineData("mailto:review@example.test")]
-    public void HyperlinkDialog_TryCreateResult_AcceptsEmailTarget(string target)
+    [InlineData("review@example.test", "mailto:review@example.test")]
+    [InlineData("mailto:review@example.test", "mailto:review@example.test")]
+    public void HyperlinkDialog_TryCreateResult_AcceptsEmailTarget(string target, string expectedTarget)
     {
         HyperlinkDialog.TryCreateResult(target, "Label", HyperlinkLinkType.EmailAddress, "", "", out var result, out var error)
             .Should()
             .BeTrue(error);
 
-        result.Target.Should().Be(target);
+        result.Target.Should().Be(expectedTarget);
+    }
+
+    [Theory]
+    [InlineData("review@example.test", "mailto:review@example.test", "review@example.test")]
+    [InlineData("mailto:review@example.test?subject=Budget", "mailto:review@example.test?subject=Budget", "review@example.test")]
+    public void HyperlinkDialog_CreateResult_NormalizesEmailTargetWithoutLeakingMailtoIntoBlankDisplay(
+        string target,
+        string expectedTarget,
+        string expectedDisplayText)
+    {
+        var result = HyperlinkDialog.CreateResult(target, " ", HyperlinkLinkType.EmailAddress);
+
+        result.Should().Be(new HyperlinkDialogResult(
+            HyperlinkLinkType.EmailAddress,
+            expectedTarget,
+            expectedDisplayText,
+            "",
+            ""));
     }
 
     [Fact]
