@@ -79,15 +79,9 @@ public partial class GridView : FrameworkElement
 
     public static double CalculateRowHeaderWidth(ViewportModel? viewport)
     {
-        var maxRow = 0u;
-        if (viewport is not null)
-        {
-            foreach (var row in viewport.RowMetrics)
-            {
-                if (row.Row > maxRow)
-                    maxRow = row.Row;
-            }
-        }
+        var maxRow = viewport?.RowMetrics.Count > 0
+            ? viewport.RowMetrics[^1].Row
+            : 0u;
 
         return maxRow switch
         {
