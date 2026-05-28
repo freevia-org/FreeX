@@ -629,6 +629,9 @@ public static partial class FlashFillService
         if (TryNameAbbreviation(examples, 2, tokens => GetFirstInitial(tokens[0]) + ". " + tokens[1], out var firstInitialLast))
             return firstInitialLast;
 
+        if (TryNameAbbreviation(examples, 2, tokens => GetFirstInitial(tokens[0]) + ". " + GetFirstInitial(tokens[1]) + ".", out var twoPartInitials))
+            return twoPartInitials;
+
         if (TryNameAbbreviation(examples, 2, tokens => tokens[0] + " " + GetFirstInitial(tokens[1]) + ".", out var firstLastInitial))
             return firstLastInitial;
 
@@ -646,6 +649,9 @@ public static partial class FlashFillService
 
         if (TryNameAbbreviation(examples, 3, tokens => GetFirstInitial(tokens[0]) + ". " + GetFirstInitial(tokens[1]) + ". " + tokens[2], out var firstMiddleInitialsLast))
             return firstMiddleInitialsLast;
+
+        if (TryNameAbbreviation(examples, 3, tokens => GetFirstInitial(tokens[0]) + ". " + GetFirstInitial(tokens[1]) + ". " + GetFirstInitial(tokens[2]) + ".", out var threePartInitials))
+            return threePartInitials;
 
         if (TryNameAbbreviation(examples, 3, tokens => tokens[0] + " " + GetFirstInitial(tokens[1]) + ".", out var firstMiddleInitialOnly))
             return firstMiddleInitialOnly;
