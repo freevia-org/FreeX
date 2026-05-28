@@ -20,6 +20,19 @@ public sealed class RibbonKeyTipOverlayPlacementTests
     }
 
     [Fact]
+    public void PlaceBadge_WhenBadgeIsLargerThanOverlay_ClampsToOrigin()
+    {
+        var elementBounds = new Rect(8, 8, 12, 12);
+        var overlaySize = new Size(20, 12);
+        var badgeSize = new Size(30, 18);
+
+        var point = RibbonKeyTipOverlayPlacement.PlaceBadge(elementBounds, overlaySize, badgeSize);
+
+        point.X.Should().Be(0);
+        point.Y.Should().Be(0);
+    }
+
+    [Fact]
     public void PlaceBadge_CentersBadgeNearTopOfElementWhenThereIsRoom()
     {
         var elementBounds = new Rect(100, 40, 80, 24);
