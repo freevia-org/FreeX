@@ -96,7 +96,7 @@ public sealed class CreateTableDialog : Window
     {
         if (!TryParse(_sheetId, _rangeBox.Text, _headersBox.IsChecked == true, _tableStyleName, out var result, out var error))
         {
-            MessageBox.Show(this, error ?? "Enter a valid table range.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter a valid table range.", Title);
             FocusRangeBox();
             return;
         }

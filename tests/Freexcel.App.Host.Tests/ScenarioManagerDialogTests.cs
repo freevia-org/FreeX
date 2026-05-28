@@ -365,7 +365,7 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("!TryValidateResultCells(resultCellsText, currentSheetId, resolveSheetIdByName, out error)");
         source.Should().Contain("new ScenarioManagerValidationFailure(error ?? \"Enter scenario result cells.\", ScenarioManagerValidationField.ResultCells)");
         source.Should().Contain("GetValidationTarget(failure.Field)");
-        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("target.SelectAll();");
         handlerSource.Should().Contain("new ScenarioManagerDialog(_workbook, _currentSheetId, ResolveSheetIdByName)");
         handlerSource.Should().Contain("dialog.ScenarioHidden");

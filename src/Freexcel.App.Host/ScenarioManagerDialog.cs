@@ -262,7 +262,7 @@ public sealed partial class ScenarioManagerDialog : Window
 
     private void ShowInvalidInputWarning(string message, TextBox target)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);

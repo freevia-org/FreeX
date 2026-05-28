@@ -41,7 +41,7 @@ public partial class PivotLabelFilterDialog : Window
         var value = LabelFilterValueBox.Text.Trim();
         if (value.Length == 0)
         {
-            MessageBox.Show(this, "Enter a label filter value.", "Label Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter a label filter value.", "Label Filter");
             FocusInvalidLabelValue(LabelFilterValueBox);
             return;
         }
@@ -50,7 +50,7 @@ public partial class PivotLabelFilterDialog : Window
         var value2 = kind == PivotLabelFilterKind.Between ? LabelFilterValue2Box.Text.Trim() : "";
         if (kind == PivotLabelFilterKind.Between && value2.Length == 0)
         {
-            MessageBox.Show(this, "Enter an ending label filter value.", "Label Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter an ending label filter value.", "Label Filter");
             FocusInvalidLabelValue(LabelFilterValue2Box);
             return;
         }

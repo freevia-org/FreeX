@@ -1388,7 +1388,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 new RecalcEngine(graph, evaluator),
                 [],
                 workbookRef,
-                workbook);
+                workbook,
+                NullUserMessageService.Instance);
 
             window.WindowState = WindowState.Normal;
             window.Width = 2400;

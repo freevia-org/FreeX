@@ -222,10 +222,8 @@ public sealed class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
 
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("Enter positive width and height values.");
-        source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInvalidSizeInput(ResolveInvalidSizeInput());");
         source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
         source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
@@ -301,10 +299,8 @@ public sealed class ObjectDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
 
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("Enter an RGB color as R,G,B.");
-        source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInvalidColorInput(_startColorBox);");
         source.Should().Contain("FocusInvalidColorInput(_endColorBox);");
         source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
@@ -345,10 +341,8 @@ public sealed class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
 
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("Enter a numeric rotation value.");
-        source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInvalidRotationInput();");
         source.Should().Contain("private void FocusInvalidRotationInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
@@ -401,10 +395,8 @@ public sealed class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
 
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("error ?? \"Enter four crop percentages.\"");
-        source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInvalidCropInput(ResolveInvalidCropInput(error));");
         source.Should().Contain("private TextBox ResolveInvalidCropInput(string? error)");
         source.Should().Contain("return _cropLeftBox;");
@@ -636,8 +628,10 @@ public sealed class ObjectDialogTests
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
         source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter hyperlink details.\");");
-        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
-        source.Should().Contain("DialogFocus.FocusAndSelect(_targetBox);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
+        source.Should().Contain("_targetBox.Focus();");
+        source.Should().Contain("_targetBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_targetBox);");
     }
 
     [Fact]
@@ -719,7 +713,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("if (!TryCreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))");
         source.Should().Contain("ShowInvalidThreadedCommentWarning(error ?? \"Enter a comment.\", _rootBox);");
-        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");

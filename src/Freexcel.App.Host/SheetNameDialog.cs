@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -76,8 +77,10 @@ public sealed class SheetNameDialog : Window
 
     private void ShowInvalidInputWarning(string message)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        DialogFocus.FocusAndSelect(_nameBox);
+        DialogMessageHelper.ShowWarning(this, message, Title);
+        _nameBox.Focus();
+        _nameBox.SelectAll();
+        Keyboard.Focus(_nameBox);
     }
 
     private void FocusInitialKeyboardTarget()

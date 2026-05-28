@@ -336,7 +336,7 @@ public sealed class ChartDialogTests
             source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("catch (ArgumentException ex)");
-        dialogSource.Should().Contain("MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, ex.Message, Title);");
         dialogSource.Should().Contain("FocusInvalidTargetName();");
         dialogSource.Should().Contain("_targetBox.Focus();");
         dialogSource.Should().Contain("_targetBox.SelectAll();");
@@ -485,7 +485,7 @@ public sealed class ChartDialogTests
         var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Window.GetWindow(dependencyObject)");
-        dialogSource.Should().Contain("MessageBox.Show(owner,");
+        dialogSource.Should().Contain("MessageBox.Show(owner,"); // static handler with dynamic owner — kept as raw call
         dialogSource.Should().Contain("\"Hidden and Empty Cell Settings\"");
     }
 
@@ -558,7 +558,7 @@ public sealed class ChartDialogTests
         dialogSource.Should().Contain("if (!ValidateInputs())");
         dialogSource.Should().Contain("ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, out _)");
         dialogSource.Should().Contain("ShowInvalidInputWarning(\"Enter a valid chart data range.\", _rangeBox);");
-        dialogSource.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         dialogSource.Should().Contain("FocusRangeSelectionInput(target);");
         chartCommandSource.Should().Contain("sheetId: _currentSheetId");
     }
@@ -808,9 +808,7 @@ public sealed class ChartDialogTests
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendBorderBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a legend border width from 0 to 10 points.\", _legendBorderThicknessBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a legend font size from 6 to 72 points.\", _legendFontSizeBox);");
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
-        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
@@ -874,9 +872,7 @@ public sealed class ChartDialogTests
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label border width from 0 to 10 points.\", _borderThicknessBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label font size from 6 to 72 points.\", _fontSizeBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label angle from -90 to 90 degrees.\", _angleBox);");
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
-        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
@@ -928,9 +924,7 @@ public sealed class ChartDialogTests
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a polynomial order from 2 to 6.\", _orderBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _colorBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a trendline width from 0.5 to 10 points.\", _thicknessBox);");
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
-        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
@@ -1001,9 +995,7 @@ public sealed class ChartDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartErrorBarsDialog.cs"));
 
         source.Should().Contain("ShowInvalidInputWarning(\"Enter an error amount from 0 to 1000.\", _valueBox);");
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
-        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
@@ -1085,9 +1077,7 @@ public sealed class ChartDialogTests
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a label angle from -90 to 90 degrees.\", _labelAngleBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _lineColorBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter an axis line width from 0.5 to 10 points.\", _lineThicknessBox);");
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
-        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
@@ -1143,9 +1133,7 @@ public sealed class ChartDialogTests
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _strokeBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive line width or leave it blank.\", _strokeThicknessBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive marker size or leave it blank.\", _markerSizeBox);");
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
-        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");

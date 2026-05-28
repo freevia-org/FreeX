@@ -158,7 +158,7 @@ public sealed class ConfirmPasswordDialog : Window
     {
         if (!ProtectionDialogPlanner.PasswordsMatch(_password, _confirmationBox.Password))
         {
-            MessageBox.Show(this, "The confirmation password does not match.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "The confirmation password does not match.", Title);
             FocusConfirmationInput();
             return;
         }

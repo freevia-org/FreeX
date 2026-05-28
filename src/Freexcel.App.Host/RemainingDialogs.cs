@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -63,8 +64,10 @@ public sealed class ConditionalFormatThresholdDialog : Window
 
     private void ShowInvalidInputWarning(string message)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        DialogFocus.FocusAndSelect(_thresholdBox);
+        DialogMessageHelper.ShowWarning(this, message, Title);
+        _thresholdBox.Focus();
+        _thresholdBox.SelectAll();
+        Keyboard.Focus(_thresholdBox);
     }
 }
 
@@ -120,12 +123,7 @@ public sealed class RowHeightDialog : Window
     {
         if (!TryCreateResult(_heightBox.Text, out var result, out var error))
         {
-            MessageBox.Show(
-                this,
-                error ?? "Enter a row height from 0 to 409.5.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter a row height from 0 to 409.", Title);
             FocusInvalidHeightInput();
             return;
         }
@@ -187,12 +185,7 @@ public sealed class ColumnWidthDialog : Window
     {
         if (!TryCreateResult(_widthBox.Text, out var result, out var error))
         {
-            MessageBox.Show(
-                this,
-                error ?? "Enter a column width from 0 to 255.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter a column width from 0 to 255.", Title);
             FocusInvalidWidthInput();
             return;
         }

@@ -53,7 +53,7 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidCopiesWarning(TextBox copiesBox)
     {
-        MessageBox.Show(this, "Enter a copy count from 1 to 999.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, "Enter a copy count from 1 to 999.", Title);
         copiesBox.Focus();
         copiesBox.SelectAll();
         Keyboard.Focus(copiesBox);
@@ -61,7 +61,7 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidPageNumberWarning(TextBox pageNumberBox, int totalPages)
     {
-        MessageBox.Show(this, $"Enter a page number from 1 to {totalPages}.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, $"Enter a page number from 1 to {totalPages}.", Title);
         pageNumberBox.Focus();
         pageNumberBox.SelectAll();
         Keyboard.Focus(pageNumberBox);
@@ -85,12 +85,7 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidPageRangeWarning(TextBox fromPageBox, TextBox toPageBox, string? error)
     {
-        MessageBox.Show(
-            this,
-            error ?? "Enter a valid page range.",
-            Title,
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, error ?? "Enter a valid page range.", Title);
         var target = string.Equals(error, "From page must be less than or equal to To page.", StringComparison.OrdinalIgnoreCase)
             ? toPageBox
             : fromPageBox;

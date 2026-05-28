@@ -132,7 +132,7 @@ public sealed class FormatPictureDialog : Window
                 out var result,
                 out var error))
         {
-            MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error, Title);
             FocusInvalidInput(error);
             return;
         }
