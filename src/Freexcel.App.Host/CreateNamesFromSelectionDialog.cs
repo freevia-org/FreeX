@@ -5,6 +5,12 @@ using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
+public sealed record CreateNamesFromSelectionDialogResult(
+    bool UseTopRow,
+    bool UseLeftColumn,
+    bool UseBottomRow,
+    bool UseRightColumn);
+
 public sealed class CreateNamesFromSelectionDialog : Window
 {
     private readonly CheckBox _topRow = new() { Content = "_Top row", IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
@@ -12,10 +18,13 @@ public sealed class CreateNamesFromSelectionDialog : Window
     private readonly CheckBox _bottomRow = new() { Content = "_Bottom row", Margin = new Thickness(0, 4, 0, 0) };
     private readonly CheckBox _rightColumn = new() { Content = "_Right column", Margin = new Thickness(0, 4, 0, 0) };
 
-    public bool UseTopRow => _topRow.IsChecked == true;
-    public bool UseLeftColumn => _leftColumn.IsChecked == true;
-    public bool UseBottomRow => _bottomRow.IsChecked == true;
-    public bool UseRightColumn => _rightColumn.IsChecked == true;
+    public CreateNamesFromSelectionDialogResult Result { get; private set; } =
+        new(UseTopRow: true, UseLeftColumn: true, UseBottomRow: false, UseRightColumn: false);
+
+    public bool UseTopRow => Result.UseTopRow;
+    public bool UseLeftColumn => Result.UseLeftColumn;
+    public bool UseBottomRow => Result.UseBottomRow;
+    public bool UseRightColumn => Result.UseRightColumn;
 
     public CreateNamesFromSelectionDialog()
     {
@@ -48,10 +57,53 @@ public sealed class CreateNamesFromSelectionDialog : Window
             Foreground = SystemColors.GrayTextBrush,
             Margin = new Thickness(0, 0, 0, 10)
         });
-        root.Children.Add(DialogButtonRowFactory.Create(() => DialogResult = true, buttonWidth: 76));
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76));
 
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    public static bool TryCreateResult(
+        bool useTopRow,
+        bool useLeftColumn,
+        bool useBottomRow,
+        bool useRightColumn,
+        out CreateNamesFromSelectionDialogResult result,
+        out string? error)
+    {
+        result = new CreateNamesFromSelectionDialogResult(useTopRow, useLeftColumn, useBottomRow, useRightColumn);
+        if (!useTopRow && !useLeftColumn && !useBottomRow && !useRightColumn)
+        {
+            error = "Select at least one row or column label position.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private void Accept()
+    {
+        if (!TryCreateResult(
+            _topRow.IsChecked == true,
+            _leftColumn.IsChecked == true,
+            _bottomRow.IsChecked == true,
+            _rightColumn.IsChecked == true,
+            out var result,
+            out var error))
+        {
+            MessageBox.Show(
+                this,
+                error ?? "Select at least one row or column label position.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInitialKeyboardTarget();
+            return;
+        }
+
+        Result = result;
+        DialogResult = true;
     }
 
     private void FocusInitialKeyboardTarget()
