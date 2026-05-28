@@ -378,6 +378,7 @@ public static class XlsxFeatureInspector
             }
 
             if (normalizedType.EndsWith("/webextension", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/webextensiontaskpanes", StringComparison.Ordinal) ||
                 normalizedType.EndsWith("/taskpane", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.OfficeAddIns;
