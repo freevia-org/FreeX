@@ -32,6 +32,20 @@ public sealed class RibbonTooltipTests
     }
 
     [Fact]
+    public void KeyTip_OnMenuItem_ClearsInputGestureTextWhenCleared()
+    {
+        RunSta(() =>
+        {
+            var menuItem = new MenuItem();
+            RibbonTooltip.SetKeyTip(menuItem, "A");
+
+            RibbonTooltip.SetKeyTip(menuItem, "");
+
+            menuItem.InputGestureText.Should().Be("");
+        });
+    }
+
+    [Fact]
     public void Title_OnFrameworkElement_SetsAutomationNameWhenMissing()
     {
         RunSta(() =>
