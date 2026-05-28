@@ -16,9 +16,7 @@ public sealed partial class TextToColumnsDialog
     {
         _wizardStep = 3;
         UpdateWizardStep();
-        _destinationBox.Focus();
-        Keyboard.Focus(_destinationBox);
-        _destinationBox.SelectAll();
+        DialogFocus.FocusAndSelect(_destinationBox);
     }
 
     private void FocusInvalidFixedWidthBreaksInput()
@@ -26,9 +24,7 @@ public sealed partial class TextToColumnsDialog
         _wizardStep = 2;
         _fixedWidthButton.IsChecked = true;
         UpdateWizardStep();
-        _fixedWidthBreaksBox.Focus();
-        _fixedWidthBreaksBox.SelectAll();
-        Keyboard.Focus(_fixedWidthBreaksBox);
+        DialogFocus.FocusAndSelect(_fixedWidthBreaksBox);
     }
 
     private void FocusInvalidCustomDelimiterInput()
@@ -37,9 +33,7 @@ public sealed partial class TextToColumnsDialog
         _delimitedButton.IsChecked = true;
         _otherBox.IsChecked = true;
         UpdateWizardStep();
-        _customBox.Focus();
-        _customBox.SelectAll();
-        Keyboard.Focus(_customBox);
+        DialogFocus.FocusAndSelect(_customBox);
     }
 
     private void FocusInvalidDelimiterSelectionInput()
@@ -55,9 +49,7 @@ public sealed partial class TextToColumnsDialog
     {
         _wizardStep = 3;
         UpdateWizardStep();
-        textBox.Focus();
-        textBox.SelectAll();
-        Keyboard.Focus(textBox);
+        DialogFocus.FocusAndSelect(textBox);
     }
 
     internal static StackPanel CreateButtonRow(Action accept) =>
