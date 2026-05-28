@@ -15,7 +15,8 @@ public enum AccessibilityIssueKind
     HiddenRowWithContent,
     HiddenColumnWithContent,
     TableMissingHeaderText,
-    LowContrastCellText
+    LowContrastCellText,
+    LowContrastChartText
 }
 
 public sealed record AccessibilityIssue(
@@ -119,10 +120,106 @@ public static class AccessibilityCheckerService
                         FormatRange(chart.DataRange),
                         "Chart title should describe the chart."));
                 }
+
+                AddLowContrastChartTextIssues(issues, workbook, sheet, chart);
             }
         }
 
         return issues;
+    }
+
+    private static void AddLowContrastChartTextIssues(
+        List<AccessibilityIssue> issues,
+        Workbook workbook,
+        Sheet sheet,
+        ChartModel chart)
+    {
+        var chartBackground = chart.ResolveChartAreaFillColor(workbook.Theme) ?? CellColor.White;
+        var plotBackground = chart.ResolvePlotAreaFillColor(workbook.Theme) ?? chartBackground;
+        var defaultText = chart.ChartDefaultTextThemeColor?.Resolve(workbook.Theme) ??
+            chart.ChartDefaultTextColor ??
+            CellColor.Black;
+
+        AddLowContrastChartTextIssue(
+            issues,
+            sheet,
+            chart,
+            "Chart title",
+            chart.Title,
+            chart.ResolveChartTitleTextColor(workbook.Theme) ?? defaultText,
+            chartBackground,
+            chart.ChartTitleFontSize);
+
+        AddLowContrastChartTextIssue(
+            issues,
+            sheet,
+            chart,
+            "X-axis title",
+            chart.XAxisTitle,
+            chart.ResolveAxisTitleTextColor(workbook.Theme) ?? defaultText,
+            chartBackground,
+            chart.AxisTitleFontSize);
+
+        AddLowContrastChartTextIssue(
+            issues,
+            sheet,
+            chart,
+            "Y-axis title",
+            chart.YAxisTitle,
+            chart.ResolveAxisTitleTextColor(workbook.Theme) ?? defaultText,
+            chartBackground,
+            chart.AxisTitleFontSize);
+
+        if (chart.ShowLegend)
+        {
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "Legend text",
+                "Legend",
+                chart.ResolveLegendTextColor(workbook.Theme) ?? defaultText,
+                chart.ResolveLegendFillColor(workbook.Theme) ?? chartBackground,
+                chart.LegendFontSize);
+        }
+
+        if (chart.ShowDataLabels)
+        {
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "Data label text",
+                "Data labels",
+                chart.ResolveDataLabelTextColor(workbook.Theme) ?? defaultText,
+                chart.ResolveDataLabelFillColor(workbook.Theme) ?? plotBackground,
+                chart.DataLabelFontSize);
+        }
+    }
+
+    private static void AddLowContrastChartTextIssue(
+        List<AccessibilityIssue> issues,
+        Sheet sheet,
+        ChartModel chart,
+        string textArea,
+        string? text,
+        CellColor textColor,
+        CellColor background,
+        double fontSize)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        var minimumContrastRatio = MinimumTextContrastRatio(fontSize, bold: false);
+        if (ContrastRatio(textColor, background) >= minimumContrastRatio)
+            return;
+
+        issues.Add(new AccessibilityIssue(
+            AccessibilityIssueKind.LowContrastChartText,
+            sheet.Id,
+            sheet.Name,
+            FormatRange(chart.DataRange),
+            $"{textArea} should have at least {minimumContrastRatio:0.0}:1 contrast against its background."));
     }
 
     private static void AddLowContrastCellTextIssues(List<AccessibilityIssue> issues, Workbook workbook, Sheet sheet)
@@ -132,7 +229,7 @@ public static class AccessibilityCheckerService
             if (cell.Value is not TextValue text || string.IsNullOrWhiteSpace(text.Value))
                 continue;
 
-            var style = workbook.GetStyle(cell.StyleId);
+            var style = GetEffectiveContrastStyle(workbook, sheet, address, cell);
             var background = style.FillColor ?? CellColor.White;
             var minimumContrastRatio = MinimumTextContrastRatio(style);
             if (ContrastRatio(style.FontColor, background) >= minimumContrastRatio)
@@ -146,6 +243,107 @@ public static class AccessibilityCheckerService
                 $"Cell text should have at least {minimumContrastRatio:0.0}:1 contrast against its fill."));
         }
     }
+
+    private static CellStyle GetEffectiveContrastStyle(Workbook workbook, Sheet sheet, CellAddress address, Cell cell)
+    {
+        var style = workbook.GetStyle(cell.StyleId);
+        foreach (var rule in sheet.ConditionalFormats
+                     .Where(rule => rule.FormatIfTrue is not null && rule.AppliesTo.Contains(address))
+                     .OrderBy(rule => rule.Priority))
+        {
+            if (!IsConditionalFormatTrue(rule, cell.Value))
+                continue;
+
+            style = rule.FormatIfTrue!;
+            if (rule.StopIfTrue)
+                break;
+        }
+
+        return style;
+    }
+
+    private static bool IsConditionalFormatTrue(ConditionalFormat rule, ScalarValue value) =>
+        rule.RuleType switch
+        {
+            CfRuleType.NoBlanks => value is not BlankValue,
+            CfRuleType.Blanks => value is BlankValue,
+            CfRuleType.Errors => value is ErrorValue,
+            CfRuleType.NoErrors => value is not ErrorValue,
+            CfRuleType.ContainsText => ValueText(value).Contains(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
+            CfRuleType.NotContainsText => !ValueText(value).Contains(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
+            CfRuleType.BeginsWith => ValueText(value).StartsWith(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
+            CfRuleType.EndsWith => ValueText(value).EndsWith(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
+            CfRuleType.CellValue => IsCellValueRuleTrue(rule, value),
+            _ => false
+        };
+
+    private static bool IsCellValueRuleTrue(ConditionalFormat rule, ScalarValue value)
+    {
+        var cellText = ValueText(value);
+        var firstComparison = CompareCellValue(value, cellText, rule.Value1);
+        var secondComparison = CompareCellValue(value, cellText, rule.Value2);
+
+        return rule.Operator switch
+        {
+            CfOperator.Equal => firstComparison == 0,
+            CfOperator.NotEqual => firstComparison != 0,
+            CfOperator.GreaterThan => firstComparison > 0,
+            CfOperator.GreaterThanOrEqual => firstComparison >= 0,
+            CfOperator.LessThan => firstComparison < 0,
+            CfOperator.LessThanOrEqual => firstComparison <= 0,
+            CfOperator.Between => firstComparison >= 0 && secondComparison <= 0,
+            CfOperator.NotBetween => firstComparison < 0 || secondComparison > 0,
+            _ => false
+        };
+    }
+
+    private static int CompareCellValue(ScalarValue value, string cellText, string? threshold)
+    {
+        if (TryGetNumber(value, out var cellNumber) &&
+            double.TryParse(threshold, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var thresholdNumber))
+        {
+            return cellNumber.CompareTo(thresholdNumber);
+        }
+
+        return string.Compare(cellText, threshold ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryGetNumber(ScalarValue value, out double number)
+    {
+        switch (value)
+        {
+            case NumberValue numeric:
+                number = numeric.Value;
+                return true;
+            case DateTimeValue dateTime:
+                number = dateTime.Value;
+                return true;
+            case BoolValue boolean:
+                number = boolean.Value ? 1 : 0;
+                return true;
+            case TextValue text when double.TryParse(
+                text.Value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed):
+                number = parsed;
+                return true;
+            default:
+                number = 0;
+                return false;
+        }
+    }
+
+    private static string ValueText(ScalarValue value) =>
+        value switch
+        {
+            TextValue text => text.Value,
+            NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            DateTimeValue dateTime => dateTime.ToDateTime().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ErrorValue error => error.Code,
+            _ => string.Empty
+        };
 
     private static void AddStructuredTableIssues(List<AccessibilityIssue> issues, Sheet sheet)
     {
@@ -273,7 +471,10 @@ public static class AccessibilityCheckerService
     }
 
     private static double MinimumTextContrastRatio(CellStyle style) =>
-        style.FontSize >= 18 || (style.Bold && style.FontSize >= 14)
+        MinimumTextContrastRatio(style.FontSize, style.Bold);
+
+    private static double MinimumTextContrastRatio(double fontSize, bool bold) =>
+        fontSize >= 18 || (bold && fontSize >= 14)
             ? 3.0
             : 4.5;
 

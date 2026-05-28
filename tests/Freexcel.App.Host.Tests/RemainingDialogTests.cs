@@ -502,6 +502,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void WorkbookStatisticsDialog_StatisticsSummaryExposesAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(statisticsBlock, \"Workbook statistics\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, \"WorkbookStatisticsSummary\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(statisticsBlock, \"Summarizes sheet, cell, formula, comment, and object counts for the workbook.\");");
+    }
+
+    [Fact]
     public void AccessibilityCheckerDialog_CreateMessage_ReportsCleanAndIssueStates()
     {
         AccessibilityCheckerDialog.CreateMessage([])
@@ -552,6 +562,22 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
         source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_ResultControlsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_messageBox, \"Accessibility checker result\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_messageBox, \"AccessibilityCheckerResultText\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_messageBox, \"Summarizes the workbook accessibility check when no issues are found.\");");
+        source.Should().Contain("AutomationProperties.SetName(_issueList, \"Accessibility issues\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_issueList, \"AccessibilityCheckerIssueList\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_issueList, \"Select an accessibility issue and choose Go To to navigate to its workbook location.\");");
+        source.Should().Contain("AutomationProperties.SetName(_goToButton, \"Go to selected accessibility issue\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_goToButton, \"AccessibilityCheckerGoToButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_goToButton, \"Navigate to the selected accessibility issue.\");");
     }
 
     [Fact]
@@ -1030,8 +1056,14 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_notInDictionaryBox, \"Not in Dictionary\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_notInDictionaryBox, \"SpellCheckNotInDictionaryBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_notInDictionaryBox, \"Shows the word that was not found in the dictionary.\");");
         source.Should().Contain("AutomationProperties.SetName(_suggestionsBox, \"Suggestions\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_suggestionsBox, \"SpellCheckSuggestionsList\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_suggestionsBox, \"Choose a suggested spelling replacement.\");");
         source.Should().Contain("AutomationProperties.SetName(_replacementBox, \"Change to\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_replacementBox, \"SpellCheckReplacementBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_replacementBox, \"Enter the replacement text for the misspelled word.\");");
     }
 
     [Fact]
@@ -1069,6 +1101,15 @@ public sealed class RemainingDialogTests
         {
             source.Should().Contain($"Content = \"{label}\"");
         }
+
+        source.Should().Contain("AutomationProperties.SetAutomationId(button, automationId);");
+        source.Should().Contain("AutomationProperties.SetHelpText(button, helpText);");
+        source.Should().Contain("SpellCheckIgnoreOnceButton");
+        source.Should().Contain("SpellCheckIgnoreAllButton");
+        source.Should().Contain("SpellCheckChangeButton");
+        source.Should().Contain("SpellCheckChangeAllButton");
+        source.Should().Contain("SpellCheckAddToDictionaryButton");
+        source.Should().Contain("SpellCheckCancelButton");
     }
 
     [Fact]

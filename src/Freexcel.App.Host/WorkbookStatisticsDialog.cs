@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Commands;
 
@@ -24,12 +25,16 @@ public sealed class WorkbookStatisticsDialog : Window
     private static StackPanel CreateTextContent(string message)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock
+        var statisticsBlock = new TextBlock
         {
             Text = message,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
-        });
+        };
+        AutomationProperties.SetName(statisticsBlock, "Workbook statistics");
+        AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
+        AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
+        stack.Children.Add(statisticsBlock);
         stack.Children.Add(DialogButtonRowFactory.CreateOkOnly(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;
     }

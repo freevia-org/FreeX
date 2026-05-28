@@ -1211,6 +1211,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Trim_OnlyRemovesAsciiSpacesLikeExcel()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("\u00A0  hello  \u00A0")),
+            (2, 1, new TextValue("\t  hello  \t")));
+
+        _eval.Evaluate("=TRIM(A1)", sheet).Should().Be(new TextValue("\u00A0 hello \u00A0"));
+        _eval.Evaluate("=TRIM(A2)", sheet).Should().Be(new TextValue("\t hello \t"));
+    }
+
+    [Fact]
     public void Trim_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -8515,7 +8526,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void AscAndDbcs_RangeArgument_SpillsElementwise()
+    public void Jis_MatchesDbcsAsExcelCompatibilityName()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=JIS(\"ABC123!\")", sheet)
+            .Should().Be(_eval.Evaluate("=DBCS(\"ABC123!\")", sheet));
+    }
+
+    [Fact]
+    public void AscDbcsAndJis_RangeArgument_SpillsElementwise()
     {
         var sheet = MakeSheet(
             (1, 1, new TextValue("ï¼¡ï¼¢ï¼£")),
@@ -8534,6 +8554,13 @@ public class FunctionLibraryTests
         dbcsRange.ColCount.Should().Be(1);
         dbcsRange.At(1, 1).Should().Be(_eval.Evaluate("=DBCS(A1)", sheet));
         dbcsRange.At(2, 1).Should().Be(_eval.Evaluate("=DBCS(A2)", sheet));
+
+        var jis = _eval.Evaluate("=JIS(A1:A2)", sheet);
+        var jisRange = jis.Should().BeOfType<RangeValue>().Subject;
+        jisRange.RowCount.Should().Be(2);
+        jisRange.ColCount.Should().Be(1);
+        jisRange.At(1, 1).Should().Be(_eval.Evaluate("=DBCS(A1)", sheet));
+        jisRange.At(2, 1).Should().Be(_eval.Evaluate("=DBCS(A2)", sheet));
     }
 
     [Fact]

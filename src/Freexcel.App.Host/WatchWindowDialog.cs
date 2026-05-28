@@ -60,6 +60,9 @@ public sealed class WatchWindowDialog : Window
             IsEnabled = _addWatch is not null,
             ToolTip = "Add the current worksheet selection to the Watch Window."
         };
+        AutomationProperties.SetName(add, "Add Watch");
+        AutomationProperties.SetAutomationId(add, "WatchWindowAddButton");
+        AutomationProperties.SetHelpText(add, "Add the current worksheet selection to the Watch Window.");
         add.Click += (_, _) =>
         {
             var dialog = new AddWatchDialog(_getSelectionText()) { Owner = this };
@@ -72,20 +75,31 @@ public sealed class WatchWindowDialog : Window
         buttons.Children.Add(add);
 
         var refresh = new Button { Content = "_Refresh", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        AutomationProperties.SetName(refresh, "Refresh watches");
+        AutomationProperties.SetAutomationId(refresh, "WatchWindowRefreshButton");
+        AutomationProperties.SetHelpText(refresh, "Refresh values and formulas for watched cells.");
         refresh.Click += (_, _) => Refresh();
         buttons.Children.Add(refresh);
 
         _deleteButton = new Button { Content = "_Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        AutomationProperties.SetName(_deleteButton, "Delete Watch");
+        AutomationProperties.SetAutomationId(_deleteButton, "WatchWindowDeleteButton");
+        AutomationProperties.SetHelpText(_deleteButton, "Delete the selected watched cells.");
         _deleteButton.Click += (_, _) => DeleteSelectedWatch();
         buttons.Children.Add(_deleteButton);
 
         var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
+        AutomationProperties.SetName(close, "Close Watch Window");
+        AutomationProperties.SetAutomationId(close, "WatchWindowCloseButton");
+        AutomationProperties.SetHelpText(close, "Close the Watch Window.");
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
         var listPanel = new DockPanel();
         _listView = new ListView { ItemsSource = _rows, SelectionMode = SelectionMode.Extended };
         AutomationProperties.SetName(_listView, "Watches");
+        AutomationProperties.SetAutomationId(_listView, "WatchWindowList");
+        AutomationProperties.SetHelpText(_listView, "Lists watched cells with their workbook, sheet, address, value, and formula.");
         var listLabel = new Label { Content = "_Watches:", Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(listLabel, Dock.Top);
         listPanel.Children.Add(listLabel);
@@ -113,6 +127,10 @@ public sealed class WatchWindowDialog : Window
 
     public void Refresh()
     {
+        var selectedAddresses = _listView.SelectedItems
+            .OfType<WatchWindowRow>()
+            .Select(row => row.Address)
+            .ToHashSet();
         _rows.Clear();
         foreach (var entry in _getEntries())
         {
@@ -125,7 +143,17 @@ public sealed class WatchWindowDialog : Window
                 entry.FormulaText ?? "",
                 entry.Address));
         }
+        RestoreSelection(selectedAddresses);
         UpdateDeleteButtonState();
+    }
+
+    private void RestoreSelection(IReadOnlySet<CellAddress> selectedAddresses)
+    {
+        if (selectedAddresses.Count == 0)
+            return;
+
+        foreach (var row in _rows.Where(row => selectedAddresses.Contains(row.Address)))
+            _listView.SelectedItems.Add(row);
     }
 
     private void DeleteSelectedWatch()

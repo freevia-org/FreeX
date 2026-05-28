@@ -203,6 +203,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.F2, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.NewNote)]
     [InlineData(Key.F2, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.NewThreadedComment)]
     [InlineData(Key.F12, Key.None, ModifierKeys.None, KeyboardCommandShortcut.SaveAs)]
+    [InlineData(Key.F1, Key.None, ModifierKeys.None, KeyboardCommandShortcut.OpenHelp)]
     [InlineData(Key.F10, Key.None, ModifierKeys.None, KeyboardCommandShortcut.ShowKeyTips)]
     [InlineData(Key.F6, Key.None, ModifierKeys.None, KeyboardCommandShortcut.CycleShellFocus)]
     [InlineData(Key.F6, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.CycleShellFocus)]

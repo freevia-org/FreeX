@@ -208,6 +208,13 @@ public sealed class RibbonTabParityTests
             "Advanced Filter");
         ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Ascending");
         ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Descending");
+        ExtractGroupXaml(dataTab, "Data Tools").Should().NotContain("local:RibbonTooltip.Title=\"Subtotal\"");
+        ExtractTooltipTitles(ExtractGroupXaml(dataTab, "Outline")).Should().ContainInOrder(
+            "Group",
+            "Ungroup",
+            "Subtotal",
+            "Collapse Group",
+            "Expand Group");
         ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonTooltip.Title=\"Forecast Sheet\"");
         ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonTooltip.Title=\"What-If Analysis\"");
     }

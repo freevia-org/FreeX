@@ -389,12 +389,13 @@ public sealed class Workbook
 
     /// <summary>
     /// Get a style by id. Returns the default style if <paramref name="id"/> is out of range.
-    /// Returns a copy so callers cannot mutate registry state.
+    /// The returned instance is shared registry state — callers must not mutate it.
+    /// Use <see cref="CellStyle.Clone"/> before modifying, or build a new <see cref="CellStyle"/> via object-initializer syntax.
     /// </summary>
     public CellStyle GetStyle(StyleId id)
     {
         int idx = id.Value;
-        return (idx >= 0 && idx < _styles.Count ? _styles[idx] : _styles[0]).Clone();
+        return idx >= 0 && idx < _styles.Count ? _styles[idx] : _styles[0];
     }
 
     /// <summary>Total number of registered styles.</summary>

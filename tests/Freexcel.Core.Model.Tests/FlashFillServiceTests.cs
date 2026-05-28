@@ -113,6 +113,26 @@ public sealed class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_ExtractSemicolonDelimitedToken_ExtractsConsistentPart()
+    {
+        var result = FlashFillService.Fill(
+            [("SKU-001;Retail;West", "Retail"), ("SKU-002;Wholesale;East", "Wholesale")],
+            ["SKU-003;Online;North"]);
+
+        result.Should().BeEquivalentTo(["Online"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractSemicolonDelimitedToken_ReturnsNullWhenRemainingDelimiterIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [("SKU-001;Retail;West", "Retail"), ("SKU-002;Wholesale;East", "Wholesale")],
+            ["SKU-003 Online North"]);
+
+        result.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("North (Retail)", "Retail", "South (Wholesale)", "Wholesale", "East (Online)", "Online")]
     [InlineData("INV [Open]", "Open", "INV [Closed]", "Closed", "INV [Pending]", "Pending")]
@@ -749,6 +769,22 @@ public sealed class FlashFillServiceTests
             ["ada.lovelace", "grace.hopper"],
             [
                 ["alan", "turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["alan.turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstLastWithPeriodLowercase_NormalizesProperCaseNames()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["ada.lovelace", "grace.hopper"],
+            [
+                ["Alan", "Turing"]
             ]);
 
         result.Should().BeEquivalentTo(["alan.turing"], o => o.WithStrictOrdering());

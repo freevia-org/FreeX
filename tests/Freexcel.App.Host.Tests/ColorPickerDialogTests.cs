@@ -1,6 +1,7 @@
 using Freexcel.Core.Model;
 using FluentAssertions;
 using System.IO;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Xml.Linq;
@@ -124,6 +125,37 @@ public sealed class ColorPickerDialogTests
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
             .Contain(["_No Color", "_OK", "_Cancel"]);
+    }
+
+    [Fact]
+    public void Dialog_ExposesAccessibleNamesForSwatchesAndLuminositySlider()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ColorPickerDialog();
+            try
+            {
+                var themePanel = (Panel)dialog.FindName("ThemeColorsPanel");
+                var standardPanel = (Panel)dialog.FindName("StandardColorsPanel");
+                var spectrumPanel = (Panel)dialog.FindName("CustomSpectrumPanel");
+                var slider = (Slider)dialog.FindName("CustomLuminositySlider");
+
+                var themeButton = FindSwatchButton(themePanel, new CellColor(0x44, 0x72, 0xC4));
+                var standardButton = FindSwatchButton(standardPanel, new CellColor(0xFF, 0x00, 0x00));
+                var spectrumButton = FindSwatchButton(spectrumPanel, new CellColor(0x00, 0xFF, 0x00));
+
+                AutomationProperties.GetName(themeButton).Should().Be("Accent 1 swatch #4472C4");
+                AutomationProperties.GetName(standardButton).Should().Be("Standard color swatch #FF0000");
+                AutomationProperties.GetName(spectrumButton).Should().Be("Custom spectrum color swatch #00FF00");
+                AutomationProperties.GetHelpText(themeButton).Should().Be("Select this color swatch.");
+                AutomationProperties.GetName(slider).Should().Be("Custom color luminosity");
+                AutomationProperties.GetHelpText(slider).Should().Be("Adjust the brightness of the selected custom color.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]

@@ -77,8 +77,12 @@ public partial class GridView
         if (charts is null)
             return null;
 
-        foreach (var chart in charts.Where(chart => chart.IsPivotChart && chart.ShowPivotChartFieldButtons).Reverse())
+        for (var i = charts.Count - 1; i >= 0; i--)
         {
+            var chart = charts[i];
+            if (!chart.IsPivotChart || !chart.ShowPivotChartFieldButtons)
+                continue;
+
             var rect = new Rect(chart.Left + rowHeaderWidth, chart.Top + columnHeaderHeight, chart.Width, chart.Height);
             var topButton = new Rect(rect.Left + 6, rect.Top + 6, Math.Min(150, Math.Max(80, rect.Width - 12)), 24);
             if (chart.ShowPivotChartReportFilterButtons && ContainsInclusive(topButton, pos))

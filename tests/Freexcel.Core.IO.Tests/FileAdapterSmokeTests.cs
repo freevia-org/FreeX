@@ -6038,11 +6038,14 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         loaded.IsStructureProtected.Should().BeTrue();
-        loaded.StructureProtectionPassword.Should().Be("workbook-secret");
+        // After a save+load round-trip the password is stored as a sha256 hash, not plaintext.
+        NativePasswordHelper.VerifyPassword(loaded.StructureProtectionPassword!, "workbook-secret")
+            .Should().BeTrue("the stored hash must verify against the original password");
         loaded.ProtectionMetadata.Should().BeEquivalentTo(workbook.ProtectionMetadata);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.IsProtected.Should().BeTrue();
-        loadedSheet.ProtectionPassword.Should().Be("sheet-secret");
+        NativePasswordHelper.VerifyPassword(loadedSheet.ProtectionPassword!, "sheet-secret")
+            .Should().BeTrue("the stored hash must verify against the original password");
         loadedSheet.ProtectionPermissions.Should().Equal(
             SheetProtectionPermission.SelectUnlockedCells,
             SheetProtectionPermission.FormatCells);

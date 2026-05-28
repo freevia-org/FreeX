@@ -638,6 +638,7 @@ public sealed class MainWindowXamlKeyTipTests
             ["SsAccountBtn_Click"] = "BackstageAccountButton",
             ["SsOptionsBtn_Click"] = "BackstageOptionsButton",
             ["HelpOnlineBtn_Click"] = "HelpOnlineButton",
+            ["CheckForUpdatesBtn_Click"] = "HelpCheckForUpdatesButton",
             ["SendFeedbackBtn_Click"] = "HelpFeedbackButton",
             ["AboutBtn_Click"] = "HelpAboutFreexcelButton",
         };
@@ -675,11 +676,19 @@ public sealed class MainWindowXamlKeyTipTests
         var feedback = document
             .Descendants()
             .Single(element => element.Attribute(x + "Name")?.Value == "HelpFeedbackButton");
+        var updates = document
+            .Descendants()
+            .Single(element => element.Attribute(x + "Name")?.Value == "HelpCheckForUpdatesButton");
 
         helpOnline.Attribute("Click")?.Value.Should().Be("HelpOnlineBtn_Click");
         helpOnline.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpOnlineButton\"");
         helpOnline.ToString().Should().Contain("AutomationProperties.HelpText=\"Open the Freexcel help documentation in a web browser.");
         helpOnline.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("HO");
+
+        updates.Attribute("Click")?.Value.Should().Be("CheckForUpdatesBtn_Click");
+        updates.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpCheckForUpdatesButton\"");
+        updates.ToString().Should().Contain("AutomationProperties.HelpText=\"Open the latest Freexcel tester release in a web browser.");
+        updates.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("UP");
 
         feedback.Attribute("Click")?.Value.Should().Be("SendFeedbackBtn_Click");
         feedback.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpFeedbackButton\"");
@@ -861,6 +870,29 @@ public sealed class MainWindowXamlKeyTipTests
         description.Should().Contain("blank table headers");
         description.Should().Contain("alternate text");
         description.Should().Contain("charts without titles");
+    }
+
+    [Fact]
+    public void ReviewProofingEntryPoints_ExposeStableAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var statisticsButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "WorkbookStatisticsBtn_Click");
+        var accessibilityButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "AccessibilityCheckerBtn_Click");
+
+        statisticsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"ReviewWorkbookStatisticsButton\"");
+        statisticsButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Show workbook counts for sheets, cells, formulas, comments, and objects.");
+        statisticsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("W");
+
+        accessibilityButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"ReviewAccessibilityCheckerButton\"");
+        accessibilityButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Find merged cells, blank table headers, objects missing alternate text, and charts without titles.");
+        accessibilityButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("CA");
     }
 
     [Fact]
@@ -1929,6 +1961,49 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void ViewWindowDeferredCommands_ExposeStableKeyTipsAndDeferredTooltips()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute("Click")?.Value == "ViewWindowDeferredBtn_Click")
+            .Select(button => new
+            {
+                Title = button.Attribute(local + "RibbonTooltip.Title")?.Value,
+                KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                Description = button.Attribute(local + "RibbonTooltip.Description")?.Value
+            })
+            .Should()
+            .Equal([
+                new { Title = (string?)"New Window", KeyTip = (string?)"NW", Description = (string?)"Deferred: requires multiple live windows over the same workbook session." },
+                new { Title = (string?)"Hide", KeyTip = (string?)"H", Description = (string?)"Deferred: requires workbook-window visibility state." },
+                new { Title = (string?)"Unhide", KeyTip = (string?)"U", Description = (string?)"Deferred: requires workbook-window visibility state." },
+                new { Title = (string?)"View Side by Side", KeyTip = (string?)"B", Description = (string?)"Deferred: requires multi-window workbook hosting and synchronized scroll routing." },
+                new { Title = (string?)"Synchronous Scrolling", KeyTip = (string?)"SS", Description = (string?)"Deferred: requires paired workbook windows with synchronized viewport state." },
+                new { Title = (string?)"Reset Window Position", KeyTip = (string?)"RP", Description = (string?)"Deferred: requires paired workbook windows and side-by-side layout state." },
+                new { Title = (string?)"Switch Windows", KeyTip = (string?)"W", Description = (string?)"Deferred: requires a multi-window workbook registry." }
+            ]);
+    }
+
+    [Fact]
+    public void ViewWindowDeferredCommands_UseOwnedDeferredMessage()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ViewCommands.cs"));
+        var handlerStart = source.IndexOf("private void ViewWindowDeferredBtn_Click(", StringComparison.Ordinal);
+        handlerStart.Should().BeGreaterThanOrEqualTo(0);
+        var handlerEnd = source.IndexOf("private void FreezePanesPickerBtn_Click(", handlerStart, StringComparison.Ordinal);
+        handlerEnd.Should().BeGreaterThan(handlerStart);
+        var handler = source[handlerStart..handlerEnd];
+
+        handler.Should().Contain("DeferredCommandMessages.MultiWindow(commandName)");
+        handler.Should().Contain("ShowOwnedMessage(message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);");
+        handler.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void PageLayoutThemesButton_OpensWorkbookThemeMenu()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -2010,6 +2085,115 @@ public sealed class MainWindowXamlKeyTipTests
         effectsButton.Descendants(presentation + "MenuItem")
             .Single(item => item.Attribute("Header")?.Value == "Customize Effects...")
             .Attribute("Click")?.Value.Should().Be("ThemeEffectsCustomizeMenuItem_Click");
+    }
+
+    [Fact]
+    public void PageLayoutThemeCommands_ExposeStableAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        AssertThemeButton(document, local, presentation, "Themes", "PageLayoutThemesButton", "Open workbook theme presets and customization.");
+        AssertThemeButton(document, local, presentation, "Theme Colors", "PageLayoutThemeColorsButton", "Open workbook theme color presets and customization.");
+        AssertThemeButton(document, local, presentation, "Theme Fonts", "PageLayoutThemeFontsButton", "Open workbook theme font presets and customization.");
+        AssertThemeButton(document, local, presentation, "Theme Effects", "PageLayoutThemeEffectsButton", "Open workbook theme effect presets and customization.");
+
+        var expectedMenuItems = new (string Header, string AutomationName, string AutomationId)[]
+        {
+            ("Office", "Office theme", "PageLayoutThemeOfficeMenuItem"),
+            ("Freexcel Colorful", "Freexcel Colorful theme", "PageLayoutThemeColorfulMenuItem"),
+            ("Grayscale", "Grayscale theme", "PageLayoutThemeGrayscaleMenuItem"),
+            ("Customize...", "Customize theme", "PageLayoutThemeCustomizeMenuItem"),
+            ("Office", "Office theme colors", "PageLayoutThemeColorsOfficeMenuItem"),
+            ("Freexcel Colorful", "Freexcel Colorful theme colors", "PageLayoutThemeColorsColorfulMenuItem"),
+            ("Grayscale", "Grayscale theme colors", "PageLayoutThemeColorsGrayscaleMenuItem"),
+            ("Customize Colors...", "Customize theme colors", "PageLayoutThemeColorsCustomizeMenuItem"),
+            ("Office", "Office theme fonts", "PageLayoutThemeFontsOfficeMenuItem"),
+            ("Arial", "Arial theme fonts", "PageLayoutThemeFontsArialMenuItem"),
+            ("Times New Roman", "Times New Roman theme fonts", "PageLayoutThemeFontsTimesMenuItem"),
+            ("Customize Fonts...", "Customize theme fonts", "PageLayoutThemeFontsCustomizeMenuItem"),
+            ("Office", "Office theme effects", "PageLayoutThemeEffectsOfficeMenuItem"),
+            ("Subtle", "Subtle theme effects", "PageLayoutThemeEffectsSubtleMenuItem"),
+            ("Refined", "Refined theme effects", "PageLayoutThemeEffectsRefinedMenuItem"),
+            ("Customize Effects...", "Customize theme effects", "PageLayoutThemeEffectsCustomizeMenuItem")
+        };
+
+        foreach (var expected in expectedMenuItems)
+        {
+            var menuItem = document
+                .Descendants(presentation + "MenuItem")
+                .Single(item =>
+                    item.Attribute("Header")?.Value == expected.Header &&
+                    item.Attribute("AutomationProperties.AutomationId")?.Value == expected.AutomationId);
+
+            menuItem.Attribute("AutomationProperties.Name")?.Value.Should().Be(expected.AutomationName);
+            menuItem.Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
+        }
+
+        static void AssertThemeButton(
+            XDocument document,
+            XNamespace local,
+            XNamespace presentation,
+            string tooltipTitle,
+            string automationId,
+            string helpText)
+        {
+            var button = document
+                .Descendants(presentation + "Button")
+                .Single(element => element.Attribute(local + "RibbonTooltip.Title")?.Value == tooltipTitle);
+
+            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(tooltipTitle);
+            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
+            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+        }
+    }
+
+    [Fact]
+    public void DrawFormatCropGradientEffectsButtons_ExposeAccessibleCommandsAndMenus()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var cropButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute("Click")?.Value == "PictureCropBtn_Click");
+        var gradientButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute("Click")?.Value == "ObjectGradientBtn_Click");
+        var effectsButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute("Click")?.Value == "ObjectEffectsBtn_Click");
+
+        cropButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("C");
+        cropButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
+        gradientButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("G");
+        gradientButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
+        effectsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FX");
+        effectsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");
+
+        var cropMenuItems = cropButton
+            .Descendants(presentation + "MenuItem")
+            .Select(item => new
+            {
+                Header = item.Attribute("Header")?.Value,
+                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                Click = item.Attribute("Click")?.Value,
+                Markup = item.ToString()
+            })
+            .ToList();
+
+        cropMenuItems.Should().Contain(item =>
+            item.Header == "Crop..." &&
+            item.KeyTip == "C" &&
+            item.Click == "PictureCropDialogMenuItem_Click" &&
+            item.Markup.Contains("AutomationProperties.AutomationId=\"DrawCropPictureMenuItem\""));
+        cropMenuItems.Should().Contain(item =>
+            item.Header == "Reset Crop" &&
+            item.KeyTip == "R" &&
+            item.Click == "PictureResetCropMenuItem_Click" &&
+            item.Markup.Contains("AutomationProperties.AutomationId=\"DrawResetPictureCropMenuItem\""));
     }
 
     [Fact]

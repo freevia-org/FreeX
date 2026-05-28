@@ -333,12 +333,15 @@ public class CellStyleTests
     }
 
     [Fact]
-    public void StyleRegistry_GetStyle_ReturnsCopy()
+    public void StyleRegistry_GetStyle_ReturnsSameInstance()
     {
+        // GetStyle returns the shared registry instance — no defensive clone on every read.
+        // Callers that need to modify a style must call .Clone() themselves.
         var wb = new Workbook();
-        var style = wb.GetStyle(StyleId.Default);
-        style.FontName = "Mutated";
-        wb.GetStyle(StyleId.Default).FontName.Should().Be("Calibri");
+        var id = wb.RegisterStyle(new CellStyle { Bold = true });
+        var first = wb.GetStyle(id);
+        var second = wb.GetStyle(id);
+        first.Should().BeSameAs(second);
     }
 
     [Fact]

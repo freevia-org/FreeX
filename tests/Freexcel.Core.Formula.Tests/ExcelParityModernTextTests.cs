@@ -59,6 +59,14 @@ public sealed class ExcelParityModernTextTests
         _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
     }
 
+    [Theory]
+    [InlineData("=TEXTBEFORE(\"😀\",\"x\",2)")]
+    [InlineData("=TEXTAFTER(\"😀\",\"x\",-2)")]
+    public void TextBeforeAfter_InstanceNumCountsSurrogatePairsAsSingleTextElements(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+    }
+
     [Fact]
     public void TextBeforeAfter_SpillOverTextRanges()
     {
@@ -131,6 +139,50 @@ public sealed class ExcelParityModernTextTests
     public void Textsplit_ReturnsValueForExcelArgumentDomainErrors(string formula)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Theory]
+    [InlineData("=ARABIC(\"LVII\")", 57)]
+    [InlineData("=ARABIC(\"mcmxii\")", 1912)]
+    [InlineData("=ARABIC(\"mxmvii\")", 1997)]
+    [InlineData("=ARABIC(\"  MMXI  \")", 2011)]
+    [InlineData("=ARABIC(\"-MMXI\")", -2011)]
+    [InlineData("=ARABIC(\"\")", 0)]
+    [InlineData("=ARABIC(\"MMMM\")", 4000)]
+    public void Arabic_ReturnsExcelArabicNumbers(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=ARABIC(1)")]
+    [InlineData("=ARABIC(TRUE)")]
+    [InlineData("=ARABIC(\"not roman\")")]
+    [InlineData("=ARABIC(\"IXIX\")")]
+    [InlineData("=ARABIC(\"-\")")]
+    public void Arabic_ReturnsValueForExcelArgumentDomainErrors(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Arabic_ReturnsValueWhenTextArgumentExceedsExcelLengthLimit()
+    {
+        var text = new string('M', 256);
+        _eval.Evaluate($"=ARABIC(\"{text}\")", Sheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Arabic_SpillsOverTextRanges()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("ID")),
+            (2, 1, new TextValue("IC")));
+
+        AssertColumn(
+            _eval.Evaluate("=ARABIC(A1:A2)", sheet),
+            new NumberValue(499),
+            new NumberValue(99));
     }
 
     [Theory]

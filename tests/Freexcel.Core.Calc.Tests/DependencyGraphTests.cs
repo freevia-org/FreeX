@@ -306,6 +306,49 @@ public class DependencyGraphTests
         formulaSheet.GetValue(formula).Should().Be(new NumberValue(14));
     }
 
+    [Theory]
+    [InlineData("SUM(A:A)")]           // full-column reference — 1,048,576 rows
+    [InlineData("SUM(A1:Z10000)")]     // 26 × 10,000 = 260,000 cells
+    public void RegisterFormulaDependencies_LargeRange_DoesNotExceed10kIndividualCellEntries(
+        string formulaBody)
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        var formula = new CellAddress(sheet.Id, 10001, 27); // somewhere outside the ranges
+
+        var ast = new Parser(new Lexer("=" + formulaBody).Tokenize()).Parse();
+        engine.RegisterFormulaDependencies(formula, ast, sheet.Id, workbook);
+
+        // Individual cell entries must not blow up — large ranges are stored compactly
+        graph.GetDirectPrecedents(formula).Count.Should().BeLessThanOrEqualTo(10_000,
+            $"formula '{formulaBody}' must not expand into >10k individual cell dependencies");
+
+        // At least one compact range dependency should exist instead
+        graph.GetDirectRangePrecedents(formula).Should().NotBeEmpty(
+            $"large range formula '{formulaBody}' should register at least one compact GridRange dependency");
+    }
+
+    [Fact]
+    public void RegisterFormulaDependencies_LargeRange_CompletesQuickly()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        var formula = new CellAddress(sheet.Id, 1, 2);
+
+        // A full-column reference has 1,048,576 rows — this must not take 1 M iterations
+        var ast = new Parser(new Lexer("=SUM(A:A)").Tokenize()).Parse();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        engine.RegisterFormulaDependencies(formula, ast, sheet.Id, workbook);
+        sw.Stop();
+
+        sw.ElapsedMilliseconds.Should().BeLessThan(500,
+            "registering a full-column dependency must complete in under 500 ms");
+    }
+
     [Fact]
     public void GetDirectRangePrecedents_ExposesCompactRangeWithoutExpandingCells()
     {

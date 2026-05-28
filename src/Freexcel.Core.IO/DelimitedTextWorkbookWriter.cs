@@ -133,7 +133,13 @@ internal static class DelimitedTextWorkbookWriter
 
     private static void WriteField(TextWriter writer, char delimiter, string value, bool isTextValue)
     {
-        if (value.Length == 0) return;
+        if (value.Length == 0)
+        {
+            if (isTextValue)
+                writer.Write("\"\"");
+            return;
+        }
+
         if (!ShouldQuoteField(value, delimiter, isTextValue))
         {
             writer.Write(value);

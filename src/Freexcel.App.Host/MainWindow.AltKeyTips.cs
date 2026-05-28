@@ -39,6 +39,7 @@ public partial class MainWindow
         else if (msg == WM_EXITSIZEMOVE && _isInWindowResizeMoveLoop)
         {
             _isInWindowResizeMoveLoop = false;
+            NormalizeRibbonSurfaceAfterLayoutChange();
             CompleteViewportResizeRefresh();
         }
 

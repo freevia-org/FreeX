@@ -100,6 +100,22 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_ExposesStableAutomationMetadataForCategoriesAndActions()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml"));
+
+        xaml.Should().Contain("AutomationProperties.Name=\"Options categories\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"OptionsCategoryList\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Select a Freexcel Options category.\"");
+        xaml.Should().Contain("x:Name=\"OkBtn\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"OptionsOkButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Apply Freexcel Options changes.\"");
+        xaml.Should().Contain("x:Name=\"CancelBtn\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"OptionsCancelButton\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Close Freexcel Options without applying changes.\"");
+    }
+
+    [Fact]
     public void OptionsDialogInvalidGeneralInputs_ShowOwnedWarningsAndRefocusEditors()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml.cs"));
