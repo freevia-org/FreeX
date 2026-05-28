@@ -109,9 +109,14 @@ internal static class RibbonAdaptivePriorityPlanner
             return [];
 
         if (RequiresMeasuredCorrection(groupNames))
+        {
+            if (availableWidth <= 900)
+                return ["Data Tools", "Forecast"];
+
             return availableWidth <= 1120
                 ? ["Sort & Filter", "Data Tools", "Forecast"]
                 : ["Sort & Filter"];
+        }
 
         if (IsRibbonGroupSet(groupNames, "Themes", "Page Setup", "Sheet Options"))
             return ["Page Setup"];

@@ -4,7 +4,10 @@ param(
     [string]$OutputRoot = "artifacts\releases",
     [string]$Version = "",
     [ValidateSet("SingleFile", "Folder", "Msix")]
-    [string]$PublishMode = "SingleFile"
+    [string]$PublishMode = "SingleFile",
+    [string]$MsixCertificatePath = $env:FREEXCEL_MSIX_CERTIFICATE_PATH,
+    [string]$MsixCertificatePassword = $env:FREEXCEL_MSIX_CERTIFICATE_PASSWORD,
+    [string]$MsixTimestampUrl = $env:FREEXCEL_MSIX_TIMESTAMP_URL
 )
 
 $ErrorActionPreference = "Stop"
@@ -193,6 +196,43 @@ if ($PublishMode -eq "Msix") {
     }
     if (-not (Test-Path -LiteralPath $artifactMsixPath)) {
         throw "makeappx did not create $artifactMsixPath"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($MsixCertificatePath)) {
+        if (-not (Test-Path -LiteralPath $MsixCertificatePath)) {
+            throw "MSIX signing certificate was not found at $MsixCertificatePath"
+        }
+
+        $signToolCommand = Get-Command signtool.exe -ErrorAction SilentlyContinue
+        $signToolPath = if ($null -ne $signToolCommand) { $signToolCommand.Source } else { $null }
+        if ($null -eq $signToolPath) {
+            $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+            if (Test-Path -LiteralPath $kitRoot) {
+                $signToolPath = Get-ChildItem -LiteralPath $kitRoot -Recurse -Filter signtool.exe |
+                    Sort-Object FullName -Descending |
+                    Select-Object -First 1 -ExpandProperty FullName
+            }
+        }
+        if ($null -eq $signToolPath) {
+            throw "signtool.exe was not found. Install the Windows SDK to sign MSIX packages."
+        }
+
+        $signArgs = @("sign", "/fd", "SHA256", "/f", $MsixCertificatePath)
+        if (-not [string]::IsNullOrWhiteSpace($MsixCertificatePassword)) {
+            $signArgs += @("/p", $MsixCertificatePassword)
+        }
+        if (-not [string]::IsNullOrWhiteSpace($MsixTimestampUrl)) {
+            $signArgs += @("/tr", $MsixTimestampUrl, "/td", "SHA256")
+        }
+        $signArgs += $artifactMsixPath
+
+        & $signToolPath @signArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "signtool sign failed with exit code $LASTEXITCODE"
+        }
+        Write-Host "Signed $artifactMsixPath"
+    } else {
+        Write-Host "Created unsigned local MSIX; pass -MsixCertificatePath to sign it."
     }
 
     $hash = Get-FileHash -LiteralPath $artifactMsixPath -Algorithm SHA256

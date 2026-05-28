@@ -427,7 +427,7 @@ public sealed partial class Sheet
     public void SetCell(CellAddress address, ScalarValue value)
     {
         ClearSpillRange(address);
-        MarkUsedRangeDirty();
+        TrackUsedRangeCellSet(address.Row, address.Col);
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
             existing.Value = value;
@@ -448,7 +448,7 @@ public sealed partial class Sheet
     public void SetFormula(CellAddress address, string formulaText)
     {
         ClearSpillRange(address);
-        MarkUsedRangeDirty();
+        TrackUsedRangeCellSet(address.Row, address.Col);
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
             existing.FormulaText = formulaText;
@@ -465,7 +465,7 @@ public sealed partial class Sheet
     public void SetCell(CellAddress address, Cell cell)
     {
         ClearSpillRange(address);
-        MarkUsedRangeDirty();
+        TrackUsedRangeCellSet(address.Row, address.Col);
         _cells[(address.Row, address.Col)] = cell;
         _styleOnly.Remove((address.Row, address.Col));
     }
@@ -475,7 +475,7 @@ public sealed partial class Sheet
     {
         ClearSpillRange(new CellAddress(Id, row, col));
         if (_cells.Remove((row, col)))
-            MarkUsedRangeDirty();
+            TrackUsedRangeCellCleared(row, col);
     }
 
     /// <summary>Remove a cell at the given address.</summary>
@@ -483,7 +483,7 @@ public sealed partial class Sheet
     {
         ClearSpillRange(address);
         if (_cells.Remove((address.Row, address.Col)))
-            MarkUsedRangeDirty();
+            TrackUsedRangeCellCleared(address.Row, address.Col);
     }
 
     /// <summary>
@@ -625,7 +625,45 @@ public sealed partial class Sheet
         return _usedRangeCache;
     }
 
-    private void MarkUsedRangeDirty() => _usedRangeCacheDirty = true;
+    private void TrackUsedRangeCellSet(uint row, uint col)
+    {
+        if (_usedRangeCacheDirty)
+            return;
+
+        if (_usedRangeCache is not { } range)
+        {
+            _usedRangeCache = new GridRange(
+                new CellAddress(Id, row, col),
+                new CellAddress(Id, row, col));
+            return;
+        }
+
+        if (row >= range.Start.Row &&
+            row <= range.End.Row &&
+            col >= range.Start.Col &&
+            col <= range.End.Col)
+        {
+            return;
+        }
+
+        _usedRangeCache = new GridRange(
+            new CellAddress(Id, Math.Min(range.Start.Row, row), Math.Min(range.Start.Col, col)),
+            new CellAddress(Id, Math.Max(range.End.Row, row), Math.Max(range.End.Col, col)));
+    }
+
+    private void TrackUsedRangeCellCleared(uint row, uint col)
+    {
+        if (_usedRangeCacheDirty || _usedRangeCache is not { } range)
+            return;
+
+        if (row == range.Start.Row ||
+            row == range.End.Row ||
+            col == range.Start.Col ||
+            col == range.End.Col)
+        {
+            _usedRangeCacheDirty = true;
+        }
+    }
 
 }
 

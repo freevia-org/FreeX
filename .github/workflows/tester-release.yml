@@ -169,22 +169,43 @@ jobs:
           $latestHash = Get-FileHash -LiteralPath $latestExePath -Algorithm SHA256
           Set-Content -LiteralPath "$latestExePath.sha256" -Value "$($latestHash.Hash.ToLowerInvariant())  Freexcel-latest-win-x64.exe" -Encoding ASCII
 
-      - name: Publish unsigned local MSIX
+      - name: Publish MSIX package
         shell: pwsh
         run: |
           $outputRoot = Join-Path $env:RUNNER_TEMP "freexcel-release"
+          $certificatePath = ""
+          $certificateBase64 = "${{ secrets.FREEXCEL_MSIX_CERTIFICATE_BASE64 }}"
+          if (-not [string]::IsNullOrWhiteSpace($certificateBase64)) {
+            $certificatePath = Join-Path $env:RUNNER_TEMP "freexcel-msix-signing.pfx"
+            [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($certificateBase64))
+          }
+
+          $signArgs = @()
+          if (-not [string]::IsNullOrWhiteSpace($certificatePath)) {
+            $signArgs += @("-MsixCertificatePath", $certificatePath)
+            $certificatePassword = "${{ secrets.FREEXCEL_MSIX_CERTIFICATE_PASSWORD }}"
+            if (-not [string]::IsNullOrWhiteSpace($certificatePassword)) {
+              $signArgs += @("-MsixCertificatePassword", $certificatePassword)
+            }
+            $timestampUrl = "${{ vars.FREEXCEL_MSIX_TIMESTAMP_URL }}"
+            if (-not [string]::IsNullOrWhiteSpace($timestampUrl)) {
+              $signArgs += @("-MsixTimestampUrl", $timestampUrl)
+            }
+          }
+
           tools/Publish-UserTestBuild.ps1 `
             -Configuration Release `
             -RuntimeIdentifier win-x64 `
             -OutputRoot $outputRoot `
             -Version "${{ steps.meta.outputs.version }}" `
-            -PublishMode Msix
+            -PublishMode Msix `
+            @signArgs
 
           $versionedMsix = Get-ChildItem -LiteralPath $outputRoot -Filter "freexcel-*-win-x64-msix.msix" |
             Sort-Object LastWriteTimeUtc -Descending |
             Select-Object -First 1
           if ($null -eq $versionedMsix) {
-            throw "Publish script did not create a versioned unsigned MSIX."
+            throw "Publish script did not create a versioned MSIX."
           }
 
           $uploadRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts\upload"
@@ -258,10 +279,10 @@ jobs:
           Commit: ${{ github.sha }}
           Download the stable latest asset: Freexcel-latest-win-x64.exe
           Checksum for the latest single-file asset: Freexcel-latest-win-x64.exe.sha256
-          Unsigned local MSIX package: Freexcel-latest-win-x64.msix
+          MSIX package: Freexcel-latest-win-x64.msix
 
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
-          The MSIX package is unsigned for local packaging validation; signing and Store submission remain release-gate tasks.
+          The MSIX package is signed when the release workflow has certificate secrets configured; otherwise it remains unsigned for local packaging validation. Installer trust validation and Store submission remain release-gate tasks.
 
           Public-preview accessibility gate:
           - Keyboard-only smoke validation recorded.
