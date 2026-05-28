@@ -75,11 +75,8 @@ public static partial class BuiltInFunctions
                 });
             case "protect":
             {
-                if (sheet is null) return new NumberValue(0);
-                bool locked = true; // default style is locked
-                if (style is not null)
-                    locked = style.Locked;
-                return new NumberValue(sheet.IsProtected && locked ? 1 : 0);
+                bool locked = style?.Locked ?? true;
+                return new NumberValue(locked ? 1 : 0);
             }
             case "width":
             {
