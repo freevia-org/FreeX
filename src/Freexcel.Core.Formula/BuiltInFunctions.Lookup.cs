@@ -62,6 +62,13 @@ public static partial class BuiltInFunctions
         return new NumberValue(1);
     }
 
+    private static ScalarValue Areas(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue) return new NumberValue(1);
+        return ErrorValue.Value;
+    }
+
     private static ScalarValue SheetFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count == 0)
