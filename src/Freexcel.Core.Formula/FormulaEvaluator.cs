@@ -1877,6 +1877,28 @@ public sealed class FormulaEvaluator
                 baseWidth = (int)(c1 - c0 + 1);
                 baseSheet = rangeRef.SheetName;
                 break;
+            case FullColumnRangeRefNode fullColumnRange:
+                if (fullColumnRange.SheetName is not null && !context.SheetExists(fullColumnRange.SheetName))
+                    return ErrorValue.Ref;
+                uint fullColumnStart = CellAddress.ColumnNameToNumber(fullColumnRange.StartColumnName);
+                uint fullColumnEnd = CellAddress.ColumnNameToNumber(fullColumnRange.EndColumnName);
+                uint fc0 = Math.Min(fullColumnStart, fullColumnEnd);
+                uint fc1 = Math.Max(fullColumnStart, fullColumnEnd);
+                baseRow = 1; baseCol = fc0;
+                baseHeight = (int)CellAddress.MaxRow;
+                baseWidth = (int)(fc1 - fc0 + 1);
+                baseSheet = fullColumnRange.SheetName;
+                break;
+            case FullRowRangeRefNode fullRowRange:
+                if (fullRowRange.SheetName is not null && !context.SheetExists(fullRowRange.SheetName))
+                    return ErrorValue.Ref;
+                uint fr0 = Math.Min(fullRowRange.StartRow, fullRowRange.EndRow);
+                uint fr1 = Math.Max(fullRowRange.StartRow, fullRowRange.EndRow);
+                baseRow = fr0; baseCol = 1;
+                baseHeight = (int)(fr1 - fr0 + 1);
+                baseWidth = (int)CellAddress.MaxCol;
+                baseSheet = fullRowRange.SheetName;
+                break;
             case NamedRangeNode nm:
                 var nr = context.TryResolveNamedRange(nm.Name);
                 if (nr is null) return ErrorValue.Name;

@@ -114,6 +114,26 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ExtractFinalDottedToken_HandlesDifferentDotCounts()
+    {
+        var result = FlashFillService.Fill(
+            [("report.final.xlsx", "xlsx"), ("budget.csv", "csv")],
+            ["notes.archive.txt"]);
+
+        result.Should().BeEquivalentTo(["txt"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractFinalDottedToken_ReturnsNullWhenRemainingDotIsMissing()
+    {
+        var result = FlashFillService.Fill(
+            [("report.final.xlsx", "xlsx"), ("budget.csv", "csv")],
+            ["notes"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_ExtractSemicolonDelimitedToken_ExtractsConsistentPart()
     {
         var result = FlashFillService.Fill(
