@@ -1,3 +1,4 @@
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -89,9 +90,29 @@ internal static class WpfTextContentExtractor
         if (string.IsNullOrEmpty(text))
             return "";
 
-        return text.Replace("__", "\u0000", StringComparison.Ordinal)
-            .Replace("_", "", StringComparison.Ordinal)
-            .Replace("\u0000", "_", StringComparison.Ordinal);
+        var markerIndex = text.IndexOf('_', StringComparison.Ordinal);
+        if (markerIndex < 0)
+            return text;
+
+        var normalized = new StringBuilder(text.Length);
+        normalized.Append(text, 0, markerIndex);
+
+        for (var i = markerIndex; i < text.Length; i++)
+        {
+            if (text[i] != '_')
+            {
+                normalized.Append(text[i]);
+                continue;
+            }
+
+            if (i + 1 < text.Length && text[i + 1] == '_')
+            {
+                normalized.Append('_');
+                i++;
+            }
+        }
+
+        return normalized.ToString();
     }
 
     private static void AppendInlineText(Inline inline, List<string> parts)
