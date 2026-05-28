@@ -14,10 +14,16 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=BASE(255,16,4)", "00FF")]
     [InlineData("=BASE(45745,36)", "ZAP")]
     [InlineData("=BASE(0,2,4)", "0000")]
-    [InlineData("=BASE(1,2,255)", "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001")]
     public void BaseFunction_ReturnsExcelText(string formula, string expected)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Fact]
+    public void BaseFunction_PadsToExcelMaximumMinLength()
+    {
+        _eval.Evaluate("=BASE(1,2,255)", MakeSheet())
+            .Should().Be(new TextValue(new string('0', 254) + "1"));
     }
 
     [Theory]
