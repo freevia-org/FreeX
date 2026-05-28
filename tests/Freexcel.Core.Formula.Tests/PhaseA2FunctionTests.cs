@@ -369,6 +369,34 @@ public class PhaseA2FunctionTests
         _eval.Evaluate("=CELL(\"format\",A1)", sheet, wb).Should().Be(new TextValue("P2"));
     }
 
+    [Theory]
+    [InlineData("#,##0;[Red]-#,##0", 1)]
+    [InlineData("#,##0;[Color10](#,##0)", 1)]
+    [InlineData("#,##0;[<=-100]#,##0", 0)]
+    [InlineData("#,##0;-#,##0", 0)]
+    public void Cell_Color_ReportsNegativeNumberFormatColor(string numberFormat, double expected)
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(-12)));
+        var styleId = wb.RegisterStyle(new CellStyle { NumberFormat = numberFormat });
+        sheet.GetCell(1, 1)!.StyleId = styleId;
+
+        _eval.Evaluate("=CELL(\"color\",A1)", sheet, wb).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("#,##0;(#,##0)", 1)]
+    [InlineData("#,##0;[Red](#,##0)", 1)]
+    [InlineData("#,##0;-#,##0", 0)]
+    [InlineData("#,##0;\"(\"#,##0\")\"", 0)]
+    public void Cell_Parentheses_ReportsNegativeNumberFormatParentheses(string numberFormat, double expected)
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(-12)));
+        var styleId = wb.RegisterStyle(new CellStyle { NumberFormat = numberFormat });
+        sheet.GetCell(1, 1)!.StyleId = styleId;
+
+        _eval.Evaluate("=CELL(\"parentheses\",A1)", sheet, wb).Should().Be(new NumberValue(expected));
+    }
+
     [Fact]
     public void Cell_Protect_UnprotectedSheet_ReturnsZero()
     {

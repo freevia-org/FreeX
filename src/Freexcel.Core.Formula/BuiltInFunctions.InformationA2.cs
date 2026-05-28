@@ -93,9 +93,9 @@ public static partial class BuiltInFunctions
             case "format":
                 return new TextValue(CellFormatCode(style?.NumberFormat));
             case "color":
-                return new NumberValue(0);
+                return new NumberValue(CellNegativeSectionUsesColor(style?.NumberFormat) ? 1 : 0);
             case "parentheses":
-                return new NumberValue(0);
+                return new NumberValue(CellNegativeSectionUsesParentheses(style?.NumberFormat) ? 1 : 0);
             case "prefix":
                 return new TextValue("");
             default:
@@ -196,6 +196,179 @@ public static partial class BuiltInFunctions
         }
 
         return new string(chars.ToArray());
+    }
+
+    private static bool CellNegativeSectionUsesColor(string? numberFormat)
+    {
+        var negativeSection = GetCellNegativeFormatSection(numberFormat);
+        if (negativeSection is null) return false;
+
+        foreach (var bracket in EnumerateBracketedFormatTokens(negativeSection))
+        {
+            var token = bracket.Trim();
+            if (token.Length == 0) continue;
+            if (token.StartsWith("$-", StringComparison.Ordinal)) continue;
+            if (token[0] is '<' or '>' or '=') continue;
+            if (token.Contains('=') || char.IsDigit(token[0])) continue;
+            if (token.StartsWith("DBNum", StringComparison.OrdinalIgnoreCase)) continue;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool CellNegativeSectionUsesParentheses(string? numberFormat)
+    {
+        var negativeSection = GetCellNegativeFormatSection(numberFormat);
+        if (negativeSection is null) return false;
+
+        bool quoted = false;
+        bool escaped = false;
+        bool bracketed = false;
+        bool hasOpen = false;
+        bool hasClose = false;
+
+        foreach (var ch in negativeSection)
+        {
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (ch == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                quoted = !quoted;
+                continue;
+            }
+
+            if (quoted)
+                continue;
+
+            if (ch == '[')
+            {
+                bracketed = true;
+                continue;
+            }
+
+            if (ch == ']')
+            {
+                bracketed = false;
+                continue;
+            }
+
+            if (bracketed)
+                continue;
+
+            if (ch == '(') hasOpen = true;
+            if (ch == ')') hasClose = true;
+        }
+
+        return hasOpen && hasClose;
+    }
+
+    private static string? GetCellNegativeFormatSection(string? numberFormat)
+    {
+        var sections = SplitCellFormatSections(numberFormat);
+        return sections.Count >= 2 ? sections[1] : null;
+    }
+
+    private static List<string> SplitCellFormatSections(string? numberFormat)
+    {
+        var sections = new List<string>();
+        if (string.IsNullOrEmpty(numberFormat))
+            return sections;
+
+        var current = new List<char>();
+        bool quoted = false;
+        bool escaped = false;
+
+        foreach (var ch in numberFormat)
+        {
+            if (escaped)
+            {
+                current.Add(ch);
+                escaped = false;
+                continue;
+            }
+
+            if (ch == '\\')
+            {
+                current.Add(ch);
+                escaped = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                current.Add(ch);
+                quoted = !quoted;
+                continue;
+            }
+
+            if (ch == ';' && !quoted)
+            {
+                sections.Add(new string(current.ToArray()));
+                current.Clear();
+                continue;
+            }
+
+            current.Add(ch);
+        }
+
+        sections.Add(new string(current.ToArray()));
+        return sections;
+    }
+
+    private static IEnumerable<string> EnumerateBracketedFormatTokens(string section)
+    {
+        bool quoted = false;
+        bool escaped = false;
+        int tokenStart = -1;
+
+        for (int i = 0; i < section.Length; i++)
+        {
+            var ch = section[i];
+
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (ch == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                quoted = !quoted;
+                continue;
+            }
+
+            if (quoted)
+                continue;
+
+            if (ch == '[')
+            {
+                tokenStart = i + 1;
+                continue;
+            }
+
+            if (ch == ']' && tokenStart >= 0)
+            {
+                yield return section[tokenStart..i];
+                tokenStart = -1;
+            }
+        }
     }
 
 
