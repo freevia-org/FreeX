@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using FluentAssertions;
 using Freexcel.App.UI;
@@ -317,6 +318,45 @@ public sealed class ChartRendererTests
         series.Items.Select(item => item.Color).Should().OnlyHaveUniqueItems();
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Bottom);
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
+    }
+
+    [Fact]
+    public void SurfaceRenderer_ParsesInvariantDecimalValues()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("de-DE");
+            var sheetId = SheetId.New();
+            var chart = new ChartModel
+            {
+                Type = ChartType.Surface,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3))
+            };
+
+            var model = BuildPlotModel(chart, new ViewportModel(
+                [
+                    Cell(1, 1, "Quarter"),
+                    Cell(1, 2, "North"),
+                    Cell(1, 3, "South"),
+                    Cell(2, 1, "Q1"),
+                    Cell(2, 2, "1.5"),
+                    Cell(2, 3, "2.5")
+                ],
+                [],
+                []));
+
+            var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+            series.Items.Should().HaveCount(2);
+            series.Items.Select(item => item.Color).Should().OnlyHaveUniqueItems();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
     }
 
     [Theory]
