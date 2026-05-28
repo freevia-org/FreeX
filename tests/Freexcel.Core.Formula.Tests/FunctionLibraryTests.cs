@@ -5691,6 +5691,33 @@ public class FunctionLibraryTests
         _eval.Evaluate("=COLUMNS(1:1)", sheet).Should().Be(new NumberValue(CellAddress.MaxCol));
     }
 
+    [Theory]
+    [InlineData("=AREAS(B2:C4)")]
+    [InlineData("=AREAS(A:A)")]
+    [InlineData("=AREAS(1:1)")]
+    public void Areas_SingleReference_ReturnsOneWithoutMaterializingReference(string formula)
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate(formula, sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Areas_MissingSheetReference_ReturnsRefError()
+    {
+        var sheet = MakeSheet();
+        var workbook = new Workbook();
+        workbook.AddSheet(sheet);
+
+        _eval.Evaluate("=AREAS(Missing!A:A)", sheet, workbook).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void Areas_NonReferenceArgument_ReturnsValueError()
+    {
+        _eval.Evaluate("=AREAS(1)", MakeSheet()).Should().Be(ErrorValue.Value);
+    }
+
     [Fact]
     public void Row_Range_SpillsRowNumbers()
     {
