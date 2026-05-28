@@ -5705,9 +5705,8 @@ public class FunctionLibraryTests
     [Fact]
     public void Areas_MissingSheetReference_ReturnsRefError()
     {
-        var sheet = MakeSheet();
         var workbook = new Workbook();
-        workbook.AddSheet(sheet);
+        var sheet = workbook.AddSheet("S");
 
         _eval.Evaluate("=AREAS(Missing!A:A)", sheet, workbook).Should().Be(ErrorValue.Ref);
     }
