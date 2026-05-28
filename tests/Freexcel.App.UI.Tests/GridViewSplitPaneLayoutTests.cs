@@ -504,6 +504,24 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitPaneScrollbarInteractionTarget_DoesNotJumpScrollOnThumbMouseDown()
+    {
+        var viewport = SplitViewport();
+        var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
+
+        GridView.CalculateSplitPaneScrollbarInteractionTarget(
+                viewport,
+                chrome,
+                chrome.HorizontalTopRight!.Thumb.TopLeft + new Vector(2, 2))
+            .Should().BeNull();
+        GridView.CalculateSplitPaneScrollbarInteractionTarget(
+                viewport,
+                chrome,
+                chrome.VerticalBottomLeft!.Thumb.TopLeft + new Vector(2, 2))
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void CalculateSplitPaneScrollbarThumbDragTarget_PreservesPointerOffsetInsideThumb()
     {
         var viewport = SplitViewport();
