@@ -28,7 +28,7 @@ internal static class RibbonCollapsedGroupPresentationPlanner
     public static double GetPlannedWidth(double measuredCollapsedWidth, double availableWidth)
     {
         var plannedWidth = availableWidth <= 920 ? 46 : 68;
-        return Math.Min(measuredCollapsedWidth, plannedWidth);
+        return Math.Min(Math.Max(0, measuredCollapsedWidth), plannedWidth);
     }
 
     public static string GetCacheKey(double availableWidth) =>

@@ -57,6 +57,17 @@ public sealed class DelimitedTextFileAdapterTests
             format.CanSave);
     }
 
+    [Theory]
+    [InlineData('\r')]
+    [InlineData('\n')]
+    public void Constructor_RejectsLineBreakDelimiters(char delimiter)
+    {
+        var create = () => new DelimitedTextFileAdapter(".txt", "Delimited text", delimiter);
+
+        create.Should().Throw<ArgumentException>()
+            .WithMessage("Delimited text field delimiter cannot be a line break.*");
+    }
+
     [Fact]
     public void Load_ReadsTabDelimitedValuesAndQuotedTabs()
     {
