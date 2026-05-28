@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Controls;
 using FluentAssertions;
+using Freexcel.App.Host;
 using Xunit;
 
 namespace Freexcel.App.Host.Tests;
