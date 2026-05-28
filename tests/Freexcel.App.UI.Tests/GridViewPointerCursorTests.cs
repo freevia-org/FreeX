@@ -188,9 +188,10 @@ public sealed class GridViewPointerCursorTests
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var marginGuideStart = source.IndexOf("if (HitTestPageMarginGuide(pos) is { } marginEdge)", StringComparison.Ordinal);
         var mouseDownBlock = source[
-            source.IndexOf("if (HitTestPageMarginGuide(pos) is { } marginEdge)", StringComparison.Ordinal)..
-            source.IndexOf("if (Viewport is not null)", StringComparison.Ordinal)];
+            marginGuideStart..
+            source.IndexOf("if (Viewport is not null)", marginGuideStart, StringComparison.Ordinal)];
 
         mouseDownBlock.Should().Contain("_marginDragEdge = marginEdge;");
         mouseDownBlock.Should().Contain("marginEdge is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right");
