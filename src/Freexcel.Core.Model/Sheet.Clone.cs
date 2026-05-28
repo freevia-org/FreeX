@@ -38,13 +38,7 @@ public sealed partial class Sheet
             SortState                     = SortState,
             SingleXmlCells                = CloneSingleXmlCells(SingleXmlCells),
             AdditionalViews               = AdditionalViews,
-            PrimaryViewMetadata           = PrimaryViewMetadata is null
-                ? null
-                : new WorksheetPrimaryViewMetadataModel
-                {
-                    NativeAttributes = new Dictionary<string, string>(PrimaryViewMetadata.NativeAttributes, StringComparer.Ordinal),
-                    NativeChildXmls = [.. PrimaryViewMetadata.NativeChildXmls]
-                },
+            PrimaryViewMetadata           = PrimaryViewMetadata?.Clone(),
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
             PageMargins                   = PageMargins,
@@ -83,36 +77,12 @@ public sealed partial class Sheet
             PrintDraftQuality             = PrintDraftQuality,
             PrintQualityDpi               = PrintQualityDpi,
             PrintQualityVerticalDpi       = PrintQualityVerticalDpi,
-            PageMarginsMetadata           = PageMarginsMetadata is null
-                ? null
-                : new WorksheetPageMarginsMetadataModel
-                {
-                    NativeAttributes = new Dictionary<string, string>(PageMarginsMetadata.NativeAttributes, StringComparer.Ordinal),
-                    NativeChildXmls = [.. PageMarginsMetadata.NativeChildXmls]
-                },
+            PageMarginsMetadata           = PageMarginsMetadata?.Clone(),
             PrintErrorValue               = PrintErrorValue,
             PrintComments                 = PrintComments,
-            PrintOptionsMetadata          = PrintOptionsMetadata is null
-                ? null
-                : new WorksheetPrintOptionsMetadataModel
-                {
-                    NativeAttributes = new Dictionary<string, string>(PrintOptionsMetadata.NativeAttributes, StringComparer.Ordinal),
-                    NativeChildXmls = [.. PrintOptionsMetadata.NativeChildXmls]
-                },
-            HeaderFooterMetadata          = HeaderFooterMetadata is null
-                ? null
-                : new WorksheetHeaderFooterMetadataModel
-                {
-                    NativeAttributes = new Dictionary<string, string>(HeaderFooterMetadata.NativeAttributes, StringComparer.Ordinal),
-                    NativeChildXmls = [.. HeaderFooterMetadata.NativeChildXmls]
-                },
-            PageSetupMetadata             = PageSetupMetadata is null
-                ? null
-                : new WorksheetPageSetupMetadataModel
-                {
-                    NativeAttributes = new Dictionary<string, string>(PageSetupMetadata.NativeAttributes, StringComparer.Ordinal),
-                    NativeChildXmls = [.. PageSetupMetadata.NativeChildXmls]
-                },
+            PrintOptionsMetadata          = PrintOptionsMetadata?.Clone(),
+            HeaderFooterMetadata          = HeaderFooterMetadata?.Clone(),
+            PageSetupMetadata             = PageSetupMetadata?.Clone(),
             ViewMode                      = ViewMode,
             IsHidden                      = false,
             IsVeryHidden                  = IsVeryHidden,
@@ -122,35 +92,12 @@ public sealed partial class Sheet
             OutlineSummaryRight           = OutlineSummaryRight,
             ShowOutlineSymbols            = ShowOutlineSymbols,
             ApplyOutlineStyles            = ApplyOutlineStyles,
-            SheetFormatMetadata           = SheetFormatMetadata is null
-                ? null
-                : new WorksheetSheetFormatMetadataModel
-                {
-                    NativeAttributes = new Dictionary<string, string>(SheetFormatMetadata.NativeAttributes, StringComparer.Ordinal),
-                    NativeChildXmls = [.. SheetFormatMetadata.NativeChildXmls]
-                },
-            DimensionMetadata             = DimensionMetadata is null
-                ? null
-                : new WorksheetDimensionMetadataModel
-                {
-                    NativeAttributes = new Dictionary<string, string>(DimensionMetadata.NativeAttributes, StringComparer.Ordinal)
-                },
-            SheetPropertiesMetadata       = SheetPropertiesMetadata is null
-                ? null
-                : new WorksheetSheetPropertiesMetadataModel
-                {
-                    NativeAttributes = new Dictionary<string, string>(SheetPropertiesMetadata.NativeAttributes, StringComparer.Ordinal),
-                    NativeChildXmls = [.. SheetPropertiesMetadata.NativeChildXmls]
-                },
+            SheetFormatMetadata           = SheetFormatMetadata?.Clone(),
+            DimensionMetadata             = DimensionMetadata?.Clone(),
+            SheetPropertiesMetadata       = SheetPropertiesMetadata?.Clone(),
             IsProtected                   = IsProtected,
             ProtectionPassword            = ProtectionPassword,
-            ProtectionMetadata            = ProtectionMetadata is null
-                ? null
-                : new WorksheetProtectionMetadataModel
-                {
-                    NativeAttributes = new Dictionary<string, string>(ProtectionMetadata.NativeAttributes, StringComparer.Ordinal),
-                    NativeChildXmls = [.. ProtectionMetadata.NativeChildXmls]
-                },
+            ProtectionMetadata            = ProtectionMetadata?.Clone(),
             // Previously missed fields:
             BackgroundImage               = BackgroundImage,
             RowPageBreaksMetadata         = ClonePageBreaksMetadata(RowPageBreaksMetadata),

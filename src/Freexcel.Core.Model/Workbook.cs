@@ -26,17 +26,9 @@ public sealed class WorkbookFileVersionModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
-public sealed class WorkbookPropertiesModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
-
-public sealed class WorkbookProtectionMetadataModel
-{
-    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
-    public List<string> NativeChildXmls { get; set; } = [];
-}
+// WorkbookPropertiesModel and WorkbookProtectionMetadataModel were simple bags of
+// NativeAttributes + NativeChildXmls with no behaviour.
+// They have been consolidated into NativeXmlPreserveBag.
 
 public sealed class WorkbookFunctionGroupsModel
 {
@@ -187,8 +179,8 @@ public sealed class Workbook
     /// <summary>Excel workbook file-version metadata.</summary>
     public WorkbookFileVersionModel? FileVersion { get; set; }
 
-    /// <summary>Excel workbook property metadata loaded from XLSX workbookPr.</summary>
-    public WorkbookPropertiesModel? Properties { get; set; }
+    /// <summary>Excel workbook property metadata loaded from XLSX workbookPr (residual native XML).</summary>
+    public NativeXmlPreserveBag? Properties { get; set; }
 
     /// <summary>Excel workbook function-group metadata.</summary>
     public WorkbookFunctionGroupsModel? FunctionGroups { get; set; }
@@ -209,7 +201,7 @@ public sealed class Workbook
     public string? StructureProtectionPassword { get; set; }
 
     /// <summary>Native Excel workbook protection metadata not yet modeled as editable fields.</summary>
-    public WorkbookProtectionMetadataModel? ProtectionMetadata { get; set; }
+    public NativeXmlPreserveBag? ProtectionMetadata { get; set; }
 
     /// <summary>Define or replace a named range.</summary>
     public void DefineNamedRange(string name, GridRange range)

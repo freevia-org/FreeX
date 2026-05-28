@@ -13,9 +13,13 @@ internal static class XlsxWorkbookMetadataXmlHelper
     public static int? ClampWorkbookViewInteger(int? value, int min, int max) =>
         value is { } intValue ? Math.Clamp(intValue, min, max) : null;
 
-    public static bool HasRevisionProtectionMetadata(WorkbookProtectionMetadataModel? metadata) =>
-        metadata?.NativeAttributes.ContainsKey("lockRevision") == true ||
-        metadata?.NativeAttributes.ContainsKey("revisionsPassword") == true;
+    public static bool HasRevisionProtectionMetadata(NativeXmlPreserveBag? metadata)
+    {
+        if (metadata is null)
+            return false;
+        var (attrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("workbookProtection"));
+        return attrs.ContainsKey("lockRevision") || attrs.ContainsKey("revisionsPassword");
+    }
 
     public static string ToLegacyPasswordHash(string passwordOrHash)
     {

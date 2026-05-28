@@ -43,7 +43,8 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 sheetViews.AddFirst(sheetView);
             }
 
-            foreach (var attribute in sheet.PrimaryViewMetadata!.NativeAttributes)
+            var (pvAttrs, pvChildren) = XmlNativeBagSerializer.Deserialize(sheet.PrimaryViewMetadata!.Get("sheetView"));
+            foreach (var attribute in pvAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrimaryViewAttribute(attribute.Key))
                     continue;
@@ -51,7 +52,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetView, attribute.Key, attribute.Value);
             }
 
-            if (sheet.PrimaryViewMetadata.NativeChildXmls.Count > 0)
+            if (pvChildren.Count > 0)
             {
                 PruneSelectionsForModeledActiveCell(sheetView, sheet);
 
@@ -59,26 +60,26 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                     .Where(element => !IsModeledPrimaryViewElement(element.Name.LocalName))
                     .Remove();
 
-                foreach (var childXml in sheet.PrimaryViewMetadata.NativeChildXmls)
+                foreach (var childXml in pvChildren)
                 {
                     if (string.IsNullOrWhiteSpace(childXml))
                         continue;
 
-                try
-                {
-                    var nativeChild = XElement.Parse(childXml);
-                    if (nativeChild.Name == WorksheetNs + "selection")
+                    try
                     {
-                        MergeMatchingSelectionNativeAttributes(sheetView, nativeChild);
-                        continue;
-                    }
+                        var nativeChild = XElement.Parse(childXml);
+                        if (nativeChild.Name == WorksheetNs + "selection")
+                        {
+                            MergeMatchingSelectionNativeAttributes(sheetView, nativeChild);
+                            continue;
+                        }
 
-                    sheetView.Add(nativeChild);
-                }
-                catch
-                {
-                    // Skip malformed native payloads in authored native JSON files.
-                }
+                        sheetView.Add(nativeChild);
+                    }
+                    catch
+                    {
+                        // Skip malformed native payloads in authored native JSON files.
+                    }
                 }
             }
 

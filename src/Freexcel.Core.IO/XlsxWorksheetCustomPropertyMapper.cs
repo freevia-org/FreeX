@@ -123,27 +123,31 @@ internal static class XlsxWorksheetCustomPropertyMapper
             insertionPoint.AddBeforeSelf(customProperties);
     }
 
-    private static WorksheetCustomPropertyMetadataModel? ReadMetadata(XElement customProperty)
+    private static NativeXmlPreserveBag? ReadMetadata(XElement customProperty)
     {
-        var metadata = new WorksheetCustomPropertyMetadataModel
-        {
-            NativeChildXmls = customProperty.Elements()
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList()
-        };
-
+        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var attribute in customProperty.Attributes())
         {
             if (attribute.IsNamespaceDeclaration || IsModeledAttribute(attribute.Name.LocalName))
                 continue;
 
-            metadata.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+            attrs[attribute.Name.ToString()] = attribute.Value;
         }
 
-        return metadata.NativeAttributes.Count == 0 && metadata.NativeChildXmls.Count == 0
-            ? null
-            : metadata;
+        var children = customProperty.Elements()
+            .Select(element => element.ToString(SaveOptions.DisableFormatting))
+            .ToList();
+
+        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
+        if (serialized is null)
+            return null;
+
+        var bag = new NativeXmlPreserveBag();
+        bag.Set("customPr", serialized);
+        return bag;
     }
+
+    private static readonly IReadOnlyCollection<string> ModeledCustomPropertyAttributes = ["name", "id"];
 
     private static XElement ToXml(WorksheetCustomProperty property, XNamespace workbookNs)
     {
@@ -152,28 +156,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
             new XAttribute("name", property.Name),
             new XAttribute("id", property.Id.ToString(CultureInfo.InvariantCulture)));
 
-        foreach (var attribute in property.Metadata?.NativeAttributes ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledAttribute(attribute.Key))
-                continue;
-
-            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
-        }
-
-        foreach (var childXml in property.Metadata?.NativeChildXmls ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(childXml))
-                continue;
-
-            try
-            {
-                element.Add(XElement.Parse(childXml, LoadOptions.PreserveWhitespace));
-            }
-            catch
-            {
-                // Native child XML is best-effort; skip malformed authored metadata.
-            }
-        }
+        XmlNativeBagSerializer.ApplyToElement(element, property.Metadata?.Get("customPr"), ModeledCustomPropertyAttributes);
 
         return element;
     }

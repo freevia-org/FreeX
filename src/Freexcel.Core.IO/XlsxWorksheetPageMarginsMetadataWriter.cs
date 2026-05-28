@@ -35,7 +35,8 @@ internal static class XlsxWorksheetPageMarginsMetadataWriter
                 InsertPageMargins(root, worksheetNs, pageMargins);
             }
 
-            foreach (var attribute in sheet.PageMarginsMetadata!.NativeAttributes)
+            var (pmAttrs, pmChildren) = XmlNativeBagSerializer.Deserialize(sheet.PageMarginsMetadata!.Get("pageMargins"));
+            foreach (var attribute in pmAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPageMarginsAttribute(attribute.Key))
                     continue;
@@ -43,10 +44,10 @@ internal static class XlsxWorksheetPageMarginsMetadataWriter
                 XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(pageMargins, attribute.Key, attribute.Value);
             }
 
-            if (sheet.PageMarginsMetadata.NativeChildXmls.Count > 0)
+            if (pmChildren.Count > 0)
             {
                 pageMargins.Elements().Remove();
-                foreach (var childXml in sheet.PageMarginsMetadata.NativeChildXmls)
+                foreach (var childXml in pmChildren)
                 {
                     if (string.IsNullOrWhiteSpace(childXml))
                         continue;

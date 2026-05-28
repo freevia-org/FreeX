@@ -36,7 +36,8 @@ internal static class XlsxWorksheetDimensionMetadataWriter
                 InsertDimension(root, dimension);
             }
 
-            foreach (var attribute in sheet.DimensionMetadata!.NativeAttributes)
+            var (dimAttrs, _) = XmlNativeBagSerializer.Deserialize(sheet.DimensionMetadata!.Get("dimension"));
+            foreach (var attribute in dimAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || string.Equals(attribute.Key, "ref", StringComparison.Ordinal))
                     continue;

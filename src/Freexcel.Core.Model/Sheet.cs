@@ -54,13 +54,13 @@ public sealed partial class Sheet
     public double DefaultRowHeight { get; set; } = 20.0;
 
     /// <summary>Native Excel sheetFormatPr metadata not yet modeled as editable fields.</summary>
-    public WorksheetSheetFormatMetadataModel? SheetFormatMetadata { get; set; }
+    public NativeXmlPreserveBag? SheetFormatMetadata { get; set; }
 
     /// <summary>Native Excel dimension metadata not yet modeled as editable fields.</summary>
-    public WorksheetDimensionMetadataModel? DimensionMetadata { get; set; }
+    public NativeXmlPreserveBag? DimensionMetadata { get; set; }
 
     /// <summary>Native Excel sheetPr metadata not yet modeled as editable fields.</summary>
-    public WorksheetSheetPropertiesMetadataModel? SheetPropertiesMetadata { get; set; }
+    public NativeXmlPreserveBag? SheetPropertiesMetadata { get; set; }
 
     /// <summary>Number of rows frozen at the top (0 = none).</summary>
     public uint FrozenRows { get; set; } = 0;
@@ -104,17 +104,17 @@ public sealed partial class Sheet
     /// <summary>Worksheet XML-map single-cell mapping metadata loaded from XLSX.</summary>
     public WorksheetSingleXmlCellsModel? SingleXmlCells { get; set; }
 
-    /// <summary>Native Excel cell watch metadata not yet modeled as editable fields.</summary>
+    /// <summary>Native Excel cellWatches metadata not yet modeled as editable fields (per-watch attributes preserved separately).</summary>
     public WorksheetCellWatchesMetadataModel? CellWatchesMetadata { get; set; }
 
-    /// <summary>Native Excel ignored-errors metadata not yet modeled as editable fields.</summary>
+    /// <summary>Native Excel ignoredErrors metadata not yet modeled as editable fields (per-error attributes preserved separately).</summary>
     public WorksheetIgnoredErrorsMetadataModel? IgnoredErrorsMetadata { get; set; }
 
     /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
     public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
 
     /// <summary>Native Excel primary sheetView metadata not yet modeled as editable fields.</summary>
-    public WorksheetPrimaryViewMetadataModel? PrimaryViewMetadata { get; set; }
+    public NativeXmlPreserveBag? PrimaryViewMetadata { get; set; }
 
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;
@@ -132,7 +132,7 @@ public sealed partial class Sheet
     public double FooterMargin { get; set; } = 0.3;
 
     /// <summary>Native Excel pageMargins metadata not yet modeled as editable fields.</summary>
-    public WorksheetPageMarginsMetadataModel? PageMarginsMetadata { get; set; }
+    public NativeXmlPreserveBag? PageMarginsMetadata { get; set; }
 
     /// <summary>Whether gridlines are printed for this worksheet.</summary>
     public bool PrintGridlines { get; set; }
@@ -141,7 +141,7 @@ public sealed partial class Sheet
     public bool PrintHeadings { get; set; }
 
     /// <summary>Native Excel printOptions metadata not yet modeled as editable fields.</summary>
-    public WorksheetPrintOptionsMetadataModel? PrintOptionsMetadata { get; set; }
+    public NativeXmlPreserveBag? PrintOptionsMetadata { get; set; }
 
     /// <summary>Worksheet print scaling settings.</summary>
     public WorksheetScaleToFit ScaleToFit { get; set; } = WorksheetScaleToFit.Default;
@@ -207,7 +207,7 @@ public sealed partial class Sheet
     public bool HeaderFooterAlignWithMargins { get; set; } = true;
 
     /// <summary>Native Excel headerFooter metadata not yet modeled as editable fields.</summary>
-    public WorksheetHeaderFooterMetadataModel? HeaderFooterMetadata { get; set; }
+    public NativeXmlPreserveBag? HeaderFooterMetadata { get; set; }
 
     /// <summary>Whether the printed grid is centered horizontally within the printable page area.</summary>
     public bool CenterHorizontallyOnPage { get; set; }
@@ -246,7 +246,7 @@ public sealed partial class Sheet
     public WorksheetPrintComments PrintComments { get; set; } = WorksheetPrintComments.None;
 
     /// <summary>Native Excel pageSetup metadata not yet modeled as editable fields.</summary>
-    public WorksheetPageSetupMetadataModel? PageSetupMetadata { get; set; }
+    public NativeXmlPreserveBag? PageSetupMetadata { get; set; }
 
     /// <summary>Manual row page breaks, stored as the first row after each break.</summary>
     public SortedSet<uint> RowPageBreaks { get; } = [];
@@ -391,7 +391,7 @@ public sealed partial class Sheet
     public string? ProtectionPassword { get; set; }
 
     /// <summary>Native Excel sheet protection metadata not yet modeled as editable fields.</summary>
-    public WorksheetProtectionMetadataModel? ProtectionMetadata { get; set; }
+    public NativeXmlPreserveBag? ProtectionMetadata { get; set; }
 
     /// <summary>Actions that remain available while the sheet is protected.</summary>
     public List<SheetProtectionPermission> ProtectionPermissions { get; } =

@@ -43,7 +43,8 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                 InsertSheetProtection(root, worksheetNs, protection);
             }
 
-            foreach (var attribute in sheet.ProtectionMetadata!.NativeAttributes)
+            var (protAttrs, protChildren) = XmlNativeBagSerializer.Deserialize(sheet.ProtectionMetadata!.Get("sheetProtection"));
+            foreach (var attribute in protAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) ||
                     string.Equals(attribute.Key, "sheet", StringComparison.Ordinal) ||
@@ -56,7 +57,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
             }
 
             protection.Elements().Remove();
-            foreach (var childXml in sheet.ProtectionMetadata.NativeChildXmls)
+            foreach (var childXml in protChildren)
             {
                 if (string.IsNullOrWhiteSpace(childXml))
                     continue;

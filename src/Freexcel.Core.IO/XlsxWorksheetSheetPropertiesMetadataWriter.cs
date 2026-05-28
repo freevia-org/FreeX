@@ -35,7 +35,8 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
                 root.AddFirst(sheetProperties);
             }
 
-            foreach (var attribute in sheet.SheetPropertiesMetadata!.NativeAttributes)
+            var (spAttrs, spChildren) = XmlNativeBagSerializer.Deserialize(sheet.SheetPropertiesMetadata!.Get("sheetPr"));
+            foreach (var attribute in spAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetPropertiesAttribute(attribute.Key))
                     continue;
@@ -43,13 +44,13 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
                 XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetProperties, attribute.Key, attribute.Value);
             }
 
-            if (sheet.SheetPropertiesMetadata.NativeChildXmls.Count > 0)
+            if (spChildren.Count > 0)
             {
                 sheetProperties.Elements()
                     .Where(element => !IsModeledSheetPropertiesElement(element.Name.LocalName))
                     .Remove();
 
-                foreach (var childXml in sheet.SheetPropertiesMetadata.NativeChildXmls)
+                foreach (var childXml in spChildren)
                 {
                     if (string.IsNullOrWhiteSpace(childXml))
                         continue;
