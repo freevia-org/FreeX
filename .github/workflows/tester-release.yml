@@ -16,6 +16,31 @@ on:
         description: Optional tester-facing release notes to append to the generated notes
         required: false
         type: string
+      public_preview_candidate:
+        description: Promote this build as a public-preview candidate only when all accessibility gate inputs are true
+        required: true
+        default: false
+        type: boolean
+      accessibility_keyboard_only:
+        description: Keyboard-only smoke validation was recorded
+        required: true
+        default: false
+        type: boolean
+      accessibility_screen_reader:
+        description: Screen-reader smoke validation was recorded
+        required: true
+        default: false
+        type: boolean
+      accessibility_uia_catalog:
+        description: UI Automation catalog review was recorded
+        required: true
+        default: false
+        type: boolean
+      accessibility_known_issues:
+        description: Known accessibility issues were reviewed and listed, or explicitly marked none
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -273,6 +298,39 @@ jobs:
         run: |
           $tag = "${{ steps.meta.outputs.tag }}"
           $title = "${{ steps.meta.outputs.release_name }}"
+          $publicPreviewCandidate = "${{ inputs.public_preview_candidate }}" -eq "true"
+          $accessibilityGate = [ordered]@{
+            "Keyboard-only smoke validation" = "${{ inputs.accessibility_keyboard_only }}" -eq "true"
+            "Screen-reader smoke validation" = "${{ inputs.accessibility_screen_reader }}" -eq "true"
+            "UI Automation catalog review" = "${{ inputs.accessibility_uia_catalog }}" -eq "true"
+            "Known accessibility issues reviewed/listed" = "${{ inputs.accessibility_known_issues }}" -eq "true"
+          }
+
+          $missingAccessibilityGate = @(
+            foreach ($item in $accessibilityGate.GetEnumerator()) {
+              if (-not $item.Value) { $item.Key }
+            }
+          )
+          if ($publicPreviewCandidate -and $missingAccessibilityGate.Count -gt 0) {
+            throw "Public-preview promotion requires completed accessibility gate inputs: $($missingAccessibilityGate -join ', ')."
+          }
+
+          function Format-GateStatus {
+            param([bool]$Complete)
+            if ($Complete) { return "recorded" }
+            return "missing"
+          }
+
+          $keyboardOnlyStatus = Format-GateStatus $accessibilityGate["Keyboard-only smoke validation"]
+          $screenReaderStatus = Format-GateStatus $accessibilityGate["Screen-reader smoke validation"]
+          $uiaCatalogStatus = Format-GateStatus $accessibilityGate["UI Automation catalog review"]
+          $knownIssuesStatus = Format-GateStatus $accessibilityGate["Known accessibility issues reviewed/listed"]
+          $promotionStatus = if ($publicPreviewCandidate) {
+            "All public-preview accessibility gate inputs were completed; this build is public-preview eligible."
+          } else {
+            "This build is internal-only unless release notes separately document a completed public-preview accessibility gate."
+          }
+
           $notes = @"
           Tester build for Freexcel.
 
@@ -285,12 +343,12 @@ jobs:
           The MSIX package is signed when the release workflow has certificate secrets configured; otherwise it remains unsigned for local packaging validation. Installer trust validation and Store submission remain release-gate tasks.
 
           Public-preview accessibility gate:
-          - Keyboard-only smoke validation recorded.
-          - Screen-reader smoke validation recorded.
-          - UI Automation catalog review recorded.
-          - Known accessibility issues listed with affected workflow and planned follow-up.
+          - Keyboard-only smoke validation: $keyboardOnlyStatus.
+          - Screen-reader smoke validation: $screenReaderStatus.
+          - UI Automation catalog review: $uiaCatalogStatus.
+          - Known accessibility issues reviewed/listed: $knownIssuesStatus.
 
-          If any gate item is not complete, treat this build as internal-only and do not promote it as a public-preview candidate.
+          $promotionStatus
           "@
           $extraNotes = $env:FREEXCEL_RELEASE_NOTES
           if (-not [string]::IsNullOrWhiteSpace($extraNotes)) {
