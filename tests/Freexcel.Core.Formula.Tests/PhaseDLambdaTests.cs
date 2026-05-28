@@ -149,6 +149,14 @@ public class PhaseDLambdaTests
         Assert.Equal(ErrorValue.Value, Eval(formula));
     }
 
+    [Theory]
+    [InlineData("=LET(f, LAMBDA(x, x, x), f(1, 2))")]
+    [InlineData("=LET(f, LAMBDA(rate, RATE, rate), f(1, 2))")]
+    public void Lambda_DuplicateParameterNames_ReturnValueError(string formula)
+    {
+        Assert.Equal(ErrorValue.Value, Eval(formula));
+    }
+
     [Fact]
     public void IsOmitted_DetectsMissingLambdaArgument()
     {

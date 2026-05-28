@@ -2203,11 +2203,13 @@ public sealed class FormulaEvaluator
         if (node.Arguments.Count < 1) return ErrorValue.Value;
 
         var paramNames = new List<string>(node.Arguments.Count - 1);
+        var seenParamNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < node.Arguments.Count - 1; i++)
         {
             if (node.Arguments[i] is NamedRangeNode nm)
             {
                 if (!IsValidLocalFunctionName(nm.Name)) return ErrorValue.Value;
+                if (!seenParamNames.Add(nm.Name)) return ErrorValue.Value;
                 paramNames.Add(nm.Name);
             }
             else
