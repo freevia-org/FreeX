@@ -125,3 +125,74 @@ public sealed class ClearHyperlinksCommand : IWorkbookCommand
         }
     }
 }
+
+/// <summary>Removes hyperlinks in a range and resets visible hyperlink styling.</summary>
+public sealed class RemoveHyperlinksCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly GridRange _range;
+    private Dictionary<CellAddress, string>? _snapshot;
+    private Dictionary<CellAddress, HyperlinkMetadata>? _metadataSnapshot;
+    private Dictionary<CellAddress, Cell>? _cellSnapshot;
+
+    public string Label => "Remove Hyperlinks";
+
+    public RemoveHyperlinksCommand(SheetId sheetId, GridRange range)
+    {
+        _sheetId = sheetId;
+        _range = range;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        _snapshot = sheet.Hyperlinks
+            .Where(p => _range.Contains(p.Key))
+            .ToDictionary(p => p.Key, p => p.Value);
+        _metadataSnapshot = sheet.HyperlinkMetadata
+            .Where(p => _range.Contains(p.Key))
+            .ToDictionary(p => p.Key, p => p.Value);
+        if (_snapshot.Keys.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
+            return new CommandOutcome(false, "The sheet is protected.");
+
+        _cellSnapshot = [];
+        foreach (var addr in _snapshot.Keys)
+        {
+            if (sheet.GetCell(addr) is { } cell)
+            {
+                _cellSnapshot[addr] = cell.Clone();
+                var style = ctx.Workbook.GetStyle(cell.StyleId).Clone();
+                style.Underline = false;
+                style.DoubleUnderline = false;
+                style.FontColor = CellColor.Black;
+                cell.StyleId = ctx.Workbook.RegisterStyle(style);
+            }
+
+            sheet.Hyperlinks.Remove(addr);
+            sheet.HyperlinkMetadata.Remove(addr);
+        }
+
+        foreach (var addr in _metadataSnapshot.Keys)
+            sheet.HyperlinkMetadata.Remove(addr);
+
+        return new CommandOutcome(true, AffectedCells: _snapshot.Keys.ToList());
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_snapshot is null)
+            return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        foreach (var (addr, cell) in _cellSnapshot ?? [])
+            sheet.SetCell(addr, cell.Clone());
+
+        foreach (var (addr, target) in _snapshot)
+            sheet.Hyperlinks[addr] = target;
+        if (_metadataSnapshot is not null)
+        {
+            foreach (var (addr, metadata) in _metadataSnapshot)
+                sheet.HyperlinkMetadata[addr] = metadata;
+        }
+    }
+}
