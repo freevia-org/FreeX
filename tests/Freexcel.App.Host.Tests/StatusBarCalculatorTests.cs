@@ -90,9 +90,28 @@ public sealed class StatusBarCalculatorTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "Freexcel.App.Host", "StatusBarCalculator.cs"));
 
+        source.Should().Contain(
+            "GetUsedRange()",
+            "status-bar refreshes for selections outside the used range should avoid scanning occupied cells");
         source.Should().NotContain(
             "GetUsedCells()",
             "status-bar refreshes happen during navigation and should not allocate a full used-cell dictionary");
+    }
+
+    [Fact]
+    public void Calculate_SelectionOutsideUsedRangeReturnsEmptyStats()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 1_000; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(row)));
+
+        var stats = StatusBarCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 5),
+                new CellAddress(sheet.Id, CellAddress.MaxRow, 5)));
+
+        stats.Should().Be(new StatusBarCalculator.Stats(0, 0, 0, null, null, null));
     }
 
     [Fact]
