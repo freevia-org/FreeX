@@ -241,17 +241,14 @@ public static partial class FlashFillService
         if (userName.Length == 0)
             return false;
 
-        var separator = userName.Contains('.', StringComparison.Ordinal)
-            ? '.'
-            : userName.Contains('_', StringComparison.Ordinal)
-                ? '_'
-                : userName.Contains('-', StringComparison.Ordinal)
-                    ? '-'
-                    : '\0';
-        if (separator == '\0')
+        if (!userName.Contains('.', StringComparison.Ordinal) &&
+            !userName.Contains('_', StringComparison.Ordinal) &&
+            !userName.Contains('-', StringComparison.Ordinal))
+        {
             return false;
+        }
 
-        var parts = userName.Split(separator, StringSplitOptions.RemoveEmptyEntries);
+        var parts = userName.Split(['.', '_', '-'], StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length < 2 || parts.Any(part => part.Any(char.IsDigit)))
             return false;
 
@@ -416,10 +413,19 @@ public static partial class FlashFillService
 
     private static Func<string, string?>? TryFinalWhitespaceToken(IReadOnlyList<(string Source, string Expected)> examples)
     {
-        if (!examples.All(e => TrySplitVariableWhitespaceTokens(e.Source, out var tokens) && tokens.Length >= 2 && e.Expected == tokens[^1]))
+        var exampleTokens = new List<string[]>(examples.Count);
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitVariableWhitespaceTokens(source, out var tokens) || expected != tokens[^1])
+                return null;
+
+            exampleTokens.Add(tokens);
+        }
+
+        if (exampleTokens.Select(tokens => tokens[0]).Distinct(StringComparer.Ordinal).Count() == 1)
             return null;
 
-        return source => TrySplitVariableWhitespaceTokens(source, out var tokens) && tokens.Length >= 2
+        return source => TrySplitVariableWhitespaceTokens(source, out var tokens)
             ? tokens[^1]
             : null;
     }

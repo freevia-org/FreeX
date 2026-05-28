@@ -425,6 +425,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDisplayName_ConvertsMixedSeparatorUserNameToProperName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.lovelace_smith@contoso.com", "Ada Lovelace Smith"),
+                ("grace-hopper_murray@example.org", "Grace Hopper Murray")
+            ],
+            ["alan.turing-mathison@test.net"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing Mathison"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_EmailDisplayName_IgnoresPlusAddressTags()
     {
         var result = FlashFillService.Fill(
