@@ -331,12 +331,14 @@ public partial class GridView
         var rowLookupAll = lookups.Rows;
         var colLookupAll = lookups.Columns;
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var rowHeaderWidth = ActualRowHeaderWidth;
+        var columnHeaderHeight = EffectiveColHeaderHeight;
         _brushCache.Clear();
         _borderPenCache.Clear();
         _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
         _underlinePenCache.Clear();
-        RenderCellBackgroundBase(dc);
+        RenderCellBackgroundBase(dc, rowHeaderWidth, columnHeaderHeight);
 
         // Pass 1: non-default backgrounds and merged-cell surfaces
         foreach (var rowMetric in viewport.RowMetrics)
@@ -362,7 +364,7 @@ public partial class GridView
                 }
 
                 var rect = new Rect(
-                    colMetric.LeftOffset + ActualRowHeaderWidth, rowMetric.TopOffset + EffectiveColHeaderHeight, w, h);
+                    colMetric.LeftOffset + rowHeaderWidth, rowMetric.TopOffset + columnHeaderHeight, w, h);
 
                 Brush? fill = null;
                 if (bg?.FillColor.HasValue == true)
@@ -389,8 +391,8 @@ public partial class GridView
             if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
             if (!colLookupAll.TryGetValue(cell.Col, out var colMetric)) continue;
 
-            double x = colMetric.LeftOffset + ActualRowHeaderWidth;
-            double y = rowMetric.TopOffset   + EffectiveColHeaderHeight;
+            double x = colMetric.LeftOffset + rowHeaderWidth;
+            double y = rowMetric.TopOffset   + columnHeaderHeight;
             double w = colMetric.Width;
             double h = rowMetric.Height;
 
@@ -408,8 +410,8 @@ public partial class GridView
             if (!colLookupAll.TryGetValue(cell.Col, out var colMetric)) continue;
 
             var rect = new Rect(
-                colMetric.LeftOffset + ActualRowHeaderWidth,
-                rowMetric.TopOffset + EffectiveColHeaderHeight,
+                colMetric.LeftOffset + rowHeaderWidth,
+                rowMetric.TopOffset + columnHeaderHeight,
                 colMetric.Width,
                 rowMetric.Height);
             DrawCommentIndicator(dc, rect);
@@ -444,7 +446,7 @@ public partial class GridView
             }
 
             var rect = new Rect(
-                colMetric.LeftOffset + ActualRowHeaderWidth, rowMetric.TopOffset + EffectiveColHeaderHeight, w, h);
+                colMetric.LeftOffset + rowHeaderWidth, rowMetric.TopOffset + columnHeaderHeight, w, h);
             double renderWidth = w;
 
             if (cell.ConditionalIcon is { } icon)
@@ -545,8 +547,12 @@ public partial class GridView
             textY = Math.Max(rect.Top, textY);
 
             var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
-            dc.PushClip(new RectangleGeometry(clipRect));
-            dc.DrawText(text, new Point(Math.Round(textX), Math.Round(textY)));
+            var textPoint = new Point(Math.Round(textX), Math.Round(textY));
+            var shouldClipText = ShouldClipText(style, wrapText, clipRect, text, textPoint);
+            if (shouldClipText)
+                dc.PushClip(new RectangleGeometry(clipRect));
+
+            dc.DrawText(text, textPoint);
 
             if (style?.DoubleUnderline == true)
             {
@@ -555,17 +561,19 @@ public partial class GridView
                 dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));
                 dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
             }
-            dc.Pop();
+
+            if (shouldClipText)
+                dc.Pop();
         }
     }
 
-    private void RenderCellBackgroundBase(DrawingContext dc)
+    private void RenderCellBackgroundBase(DrawingContext dc, double rowHeaderWidth, double columnHeaderHeight)
     {
         if (Viewport is null || Viewport.RowMetrics.Count == 0 || Viewport.ColMetrics.Count == 0)
             return;
 
-        var left = ActualRowHeaderWidth;
-        var top = EffectiveColHeaderHeight;
+        var left = rowHeaderWidth;
+        var top = columnHeaderHeight;
         var right = left + Viewport.ColMetrics[^1].LeftOffset + Viewport.ColMetrics[^1].Width;
         var bottom = top + Viewport.RowMetrics[^1].TopOffset + Viewport.RowMetrics[^1].Height;
         var rect = new Rect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
@@ -671,6 +679,23 @@ public partial class GridView
         }
         geometry.Freeze();
         dc.DrawGeometry(Brushes.Red, null, geometry);
+    }
+
+    private static bool ShouldClipText(
+        CellStyle? style,
+        bool wrapText,
+        Rect clipRect,
+        FormattedText text,
+        Point textPoint)
+    {
+        if (style is not null || wrapText)
+            return true;
+
+        const double tolerance = 0.5;
+        return textPoint.X < clipRect.Left - tolerance ||
+            textPoint.Y < clipRect.Top - tolerance ||
+            textPoint.X + text.Width > clipRect.Right + tolerance ||
+            textPoint.Y + text.Height > clipRect.Bottom + tolerance;
     }
 
     private static Pen UnderlinePenForTextBrush(Brush textBrush, Dictionary<Brush, Pen> underlinePenCache)

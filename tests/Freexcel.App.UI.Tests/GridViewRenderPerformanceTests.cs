@@ -255,7 +255,9 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)..
             source.IndexOf("private static Dictionary<(uint Row, uint Col), CellStyle>", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("RenderCellBackgroundBase(dc);");
+        renderCells.Should().Contain("var rowHeaderWidth = ActualRowHeaderWidth;");
+        renderCells.Should().Contain("var columnHeaderHeight = EffectiveColHeaderHeight;");
+        renderCells.Should().Contain("RenderCellBackgroundBase(dc, rowHeaderWidth, columnHeaderHeight);");
         renderCells.Should().Contain("if (bg is null && !merge.HasValue)");
         renderCells.Should().Contain("continue;");
         backgroundBase.Should().Contain("dc.DrawRectangle(Brushes.White, null, rect);");
