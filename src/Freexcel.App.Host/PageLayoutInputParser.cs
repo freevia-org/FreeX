@@ -307,42 +307,9 @@ public static class PageLayoutInputParser
     private static bool TryParseAbsoluteCellReference(string token, SheetId sheetId, out CellAddress address)
     {
         address = default;
-        var normalized = NormalizeAbsoluteCellReferenceToken(token);
+        var normalized = AbsoluteCellReferenceNormalizer.Normalize(token);
         return normalized is not null && CellAddress.TryParse(normalized, sheetId, out address) ||
                TryParseR1C1CellReference(token, sheetId, out address);
-    }
-
-    private static string? NormalizeAbsoluteCellReferenceToken(string token)
-    {
-        var value = token.AsSpan().Trim();
-        if (value.IsEmpty)
-            return null;
-
-        Span<char> buffer = stackalloc char[value.Length];
-        var index = 0;
-        var write = 0;
-
-        if (value[index] == '$')
-            index++;
-
-        var columnStart = index;
-        while (index < value.Length && char.IsLetter(value[index]))
-            buffer[write++] = value[index++];
-
-        if (index == columnStart)
-            return null;
-
-        if (index < value.Length && value[index] == '$')
-            index++;
-
-        var rowStart = index;
-        while (index < value.Length && char.IsDigit(value[index]))
-            buffer[write++] = value[index++];
-
-        if (index == rowStart || index != value.Length)
-            return null;
-
-        return new string(buffer[..write]);
     }
 
     private static bool TryParseR1C1CellReference(string token, SheetId sheetId, out CellAddress address)
