@@ -91,4 +91,24 @@ public sealed class XmlNativeBagSerializerTests
         target.Attribute("modeled")?.Value.Should().Be("model-value");
         target.Attribute("nativeOnly")?.Value.Should().Be("preserved");
     }
+
+    [Fact]
+    public void Serialize_InvalidChildXml_PreservesValidNativeData()
+    {
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeOnly"] = "preserved"
+            },
+            [
+                "<valid id=\"1\" />",
+                "<invalid>",
+                "<alsoValid><child /></alsoValid>"
+            ]);
+
+        var (roundTripAttrs, roundTripChildren) = XmlNativeBagSerializer.Deserialize(bagValue);
+
+        roundTripAttrs.Should().ContainKey("nativeOnly").WhoseValue.Should().Be("preserved");
+        roundTripChildren.Should().Equal("<valid id=\"1\" />", "<alsoValid><child /></alsoValid>");
+    }
 }
