@@ -8931,6 +8931,11 @@ public class FunctionLibraryTests
         _eval.Evaluate("=NUMBERVALUE(\"1.234,56\",\",ignored\",\".ignored\")", MakeSheet())
             .Should().Be(new NumberValue(1234.56));
 
+    [Fact]
+    public void Numbervalue_GroupSeparatorAfterDecimal_ReturnsValueError() =>
+        _eval.Evaluate("=NUMBERVALUE(\"1.234,56\",\".\",\",\")", MakeSheet())
+            .Should().Be(ErrorValue.Value);
+
     [Theory]
     [InlineData("=NUMBERVALUE(\"1\t234\")")]
     [InlineData("=NUMBERVALUE(\"1\n234\")")]
