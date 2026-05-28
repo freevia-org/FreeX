@@ -167,6 +167,40 @@ public class PerformanceBenchmarkTests
     }
 
     [Fact]
+    public void Benchmark_IdleRecalcWithoutChangedOrVolatileCells_IsAllocationFree()
+    {
+        var workbook = new Workbook();
+        workbook.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        const int iterations = 10_000;
+
+        engine.Recalculate(workbook, []);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var report = engine.Recalculate(workbook, []);
+            if (report.RecalculatedCells.Count != 0 ||
+                report.Errors.Count != 0 ||
+                report.CyclicCells.Count != 0)
+            {
+                throw new Xunit.Sdk.XunitException("Idle recalc should not report recalculated cells, errors, or cycles.");
+            }
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Idle recalc: {iterations:N0} iterations, {sw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
+
+        allocated.Should().BeLessThan(
+            1_024,
+            "idle recalculation should bypass dependency traversal collection allocation");
+    }
+
+    [Fact]
     public void Benchmark_LargeRangeDependencyRebuild_UsesCompactRangeTracking()
     {
         var workbook = new Workbook("Benchmark");

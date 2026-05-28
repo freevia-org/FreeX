@@ -10,6 +10,7 @@ namespace Freexcel.Core.Calc;
 public sealed class RecalcEngine
 {
     private const long CompactRangeCellThreshold = 1024;
+    private static readonly RecalcReport EmptyReport = new([], [], []);
 
     private readonly DependencyGraph _graph;
     private readonly FormulaEvaluator _evaluator;
@@ -28,6 +29,9 @@ public sealed class RecalcEngine
     /// </summary>
     public RecalcReport Recalculate(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
     {
+        if (changedCells.Count == 0 && _volatileCells.Count == 0)
+            return EmptyReport;
+
         // Include volatile cells in the dependency traversal so their dependents appear in the plan
         var changedForTraversal = BuildChangedSetForTraversal(changedCells);
         var plan = _graph.GetRecalcOrder(changedForTraversal);
