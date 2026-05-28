@@ -940,6 +940,8 @@ public sealed class RemainingDialogTests
     [InlineData("   ", "Sheet name is invalid: it cannot be blank.")]
     [InlineData("This sheet name is far too long for Excel", "Sheet name is invalid: it cannot exceed 31 characters.")]
     [InlineData("Bad/Name", "Sheet name is invalid: it cannot contain : \\ / ? * [ or ].")]
+    [InlineData("'Report", "Sheet name is invalid: it cannot begin or end with an apostrophe.")]
+    [InlineData("Report'", "Sheet name is invalid: it cannot begin or end with an apostrophe.")]
     public void SheetNameDialog_TryCreateResult_RejectsInvalidExcelSheetNames(string input, string expectedError)
     {
         SheetNameDialog.TryCreateResult(input, out _, out var error)

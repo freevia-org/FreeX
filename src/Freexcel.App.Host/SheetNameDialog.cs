@@ -53,6 +53,12 @@ public sealed class SheetNameDialog : Window
             return false;
         }
 
+        if (result.SheetName.StartsWith('\'') || result.SheetName.EndsWith('\''))
+        {
+            error = "Sheet name is invalid: it cannot begin or end with an apostrophe.";
+            return false;
+        }
+
         error = null;
         return true;
     }

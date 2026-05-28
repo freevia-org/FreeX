@@ -281,6 +281,9 @@ public sealed class Workbook
         if (name.IndexOfAny(InvalidSheetNameChars) >= 0)
             return "Sheet name is invalid: it cannot contain : \\ / ? * [ or ].";
 
+        if (name.StartsWith('\'') || name.EndsWith('\''))
+            return "Sheet name is invalid: it cannot begin or end with an apostrophe.";
+
         if (_sheets.Any(s => s.Id != exceptSheetId &&
                              string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)))
             return $"A sheet named '{name}' already exists.";

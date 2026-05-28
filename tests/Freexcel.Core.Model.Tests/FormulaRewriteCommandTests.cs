@@ -253,6 +253,20 @@ public class FormulaRewriteCommandTests
         sheet.Name.Should().Be("Sheet1");
     }
 
+    [Theory]
+    [InlineData("'Report")]
+    [InlineData("Report'")]
+    public void RenameSheet_ApostropheBoundedExcelSheetName_FailsWithoutChangingSheet(string newName)
+    {
+        var (_, sheet, ctx) = Setup();
+
+        var outcome = new RenameSheetCommand(sheet.Id, newName).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Sheet name is invalid: it cannot begin or end with an apostrophe.");
+        sheet.Name.Should().Be("Sheet1");
+    }
+
     [Fact]
     public void RemoveSheet_Undo_RestoresRemovedSheetContentsAndId()
     {
