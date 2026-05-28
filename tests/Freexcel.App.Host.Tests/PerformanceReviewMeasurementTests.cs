@@ -199,7 +199,7 @@ public sealed class PerformanceReviewMeasurementTests
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
                 workbook,
-                new NullUserMessageService());
+                NullUserMessageService.Instance);
 
             window.Width = 1500;
             window.Height = 720;
@@ -275,7 +275,7 @@ public sealed class PerformanceReviewMeasurementTests
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
                 workbook,
-                new NullUserMessageService())
+                NullUserMessageService.Instance)
             {
                 Width = 1280,
                 Height = 720
@@ -361,7 +361,7 @@ public sealed class PerformanceReviewMeasurementTests
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
                 workbook,
-                new NullUserMessageService())
+                NullUserMessageService.Instance)
             {
                 Width = 1280,
                 Height = 720
