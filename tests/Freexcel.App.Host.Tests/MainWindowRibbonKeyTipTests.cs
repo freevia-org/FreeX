@@ -1442,13 +1442,13 @@ public sealed class MainWindowRibbonKeyTipTests
             store.Entries.AddRange(recentPaths.Select(path => new RecentFileEntry
             {
                 Path = path,
-                LastOpened = DateTime.Now,
+                LastOpened = DateTimeOffset.UtcNow,
                 IsPinned = false
             }));
             store.Entries.AddRange(pinnedPaths.Select(path => new RecentFileEntry
             {
                 Path = path,
-                LastOpened = DateTime.Now,
+                LastOpened = DateTimeOffset.UtcNow,
                 IsPinned = true
             }));
             _updateSsRecentList.Invoke(_window, [""]);

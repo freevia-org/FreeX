@@ -6,7 +6,7 @@ namespace Freexcel.App.Host;
 public sealed class RecentFileEntry
 {
     public string Path { get; set; } = "";
-    public DateTime LastOpened { get; set; }
+    public DateTimeOffset LastOpened { get; set; }
     public bool IsPinned { get; set; }
 }
 
@@ -47,7 +47,7 @@ public sealed class RecentFilesStore
             string.Equals(e.Path, path, StringComparison.OrdinalIgnoreCase));
         bool wasPinned = existing?.IsPinned ?? false;
         Entries.RemoveAll(e => string.Equals(e.Path, path, StringComparison.OrdinalIgnoreCase));
-        Entries.Insert(0, new RecentFileEntry { Path = path, LastOpened = DateTime.Now, IsPinned = wasPinned });
+        Entries.Insert(0, new RecentFileEntry { Path = path, LastOpened = DateTimeOffset.UtcNow, IsPinned = wasPinned });
         if (Entries.Count > MaxEntries)
             Entries.RemoveRange(MaxEntries, Entries.Count - MaxEntries);
         Save();
