@@ -2,14 +2,14 @@ using System.Text.RegularExpressions;
 
 namespace Freexcel.App.Host;
 
-public static class NumberFormatDecimalAdjuster
+public static partial class NumberFormatDecimalAdjuster
 {
     public static string AddDecimalPlace(string? format)
     {
         if (string.IsNullOrEmpty(format) || format == "General")
             return "0.0";
 
-        var decimalMatch = Regex.Match(format, @"(\d*)(\.(\d*))");
+        var decimalMatch = DecimalPlacesRegex().Match(format);
         if (decimalMatch.Success)
         {
             return format
@@ -17,7 +17,7 @@ public static class NumberFormatDecimalAdjuster
                 .Insert(decimalMatch.Index, decimalMatch.Groups[1].Value + "." + decimalMatch.Groups[3].Value + "0");
         }
 
-        var integerMatch = Regex.Match(format, @"(\d+)");
+        var integerMatch = IntegerDigitsRegex().Match(format);
         if (integerMatch.Success)
             return format.Remove(integerMatch.Index, integerMatch.Length).Insert(integerMatch.Index, integerMatch.Value + ".0");
 
@@ -29,7 +29,7 @@ public static class NumberFormatDecimalAdjuster
         if (string.IsNullOrEmpty(format) || format == "General")
             return "0";
 
-        var decimalMatch = Regex.Match(format, @"\.(\d+)");
+        var decimalMatch = RemoveDecimalPlacesRegex().Match(format);
         if (!decimalMatch.Success)
             return format;
 
@@ -38,4 +38,13 @@ public static class NumberFormatDecimalAdjuster
 
         return format.Remove(decimalMatch.Index + decimalMatch.Length - 1, 1);
     }
+
+    [GeneratedRegex(@"(\d*)(\.(\d*))")]
+    private static partial Regex DecimalPlacesRegex();
+
+    [GeneratedRegex(@"(\d+)")]
+    private static partial Regex IntegerDigitsRegex();
+
+    [GeneratedRegex(@"\.(\d+)")]
+    private static partial Regex RemoveDecimalPlacesRegex();
 }
