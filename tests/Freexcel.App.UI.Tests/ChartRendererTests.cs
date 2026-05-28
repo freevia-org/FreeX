@@ -606,6 +606,48 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void ColumnRenderer_AppliesChartDataTableDirectStyle()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            DataTable = new ChartDataTableModel
+            {
+                ShowOutline = true,
+                FillColor = new CellColor(255, 242, 204),
+                BorderColor = new CellColor(191, 144, 0),
+                BorderThickness = 2.5,
+                TextColor = new CellColor(112, 48, 160),
+                FontSize = 11.5
+            }
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        var dataTableAnnotations = model.Annotations
+            .OfType<TextAnnotation>()
+            .Where(annotation => annotation.Text?.Contains("North", StringComparison.Ordinal) == true ||
+                                 annotation.Text?.Contains("Q1", StringComparison.Ordinal) == true)
+            .ToList();
+        dataTableAnnotations.Should().HaveCount(2);
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.Background == OxyColor.FromRgb(255, 242, 204));
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.Stroke == OxyColor.FromRgb(191, 144, 0));
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.StrokeThickness == 2.5);
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.TextColor == OxyColor.FromRgb(112, 48, 160));
+        dataTableAnnotations.Should().OnlyContain(annotation => annotation.FontSize == 11.5);
+    }
+
+    [Fact]
     public void ColumnRenderer_AddsLegendKeysToChartDataTableWhenRequested()
     {
         var sheetId = SheetId.New();
