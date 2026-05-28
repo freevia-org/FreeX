@@ -1,6 +1,7 @@
 using System.IO;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 
@@ -190,21 +191,73 @@ public sealed partial class DocumentationIndexTests
         {
             var target = match.Groups["target"].Value;
             if (target.StartsWith("http", StringComparison.OrdinalIgnoreCase)
-                || target.StartsWith("#", StringComparison.Ordinal)
                 || target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            var targetWithoutFragment = target.Split('#', 2)[0];
+            var targetParts = target.Split('#', 2);
+            var targetWithoutFragment = targetParts[0];
             var resolvedPath = Path.GetFullPath(
-                Path.Combine(docsDirectory, targetWithoutFragment.Replace('/', Path.DirectorySeparatorChar)));
+                string.IsNullOrWhiteSpace(targetWithoutFragment)
+                    ? sourcePath
+                    : Path.Combine(docsDirectory, targetWithoutFragment.Replace('/', Path.DirectorySeparatorChar)));
 
             (File.Exists(resolvedPath) || Directory.Exists(resolvedPath)).Should().BeTrue(
                 "{0} links to {1}",
                 Path.GetFileName(sourcePath),
                 target);
+
+            if (targetParts.Length == 2 && !string.IsNullOrWhiteSpace(targetParts[1]) && File.Exists(resolvedPath))
+            {
+                var anchors = ReadMarkdownHeadingAnchors(resolvedPath);
+                var fragment = Uri.UnescapeDataString(targetParts[1]);
+
+                anchors.Should().Contain(
+                    fragment,
+                    "{0} links to heading #{1} in {2}",
+                    Path.GetFileName(sourcePath),
+                    fragment,
+                    targetWithoutFragment.Length == 0 ? Path.GetFileName(sourcePath) : targetWithoutFragment);
+            }
         }
+    }
+
+    private static IReadOnlySet<string> ReadMarkdownHeadingAnchors(string path) =>
+        File.ReadLines(path)
+            .Where(line => line.StartsWith('#'))
+            .Select(line => MarkdownHeading().Match(line))
+            .Where(match => match.Success)
+            .Select(match => ToMarkdownAnchor(match.Groups["heading"].Value))
+            .ToHashSet(StringComparer.Ordinal);
+
+    private static string ToMarkdownAnchor(string heading)
+    {
+        var builder = new StringBuilder(heading.Length);
+        var previousWasHyphen = false;
+
+        foreach (var character in heading.Trim().ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(character);
+                previousWasHyphen = false;
+                continue;
+            }
+
+            if (character == ' ' || character == '-')
+            {
+                if (!previousWasHyphen && builder.Length > 0)
+                    builder.Append('-');
+
+                previousWasHyphen = true;
+            }
+        }
+
+        if (builder.Length > 0 && builder[^1] == '-')
+            builder.Length--;
+
+        return builder.ToString();
     }
 
     private static IReadOnlyDictionary<string, int> ReadMetricTable(string report) =>
@@ -262,6 +315,9 @@ public sealed partial class DocumentationIndexTests
 
     [GeneratedRegex(@"(?<!!)\[[^\]]+\]\((?<target>[^)]+)\)")]
     private static partial Regex MarkdownLink();
+
+    [GeneratedRegex(@"^#+\s+(?<heading>.+?)\s*#*$")]
+    private static partial Regex MarkdownHeading();
 
     [GeneratedRegex(@"^\d+\. \*\*(?<title>[^*]+)\*\*")]
     private static partial Regex NumberedBoldItem();

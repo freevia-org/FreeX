@@ -2213,7 +2213,7 @@ public sealed class FormulaEvaluator
         {
             if (node.Arguments[i] is NamedRangeNode nm)
             {
-                if (!IsValidLocalFunctionName(nm.Name)) return ErrorValue.Value;
+                if (!IsValidLambdaParameterName(nm.Name)) return ErrorValue.Value;
                 if (!seenParamNames.Add(nm.Name)) return ErrorValue.Value;
                 paramNames.Add(nm.Name);
             }
@@ -2225,6 +2225,13 @@ public sealed class FormulaEvaluator
     }
 
     private static bool IsValidLocalFunctionName(string? name)
+    {
+        if (!IsValidLambdaParameterName(name)) return false;
+
+        return !ConflictsWithR1C1Reference(name!);
+    }
+
+    private static bool IsValidLambdaParameterName(string? name)
     {
         if (string.IsNullOrEmpty(name)) return false;
 
@@ -2238,7 +2245,7 @@ public sealed class FormulaEvaluator
                 return false;
         }
 
-        return !ConflictsWithR1C1Reference(name);
+        return true;
     }
 
     private static bool ConflictsWithR1C1Reference(string name)
@@ -2276,6 +2283,8 @@ public sealed class FormulaEvaluator
     private ScalarValue InvokeLambdaWithArgs(LambdaValue lambda, IReadOnlyList<FormulaNode> argNodes, IEvalContext context)
     {
         if (argNodes.Count != lambda.Parameters.Count) return ErrorValue.Value;
+        if (lambda.Parameters.Any(ConflictsWithR1C1Reference)) return ErrorValue.Value;
+
         var args = new ScalarValue[argNodes.Count];
         for (int i = 0; i < argNodes.Count; i++)
             args[i] = argNodes[i] is OmittedArgumentNode

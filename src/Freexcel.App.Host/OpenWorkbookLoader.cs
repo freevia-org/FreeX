@@ -25,7 +25,7 @@ public sealed class OpenWorkbookLoader
         FileFormatDescriptor format,
         IProgress<OpenProgressUpdate> progress)
     {
-        await using var fileStream = OpenFileStream(path, progress);
+        ReportReadingProgress(progress);
 
         XlsxFeatureReport? featureReport = null;
         if (IsOpenXmlExcelPackageExtension(extension))
@@ -38,7 +38,7 @@ public sealed class OpenWorkbookLoader
                 TimeSpan.FromSeconds(4),
                 () =>
                 {
-                    fileStream.Position = 0;
+                    using var fileStream = OpenFileStream(path);
                     return _inspectXlsx(fileStream);
                 });
         }
@@ -52,7 +52,7 @@ public sealed class OpenWorkbookLoader
             TimeSpan.FromSeconds(45),
             () =>
             {
-                fileStream.Position = 0;
+                using var fileStream = OpenFileStream(path);
                 if (adapter is XlsxFileAdapter xlsxAdapter)
                 {
                     var result = xlsxAdapter.LoadWithWarnings(fileStream);
@@ -138,9 +138,11 @@ public sealed class OpenWorkbookLoader
         }
     }
 
-    private static FileStream OpenFileStream(string path, IProgress<OpenProgressUpdate> progress)
-    {
+    private static void ReportReadingProgress(IProgress<OpenProgressUpdate> progress) =>
         progress.Report(new OpenProgressUpdate("Opening workbook", OpenWorkbookProgressPlanner.FormatLoadingFileDetail("reading", TimeSpan.Zero), 8));
+
+    private static FileStream OpenFileStream(string path)
+    {
         return new FileStream(
             path,
             FileMode.Open,
