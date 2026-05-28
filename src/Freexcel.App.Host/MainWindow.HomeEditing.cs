@@ -93,15 +93,18 @@ public partial class MainWindow
 
     private void FillSeriesMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        // Basic: fill a linear series starting from selected cell
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        var startVal = sheet.GetValue(range.Start.Row, range.Start.Col) as NumberValue;
-        if (startVal is null) { MessageBox.Show("Select a cell with a numeric value to start a series."); return; }
+        var startValue = sheet.GetValue(range.Start.Row, range.Start.Col);
+        if (startValue is not NumberValue and not DateTimeValue)
+        {
+            MessageBox.Show("Select a numeric or date cell to start a series.", "Fill Series", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
         var dialog = new FillSeriesStepDialog { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        var step = dialog.Result.Step;
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Fill Series",
@@ -111,12 +114,10 @@ public partial class MainWindow
                     var currentSheet = _workbook.GetSheet(_currentSheetId);
                     List<(CellAddress Address, Cell NewCell)> edits = currentSheet is null
                         ? []
-                        : FillSeriesPlanner.BuildLinearSeriesEdits(
+                        : FillSeriesPlanner.BuildSeriesEdits(
                             currentSheet,
                             currentRange,
-                            dialog.Result.Step,
-                            dialog.Result.SeriesIn,
-                            dialog.Result.StopValue);
+                            dialog.Result);
                     var targetSheetIds = CurrentGroupedEditSheetIds();
                     return targetSheetIds.Count > 1
                         ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
