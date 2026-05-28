@@ -10,7 +10,14 @@ namespace Freexcel.Core.IO.Tests;
 /// </summary>
 public sealed class XlsxLoadWarningsTests
 {
-    // XlsxLoadResult record
+    private static readonly string[] ExpectedLoadWarningPrefixes =
+    [
+        "[print-area]",
+        "[conditional-format]",
+        "[data-validation]",
+        "[merged-regions]",
+        "[named-ranges]"
+    ];
 
     [Fact]
     public void XlsxLoadResult_HasWarnings_IsFalse_WhenWarningsEmpty()
@@ -43,8 +50,6 @@ public sealed class XlsxLoadWarningsTests
         resultNoWarnings.Workbook.Should().BeSameAs(workbook);
     }
 
-    // LoadWithWarnings round-trip: clean file produces no warnings
-
     [Fact]
     public void LoadWithWarnings_CleanFile_ReturnsNoWarnings()
     {
@@ -73,8 +78,6 @@ public sealed class XlsxLoadWarningsTests
         cell1.Should().Be(cell2);
     }
 
-    // IFileAdapter.Load() delegates to LoadWithWarnings
-
     [Fact]
     public void Load_IsConsistentWithLoadWithWarnings_Workbook()
     {
@@ -86,8 +89,6 @@ public sealed class XlsxLoadWarningsTests
         workbook.Should().NotBeNull();
         workbook.Sheets.Should().HaveCount(1);
     }
-
-    // Source-level regression: no more Debug.WriteLine in catch blocks
 
     [Fact]
     public void XlsxFileAdapterSource_DoesNotContainDebugWriteLineInCatchBlocks()
@@ -105,15 +106,13 @@ public sealed class XlsxLoadWarningsTests
     }
 
     [Fact]
-    public void XlsxFileAdapterSource_ContainsWarningsAddInCatchBlocks()
+    public void XlsxFileAdapterSource_ContainsExpectedWarningCategories()
     {
         var adapterSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.cs"));
 
-        // All 5 feature-loading catch blocks must use warnings.Add.
-        adapterSource.Should().Contain("warnings.Add(");
+        foreach (var prefix in ExpectedLoadWarningPrefixes)
+            adapterSource.Should().Contain($"warnings.Add($\"{prefix}");
     }
-
-    // Helpers
 
     private static byte[] SaveWorkbookToBytes(IFileAdapter adapter, Workbook workbook)
     {

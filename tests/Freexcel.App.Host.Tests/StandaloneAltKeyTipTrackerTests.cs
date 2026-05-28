@@ -5,14 +5,17 @@ namespace Freexcel.App.Host.Tests;
 
 public sealed class StandaloneAltKeyTipTrackerTests
 {
-    [Fact]
-    public void ShouldToggleOnKeyUp_RequiresUnmodifiedStandaloneAltPress()
+    [Theory]
+    [InlineData(Key.LeftAlt)]
+    [InlineData(Key.RightAlt)]
+    [InlineData(Key.System)]
+    public void ShouldToggleOnKeyUp_RequiresUnmodifiedStandaloneAltPress(Key key)
     {
         var tracker = new StandaloneAltKeyTipTracker();
 
         tracker.BeginStandaloneAltCandidate();
 
-        tracker.ShouldToggleOnKeyUp(Key.System).Should().BeTrue();
+        tracker.ShouldToggleOnKeyUp(key).Should().BeTrue();
     }
 
     [Fact]

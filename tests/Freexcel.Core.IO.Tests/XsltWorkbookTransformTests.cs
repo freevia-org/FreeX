@@ -47,6 +47,37 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_OutputAboveLimit_ReportsSafetyDiagnostic()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <output>abcdefghijklmnopqrstuvwxyz</output>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet, maxOutputBytes: 16);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*output exceeded*16 byte safety limit*")
+            .WithInnerException<IOException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_InvalidOutputLimit_ThrowsArgumentOutOfRangeException()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet, maxOutputBytes: 0);
+
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .Where(exception => exception.ParamName == "maxOutputBytes");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_MalformedStylesheet_ReportsStylesheetDiagnostic()
     {
         using var source = StreamFromString("<rows />");
