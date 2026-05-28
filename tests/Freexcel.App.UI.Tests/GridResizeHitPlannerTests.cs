@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Freexcel.App.UI;
 using Freexcel.Core.Model;
+using System.IO;
 using System.Windows;
 
 namespace Freexcel.App.UI.Tests;
@@ -77,9 +78,40 @@ public sealed class GridResizeHitPlannerTests
             .Be(new GridResizeHit(GridResizeHitTarget.None, 0, 0));
     }
 
+    [Fact]
+    public void HitTest_StopsHeaderScansOnceSortedEdgesPassPointer()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridResizeHitPlanner.cs"));
+
+        source.Should().Contain("public readonly record struct GridResizeHit");
+        source.Should().Contain("for (var i = 0; i < columns.Count; i++)");
+        source.Should().Contain("for (var i = 0; i < rows.Count; i++)");
+        source.Should().Contain("if (rightEdge - pointer.X > hitZone)");
+        source.Should().Contain("if (bottomEdge - pointer.Y > hitZone)");
+        source.Should().NotContain("public sealed record GridResizeHit");
+        source.Should().NotContain("foreach (var column in viewport.ColMetrics)");
+        source.Should().NotContain("foreach (var row in viewport.RowMetrics)");
+    }
+
     private static ViewportModel CreateViewport() =>
         new(
             [],
             [new RowMetric(1, 20, 0), new RowMetric(2, 24, 20)],
             [new ColMetric(1, 40, 0), new ColMetric(2, 60, 40)]);
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
+    }
 }
