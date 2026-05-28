@@ -373,6 +373,35 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ZoomDialogCustomPercentFocus_SelectsCustomChoiceOverPreset()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ZoomDialog(100);
+            try
+            {
+                dialog.Show();
+                PumpDispatcher();
+
+                var customButton = GetField<RadioButton>(dialog, "_customZoomButton");
+                var zoomBox = GetField<TextBox>(dialog, "_zoomBox");
+
+                customButton.IsChecked.Should().BeFalse();
+                zoomBox.Focus();
+                Keyboard.Focus(zoomBox);
+                PumpDispatcher();
+
+                customButton.IsChecked.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+                PumpDispatcher();
+            }
+        });
+    }
+
+    [Fact]
     public void ZoomDialog_InvalidCustomInput_ShowsParserErrorAndRefocusesEntry()
     {
         var source = ReadRemainingDialogSources();
