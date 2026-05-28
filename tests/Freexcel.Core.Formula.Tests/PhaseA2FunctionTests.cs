@@ -438,6 +438,28 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Cell_Metadata_UsesReferencedSheetForSheetQualifiedReferences()
+    {
+        var wb = new Workbook();
+        var host = wb.AddSheet("Host");
+        var data = wb.AddSheet("Data");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new NumberValue(12.34));
+        data.ColumnWidths[1] = 14.6;
+        data.IsProtected = true;
+        var styleId = wb.RegisterStyle(new CellStyle
+        {
+            NumberFormat = "0.00",
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
+        data.GetCell(1, 1)!.StyleId = styleId;
+
+        _eval.Evaluate("=CELL(\"width\",Data!A1)", host, wb).Should().Be(new NumberValue(15));
+        _eval.Evaluate("=CELL(\"format\",Data!A1)", host, wb).Should().Be(new TextValue("F2"));
+        _eval.Evaluate("=CELL(\"prefix\",Data!A1)", host, wb).Should().Be(new TextValue("^"));
+        _eval.Evaluate("=CELL(\"protect\",Data!A1)", host, wb).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Cell_Protect_UnprotectedSheet_ReturnsZero()
     {
         var (wb, sheet) = MakeWb();

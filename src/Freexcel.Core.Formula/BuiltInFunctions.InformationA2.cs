@@ -34,6 +34,8 @@ public static partial class BuiltInFunctions
                 row = rv.StartRow;
                 col = rv.StartCol;
                 cellValue = rv.Cells[0, 0];
+                if (rv.SheetName is not null)
+                    sheet = ctx.CurrentWorkbook?.GetSheet(rv.SheetName);
             }
             else if (args[1] is BlankValue)
             {
