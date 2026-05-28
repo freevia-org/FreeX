@@ -2801,6 +2801,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Floor_NegativeNumberPositiveSignificance_ReturnsNumError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=FLOOR(-2.9,1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void Floor_ArgumentError_PropagatesError()
     {
         var sheet = MakeSheet();

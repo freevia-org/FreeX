@@ -204,7 +204,7 @@ public static partial class BuiltInFunctions
         var n = ToNumber(value);
         if (sig == 0) return new NumberValue(0);
         if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
-        if (n > 0 && sig < 0) return ErrorValue.Num;
+        if (n * sig < 0) return ErrorValue.Num;
         return NumberResult(Math.Floor(n / sig) * sig);
     }
 
