@@ -71,8 +71,15 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, ex.GetType().Name));
-            ShowOwnedMessage($"Failed to import data:\n{ex.Message}", "Get Data", MessageBoxButton.OK, MessageBoxImage.Error);
+            var diagnostic = ImportFailureDiagnosticFactory.FromException(ext, ex);
+            RecordDiagnosticEvent(
+                "import_failed",
+                BuildImportDiagnosticProperties(
+                    ext,
+                    format?.FormatName ?? adapter.FormatName,
+                    diagnostic.Reason,
+                    errorDetail: diagnostic.Detail));
+            ShowOwnedMessage(diagnostic.UserMessage, "Get Data", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -80,7 +87,8 @@ public partial class MainWindow
         string extension,
         string? format,
         string? reason = null,
-        int? worksheetCount = null)
+        int? worksheetCount = null,
+        string? errorDetail = null)
     {
         var properties = new Dictionary<string, string?>
         {
@@ -93,6 +101,8 @@ public partial class MainWindow
             properties["worksheetCount"] = worksheetCount.Value.ToString(CultureInfo.InvariantCulture);
         if (!string.IsNullOrWhiteSpace(reason))
             properties["reason"] = reason;
+        if (!string.IsNullOrWhiteSpace(errorDetail))
+            properties["errorDetail"] = errorDetail;
         return properties;
     }
     private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click(sender, e);
