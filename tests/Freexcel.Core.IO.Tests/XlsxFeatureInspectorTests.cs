@@ -71,6 +71,22 @@ public class XlsxFeatureInspectorTests
         report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
     }
 
+    [Fact]
+    public void Inspect_ChartStyleAndColorPartsAlone_DoNotReportUnsupportedChart()
+    {
+        using var package = CreatePackageWithContent(
+            ("xl/charts/style1.xml", """
+                <c:chartStyle xmlns:c="http://schemas.microsoft.com/office/drawing/2012/chartStyle"/>
+                """),
+            ("xl/charts/colors1.xml", """
+                <c:colorStyle xmlns:c="http://schemas.microsoft.com/office/drawing/2012/chartStyle"/>
+                """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
+    }
+
     [Theory]
     [InlineData("histogramChart")]
     [InlineData("waterfallChart")]
@@ -296,6 +312,22 @@ public class XlsxFeatureInspectorTests
         using var package = CreatePackage(
             "_xmlsignatures/origin.sigs",
             "_xmlsignatures/sig1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.DigitalSignatures);
+    }
+
+    [Fact]
+    public void Inspect_RelationshipOnlyDigitalSignatureReference_DetectsDigitalSignatures()
+    {
+        using var package = CreatePackageWithContent(("_rels/.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdSignatureOrigin"
+                            Type="http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin"
+                            Target="_xmlsignatures/origin.sigs"/>
+            </Relationships>
+            """));
 
         var report = XlsxFeatureInspector.Inspect(package);
 

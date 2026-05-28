@@ -251,8 +251,22 @@ public static class XlsxFeatureInspector
     }
 
     private static bool IsChartPart(string normalizedPackagePart) =>
-        normalizedPackagePart.StartsWith("xl/charts/", StringComparison.Ordinal) ||
-        normalizedPackagePart.StartsWith("xl/drawings/charts/", StringComparison.Ordinal);
+        IsNumberedChartPart(normalizedPackagePart, "xl/charts/") ||
+        IsNumberedChartPart(normalizedPackagePart, "xl/drawings/charts/");
+
+    private static bool IsNumberedChartPart(string normalizedPackagePart, string prefix)
+    {
+        if (!normalizedPackagePart.StartsWith(prefix, StringComparison.Ordinal) ||
+            !normalizedPackagePart.EndsWith(".xml", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var fileName = normalizedPackagePart[prefix.Length..];
+        return fileName.StartsWith("chart", StringComparison.Ordinal) &&
+               fileName.Length > "chart".Length &&
+               char.IsDigit(fileName["chart".Length]);
+    }
 
     private static IEnumerable<XlsxUnsupportedFeatureKind> InspectRelationships(ZipArchiveEntry entry)
     {
@@ -282,6 +296,12 @@ public static class XlsxFeatureInspector
             if (normalizedType.EndsWith("/vbaproject", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.Macros;
+                continue;
+            }
+
+            if (normalizedType.Contains("/digital-signature/", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.DigitalSignatures;
                 continue;
             }
 
