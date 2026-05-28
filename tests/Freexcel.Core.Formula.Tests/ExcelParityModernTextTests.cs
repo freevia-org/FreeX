@@ -288,6 +288,20 @@ public sealed class ExcelParityModernTextTests
     }
 
     [Fact]
+    public void ValueToText_TreatsSingleCellReferencesAsScalarValues()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("Hello")),
+            (2, 1, new BoolValue(true)),
+            (3, 1, ErrorValue.Value));
+
+        _eval.Evaluate("=VALUETOTEXT(A1,0)", sheet).Should().Be(new TextValue("Hello"));
+        _eval.Evaluate("=VALUETOTEXT(A1,1)", sheet).Should().Be(new TextValue("\"Hello\""));
+        _eval.Evaluate("=VALUETOTEXT(A2,1)", sheet).Should().Be(new TextValue("TRUE"));
+        _eval.Evaluate("=VALUETOTEXT(A3,1)", sheet).Should().Be(new TextValue("#VALUE!"));
+    }
+
+    [Fact]
     public void ValueToText_FormatsErrorsAndArrayValues()
     {
         _eval.Evaluate("=VALUETOTEXT(NA(),0)", Sheet()).Should().Be(new TextValue("#N/A"));
