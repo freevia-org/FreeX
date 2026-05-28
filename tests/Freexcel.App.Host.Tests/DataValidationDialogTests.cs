@@ -620,9 +620,7 @@ public sealed class DataValidationDialogTests
         handlerSource.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest);");
         handlerSource.Should().Contain("FocusRangeSelectionInput(textBox);");
         source.Should().Contain("private static void FocusRangeSelectionInput(TextBox textBox)");
-        source.Should().Contain("textBox.Focus();");
-        source.Should().Contain("textBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(textBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
     }
 
     [Fact]

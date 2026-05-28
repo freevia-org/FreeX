@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -209,9 +208,7 @@ public sealed class DataTableDialog : Window
 
     private static void FocusRangeSelectionInput(TextBox target)
     {
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void FocusInitialKeyboardTarget()
@@ -226,9 +223,7 @@ public sealed class DataTableDialog : Window
             string.Equals(error, "Row and column input cells must be different.", StringComparison.Ordinal)
             ? _columnInputBox
             : _rowInputBox;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void Accept()
