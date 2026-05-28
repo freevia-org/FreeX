@@ -201,9 +201,7 @@ public sealed class ColorPickerDialogTests
         source.Should().Contain("FocusInvalidCustomColorInput();");
         source.Should().Contain("private void FocusInvalidCustomColorInput()");
         source.Should().Contain("ColorTabs.SelectedItem = CustomTab;");
-        source.Should().Contain("CustomColorTextBox.Focus();");
-        source.Should().Contain("CustomColorTextBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(CustomColorTextBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(CustomColorTextBox);");
     }
 
     [Theory]

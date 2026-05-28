@@ -34,7 +34,11 @@ public sealed class PageBreakDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         SeedDefault(defaultValue);
+        _insertRowButton.Checked += (_, _) => UpdateBreakInputAvailability();
+        _insertColumnButton.Checked += (_, _) => UpdateBreakInputAvailability();
+        _resetAllButton.Checked += (_, _) => UpdateBreakInputAvailability();
         Content = CreateContent();
+        UpdateBreakInputAvailability();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -135,6 +139,12 @@ public sealed class PageBreakDialog : Window
         textBox.Focus();
         textBox.SelectAll();
         Keyboard.Focus(textBox);
+    }
+
+    private void UpdateBreakInputAvailability()
+    {
+        _rowBreakBox.IsEnabled = _insertRowButton.IsChecked == true;
+        _columnBreakBox.IsEnabled = _insertColumnButton.IsChecked == true;
     }
 
     private void SeedDefault(string defaultValue)
