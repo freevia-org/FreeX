@@ -130,10 +130,9 @@ public static class PageLayoutInputParser
             try
             {
                 var token = NormalizeAbsoluteReferenceToken(parts[0]);
-                if (!IsColumnName(token))
+                if (!TryParseRepeatColumnToken(token, out var single))
                     return false;
 
-                var single = CellAddress.ColumnNameToNumber(token);
                 if (!IsValidRepeatColumn(single))
                     return false;
 
@@ -152,11 +151,10 @@ public static class PageLayoutInputParser
             {
                 var startToken = NormalizeAbsoluteReferenceToken(parts[0]);
                 var endToken = NormalizeAbsoluteReferenceToken(parts[1]);
-                if (!IsColumnName(startToken) || !IsColumnName(endToken))
+                if (!TryParseRepeatColumnToken(startToken, out var start) ||
+                    !TryParseRepeatColumnToken(endToken, out var end))
                     return false;
 
-                var start = CellAddress.ColumnNameToNumber(startToken);
-                var end = CellAddress.ColumnNameToNumber(endToken);
                 if (!IsValidRepeatColumn(start) || !IsValidRepeatColumn(end))
                     return false;
 
@@ -293,7 +291,23 @@ public static class PageLayoutInputParser
         column is > 0 and <= CellAddress.MaxCol;
 
     private static bool TryParseRepeatRowToken(string token, out uint row) =>
+        TryParseR1C1RowReference(token, out row) ||
         uint.TryParse(NormalizeAbsoluteReferenceToken(token), out row);
+
+    private static bool TryParseRepeatColumnToken(string token, out uint column)
+    {
+        if (TryParseR1C1ColumnReference(token, out column))
+            return true;
+
+        if (!IsColumnName(token))
+        {
+            column = 0;
+            return false;
+        }
+
+        column = CellAddress.ColumnNameToNumber(token);
+        return true;
+    }
 
     private static string NormalizeAbsoluteReferenceToken(string token) =>
         token.Trim().TrimStart('$');
@@ -305,7 +319,8 @@ public static class PageLayoutInputParser
     {
         address = default;
         var normalized = NormalizeAbsoluteCellReferenceToken(token);
-        return normalized is not null && CellAddress.TryParse(normalized, sheetId, out address);
+        return normalized is not null && CellAddress.TryParse(normalized, sheetId, out address) ||
+               TryParseR1C1CellReference(token, sheetId, out address);
     }
 
     private static string? NormalizeAbsoluteCellReferenceToken(string token)
@@ -340,4 +355,67 @@ public static class PageLayoutInputParser
 
         return new string(buffer[..write]);
     }
+
+    private static bool TryParseR1C1CellReference(string token, SheetId sheetId, out CellAddress address)
+    {
+        address = default;
+        var value = token.AsSpan().Trim();
+        if (value.Length < 4 || !IsR1C1Prefix(value[0], 'R'))
+            return false;
+
+        var index = 1;
+        if (!TryReadR1C1Number(value, ref index, CellAddress.MaxRow, out var row))
+            return false;
+
+        if (index >= value.Length || !IsR1C1Prefix(value[index], 'C'))
+            return false;
+
+        index++;
+        if (!TryReadR1C1Number(value, ref index, CellAddress.MaxCol, out var column) || index != value.Length)
+            return false;
+
+        address = new CellAddress(sheetId, row, column);
+        return true;
+    }
+
+    private static bool TryParseR1C1RowReference(string token, out uint row)
+    {
+        row = 0;
+        var value = token.AsSpan().Trim();
+        if (value.Length < 2 || !IsR1C1Prefix(value[0], 'R'))
+            return false;
+
+        var index = 1;
+        return TryReadR1C1Number(value, ref index, CellAddress.MaxRow, out row) && index == value.Length;
+    }
+
+    private static bool TryParseR1C1ColumnReference(string token, out uint column)
+    {
+        column = 0;
+        var value = token.AsSpan().Trim();
+        if (value.Length < 2 || !IsR1C1Prefix(value[0], 'C'))
+            return false;
+
+        var index = 1;
+        return TryReadR1C1Number(value, ref index, CellAddress.MaxCol, out column) && index == value.Length;
+    }
+
+    private static bool TryReadR1C1Number(ReadOnlySpan<char> value, ref int index, uint max, out uint number)
+    {
+        number = 0;
+        var start = index;
+        while (index < value.Length && char.IsDigit(value[index]))
+        {
+            number = number * 10 + (uint)(value[index] - '0');
+            if (number > max)
+                return false;
+
+            index++;
+        }
+
+        return index > start && number > 0;
+    }
+
+    private static bool IsR1C1Prefix(char actual, char expected) =>
+        char.ToUpperInvariant(actual) == expected;
 }
