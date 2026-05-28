@@ -102,6 +102,9 @@ public sealed class StatusBarCalculatorTests
         source.Should().NotContain(
             ".Select(",
             "whole-column status calculations should avoid LINQ iterator chains in the hot path");
+        source.Should().Contain(
+            "foreach (var address in scanRange.AllCells())",
+            "small status-bar selections should clip to the used range before enumerating addresses");
     }
 
     [Fact]
@@ -169,5 +172,25 @@ public sealed class StatusBarCalculatorTests
         stats.Count.Should().Be(100_000);
         stats.NumericalCount.Should().Be(100_000);
         stats.Sum.Should().Be(5_000_050_000d);
+    }
+
+    [Fact]
+    public void Benchmark_ClippedSparseStatusSelection()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 10_000, 1), Cell.FromValue(new NumberValue(5)));
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 10_000, 1));
+
+        var sw = Stopwatch.StartNew();
+        StatusBarCalculator.Stats stats = null!;
+        for (var i = 0; i < 500; i++)
+            stats = StatusBarCalculator.Calculate(sheet, range);
+        sw.Stop();
+
+        Console.WriteLine($"Clipped sparse status selection: {sw.ElapsedMilliseconds}ms for 500 runs");
+        stats.Should().Be(new StatusBarCalculator.Stats(5, 1, 1, 5, 5, 5));
     }
 }
