@@ -99,15 +99,9 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         {
             timeline.SelectedStartDate = SelectedStartDate;
             timeline.SelectedEndDate = SelectedEndDate;
-            Replace(pivotTable.RowFields, RowFields);
-            Replace(pivotTable.ColumnFields, ColumnFields);
-            Replace(pivotTable.PageFields, PageFields);
-        }
-
-        private static void Replace<T>(List<T> target, IReadOnlyList<T> source)
-        {
-            target.Clear();
-            target.AddRange(source);
+            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
+            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
+            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
         }
     }
 }
