@@ -33,6 +33,9 @@ public static partial class ChartRenderer
 
         int n = values.Count;
         var bars = new RectangleBarSeries { FillColor = OxyColors.Transparent };
+        var connectors = chart.ShowSeriesLines
+            ? CreateWaterfallConnectorSeries(chart, theme)
+            : null;
 
         double running = 0;
         for (int i = 0; i < n; i++)
@@ -53,10 +56,15 @@ public static partial class ChartRenderer
             bars.Items.Add(rectItem);
 
             if (!isTotal)
+            {
+                AddWaterfallConnector(connectors, i, top);
                 running = top;
+            }
         }
 
         model.Series.Add(bars);
+        if (connectors?.Points.Count > 0)
+            model.Series.Add(connectors);
 
         var categoryAxis = new CategoryAxis
         {
@@ -73,6 +81,30 @@ public static partial class ChartRenderer
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
 
         return model;
+    }
+
+    private static LineSeries CreateWaterfallConnectorSeries(ChartModel chart, WorkbookTheme theme)
+    {
+        var color = chart.SeriesLineThemeColor?.Resolve(theme) ?? chart.SeriesLineColor;
+        return new LineSeries
+        {
+            Color = ToOxyColor(color) ?? OxyColors.Gray,
+            StrokeThickness = double.IsFinite(chart.SeriesLineThickness)
+                ? Math.Clamp(chart.SeriesLineThickness, 0, 20)
+                : 1,
+            LineStyle = ToOxyLineStyle(chart.SeriesLineDashStyle),
+            MarkerType = MarkerType.None
+        };
+    }
+
+    private static void AddWaterfallConnector(LineSeries? connectors, int index, double y)
+    {
+        if (connectors is null)
+            return;
+
+        connectors.Points.Add(new DataPoint(index + 0.35, y));
+        connectors.Points.Add(new DataPoint(index + 0.65, y));
+        connectors.Points.Add(DataPoint.Undefined);
     }
 
     internal static PlotModel BuildHistogramModel(
