@@ -127,6 +127,56 @@ public class WorkbookTests
 
         act.Should().Throw<ArgumentException>();
     }
+
+    [Fact]
+    public void RemoveSheet_RemovesNamedRangesOnDeletedSheet()
+    {
+        var wb = new Workbook();
+        var keep = wb.AddSheet("Keep");
+        var remove = wb.AddSheet("Remove");
+        wb.DefineNamedRange("KeepRange", new GridRange(
+            new CellAddress(keep.Id, 1, 1),
+            new CellAddress(keep.Id, 2, 1)));
+        wb.DefineNamedRange("RemoveRange", new GridRange(
+            new CellAddress(remove.Id, 1, 1),
+            new CellAddress(remove.Id, 2, 1)));
+
+        wb.RemoveSheet(remove.Id).Should().BeTrue();
+
+        wb.NamedRanges.Should().ContainKey("KeepRange");
+        wb.NamedRanges.Should().NotContainKey("RemoveRange");
+        wb.NamedRangeMetadataByName.Should().NotContainKey("RemoveRange");
+    }
+
+    [Fact]
+    public void RemoveSheet_AdjustsWorkbookViewSheetIndexes()
+    {
+        var wb = new Workbook();
+        wb.AddSheet("First");
+        var middle = wb.AddSheet("Middle");
+        wb.AddSheet("Last");
+        wb.ActiveSheetIndex = 2;
+        wb.FirstVisibleSheetIndex = 1;
+
+        wb.RemoveSheet(middle.Id).Should().BeTrue();
+
+        wb.ActiveSheetIndex.Should().Be(1);
+        wb.FirstVisibleSheetIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void RemoveSheet_ClearsWorkbookViewSheetIndexesWhenLastSheetIsRemoved()
+    {
+        var wb = new Workbook();
+        var only = wb.AddSheet("Only");
+        wb.ActiveSheetIndex = 0;
+        wb.FirstVisibleSheetIndex = 0;
+
+        wb.RemoveSheet(only.Id).Should().BeTrue();
+
+        wb.ActiveSheetIndex.Should().BeNull();
+        wb.FirstVisibleSheetIndex.Should().BeNull();
+    }
 }
 
 public class SheetTests
