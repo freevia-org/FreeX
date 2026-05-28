@@ -1,7 +1,4 @@
-using System.Globalization;
-using System.Linq;
 using System.Windows;
-using System.Windows.Controls;
 
 namespace Freexcel.App.Host;
 
@@ -85,28 +82,22 @@ public static class RibbonMetadata
         if (!double.IsNaN(fullWidth) && !double.IsNaN(compactWidth))
             return true;
 
-        if (element is FrameworkElement { Tag: string tag })
-            return TryParseCompactTag(tag, out fullWidth, out compactWidth);
-
         fullWidth = 0;
         compactWidth = 0;
         return false;
     }
 
     public static bool IsCommandLabel(DependencyObject element) =>
-        HasRole(element, RibbonMetadataRole.CommandLabel, "RibbonLabel");
+        GetRole(element) == RibbonMetadataRole.CommandLabel;
 
     public static bool IsCommandIcon(DependencyObject element) =>
-        HasRole(element, RibbonMetadataRole.CommandIcon, "RibbonIcon") ||
-        HasRole(element, RibbonMetadataRole.CollapsedChevron, "RibbonIcon");
+        GetRole(element) is RibbonMetadataRole.CommandIcon or RibbonMetadataRole.CollapsedChevron;
 
     public static bool IsCollapsedChevron(DependencyObject element) =>
-        GetRole(element) == RibbonMetadataRole.CollapsedChevron ||
-        element is TextBlock { Text: "\uE70D", Tag: string tag } &&
-        string.Equals(tag, "RibbonIcon", StringComparison.Ordinal);
+        GetRole(element) == RibbonMetadataRole.CollapsedChevron;
 
     public static bool IsCollapsedGroupButton(DependencyObject element) =>
-        HasRole(element, RibbonMetadataRole.CollapsedGroupButton, "RibbonCollapsedGroupButton");
+        GetRole(element) == RibbonMetadataRole.CollapsedGroupButton;
 
     public static bool IsCommandSpacer(DependencyObject element) =>
         GetRole(element) == RibbonMetadataRole.CommandSpacer;
@@ -137,38 +128,7 @@ public static class RibbonMetadata
         if (layout != RibbonCommandContentLayout.None)
             return true;
 
-        if (element is FrameworkElement { Tag: string tag })
-        {
-            layout = tag switch
-            {
-                "RibbonCommandContent:S" => RibbonCommandContentLayout.Small,
-                "RibbonCommandContent:M" => RibbonCommandContentLayout.Medium,
-                "RibbonCommandContent:L" => RibbonCommandContentLayout.Large,
-                "RibbonCommandContent" => RibbonCommandContentLayout.IconOnly,
-                _ => RibbonCommandContentLayout.None
-            };
-        }
-
-        return layout != RibbonCommandContentLayout.None;
-    }
-
-    private static bool HasRole(DependencyObject element, RibbonMetadataRole role, string legacyTag) =>
-        GetRole(element) == role ||
-        element is FrameworkElement { Tag: string tag } &&
-        string.Equals(tag, legacyTag, StringComparison.Ordinal);
-
-    public static bool TryParseCompactTag(string tag, out double fullWidth, out double compactWidth)
-    {
-        fullWidth = 0;
-        compactWidth = 0;
-        const string prefix = "RibbonCompact:";
-        if (!tag.StartsWith(prefix, StringComparison.Ordinal))
-            return false;
-
-        var parts = tag[prefix.Length..].Split(':');
-        return parts.Length == 2 &&
-               double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out fullWidth) &&
-               double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out compactWidth);
+        return false;
     }
 }
 
