@@ -128,7 +128,53 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
     }
 
     /// <summary>Format as A1 notation (e.g. "B7").</summary>
-    public string ToA1() => $"{NumberToColumnName(Col)}{Row}";
+    public string ToA1()
+    {
+        var columnLength = GetColumnNameLength(Col);
+        var rowLength = GetRowDigitCount(Row);
+        return string.Create((int)(columnLength + rowLength), (Col, Row, columnLength), static (buffer, state) =>
+        {
+            var (col, row, colLength) = state;
+            for (var index = (int)colLength - 1; index >= 0; index--)
+            {
+                col--;
+                buffer[index] = (char)('A' + col % 26);
+                col /= 26;
+            }
+
+            var rowIndex = buffer.Length;
+            do
+            {
+                buffer[--rowIndex] = (char)('0' + row % 10);
+                row /= 10;
+            }
+            while (row > 0);
+        });
+    }
+
+    private static uint GetColumnNameLength(uint col)
+    {
+        uint length = 0;
+        while (col > 0)
+        {
+            length++;
+            col = (col - 1) / 26;
+        }
+
+        return length;
+    }
+
+    private static uint GetRowDigitCount(uint row)
+    {
+        uint length = 1;
+        while (row >= 10)
+        {
+            length++;
+            row /= 10;
+        }
+
+        return length;
+    }
 
     public override string ToString() => ToA1();
 

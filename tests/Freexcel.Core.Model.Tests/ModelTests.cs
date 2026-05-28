@@ -111,6 +111,41 @@ public class CellAddressTests
         addr.ToA1().Should().Be("B7");
     }
 
+    [Theory]
+    [InlineData(1u, 1u, "A1")]
+    [InlineData(CellAddress.MaxRow, CellAddress.MaxCol, "XFD1048576")]
+    public void ToA1_FormatsExcelBounds(uint row, uint col, string expected)
+    {
+        var sheet = SheetId.New();
+        var addr = new CellAddress(sheet, row, col);
+
+        addr.ToA1().Should().Be(expected);
+    }
+
+    [Fact]
+    public void ToA1_RepeatedCalls_AllocateOnlyResultStrings()
+    {
+        var sheet = SheetId.New();
+        var addr = new CellAddress(sheet, CellAddress.MaxRow, CellAddress.MaxCol);
+        addr.ToA1().Should().Be("XFD1048576");
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 100_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        string result = "";
+        for (var i = 0; i < repetitions; i++)
+            result = addr.ToA1();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.Should().Be("XFD1048576");
+        Console.WriteLine(
+            $"ToA1 repeated {repetitions:N0}x: {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(6_500_000);
+    }
+
     [Fact]
     public void NumberToColumnName_RepeatedCalls_AllocateOnlyResultStrings()
     {
