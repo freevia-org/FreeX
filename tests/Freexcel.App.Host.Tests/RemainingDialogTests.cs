@@ -184,6 +184,41 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void FillSeriesStepDialog_FieldLabelsUseUniqueAccessKeys()
+    {
+        var labels = new[]
+        {
+            "_Rows",
+            "_Columns",
+            "_Linear",
+            "_Growth",
+            "_Date",
+            "_AutoFill",
+            "Da_y",
+            "_Weekday",
+            "_Month",
+            "Y_ear",
+            "Step _value:",
+            "S_top value:"
+        };
+
+        labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
+
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+        foreach (var label in labels)
+            source.Should().Contain(label);
+    }
+
+    [Fact]
+    public void FillSeriesStepDialog_InputFieldsExposeAutomationNames()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_stepBox, \"Step value\");");
+        source.Should().Contain("AutomationProperties.SetName(_stopBox, \"Stop value\");");
+    }
+
+    [Fact]
     public void FillSeriesStepDialogOpenedFromKeyboard_FocusesSelectedSeriesDirection()
     {
         var source = ReadRemainingDialogSources();
