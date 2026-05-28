@@ -74,6 +74,20 @@ public sealed class RibbonKeyTipRoutingTests
     }
 
     [Fact]
+    public void ResolveMenuItem_ResolvesExactMenuItemWhenNoLongerPrefixExists()
+    {
+        RunSta(() =>
+        {
+            var first = CreateMenuItem("A");
+            var second = CreateMenuItem("B");
+
+            var resolved = RibbonKeyTipRouting.ResolveMenuItem([first, second], "A");
+
+            resolved.Should().BeSameAs(first);
+        });
+    }
+
+    [Fact]
     public void ResolveMenuItem_ResolvesNestedLeafAfterParentPrefix()
     {
         RunSta(() =>
