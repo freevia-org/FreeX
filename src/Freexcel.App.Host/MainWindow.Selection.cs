@@ -803,6 +803,7 @@ public partial class MainWindow
             _dragSelectAddsAdditionalRange = false;
             SheetGrid.ReleaseMouseCapture();
             CompleteDragSelectionStatusRefresh();
+            e.Handled = true;
             return;
         }
 
@@ -881,6 +882,7 @@ public partial class MainWindow
             return;
         }
         GetFormulaRangeEntryEditor()?.Focus();
+        e.Handled = true;
     }
 
 }

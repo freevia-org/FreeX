@@ -49,7 +49,11 @@ public sealed class MainWindowMouseSelectionSourceTests
         mouseMove.Should().Contain("_dragSelectAddsAdditionalRange = false;");
         mouseMove.Should().Contain("SheetGrid.ReleaseMouseCapture();");
         mouseMove.Should().Contain("CompleteDragSelectionStatusRefresh();");
+        mouseMove.Should().Contain("e.Handled = true;");
         mouseMove.IndexOf("if (e.LeftButton != MouseButtonState.Pressed)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal));
+        mouseMove.IndexOf("e.Handled = true;", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal));
     }
@@ -116,6 +120,27 @@ public sealed class MainWindowMouseSelectionSourceTests
         mouseUp.IndexOf("if (e.ChangedButton != MouseButton.Left)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseUp.IndexOf("if (!_dragSelectActive)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void MouseUpSelectionHandlesCompletedDragBeforeReturningToWpf()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseUp = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal)..];
+
+        var completedDrag = mouseUp[
+            mouseUp.IndexOf("if (!_dragSelectActive) return;", StringComparison.Ordinal)..];
+
+        completedDrag.Should().Contain("SheetGrid.ReleaseMouseCapture();");
+        completedDrag.Should().Contain("CompleteDragSelectionStatusRefresh();");
+        completedDrag.Should().Contain("GetFormulaRangeEntryEditor()?.Focus();");
+        completedDrag.Should().Contain("e.Handled = true;");
+        completedDrag.LastIndexOf("e.Handled = true;", StringComparison.Ordinal)
+            .Should()
+            .BeGreaterThan(completedDrag.IndexOf("GetFormulaRangeEntryEditor()?.Focus();", StringComparison.Ordinal));
     }
 
     [Fact]
