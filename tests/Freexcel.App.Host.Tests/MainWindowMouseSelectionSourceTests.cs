@@ -174,6 +174,8 @@ public sealed class MainWindowMouseSelectionSourceTests
         columnShiftSelection.Should().Contain("SheetGrid.SelectedRanges = null;");
         columnShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
         columnShiftSelection.Should().Contain("CellAddressBox.Text");
+        columnShiftSelection.Should().Contain("HideValidationDropdown();");
+        columnShiftSelection.Should().Contain("FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);");
         columnShiftSelection.Should().Contain("SheetGrid.Focus();");
         columnShiftSelection.Should().Contain("RefreshToolbar();");
         columnShiftSelection.Should().Contain("RefreshStatusBar();");
@@ -181,6 +183,8 @@ public sealed class MainWindowMouseSelectionSourceTests
         rowShiftSelection.Should().Contain("SheetGrid.SelectedRanges = null;");
         rowShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
         rowShiftSelection.Should().Contain("CellAddressBox.Text");
+        rowShiftSelection.Should().Contain("HideValidationDropdown();");
+        rowShiftSelection.Should().Contain("FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);");
         rowShiftSelection.Should().Contain("SheetGrid.Focus();");
         rowShiftSelection.Should().Contain("RefreshToolbar();");
         rowShiftSelection.Should().Contain("RefreshStatusBar();");

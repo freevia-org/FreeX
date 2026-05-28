@@ -94,6 +94,7 @@ public partial class MainWindow
                     {
                         if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
                         {
+                            HideValidationDropdown();
                             uint anchorCol = _selectionAnchor.Value.Col;
                             _selectionCursor = new CellAddress(_currentSheetId, 1_048_576, cm.Col);
                             SheetGrid.SelectedRanges = null;
@@ -103,6 +104,8 @@ public partial class MainWindow
                             var c1 = FormatColumnReference(Math.Min(anchorCol, cm.Col));
                             var c2 = FormatColumnReference(Math.Max(anchorCol, cm.Col));
                             CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
+                            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+                            FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
                             SheetGrid.Focus();
                             RefreshToolbar();
                             RefreshStatusBar();
@@ -125,6 +128,7 @@ public partial class MainWindow
                 {
                     if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
                     {
+                        HideValidationDropdown();
                         uint anchorRow = _selectionAnchor.Value.Row;
                         _selectionCursor = new CellAddress(_currentSheetId, rm.Row, 16_384);
                         SheetGrid.SelectedRanges = null;
@@ -134,6 +138,8 @@ public partial class MainWindow
                         var r1 = Math.Min(anchorRow, rm.Row);
                         var r2 = Math.Max(anchorRow, rm.Row);
                         CellAddressBox.Text = r1 == r2 ? $"{r1}:{r1}" : $"{r1}:{r2}";
+                        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+                        FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
                         SheetGrid.Focus();
                         RefreshToolbar();
                         RefreshStatusBar();
