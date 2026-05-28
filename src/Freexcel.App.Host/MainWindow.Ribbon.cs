@@ -164,6 +164,14 @@ public partial class MainWindow
             DispatcherPriority.Send);
     }
 
+    private void CompleteRibbonResizeCompaction()
+    {
+        CompactRibbonSurfaceAfterResize(scheduleFallback: true);
+        var width = GetCurrentRibbonResizeWidth();
+        if (width > 0 && !double.IsNaN(width))
+            _lastRibbonResizeWidth = width;
+    }
+
     private bool ShouldNormalizeRibbonSurfaceForResize()
     {
         var width = GetCurrentRibbonResizeWidth();
