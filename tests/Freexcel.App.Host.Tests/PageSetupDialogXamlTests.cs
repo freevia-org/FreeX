@@ -280,8 +280,9 @@ public sealed class PageSetupDialogXamlTests
 
     [Theory]
     [InlineData(PageSetupRangeSelectionTarget.PrintArea, false, "B2:D8")]
-    [InlineData(PageSetupRangeSelectionTarget.RepeatRows, false, "2:8")]
-    [InlineData(PageSetupRangeSelectionTarget.RepeatColumns, false, "B:D")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatRows, false, "$2:$8")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatColumns, false, "$B:$D")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatRows, true, "R2:R8")]
     [InlineData(PageSetupRangeSelectionTarget.PrintArea, true, "R2C2:R8C4")]
     [InlineData(PageSetupRangeSelectionTarget.RepeatColumns, true, "C2:C4")]
     public void PageSetupRangeSelectionFormatter_FormatsPickerSelectionForTarget(

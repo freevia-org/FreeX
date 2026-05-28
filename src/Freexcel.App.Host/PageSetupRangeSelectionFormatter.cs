@@ -10,9 +10,13 @@ internal static class PageSetupRangeSelectionFormatter
         bool useR1C1ReferenceStyle) =>
         target switch
         {
-            PageSetupRangeSelectionTarget.RepeatRows => $"{selectedRange.Start.Row}:{selectedRange.End.Row}",
+            PageSetupRangeSelectionTarget.RepeatRows => useR1C1ReferenceStyle
+                ? $"R{selectedRange.Start.Row}:R{selectedRange.End.Row}"
+                : $"${selectedRange.Start.Row}:${selectedRange.End.Row}",
             PageSetupRangeSelectionTarget.RepeatColumns =>
-                $"{SpreadsheetDisplayFormatter.FormatColumnReference(selectedRange.Start.Col, useR1C1ReferenceStyle)}:{SpreadsheetDisplayFormatter.FormatColumnReference(selectedRange.End.Col, useR1C1ReferenceStyle)}",
+                useR1C1ReferenceStyle
+                    ? $"{SpreadsheetDisplayFormatter.FormatColumnReference(selectedRange.Start.Col, useR1C1ReferenceStyle)}:{SpreadsheetDisplayFormatter.FormatColumnReference(selectedRange.End.Col, useR1C1ReferenceStyle)}"
+                    : $"${SpreadsheetDisplayFormatter.FormatColumnReference(selectedRange.Start.Col, useR1C1ReferenceStyle)}:${SpreadsheetDisplayFormatter.FormatColumnReference(selectedRange.End.Col, useR1C1ReferenceStyle)}",
             _ => SpreadsheetDisplayFormatter.FormatRangeReference(selectedRange.Start, selectedRange.End, useR1C1ReferenceStyle)
         };
 }
