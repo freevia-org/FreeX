@@ -392,6 +392,7 @@ public static partial class BuiltInFunctions
         ["ERFC.PRECISE"] = (ErfcFunc, 1, 1),
         ["GESTEP"]      = (Gestep, 1, 2),
         ["IMABS"]       = (ImAbs, 1, 1),
+        ["IMARGUMENT"]  = (ImArgument, 1, 1),
         ["IMAGINARY"]   = (Imaginary, 1, 1),
         ["IMCONJUGATE"] = (ImConjugate, 1, 1),
         ["IMCOS"]       = (ImCos, 1, 1),
