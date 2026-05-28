@@ -14,13 +14,15 @@ public partial class GridView
     {
         if (Viewport?.FrozenPanes == null) return;
         var fp = Viewport.FrozenPanes;
+        var rowHeaderWidth = ActualRowHeaderWidth;
+        var columnHeaderHeight = EffectiveColHeaderHeight;
 
         if (fp.Rows > 0)
         {
             var lastFrozenRow = FindRowMetric(Viewport.RowMetrics, fp.Rows);
             if (lastFrozenRow != null)
             {
-                double y = lastFrozenRow.TopOffset + lastFrozenRow.Height + EffectiveColHeaderHeight;
+                double y = lastFrozenRow.TopOffset + lastFrozenRow.Height + columnHeaderHeight;
                 dc.DrawLine(FreezePen, new Point(0, y), new Point(ActualWidth, y));
             }
         }
@@ -30,7 +32,7 @@ public partial class GridView
             var lastFrozenCol = FindColMetric(Viewport.ColMetrics, fp.Cols);
             if (lastFrozenCol != null)
             {
-                double x = lastFrozenCol.LeftOffset + lastFrozenCol.Width + ActualRowHeaderWidth;
+                double x = lastFrozenCol.LeftOffset + lastFrozenCol.Width + rowHeaderWidth;
                 dc.DrawLine(FreezePen, new Point(x, 0), new Point(x, ActualHeight));
             }
         }
@@ -43,13 +45,15 @@ public partial class GridView
         var selectedRanges = SelectedRanges;
         var selRange = SelectedRange;
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var rowHeaderWidth = ActualRowHeaderWidth;
+        var columnHeaderHeight = EffectiveColHeaderHeight;
 
         foreach (var col in Viewport!.ColMetrics)
         {
             bool inSel = IsColumnHeaderSelected(col.Col, selectedRanges, selRange);
 
             var bg = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
-            var rect = new Rect(col.LeftOffset + ActualRowHeaderWidth, 0, col.Width, EffectiveColHeaderHeight);
+            var rect = new Rect(col.LeftOffset + rowHeaderWidth, 0, col.Width, columnHeaderHeight);
             dc.DrawRectangle(bg, GridPen, rect);
 
             var text = GetDefaultFormattedText(
@@ -67,7 +71,7 @@ public partial class GridView
             bool inSel = IsRowHeaderSelected(row.Row, selectedRanges, selRange);
 
             var bg = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
-            var rect = new Rect(0, row.TopOffset + EffectiveColHeaderHeight, ActualRowHeaderWidth, row.Height);
+            var rect = new Rect(0, row.TopOffset + columnHeaderHeight, rowHeaderWidth, row.Height);
             dc.DrawRectangle(bg, GridPen, rect);
 
             var text = GetDefaultFormattedText(
@@ -81,7 +85,7 @@ public partial class GridView
         }
 
         dc.DrawRectangle(HeaderBackgroundBrush, GridPen,
-            new Rect(0, 0, ActualRowHeaderWidth, EffectiveColHeaderHeight));
+            new Rect(0, 0, rowHeaderWidth, columnHeaderHeight));
     }
 
     private static bool IsColumnHeaderSelected(uint column, IReadOnlyList<GridRange>? selectedRanges, GridRange? selectedRange)
