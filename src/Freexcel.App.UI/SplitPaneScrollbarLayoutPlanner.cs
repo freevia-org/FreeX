@@ -16,11 +16,13 @@ public static class SplitPaneScrollbarLayoutPlanner
         uint maxIndex)
     {
         var trackLength = InnerTrackLength(orientation, track);
+        var effectiveMaxIndex = Math.Max(1, maxIndex);
+        var effectiveVisibleCount = Math.Min(effectiveMaxIndex, (uint)Math.Max(1, visibleCount));
         var thumbLength = Math.Min(
             trackLength,
-            Math.Max(MinThumbLength, trackLength * Math.Max(1, visibleCount) / maxIndex));
+            Math.Max(MinThumbLength, trackLength * effectiveVisibleCount / effectiveMaxIndex));
         var available = Math.Max(0, InnerTrackLength(orientation, track) - thumbLength);
-        var maxStartIndex = Math.Max(1, maxIndex - (uint)Math.Max(1, visibleCount) + 1);
+        var maxStartIndex = effectiveMaxIndex - effectiveVisibleCount + 1;
         var clampedFirstVisibleIndex = Math.Min(maxStartIndex, Math.Max(1, firstVisibleIndex));
         var ratio = maxStartIndex <= 1
             ? 0
