@@ -916,6 +916,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameSuffixes_RemovesBusinessAndMedicalCredentials()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace, CPA", "Ada Lovelace"),
+                ("Grace Brewster Hopper M.B.A.", "Grace Brewster Hopper")
+            ],
+            ["Katherine Coleman Johnson DVM"]);
+
+        result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameSuffixes_RemovesSuffixFromSingleTokenNames()
     {
         var result = FlashFillService.Fill(

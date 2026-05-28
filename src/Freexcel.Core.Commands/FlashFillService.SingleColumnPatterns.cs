@@ -33,6 +33,14 @@ public static partial class FlashFillService
         "Ph.D",
         "MD",
         "M.D",
+        "CPA",
+        "C.P.A",
+        "MBA",
+        "M.B.A",
+        "DDS",
+        "D.D.S",
+        "DVM",
+        "D.V.M",
         "Esq"
     };
 
