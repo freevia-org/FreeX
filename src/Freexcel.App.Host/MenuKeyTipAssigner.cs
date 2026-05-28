@@ -11,12 +11,13 @@ public static class MenuKeyTipAssigner
 
         foreach (var item in items)
         {
-            var existing = RibbonTooltip.GetKeyTip(item);
+            var existing = NormalizeKeyTip(RibbonTooltip.GetKeyTip(item));
             if (string.IsNullOrWhiteSpace(existing))
                 continue;
 
             if (IsAvailable(existing, used))
             {
+                RibbonTooltip.SetKeyTip(item, existing);
                 used.Add(existing);
                 continue;
             }
@@ -39,7 +40,7 @@ public static class MenuKeyTipAssigner
     {
         foreach (var character in EnumerateCandidateCharacters(header))
         {
-            var candidate = character.ToString().ToUpperInvariant();
+            var candidate = NormalizeKeyTip(character.ToString());
             if (IsAvailable(candidate, used))
                 return candidate;
         }
@@ -53,6 +54,9 @@ public static class MenuKeyTipAssigner
 
         return Guid.NewGuid().ToString("N")[..2].ToUpperInvariant();
     }
+
+    private static string NormalizeKeyTip(string? keyTip) =>
+        keyTip?.Trim().ToUpperInvariant() ?? "";
 
     private static bool IsAvailable(string candidate, IEnumerable<string> used) =>
         used.All(existing =>
