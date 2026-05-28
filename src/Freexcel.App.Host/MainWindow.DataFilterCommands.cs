@@ -178,49 +178,18 @@ public partial class MainWindow
 
         if (!string.IsNullOrWhiteSpace(filterText))
         {
-            if (IsTopBottomFilterText(filterText))
+            if (!FilterPromptPlanner.TryPlan(value, out var promptPlan, out var promptError) || promptPlan is null)
             {
-                if (!FilterInputParser.TryParseTopBottom(value, out var count, out var top, out var percent, out var topBottomError))
-                {
-                    _messageService.ShowWarning(topBottomError ?? "Enter a supported filter criterion.", title);
-                    return false;
-                }
-
-                if (!TryExecuteRememberedAutoFilterCommand(
-                        "Filter",
-                        range,
-                        currentRange => percent
-                            ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset, count, top)
-                            : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset, count, top)))
-                    return false;
-                return true;
+                _messageService.ShowWarning(promptError ?? "Enter a supported filter criterion.", title);
+                return false;
             }
 
-            if (FilterInputParser.TryParseAverage(value, out var aboveAverage))
-            {
-                if (!TryExecuteRememberedAutoFilterCommand(
-                        "Filter",
-                        range,
-                        currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset, aboveAverage)))
-                    return false;
-                return true;
-            }
-
-            if (IsCriterionFilterText(filterText))
-            {
-                if (!FilterInputParser.TryParseCriterion(value, out var criterion, out var criterionError) || criterion is null)
-                {
-                    _messageService.ShowWarning(criterionError ?? "Enter a supported filter criterion.", title);
-                    return false;
-                }
-
-                if (!TryExecuteRememberedAutoFilterCommand(
-                        "Filter",
-                        range,
-                        currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset, criterion)))
-                    return false;
-                return true;
-            }
+            if (!TryExecuteRememberedAutoFilterCommand(
+                    "Filter",
+                    range,
+                    currentRange => promptPlan.CreateCommand(_currentSheetId, currentRange, filterColOffset)))
+                return false;
+            return true;
         }
 
         if (string.IsNullOrWhiteSpace(filterText) && result.SelectedValues.Count == 0)
@@ -443,37 +412,4 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private static bool IsTopBottomFilterText(string filterText) =>
-        filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsCriterionFilterText(string filterText) =>
-        filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
-        filterText.Equals("nonblank", StringComparison.OrdinalIgnoreCase) ||
-        filterText.Equals("non-blank", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("and:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("or:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date=", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date<>", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date>=", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date>", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date<=", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date<", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("datebetween:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("contains:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("notcontains:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("begins:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("equals:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("<>", StringComparison.Ordinal) ||
-        filterText.StartsWith(">=", StringComparison.Ordinal) ||
-        filterText.StartsWith("<=", StringComparison.Ordinal) ||
-        filterText.StartsWith('>') ||
-        filterText.StartsWith('<') ||
-        filterText.StartsWith('=');
 }
