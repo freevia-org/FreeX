@@ -128,6 +128,20 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_IdentityTransform_PreservesCommentsAndProcessingInstructions()
+    {
+        using var source = StreamFromString("<rows><?freexcel keep=\"true\"?><!--keep me--><row name=\"Golf\" /></rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var xml = reader.ReadToEnd();
+        xml.Should().Contain("<?freexcel keep=\"true\"?>");
+        xml.Should().Contain("<!--keep me-->");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_OutputAboveLimit_ReportsSafetyDiagnostic()
     {
         using var source = StreamFromString("<rows />");
