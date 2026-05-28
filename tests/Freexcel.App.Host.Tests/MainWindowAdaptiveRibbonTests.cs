@@ -898,6 +898,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             RibbonTooltip.GetTitle(button).Should().Be("Page Setup");
             RibbonTooltip.GetKeyTip(button).Should().Be("PS");
             button.ContextMenu.Should().NotBeNull();
+            button.ContextMenu!.Items.Count.Should().Be(0, "collapsed group menus are populated lazily");
+            button.ContextMenu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, button.ContextMenu));
             button.ContextMenu!.Items.OfType<MenuItem>().Single().Header.Should().Be("Page Setup");
         });
     }
