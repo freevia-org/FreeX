@@ -59,6 +59,11 @@ public sealed class PageLayoutInputParserTests
 
     [Theory]
     [InlineData("row x")]
+    [InlineData("row 0")]
+    [InlineData("row 1048577")]
+    [InlineData("col 0")]
+    [InlineData("col 16385")]
+    [InlineData("column XFE")]
     [InlineData("columns 4")]
     [InlineData("break")]
     public void TryParsePageBreakInput_RejectsMalformedCommands(string input)

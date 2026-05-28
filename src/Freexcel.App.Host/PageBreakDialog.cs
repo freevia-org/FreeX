@@ -48,7 +48,8 @@ public sealed class PageBreakDialog : Window
         if (trimmed.Equals("clear", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (PageLayoutInputParser.TryParseBreakInput(trimmed, "row", out var rowBreak) && rowBreak > 0)
+        if (PageLayoutInputParser.TryParseBreakInput(trimmed, "row", out var rowBreak) &&
+            PageLayoutInputParser.IsValidRowBreak(rowBreak))
         {
             result = new PageBreakDialogResult(PageBreakDialogAction.AddRow, rowBreak, null);
             return true;
@@ -56,7 +57,7 @@ public sealed class PageBreakDialog : Window
 
         if ((PageLayoutInputParser.TryParseColumnBreakInput(trimmed, "col", out var columnBreak) ||
              PageLayoutInputParser.TryParseColumnBreakInput(trimmed, "column", out columnBreak)) &&
-            columnBreak > 0)
+            PageLayoutInputParser.IsValidColumnBreak(columnBreak))
         {
             result = new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, columnBreak);
             return true;
@@ -72,11 +73,11 @@ public sealed class PageBreakDialog : Window
             result = CreateClearResult();
         else if (_insertColumnButton.IsChecked == true)
         {
-            if (!PageLayoutInputParser.TryParseColumnBreakValue(_columnBreakBox.Text, out var columnBreak) || columnBreak == 0)
+            if (!PageLayoutInputParser.TryParseColumnBreakValue(_columnBreakBox.Text, out var columnBreak))
             {
                 MessageBox.Show(
                     this,
-                    "Enter a positive column number or letter for the page break.",
+                    "Enter a column number or letter within the worksheet for the page break.",
                     Title,
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -88,11 +89,12 @@ public sealed class PageBreakDialog : Window
         }
         else
         {
-            if (!uint.TryParse(_rowBreakBox.Text.Trim(), out var rowBreak) || rowBreak == 0)
+            if (!uint.TryParse(_rowBreakBox.Text.Trim(), out var rowBreak) ||
+                !PageLayoutInputParser.IsValidRowBreak(rowBreak))
             {
                 MessageBox.Show(
                     this,
-                    "Enter a positive row number for the page break.",
+                    "Enter a row number within the worksheet for the page break.",
                     Title,
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);

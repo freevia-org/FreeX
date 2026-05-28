@@ -43,7 +43,7 @@ public static class PageLayoutInputParser
         value = 0;
         var trimmed = input.Trim();
         if (uint.TryParse(trimmed, out value))
-            return true;
+            return IsValidColumnBreak(value);
 
         if (!IsColumnName(trimmed))
             return false;
@@ -51,7 +51,7 @@ public static class PageLayoutInputParser
         try
         {
             value = CellAddress.ColumnNameToNumber(trimmed);
-            return true;
+            return IsValidColumnBreak(value);
         }
         catch (FormatException)
         {
@@ -69,7 +69,7 @@ public static class PageLayoutInputParser
             return true;
         }
 
-        if (TryParseBreakInput(trimmed, "row", out var rowBreak))
+        if (TryParseBreakInput(trimmed, "row", out var rowBreak) && IsValidRowBreak(rowBreak))
         {
             pageBreak = new PageBreakInput(PageBreakInputKind.Row, Row: rowBreak);
             return true;
@@ -241,6 +241,12 @@ public static class PageLayoutInputParser
     private static bool IsAutoInput(string normalized) =>
         normalized.Length == 0 ||
         normalized.Equals("auto", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsValidRowBreak(uint row) =>
+        row is > 0 and <= CellAddress.MaxRow;
+
+    public static bool IsValidColumnBreak(uint column) =>
+        column is > 0 and <= CellAddress.MaxCol;
 
     private static bool IsColumnName(string text) =>
         text.Length > 0 && text.All(char.IsLetter);

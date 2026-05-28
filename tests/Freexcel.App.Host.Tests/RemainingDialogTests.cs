@@ -384,9 +384,12 @@ public sealed class RemainingDialogTests
 
     [Theory]
     [InlineData("row 0")]
+    [InlineData("row 1048577")]
     [InlineData("col 0")]
+    [InlineData("col 16385")]
     [InlineData("column 0")]
-    public void PageBreakDialog_TryCreateResult_RejectsZeroBreakEntries(string input)
+    [InlineData("column XFE")]
+    public void PageBreakDialog_TryCreateResult_RejectsOutOfWorksheetBreakEntries(string input)
     {
         PageBreakDialog.TryCreateResult(input, out _).Should().BeFalse();
     }
@@ -436,11 +439,10 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("MessageBox.Show(");
         source.Should().Contain("this,");
-        source.Should().Contain("Enter a positive row number for the page break.");
-        source.Should().Contain("Enter a positive column number or letter for the page break.");
+        source.Should().Contain("Enter a row number within the worksheet for the page break.");
+        source.Should().Contain("Enter a column number or letter within the worksheet for the page break.");
         source.Should().Contain("MessageBoxImage.Warning");
-        source.Should().Contain("rowBreak == 0");
-        source.Should().Contain("columnBreak == 0");
+        source.Should().Contain("PageLayoutInputParser.IsValidRowBreak(rowBreak)");
         source.Should().Contain("FocusInvalidBreakInput(_rowBreakBox);");
         source.Should().Contain("FocusInvalidBreakInput(_columnBreakBox);");
         source.Should().Contain("private static void FocusInvalidBreakInput(TextBox textBox)");
