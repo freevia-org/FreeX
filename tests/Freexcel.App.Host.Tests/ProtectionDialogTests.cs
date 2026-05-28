@@ -133,11 +133,11 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("private void RangePicker_Click");
         source.Should().Contain("RangeSelectionRequest = CreateRangeSelectionRequest");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
-        source.Should().Contain("_rangeBox.SelectAll()");
+        source.Should().Contain("FocusRangeInput();");
         var pickerHandlerSource = source[
             source.IndexOf("private void RangePicker_Click", StringComparison.Ordinal)..
             source.IndexOf("public static AllowEditRangeSelectionRequest", StringComparison.Ordinal)];
-        pickerHandlerSource.Should().Contain("Keyboard.Focus(_rangeBox)");
+        pickerHandlerSource.Should().Contain("FocusRangeInput();");
         source.Should().Contain("Use an A1-style range");
     }
 
@@ -152,9 +152,7 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("Keyboard.Focus(_passwordBox);");
         source.Should().Contain("_confirmationBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_confirmationBox);");
-        source.Should().Contain("_rangeBox.Focus();");
-        source.Should().Contain("_rangeBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rangeBox);");
     }
 
     [Fact]
@@ -169,9 +167,7 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("Keyboard.Focus(_confirmationBox);");
         source.Should().Contain("FocusRangeInput();");
         source.Should().Contain("private void FocusRangeInput()");
-        source.Should().Contain("_rangeBox.Focus();");
-        source.Should().Contain("_rangeBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rangeBox);");
     }
 
     [Fact]

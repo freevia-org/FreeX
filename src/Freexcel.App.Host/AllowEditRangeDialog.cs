@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -128,9 +127,7 @@ public sealed class AllowEditRangeDialog : Window
     {
         RangeSelectionRequest = CreateRangeSelectionRequest(_rangeBox.Text);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
-        _rangeBox.Focus();
-        _rangeBox.SelectAll();
-        Keyboard.Focus(_rangeBox);
+        FocusRangeInput();
     }
 
     public static AllowEditRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
@@ -139,9 +136,7 @@ public sealed class AllowEditRangeDialog : Window
     public void ApplyRangeSelection(string rangeText)
     {
         _rangeBox.Text = rangeText;
-        _rangeBox.Focus();
-        _rangeBox.SelectAll();
-        Keyboard.Focus(_rangeBox);
+        FocusRangeInput();
     }
 
     public static AllowEditRangeDialogResult CreateAddResult(GridRange range) =>
@@ -200,8 +195,6 @@ public sealed class AllowEditRangeDialog : Window
 
     private void FocusRangeInput()
     {
-        _rangeBox.Focus();
-        _rangeBox.SelectAll();
-        Keyboard.Focus(_rangeBox);
+        DialogFocus.FocusAndSelect(_rangeBox);
     }
 }
