@@ -4,6 +4,7 @@ using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
+using static Freexcel.App.Host.ChartDialogInputParser;
 using static Freexcel.App.Host.ChartDialogHelpers;
 
 namespace Freexcel.App.Host;
@@ -155,31 +156,6 @@ public sealed class ChartSeriesFormatDialog : Window
             _markerBox.SelectedItem is ChartMarkerStyle marker ? marker : null,
             markerSize);
         DialogResult = true;
-    }
-
-    private static bool TryReadOptionalColor(TextBox textBox, out CellColor? color) =>
-        ColorInputParser.TryParseOptionalHexColor(textBox.Text, out color);
-
-    private static bool TryReadNullablePositiveDouble(TextBox textBox, out double? value)
-    {
-        value = null;
-        var text = textBox.Text.Trim();
-        if (string.IsNullOrEmpty(text) || text.Equals("auto", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (!double.TryParse(
-                text,
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var parsed)
-            || !double.IsFinite(parsed)
-            || parsed <= 0)
-        {
-            return false;
-        }
-
-        value = parsed;
-        return true;
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
