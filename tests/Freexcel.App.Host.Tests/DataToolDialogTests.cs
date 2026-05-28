@@ -2123,8 +2123,7 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_rangeBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rangeBox);");
     }
 
     [Fact]
@@ -2134,8 +2133,7 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("FocusRangeBox();");
         source.Should().Contain("private void FocusRangeBox()");
-        source.Should().Contain("_rangeBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rangeBox);");
     }
 
     [Fact]
@@ -2233,9 +2231,7 @@ public sealed class DataToolDialogTests
 
         handlerSource.Should().Contain("FocusRangeBox();");
         source.Should().Contain("private void FocusRangeBox()");
-        source.Should().Contain("_rangeBox.Focus();");
-        source.Should().Contain("_rangeBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rangeBox);");
     }
 
     [Fact]
