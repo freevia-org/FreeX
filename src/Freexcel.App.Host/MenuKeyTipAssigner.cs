@@ -71,8 +71,13 @@ public static class MenuKeyTipAssigner
 
         foreach (var character in header)
         {
-            if (char.IsLetterOrDigit(character))
+            if (IsTypeableKeyTipCharacter(character))
                 yield return character;
         }
     }
+
+    private static bool IsTypeableKeyTipCharacter(char character) =>
+        character is >= '0' and <= '9' or
+            >= 'A' and <= 'Z' or
+            >= 'a' and <= 'z';
 }
