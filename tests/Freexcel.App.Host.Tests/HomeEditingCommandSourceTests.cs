@@ -101,8 +101,8 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("new ClearCommentsCommand(sheetId, currentRange)");
         source.Should().Contain("new ClearHyperlinksCommand(sheetId, currentRange)");
         source.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? [])");
-        source.Should().Contain("new ClearCommentsCommand(_currentSheetId, currentRange)");
-        source.Should().Contain("new ClearHyperlinksCommand(_currentSheetId, currentRange)");
+        source.Should().Contain("new ClearCommentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))");
+        source.Should().Contain("new ClearHyperlinksCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))");
     }
 
     private static string ExtractButtonElementByClickHandler(string xaml, string clickHandler)
