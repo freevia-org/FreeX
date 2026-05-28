@@ -353,6 +353,24 @@ public partial class GridView
         double actualHeight) =>
         SplitPaneClipLayoutPlanner.CalculateClipRects(viewport, actualWidth, actualHeight);
 
+    private static Rect GetSplitPaneClipRectForCell(
+        ViewportModel viewport,
+        DisplayCell cell,
+        SplitPaneClipRects clips)
+    {
+        if (viewport.SplitPanes is not { } splitPanes)
+            return clips.BottomRight;
+
+        var isTop = (splitPanes.TopRows ?? []).Any(row => row.Row == cell.Row);
+        var isLeft = (splitPanes.LeftColumns ?? []).Any(column => column.Col == cell.Col);
+        return (isTop, isLeft) switch
+        {
+            (true, true) => clips.TopLeft,
+            (true, false) => clips.TopRight,
+            (false, true) => clips.BottomLeft,
+            _ => clips.BottomRight
+        };
+    }
 }
 
 public sealed record SplitDividerLayout(double? HorizontalY, double? VerticalX);

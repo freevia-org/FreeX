@@ -352,6 +352,16 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_SensitivityLabelInfoPart_DetectsSensitivityLabels()
+    {
+        using var package = CreatePackage("docMetadata/LabelInfo.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.SensitivityLabels);
+    }
+
+    [Fact]
     public void Inspect_CustomPropertiesWithoutSensitivityLabel_DoesNotWarn()
     {
         using var package = CreatePackageWithContent(("docProps/custom.xml", """
