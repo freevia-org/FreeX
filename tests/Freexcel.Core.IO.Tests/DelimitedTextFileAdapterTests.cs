@@ -663,6 +663,27 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Save_RoundTripsExplicitEmptyTextFields()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(""));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("tail"));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"\"\ttail\r\n");
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var loadedSheet = roundTripped.Sheets.Single();
+
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 1)).Should().Be(new TextValue(""));
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 2)).Should().Be(new TextValue("tail"));
+    }
+
+    [Fact]
     public void Save_RoundTripsFormulaLikeTextFieldsAsLiteralText()
     {
         var workbook = new Workbook("Book1");
