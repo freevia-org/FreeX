@@ -77,6 +77,7 @@ public sealed record RowHeightDialogResult(double Height);
 
 public sealed class RowHeightDialog : Window
 {
+    private const double MaximumExcelRowHeight = 409;
     private readonly TextBox _heightBox = new();
 
     public RowHeightDialogResult Result { get; private set; } = new(20);
@@ -112,9 +113,9 @@ public sealed class RowHeightDialog : Window
     {
         result = new RowHeightDialogResult(20);
         error = null;
-        if (input is null || !WorksheetSizeInputParser.TryParsePositiveSize(input, out var height))
+        if (input is null || !WorksheetSizeInputParser.TryParseSizeInRange(input, 0, MaximumExcelRowHeight, out var height))
         {
-            error = "Enter a positive row height.";
+            error = "Enter a row height from 0 to 409.";
             return false;
         }
 
@@ -128,7 +129,7 @@ public sealed class RowHeightDialog : Window
         {
             MessageBox.Show(
                 this,
-                error ?? "Enter a positive row height.",
+                error ?? "Enter a row height from 0 to 409.",
                 Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -145,6 +146,7 @@ public sealed record ColumnWidthDialogResult(double Width);
 
 public sealed class ColumnWidthDialog : Window
 {
+    private const double MaximumExcelColumnWidth = 255;
     private readonly TextBox _widthBox = new();
 
     public ColumnWidthDialogResult Result { get; private set; } = new(8);
@@ -180,9 +182,9 @@ public sealed class ColumnWidthDialog : Window
     {
         result = new ColumnWidthDialogResult(8);
         error = null;
-        if (input is null || !WorksheetSizeInputParser.TryParsePositiveSize(input, out var width))
+        if (input is null || !WorksheetSizeInputParser.TryParseSizeInRange(input, 0, MaximumExcelColumnWidth, out var width))
         {
-            error = "Enter a positive column width.";
+            error = "Enter a column width from 0 to 255.";
             return false;
         }
 
@@ -196,7 +198,7 @@ public sealed class ColumnWidthDialog : Window
         {
             MessageBox.Show(
                 this,
-                error ?? "Enter a positive column width.",
+                error ?? "Enter a column width from 0 to 255.",
                 Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
