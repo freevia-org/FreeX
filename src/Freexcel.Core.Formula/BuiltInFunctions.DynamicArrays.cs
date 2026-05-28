@@ -686,12 +686,6 @@ public static partial class BuiltInFunctions
         values = new List<ScalarValue>();
         error = ErrorValue.Value;
 
-        if (args[0] is ErrorValue arrayError)
-        {
-            error = arrayError;
-            return false;
-        }
-
         int ignore = 0;
         if (args.Count > 1 && args[1] is not BlankValue)
         {
@@ -711,6 +705,13 @@ public static partial class BuiltInFunctions
 
         bool ignoreBlanks = (ignore & 1) != 0;
         bool ignoreErrors = (ignore & 2) != 0;
+
+        if (args[0] is ErrorValue arrayError)
+        {
+            if (ignoreErrors) return true;
+            error = arrayError;
+            return false;
+        }
 
         if (args[0] is not RangeValue arr)
         {

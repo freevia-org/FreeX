@@ -7696,6 +7696,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TorowAndTocol_IgnoreScalarErrorsLikeSingleCellArrays()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=TOROW(NA(),2)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=TOCOL(NA(),2)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=TOROW(NA())", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=TOCOL(NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Tocol_InvalidIgnoreMode_ReturnsValueError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
