@@ -1,6 +1,5 @@
 param(
-    [string]$CommandInventoryScriptPath = "tools\Generate-CommandInventoryDocs.ps1",
-    [string]$IconsetPreviewScriptPath = "tools\Generate-IconsetPreview.ps1"
+    [string]$CommandInventoryScriptPath = "tools\Generate-CommandInventoryDocs.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +32,5 @@ function Invoke-GeneratedDocsCheck {
 }
 
 Invoke-GeneratedDocsCheck -ScriptPath $CommandInventoryScriptPath -Label "command inventory"
-Invoke-GeneratedDocsCheck -ScriptPath $IconsetPreviewScriptPath -Label "iconset preview"
 
 Write-Host "Generated documentation checks passed."

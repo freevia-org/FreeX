@@ -91,7 +91,7 @@ public sealed partial class UiTestCatalogInventoryTests
             snapshot,
             "Existing UI evidence screenshots",
             uiEvidenceScreenshotCount,
-            "Current `docs/ui-test-artifacts` images from prior passes; append new evidence paths to the relevant row.");
+            "Historical PNG evidence artifacts were removed during documentation cleanup; append new evidence paths to the relevant row.");
     }
 
     [Fact]
@@ -365,8 +365,9 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static int ReadUiEvidenceScreenshotCount()
     {
-        var artifactDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "ui-test-artifacts", "launch-shell.png"))
-            ?? throw new DirectoryNotFoundException("Could not locate docs/ui-test-artifacts.");
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))
+            ?? throw new DirectoryNotFoundException("Could not locate docs.");
+        var artifactDirectory = Path.Combine(docsDirectory, "ui-test-artifacts");
 
         return Directory
             .EnumerateFiles(artifactDirectory, "*.png", SearchOption.TopDirectoryOnly)

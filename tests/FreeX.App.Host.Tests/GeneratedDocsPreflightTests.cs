@@ -12,7 +12,6 @@ public sealed class GeneratedDocsPreflightTests
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-GeneratedDocs.ps1"));
 
         script.Should().Contain("Generate-CommandInventoryDocs.ps1");
-        script.Should().Contain("Generate-IconsetPreview.ps1");
         script.Should().Contain("& $resolvedScriptPath -Check");
         script.Should().Contain("Generated documentation checks passed.");
     }
@@ -41,7 +40,6 @@ public sealed class GeneratedDocsPreflightTests
 
         process.ExitCode.Should().Be(0, error);
         output.Should().Contain("Checking command inventory generated docs...");
-        output.Should().Contain("Checking iconset preview generated docs...");
         output.Should().Contain("Generated documentation checks passed.");
     }
 }
