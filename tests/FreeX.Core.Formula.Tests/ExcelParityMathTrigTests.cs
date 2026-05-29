@@ -515,6 +515,14 @@ public sealed class ExcelParityMathTrigTests
             .Should().Be(ErrorValue.Value);
     }
 
+    [Fact]
+    public void SeriesSum_ScalarCoefficientCoercesDirectTextAndLogicalValues()
+    {
+        Number("=SERIESSUM(2,0,1,\"3\")").Should().Be(3);
+        Number("=SERIESSUM(2,1,1,TRUE)").Should().Be(2);
+        Number("=SERIESSUM(2,1,1,FALSE)").Should().Be(0);
+    }
+
     private double Number(string formula) => Number(formula, MakeSheet());
 
     private double Number(string formula, Sheet sheet)
