@@ -2,15 +2,17 @@ namespace FreeX.App.Host;
 
 internal static class TextToColumnsFixedWidthBreakPlanner
 {
+    private const int FirstBreakPosition = 1;
+
     public static IReadOnlyList<int> AddBreakPosition(
         IReadOnlyList<int> breakPositions,
         int position,
         int maxLength)
     {
-        if (maxLength <= 1)
+        if (!CanContainBreaks(maxLength))
             return NormalizeBreakPositions(breakPositions);
 
-        var clamped = Math.Clamp(position, 1, maxLength - 1);
+        var clamped = Math.Clamp(position, FirstBreakPosition, LastBreakPosition(maxLength));
         return NormalizeBreakPositions(breakPositions.Append(clamped));
     }
 
@@ -20,7 +22,7 @@ internal static class TextToColumnsFixedWidthBreakPlanner
         int position,
         int maxLength)
     {
-        if (index < 0 || index >= breakPositions.Count)
+        if (!IsExistingBreakIndex(breakPositions, index))
             return NormalizeBreakPositions(breakPositions);
 
         var updated = breakPositions.ToList();
@@ -32,7 +34,7 @@ internal static class TextToColumnsFixedWidthBreakPlanner
         IReadOnlyList<int> breakPositions,
         int index)
     {
-        if (index < 0 || index >= breakPositions.Count)
+        if (!IsExistingBreakIndex(breakPositions, index))
             return NormalizeBreakPositions(breakPositions);
 
         var updated = breakPositions.ToList();
@@ -47,7 +49,7 @@ internal static class TextToColumnsFixedWidthBreakPlanner
     {
         positions = [];
         var parts = ParseParts(text);
-        if (parts.Length == 0 || maxLength <= 1)
+        if (parts.Length == 0 || !CanContainBreaks(maxLength))
             return false;
 
         var validPositions = new List<int>();
@@ -76,7 +78,16 @@ internal static class TextToColumnsFixedWidthBreakPlanner
         TryParsePositiveBreakPosition(part, out position) && position < maxLength;
 
     private static bool TryParsePositiveBreakPosition(string part, out int position) =>
-        int.TryParse(part, out position) && position > 0;
+        int.TryParse(part, out position) && position >= FirstBreakPosition;
+
+    private static bool CanContainBreaks(int maxLength) =>
+        maxLength > FirstBreakPosition;
+
+    private static int LastBreakPosition(int maxLength) =>
+        maxLength - 1;
+
+    private static bool IsExistingBreakIndex(IReadOnlyList<int> breakPositions, int index) =>
+        index >= 0 && index < breakPositions.Count;
 
     private static IReadOnlyList<int> NormalizeBreakPositions(IEnumerable<int> breakPositions) =>
         breakPositions
