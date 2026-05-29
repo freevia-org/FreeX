@@ -125,6 +125,8 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=LOG10(0)")]
     [InlineData("=LOG10(-1)")]
     [InlineData("=MROUND(5,-2)")]
+    [InlineData("=PERMUT(0,0)")]
+    [InlineData("=PERMUT(0.9,0)")]
     [InlineData("=SEC(134217728)")]
     [InlineData("=SQRT(-1)")]
     public void MathTrigDomainErrors_ReturnExcelNum(string formula)

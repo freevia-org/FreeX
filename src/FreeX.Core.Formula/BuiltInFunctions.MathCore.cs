@@ -1099,8 +1099,8 @@ public static partial class BuiltInFunctions
         double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
         if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
-        int n = (int)dn; int k = (int)dk;
-        if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
+        int n = (int)Math.Truncate(dn); int k = (int)Math.Truncate(dk);
+        if (n <= 0 || k < 0 || k > n) return ErrorValue.Num;
         double result = 1;
         for (int i = 0; i < k; i++)
             result *= (n - i);
