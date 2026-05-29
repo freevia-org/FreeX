@@ -58,14 +58,17 @@ public sealed class SparklineDialog : Window
         _dataRangePickerButton.Click += (_, _) => RequestRangeSelection(SparklineRangeSelectionTarget.DataRange, _dataRangeBox);
         _locationPickerButton.Click += (_, _) => RequestRangeSelection(SparklineRangeSelectionTarget.Location, _locationBox);
 
+        AutomationProperties.SetName(_dataRangePickerButton, "Select sparkline data range");
+        AutomationProperties.SetName(_locationPickerButton, "Select sparkline location range");
+
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Data range:", Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _dataRangeBox.Text = Result.DataRangeText;
         AutomationProperties.SetName(_dataRangeBox, "Sparkline data range");
         stack.Children.Add(CreateRangePickerRow(_dataRangeBox, _dataRangePickerButton));
-        stack.Children.Add(new Label { Content = "_Location:", Target = _locationBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Location range:", Target = _locationBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _locationBox.Text = Result.LocationText;
-        AutomationProperties.SetName(_locationBox, "Sparkline location");
+        AutomationProperties.SetName(_locationBox, "Sparkline location range");
         stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
         stack.Children.Add(new Label { Content = "Sparkline _type:", Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>()
