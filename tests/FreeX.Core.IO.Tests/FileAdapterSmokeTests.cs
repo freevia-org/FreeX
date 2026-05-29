@@ -57,6 +57,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_StripsLeadingEqualsFromFormulaText()
+    {
+        const string json = """
+        {
+          "Name": "FormulaPrefixLoad",
+          "Sheets": [
+            {
+              "Name": "Sheet1",
+              "Cells": [
+                { "Address": "A1", "Formula": "=B1+1" }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var loaded = new NativeJsonAdapter().Load(stream);
+
+        loaded.GetSheetAt(0).GetCell(1, 1)!.FormulaText.Should().Be("B1+1");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_StripsLeadingEqualsFromFormulaText()
+    {
+        var workbook = new Workbook("FormulaPrefixSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromFormula("=B1+1"));
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        using var document = JsonDocument.Parse(stream);
+        document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("Cells")[0]
+            .GetProperty("Formula")
+            .GetString()
+            .Should().Be("B1+1");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_SaveThenResolveOpenAdapterAndReload()
     {
         var workbook = new Workbook("ResolvableNative");
