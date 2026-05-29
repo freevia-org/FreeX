@@ -736,6 +736,8 @@ public partial class MainWindow
 
     private void ExtendSelection(CellAddress anchor, CellAddress to)
     {
+        HideValidationDropdown();
+
         _selectionCursor = to;
         SheetGrid.SelectedRanges = null;
         SheetGrid.SelectedRange = new GridRange(
