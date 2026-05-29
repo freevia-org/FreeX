@@ -391,6 +391,19 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void Multinomial_IgnoresReferencedTextLogicalAndBlankValuesButIncludesZeros()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, new TextValue("ignored")),
+            (3, 1, new BoolValue(true)),
+            (5, 1, new NumberValue(3)),
+            (6, 1, new NumberValue(0)));
+
+        Number("=MULTINOMIAL(A1:A6)", sheet).Should().Be(10);
+    }
+
+    [Fact]
     public void MathPhaseA1Functions_RangeArguments_SpillElementwise()
     {
         var sheet = MakeSheet(
