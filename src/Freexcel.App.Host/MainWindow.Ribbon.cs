@@ -63,7 +63,7 @@ public partial class MainWindow
         if (!_normalizedRibbonStaticTabs.Add(tabItem))
             return;
 
-        PrepareRibbonTabForImmediateCompaction(tabItem);
+        PrepareRibbonTabForImmediateCompaction(tabItem, forceLayout: true);
         var root = GetRibbonTabContentRoot(tabItem);
         var surface = CaptureRibbonStaticSurface(root);
         NormalizeRibbonGroupMetadata(surface);
@@ -315,13 +315,24 @@ public partial class MainWindow
         PrepareRibbonTabForImmediateCompaction(tabItem);
     }
 
-    private static void PrepareRibbonTabForImmediateCompaction(TabItem tabItem)
+    private static void PrepareRibbonTabForImmediateCompaction(TabItem tabItem, bool forceLayout = false)
     {
         tabItem.ApplyTemplate();
         if (tabItem.Content is FrameworkElement content)
         {
             content.ApplyTemplate();
-            content.UpdateLayout();
+            UpdateRibbonLayoutIfNeeded(content, force: forceLayout);
+        }
+    }
+
+    private static void UpdateRibbonLayoutIfNeeded(FrameworkElement element, bool force = false)
+    {
+        if (force ||
+            !element.IsMeasureValid ||
+            !element.IsArrangeValid ||
+            (element.IsVisible && (element.ActualWidth <= 0 || element.ActualHeight <= 0)))
+        {
+            element.UpdateLayout();
         }
     }
 
