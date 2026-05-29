@@ -861,11 +861,16 @@ public partial class MainWindow
             {
                 var selectionChanged = !ReferenceEquals(RibbonTabs.SelectedItem, item);
                 if (selectionChanged)
+                {
                     ChangeRibbonSelectionWithoutTabNormalization(() => RibbonTabs.SelectedItem = item);
+                    UpdateRibbonLayoutIfNeeded(RibbonTabs, force: true);
+                    NormalizeRibbonSurfaceAfterTabSelection();
+                }
                 else
-                    RibbonTabs.SelectedItem = item;
-                UpdateRibbonLayoutIfNeeded(RibbonTabs, force: selectionChanged);
-                NormalizeRibbonSurfaceAfterTabSelection();
+                {
+                    UpdateRibbonLayoutIfNeeded(RibbonTabs);
+                    NormalizeRibbonSurface(forceCompact: true);
+                }
 
                 return true;
             }
