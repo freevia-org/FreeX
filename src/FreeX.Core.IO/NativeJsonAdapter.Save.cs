@@ -290,7 +290,7 @@ public sealed partial class NativeJsonAdapter
                         Address   = entry.Address.ToA1(),
                         Value     = NativeJsonScalarValueMapper.Serialize(entry.Cell.Value),
                         ValueType = NativeJsonScalarValueMapper.GetValueType(entry.Cell.Value),
-                        Formula   = entry.Cell.HasFormula ? entry.Cell.FormulaText : null,
+                        Formula   = entry.Cell.HasFormula ? NormalizeNativeFormulaText(entry.Cell.FormulaText!) : null,
                         IgnoreFormulaError = entry.Cell.IgnoreFormulaError,
                         Style = FromCellStyle(workbook.GetStyle(entry.Cell.StyleId))
                     }).ToList(),
@@ -317,4 +317,7 @@ public sealed partial class NativeJsonAdapter
     private static bool IsValidRangeOnSheet(GridRange range, SheetId sheetId) =>
         IsValidAddressOnSheet(range.Start, sheetId) &&
         IsValidAddressOnSheet(range.End, sheetId);
+
+    private static string NormalizeNativeFormulaText(string formulaText) =>
+        formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText[1..] : formulaText;
 }
