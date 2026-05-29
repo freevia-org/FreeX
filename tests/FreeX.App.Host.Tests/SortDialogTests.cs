@@ -47,6 +47,15 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void PlannerHotPaths_AvoidLinqIteratorChains()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SortDialog.Planning.cs"));
+
+        source.Should().NotContain(".Append(");
+        source.Should().NotContain(".Select(");
+    }
+
+    [Fact]
     public void PlannerBuildActiveColumnChoices_UsesRowsForLeftToRightAndHeaderAwareColumnsOtherwise()
     {
         var sheetId = SheetId.New();

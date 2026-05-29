@@ -2514,7 +2514,7 @@
                                         local:RibbonTooltip.Title="Refresh All"
                                         local:RibbonTooltip.KeyTip="R"
                                         local:RibbonTooltip.Description="Recalculate formulas and refresh FreeX-managed workbook data. External data connections and Power Query are excluded."/>
-                                <Button Content="Queries" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                <Button Content="Queries &amp; Connections" Width="128" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Queries &amp; Connections"
                                         local:RibbonTooltip.KeyTip="Q"
                                         local:RibbonTooltip.Description="External workbook queries and connection management are deferred in FreeX."/>

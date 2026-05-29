@@ -45,6 +45,19 @@ public sealed class DataCommandSourceTests
         dataSource.Should().Contain("ApplyAdvancedFilterRangeSelection(dialog, request)");
     }
 
+    [Fact]
+    public void DataQueriesAndConnectionsCommand_RemainsDisabledWithExcelTitle()
+    {
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), "Queries &amp; Connections");
+
+        button.Should().Contain("Content=\"Queries &amp; Connections\"");
+        button.Should().Contain("IsEnabled=\"False\"");
+        button.Should().Contain("local:RibbonTooltip.Title=\"Queries &amp; Connections\"");
+        button.Should().Contain("local:RibbonTooltip.KeyTip=\"Q\"");
+        button.Should().Contain("External workbook queries and connection management are deferred in FreeX.");
+        button.Should().NotContain("Click=");
+    }
+
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
