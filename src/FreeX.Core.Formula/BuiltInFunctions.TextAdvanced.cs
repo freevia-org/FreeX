@@ -33,7 +33,7 @@ public static partial class BuiltInFunctions
             }
         }
         var result = JoinTextjoinParts(parts, delimiters.Text);
-        return result.Length > 32767 ? ErrorValue.Value : new TextValue(result);
+        return ExceedsExcelTextLimit(result) ? ErrorValue.Value : new TextValue(result);
     }
 
     private static (List<string> Text, ErrorValue? Error) FlattenTextjoinArgument(ScalarValue value)
