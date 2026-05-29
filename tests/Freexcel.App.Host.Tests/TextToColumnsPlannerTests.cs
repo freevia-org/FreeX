@@ -302,6 +302,15 @@ public sealed class TextToColumnsPlannerTests
     }
 
     [Fact]
+    public void SplitFixedWidthText_SourceAvoidsEmptyBreakNormalizationAndPreallocatesParts()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsSplitter.cs"));
+
+        source.Should().Contain("if (breakPositions.Count == 0)");
+        source.Should().Contain("new List<string>(positions.Count + 1)");
+    }
+
+    [Fact]
     public void SplitText_SourceAvoidsDelimiterArrayAllocation()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsSplitter.cs"));
