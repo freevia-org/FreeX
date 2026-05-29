@@ -10,35 +10,62 @@ internal static class AutoFilterDialogCriteriaPlanner
     {
         var needle = searchText?.Trim();
         if (string.IsNullOrEmpty(needle))
-            return items.ToList();
+            return MaterializeItems(items);
 
-        return items
-            .Where(item =>
-                item.DisplayText.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
-                item.Value.Contains(needle, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var filtered = CreateItemList(items);
+        foreach (var item in items)
+        {
+            if (MatchesSearch(item, needle))
+                filtered.Add(item);
+        }
+
+        return filtered;
     }
 
-    public static IReadOnlyList<AutoFilterDialogItem> SelectAll(IEnumerable<AutoFilterDialogItem> items) =>
-        items.Select(item => item with { IsSelected = true }).ToList();
+    public static IReadOnlyList<AutoFilterDialogItem> SelectAll(IEnumerable<AutoFilterDialogItem> items)
+    {
+        var selected = CreateItemList(items);
+        foreach (var item in items)
+            selected.Add(item with { IsSelected = true });
 
-    public static IReadOnlyList<AutoFilterDialogItem> ClearAll(IEnumerable<AutoFilterDialogItem> items) =>
-        items.Select(item => item with { IsSelected = false }).ToList();
+        return selected;
+    }
+
+    public static IReadOnlyList<AutoFilterDialogItem> ClearAll(IEnumerable<AutoFilterDialogItem> items)
+    {
+        var cleared = CreateItemList(items);
+        foreach (var item in items)
+            cleared.Add(item with { IsSelected = false });
+
+        return cleared;
+    }
 
     public static IReadOnlyList<AutoFilterDialogItem> SetSelectionForSearch(
         IEnumerable<AutoFilterDialogItem> items,
         string? searchText,
         bool isSelected)
     {
-        var visibleValues = FilterItems(items, searchText)
-            .Select(item => item.Value)
-            .ToHashSet(StringComparer.Ordinal);
+        var allItems = MaterializeItems(items);
+        var needle = searchText?.Trim();
+        if (string.IsNullOrEmpty(needle))
+            return SetAllSelections(allItems, isSelected);
 
-        return items
-            .Select(item => visibleValues.Contains(item.Value)
+        var visibleValues = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in allItems)
+        {
+            if (MatchesSearch(item, needle))
+                visibleValues.Add(item.Value);
+        }
+
+        var updated = new List<AutoFilterDialogItem>(allItems.Count);
+        foreach (var item in allItems)
+        {
+            updated.Add(visibleValues.Contains(item.Value)
                 ? item with { IsSelected = isSelected }
-                : item)
-            .ToList();
+                : item);
+        }
+
+        return updated;
     }
 
     public static string GetFilterFamilyHeader(AutoFilterMenuFilterKind filterKind) =>
@@ -58,10 +85,13 @@ internal static class AutoFilterDialogCriteriaPlanner
         bool addCurrentSelectionToFilter = false)
     {
         var resultItems = GetResultItemsForSearchMode(items, searchText, addCurrentSelectionToFilter);
-        var selectedValues = resultItems
-            .Where(item => item.IsSelected)
-            .Select(item => item.Value)
-            .ToList();
+        var selectedValues = new List<string>(resultItems.Count);
+        foreach (var item in resultItems)
+        {
+            if (item.IsSelected)
+                selectedValues.Add(item.Value);
+        }
+
         var normalizedCriteria = string.IsNullOrWhiteSpace(criteriaText)
             ? string.Join(", ", selectedValues)
             : criteriaText.Trim();
@@ -88,18 +118,30 @@ internal static class AutoFilterDialogCriteriaPlanner
         string? searchText,
         bool addCurrentSelectionToFilter)
     {
-        var allItems = items.ToList();
         return string.IsNullOrWhiteSpace(searchText) || addCurrentSelectionToFilter
-            ? allItems
-            : FilterItems(allItems, searchText);
+            ? MaterializeItems(items)
+            : FilterItems(items, searchText);
     }
 
-    public static IReadOnlyList<string> GetCriteriaSuggestions(AutoFilterMenuPlan menuPlan) =>
-        menuPlan.Entries
-            .FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily)
-            ?.CriteriaSuggestions
-            .Where(suggestion => !string.IsNullOrWhiteSpace(suggestion))
-            .ToList() ?? [];
+    public static IReadOnlyList<string> GetCriteriaSuggestions(AutoFilterMenuPlan menuPlan)
+    {
+        foreach (var entry in menuPlan.Entries)
+        {
+            if (entry.Kind != AutoFilterMenuEntryKind.FilterFamily)
+                continue;
+
+            var suggestions = new List<string>(entry.CriteriaSuggestions.Count);
+            foreach (var suggestion in entry.CriteriaSuggestions)
+            {
+                if (!string.IsNullOrWhiteSpace(suggestion))
+                    suggestions.Add(suggestion);
+            }
+
+            return suggestions;
+        }
+
+        return [];
+    }
 
     public static IReadOnlyList<AutoFilterCriteriaOption> GetCriteriaOptions(AutoFilterMenuFilterKind filterKind) =>
         filterKind switch
@@ -225,4 +267,33 @@ internal static class AutoFilterDialogCriteriaPlanner
 
     private static DateTime StartOfWeek(DateTime date) =>
         date.AddDays(-(int)date.DayOfWeek);
+
+    private static List<AutoFilterDialogItem> MaterializeItems(IEnumerable<AutoFilterDialogItem> items)
+    {
+        var materialized = CreateItemList(items);
+        foreach (var item in items)
+            materialized.Add(item);
+
+        return materialized;
+    }
+
+    private static List<AutoFilterDialogItem> CreateItemList(IEnumerable<AutoFilterDialogItem> items) =>
+        items.TryGetNonEnumeratedCount(out var count)
+            ? new List<AutoFilterDialogItem>(count)
+            : [];
+
+    private static IReadOnlyList<AutoFilterDialogItem> SetAllSelections(
+        IReadOnlyList<AutoFilterDialogItem> items,
+        bool isSelected)
+    {
+        var updated = new List<AutoFilterDialogItem>(items.Count);
+        foreach (var item in items)
+            updated.Add(item with { IsSelected = isSelected });
+
+        return updated;
+    }
+
+    private static bool MatchesSearch(AutoFilterDialogItem item, string needle) =>
+        item.DisplayText.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+        item.Value.Contains(needle, StringComparison.OrdinalIgnoreCase);
 }
