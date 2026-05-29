@@ -74,14 +74,15 @@ public sealed class MainWindowRibbonKeyTipTests
         RunSta(() =>
         {
             using var harness = MainWindowHarness.Create();
-            var originalKeyTip = harness.SetButtonKeyTip("SaveQatBtn", " 1 ");
+            var originalKeyTip = harness.SetButtonKeyTip("SaveQatBtn", " q ");
 
             try
             {
                 harness.EnterKeyTipScope("TopLevel");
 
-                harness.OverlayBadgeTexts.Should().Contain("1");
-                harness.OverlayBadgeTexts.Should().NotContain(" 1 ");
+                harness.OverlayBadgeTexts.Should().Contain("Q");
+                harness.OverlayBadgeTexts.Should().NotContain(" q ");
+                harness.OverlayBadgeTexts.Should().NotContain("q");
             }
             finally
             {
