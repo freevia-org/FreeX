@@ -238,6 +238,8 @@ public partial class MainWindow
     }
     private void FormatProtectSheetMenuItem_Click(object sender, RoutedEventArgs e) { ProtectSheetBtn_Click(sender, e); }
     private void FormatRenameSheetMenuItem_Click(object sender, RoutedEventArgs e) => RenameCurrentSheet();
+    private void FormatHideSheetMenuItem_Click(object sender, RoutedEventArgs e) => HideCurrentSheet();
+    private void FormatUnhideSheetMenuItem_Click(object sender, RoutedEventArgs e) => UnhideSheet();
     private void FormatLockCellMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;

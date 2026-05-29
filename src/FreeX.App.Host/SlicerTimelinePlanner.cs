@@ -19,15 +19,21 @@ public static class SlicerTimelinePlanner
     public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer, IEnumerable<string> sourceItems)
     {
         var selected = slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-        var items = sourceItems.ToList();
-        if (items.Count == 0)
-            items.AddRange(slicer.SelectedItems);
+        var items = new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase);
+        foreach (var item in sourceItems)
+            items.Add(item);
 
-        return items
-            .Distinct(StringComparer.CurrentCultureIgnoreCase)
-            .OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)
-            .Select(item => new SlicerTileItem(slicer.Name, item, selected.Count == 0 || selected.Contains(item)))
-            .ToList();
+        if (items.Count == 0)
+        {
+            foreach (var item in slicer.SelectedItems)
+                items.Add(item);
+        }
+
+        var tiles = new List<SlicerTileItem>(items.Count);
+        foreach (var item in items)
+            tiles.Add(new SlicerTileItem(slicer.Name, item, selected.Count == 0 || selected.Contains(item)));
+
+        return tiles;
     }
 
     public static IReadOnlyList<string> ToggleSlicerSelection(

@@ -1053,6 +1053,8 @@
                                             <MenuItem Header="Unhide Columns"         local:RibbonTooltip.KeyTip="N" Click="FormatUnhideColMenuItem_Click"/>
                                             <Separator/>
                                             <MenuItem Header="Rename Sheet"           local:RibbonTooltip.KeyTip="R" Click="FormatRenameSheetMenuItem_Click"/>
+                                            <MenuItem Header="Hide Sheet"             local:RibbonTooltip.KeyTip="S" Click="FormatHideSheetMenuItem_Click"/>
+                                            <MenuItem Header="Unhide Sheet..."        local:RibbonTooltip.KeyTip="T" Click="FormatUnhideSheetMenuItem_Click"/>
                                             <Separator/>
                                             <MenuItem Header="Protect Sheet..."       local:RibbonTooltip.KeyTip="P" Click="FormatProtectSheetMenuItem_Click"/>
                                             <MenuItem Header="Lock Cell"              local:RibbonTooltip.KeyTip="L" Click="FormatLockCellMenuItem_Click"/>

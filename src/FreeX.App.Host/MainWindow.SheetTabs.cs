@@ -1033,12 +1033,27 @@ public partial class MainWindow
     {
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        if (!TryExecuteCommand(new SetSheetHiddenCommand(tab.Id, hidden: true), "Hide Sheet"))
+        HideSheet(tab.Id);
+    }
+
+    private void SheetCtxUnhide_Click(object sender, RoutedEventArgs e)
+    {
+        UnhideSheet();
+    }
+
+    private void HideCurrentSheet()
+    {
+        HideSheet(_currentSheetId);
+    }
+
+    private void HideSheet(SheetId sheetId)
+    {
+        if (!TryExecuteCommand(new SetSheetHiddenCommand(sheetId, hidden: true), "Hide Sheet"))
             return;
 
-        if (_currentSheetId == tab.Id)
+        if (_currentSheetId == sheetId)
             _currentSheetId = _workbook.Sheets.First(s => !s.IsHidden).Id;
-        _groupedSheetIds.Remove(tab.Id);
+        _groupedSheetIds.Remove(sheetId);
         if (_groupedSheetIds.Count == 0)
             _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
@@ -1046,7 +1061,7 @@ public partial class MainWindow
         RefreshSheetTabs();
     }
 
-    private void SheetCtxUnhide_Click(object sender, RoutedEventArgs e)
+    private void UnhideSheet()
     {
         var hiddenSheets = _workbook.Sheets.Where(s => s.IsHidden).ToList();
         if (hiddenSheets.Count == 0)
