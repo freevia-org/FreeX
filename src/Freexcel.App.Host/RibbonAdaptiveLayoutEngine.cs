@@ -12,6 +12,16 @@ internal static class RibbonAdaptiveLayoutEngine
             return new RibbonAdaptiveLayoutResult([], 0, false);
 
         var groupNames = GetGroupNames(groups);
+        return Plan(availableWidth, groups, groupNames, fixedChromeWidth, selectedTabHeader);
+    }
+
+    private static RibbonAdaptiveLayoutResult Plan(
+        double availableWidth,
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        IReadOnlyList<string> groupNames,
+        double fixedChromeWidth,
+        string? selectedTabHeader)
+    {
         var states = RibbonAdaptiveLayoutPlanner.Plan(availableWidth, groups, fixedChromeWidth).ToArray();
         states = RibbonAdaptiveTabProfiles
             .ApplyBreakpointOverrides(availableWidth, groupNames, states, selectedTabHeader)
@@ -23,8 +33,8 @@ internal static class RibbonAdaptiveLayoutEngine
             .ApplyRuntimeVisibilityStates(availableWidth, groupNames, states, selectedTabHeader)
             .ToArray();
 
-        FitStatesToWidth(states, groups, fixedChromeWidth, availableWidth, selectedTabHeader);
-        ExpandStatesIntoAvailableWidth(states, groups, fixedChromeWidth, availableWidth, selectedTabHeader);
+        FitStatesToWidth(states, groups, groupNames, fixedChromeWidth, availableWidth, selectedTabHeader);
+        ExpandStatesIntoAvailableWidth(states, groups, groupNames, fixedChromeWidth, availableWidth, selectedTabHeader);
 
         return new RibbonAdaptiveLayoutResult(
             states,
@@ -41,7 +51,7 @@ internal static class RibbonAdaptiveLayoutEngine
         var thresholds = new SortedSet<double>(RibbonAdaptiveTabProfiles.GetBreakpointThresholds(groupNames, selectedTabHeader));
         foreach (var width in EnumerateThresholdCandidates(groups, fixedChromeWidth))
         {
-            var layout = Plan(width, groups, fixedChromeWidth, selectedTabHeader);
+            var layout = Plan(width, groups, groupNames, fixedChromeWidth, selectedTabHeader);
             thresholds.Add(layout.PlannedWidth);
         }
 
@@ -113,12 +123,17 @@ internal static class RibbonAdaptiveLayoutEngine
     private static void FitStatesToWidth(
         RibbonAdaptiveGroupState[] states,
         IReadOnlyList<RibbonAdaptiveGroup> groups,
+        IReadOnlyList<string> groupNames,
         double fixedChromeWidth,
         double availableWidth,
         string? selectedTabHeader)
     {
-        var protectedGroupIndexes = GetFallbackProtectedGroupIndexes(groups, availableWidth, selectedTabHeader);
-        var runtimeVisibilityProtectedGroupIndexes = GetRuntimeVisibilityProtectedGroupIndexes(groups, availableWidth, selectedTabHeader);
+        var protectedGroupIndexes = RibbonAdaptivePriorityPlanner
+            .GetFallbackProtectedGroupIndexes(groupNames, availableWidth, selectedTabHeader)
+            .ToHashSet();
+        var runtimeVisibilityProtectedGroupIndexes = RibbonAdaptivePriorityPlanner
+            .GetRuntimeVisibilityProtectedGroupIndexes(groupNames, availableWidth, selectedTabHeader)
+            .ToHashSet();
         protectedGroupIndexes.UnionWith(runtimeVisibilityProtectedGroupIndexes);
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
                TryCollapseOneMoreGroup(states, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
@@ -137,11 +152,14 @@ internal static class RibbonAdaptiveLayoutEngine
     private static void ExpandStatesIntoAvailableWidth(
         RibbonAdaptiveGroupState[] states,
         IReadOnlyList<RibbonAdaptiveGroup> groups,
+        IReadOnlyList<string> groupNames,
         double fixedChromeWidth,
         double availableWidth,
         string? selectedTabHeader)
     {
-        var expandableIndexes = GetExpandableGroupIndexes(groups, availableWidth, selectedTabHeader).ToHashSet();
+        var expandableIndexes = RibbonAdaptivePriorityPlanner
+            .GetExpandableGroupIndexes(groupNames, availableWidth, selectedTabHeader)
+            .ToHashSet();
         var madeProgress = true;
         while (madeProgress)
         {
