@@ -117,6 +117,8 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=COMBIN(2,5)")]
     [InlineData("=COMBINA(0,1)")]
     [InlineData("=COSH(1000)")]
+    [InlineData("=COTH(134217728)")]
+    [InlineData("=CSCH(134217728)")]
     [InlineData("=FACTDOUBLE(-1)")]
     [InlineData("=FLOOR(2.7,-1)")]
     [InlineData("=GCD(-1,2)")]
@@ -128,6 +130,7 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=PERMUT(0,0)")]
     [InlineData("=PERMUT(0.9,0)")]
     [InlineData("=SEC(134217728)")]
+    [InlineData("=SECH(134217728)")]
     [InlineData("=SQRT(-1)")]
     public void MathTrigDomainErrors_ReturnExcelNum(string formula)
     {
