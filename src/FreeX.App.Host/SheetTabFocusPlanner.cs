@@ -14,7 +14,7 @@ public static class SheetTabFocusPlanner
 
         var index = IndexOf(visibleTabs, currentSheetId);
         if (index < 0)
-            index = direction < 0 ? visibleTabs.Count : -1;
+            index = GetMissingCurrentAnchorIndex(visibleTabs, direction);
 
         var nextIndex = Math.Clamp(index + direction, 0, visibleTabs.Count - 1);
         return visibleTabs[nextIndex].Id;
@@ -38,4 +38,9 @@ public static class SheetTabFocusPlanner
 
         return -1;
     }
+
+    private static int GetMissingCurrentAnchorIndex(
+        IReadOnlyList<SheetTabViewModel> visibleTabs,
+        int direction) =>
+        direction < 0 ? visibleTabs.Count : -1;
 }
