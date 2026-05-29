@@ -83,7 +83,7 @@ public static class RibbonTooltip
     private static void OnKeyTipChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is MenuItem menuItem)
-            menuItem.InputGestureText = e.NewValue as string ?? "";
+            menuItem.InputGestureText = NormalizeKeyTip(e.NewValue as string) ?? "";
     }
 
     private static void OnChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
