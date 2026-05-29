@@ -5747,6 +5747,44 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_SanitizesInvalidConditionalFormatThresholdTypes()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidThresholdLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 6,
+                  "Operator": 0,
+                  "DataBarMinThresholdType": 999,
+                  "DataBarMaxThresholdType": 999,
+                  "IconSetThresholds": [
+                    { "Type": 999, "Value": "bad" },
+                    { "Type": 3, "Value": "50" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.DataBarMinThresholdType.Should().Be(CfThresholdType.Min);
+        rule.DataBarMaxThresholdType.Should().Be(CfThresholdType.Max);
+        rule.IconSetThresholds.Should().ContainSingle()
+            .Which.Should().Be(new CfThresholdModel(CfThresholdType.Percent, "50"));
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Save_SkipsInvalidConditionalFormatRules()
     {
         var workbook = new Workbook("CfNativeInvalidSave");
