@@ -141,6 +141,7 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Theory]
+    [InlineData("=ATAN2(0,0)")]
     [InlineData("=COT(0)")]
     [InlineData("=COTH(0)")]
     [InlineData("=CSC(0)")]
