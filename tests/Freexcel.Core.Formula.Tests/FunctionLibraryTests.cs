@@ -6129,6 +6129,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void T_ArrayTextLiteral_ReturnsTextElement()
+    {
+        var result = _eval.Evaluate("=T({\"hello\",42})", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(2);
+        result.At(1, 1).Should().Be(new TextValue("hello"));
+        result.At(1, 2).Should().Be(new TextValue(""));
+    }
+
+    [Fact]
     public void Hyperlink_ReturnsDisplayTextWhenFriendlyNameIsProvided()
     {
         _eval.Evaluate("=HYPERLINK(\"https://example.com\",\"Example\")", MakeSheet())

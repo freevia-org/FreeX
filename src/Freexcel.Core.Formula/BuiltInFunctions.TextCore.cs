@@ -1181,6 +1181,7 @@ public static partial class BuiltInFunctions
         {
             ErrorValue e => e,
             TextValue t => TextResult(t.Value),
+            DirectTextLiteralValue t => TextResult(t.Value),
             _ => new TextValue("")
         };
 
