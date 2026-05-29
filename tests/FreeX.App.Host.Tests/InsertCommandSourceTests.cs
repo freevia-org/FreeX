@@ -6,7 +6,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class InsertCommandSourceTests
 {
     [Theory]
-    [InlineData("Insert Link", "Link", "K", "InsertLinkBtn_Click")]
+    [InlineData("Link", "Link", "K", "InsertLinkBtn_Click")]
     [InlineData("New Comment", "New Comment", "CM", "InsertCommentBtn_Click")]
     [InlineData("Text Box", "Text Box", "TX", "DrawTextBtn_Click")]
     [InlineData("Header &amp; Footer", "Header &amp; Footer", "HF", "HeaderFooterBtn_Click")]
