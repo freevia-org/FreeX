@@ -91,7 +91,9 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         var element = new XElement(
             worksheetNs + "autoFilter",
             new XAttribute("ref", autoFilter.Reference!),
-            autoFilter.FilterColumns.Select(filterColumn => ToFilterColumnXml(filterColumn, worksheetNs)));
+            autoFilter.FilterColumns
+                .Where(filterColumn => filterColumn.ColumnId >= 0)
+                .Select(filterColumn => ToFilterColumnXml(filterColumn, worksheetNs)));
         foreach (var (name, value) in autoFilter.NativeAttributes ?? new Dictionary<string, string>())
         {
             TrySetNativeAttributeIfMissing(element, name, value);

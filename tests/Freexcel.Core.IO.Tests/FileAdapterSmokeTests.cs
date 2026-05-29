@@ -18588,6 +18588,11 @@ public partial class FileAdapterSmokeTests
                 ["customFilterColumnFlag"] = "keep",
                 ["invalid filterColumn attr"] = "skip"
             }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            -1,
+            ["Invalid"],
+            IncludeBlank: false,
+            NativeFilterXmls: []));
 
         var saved = new MemoryStream();
         var save = () => new XlsxFileAdapter().Save(workbook, saved);
@@ -18605,6 +18610,7 @@ public partial class FileAdapterSmokeTests
         autoFilter.Element(worksheetNs + "extLst").Should().NotBeNull();
         var filterColumns = autoFilter.Elements(worksheetNs + "filterColumn").ToArray();
         filterColumns.Should().HaveCount(2);
+        filterColumns.Select(column => column.Attribute("colId")?.Value).Should().NotContain("-1");
         var valueFilterColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "0");
         valueFilterColumn.Attribute("customFilterColumnFlag")!.Value.Should().Be("keep");
         valueFilterColumn.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid filterColumn attr");
@@ -18857,6 +18863,39 @@ public partial class FileAdapterSmokeTests
         iconFilterColumn.IconFilter.IconId.Should().Be(1);
         iconFilterColumn.IconFilter.NativeAttributes.Should().Contain("customIconFilterFlag", "keep");
         iconFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag6", "keep");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_SkipsInvalidWorksheetAutoFilterColumns()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterInvalidColumnNativeJsonTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B3", null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: false,
+            NativeFilterXmls: []));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            -1,
+            ["Invalid"],
+            IncludeBlank: false,
+            NativeFilterXmls: []));
+
+        var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        using var document = JsonDocument.Parse(stream);
+        var columns = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("AutoFilter")
+            .GetProperty("FilterColumns")
+            .EnumerateArray()
+            .ToList();
+
+        columns.Should().ContainSingle();
+        columns[0].GetProperty("ColumnId").GetInt32().Should().Be(0);
     }
 
     [Fact]
