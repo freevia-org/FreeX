@@ -21,7 +21,7 @@ public sealed class FormulaCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractCommandElementByTitle(ReadMainWindowXaml(), title);
+        var button = ExtractCommandElementByTitle(ReadMainWindowXaml(), title, handler);
 
         button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -86,29 +86,38 @@ public sealed class FormulaCommandSourceTests
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
-    private static string ExtractCommandElementByTitle(string xaml, string title)
+    private static string ExtractCommandElementByTitle(string xaml, string title, string? handler = null)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} formula command should be present");
-
-        var start = xaml.LastIndexOf('<', titleIndex);
-        while (start >= 0 &&
-               !xaml[start..].StartsWith("<Button", StringComparison.Ordinal) &&
-               !xaml[start..].StartsWith("<local:AutomationInvokeButton", StringComparison.Ordinal))
+        var searchIndex = 0;
+        while (true)
         {
-            start = xaml.LastIndexOf('<', start - 1);
+            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
+            titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} formula command should be present");
+
+            var start = xaml.LastIndexOf('<', titleIndex);
+            while (start >= 0 &&
+                   !xaml[start..].StartsWith("<Button", StringComparison.Ordinal) &&
+                   !xaml[start..].StartsWith("<local:AutomationInvokeButton", StringComparison.Ordinal))
+            {
+                start = xaml.LastIndexOf('<', start - 1);
+            }
+
+            start.Should().BeGreaterThanOrEqualTo(0, $"the {title} formula command should be a Button or AutomationInvokeButton");
+
+            var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
+            var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
+            var nextButton = xaml.IndexOf("<Button", titleIndex + 1, StringComparison.Ordinal);
+            var end = closingEnd >= 0 && (nextButton < 0 || closingEnd < nextButton)
+                ? closingEnd + "</Button>".Length
+                : selfClosingEnd + 2;
+
+            end.Should().BeGreaterThan(titleIndex, $"the {title} formula command should have a closing marker");
+            var element = xaml[start..end];
+            if (handler is null || element.Contains($"Click=\"{handler}\"", StringComparison.Ordinal))
+                return element;
+
+            searchIndex = end;
         }
-
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} formula command should be a Button or AutomationInvokeButton");
-
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + "</Button>".Length
-            : selfClosingEnd + 2;
-
-        end.Should().BeGreaterThan(titleIndex, $"the {title} formula command should have a closing marker");
-        return xaml[start..end];
     }
 
     private static string ExtractMenuItemElementByHeader(string xaml, string header)

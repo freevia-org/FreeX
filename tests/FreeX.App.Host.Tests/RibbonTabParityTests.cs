@@ -56,8 +56,8 @@ public sealed class RibbonTabParityTests
         ExtractGroupXaml(insertTab, "Charts").Should().Contain("local:RibbonTooltip.Title=\"Recommended Charts\"");
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Timeline\"");
-        ExtractGroupXaml(insertTab, "Links").Should().Contain("local:RibbonTooltip.Title=\"Insert Link\"");
-        ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"Comment\"");
+        ExtractGroupXaml(insertTab, "Links").Should().Contain("local:RibbonTooltip.Title=\"Link\"");
+        ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"New Comment\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Text Box\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Header &amp; Footer\"");
         ExtractGroupXaml(insertTab, "Symbols").Should().Contain("local:RibbonTooltip.Title=\"Symbol\"");
@@ -112,8 +112,8 @@ public sealed class RibbonTabParityTests
 
         ExtractTooltipTitles(pageSetupGroup).Should().ContainInOrder(
             "Margins",
-            "Page Orientation",
-            "Paper Size",
+            "Orientation",
+            "Size",
             "Print Area",
             "Breaks",
             "Background",
@@ -169,8 +169,8 @@ public sealed class RibbonTabParityTests
             "AutoSum",
             "Recently Used",
             "Financial",
-            "Logical Functions",
-            "Text Functions",
+            "Logical",
+            "Text",
             "Date & Time",
             "Lookup & Reference",
             "Math & Trig",
@@ -204,8 +204,8 @@ public sealed class RibbonTabParityTests
             "Sort A to Z",
             "Sort Z to A",
             "Filter",
-            "Clear Filter",
-            "Advanced Filter");
+            "Clear",
+            "Advanced");
         ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Ascending");
         ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Descending");
         ExtractGroupXaml(dataTab, "Data Tools").Should().NotContain("local:RibbonTooltip.Title=\"Subtotal\"");
