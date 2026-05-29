@@ -207,8 +207,14 @@ public sealed class RotationDialog : Window
         if (!DrawingInputParser.TryParseRotationDegrees(input, out var value))
             return false;
 
-        result = new RotationDialogResult(value);
+        result = new RotationDialogResult(NormalizeRotationDegrees(value));
         return true;
+    }
+
+    internal static double NormalizeRotationDegrees(double value)
+    {
+        var normalized = value % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
     }
 
     private void Accept()
