@@ -1,6 +1,7 @@
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using System.Xml.Xsl;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -600,6 +601,26 @@ public sealed class SpreadsheetXmlFileAdapterTests
         var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
 
         act.Should().Throw<Exception>();
+    }
+
+    [Fact]
+    public void LoadTransformed_RejectsStylesheetInclude()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:include href="file:///C:/Windows/win.ini"/>
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
     }
 
     [Fact]
