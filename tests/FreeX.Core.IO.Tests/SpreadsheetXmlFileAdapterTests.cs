@@ -98,6 +98,27 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsSpreadsheetMlWorksheetVisibility()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Visible"><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="Hidden" ss:Visible="SheetHidden"><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="VeryHidden" ss:Visible="SheetVeryHidden"><ss:Table/></ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        workbook.GetSheetAt(0).IsHidden.Should().BeFalse();
+        workbook.GetSheetAt(0).IsVeryHidden.Should().BeFalse();
+        workbook.GetSheetAt(1).IsHidden.Should().BeTrue();
+        workbook.GetSheetAt(1).IsVeryHidden.Should().BeFalse();
+        workbook.GetSheetAt(2).IsHidden.Should().BeTrue();
+        workbook.GetSheetAt(2).IsVeryHidden.Should().BeTrue();
+    }
+
+    [Fact]
     public void Load_ReadsSpreadsheetMlMergeAcrossAndMergeDown()
     {
         using var stream = StreamFromString("""
@@ -389,6 +410,38 @@ public sealed class SpreadsheetXmlFileAdapterTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.Comments[new CellAddress(loadedSheet.Id, 1, 1)].Should().Be("Check < & > total");
         loadedSheet.Comments[new CellAddress(loadedSheet.Id, 2, 2)].Should().Be("Standalone note");
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlWorksheetVisibility()
+    {
+        var workbook = new Workbook("XmlVisibility");
+        workbook.AddSheet("Visible");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var veryHidden = workbook.AddSheet("VeryHidden");
+        veryHidden.IsHidden = true;
+        veryHidden.IsVeryHidden = true;
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var worksheets = document.Root!.Elements(ss + "Worksheet").ToList();
+        worksheets[0].Attribute(ss + "Visible").Should().BeNull();
+        worksheets[1].Attribute(ss + "Visible")!.Value.Should().Be("SheetHidden");
+        worksheets[2].Attribute(ss + "Visible")!.Value.Should().Be("SheetVeryHidden");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        loaded.GetSheetAt(0).IsHidden.Should().BeFalse();
+        loaded.GetSheetAt(1).IsHidden.Should().BeTrue();
+        loaded.GetSheetAt(1).IsVeryHidden.Should().BeFalse();
+        loaded.GetSheetAt(2).IsHidden.Should().BeTrue();
+        loaded.GetSheetAt(2).IsVeryHidden.Should().BeTrue();
     }
 
     [Fact]
