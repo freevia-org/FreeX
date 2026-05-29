@@ -302,9 +302,21 @@ public partial class MainWindow
         control.BringIntoView();
         control.UpdateLayout();
         var focused = control.Focus();
-        Keyboard.Focus(control);
+        var keyboardFocus = Keyboard.Focus(control);
         FocusManager.SetFocusedElement(FocusManager.GetFocusScope(control), control);
-        return focused || control.IsKeyboardFocusWithin || ReferenceEquals(Keyboard.FocusedElement, control);
+        if (focused || keyboardFocus is not null || control.IsKeyboardFocusWithin || ReferenceEquals(Keyboard.FocusedElement, control))
+            return true;
+
+        Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Input,
+            new Action(() =>
+            {
+                control.BringIntoView();
+                control.Focus();
+                Keyboard.Focus(control);
+                FocusManager.SetFocusedElement(FocusManager.GetFocusScope(control), control);
+            }));
+        return true;
     }
 
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
