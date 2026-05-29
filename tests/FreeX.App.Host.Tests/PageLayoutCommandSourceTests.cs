@@ -23,7 +23,7 @@ public sealed class PageLayoutCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractElementByTitle(ReadMainWindowXaml(), title, "Button");
+        var button = ExtractElementByTitle(ReadMainWindowXaml(), title, "Button", handler);
 
         button.Should().Contain($"Content=\"{content}\"");
         button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
@@ -120,22 +120,31 @@ public sealed class PageLayoutCommandSourceTests
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
-    private static string ExtractElementByTitle(string xaml, string title, string elementName)
+    private static string ExtractElementByTitle(string xaml, string title, string elementName, string? handler = null)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Page Layout command should be present");
+        var searchIndex = 0;
+        while (true)
+        {
+            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
+            titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Page Layout command should be present");
 
-        var start = xaml.LastIndexOf($"<{elementName}", titleIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} Page Layout command should be a {elementName}");
+            var start = xaml.LastIndexOf($"<{elementName}", titleIndex, StringComparison.Ordinal);
+            start.Should().BeGreaterThanOrEqualTo(0, $"the {title} Page Layout command should be a {elementName}");
 
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf($"</{elementName}>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + elementName.Length + 3
-            : selfClosingEnd + 2;
+            var closingEnd = xaml.IndexOf($"</{elementName}>", titleIndex, StringComparison.Ordinal);
+            var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
+            var nextElement = xaml.IndexOf($"<{elementName} ", titleIndex + 1, StringComparison.Ordinal);
+            var end = closingEnd >= 0 && (nextElement < 0 || closingEnd < nextElement)
+                ? closingEnd + elementName.Length + 3
+                : selfClosingEnd + 2;
 
-        end.Should().BeGreaterThan(titleIndex, $"the {title} Page Layout element should have a closing marker");
-        return xaml[start..end];
+            end.Should().BeGreaterThan(titleIndex, $"the {title} Page Layout element should have a closing marker");
+            var element = xaml[start..end];
+            if (handler is null || element.Contains($"Click=\"{handler}\"", StringComparison.Ordinal))
+                return element;
+
+            searchIndex = end;
+        }
     }
 
     private static string ExtractMenuItemElementByHeader(string xaml, string header, string handler)
