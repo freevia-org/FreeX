@@ -295,6 +295,8 @@ public partial class MainWindow
                         [
                             new ClearContentsCommand(sheetId, currentRange),
                             new ApplyStyleCommand(sheetId, currentRange, CellStyleDiffPlanner.ClearFormatsDiff()),
+                            new ClearConditionalFormatsCommand(sheetId, currentRange),
+                            new ClearDataValidationCommand(sheetId, currentRange),
                             new ClearCommentsCommand(sheetId, currentRange),
                             new ClearHyperlinksCommand(sheetId, currentRange)
                         ]);
