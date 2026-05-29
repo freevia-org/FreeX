@@ -60,13 +60,11 @@ public partial class MainWindow
         if (RibbonTabs?.SelectedItem is not TabItem tabItem)
             return;
 
-        PrepareSelectedRibbonTabForImmediateCompaction();
-        var root = GetRibbonTabContentRoot(tabItem);
         if (!_normalizedRibbonStaticTabs.Add(tabItem))
-        {
             return;
-        }
 
+        PrepareRibbonTabForImmediateCompaction(tabItem);
+        var root = GetRibbonTabContentRoot(tabItem);
         NormalizeRibbonGroupMetadata(root);
         NormalizeRibbonCommandButtons(root);
         NormalizeExistingRibbonIconText(root);
@@ -130,7 +128,7 @@ public partial class MainWindow
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
         _ribbonResizeNormalizationRequired = true;
-        NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true);
+        NormalizeRibbonSurfaceAfterLayoutChange();
     }
 
     private void NormalizeRibbonSurfaceAfterResize()
@@ -141,13 +139,11 @@ public partial class MainWindow
         CompactRibbonSurfaceAfterResize(scheduleFallback: !_isInWindowResizeMoveLoop);
     }
 
-    private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab = false)
-        => NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab, scheduleFallback: true);
+    private void NormalizeRibbonSurfaceAfterLayoutChange()
+        => NormalizeRibbonSurfaceAfterLayoutChange(scheduleFallback: true);
 
-    private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab, bool scheduleFallback)
+    private void NormalizeRibbonSurfaceAfterLayoutChange(bool scheduleFallback)
     {
-        if (prepareSelectedTab)
-            PrepareSelectedRibbonTabForImmediateCompaction();
         NormalizeRibbonSurface(forceCompact: true);
         if (!scheduleFallback)
             return;
@@ -155,8 +151,6 @@ public partial class MainWindow
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
-                if (prepareSelectedTab)
-                    PrepareSelectedRibbonTabForImmediateCompaction();
                 NormalizeRibbonSurface(forceCompact: true);
             }),
             DispatcherPriority.Send);
@@ -270,6 +264,11 @@ public partial class MainWindow
         if (RibbonTabs?.SelectedItem is not TabItem tabItem)
             return;
 
+        PrepareRibbonTabForImmediateCompaction(tabItem);
+    }
+
+    private static void PrepareRibbonTabForImmediateCompaction(TabItem tabItem)
+    {
         tabItem.ApplyTemplate();
         if (tabItem.Content is FrameworkElement content)
         {
