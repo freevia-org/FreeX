@@ -59,14 +59,20 @@ public sealed class KeyboardInsertDeletePlannerTests
     [Theory]
     [InlineData("right", KeyboardInsertDeleteDialogChoice.ShiftRight)]
     [InlineData("r", KeyboardInsertDeleteDialogChoice.ShiftRight)]
+    [InlineData("shift right", KeyboardInsertDeleteDialogChoice.ShiftRight)]
+    [InlineData("shift cells right", KeyboardInsertDeleteDialogChoice.ShiftRight)]
     [InlineData("down", KeyboardInsertDeleteDialogChoice.ShiftDown)]
     [InlineData("d", KeyboardInsertDeleteDialogChoice.ShiftDown)]
+    [InlineData("shift down", KeyboardInsertDeleteDialogChoice.ShiftDown)]
+    [InlineData("shift cells down", KeyboardInsertDeleteDialogChoice.ShiftDown)]
     [InlineData("row", KeyboardInsertDeleteDialogChoice.EntireRow)]
     [InlineData("rows", KeyboardInsertDeleteDialogChoice.EntireRow)]
     [InlineData("entire row", KeyboardInsertDeleteDialogChoice.EntireRow)]
+    [InlineData("entire rows", KeyboardInsertDeleteDialogChoice.EntireRow)]
     [InlineData("column", KeyboardInsertDeleteDialogChoice.EntireColumn)]
     [InlineData("columns", KeyboardInsertDeleteDialogChoice.EntireColumn)]
     [InlineData("entire column", KeyboardInsertDeleteDialogChoice.EntireColumn)]
+    [InlineData("entire columns", KeyboardInsertDeleteDialogChoice.EntireColumn)]
     public void TryParseInsertDialogChoice_RecognizesShiftAndEntireAxisChoices(
         string input,
         KeyboardInsertDeleteDialogChoice expected)
@@ -80,14 +86,20 @@ public sealed class KeyboardInsertDeletePlannerTests
     [Theory]
     [InlineData("left", KeyboardInsertDeleteDialogChoice.ShiftLeft)]
     [InlineData("l", KeyboardInsertDeleteDialogChoice.ShiftLeft)]
+    [InlineData("shift left", KeyboardInsertDeleteDialogChoice.ShiftLeft)]
+    [InlineData("shift cells left", KeyboardInsertDeleteDialogChoice.ShiftLeft)]
     [InlineData("up", KeyboardInsertDeleteDialogChoice.ShiftUp)]
     [InlineData("u", KeyboardInsertDeleteDialogChoice.ShiftUp)]
+    [InlineData("shift up", KeyboardInsertDeleteDialogChoice.ShiftUp)]
+    [InlineData("shift cells up", KeyboardInsertDeleteDialogChoice.ShiftUp)]
     [InlineData("row", KeyboardInsertDeleteDialogChoice.EntireRow)]
     [InlineData("rows", KeyboardInsertDeleteDialogChoice.EntireRow)]
     [InlineData("entire row", KeyboardInsertDeleteDialogChoice.EntireRow)]
+    [InlineData("entire rows", KeyboardInsertDeleteDialogChoice.EntireRow)]
     [InlineData("column", KeyboardInsertDeleteDialogChoice.EntireColumn)]
     [InlineData("columns", KeyboardInsertDeleteDialogChoice.EntireColumn)]
     [InlineData("entire column", KeyboardInsertDeleteDialogChoice.EntireColumn)]
+    [InlineData("entire columns", KeyboardInsertDeleteDialogChoice.EntireColumn)]
     public void TryParseDeleteDialogChoice_RecognizesShiftAndEntireAxisChoices(
         string input,
         KeyboardInsertDeleteDialogChoice expected)
