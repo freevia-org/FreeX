@@ -31,7 +31,7 @@ public partial class MainWindow
         if (availableWidth <= 0)
             return;
 
-        var cacheKey = $"{controlCacheKey}|{GetCollapsedRibbonFootprintMode(availableWidth)}";
+        var cacheKey = controlCacheKey;
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups;
         double fixedChromeWidth;
         if (string.Equals(_ribbonAdaptiveMeasurementCacheKey, cacheKey, StringComparison.Ordinal) &&
@@ -48,7 +48,7 @@ public partial class MainWindow
                 Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groups.Count).ToArray(),
                 previousStates: null);
             fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
-            adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index], availableWidth)).ToList();
+            adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
             _ribbonAdaptiveMeasurementCacheKey = cacheKey;
             _ribbonAdaptiveGroupCache = adaptiveGroups;
             _ribbonAdaptiveFixedChromeWidthCache = fixedChromeWidth;
@@ -383,19 +383,14 @@ public partial class MainWindow
     private static string GetCollapsedRibbonFootprintMode(double availableWidth) =>
         RibbonCollapsedGroupPresentationPlanner.GetCacheKey(availableWidth);
 
-    private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(
-        FrameworkElement group,
-        Button collapsedButton,
-        double availableWidth)
+    private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
     {
         var name = GetRibbonGroupName(group);
         var fullWidth = MeasureRibbonGroupWidth(group, RibbonCompactLevel.Full);
         var smallWidth = MeasureRibbonGroupWidth(group, RibbonCompactLevel.SmallWithLabels);
         var iconWidth = MeasureRibbonGroupWidth(group, RibbonCompactLevel.IconOnly);
         collapsedButton.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var collapsedWidth = RibbonCollapsedGroupPresentationPlanner.GetPlannedWidth(
-            collapsedButton.DesiredSize.Width,
-            availableWidth);
+        var collapsedWidth = Math.Max(48, collapsedButton.DesiredSize.Width);
         SetRibbonGroupCompact(group, RibbonCompactLevel.Full);
 
         return new RibbonAdaptiveGroup(name, fullWidth, smallWidth, iconWidth, collapsedWidth);

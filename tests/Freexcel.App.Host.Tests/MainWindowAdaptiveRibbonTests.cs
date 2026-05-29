@@ -493,10 +493,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private bool _ribbonAdaptiveStateDiffInvalidated;");
         fields.Should().Contain("private bool _ribbonResizeCompactFallbackPending;");
         source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
-        source.Should().Contain("GetCollapsedRibbonFootprintMode(availableWidth)");
         source.Should().Contain("_ribbonAdaptiveGroupCache");
-        source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index], availableWidth)");
-        source.Should().Contain("RibbonCollapsedGroupPresentationPlanner.GetPlannedWidth(");
+        source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])");
         source.Should().Contain("UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);");
         source.Should().Contain("RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth)");
         source.Should().Contain("GetCachedRibbonAdaptiveGroups(activePanel)");
@@ -511,30 +509,6 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().NotContain("width <= 2200.0");
         source.Should().NotContain("width += 8.0");
         source.Should().NotContain("RemoveRibbonCollapsedGroupButtons(activePanel)");
-    }
-
-    [Fact]
-    public void AdaptiveGroupMeasurement_UsesCollapsedPresentationWidthForPlanning()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var group = new StackPanel { Width = 140 };
-            RibbonMetadata.SetGroupName(group, "Long Group Name");
-            var collapsedButton = new Button
-            {
-                Content = "Long Group Name",
-                Width = 120
-            };
-            var measureGroup = typeof(MainWindow)
-                .GetMethod("MeasureRibbonAdaptiveGroup", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "MeasureRibbonAdaptiveGroup");
-
-            var measured = (RibbonAdaptiveGroup)measureGroup.Invoke(null, [group, collapsedButton, 900d])!;
-
-            measured.CollapsedWidth.Should().Be(
-                RibbonCollapsedGroupPresentationPlanner.GetPlannedWidth(120, 900),
-                "adaptive planning should use the same capped collapsed footprint that the ribbon presents at compact widths");
-        });
     }
 
     [Fact]
