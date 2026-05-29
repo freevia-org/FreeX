@@ -239,8 +239,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         if (mergeAcross == 0 && mergeDown == 0)
             return false;
 
-        if (column > CellAddress.MaxCol - mergeAcross ||
-            row > CellAddress.MaxRow - mergeDown)
+        if (mergeAcross > CellAddress.MaxCol - column ||
+            mergeDown > CellAddress.MaxRow - row)
         {
             return false;
         }
@@ -261,8 +261,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
     private static uint AdvanceColumnIndex(uint columnIndex, uint mergeAcross)
     {
-        if (mergeAcross >= CellAddress.MaxCol || columnIndex > CellAddress.MaxCol - mergeAcross)
-            return CellAddress.MaxCol + 1;
+        if (mergeAcross > CellAddress.MaxCol - columnIndex)
+            return columnIndex + 1;
 
         return columnIndex + mergeAcross + 1;
     }

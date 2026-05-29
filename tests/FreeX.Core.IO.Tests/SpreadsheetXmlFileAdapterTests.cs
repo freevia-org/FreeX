@@ -236,6 +236,30 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_InvalidMergeAcrossDoesNotSkipFollowingCells()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Merged">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell ss:MergeAcross="4294967295"><ss:Data ss:Type="String">Bad merge</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="String">Still read</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Bad merge"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("Still read"));
+        sheet.MergedRegions.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Load_TreatsBackwardCellIndexesAsImplicitNextColumn()
     {
         using var stream = StreamFromString("""
