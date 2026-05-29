@@ -1049,6 +1049,72 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void CollapsedRibbonGroupButtons_ReconcilesExistingButtonsInGroupOrder()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var fontGroup = CreateGroup("Font");
+            var alignmentGroup = CreateGroup("Alignment");
+            var numberGroup = CreateGroup("Number");
+            var fontButton = CreateCollapsedButton("Font");
+            var duplicateFontButton = CreateCollapsedButton("Font");
+            var staleButton = CreateCollapsedButton("Styles");
+            var numberButton = CreateCollapsedButton("Number");
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal
+            };
+            panel.Children.Add(fontButton);
+            panel.Children.Add(fontGroup);
+            panel.Children.Add(staleButton);
+            panel.Children.Add(alignmentGroup);
+            panel.Children.Add(duplicateFontButton);
+            panel.Children.Add(numberGroup);
+            panel.Children.Add(numberButton);
+
+            var ensureButtons = typeof(MainWindow)
+                .GetMethod("EnsureRibbonCollapsedGroupButtons", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "EnsureRibbonCollapsedGroupButtons");
+
+            var buttons = ((IEnumerable<Button>)ensureButtons.Invoke(
+                null,
+                [panel, new FrameworkElement[] { fontGroup, alignmentGroup, numberGroup }])!).ToList();
+
+            buttons.Should().HaveCount(3);
+            buttons[0].Should().BeSameAs(fontButton);
+            buttons[2].Should().BeSameAs(numberButton);
+            buttons[1].Should().NotBeSameAs(duplicateFontButton);
+            buttons[1].Should().NotBeSameAs(staleButton);
+            panel.Children.Cast<UIElement>().Should().Equal(
+                fontGroup,
+                fontButton,
+                alignmentGroup,
+                buttons[1],
+                numberGroup,
+                numberButton);
+            panel.Children.OfType<Button>()
+                .Where(RibbonMetadata.IsCollapsedGroupButton)
+                .Select(button => RibbonTooltip.GetTitle(button))
+                .Should().Equal("Font", "Alignment", "Number");
+        });
+
+        static FrameworkElement CreateGroup(string name)
+        {
+            var group = new Grid();
+            RibbonMetadata.SetGroupName(group, name);
+            return group;
+        }
+
+        static Button CreateCollapsedButton(string title)
+        {
+            var button = new Button();
+            RibbonMetadata.SetRole(button, RibbonMetadataRole.CollapsedGroupButton);
+            RibbonTooltip.SetTitle(button, title);
+            return button;
+        }
+    }
+
+    [Fact]
     public void RibbonGroupMetadata_IsSeededForEveryVisibleRibbonTab()
     {
         StaTestRunner.Run(() =>
