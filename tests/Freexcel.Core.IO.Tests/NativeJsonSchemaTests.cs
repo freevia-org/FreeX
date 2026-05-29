@@ -131,6 +131,62 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_ResolvesMetadataReferencesToNormalizedNativeJsonSheetNames()
+    {
+        const string json = """
+            {
+              "Name": "MalformedSheetReferences",
+              "Sheets": [
+                {
+                  "Name": "'Bad:/?*[]Name'",
+                  "Cells": [
+                    { "Address": "A1", "Value": "42", "ValueType": "n" }
+                  ]
+                }
+              ],
+              "NamedRanges": [
+                { "Name": "Input", "SheetName": "'Bad:/?*[]Name'", "Range": "A1:A1" }
+              ],
+              "WatchedCells": [
+                { "SheetName": "'Bad:/?*[]Name'", "Address": "A1" }
+              ],
+              "Scenarios": [
+                {
+                  "Name": "Scenario 1",
+                  "ChangingCells": [
+                    { "SheetName": "'Bad:/?*[]Name'", "Address": "A1", "Value": "99", "ValueType": "n" }
+                  ]
+                }
+              ],
+              "CustomViews": [
+                {
+                  "Name": "View 1",
+                  "Sheets": [
+                    { "SheetName": "'Bad:/?*[]Name'", "ZoomPercent": 125 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Bad______Name");
+        workbook.NamedRanges["Input"].Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 1)));
+        workbook.WatchedCells.Should().ContainSingle().Which.Should().Be(new CellAddress(sheet.Id, 1, 1));
+        workbook.Scenarios.Should().ContainSingle()
+            .Which.ChangingCells.Should().ContainSingle()
+            .Which.Address.Should().Be(new CellAddress(sheet.Id, 1, 1));
+        workbook.CustomViews.Should().ContainSingle()
+            .Which.Sheets.Should().ContainSingle()
+            .Which.SheetName.Should().Be("Bad______Name");
+    }
+
+    [Fact]
     public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
     {
         using var stream = PositionedStreamFromString("ignored", """
