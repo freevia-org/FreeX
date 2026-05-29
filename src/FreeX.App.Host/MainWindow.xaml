@@ -1806,7 +1806,7 @@
                                         local:RibbonTooltip.KeyTip="EQ"
                                         local:RibbonTooltip.Description="Equation authoring is deferred in FreeX."/>
                                 <Button Content="Symbol" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SymbolPickerBtn_Click"
-                                        local:RibbonTooltip.Title="Insert Symbol"
+                                        local:RibbonTooltip.Title="Symbol"
                                         local:RibbonTooltip.KeyTip="SY"
                                         local:RibbonTooltip.Description="Insert a special character or symbol at the cursor position."/>
                             </StackPanel>
