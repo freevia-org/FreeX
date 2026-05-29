@@ -915,11 +915,6 @@ public partial class MainWindow
         RenameSheet(tab.Id, tab.Name);
     }
 
-    private void RenameSheetFromTab(SheetTabViewModel tab)
-    {
-        RenameSheet(tab.Id, tab.Name);
-    }
-
     private void RenameCurrentSheet()
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
