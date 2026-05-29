@@ -6,23 +6,31 @@ namespace FreeX.Core.IO;
 public static class XsltWorkbookTransform
 {
     internal const long DefaultMaxOutputBytes = 64L * 1024L * 1024L;
+    internal const long DefaultMaxInputCharacters = 64L * 1024L * 1024L;
 
     public static MemoryStream TransformToSpreadsheetXml(Stream sourceXml, Stream stylesheet)
-        => TransformToSpreadsheetXml(sourceXml, stylesheet, DefaultMaxOutputBytes);
+        => TransformToSpreadsheetXml(sourceXml, stylesheet, DefaultMaxOutputBytes, DefaultMaxInputCharacters);
 
     internal static MemoryStream TransformToSpreadsheetXml(Stream sourceXml, Stream stylesheet, long maxOutputBytes)
+        => TransformToSpreadsheetXml(sourceXml, stylesheet, maxOutputBytes, DefaultMaxInputCharacters);
+
+    internal static MemoryStream TransformToSpreadsheetXml(
+        Stream sourceXml,
+        Stream stylesheet,
+        long maxOutputBytes,
+        long maxInputCharacters)
     {
         ArgumentNullException.ThrowIfNull(sourceXml);
         ArgumentNullException.ThrowIfNull(stylesheet);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxOutputBytes, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxInputCharacters, 1);
 
-        var transform = LoadStylesheet(stylesheet);
-        using var sourceReader = CreateSecureReader(sourceXml);
-
-        var output = new BoundedMemoryStream(maxOutputBytes);
+        var transform = LoadStylesheet(stylesheet, maxInputCharacters);
         var outputSettings = transform.OutputSettings?.Clone() ?? new XmlWriterSettings();
+        var output = new BoundedMemoryStream(maxOutputBytes);
         try
         {
+            using var sourceReader = CreateSecureReader(sourceXml, maxInputCharacters);
             using var writer = XmlWriter.Create(output, outputSettings);
             transform.Transform(sourceReader, arguments: null, writer, documentResolver: null);
         }
@@ -46,16 +54,17 @@ public static class XsltWorkbookTransform
         return output;
     }
 
-    private static XslCompiledTransform LoadStylesheet(Stream stylesheet)
+    private static XslCompiledTransform LoadStylesheet(Stream stylesheet, long maxInputCharacters)
     {
-        using var stylesheetReader = CreateSecureReader(stylesheet);
-        var transform = new XslCompiledTransform();
         try
         {
+            using var stylesheetReader = CreateSecureReader(stylesheet, maxInputCharacters);
+            var transform = new XslCompiledTransform();
             transform.Load(
                 stylesheetReader,
                 new XsltSettings(enableDocumentFunction: false, enableScript: false),
                 stylesheetResolver: null);
+            return transform;
         }
         catch (XmlException ex)
         {
@@ -65,15 +74,14 @@ public static class XsltWorkbookTransform
         {
             throw new InvalidDataException("The XSLT stylesheet is invalid or uses disabled features.", ex);
         }
-
-        return transform;
     }
 
-    private static XmlReader CreateSecureReader(Stream stream)
+    private static XmlReader CreateSecureReader(Stream stream, long maxInputCharacters)
     {
         var readerSettings = new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit,
+            MaxCharactersInDocument = maxInputCharacters,
             XmlResolver = null
         };
 

@@ -526,6 +526,57 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_SourceAboveInputLimit_ReportsSourceDiagnostic()
+    {
+        using var source = StreamFromString($"<rows><row name=\"{new string('A', 600)}\" /></rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(
+            source,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            maxInputCharacters: 512);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*source XML*")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetAboveInputLimit_ReportsStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(
+            source,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            maxInputCharacters: 8);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XmlException>();
+        source.Position.Should().Be(0);
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_InvalidInputLimit_ThrowsArgumentOutOfRangeException()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(
+            source,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            maxInputCharacters: 0);
+
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .Where(exception => exception.ParamName == "maxInputCharacters");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_InvalidOutputLimit_ThrowsArgumentOutOfRangeException()
     {
         using var source = StreamFromString("<rows />");
