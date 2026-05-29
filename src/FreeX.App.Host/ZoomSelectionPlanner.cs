@@ -4,6 +4,10 @@ namespace FreeX.App.Host;
 
 public static class ZoomSelectionPlanner
 {
+    private const double DefaultColumnWidthPixels = 80d;
+    private const double DefaultRowHeightPixels = 20d;
+    private const double PercentScale = 100d;
+
     public static double CalculateDialogZoomPercent(
         ZoomDialogResult result,
         double gridWidth,
@@ -20,11 +24,17 @@ public static class ZoomSelectionPlanner
         uint selectedColumns,
         uint selectedRows)
     {
-        var widthFit = gridWidth / Math.Max(1, selectedColumns * 80d) * 100;
-        var heightFit = gridHeight / Math.Max(1, selectedRows * 20d) * 100;
+        var widthFit = CalculateAxisFitPercent(gridWidth, selectedColumns, DefaultColumnWidthPixels);
+        var heightFit = CalculateAxisFitPercent(gridHeight, selectedRows, DefaultRowHeightPixels);
         return Math.Clamp(
             Math.Min(widthFit, heightFit),
             ZoomLevelMapper.MinZoomPercent,
             ZoomLevelMapper.MaxZoomPercent);
+    }
+
+    private static double CalculateAxisFitPercent(double viewportPixels, uint selectedCount, double defaultCellPixels)
+    {
+        var selectionPixels = Math.Max(1, selectedCount * defaultCellPixels);
+        return viewportPixels / selectionPixels * PercentScale;
     }
 }
