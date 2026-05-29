@@ -906,6 +906,10 @@ public partial class MainWindow
 
             if (SheetGrid.SelectedRange is { } selectedRange)
                 TryApplyFormatPainter(selectedRange);
+            if (hitAddr.HasValue)
+                UpdateCommentPreview(hitAddr.Value);
+            else
+                ClearCommentPreview();
 
             e.Handled = true;
             return;
