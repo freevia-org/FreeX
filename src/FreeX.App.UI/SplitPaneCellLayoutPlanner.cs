@@ -25,13 +25,8 @@ public static class SplitPaneCellLayoutPlanner
         var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
         var horizontalY = dividerLayout.HorizontalY ?? GridView.ColHeaderHeight;
         var verticalX = dividerLayout.VerticalX ?? GridView.CalculateRowHeaderWidth(viewport);
-        var layouts = new List<SplitPaneCellLayout>();
-        var occupied = new HashSet<(uint Row, uint Col)>();
-        foreach (var cell in cells)
-        {
-            if (!string.IsNullOrEmpty(cell.DisplayText))
-                occupied.Add((cell.Row, cell.Col));
-        }
+        var layouts = new List<SplitPaneCellLayout>(cells.Count);
+        HashSet<(uint Row, uint Col)>? occupied = null;
 
         foreach (var cell in cells)
         {
@@ -73,6 +68,7 @@ public static class SplitPaneCellLayoutPlanner
             var textClipRect = rect;
             if (CanOverflowSplitPaneText(cell, merge))
             {
+                occupied ??= BuildOccupiedCells(cells);
                 var renderWidth = width + SumEmptyOverflowColumnWidths(cell, colMetrics, occupied);
                 textClipRect = new Rect(x, y, renderWidth, height);
             }
@@ -112,6 +108,18 @@ public static class SplitPaneCellLayoutPlanner
 
     private static bool CanOverflowSplitPaneText(DisplayCell cell, GridRange? merge) =>
         GridView.CanOverflowCellText(cell.Style, cell.RawValue, cell.DisplayText, merge);
+
+    private static HashSet<(uint Row, uint Col)> BuildOccupiedCells(IReadOnlyList<DisplayCell> cells)
+    {
+        var occupied = new HashSet<(uint Row, uint Col)>();
+        foreach (var cell in cells)
+        {
+            if (!string.IsNullOrEmpty(cell.DisplayText))
+                occupied.Add((cell.Row, cell.Col));
+        }
+
+        return occupied;
+    }
 
     private static double SumEmptyOverflowColumnWidths(
         DisplayCell cell,
