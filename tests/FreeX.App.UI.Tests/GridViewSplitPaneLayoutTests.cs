@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -264,6 +265,22 @@ public sealed class GridViewSplitPaneLayoutTests
             .Should().Be(new CellAddress(sheetId, 30, 1));
         GridView.HitTestViewportCell(viewport, sheetId, new Point(GridView.RowHeaderWidth + 208 + 5, GridView.ColHeaderHeight + 58 + 5))
             .Should().Be(new CellAddress(sheetId, 20, 10));
+    }
+
+    [Fact]
+    public void HitTestViewportCell_StopsMetricScansOnceSortedEdgesPassPointer()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var hitTestMetrics = source[
+            source.IndexOf("private static CellAddress? HitTestMetrics", StringComparison.Ordinal)..
+            source.IndexOf("public static SplitPaneClipRects CalculateSplitPaneClipRects", StringComparison.Ordinal)];
+
+        hitTestMetrics.Should().Contain("foreach (var rm in rows)");
+        hitTestMetrics.Should().Contain("if (pos.Y < top)");
+        hitTestMetrics.Should().Contain("foreach (var cm in cols)");
+        hitTestMetrics.Should().Contain("if (pos.X < left)");
+        hitTestMetrics.Should().Contain("break;");
     }
 
     [Fact]
@@ -829,4 +846,18 @@ public sealed class GridViewSplitPaneLayoutTests
                 4,
                 [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
                 [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)]));
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
+    }
 }
