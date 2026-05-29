@@ -345,8 +345,23 @@ internal static class XlsxStructuredTableWriter
 
     private static int ExtractTrailingNumber(string text)
     {
-        var digits = new string(text.Reverse().TakeWhile(char.IsDigit).Reverse().ToArray());
-        return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0
+        var start = text.Length;
+        while (start > 0 && char.IsDigit(text[start - 1]))
+        {
+            start--;
+        }
+
+        var value = 0;
+        for (var index = start; index < text.Length; index++)
+        {
+            var digit = text[index] - '0';
+            if (value > (int.MaxValue - digit) / 10)
+                return 1;
+
+            value = (value * 10) + digit;
+        }
+
+        return value > 0
             ? value
             : 1;
     }

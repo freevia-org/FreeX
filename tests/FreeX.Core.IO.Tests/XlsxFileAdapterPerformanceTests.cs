@@ -148,6 +148,22 @@ public sealed class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Benchmark_StructuredTableWriterTrailingNumber_AvoidsReverseIteratorAllocation()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableWriter.cs"));
+        var methodStart = source.IndexOf("private static int ExtractTrailingNumber", StringComparison.Ordinal);
+        var methodEnd = source.IndexOf("private static void TrySetNativeAttributeIfMissing", methodStart, StringComparison.Ordinal);
+        var method = source[methodStart..methodEnd];
+
+        method.Should().NotContain(
+            ".Reverse()",
+            "structured table id fallback parsing runs during XLSX save and should avoid LINQ iterator scaffolding");
+        method.Should().NotContain(
+            ".ToArray()",
+            "trailing-number parsing should avoid a temporary char array allocation");
+    }
+
     private const int DenseSheetCount = 8;
     private const int DenseRowsPerSheet = 80;
     private const int DenseColumnsPerSheet = 24;
@@ -241,5 +257,20 @@ public sealed class XlsxFileAdapterPerformanceTests
             extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) ||
             extension.Equals(".xltx", StringComparison.OrdinalIgnoreCase) ||
             extension.Equals(".xltm", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = dir.Parent;
+        }
+
+        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
     }
 }
