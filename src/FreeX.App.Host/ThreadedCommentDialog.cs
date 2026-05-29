@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -37,6 +38,12 @@ public sealed class ThreadedCommentDialog : Window
 
         var ok = new Button { Content = existing is null ? "_Add" : "_Reply", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0) };
         var cancel = new Button { Content = "Ca_ncel", IsCancel = true, Width = 80 };
+        AutomationProperties.SetName(ok, existing is null ? "Add comment" : "Reply to comment");
+        AutomationProperties.SetAutomationId(ok, existing is null ? "ThreadedCommentAddButton" : "ThreadedCommentReplyButton");
+        AutomationProperties.SetHelpText(ok, existing is null ? "Add the threaded comment." : "Add a reply to the threaded comment.");
+        AutomationProperties.SetName(cancel, "Cancel");
+        AutomationProperties.SetAutomationId(cancel, "ThreadedCommentCancelButton");
+        AutomationProperties.SetHelpText(cancel, "Close the comment dialog without applying changes.");
         ok.Click += (_, _) => SubmitThreadedCommentDialog(existing);
         var btnRow = new StackPanel
         {
@@ -62,11 +69,17 @@ public sealed class ThreadedCommentDialog : Window
         var inner = new StackPanel();
         inner.Children.Add(scroll);
         _rootBox.Text = existing?.Text ?? "";
+        AutomationProperties.SetName(_rootBox, existing is null ? "Comment" : "Edit comment");
+        AutomationProperties.SetAutomationId(_rootBox, "ThreadedCommentRootBox");
+        AutomationProperties.SetHelpText(_rootBox, existing is null ? "Enter the threaded comment text." : "Edit the root comment text.");
         inner.Children.Add(new Label { Content = existing is null ? "_Comment:" : "Edit _comment:", Target = _rootBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
         inner.Children.Add(_rootBox);
         if (existing is not null)
         {
             inner.Children.Add(new Label { Content = "Repl_y:", Target = _replyBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+            AutomationProperties.SetName(_replyBox, "Reply");
+            AutomationProperties.SetAutomationId(_replyBox, "ThreadedCommentReplyBox");
+            AutomationProperties.SetHelpText(_replyBox, "Enter an optional reply to the threaded comment. Press Ctrl+Enter to reply.");
             _replyBox.PreviewKeyDown += (_, e) =>
             {
                 if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Enter)
@@ -77,6 +90,9 @@ public sealed class ThreadedCommentDialog : Window
             };
             inner.Children.Add(_replyBox);
         }
+        AutomationProperties.SetName(_resolveBox, "Mark as resolved");
+        AutomationProperties.SetAutomationId(_resolveBox, "ThreadedCommentResolvedBox");
+        AutomationProperties.SetHelpText(_resolveBox, "Mark the threaded comment as resolved.");
         inner.Children.Add(_resolveBox);
         root.Children.Add(inner);
 
