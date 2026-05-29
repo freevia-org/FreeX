@@ -587,6 +587,36 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_OutputAboveLimit_ReportsTransformSafetyDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Large">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">This output is intentionally over the tiny adapter limit.</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet, maxOutputBytes: 32);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*XSLT transform output exceeded the 32 byte safety limit*");
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void LoadTransformed_RejectsExternalDocumentFunction()
     {
         using var source = StreamFromString("<rows/>");
