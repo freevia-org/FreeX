@@ -145,6 +145,27 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void FormulaRangeMouseSelectionClearsTransientCellUiBeforeReplacingSelection()
+    {
+        var formulaReferenceSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.FormulaReferenceEditing.cs"));
+
+        var formulaRangeSelection = formulaReferenceSource[
+            formulaReferenceSource.IndexOf("private bool TryApplyFormulaRangeSelection", StringComparison.Ordinal)..
+            formulaReferenceSource.IndexOf("private IReadOnlyList<FormulaReferenceHighlight>", StringComparison.Ordinal)];
+
+        formulaRangeSelection.Should().Contain("HideValidationDropdown();");
+        formulaRangeSelection.Should().Contain("ClearCommentPreview();");
+        formulaRangeSelection.Should().Contain("SheetGrid.SelectedRange = range;");
+        formulaRangeSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(formulaRangeSelection.IndexOf("SheetGrid.SelectedRange = range;", StringComparison.Ordinal));
+        formulaRangeSelection.IndexOf("ClearCommentPreview();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(formulaRangeSelection.IndexOf("SheetGrid.SelectedRange = range;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MouseDownSelectionIgnoresNonLeftButtonsBeforeHitTesting()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
