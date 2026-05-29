@@ -79,8 +79,14 @@ public static class RibbonMetadata
     {
         fullWidth = GetCompactFullWidth(element);
         compactWidth = GetCompactWidth(element);
-        if (!double.IsNaN(fullWidth) && !double.IsNaN(compactWidth))
+        if (double.IsFinite(fullWidth) &&
+            double.IsFinite(compactWidth) &&
+            fullWidth > 0 &&
+            compactWidth > 0 &&
+            compactWidth <= fullWidth)
+        {
             return true;
+        }
 
         fullWidth = 0;
         compactWidth = 0;

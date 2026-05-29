@@ -72,6 +72,31 @@ public sealed class RibbonMetadataTests
         });
     }
 
+    [Theory]
+    [InlineData(double.NaN, 24)]
+    [InlineData(74, double.NaN)]
+    [InlineData(double.PositiveInfinity, 24)]
+    [InlineData(74, double.PositiveInfinity)]
+    [InlineData(0, 24)]
+    [InlineData(74, 0)]
+    [InlineData(-74, 24)]
+    [InlineData(74, -24)]
+    [InlineData(24, 74)]
+    public void CompactWidths_RejectInvalidLayoutMetadata(double fullWidth, double compactWidth)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var button = new Button();
+            RibbonMetadata.SetCompactWidths(button, fullWidth, compactWidth);
+
+            RibbonMetadata.TryGetCompactWidths(button, out var actualFullWidth, out var actualCompactWidth)
+                .Should()
+                .BeFalse();
+            actualFullWidth.Should().Be(0);
+            actualCompactWidth.Should().Be(0);
+        });
+    }
+
     [Fact]
     public void CommandContentLayout_ReadsAttachedMetadataOnly()
     {
