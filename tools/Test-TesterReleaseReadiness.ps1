@@ -103,6 +103,7 @@ foreach ($marker in @(
     "accessibility_uia_catalog:",
     "accessibility_known_issues:",
     "contents: write",
+    "dotnet-version: 10.0.x",
     "TestResults/tests.trx",
     "Public-preview promotion requires completed accessibility gate inputs",
     "gh release create",
