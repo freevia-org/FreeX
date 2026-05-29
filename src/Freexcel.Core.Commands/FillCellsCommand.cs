@@ -16,7 +16,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly FillCellsDirection _direction;
-    private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
     private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
 
     public string Label => _direction switch
@@ -48,7 +48,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
         _hyperlinkSnapshot = [];
         foreach (var target in targets)
         {
-            _snapshot.Add((target, sheet.GetCell(target)?.Clone()));
+            _snapshot.Add((target, sheet.GetCell(target)?.Clone(), sheet.GetStyleOnly(target.Row, target.Col)));
             _hyperlinkSnapshot.Add((
                 target,
                 sheet.Hyperlinks.TryGetValue(target, out var oldTarget),
@@ -61,6 +61,10 @@ public sealed class FillCellsCommand : IWorkbookCommand
             if (sourceCell is null)
             {
                 sheet.ClearCell(target);
+                if (sheet.GetStyleOnly(source.Row, source.Col) is { } sourceStyleOnly)
+                    sheet.SetStyleOnly(target.Row, target.Col, sourceStyleOnly);
+                else
+                    sheet.ClearStyleOnly(target.Row, target.Col);
                 sheet.Hyperlinks.Remove(target);
                 sheet.HyperlinkMetadata.Remove(target);
                 continue;
@@ -87,12 +91,17 @@ public sealed class FillCellsCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (address, oldCell) in _snapshot)
+        foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
         {
             if (oldCell is null)
+            {
                 sheet.ClearCell(address);
+                RestoreStyleOnly(sheet, address, oldStyleOnly);
+            }
             else
+            {
                 sheet.SetCell(address, oldCell.Clone());
+            }
         }
 
         if (_hyperlinkSnapshot is null)
@@ -147,6 +156,14 @@ public sealed class FillCellsCommand : IWorkbookCommand
         FillCellsDirection.Left => new CellAddress(_sheetId, target.Row, _range.End.Col),
         _ => target
     };
+
+    private static void RestoreStyleOnly(Sheet sheet, CellAddress address, StyleId? styleId)
+    {
+        if (styleId.HasValue)
+            sheet.SetStyleOnly(address.Row, address.Col, styleId.Value);
+        else
+            sheet.ClearStyleOnly(address.Row, address.Col);
+    }
 
     private static Cell CloneForTarget(Cell sourceCell, CellAddress source, CellAddress target, string sheetName)
     {
