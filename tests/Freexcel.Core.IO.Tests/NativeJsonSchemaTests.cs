@@ -210,6 +210,43 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsUnresolvableNativeJsonCustomViewSheetReferences()
+    {
+        const string json = """
+            {
+              "Name": "CustomViewSheetReferences",
+              "Sheets": [
+                { "Name": "Loaded" }
+              ],
+              "CustomViews": [
+                {
+                  "Name": "Mixed",
+                  "Sheets": [
+                    { "SheetName": "Loaded", "ZoomPercent": 110 },
+                    { "SheetName": "Missing", "ZoomPercent": 125 }
+                  ]
+                },
+                {
+                  "Name": "OnlyMissing",
+                  "Sheets": [
+                    { "SheetName": "Missing", "ZoomPercent": 140 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        var view = workbook.CustomViews.Should().ContainSingle().Which;
+        view.Name.Should().Be("Mixed");
+        var sheetState = view.Sheets.Should().ContainSingle().Which;
+        sheetState.SheetName.Should().Be("Loaded");
+        sheetState.ZoomPercent.Should().Be(110);
+    }
+
+    [Fact]
     public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
     {
         using var stream = PositionedStreamFromString("ignored", """

@@ -369,9 +369,16 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         foreach (var viewDto in dto.CustomViews ?? [])
         {
             if (string.IsNullOrWhiteSpace(viewDto?.Name)) continue;
+            var sheets = (viewDto.Sheets ?? [])
+                .Select(sheetDto => ToWorksheetCustomViewState(sheetDto, workbook, loadedSheetsBySourceName))
+                .OfType<WorksheetCustomViewState>()
+                .ToList();
+            if (sheets.Count == 0)
+                continue;
+
             workbook.CustomViews.Add(new WorkbookCustomView(
                 viewDto.Name,
-                (viewDto.Sheets ?? []).Select(sheetDto => ToWorksheetCustomViewState(sheetDto, workbook, loadedSheetsBySourceName)).ToList(),
+                sheets,
                 string.IsNullOrWhiteSpace(viewDto.Id) ? null : viewDto.Id,
                 viewDto.IncludePrintSettings ?? true,
                 viewDto.IncludeHiddenRowsColumnsAndFilterSettings ?? true));
