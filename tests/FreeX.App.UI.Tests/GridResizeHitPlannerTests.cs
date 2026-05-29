@@ -57,6 +57,42 @@ public sealed class GridResizeHitPlannerTests
     }
 
     [Fact]
+    public void HitTest_PrefersNearestColumnEdgeWhenHitZonesOverlap()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0)],
+            [new ColMetric(1, 40, 0), new ColMetric(2, 3, 40)]);
+
+        GridResizeHitPlanner.HitTest(
+                viewport,
+                new Point(30 + 40 + 2.5, 8),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                hitZone: 4)
+            .Should()
+            .Be(new GridResizeHit(GridResizeHitTarget.Column, 2, 3));
+    }
+
+    [Fact]
+    public void HitTest_PrefersNearestRowEdgeWhenHitZonesOverlap()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 3, 20)],
+            [new ColMetric(1, 40, 0)]);
+
+        GridResizeHitPlanner.HitTest(
+                viewport,
+                new Point(12, 18 + 20 + 2.5),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                hitZone: 4)
+            .Should()
+            .Be(new GridResizeHit(GridResizeHitTarget.Row, 2, 3));
+    }
+
+    [Fact]
     public void HitTest_ReturnsNoneAwayFromHeadersOrWhenViewportIsMissing()
     {
         GridResizeHitPlanner.HitTest(
@@ -89,6 +125,8 @@ public sealed class GridResizeHitPlannerTests
         source.Should().Contain("for (var i = 0; i < rows.Count; i++)");
         source.Should().Contain("if (rightEdge - pointer.X > hitZone)");
         source.Should().Contain("if (bottomEdge - pointer.Y > hitZone)");
+        source.Should().Contain("nearestColumnDistance");
+        source.Should().Contain("nearestRowDistance");
         source.Should().NotContain("public sealed record GridResizeHit");
         source.Should().NotContain("foreach (var column in viewport.ColMetrics)");
         source.Should().NotContain("foreach (var row in viewport.RowMetrics)");
