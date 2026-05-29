@@ -117,6 +117,10 @@ public sealed class MainWindowXamlKeyTipTests
 
         keyTipSource.Should().Contain("private bool TryInvokeTopLevelQatKeyTip(string keyTip)");
         keyTipSource.Should().Contain("GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)");
+        keyTipSource.Should().Contain("private IEnumerable<FrameworkElement> EnumerateKeyTipCandidateElements");
+        keyTipSource.Should().Contain("RibbonTabs.Items.OfType<TabItem>()");
+        keyTipSource.Should().Contain("EnumerateQuickAccessKeyTipButtons()");
+        keyTipSource.Should().Contain("selectedTab.Content as DependencyObject ?? selectedTab");
         keyTipSource.Should().Contain("if (!match.IsEnabled)");
         keyTipSource.Should().Contain("match.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, match));");
 
