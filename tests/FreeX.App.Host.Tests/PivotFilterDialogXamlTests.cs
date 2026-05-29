@@ -225,6 +225,31 @@ public sealed class PivotFilterDialogXamlTests
     }
 
     [Fact]
+    public void PivotValueFieldSettingsDialog_ExposesAutomationIdsAndHelpText()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        AssertAutomation(document, presentation, xaml, "CustomNameBox", "PivotValueCustomNameBox");
+        AssertAutomation(document, presentation, xaml, "SummaryFunctionBox", "PivotValueSummaryFunctionBox");
+        AssertAutomation(document, presentation, xaml, "ShowValuesAsBox", "PivotValueShowValuesAsBox");
+        AssertAutomation(document, presentation, xaml, "BaseFieldBox", "PivotValueBaseFieldBox");
+        AssertAutomation(document, presentation, xaml, "BaseItemBox", "PivotValueBaseItemBox");
+        AssertAutomation(document, presentation, xaml, "NumberFormatPresetBox", "PivotValueNumberFormatPresetBox");
+        AssertAutomation(document, presentation, xaml, "NumberFormatButton", "PivotValueNumberFormatButton");
+        AssertAutomation(document, presentation, xaml, "NumberFormatBox", "PivotValueNumberFormatIdBox");
+        AssertAutomation(document, presentation, xaml, "NumberFormatCodeBox", "PivotValueCustomFormatCodeBox");
+        AssertAutomation(document, presentation, xaml, "OkButton", "PivotValueFieldSettingsOkButton");
+
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Content")?.Value == "_Cancel")
+            .Attribute("AutomationProperties.AutomationId")?.Value
+            .Should()
+            .Be("PivotValueFieldSettingsCancelButton");
+    }
+
+    [Fact]
     public void PivotValueFieldSettingsDialogOpenedFromKeyboard_FocusesCustomName()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
@@ -410,6 +435,21 @@ public sealed class PivotFilterDialogXamlTests
             .Single(element => element.Attribute("Content")?.Value == content);
 
         label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
+    }
+
+    private static void AssertAutomation(
+        XDocument document,
+        XNamespace presentation,
+        XNamespace xaml,
+        string name,
+        string automationId)
+    {
+        var element = document
+            .Descendants()
+            .Single(element => element.Name.Namespace == presentation && element.Attribute(xaml + "Name")?.Value == name);
+
+        element.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
+        element.Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
     }
 
     private static T GetControl<T>(PivotValueFieldSettingsDialog dialog, string name)
