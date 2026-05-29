@@ -99,7 +99,7 @@ internal static partial class DelimitedTextWorkbookReader
             return false;
 
         delimiter = directive[4];
-        return delimiter is not '\r' and not '\n';
+        return delimiter is not '\r' and not '\n' and not '"';
     }
 
     internal static bool TryReadRecord(TextReader reader, char delimiter, out List<DelimitedTextField> fields)
