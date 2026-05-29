@@ -38,6 +38,23 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void RecalcEngine_CollectsFormulaCellsWithoutLinqScaffolding()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
+
+        source.Should().Contain(
+            "sheet.FormulaCellCount",
+            "full and sheet recalculation should pre-size formula-cell lists from tracked sheet metadata");
+        source.Should().Contain(
+            "if (!sheet.HasFormulas)",
+            "sheets without formulas should be skipped before enumerating occupied cells");
+        source.Should().NotContain(
+            ".Where(entry => entry.Cell.HasFormula)",
+            "formula-cell collection should avoid LINQ iterator/list scaffolding on recalculation hot paths");
+    }
+
+    [Fact]
     public void SetDependencies_TracksDependents()
     {
         var graph = new DependencyGraph();
