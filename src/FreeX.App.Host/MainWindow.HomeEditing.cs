@@ -313,7 +313,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Clear Comments",
+                "Clear Comments and Notes",
                 sheetId => new ClearCommentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
             return;
 
