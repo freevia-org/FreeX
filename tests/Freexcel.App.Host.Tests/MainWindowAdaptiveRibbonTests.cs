@@ -557,13 +557,16 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;");
         fields.Should().Contain("private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;");
         fields.Should().Contain("private ScrollViewer? _ribbonAdaptiveScrollViewerCache;");
+        fields.Should().Contain("private string? _ribbonCompactSnapshotCacheKey;");
+        fields.Should().Contain("private IReadOnlyList<RibbonCompactGroupSnapshot>? _ribbonCompactGroupSnapshotCache;");
         fields.Should().Contain("private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;");
         fields.Should().Contain("private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];");
         fields.Should().Contain("private bool _ribbonAdaptiveStateDiffInvalidated;");
         fields.Should().Contain("private bool _ribbonFallbackPending;");
         source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
         source.Should().Contain("_ribbonAdaptiveGroupCache");
-        source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])");
+        source.Should().Contain("GetCachedRibbonCompactGroupSnapshots(groups, controlCacheKey)");
+        source.Should().Contain("MeasureRibbonAdaptiveGroup(snapshot, collapsedButtons[index])");
         source.Should().Contain("UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);");
         source.Should().Contain("RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth)");
         source.Should().Contain("GetCachedRibbonAdaptiveGroups(activePanel)");
@@ -573,13 +576,34 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("_ribbonAdaptiveScrollViewerCache");
         source.Should().Contain("ribbonScrollViewer ??= FindVisualAncestor<ScrollViewer>(activePanel)");
         source.Should().Contain("RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth)");
-        source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth)");
+        source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, availableWidth)");
+        source.Should().Contain("private IReadOnlyList<RibbonCompactGroupSnapshot> GetCachedRibbonCompactGroupSnapshots");
+        source.Should().Contain("private static void ApplyRibbonGroupCompactSnapshot(RibbonCompactGroupSnapshot snapshot");
+        source.Should().Contain("private static void ApplyRibbonButtonCompactSnapshot(RibbonCompactButtonSnapshot snapshot");
+        source.Should().Contain("var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);");
+        source.Should().Contain("var requiresMeasuredCorrection = layout.RequiresMeasuredCorrection");
+        source.Should().Contain("? !hasCachedCorrection || RibbonRowOverflowsMeasured(activePanel, availableWidth)");
+        source.Should().Contain(": !hasCachedCorrection && RibbonRowOverflowsMeasured(activePanel, availableWidth);");
         source.Should().Contain("CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates)");
         source.Should().Contain("_ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates");
         source.Should().Contain("SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth)");
+        source.Should().Contain("if (!hasCachedCorrection || requiresMeasuredCorrection)");
+        source.Should().NotContain("var requiresMeasuredCorrection = correctedStates is null || layout.RequiresMeasuredCorrection;");
         source.Should().NotContain("width <= 2200.0");
         source.Should().NotContain("width += 8.0");
         source.Should().NotContain("RemoveRibbonCollapsedGroupButtons(activePanel)");
+
+        var groupCompactor = source.Substring(
+            source.IndexOf("private static void ApplyRibbonGroupCompactSnapshot(RibbonCompactGroupSnapshot snapshot", StringComparison.Ordinal),
+            source.IndexOf("private static void SetRibbonButtonCompact(ButtonBase button", StringComparison.Ordinal) -
+            source.IndexOf("private static void ApplyRibbonGroupCompactSnapshot(RibbonCompactGroupSnapshot snapshot", StringComparison.Ordinal));
+        groupCompactor.Should().NotContain("EnumerateVisualDescendants");
+
+        var buttonCompactor = source.Substring(
+            source.IndexOf("private static void ApplyRibbonButtonCompactSnapshot(RibbonCompactButtonSnapshot snapshot", StringComparison.Ordinal),
+            source.IndexOf("private static void ApplySmallButtonCompactLayout", StringComparison.Ordinal) -
+            source.IndexOf("private static void ApplyRibbonButtonCompactSnapshot(RibbonCompactButtonSnapshot snapshot", StringComparison.Ordinal));
+        buttonCompactor.Should().NotContain("EnumerateVisualDescendants");
     }
 
     [Fact]
