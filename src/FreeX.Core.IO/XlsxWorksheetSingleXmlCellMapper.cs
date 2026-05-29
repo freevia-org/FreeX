@@ -72,8 +72,9 @@ internal static class XlsxWorksheetSingleXmlCellMapper
             if (xml is not null)
             {
                 InsertSingleXmlCells(root, xml);
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
             }
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
     }
 
