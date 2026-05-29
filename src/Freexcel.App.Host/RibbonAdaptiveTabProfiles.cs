@@ -128,7 +128,8 @@ internal static class RibbonAdaptiveTabProfiles
             Breakpoints:
             [
                 Rule(760, collapseGroups: ["Show", "Macros"])
-            ]),
+            ],
+            RequiresMeasuredCorrection: true),
         new(
             Name: "Draw",
             RequiredGroups: ["Tools", "Pens", "Convert"],
@@ -137,7 +138,7 @@ internal static class RibbonAdaptiveTabProfiles
             [
                 Rule(760, collapseFromIndex: 0),
                 Rule(1120, collapseFromIndex: 3),
-                Rule(1320, collapseFromIndex: 4)
+                Rule(1320, collapseFromIndex: 3)
             ]),
         new(
             Name: "Tiny",

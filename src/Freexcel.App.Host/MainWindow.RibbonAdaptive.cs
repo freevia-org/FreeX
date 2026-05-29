@@ -831,13 +831,15 @@ public partial class MainWindow
 
     private bool TryGetCachedActiveRibbonPanel(TabItem tabItem, out StackPanel? activePanel)
     {
-        if (ReferenceEquals(_ribbonAdaptiveActivePanelCacheTab, tabItem) &&
-            _ribbonAdaptiveActivePanelCache is { IsVisible: true } cachedPanel)
+        if (_ribbonAdaptiveActivePanelCacheByTab.TryGetValue(tabItem, out var cachedPanel) &&
+            cachedPanel.IsVisible &&
+            ReferenceEquals(FindVisualAncestor<TabItem>(cachedPanel), tabItem))
         {
             activePanel = cachedPanel;
             return true;
         }
 
+        _ribbonAdaptiveActivePanelCacheByTab.Remove(tabItem);
         activePanel = null;
         return false;
     }
@@ -846,17 +848,11 @@ public partial class MainWindow
     {
         if (activePanel is null)
         {
-            if (ReferenceEquals(_ribbonAdaptiveActivePanelCacheTab, tabItem))
-            {
-                _ribbonAdaptiveActivePanelCacheTab = null;
-                _ribbonAdaptiveActivePanelCache = null;
-            }
-
+            _ribbonAdaptiveActivePanelCacheByTab.Remove(tabItem);
             return null;
         }
 
-        _ribbonAdaptiveActivePanelCacheTab = tabItem;
-        _ribbonAdaptiveActivePanelCache = activePanel;
+        _ribbonAdaptiveActivePanelCacheByTab[tabItem] = activePanel;
         return activePanel;
     }
 

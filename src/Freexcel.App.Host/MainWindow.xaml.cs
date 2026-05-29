@@ -92,8 +92,7 @@ public partial class MainWindow : Window
     private bool _ribbonResizeNormalizationRequired = true;
     private string? _lastRibbonAdaptiveAppliedStateKey;
     private string? _ribbonAdaptiveControlCacheKey;
-    private TabItem? _ribbonAdaptiveActivePanelCacheTab;
-    private StackPanel? _ribbonAdaptiveActivePanelCache;
+    private readonly Dictionary<TabItem, StackPanel> _ribbonAdaptiveActivePanelCacheByTab = [];
     private StackPanel? _ribbonAdaptiveControlCachePanel;
     private ScrollViewer? _ribbonAdaptiveScrollViewerCache;
     private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;
