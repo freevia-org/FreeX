@@ -167,8 +167,11 @@ public sealed class ExcelParityDateSerialTests
 
     [Theory]
     [InlineData("=TIME(1.9,2.9,3.9)", 0.0430902777777778)]
+    [InlineData("=TIME(32767.9,0,0)", 0.291666666666667)]
+    [InlineData("=TIME(0,32767.9,0)", 0.754861111111111)]
     [InlineData("=TIME(25,61,61)", 0.0847337962962964)]
     [InlineData("=TIME(0,0,32767)", 0.379247685185185)]
+    [InlineData("=TIME(0,0,32767.9)", 0.379247685185185)]
     public void Time_TruncatesComponentsAndWrapsWithinDay(string formula, double expected)
     {
         var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
