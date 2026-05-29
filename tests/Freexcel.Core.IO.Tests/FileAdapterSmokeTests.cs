@@ -6075,6 +6075,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_ConditionalFormat_ColorScaleThresholds_Survive()
+    {
+        var workbook = new Workbook("CfColorScaleNativeJson");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.ColorScale,
+            Operator = CfOperator.Equal,
+            UseThreeColorScale = true,
+            MinThresholdType = CfThresholdType.Number,
+            MinThresholdValue = "10",
+            MinThresholdGreaterThanOrEqual = false,
+            MidThresholdType = CfThresholdType.Percentile,
+            MidThresholdValue = "50",
+            MidThresholdGreaterThanOrEqual = true,
+            MaxThresholdType = CfThresholdType.Formula,
+            MaxThresholdValue = "$B$1",
+            MaxThresholdGreaterThanOrEqual = false
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.MinThresholdType.Should().Be(CfThresholdType.Number);
+        rule.MinThresholdValue.Should().Be("10");
+        rule.MinThresholdGreaterThanOrEqual.Should().BeFalse();
+        rule.MidThresholdType.Should().Be(CfThresholdType.Percentile);
+        rule.MidThresholdValue.Should().Be("50");
+        rule.MidThresholdGreaterThanOrEqual.Should().BeTrue();
+        rule.MaxThresholdType.Should().Be(CfThresholdType.Formula);
+        rule.MaxThresholdValue.Should().Be("$B$1");
+        rule.MaxThresholdGreaterThanOrEqual.Should().BeFalse();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SkipsInvalidConditionalFormatRules()
     {
         const string json = """
@@ -6169,6 +6212,9 @@ public partial class FileAdapterSmokeTests
                   "AppliesTo": "A1:A5",
                   "RuleType": 6,
                   "Operator": 0,
+                  "MinThresholdType": 999,
+                  "MidThresholdType": 999,
+                  "MaxThresholdType": 999,
                   "DataBarMinThresholdType": 999,
                   "DataBarMaxThresholdType": 999,
                   "IconSetThresholds": [
@@ -6187,6 +6233,9 @@ public partial class FileAdapterSmokeTests
         var loaded = new NativeJsonAdapter().Load(ms);
 
         var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.MinThresholdType.Should().Be(CfThresholdType.Min);
+        rule.MidThresholdType.Should().Be(CfThresholdType.Percentile);
+        rule.MaxThresholdType.Should().Be(CfThresholdType.Max);
         rule.DataBarMinThresholdType.Should().Be(CfThresholdType.Min);
         rule.DataBarMaxThresholdType.Should().Be(CfThresholdType.Max);
         rule.IconSetThresholds.Should().ContainSingle()
