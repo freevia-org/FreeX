@@ -102,7 +102,8 @@ public partial class MainWindow : Window
     private string? _lastRibbonCollapsedFootprintMode;
     private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
     private bool _ribbonAdaptiveStateDiffInvalidated;
-    private bool _ribbonResizeCompactFallbackPending;
+    private bool _ribbonFallbackPending;
+    private RibbonFallbackWork _ribbonFallbackWork;
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;

@@ -148,35 +148,48 @@ public partial class MainWindow
             PrepareSelectedRibbonTabForImmediateCompaction();
 
         NormalizeRibbonSurface(forceCompact: true);
-        if (!scheduleFallback)
-            return;
-
-        Dispatcher.BeginInvoke(
-            (Action)(() =>
-            {
-                if (prepareSelectedTab)
-                    PrepareSelectedRibbonTabForImmediateCompaction();
-
-                NormalizeRibbonSurface(forceCompact: true);
-            }),
-            DispatcherPriority.Send);
+        if (scheduleFallback)
+            QueueRibbonFallback(RibbonFallbackWork.NormalizeSurface);
     }
 
     private void CompactRibbonSurfaceAfterResize(bool scheduleFallback)
     {
         UpdateRibbonCompactMode(force: true);
-        if (!scheduleFallback || _ribbonResizeCompactFallbackPending)
+        if (scheduleFallback)
+            QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
+    }
+
+    private void QueueRibbonFallback(RibbonFallbackWork work)
+    {
+        if (work == RibbonFallbackWork.None)
             return;
 
-        _ribbonResizeCompactFallbackPending = true;
+        _ribbonFallbackWork = MergeRibbonFallbackWork(_ribbonFallbackWork, work);
+        if (_ribbonFallbackPending)
+            return;
+
+        _ribbonFallbackPending = true;
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
-                _ribbonResizeCompactFallbackPending = false;
-                UpdateRibbonCompactMode(force: true);
+                var pendingWork = _ribbonFallbackWork;
+                _ribbonFallbackWork = RibbonFallbackWork.None;
+                _ribbonFallbackPending = false;
+
+                if (pendingWork == RibbonFallbackWork.NormalizeSurface)
+                    NormalizeRibbonSurface(forceCompact: true);
+                else if (pendingWork == RibbonFallbackWork.CompactOnly)
+                    UpdateRibbonCompactMode(force: true);
             }),
             DispatcherPriority.Send);
     }
+
+    private static RibbonFallbackWork MergeRibbonFallbackWork(RibbonFallbackWork current, RibbonFallbackWork requested) =>
+        current == RibbonFallbackWork.NormalizeSurface || requested == RibbonFallbackWork.NormalizeSurface
+            ? RibbonFallbackWork.NormalizeSurface
+            : current == RibbonFallbackWork.CompactOnly || requested == RibbonFallbackWork.CompactOnly
+                ? RibbonFallbackWork.CompactOnly
+                : RibbonFallbackWork.None;
 
     private void CompleteRibbonResizeCompaction()
     {
