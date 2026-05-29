@@ -5,9 +5,12 @@ namespace FreeX.App.Host;
 
 public static class DataTableInputParser
 {
-    public static bool IsTwoVariableMode(string input) =>
-        input.Trim().Equals("two", StringComparison.OrdinalIgnoreCase) ||
-        input.Trim().Equals("2", StringComparison.OrdinalIgnoreCase);
+    public static bool IsTwoVariableMode(string input)
+    {
+        var normalized = input.Trim();
+        return normalized.Equals("two", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Equals("2", StringComparison.OrdinalIgnoreCase);
+    }
 
     public static CellAddress GetDefaultFormulaCell(GridRange range, bool twoVariable) =>
         GetDefaultFormulaCell(range, DataTableInputOrientation.Column, twoVariable);
