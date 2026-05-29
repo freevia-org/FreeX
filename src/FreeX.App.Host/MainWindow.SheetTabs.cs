@@ -906,19 +906,28 @@ public partial class MainWindow
     {
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        RenameSheetFromTab(tab);
+        RenameSheet(tab.Id, tab.Name);
     }
 
-    private void RenameSheetFromTab(SheetTabViewModel tab)
+    private void RenameCurrentSheet()
     {
-        var dialog = new SheetNameDialog(tab.Name) { Owner = this };
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        RenameSheet(_currentSheetId, sheet.Name);
+    }
+
+    private void RenameSheet(SheetId sheetId, string currentName)
+    {
+        var dialog = new SheetNameDialog(currentName) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
         var name = dialog.Result.SheetName;
-        if (!string.IsNullOrWhiteSpace(name) && name != tab.Name)
+        if (!string.IsNullOrWhiteSpace(name) && name != currentName)
         {
-            var outcome = _commandBus.Execute(_workbook.Id, new RenameSheetCommand(tab.Id, name));
+            var outcome = _commandBus.Execute(_workbook.Id, new RenameSheetCommand(sheetId, name));
             if (!outcome.Success)
             {
                 ShowCommandError(outcome, "Rename Sheet");
