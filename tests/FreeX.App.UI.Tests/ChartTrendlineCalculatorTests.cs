@@ -65,6 +65,23 @@ public sealed class ChartTrendlineCalculatorTests
     }
 
     [Fact]
+    public void Calculate_PolynomialTrendline_AggregatesLeastSquaresInputsWithoutLinqPasses()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
+        var polynomialBlock = source[
+            source.IndexOf("private static IReadOnlyList<DataPoint> CalculatePolynomialTrendline", StringComparison.Ordinal)..
+            source.IndexOf("private static double EvaluatePolynomial", StringComparison.Ordinal)];
+
+        polynomialBlock.Should().Contain("var xPowerSums = new double[(degree * 2) + 1];");
+        polynomialBlock.Should().Contain("xPower *= point.X;");
+        polynomialBlock.Should().NotContain(".Sum(");
+        polynomialBlock.Should().NotContain("Math.Pow(");
+        polynomialBlock.Should().NotContain("points.Min(");
+        polynomialBlock.Should().NotContain("points.Max(");
+    }
+
+    [Fact]
     public void TryCalculateRSquared_ReturnsOneForPerfectFit()
     {
         var source = new[] { new DataPoint(0, 1), new DataPoint(1, 3), new DataPoint(2, 5) };

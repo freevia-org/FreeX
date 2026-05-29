@@ -258,8 +258,15 @@ public static class ChartTrendlineCalculator
         if (coefficients is null)
             return [];
 
-        var minX = points.Min(point => point.X);
-        var maxX = points.Max(point => point.X);
+        var minX = double.PositiveInfinity;
+        var maxX = double.NegativeInfinity;
+        for (var i = 0; i < points.Count; i++)
+        {
+            var x = points[i].X;
+            minX = Math.Min(minX, x);
+            maxX = Math.Max(maxX, x);
+        }
+
         var samples = Math.Max(16, points.Count * 4);
         var trendPoints = new List<DataPoint>(samples);
         for (var i = 0; i < samples; i++)
@@ -276,13 +283,28 @@ public static class ChartTrendlineCalculator
         var size = degree + 1;
         var matrix = new double[size, size];
         var vector = new double[size];
+        var xPowerSums = new double[(degree * 2) + 1];
+        var yXPowerSums = new double[size];
+
+        for (var pointIndex = 0; pointIndex < points.Count; pointIndex++)
+        {
+            var point = points[pointIndex];
+            var xPower = 1.0;
+            for (var power = 0; power < xPowerSums.Length; power++)
+            {
+                xPowerSums[power] += xPower;
+                if (power < yXPowerSums.Length)
+                    yXPowerSums[power] += point.Y * xPower;
+                xPower *= point.X;
+            }
+        }
 
         for (var row = 0; row < size; row++)
         {
             for (var col = 0; col < size; col++)
-                matrix[row, col] = points.Sum(point => Math.Pow(point.X, row + col));
+                matrix[row, col] = xPowerSums[row + col];
 
-            vector[row] = points.Sum(point => point.Y * Math.Pow(point.X, row));
+            vector[row] = yXPowerSums[row];
         }
 
         return SolveLinearSystem(matrix, vector);
