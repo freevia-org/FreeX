@@ -128,6 +128,23 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void DragRangeExtensionHidesValidationDropdownBeforeReplacingSelection()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var extendSelection = selectionSource[
+            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+
+        extendSelection.Should().Contain("HideValidationDropdown();");
+        extendSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
+        extendSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(extendSelection.IndexOf("SheetGrid.SelectedRange = new GridRange(", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MouseDownSelectionIgnoresNonLeftButtonsBeforeHitTesting()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
