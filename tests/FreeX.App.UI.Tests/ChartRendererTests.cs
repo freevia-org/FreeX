@@ -135,6 +135,18 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void StockRenderer_BuildsDateAxisXValuesWithoutLinqScaffolding()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.Stock.cs"));
+
+        source.Should().NotContain("Enumerable.Range");
+        source.Should().NotContain(".Select(DateTimeAxis.ToDouble)");
+        source.Should().NotContain(".Min()");
+        source.Should().NotContain(".Max()");
+    }
+
+    [Fact]
     public void TreemapRenderer_ProducesRectangleAnnotationsProportionalToValues()
     {
         var sheetId = SheetId.New();
