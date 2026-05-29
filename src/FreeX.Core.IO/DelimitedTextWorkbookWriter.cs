@@ -308,7 +308,7 @@ internal static class DelimitedTextWorkbookWriter
 
     private static string FormatCell(Cell cell) =>
         cell.FormulaText is { } formulaText
-            ? $"={formulaText}"
+            ? formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText : $"={formulaText}"
             : FormatValue(cell.Value);
 
     private static string FormatValue(ScalarValue value) => value switch
