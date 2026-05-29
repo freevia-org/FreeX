@@ -5,7 +5,7 @@ namespace FreeX.Core.Commands;
 
 public static class ClipboardSerializer
 {
-    /// <summary>Serialises the display text of <paramref name="range"/> as Excel-compatible
+    /// <summary>Serialises the display text of <paramref name="range"/> as spreadsheet-compatible
     /// tab/newline-delimited text.</summary>
     public static string Serialize(ViewportModel viewport, GridRange range)
     {

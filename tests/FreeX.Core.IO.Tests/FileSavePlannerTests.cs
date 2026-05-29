@@ -10,8 +10,8 @@ public sealed class FileSavePlannerTests
     public void TryResolveExistingPath_UsesOnlySaveCapableFormats()
     {
         var adapter = new FakeAdapter([
-            new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
-            new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+            new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+            new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
         ]);
 
         var resolved = FileSavePlanner.TryResolveExistingPath("Book.xlsm", [adapter], out var target);
@@ -39,7 +39,7 @@ public sealed class FileSavePlannerTests
     public void TryResolveExistingPath_TrimsCurrentPathBeforeReturningTarget()
     {
         var adapter = new FakeAdapter([
-            new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true)
+            new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true)
         ]);
 
         var resolved = FileSavePlanner.TryResolveExistingPath("  C:\\Temp\\Book.XLSX  ", [adapter], out var target);
