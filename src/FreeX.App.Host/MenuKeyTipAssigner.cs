@@ -84,10 +84,29 @@ public static class MenuKeyTipAssigner
         if (string.IsNullOrWhiteSpace(header))
             yield break;
 
+        foreach (var character in EnumerateAccessKeyCharacters(header))
+            yield return character;
+
         foreach (var character in header)
         {
             if (IsTypeableKeyTipCharacter(character))
                 yield return character;
+        }
+    }
+
+    private static IEnumerable<char> EnumerateAccessKeyCharacters(string header)
+    {
+        for (var index = 0; index < header.Length - 1; index++)
+        {
+            if (header[index] != '_')
+                continue;
+
+            index++;
+            if (header[index] == '_')
+                continue;
+
+            if (IsTypeableKeyTipCharacter(header[index]))
+                yield return header[index];
         }
     }
 
