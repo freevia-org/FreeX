@@ -28,16 +28,11 @@ public static class GoalSeekService
         try
         {
             // Get starting point x0
-            var sheet = workbook.GetSheet(changingCell.Sheet);
-            double x0;
-            if (sheet?.GetCell(changingCell)?.Value is NumberValue nv0)
-                x0 = nv0.Value;
-            else
-                x0 = 0.0;
+            double x0 = ReadInitialChangingValue(workbook, changingCell);
 
             // Evaluate f(x) = formula(x) - target
             double fx0 = EvaluateF(workbook, engine, changingCell, setCell, x0, targetValue);
-            if (double.IsNaN(fx0) || double.IsInfinity(fx0))
+            if (IsInvalidNumber(fx0))
                 return new GoalSeekResult(false, x0, x0 + targetValue, 0);
 
             // Already at solution?
@@ -49,7 +44,7 @@ public static class GoalSeekService
             double x1 = x0 + step;
 
             double fx1 = EvaluateF(workbook, engine, changingCell, setCell, x1, targetValue);
-            if (double.IsNaN(fx1) || double.IsInfinity(fx1))
+            if (IsInvalidNumber(fx1))
                 return new GoalSeekResult(false, x0, fx0 + targetValue, 0);
 
             for (int i = 0; i < maxIterations; i++)
@@ -63,11 +58,11 @@ public static class GoalSeekService
                 // Secant step
                 double x2 = x1 - fx1 * (x1 - x0) / dfx;
 
-                if (double.IsNaN(x2) || double.IsInfinity(x2))
+                if (IsInvalidNumber(x2))
                     return new GoalSeekResult(false, x1, fx1 + targetValue, i + 1);
 
                 double fx2 = EvaluateF(workbook, engine, changingCell, setCell, x2, targetValue);
-                if (double.IsNaN(fx2) || double.IsInfinity(fx2))
+                if (IsInvalidNumber(fx2))
                     return new GoalSeekResult(false, x1, fx1 + targetValue, i + 1);
 
                 x0 = x1; fx0 = fx1;
@@ -82,17 +77,36 @@ public static class GoalSeekService
         finally
         {
             // Always restore original value
-            var sheet = workbook.GetSheet(changingCell.Sheet);
-            if (sheet is not null)
-            {
-                if (originalCell is not null)
-                    sheet.SetCell(changingCell, originalCell);
-                else
-                    sheet.ClearCell(changingCell);
-                engine.Recalculate(workbook, [changingCell]);
-            }
+            RestoreChangingCell(workbook, engine, changingCell, originalCell);
         }
     }
+
+    private static double ReadInitialChangingValue(Workbook workbook, CellAddress changingCell)
+    {
+        var sheet = workbook.GetSheet(changingCell.Sheet);
+        return sheet?.GetCell(changingCell)?.Value is NumberValue value ? value.Value : 0.0;
+    }
+
+    private static void RestoreChangingCell(
+        Workbook workbook,
+        RecalcEngine engine,
+        CellAddress changingCell,
+        Cell? originalCell)
+    {
+        var sheet = workbook.GetSheet(changingCell.Sheet);
+        if (sheet is null)
+            return;
+
+        if (originalCell is not null)
+            sheet.SetCell(changingCell, originalCell);
+        else
+            sheet.ClearCell(changingCell);
+
+        engine.Recalculate(workbook, [changingCell]);
+    }
+
+    private static bool IsInvalidNumber(double value) =>
+        double.IsNaN(value) || double.IsInfinity(value);
 
     private static double EvaluateF(
         Workbook workbook,

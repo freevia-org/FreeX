@@ -25,12 +25,13 @@ public static class WorkbookStatisticsService
 
         foreach (var sheet in workbook.Sheets)
         {
-            cellCount += sheet.CellCount;
-            formulaCount += sheet.EnumerateCells().Count(cell => cell.Cell.HasFormula);
-            commentCount += sheet.Comments.Count + sheet.ThreadedComments.Count;
-            chartCount += sheet.Charts.Count;
-            pictureCount += sheet.Pictures.Count;
-            shapeCount += sheet.DrawingShapes.Count + sheet.TextBoxes.Count;
+            var sheetStatistics = GetSheetStatistics(sheet);
+            cellCount += sheetStatistics.CellCount;
+            formulaCount += sheetStatistics.FormulaCount;
+            commentCount += sheetStatistics.CommentCount;
+            chartCount += sheetStatistics.ChartCount;
+            pictureCount += sheetStatistics.PictureCount;
+            shapeCount += sheetStatistics.ShapeCount;
         }
 
         return new WorkbookStatistics(
@@ -43,4 +44,21 @@ public static class WorkbookStatisticsService
             ShapeCount: shapeCount,
             NamedRangeCount: workbook.NamedRanges.Count);
     }
+
+    private static SheetStatistics GetSheetStatistics(Sheet sheet) =>
+        new(
+            CellCount: sheet.CellCount,
+            FormulaCount: sheet.EnumerateCells().Count(cell => cell.Cell.HasFormula),
+            CommentCount: sheet.Comments.Count + sheet.ThreadedComments.Count,
+            ChartCount: sheet.Charts.Count,
+            PictureCount: sheet.Pictures.Count,
+            ShapeCount: sheet.DrawingShapes.Count + sheet.TextBoxes.Count);
+
+    private readonly record struct SheetStatistics(
+        int CellCount,
+        int FormulaCount,
+        int CommentCount,
+        int ChartCount,
+        int PictureCount,
+        int ShapeCount);
 }
