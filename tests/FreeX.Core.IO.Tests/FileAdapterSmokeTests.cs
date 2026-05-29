@@ -431,6 +431,77 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_SkipsInvalidWorksheetSortStateRanges()
+    {
+        const string json = """
+        {
+          "Name": "WorksheetSortStateInvalidRangeLoad",
+          "Sheets": [
+            {
+              "Name": "Data",
+              "SortState": {
+                "Reference": "XFE1:XFE3",
+                "CaseSensitive": true,
+                "Conditions": [
+                  { "Reference": "A2:A3", "Descending": true, "SortBy": "cellColor" },
+                  { "Reference": "A0:A1", "Descending": true }
+                ]
+              }
+            }
+          ]
+        }
+        """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var loaded = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        loaded.SortState.Should().NotBeNull();
+        loaded.SortState!.Reference.Should().BeNull();
+        loaded.SortState.Conditions.Should().ContainSingle()
+            .Which.Reference.Should().Be("A2:A3");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_SkipsInvalidWorksheetSortStateRanges()
+    {
+        var workbook = new Workbook("WorksheetSortStateInvalidRangeSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            Reference = "XFE1:XFE3",
+            CaseSensitive = true,
+            Conditions =
+            [
+                new WorksheetSortConditionModel
+                {
+                    Reference = "A2:A3",
+                    Descending = true,
+                    SortBy = "cellColor"
+                },
+                new WorksheetSortConditionModel
+                {
+                    Reference = "A0:A1",
+                    Descending = true
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        using var document = JsonDocument.Parse(stream);
+        var sortState = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("SortState");
+
+        sortState.GetProperty("Reference").ValueKind.Should().Be(JsonValueKind.Null);
+        var conditions = sortState.GetProperty("Conditions").EnumerateArray().ToList();
+        conditions.Should().ContainSingle();
+        conditions[0].GetProperty("Reference").GetString().Should().Be("A2:A3");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_AdditionalWorksheetViews()
     {
         var workbook = new Workbook("AdditionalWorksheetViewsNativeJson");
