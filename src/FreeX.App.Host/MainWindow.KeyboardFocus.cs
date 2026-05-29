@@ -281,9 +281,9 @@ public partial class MainWindow
         if (PivotFieldListPane?.Visibility != Visibility.Visible)
             return false;
 
-        return PivotFieldListSearchBox.Focus() ||
-               PivotAvailableFieldsList.Focus() ||
-               PivotFieldListCloseBtn.Focus();
+        return TryFocusTaskPaneElement(PivotFieldListSearchBox) ||
+               TryFocusTaskPaneElement(PivotAvailableFieldsList) ||
+               TryFocusTaskPaneElement(PivotFieldListCloseBtn);
     }
 
     private bool FocusSlicerTimelinePane()
@@ -291,7 +291,20 @@ public partial class MainWindow
         if (SlicerTimelinePane?.Visibility != Visibility.Visible)
             return false;
 
-        return SlicerTimelinePaneCloseBtn.Focus();
+        return TryFocusTaskPaneElement(SlicerTimelinePaneCloseBtn);
+    }
+
+    private bool TryFocusTaskPaneElement(Control? control)
+    {
+        if (control is null || !control.IsVisible || !control.IsEnabled)
+            return false;
+
+        control.BringIntoView();
+        control.UpdateLayout();
+        var focused = control.Focus();
+        Keyboard.Focus(control);
+        FocusManager.SetFocusedElement(FocusManager.GetFocusScope(control), control);
+        return focused || control.IsKeyboardFocusWithin || ReferenceEquals(Keyboard.FocusedElement, control);
     }
 
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
