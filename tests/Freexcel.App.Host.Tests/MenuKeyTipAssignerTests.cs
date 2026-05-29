@@ -146,6 +146,35 @@ public sealed class MenuKeyTipAssignerTests
         });
     }
 
+    [Fact]
+    public void DeterministicFallbackKeyTipsAvoidExistingPrefixConflicts()
+    {
+        RunSta(() =>
+        {
+            var letterItems = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                .Select(keyTip =>
+                {
+                    var item = new MenuItem { Header = keyTip };
+                    RibbonTooltip.SetKeyTip(item, keyTip.ToString());
+                    return item;
+                });
+            var digitItems = Enumerable.Range(1, 9)
+                .Select(index =>
+                {
+                    var item = new MenuItem { Header = index.ToString() };
+                    RibbonTooltip.SetKeyTip(item, index.ToString());
+                    return item;
+                });
+            var fallbackItem = new MenuItem { Header = "" };
+
+            var items = letterItems.Concat(digitItems).Append(fallbackItem).ToList();
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips(items);
+
+            RibbonTooltip.GetKeyTip(fallbackItem).Should().Be("0A");
+        });
+    }
+
     private static void RunSta(Action action)
     {
         Exception? exception = null;
