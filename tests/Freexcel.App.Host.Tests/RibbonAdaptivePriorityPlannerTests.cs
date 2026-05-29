@@ -42,6 +42,22 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
+    public void ApplyRuntimeVisibilityStates_ContributesDataToolsIconOnlyStateToPurePlan()
+    {
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
+
+        var states = RibbonAdaptivePriorityPlanner.ApplyRuntimeVisibilityStates(
+            1120,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
+
+        states[Array.IndexOf(groupNames, "Data Tools")].Should().Be(RibbonAdaptiveGroupState.IconOnly);
+        states.Where((_, index) => index != Array.IndexOf(groupNames, "Data Tools"))
+            .Should()
+            .OnlyContain(state => state == RibbonAdaptiveGroupState.Full);
+    }
+
+    [Fact]
     public void FallbackProtectedGroupIndexes_ProtectPriorityGroupsButRelaxAtVeryNarrowWidths()
     {
         var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
@@ -73,6 +89,30 @@ public sealed class RibbonAdaptivePriorityPlannerTests
         RibbonAdaptivePriorityPlanner.GetExpandableGroupIndexes(pageLayoutGroups, 1120)
             .Should()
             .Equal(Array.IndexOf(pageLayoutGroups, "Page Setup"));
+    }
+
+    [Fact]
+    public void ExpandableGroupIndexes_ExcludeRuntimeVisibilityStateOverrides()
+    {
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
+
+        RibbonAdaptivePriorityPlanner.GetExpandableGroupIndexes(groupNames, 1120)
+            .Should()
+            .NotContain(Array.IndexOf(groupNames, "Data Tools"));
+    }
+
+    [Fact]
+    public void RuntimeVisibilityProtectedGroupIndexes_ProtectOnlyVisibleRuntimeOverrides()
+    {
+        var dataGroups = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
+        var insertGroups = new[] { "Tables", "Illustrations", "Add-ins", "Charts" };
+
+        RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityProtectedGroupIndexes(dataGroups, 1120)
+            .Should()
+            .Equal(Array.IndexOf(dataGroups, "Data Tools"));
+        RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityProtectedGroupIndexes(insertGroups, 900)
+            .Should()
+            .BeEmpty();
     }
 
     [Fact]
