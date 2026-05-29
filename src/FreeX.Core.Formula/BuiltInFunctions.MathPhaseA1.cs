@@ -32,8 +32,7 @@ public static partial class BuiltInFunctions
                 foreach (var cell in rv.Flatten())
                 {
                     if (cell is ErrorValue ec) return ec;
-                    if (cell is BlankValue) continue;
-                    if (!TryCellNumber(cell, out double d)) return ErrorValue.Value;
+                    if (!TryCellNumber(cell, out double d)) continue;
                     if (!double.IsFinite(d) || d < 0) return ErrorValue.Num;
                     int n = (int)Math.Truncate(d);
                     values.Add(n);
