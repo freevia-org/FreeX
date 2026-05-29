@@ -247,6 +247,30 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsInvalidNativeJsonPrintTitleRanges()
+    {
+        const string json = """
+            {
+              "Name": "PrintTitleRanges",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "PrintTitleRows": { "Start": 0, "End": 2 },
+                  "PrintTitleColumns": { "Start": 2, "End": 1 }
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PrintTitleRows.Should().BeNull();
+        sheet.PrintTitleColumns.Should().BeNull();
+    }
+
+    [Fact]
     public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
     {
         using var stream = PositionedStreamFromString("ignored", """

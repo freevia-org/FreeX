@@ -171,8 +171,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.PrintGridlines = sDto.PrintGridlines;
             sheet.PrintHeadings = sDto.PrintHeadings;
             sheet.PrintOptionsMetadata = ToWorksheetPrintOptionsMetadata(sDto.PrintOptionsMetadata);
-            sheet.PrintTitleRows = ToRepeatRange(sDto.PrintTitleRows);
-            sheet.PrintTitleColumns = ToRepeatRange(sDto.PrintTitleColumns);
+            sheet.PrintTitleRows = ToRepeatRange(sDto.PrintTitleRows, CellAddress.MaxRow);
+            sheet.PrintTitleColumns = ToRepeatRange(sDto.PrintTitleColumns, CellAddress.MaxCol);
             sheet.PageHeader = ToHeaderFooter(sDto.PageHeader);
             sheet.PageFooter = ToHeaderFooter(sDto.PageFooter);
             sheet.FirstPageHeader = ToHeaderFooter(sDto.FirstPageHeader);
