@@ -223,6 +223,7 @@ public partial class MainWindow
 
             if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
             {
+                HideValidationDropdown();
                 ExtendSelection(_selectionAnchor.Value, newAddr);
             }
             else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
