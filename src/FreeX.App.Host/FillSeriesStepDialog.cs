@@ -64,7 +64,11 @@ public sealed class FillSeriesStepDialog : Window
         _stepBox.Text = step.ToString(CultureInfo.InvariantCulture);
         _stopBox.Text = "";
         AutomationProperties.SetName(_stepBox, "Step value");
+        AutomationProperties.SetAutomationId(_stepBox, "FillSeriesStepValueBox");
+        AutomationProperties.SetHelpText(_stepBox, "Enter the amount to increment each value in the series.");
         AutomationProperties.SetName(_stopBox, "Stop value");
+        AutomationProperties.SetAutomationId(_stopBox, "FillSeriesStopValueBox");
+        AutomationProperties.SetHelpText(_stopBox, "Enter the optional final value for the series.");
         _linearButton.Checked += (_, _) => UpdateDateUnitAvailability();
         _growthButton.Checked += (_, _) => UpdateDateUnitAvailability();
         _dateButton.Checked += (_, _) => UpdateDateUnitAvailability();
