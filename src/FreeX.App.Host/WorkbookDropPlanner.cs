@@ -21,7 +21,7 @@ public static class WorkbookDropPlanner
         if (!IsFilePathCandidate(path))
             return false;
 
-        var extension = Path.GetExtension(path);
+        var extension = Path.GetExtension(path) ?? string.Empty;
         return FileDialogFilterBuilder.FindOpenAdapter(adapters, extension, out _) is not null;
     }
 

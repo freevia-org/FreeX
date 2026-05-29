@@ -31,7 +31,7 @@ public sealed class WorkbookDropPlannerTests
     public void SelectOpenableFile_ReturnsNullWhenNoDroppedPathCanOpen()
     {
         var selected = WorkbookDropPlanner.SelectOpenableFile(
-            [@"C:\Temp\notes.pdf"],
+            [@"C:\Temp\README", @"C:\Temp\notes.pdf"],
             [new FakeAdapter(".xlsx", "Excel Workbook")]);
 
         selected.Should().BeNull();
