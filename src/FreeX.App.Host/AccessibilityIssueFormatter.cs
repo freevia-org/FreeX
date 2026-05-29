@@ -9,9 +9,15 @@ public static class AccessibilityIssueFormatter
     public static string Format(IReadOnlyList<AccessibilityIssue> issues)
     {
         var message = string.Join(Environment.NewLine,
-            issues.Take(MaxShownIssues).Select(issue => $"{issue.SheetName}!{issue.Location}: {issue.Message}"));
+            issues.Take(MaxShownIssues).Select(FormatIssue));
         if (issues.Count > MaxShownIssues)
-            message += $"{Environment.NewLine}...and {issues.Count - MaxShownIssues} more.";
+            message += FormatOverflowSummary(issues.Count);
         return message;
     }
+
+    private static string FormatIssue(AccessibilityIssue issue) =>
+        $"{issue.SheetName}!{issue.Location}: {issue.Message}";
+
+    private static string FormatOverflowSummary(int issueCount) =>
+        $"{Environment.NewLine}...and {issueCount - MaxShownIssues} more.";
 }

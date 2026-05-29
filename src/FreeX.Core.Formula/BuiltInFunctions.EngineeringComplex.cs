@@ -547,7 +547,10 @@ public static partial class BuiltInFunctions
     {
         if (value is ErrorValue e) return (0, 0, "i", e);
         if (value is BoolValue) return (0, 0, "i", ErrorValue.Value);
-        if (TryCellNumber(value, out var number)) return (number, 0, "i", null);
+        if (TryCellNumber(value, out var number))
+            return double.IsFinite(number)
+                ? (number, 0, "i", null)
+                : (0, 0, "i", ErrorValue.Num);
 
         var text = ToText(value).Trim();
         if (text.Length == 0) return (0, 0, "i", ErrorValue.Num);
@@ -555,7 +558,7 @@ public static partial class BuiltInFunctions
         var suffix = text[^1].ToString().ToLowerInvariant();
         if (suffix is not ("i" or "j"))
         {
-            return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var realOnly)
+            return TryParseComplexNumber(text, out var realOnly)
                 ? (realOnly, 0, "i", null)
                 : (0, 0, "i", ErrorValue.Num);
         }
@@ -591,7 +594,8 @@ public static partial class BuiltInFunctions
     }
 
     private static bool TryParseComplexNumber(string text, out double value) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+        && double.IsFinite(value);
 
     private static bool TryParseImaginaryCoefficient(string text, out double value)
     {
@@ -607,7 +611,8 @@ public static partial class BuiltInFunctions
             return true;
         }
 
-        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+            && double.IsFinite(value);
     }
 
     private static string FormatComplex(double real, double imaginary, string suffix)

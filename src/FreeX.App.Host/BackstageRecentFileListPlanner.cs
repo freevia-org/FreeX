@@ -13,22 +13,33 @@ public static class BackstageRecentFileListPlanner
         Func<string, bool>? pathExists = null)
     {
         pathExists ??= _ => true;
-        var normalizedFilter = string.IsNullOrWhiteSpace(filter)
-            ? null
-            : filter.Trim();
+        var allItems = BuildAllItems(entries, NormalizeFilter(filter), pathExists);
 
-        var allItems = entries
+        return new BackstageRecentFileListPlan(
+            allItems,
+            GetRecentItems(allItems),
+            GetPinnedItems(allItems));
+    }
+
+    private static string? NormalizeFilter(string? filter) =>
+        string.IsNullOrWhiteSpace(filter) ? null : filter.Trim();
+
+    private static List<RecentFileViewModel> BuildAllItems(
+        IEnumerable<RecentFileEntry> entries,
+        string? normalizedFilter,
+        Func<string, bool> pathExists) =>
+        entries
             .Where(entry => pathExists(entry.Path))
             .OrderByDescending(entry => entry.LastOpened)
             .Select(entry => new RecentFileViewModel(entry))
             .Where(item => MatchesFilter(item, normalizedFilter))
             .ToList();
 
-        return new BackstageRecentFileListPlan(
-            allItems,
-            allItems.Where(item => !item.IsPinned).ToList(),
-            allItems.Where(item => item.IsPinned).ToList());
-    }
+    private static List<RecentFileViewModel> GetRecentItems(IEnumerable<RecentFileViewModel> items) =>
+        items.Where(item => !item.IsPinned).ToList();
+
+    private static List<RecentFileViewModel> GetPinnedItems(IEnumerable<RecentFileViewModel> items) =>
+        items.Where(item => item.IsPinned).ToList();
 
     private static bool MatchesFilter(RecentFileViewModel item, string? filter) =>
         filter is null ||
