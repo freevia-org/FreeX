@@ -96,6 +96,12 @@ public partial class MainWindow
         RenameSheetFromTab(tab);
     }
 
+    private void RenameSheetFromTab(SheetTabViewModel tab)
+    {
+        _currentSheetId = tab.Id;
+        RenameSheet(tab.Id, tab.Name);
+    }
+
     private void AddSheetButton_Click(object sender, RoutedEventArgs e)
     {
         InsertNewSheet();
