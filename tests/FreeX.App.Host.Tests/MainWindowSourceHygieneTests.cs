@@ -1575,14 +1575,14 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Grid.RowSpan=\"3\"");
         xaml.Should().Contain("FontSize=\"6.6\"");
         xaml.Should().Contain("FontSize=\"14.5\"");
-        xaml.Should().Contain("Foreground=\"#155C38\"");
+        xaml.Should().Contain("Foreground=\"#10253A\"");
         xaml.Should().Contain("Margin=\"0,-3,0,0\"");
         xaml.Should().Contain("Margin=\"0,-1,0,0\"");
         xaml.Should().Contain("Margin=\"-1,-2,0,0\"");
         xaml.Should().Contain("Margin=\"1,-2,0,0\"");
         xaml.Should().Contain("Margin=\"0,-2,0,0\"");
         xaml.Should().NotContain("<Image Source=\"Resources/FreeX.ico\"");
-        xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreeXGreenBrush}\"");
+        xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreeXAccentBrush}\"");
         theme.Should().Contain("x:Key=\"FreeXTitleBarBrush\"");
         xaml.Should().Contain("Background=\"{StaticResource FreeXTitleBarBrush}\"");
         project.Should().Contain("<ApplicationIcon>Resources\\FreeX.ico</ApplicationIcon>");

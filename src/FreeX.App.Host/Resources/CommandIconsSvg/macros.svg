@@ -4,5 +4,5 @@
   <path d="M20 5v5h4" fill="none" stroke="#242424" stroke-width="1"/>
   <path d="M12 14l-3 3 3 3M19 14l3 3-3 3" fill="none" stroke="#4472c4" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M16.5 13l-2 8" stroke="#4472c4" stroke-width="1.4" stroke-linecap="round"/>
-  <path d="M13 24h8" stroke="#217346" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M13 24h8" stroke="#0F6D8C" stroke-width="1.5" stroke-linecap="round"/>
 </svg>

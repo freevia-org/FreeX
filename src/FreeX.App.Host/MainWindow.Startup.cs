@@ -47,6 +47,6 @@ public partial class MainWindow
         UpdateTitleBar();
         TryStartScreenshotTour();
         TryStartSheetTabVisualTour();
-        TryStartGreenBarVisualTour();
+        TryStartAccentBarVisualTour();
     }
 }

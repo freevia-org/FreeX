@@ -199,7 +199,7 @@ public partial class MainWindow
 
         SheetNavLeftBtn.Visibility = canScroll ? Visibility.Visible : Visibility.Hidden;
         SheetNavRightBtn.Visibility = canScroll ? Visibility.Visible : Visibility.Hidden;
-        var activeNavigationBrush = (Brush)FindResource("FreeXGreenDarkBrush");
+        var activeNavigationBrush = (Brush)FindResource("FreeXAccentDarkBrush");
         var inactiveNavigationBrush = (Brush)FindResource("FreeXBorderStrongBrush");
         SheetNavLeftBtn.Foreground = canScrollLeft ? activeNavigationBrush : inactiveNavigationBrush;
         SheetNavRightBtn.Foreground = canScrollRight ? activeNavigationBrush : inactiveNavigationBrush;
@@ -333,7 +333,7 @@ public partial class MainWindow
         SheetTabsChromeLayer.Children.Clear();
         SheetTabsOverlayLayer.Children.Clear();
         var chromeWidth = SheetTabsChromeLayer.ActualWidth;
-        var greenBrush = (Brush)FindResource("FreeXGreenBrush");
+        var greenBrush = (Brush)FindResource("FreeXAccentBrush");
         var inactiveStrokeBrush = (Brush)FindResource("FreeXBorderStrongBrush");
         var inactiveFillBrush = (Brush)FindResource("FreeXSheetSurfaceBrush");
         var groupedFillBrush = new SolidColorBrush(Color.FromRgb(247, 252, 249));

@@ -47,7 +47,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 0  Title bar / Quick Access Toolbar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border x:Name="TitleBarRoot" Grid.Row="0" Background="{StaticResource FreeXTitleBarBrush}" BorderBrush="{StaticResource FreeXGreenDarkBrush}"
+        <Border x:Name="TitleBarRoot" Grid.Row="0" Background="{StaticResource FreeXTitleBarBrush}" BorderBrush="{StaticResource FreeXAccentDarkBrush}"
                 BorderThickness="0,0,0,1" Padding="6,3">
             <DockPanel>
                 <!-- App icon -->
@@ -56,7 +56,7 @@
                         Width="22" Height="22"
                         Margin="0,0,8,0"
                         VerticalAlignment="Center"
-                        Background="{StaticResource FreeXGreenDarkBrush}"
+                        Background="{StaticResource FreeXAccentDarkBrush}"
                         BorderBrush="#66FFFFFF"
                         BorderThickness="1"
                         CornerRadius="2"
@@ -74,7 +74,7 @@
                         </Grid.RowDefinitions>
                         <Border x:Name="TitleBarAppFreeBand"
                                 Grid.Row="0"
-                                Background="#2FA466"
+                                Background="#0F7E9B"
                                 CornerRadius="1,1,0,0"
                                 Margin="0"/>
                         <TextBlock x:Name="TitleBarAppXOutlineTop"
@@ -82,7 +82,7 @@
                                    Grid.RowSpan="3"
                                    Panel.ZIndex="3"
                                    Text="X"
-                                   Foreground="#155C38"
+                                   Foreground="#10253A"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
                                    FontSize="14.5"
@@ -95,7 +95,7 @@
                                    Grid.RowSpan="3"
                                    Panel.ZIndex="3"
                                    Text="X"
-                                   Foreground="#155C38"
+                                   Foreground="#10253A"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
                                    FontSize="14.5"
@@ -108,7 +108,7 @@
                                    Grid.RowSpan="3"
                                    Panel.ZIndex="3"
                                    Text="X"
-                                   Foreground="#155C38"
+                                   Foreground="#10253A"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
                                    FontSize="14.5"
@@ -121,7 +121,7 @@
                                    Grid.RowSpan="3"
                                    Panel.ZIndex="3"
                                    Text="X"
-                                   Foreground="#155C38"
+                                   Foreground="#10253A"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
                                    FontSize="14.5"
@@ -726,7 +726,7 @@
                                             <Path Data="M 9 4 H 24 M 9 9 H 21 M 9 14 H 24"
                                                   Stroke="#242424" StrokeThickness="1"
                                                   StrokeStartLineCap="Square" StrokeEndLineCap="Square"/>
-                                            <Path Data="M 7 5 L 2 9 L 7 13" Stroke="#217346" StrokeThickness="1.4"
+                                            <Path Data="M 7 5 L 2 9 L 7 13" Stroke="#0F6D8C" StrokeThickness="1.4"
                                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                                         </Grid>
                                     </Button>
@@ -739,7 +739,7 @@
                                             <Path Data="M 2 4 H 17 M 5 9 H 17 M 2 14 H 17"
                                                   Stroke="#242424" StrokeThickness="1"
                                                   StrokeStartLineCap="Square" StrokeEndLineCap="Square"/>
-                                            <Path Data="M 19 5 L 24 9 L 19 13" Stroke="#217346" StrokeThickness="1.4"
+                                            <Path Data="M 19 5 L 24 9 L 19 13" Stroke="#0F6D8C" StrokeThickness="1.4"
                                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                                         </Grid>
                                     </Button>
@@ -3768,7 +3768,7 @@
 
                 <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="27" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
-                        Foreground="{StaticResource FreeXGreenDarkBrush}"
+                        Foreground="{StaticResource FreeXAccentDarkBrush}"
                         Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
@@ -3787,10 +3787,10 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="NavHitArea" Property="Background" Value="#EAF4EF"/>
+                                    <Setter TargetName="NavHitArea" Property="Background" Value="#E6F6FA"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="NavHitArea" Property="Background" Value="#D9ECE2"/>
+                                    <Setter TargetName="NavHitArea" Property="Background" Value="#CCEAF2"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -3956,12 +3956,12 @@
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                                             <Setter Property="Background"      Value="Transparent"/>
-                                                            <Setter Property="BorderBrush"     Value="{StaticResource FreeXGreenBrush}"/>
+                                                            <Setter Property="BorderBrush"     Value="{StaticResource FreeXAccentBrush}"/>
                                                             <Setter Property="BorderThickness" Value="0"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                             <Setter Property="Background"      Value="Transparent"/>
-                                                            <Setter Property="BorderBrush"     Value="{StaticResource FreeXGreenBrush}"/>
+                                                            <Setter Property="BorderBrush"     Value="{StaticResource FreeXAccentBrush}"/>
                                                             <Setter Property="BorderThickness" Value="0"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -3985,7 +3985,7 @@
                                         </Border>
                                         <Border x:Name="TabFocusCue"
                                                 Margin="14,4,14,5"
-                                                BorderBrush="{StaticResource FreeXGreenDarkBrush}"
+                                                BorderBrush="{StaticResource FreeXAccentDarkBrush}"
                                                 BorderThickness="1"
                                                 CornerRadius="2"
                                                 Panel.ZIndex="8"
@@ -3997,10 +3997,10 @@
                                             <Setter TargetName="TabFocusCue" Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreeXGreenBrush}"/>
+                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreeXAccentBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreeXGreenBrush}"/>
+                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreeXAccentBrush}"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -4009,7 +4009,7 @@
                         <Button x:Name="AddSheetButton" Content="+" Width="70" MinWidth="70" MinHeight="27"
                                 FontSize="17" FontWeight="SemiBold" Margin="0,0,0,1" Padding="0"
                                 Background="Transparent" BorderBrush="Transparent" BorderThickness="0"
-                                Foreground="{StaticResource FreeXGreenBrush}" Opacity="1"
+                                Foreground="{StaticResource FreeXAccentBrush}" Opacity="1"
                                 VerticalAlignment="Top" Cursor="Hand"
                                 Panel.ZIndex="3"
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
@@ -4051,12 +4051,12 @@
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
                                             <Setter TargetName="GhostTabChrome" Property="Background" Value="Transparent"/>
-                                            <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreeXGreenBrush}"/>
+                                            <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
                                         </Trigger>
                                         <Trigger Property="IsPressed" Value="True">
                                             <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
                                             <Setter TargetName="GhostTabChrome" Property="Background" Value="Transparent"/>
-                                            <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreeXGreenDarkBrush}"/>
+                                            <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreeXAccentDarkBrush}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -4079,7 +4079,7 @@
                 <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;"
                         Width="18" Height="27" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
-                        Foreground="{StaticResource FreeXGreenDarkBrush}"
+                        Foreground="{StaticResource FreeXAccentDarkBrush}"
                         Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
@@ -4098,10 +4098,10 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="NavHitArea" Property="Background" Value="#EAF4EF"/>
+                                    <Setter TargetName="NavHitArea" Property="Background" Value="#E6F6FA"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="NavHitArea" Property="Background" Value="#D9ECE2"/>
+                                    <Setter TargetName="NavHitArea" Property="Background" Value="#CCEAF2"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -4147,8 +4147,8 @@
                             <ProgressBar x:Name="StatusSaveProgressBar"
                                          Width="120" Height="5"
                                          Minimum="0" Maximum="100"
-                                         Foreground="#D7F0DF"
-                                         Background="#356B4D"
+                                         Foreground="#D8EEF6"
+                                         Background="#24445E"
                                          BorderThickness="0"
                                          AutomationProperties.Name="Saving Progress"/>
                             <TextBlock x:Name="StatusSaveProgressText"
@@ -4250,7 +4250,7 @@
                                  Minimum="0"
                                  Maximum="100"
                                  IsIndeterminate="True"
-                                 Foreground="#217346"
+                                 Foreground="#0F6D8C"
                                  AutomationProperties.Name="Opening Progress"/>
                     <TextBlock x:Name="OpenProgressDetail"
                                Text="Reading file..."
@@ -4274,7 +4274,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- ── Left sidebar ─────────────────────────────────────────── -->
-            <DockPanel x:Name="StartScreenSidebar" Grid.Column="0" Background="#1C3E2E" LastChildFill="True">
+            <DockPanel x:Name="StartScreenSidebar" Grid.Column="0" Background="#10253A" LastChildFill="True">
 
                 <!-- Back arrow -->
 	                <Button x:Name="SsBackBtn" DockPanel.Dock="Top"
@@ -4303,7 +4303,7 @@
 
                 <!-- Account / Options pinned to bottom -->
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,10">
-                    <Rectangle Height="1" Fill="#2C5C40" Margin="0,0,0,6"/>
+                    <Rectangle Height="1" Fill="#24445E" Margin="0,0,0,6"/>
                     <local:AutomationInvokeButton x:Name="SsAccountNavBtn"
                                                   HorizontalAlignment="Stretch"
                                                   Style="{StaticResource SsNavBtn}"
@@ -4371,7 +4371,7 @@
                         </StackPanel>
                     </Button>
 
-                    <Rectangle Height="1" Fill="#2C5C40" Margin="0,6"/>
+                    <Rectangle Height="1" Fill="#24445E" Margin="0,6"/>
 
                     <Button x:Name="SsInfoNavBtn"
                             HorizontalAlignment="Stretch"
@@ -4466,7 +4466,7 @@
                                        FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
                             <Button DockPanel.Dock="Right" Content="More templates (Excluded) →"
                                     Background="Transparent" BorderThickness="0" Padding="0"
-                                    FontSize="12" Foreground="#217346"
+                                    FontSize="12" Foreground="#0F6D8C"
                                     VerticalAlignment="Center" Cursor="Hand"
                                     AutomationProperties.AutomationId="MoreTemplatesExcludedButton"
                                     AutomationProperties.Name="More templates unavailable"
@@ -4516,10 +4516,10 @@
                                                         <!-- Selected cell A1 -->
                                                         <Rectangle Canvas.Left="18" Canvas.Top="14"
                                                                    Width="24" Height="13"
-                                                                   Fill="#E8F5EC"/>
+                                                                   Fill="#E6F6FA"/>
                                                         <Rectangle Canvas.Left="18" Canvas.Top="14"
                                                                    Width="24" Height="13"
-                                                                   Stroke="#217346" StrokeThickness="1.5"
+                                                                   Stroke="#0F6D8C" StrokeThickness="1.5"
                                                                    Fill="Transparent"/>
                                                     </Canvas>
                                                 </Border>
@@ -4532,7 +4532,7 @@
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
                                                 <Setter TargetName="cardBg" Property="Background"
-                                                        Value="#F0F6F2"/>
+                                                        Value="#EEF8FA"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
@@ -4558,9 +4558,9 @@
                                     local:RibbonTooltip.Title="Recent"
                                     local:RibbonTooltip.KeyTip="RC">
                                 <Border x:Name="SsRecentTab" Padding="0,8,22,8"
-                                        BorderThickness="0,0,0,2" BorderBrush="#217346">
+                                        BorderThickness="0,0,0,2" BorderBrush="#0F6D8C">
                                 <TextBlock x:Name="SsRecentTabText" Text="Recent" FontSize="13"
-                                           FontWeight="SemiBold" Foreground="#217346"/>
+                                           FontWeight="SemiBold" Foreground="#0F6D8C"/>
                                 </Border>
                             </Button>
                             <Button Background="Transparent" BorderThickness="0" Padding="0"
@@ -4644,7 +4644,7 @@
                                                 <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                                <Border Width="26" Height="30" Background="#217346"
+                                                <Border Width="26" Height="30" Background="#0F6D8C"
                                                         CornerRadius="2" Margin="0,0,10,0"
                                                         VerticalAlignment="Center">
                                                     <TextBlock Text="X" Foreground="White"
@@ -4728,7 +4728,7 @@
                                                 <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                                <Border Width="26" Height="30" Background="#217346"
+                                                <Border Width="26" Height="30" Background="#0F6D8C"
                                                         CornerRadius="2" Margin="0,0,10,0"
                                                         VerticalAlignment="Center">
                                                     <TextBlock Text="X" Foreground="White"
@@ -4843,7 +4843,10 @@
                                                Margin="0,0,0,10"/>
                                     <TextBlock FontSize="12" Foreground="#555"
                                                TextWrapping="Wrap" LineHeight="20"
-                                               Margin="0,0,0,6">FreeX is a lightweight, open-format spreadsheet built on .NET 10 and WPF. Supports XLSX, formula calculation, cell styling, charts, and freeze panes.</TextBlock>
+                                               Margin="0,0,0,6">FreeX is a free spreadsheet app for .xlsx files. It supports workbook editing, formulas, styling, charts, and local file workflows.</TextBlock>
+                                    <TextBlock FontSize="11" Foreground="#666"
+                                               TextWrapping="Wrap" LineHeight="18"
+                                               Margin="0,0,0,6">FreeX is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft Excel is a trademark of Microsoft Corporation.</TextBlock>
                                     <TextBlock Text="Version 0.5 (Tester Release)"
                                                FontSize="11" Foreground="#888"/>
                                 </StackPanel>

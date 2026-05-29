@@ -23,7 +23,7 @@ function Svg([int]$n, [string]$body) {
 <svg xmlns="http://www.w3.org/2000/svg" width="$n" height="$n" viewBox="0 0 $n $n">
   <defs>
     <style>
-      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
+      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#0F6D8C}.g2{fill:#7DD3E8}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
     </style>
   </defs>
 $body
@@ -32,7 +32,7 @@ $body
 }
 
 function L($x1, $y1, $x2, $y2, [int]$n = 20, $cls = 's', $sw = 1) {
-    $colors = @{ b = '#5b9bd5'; g = '#217346'; g2 = '#8fd19e'; rd = '#d83b01'; p = '#8064a2'; o = '#f4b183'; y = '#ffd966'; k = '#1f1f1f' }
+    $colors = @{ b = '#5b9bd5'; g = '#0F6D8C'; g2 = '#7DD3E8'; rd = '#d83b01'; p = '#8064a2'; o = '#f4b183'; y = '#ffd966'; k = '#1f1f1f' }
     if ($colors.ContainsKey($cls)) {
         return "  <path d=""M$(S $x1 $n) $(S $y1 $n) L$(S $x2 $n) $(S $y2 $n)"" fill=""none"" stroke=""$($colors[$cls])"" stroke-width=""$(SW $sw)"" stroke-linecap=""round"" stroke-linejoin=""round"" vector-effect=""non-scaling-stroke""/>"
     }
@@ -116,7 +116,7 @@ function Alignment($slug, [int]$n) {
 function Body($slug, [int]$n) {
     switch -Regex ($slug) {
         'open' { return Folder $n }
-        '^insert$' { return (Grid $n) + "`n  <rect class=""g2"" x=""$(S 7 $n)"" y=""$(S 3 $n)"" width=""$(S 6 $n)"" height=""$(S 14 $n)"" opacity="".65""/>`n  <path class=""g"" d=""M$(S 10 $n) $(S 6 $n) V$(S 14 $n) M$(S 6 $n) $(S 10 $n) H$(S 14 $n)"" stroke=""#217346"" stroke-width=""1"" stroke-linecap=""square"" vector-effect=""non-scaling-stroke""/>" }
+        '^insert$' { return (Grid $n) + "`n  <rect class=""g2"" x=""$(S 7 $n)"" y=""$(S 3 $n)"" width=""$(S 6 $n)"" height=""$(S 14 $n)"" opacity="".65""/>`n  <path class=""g"" d=""M$(S 10 $n) $(S 6 $n) V$(S 14 $n) M$(S 6 $n) $(S 10 $n) H$(S 14 $n)"" stroke=""#0F6D8C"" stroke-width=""1"" stroke-linecap=""square"" vector-effect=""non-scaling-stroke""/>" }
         '^delete$' { return (Grid $n) + "`n  <rect class=""rd"" x=""$(S 7 $n)"" y=""$(S 3 $n)"" width=""$(S 6 $n)"" height=""$(S 14 $n)"" opacity="".55""/>`n  <path d=""M$(S 6 $n) $(S 6 $n) L$(S 14 $n) $(S 14 $n) M$(S 14 $n) $(S 6 $n) L$(S 6 $n) $(S 14 $n)"" fill=""none"" stroke=""#d83b01"" stroke-width=""1"" stroke-linecap=""round"" vector-effect=""non-scaling-stroke""/>" }
         '^format$' { return (Grid $n) + "`n" + (Brush $n) }
         'save-as' { return (Doc $n) + "`n" + (Txt $starGlyph 15 5.5 5 $n) }
@@ -210,7 +210,7 @@ function Body($slug, [int]$n) {
         '^selection-pane$' { return (WindowIcon $n) + "`n" + (L 5 6 11 6 $n 'b' .8) + "`n" + (L 5 9 9 9 $n 'b' .8) }
         '^object-outline$|^outline-color$|^outline$' { return "  <rect x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)"" fill=""none"" stroke=""#5b9bd5"" stroke-width=""1"" vector-effect=""non-scaling-stroke""/>" }
         '^object-fill$' { return "  <rect class=""y"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)""/>`n" + (Rct 4 5 12 10 $n 's' 1) }
-        '^shape-gradient$|^gradient$' { return "  <defs><linearGradient id=""grad"" x1=""0"" x2=""1""><stop offset=""0"" stop-color=""#5b9bd5""/><stop offset="".55"" stop-color=""#8fd19e""/><stop offset=""1"" stop-color=""#ffffff""/></linearGradient></defs>`n  <rect x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)"" fill=""url(#grad)"" stroke=""#1f1f1f"" stroke-width=""1"" vector-effect=""non-scaling-stroke""/>" }
+        '^shape-gradient$|^gradient$' { return "  <defs><linearGradient id=""grad"" x1=""0"" x2=""1""><stop offset=""0"" stop-color=""#5b9bd5""/><stop offset="".55"" stop-color=""#7DD3E8""/><stop offset=""1"" stop-color=""#ffffff""/></linearGradient></defs>`n  <rect x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)"" fill=""url(#grad)"" stroke=""#1f1f1f"" stroke-width=""1"" vector-effect=""non-scaling-stroke""/>" }
         '^crop$' { return "  <rect class=""f s"" x=""$(S 5 $n)"" y=""$(S 5 $n)"" width=""$(S 10 $n)"" height=""$(S 10 $n)"" stroke-width=""$(S .8 $n)""/>`n  <path class=""s"" d=""M$(S 6.5 $n) $(S 2.8 $n) V$(S 13.5 $n) H$(S 17.2 $n) M$(S 2.8 $n) $(S 6.5 $n) H$(S 13.5 $n) V$(S 17.2 $n)"" stroke-width=""$(S 1.2 $n)""/>" }
         '^object-effects$|^effects$' { return (Txt $sparkleGlyph 9 8.5 10 $n) + "`n" + (Txt $sparkleGlyph 14.5 14 5 $n) }
         '^normal$' { return (Grid $n) + "`n  <rect class=""g2"" x=""$(S 3 $n)"" y=""$(S 3 $n)"" width=""$(S 14 $n)"" height=""$(S 3.5 $n)"" opacity="".6""/>" }

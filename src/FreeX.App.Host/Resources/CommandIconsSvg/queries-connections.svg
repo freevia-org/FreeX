@@ -3,6 +3,6 @@
   <ellipse cx="10.5" cy="8" rx="5.5" ry="2.5" fill="#ffffff" stroke="#242424" stroke-width="1.2"/>
   <path d="M5 8v9c0 1.4 2.5 2.5 5.5 2.5S16 18.4 16 17V8M5 12.5c0 1.4 2.5 2.5 5.5 2.5S16 13.9 16 12.5" fill="none" stroke="#5c5c5c" stroke-width="1"/>
   <rect x="19" y="6" width="8" height="8" rx="1.2" fill="#f5f9ff" stroke="#4472c4" stroke-width="1.2"/>
-  <rect x="19" y="19" width="8" height="8" rx="1.2" fill="#e8f4ef" stroke="#217346" stroke-width="1.2"/>
+  <rect x="19" y="19" width="8" height="8" rx="1.2" fill="#E6F6FA" stroke="#0F6D8C" stroke-width="1.2"/>
   <path d="M16 13h3M23 14v5" fill="none" stroke="#242424" stroke-width="1.2" stroke-linecap="round"/>
 </svg>

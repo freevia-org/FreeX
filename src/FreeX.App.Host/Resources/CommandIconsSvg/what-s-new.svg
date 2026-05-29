@@ -4,5 +4,5 @@
   <path d="M20 6v5h4" fill="none" stroke="#242424" stroke-width="1.1" stroke-linejoin="round"/>
   <path d="M13 16h7M13 20h7" stroke="#5c5c5c" stroke-width="1.1" stroke-linecap="round"/>
   <path d="M8 7.5l1.2 2.8L12 11.5l-2.8 1.2L8 15.5l-1.2-2.8L4 11.5l2.8-1.2z" fill="#4472c4"/>
-  <path d="M22.8 16.5l.8 1.8 1.9.8-1.9.8-.8 1.8-.8-1.8-1.9-.8 1.9-.8z" fill="#217346"/>
+  <path d="M22.8 16.5l.8 1.8 1.9.8-1.9.8-.8 1.8-.8-1.8-1.9-.8 1.9-.8z" fill="#0F6D8C"/>
 </svg>

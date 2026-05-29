@@ -2,8 +2,8 @@
   <defs>
     <style>
       .s,.r,.line,.thin,.heavy{fill:none;stroke:#242424;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g,.green{fill:#107c41}
-      .g2,.palegreen,.green2{fill:#dff6dd}
+      .g,.green{fill:#0F6D8C}
+      .g2,.palegreen,.green2{fill:#E6F6FA}
       .b,.blue{fill:#0078d4}
       .o,.orange{fill:#f7630c}
       .y,.yellow,.paleyellow{fill:#ffb900}
@@ -14,7 +14,7 @@
       .f,.soft{fill:#f3f2f1}
       .t,.txtb{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:700;text-anchor:middle;dominant-baseline:central}
       .tm,.txt{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-      .greenLine{fill:none;stroke:#107c41;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .greenLine{fill:none;stroke:#0F6D8C;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
       .blueLine{fill:none;stroke:#0078d4;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
       .grid{fill:none;stroke:#5c5c5c;stroke-width:1.0;stroke-linecap:square;vector-effect:non-scaling-stroke}
       .paleblue{fill:#dcecff}
@@ -23,5 +23,5 @@
 </style>
   </defs>
   <rect width="54" height="54" fill="none"/>
-  <g><path fill="#f8fafc" stroke="#202124" stroke-width="1.8" d="M9.72 27h10.8l3.24-5.4h15.12l3.24 5.4h5.4v10.8H9.72z"/><path stroke="#217346" stroke-width="2.1" d="M28.08 41.04l10.8-10.8"/>  </g>
+  <g><path fill="#f8fafc" stroke="#202124" stroke-width="1.8" d="M9.72 27h10.8l3.24-5.4h15.12l3.24 5.4h5.4v10.8H9.72z"/><path stroke="#0F6D8C" stroke-width="2.1" d="M28.08 41.04l10.8-10.8"/>  </g>
 </svg>

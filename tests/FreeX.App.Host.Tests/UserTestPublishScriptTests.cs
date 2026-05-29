@@ -40,6 +40,8 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("Local diagnostics:");
         script.Should().Contain("%LOCALAPPDATA%\\FreeX\\Diagnostics");
         script.Should().Contain("FREEX_DIAGNOSTICS=0");
+        script.Should().Contain("FreeX is not affiliated with, endorsed by, or sponsored by Microsoft.");
+        script.Should().Contain("Microsoft Excel is a trademark of Microsoft Corporation.");
     }
 
     [Fact]

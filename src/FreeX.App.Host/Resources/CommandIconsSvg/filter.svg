@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Filter" shape-rendering="crispEdges">
   <rect width="32" height="32" fill="none"/>
   <path d="M5 7H27L18 17V24L14 26V17Z" fill="#ffffff" stroke="#242424" stroke-width="1" stroke-linejoin="miter"/>
-  <path d="M8 10H24" stroke="#107c41" stroke-width="1"/>
+  <path d="M8 10H24" stroke="#0F6D8C" stroke-width="1"/>
 </svg>

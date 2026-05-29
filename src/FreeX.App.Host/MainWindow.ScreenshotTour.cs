@@ -126,19 +126,19 @@ public partial class MainWindow
         encoder.Save(stream);
     }
 
-    // Activated by FREEX_GREEN_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/green-bars-tour/.
-    private void TryStartGreenBarVisualTour()
+    // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
+    private void TryStartAccentBarVisualTour()
     {
-        if (Environment.GetEnvironmentVariable("FREEX_GREEN_BAR_TOUR") != "1")
+        if (Environment.GetEnvironmentVariable("FREEX_ACCENT_BAR_TOUR") != "1")
             return;
 
         var outputDir = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots", "green-bars-tour"));
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots", "accent-bars-tour"));
         Directory.CreateDirectory(outputDir);
-        _ = RunGreenBarVisualTourAsync(outputDir);
+        _ = RunAccentBarVisualTourAsync(outputDir);
     }
 
-    private async Task RunGreenBarVisualTourAsync(string outputDir)
+    private async Task RunAccentBarVisualTourAsync(string outputDir)
     {
         foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
             File.Delete(file);

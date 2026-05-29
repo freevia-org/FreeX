@@ -365,6 +365,10 @@ Local diagnostics:
   These files stay on the tester's machine unless they choose to attach them
   to an issue report. To disable local diagnostics for a run, start FreeX
   with FREEX_DIAGNOSTICS=0 in the environment.
+
+Trademark notice:
+  FreeX is not affiliated with, endorsed by, or sponsored by Microsoft.
+  Microsoft Excel is a trademark of Microsoft Corporation.
 "@
 Set-Content -LiteralPath $readmePath -Value $readme -Encoding ASCII
 

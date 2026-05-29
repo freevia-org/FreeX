@@ -3,5 +3,5 @@
   <rect x="5" y="8" width="22" height="17" fill="#ffffff" stroke="#242424" stroke-width="1"/>
   <path d="M7 12H25M7 21H25" fill="none" stroke="#8a8a8a" stroke-width="1"/>
   <text x="16" y="21" font-size="19" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">$</text>
-  <circle cx="24" cy="24" r="4" fill="#8fd19e" stroke="#107c41" stroke-width="1"/>
+  <circle cx="24" cy="24" r="4" fill="#7DD3E8" stroke="#0F6D8C" stroke-width="1"/>
 </svg>

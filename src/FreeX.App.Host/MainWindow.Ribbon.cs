@@ -387,7 +387,7 @@ public partial class MainWindow
 
     private static Brush GetRibbonDropdownHoverBrush(FrameworkElement element)
     {
-        if (element.TryFindResource("FreeXGreenSoftBrush") is Brush brush)
+        if (element.TryFindResource("FreeXAccentSoftBrush") is Brush brush)
             return brush;
 
         return new SolidColorBrush(Color.FromRgb(0xEA, 0xF4, 0xEF));

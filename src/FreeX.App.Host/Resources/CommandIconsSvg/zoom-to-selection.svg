@@ -2,6 +2,6 @@
   <rect width="32" height="32" fill="none"/>
   <circle cx="13" cy="13" r="10" fill="#ffffff" stroke="#242424" stroke-width="2"/>
   <path d="M21 21 L29 29" fill="none" stroke="#242424" stroke-width="3" stroke-linecap="round"/>
-  <rect x="7" y="8" width="12" height="9" fill="none" stroke="#107c41" stroke-width="2"/>
-  <path d="M7 11 H19 M11 8 V17 M15 8 V17" fill="none" stroke="#107c41" stroke-width="1"/>
+  <rect x="7" y="8" width="12" height="9" fill="none" stroke="#0F6D8C" stroke-width="2"/>
+  <path d="M7 11 H19 M11 8 V17 M15 8 V17" fill="none" stroke="#0F6D8C" stroke-width="1"/>
 </svg>

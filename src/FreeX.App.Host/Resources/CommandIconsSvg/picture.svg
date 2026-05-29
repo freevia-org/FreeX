@@ -3,5 +3,5 @@
   <rect x="5" y="6" width="22" height="20" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1"/>
   <rect x="6" y="7" width="20" height="9" fill="#dcecff"/>
   <circle cx="22" cy="11" r="2" fill="#ffb900"/>
-  <path d="M6 25L13 16L18 21L21 18L26 25Z" fill="#8fd19e"/>
+  <path d="M6 25L13 16L18 21L21 18L26 25Z" fill="#7DD3E8"/>
 </svg>

@@ -2,7 +2,7 @@
   <rect width="32" height="32" fill="none"/>
   <rect x="5" y="6" width="22" height="20" fill="#ffffff" stroke="#5c5c5c" stroke-width="1"/>
   <text x="16" y="18" font-size="13" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">fx</text>
-  <circle cx="10" cy="24" r="1.5" fill="#107c41"/>
-  <circle cx="16" cy="24" r="1.5" fill="#107c41"/>
-  <circle cx="22" cy="24" r="1.5" fill="#107c41"/>
+  <circle cx="10" cy="24" r="1.5" fill="#0F6D8C"/>
+  <circle cx="16" cy="24" r="1.5" fill="#0F6D8C"/>
+  <circle cx="22" cy="24" r="1.5" fill="#0F6D8C"/>
 </svg>

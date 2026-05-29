@@ -108,7 +108,10 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("[string]$RuntimeIdentifier = \"win-x64\"");
         script.Should().Contain("\"-r\", $RuntimeIdentifier");
         script.Should().Contain("\"--self-contained\", \"false\"");
-        script.Should().Contain("Set-Content -LiteralPath \"$artifactExePath.sha256\"");
+        script.Should().Contain("$artifactExeHashPath = \"$artifactExePath.sha256\"");
+        script.Should().Contain("Set-Content -LiteralPath $artifactExeHashPath");
+        script.Should().Contain("FreeX is not affiliated with, endorsed by, or sponsored by Microsoft.");
+        script.Should().Contain("Microsoft Excel is a trademark of Microsoft Corporation.");
     }
 
     [Fact]
@@ -135,7 +138,8 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("signtool.exe was not found. Install the Windows SDK to sign MSIX packages.");
         script.Should().Contain("$signArgs = @(\"sign\", \"/fd\", \"SHA256\", \"/f\", $MsixCertificatePath)");
         script.Should().Contain("Created unsigned local MSIX; pass -MsixCertificatePath to sign it.");
-        script.Should().Contain("Set-Content -LiteralPath \"$artifactMsixPath.sha256\"");
+        script.Should().Contain("$artifactMsixHashPath = \"$artifactMsixPath.sha256\"");
+        script.Should().Contain("Set-Content -LiteralPath $artifactMsixHashPath");
     }
 
     [Fact]

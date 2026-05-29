@@ -5,7 +5,7 @@
             <ResourceDictionary Source="ThemeResources.xaml"/>
             <ResourceDictionary Source="IconResources.xaml"/>
         </ResourceDictionary.MergedDictionaries>
-        <SolidColorBrush x:Key="FreeXTitleBarBrush" Color="#217346"/>
+        <SolidColorBrush x:Key="FreeXTitleBarBrush" Color="#17324D"/>
         <!-- ── Ribbon button styles ─────────────────────────────────────── -->
 
         <Style x:Key="RibbonBtn" TargetType="Button">
@@ -22,12 +22,12 @@
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource FreeXGreenSoftBrush}"/>
+                    <Setter Property="Background" Value="{StaticResource FreeXAccentSoftBrush}"/>
                     <Setter Property="BorderBrush" Value="{StaticResource FreeXBorderStrongBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource FreeXGreenPressedBrush}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource FreeXGreenBrush}"/>
+                    <Setter Property="Background" Value="{StaticResource FreeXAccentPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -46,20 +46,20 @@
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource FreeXGreenSoftBrush}"/>
+                    <Setter Property="Background" Value="{StaticResource FreeXAccentSoftBrush}"/>
                     <Setter Property="BorderBrush" Value="{StaticResource FreeXBorderStrongBrush}"/>
                 </Trigger>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="{StaticResource FreeXGreenPressedBrush}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource FreeXGreenBrush}"/>
+                    <Setter Property="Background" Value="{StaticResource FreeXAccentPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
                 </Trigger>
                 <MultiTrigger>
                     <MultiTrigger.Conditions>
                         <Condition Property="IsChecked" Value="True"/>
                         <Condition Property="IsMouseOver" Value="True"/>
                     </MultiTrigger.Conditions>
-                    <Setter Property="Background" Value="{StaticResource FreeXGreenPressedBrush}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource FreeXGreenDarkBrush}"/>
+                    <Setter Property="Background" Value="{StaticResource FreeXAccentPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreeXAccentDarkBrush}"/>
                 </MultiTrigger>
             </Style.Triggers>
         </Style>
@@ -233,7 +233,7 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Ribbon tab item style — flat, green underline when selected -->
+        <!-- Ribbon tab item style — flat, accent underline when selected -->
         <Style TargetType="TabItem">
             <Setter Property="Padding" Value="5,4"/>
             <Setter Property="FontSize" Value="12"/>
@@ -253,11 +253,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource FreeXGreenBrush}"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
                                 <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource FreeXRibbonSurfaceBrush}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource FreeXGreenSoftBrush}"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource FreeXAccentSoftBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -440,10 +440,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#EAF3EA"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#E6F6FA"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#DDEDDD"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#CCEAF2"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -493,7 +493,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="{StaticResource FreeXGreenDarkBrush}"/>
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource FreeXAccentDarkBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -502,7 +502,7 @@
         </Style>
 
         <Style x:Key="SsNavBtnActive" BasedOn="{StaticResource SsNavBtn}" TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource FreeXGreenBrush}"/>
+            <Setter Property="Background" Value="{StaticResource FreeXAccentBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
 
