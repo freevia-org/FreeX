@@ -93,6 +93,31 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void SerializeDeserialize_ChildAttributeValues_PreservesXmlSensitiveCharacters()
+    {
+        const string childXml = "<ext formula=\"A1&lt;B1 &amp;&amp; &quot;quoted&quot;\" apostrophe=\"O'Brien\" newline=\"Line&#xA;Break\" />";
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [childXml]);
+        var target = new XElement("root");
+
+        var (roundTripAttrs, roundTripChildren) = XmlNativeBagSerializer.Deserialize(bagValue);
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        roundTripAttrs.Should().BeEmpty();
+        roundTripChildren.Should().ContainSingle();
+        var child = XElement.Parse(roundTripChildren.Single(), LoadOptions.PreserveWhitespace);
+        child.Attribute("formula")?.Value.Should().Be("A1<B1 && \"quoted\"");
+        child.Attribute("apostrophe")?.Value.Should().Be("O'Brien");
+        child.Attribute("newline")?.Value.Should().Be("Line\nBreak");
+        changed.Should().BeTrue();
+        target.Elements().Should().ContainSingle();
+        target.Element("ext")?.Attribute("formula")?.Value.Should().Be("A1<B1 && \"quoted\"");
+        target.Element("ext")?.Attribute("apostrophe")?.Value.Should().Be("O'Brien");
+        target.Element("ext")?.Attribute("newline")?.Value.Should().Be("Line\nBreak");
+    }
+
+    [Fact]
     public void Deserialize_NamespaceDeclarations_DoesNotReturnDeclarationsAsNativeAttributes()
     {
         const string bagValue = """
