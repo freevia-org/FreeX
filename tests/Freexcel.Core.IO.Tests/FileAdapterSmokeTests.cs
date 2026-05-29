@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.IO.Compression;
 using System.Globalization;
+using System.Reflection;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
@@ -4984,6 +4985,34 @@ public partial class FileAdapterSmokeTests
 
         icon.Attribute("iconSet")?.Value.Should().Be("3Arrows");
         icon.Attribute("iconId")?.Value.Should().Be("2");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_ConditionalFormatIconSetNames_AreTrimmed()
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = new XDocument(
+            new XElement(worksheetNs + "worksheet",
+                new XElement(worksheetNs + "conditionalFormatting",
+                    new XAttribute("sqref", "A1:A3"),
+                    new XElement(worksheetNs + "cfRule",
+                        new XAttribute("type", "iconSet"),
+                        new XAttribute("priority", "1"),
+                        new XElement(worksheetNs + "iconSet",
+                            new XAttribute("iconSet", "  3TrafficLights1  "),
+                            new XElement(worksheetNs + "cfvo", new XAttribute("type", "percent"), new XAttribute("val", "0")),
+                            new XElement(worksheetNs + "cfIcon", new XAttribute("iconSet", "  3Arrows  "), new XAttribute("iconId", "2")),
+                            new XElement(worksheetNs + "cfIcon", new XAttribute("iconSet", "   "), new XAttribute("iconId", "0")),
+                            new XElement(worksheetNs + "cfIcon", new XAttribute("iconSet", "3TrafficLights1"), new XAttribute("iconId", "-1")))))));
+
+        var loadedRule = InvokeReadAdvancedConditionalFormats(worksheetXml, worksheetNs)
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        loadedRule.IconSetStyle.Should().Be("3TrafficLights1");
+        loadedRule.IconOverrides.Should().ContainSingle()
+            .Which.Should().Be(new CfIconOverride("3Arrows", 2));
     }
 
     [Fact]
@@ -24556,6 +24585,19 @@ public partial class FileAdapterSmokeTests
                 .ToList();
         }
         catch { return []; }
+    }
+
+    private static IReadOnlyList<ConditionalFormat> InvokeReadAdvancedConditionalFormats(
+        XDocument worksheetXml,
+        XNamespace worksheetNs)
+    {
+        var method = typeof(XlsxFileAdapter).GetMethod(
+            "ReadAdvancedConditionalFormats",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        method.Should().NotBeNull();
+        return (IReadOnlyList<ConditionalFormat>)method!.Invoke(
+            null,
+            [worksheetXml, worksheetNs, Array.Empty<CellStyle>()])!;
     }
 
     /// <summary>Adds an attribute to the NativeXmlPreserveBag entry for the given key.
