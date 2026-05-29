@@ -126,4 +126,14 @@ internal static class XlsxAdvancedConditionalFormatMetadata
             CfThresholdType.Formula => "formula",
             _ => "min"
         };
+
+    public static string NormalizeDateOccurringPeriod(string? value)
+    {
+        var normalized = value?.Trim();
+        return normalized is "yesterday" or "today" or "tomorrow" or "last7Days" or
+            "lastWeek" or "thisWeek" or "nextWeek" or
+            "lastMonth" or "thisMonth" or "nextMonth"
+            ? normalized
+            : "today";
+    }
 }
