@@ -1,5 +1,5 @@
-name: Freexcel user test report
-description: Report a problem found while testing a Freexcel release build.
+name: FreeX user test report
+description: Report a problem found while testing a FreeX release build.
 title: "[User test]: "
 labels:
   - user-testing
@@ -9,7 +9,7 @@ body:
     id: build
     attributes:
       label: App version/build
-      description: Paste the full file name or build label, for example freexcel-0-5-tester-release-20260524-123456-abcdef12-win-x64-singlefile.
+      description: Paste the full file name or build label, for example freex-0-5-tester-release-20260524-123456-abcdef12-win-x64-singlefile.
     validations:
       required: true
   - type: dropdown
@@ -38,7 +38,7 @@ body:
     id: expected
     attributes:
       label: Expected result
-      description: What did you expect Freexcel to do?
+      description: What did you expect FreeX to do?
     validations:
       required: true
   - type: textarea
@@ -52,7 +52,7 @@ body:
     id: diagnostics
     attributes:
       label: Optional diagnostics and crash reports
-      description: Freexcel writes local tester diagnostics to %LOCALAPPDATA%\Freexcel\Diagnostics. If there was a crash, attach the relevant file from CrashReports. Please remove any private information before uploading.
+      description: FreeX writes local tester diagnostics to %LOCALAPPDATA%\FreeX\Diagnostics. If there was a crash, attach the relevant file from CrashReports. Please remove any private information before uploading.
       placeholder: Attach events.jsonl, logs, screenshots, or CrashReports/*.json when useful.
     validations:
       required: false

@@ -1,0 +1,5743 @@
+using FreeX.Core.IO;
+using FreeX.Core.Model;
+using FluentAssertions;
+using System.Globalization;
+using System.IO.Compression;
+using System.Xml.Linq;
+
+namespace FreeX.Core.IO.Tests;
+
+public class XlsxCorpusRunnerTests
+{
+    [Fact]
+    public void GeneratedCorpusRows_RoundTripThroughXlsxAdapter()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .ToArray();
+
+        rows.Should().NotBeEmpty("generated corpus rows are deterministic and do not rely on redistributed Excel files");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            var workbook = XlsxCorpusFixtureFactory.Create(row.Id);
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Length.Should().BeGreaterThan(0, row.Id);
+            AssertPackageHealth(saved, row.Id);
+
+            saved.Position = 0;
+            var loaded = adapter.Load(saved);
+
+            loaded.SheetCount.Should().Be(workbook.SheetCount, row.Id);
+            loaded.Sheets.Select(sheet => sheet.Name).Should().Equal(workbook.Sheets.Select(sheet => sheet.Name), row.Id);
+            loaded.Sheets.Sum(sheet => sheet.CellCount).Should().BeGreaterThan(0, row.Id);
+            CaptureSummary(loaded).Should().BeEquivalentTo(
+                CaptureSummary(workbook),
+                options => options.WithStrictOrdering(),
+                row.Id);
+            AssertExpectedFeatureTags(row, loaded);
+        }
+    }
+
+    [Fact]
+    public void GeneratedCorpusRows_IncludeSurfaceChartCoverage()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("surface-charts"))
+            .ToArray();
+
+        rows.Should().ContainSingle("surface charts are now a supported native chart family and need deterministic corpus coverage");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        var workbook = XlsxCorpusFixtureFactory.Create(rows[0].Id);
+        workbook.Sheets
+            .SelectMany(sheet => sheet.Charts)
+            .Select(chart => chart.Type)
+            .Should().Contain([ChartType.Surface, ChartType.ThreeDSurface]);
+    }
+
+    [Fact]
+    public void ChartSummary_IncludesProtectionAndPrintSettings()
+    {
+        var sheetId = SheetId.New();
+        var baseline = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+        var withNativeMetadata = new ChartModel
+        {
+            Type = baseline.Type,
+            DataRange = baseline.DataRange,
+            Protection = new ChartProtectionModel { ChartObject = true, Data = false, Formatting = true, Selection = false, UserInterface = true },
+            PrintSettings = new ChartPrintSettingsModel
+            {
+                PageMargins = new ChartPageMarginsModel { Left = 0.7, Right = 0.7, Top = 0.75, Bottom = 0.75, Header = 0.3, Footer = 0.3 },
+                PageSetup = new ChartPageSetupModel { PaperSize = "9", Orientation = "portrait", Copies = 2, BlackAndWhite = true, Draft = false }
+            }
+        };
+
+        CaptureChartSummary(withNativeMetadata).Should().NotBe(CaptureChartSummary(baseline));
+    }
+
+    [Fact]
+    public void WorkbookSummary_IncludesPopulatedCellStyles()
+    {
+        var workbook = new Workbook("StyledCells");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("styled"),
+            StyleId = workbook.RegisterStyle(new CellStyle
+            {
+                Bold = true,
+                FillColor = new CellColor(1, 2, 3),
+                NumberFormat = "0.00"
+            })
+        });
+        var baseline = new Workbook("StyledCells");
+        var baselineSheet = baseline.AddSheet("Sheet1");
+        baselineSheet.SetCell(new CellAddress(baselineSheet.Id, 1, 1), new TextValue("styled"));
+
+        CaptureSummary(workbook).Should().NotBe(CaptureSummary(baseline));
+    }
+
+    [Fact]
+    public void GeneratedCorpusRows_IncludeNamedVisualObjects()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(tag => tag is "images" or "text-boxes" or "shapes"))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("visual object identity should be covered by deterministic generated fixtures");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        var workbooks = rows.Select(row => XlsxCorpusFixtureFactory.Create(row.Id)).ToArray();
+        workbooks
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.Pictures)
+            .Should().Contain(picture => !string.IsNullOrWhiteSpace(picture.Name));
+        workbooks
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.TextBoxes)
+            .Should().Contain(textBox => !string.IsNullOrWhiteSpace(textBox.Name));
+        workbooks
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.DrawingShapes)
+            .Should().Contain(shape => !string.IsNullOrWhiteSpace(shape.Name));
+    }
+
+    [Fact]
+    public void GeneratedCorpusRows_IncludeWorksheetBackgroundImageCoverage()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("background-image"))
+            .ToArray();
+
+        rows.Should().ContainSingle("worksheet background images should have explicit deterministic corpus coverage");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        var workbook = XlsxCorpusFixtureFactory.Create(rows[0].Id);
+        workbook.Sheets
+            .Where(sheet =>
+                sheet.BackgroundImage is not null &&
+                sheet.BackgroundImage.ContentType == "image/png" &&
+                sheet.BackgroundImage.ImageBytes.Length > 0)
+            .Should()
+            .ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedCorpusRows_IncludeDataValidationMessages()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("data-validation"))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("validation prompt/error message metadata should be covered by deterministic generated fixtures");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        rows.Select(row => XlsxCorpusFixtureFactory.Create(row.Id))
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.DataValidations)
+            .Should().Contain(validation =>
+                !string.IsNullOrWhiteSpace(validation.ErrorTitle) &&
+                !string.IsNullOrWhiteSpace(validation.ErrorMessage) &&
+                !string.IsNullOrWhiteSpace(validation.PromptTitle) &&
+                !string.IsNullOrWhiteSpace(validation.PromptMessage));
+    }
+
+    [Fact]
+    public void GeneratedCorpusRows_IncludeMultiAreaDataValidationCoverage()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("multi-area-validation"))
+            .ToArray();
+
+        rows.Should().ContainSingle("Excel data-validation sqref can cover discontiguous ranges and should not narrow to the first range");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        rows.Select(row => XlsxCorpusFixtureFactory.Create(row.Id))
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.DataValidations)
+            .Should().Contain(validation => validation.AdditionalRanges.Count > 0);
+    }
+
+    [Fact]
+    public void GeneratedKnownGapRows_DeclareExpectedWarningsAndNotes()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-known-gap")
+            .ToArray();
+
+        rows.Should().NotBeEmpty("known gaps keep the parity target honest without blocking supported-pass fixtures");
+        rows.Should().OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings));
+        rows.Should().OnlyContain(row => !string.IsNullOrWhiteSpace(row.Notes));
+    }
+
+    [Fact]
+    public void GeneratedKnownGapRows_ProduceExpectedUnsupportedFeatureReports()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-known-gap")
+            .ToArray();
+
+        rows.Should().NotBeEmpty();
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapPackage(row.Id));
+
+        foreach (var row in rows)
+        {
+            using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage(row.Id);
+            var report = XlsxFeatureInspector.Inspect(package);
+
+            report.HasUnsupportedFeatures.Should().BeTrue(row.Id);
+            var expectedKinds = ExpectedFeatureKindsFor(row);
+            report.Features.Select(feature => feature.Kind).Distinct().Should().BeEquivalentTo(expectedKinds, row.Id);
+            row.ExpectedWarnings.Should().ContainAll(
+                expectedKinds.Select(kind => ExpectedWarningText[kind]),
+                row.Id);
+        }
+    }
+
+    [Fact]
+    public void GeneratedKnownGapRows_RetainCriticalPackagePartsAfterModelEdit()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-known-gap")
+            .Where(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("known-gap retention packages catch XLSX package loss during ordinary model edits");
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
+            var before = CapturePackageSummary(source);
+            var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
+            before.CriticalParts.Should().Contain(fixtureParts, row.Id);
+            var fixtureContentTypeOverrides = ContentTypeOverridesForParts(before, fixtureParts);
+            fixtureContentTypeOverrides.Should().NotBeEmpty(row.Id);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 10, 1), new TextValue("freex-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Position = 0;
+            var after = CapturePackageSummary(saved);
+
+            after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
+            after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+            after.CriticalRelationshipDetails.Should().Contain(before.CriticalRelationshipDetails, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(before.CriticalContentTypeOverrides, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(fixtureContentTypeOverrides, row.Id);
+        }
+    }
+
+    [Fact]
+    public void GeneratedPowerQueryRetentionPackage_LinksQueryTableFromWorksheet()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-power-query-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        var worksheetRelsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        worksheetEntry.Should().NotBeNull();
+        worksheetRelsEntry.Should().NotBeNull();
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+        XDocument worksheetRelsXml;
+        using (var stream = worksheetRelsEntry!.Open())
+            worksheetRelsXml = XDocument.Load(stream);
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var queryTablePart = worksheetXml.Root!
+            .Element(sheetNs + "queryTableParts")!
+            .Elements(sheetNs + "queryTablePart")
+            .Should().ContainSingle().Subject;
+        var relationshipId = queryTablePart.Attribute(relNs + "id")!.Value;
+
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == relationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable" &&
+                relationship.Attribute("Target")?.Value == "../queryTables/queryTable1.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedUnsupportedSheetTypesRetentionPackage_ListsWorkbookSheetReferences()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-unsupported-sheet-types-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        workbookEntry.Should().NotBeNull();
+        workbookRelsEntry.Should().NotBeNull();
+
+        XDocument workbookXml;
+        using (var stream = workbookEntry!.Open())
+            workbookXml = XDocument.Load(stream);
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var sheets = workbookXml.Root!
+            .Element(workbookNs + "sheets")!
+            .Elements(workbookNs + "sheet")
+            .ToArray();
+        sheets.Where(sheet => sheet.Attribute("name")?.Value == "FreeX Chart Sheet").Should().ContainSingle();
+        sheets.Where(sheet => sheet.Attribute("name")?.Value == "FreeX Dialog Sheet").Should().ContainSingle();
+        sheets.Where(sheet => sheet.Attribute("name")?.Value == "FreeX Macro Sheet").Should().ContainSingle();
+
+        var relationshipsById = workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .ToDictionary(relationship => relationship.Attribute("Id")!.Value, relationship => relationship);
+        relationshipsById[sheets.Single(sheet => sheet.Attribute("name")?.Value == "FreeX Chart Sheet").Attribute(relNs + "id")!.Value]
+            .Attribute("Target")!.Value.Should().Be("chartsheets/sheet1.xml");
+        relationshipsById[sheets.Single(sheet => sheet.Attribute("name")?.Value == "FreeX Dialog Sheet").Attribute(relNs + "id")!.Value]
+            .Attribute("Target")!.Value.Should().Be("dialogSheets/sheet2.xml");
+        relationshipsById[sheets.Single(sheet => sheet.Attribute("name")?.Value == "FreeX Macro Sheet").Attribute(relNs + "id")!.Value]
+            .Attribute("Target")!.Value.Should().Be("macroSheets/sheet3.xml");
+    }
+
+    [Fact]
+    public void GeneratedVbaMacrosRetentionPackage_LinksWorkbookToVbaProject()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-vba-macros-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var vbaProjectEntry = archive.GetEntry("xl/vbaProject.bin");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        vbaProjectEntry.Should().NotBeNull();
+        workbookRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2006/relationships/vbaProject" &&
+                relationship.Attribute("Target")?.Value == "vbaProject.bin")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedThreadedCommentsRetentionPackage_LinksWorksheetAndPersonsParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-threaded-comments-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetRelsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        worksheetRelsEntry.Should().NotBeNull();
+        workbookRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument worksheetRelsXml;
+        using (var stream = worksheetRelsEntry!.Open())
+            worksheetRelsXml = XDocument.Load(stream);
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" &&
+                relationship.Attribute("Target")?.Value == "../threadedComments/threadedComment1.xml")
+            .Should().ContainSingle();
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2017/10/relationships/person" &&
+                relationship.Attribute("Target")?.Value == "persons/person.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedFormControlsRetentionPackage_LinksWorksheetControlAndActiveXParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-form-controls-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        var worksheetRelsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        var activeXRelsEntry = archive.GetEntry("xl/activeX/_rels/activeX1.xml.rels");
+        worksheetEntry.Should().NotBeNull();
+        worksheetRelsEntry.Should().NotBeNull();
+        activeXRelsEntry.Should().NotBeNull();
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+        XDocument worksheetRelsXml;
+        using (var stream = worksheetRelsEntry!.Open())
+            worksheetRelsXml = XDocument.Load(stream);
+        XDocument activeXRelsXml;
+        using (var stream = activeXRelsEntry!.Open())
+            activeXRelsXml = XDocument.Load(stream);
+
+        var control = worksheetXml.Root!
+            .Element(sheetNs + "controls")!
+            .Elements(sheetNs + "control")
+            .Should().ContainSingle().Subject;
+        var controlRelationshipId = control.Attribute(relNs + "id")!.Value;
+        control.Attribute("name")!.Value.Should().Be("FreeX Button");
+
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == controlRelationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp" &&
+                relationship.Attribute("Target")?.Value == "../ctrlProps/ctrlProp1.xml")
+            .Should().ContainSingle();
+        activeXRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary" &&
+                relationship.Attribute("Target")?.Value == "activeX1.bin")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedCustomRibbonUiRetentionPackage_LinksPackageRootToCustomUiPart()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-custom-ribbon-ui-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var packageRelsEntry = archive.GetEntry("_rels/.rels");
+        packageRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument packageRelsXml;
+        using (var stream = packageRelsEntry!.Open())
+            packageRelsXml = XDocument.Load(stream);
+
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility" &&
+                relationship.Attribute("Target")?.Value == "customUI/customUI.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedOfficeAddinsRetentionPackage_LinksTaskpanesAndWebextensionParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-office-addins-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var packageRelsEntry = archive.GetEntry("_rels/.rels");
+        var taskpanesRelsEntry = archive.GetEntry("xl/webextensions/_rels/taskpanes.xml.rels");
+        packageRelsEntry.Should().NotBeNull();
+        taskpanesRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument packageRelsXml;
+        using (var stream = packageRelsEntry!.Open())
+            packageRelsXml = XDocument.Load(stream);
+        XDocument taskpanesRelsXml;
+        using (var stream = taskpanesRelsEntry!.Open())
+            taskpanesRelsXml = XDocument.Load(stream);
+
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes" &&
+                relationship.Attribute("Target")?.Value == "xl/webextensions/taskpanes.xml")
+            .Should().ContainSingle();
+        taskpanesRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/webextension" &&
+                relationship.Attribute("Target")?.Value == "webextension1.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedSmartArtDiagramsRetentionPackage_LinksWorksheetDrawingAndDiagramParts()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-smartart-diagrams-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        var worksheetRelsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        var drawingRelsEntry = archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels");
+        worksheetEntry.Should().NotBeNull();
+        worksheetRelsEntry.Should().NotBeNull();
+        drawingRelsEntry.Should().NotBeNull();
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+        XDocument worksheetRelsXml;
+        using (var stream = worksheetRelsEntry!.Open())
+            worksheetRelsXml = XDocument.Load(stream);
+        XDocument drawingRelsXml;
+        using (var stream = drawingRelsEntry!.Open())
+            drawingRelsXml = XDocument.Load(stream);
+
+        var drawingRelationshipId = worksheetXml.Root!
+            .Element(sheetNs + "drawing")!
+            .Attribute(relNs + "id")!
+            .Value;
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == drawingRelationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" &&
+                relationship.Attribute("Target")?.Value == "../drawings/drawing1.xml")
+            .Should().ContainSingle();
+        drawingRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" &&
+                relationship.Attribute("Target")?.Value == "../diagrams/data1.xml")
+            .Should().ContainSingle();
+        drawingRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout" &&
+                relationship.Attribute("Target")?.Value == "../diagrams/layout1.xml")
+            .Should().ContainSingle();
+        drawingRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle" &&
+                relationship.Attribute("Target")?.Value == "../diagrams/quickStyle1.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedDataModelRetentionPackage_LinksWorkbookToModelPart()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-data-model-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        workbookRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/model" &&
+                relationship.Attribute("Target")?.Value == "model/item.data")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-metadata-pass")
+            .ToArray();
+
+        rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
+        rows.Should().HaveCount(52, "the generated metadata-pass manifest currently declares fifty-two deterministic package-retention rows");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
+            var before = CapturePackageSummary(source);
+            var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
+            before.CriticalParts.Should().Contain(fixtureParts, row.Id);
+            var fixtureContentTypeOverrides = ContentTypeOverridesForParts(before, fixtureParts);
+
+            source.Position = 0;
+            XlsxFeatureInspector.Inspect(source).HasUnsupportedFeatures.Should().BeFalse(row.Id);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 11, 1), new TextValue("freex-metadata-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Position = 0;
+            AssertPackageHealth(saved, row.Id);
+            var after = CapturePackageSummary(saved);
+
+            after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
+            after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+            after.CriticalRelationshipDetails.Should().Contain(before.CriticalRelationshipDetails, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(before.CriticalContentTypeOverrides, row.Id);
+            if (fixtureContentTypeOverrides.Count > 0)
+                after.CriticalContentTypeOverrides.Should().Contain(fixtureContentTypeOverrides, row.Id);
+
+            saved.Position = 0;
+            var roundTripped = adapter.Load(saved);
+            CaptureWorkbookMetadataSummary(roundTripped).Should().BeEquivalentTo(
+                beforeMetadata,
+                options => options.WithStrictOrdering(),
+                row.Id);
+        }
+    }
+
+    [Fact]
+    public void GeneratedCfRetentionPackage_RetainsSixteenCfRulesInXml()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-cf-retention-package-003");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        worksheetEntry.Should().NotBeNull("generated-cf-retention-package-003 must contain xl/worksheets/sheet1.xml");
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var cfRules = worksheetXml.Descendants(sheetNs + "cfRule").ToArray();
+        cfRules.Should().HaveCount(16, "generated-cf-retention-package-003 embeds sixteen cfRule elements across its conditionalFormatting blocks");
+    }
+
+    [Fact]
+    public void GeneratedChartSeriesCountPackage_RetainsFiveSeriesInChartXml()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-chart-series-count-003");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var chartEntry = archive.Entries.FirstOrDefault(e => e.FullName.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+        chartEntry.Should().NotBeNull("generated-chart-series-count-003 must contain at least one chart part under xl/charts/");
+
+        XDocument chartXml;
+        using (var stream = chartEntry!.Open())
+            chartXml = XDocument.Load(stream);
+
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var serElements = chartXml.Descendants()
+            .Where(e => e.Name.LocalName == "ser" && e.Name.Namespace == chartNs)
+            .ToArray();
+        serElements.Should().HaveCount(5, "generated-chart-series-count-003 embeds five <c:ser> elements in its chart XML");
+    }
+
+    [Fact]
+    public void GeneratedDvCountPackage_RetainsTenDataValidationRulesInXml()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-dv-count-package-003");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        worksheetEntry.Should().NotBeNull("generated-dv-count-package-003 must contain xl/worksheets/sheet1.xml");
+
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dvElements = worksheetXml.Descendants(sheetNs + "dataValidation").ToArray();
+        dvElements.Should().HaveCount(10, "generated-dv-count-package-003 embeds ten dataValidation elements in its worksheet XML");
+    }
+
+    [Theory]
+    [InlineData("generated-slicers-001", "xl/drawings/drawing1.xml", "../slicers/slicer1.xml")]
+    [InlineData("generated-timelines-001", "xl/drawings/drawing1.xml", "../timelines/timeline1.xml")]
+    public void GeneratedSlicerTimelineRows_RetainFloatingDrawingAnchorsAfterModelEdit(
+        string id,
+        string drawingPart,
+        string drawingRelationshipTarget)
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(id);
+        var before = CapturePackageSummary(source);
+        before.CriticalParts.Should().Contain(drawingPart, id);
+        before.CriticalRelationshipTargets.Should().Contain(target =>
+            target.EndsWith($"=>{drawingRelationshipTarget}", StringComparison.OrdinalIgnoreCase), id);
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-floating-anchor-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, id);
+        var after = CapturePackageSummary(saved);
+
+        after.CriticalParts.Should().Contain(drawingPart, id);
+        after.CriticalRelationshipTargets.Should().Contain(target =>
+            target.EndsWith($"=>{drawingRelationshipTarget}", StringComparison.OrdinalIgnoreCase), id);
+    }
+
+    [Fact]
+    public void GeneratedPrinterSettingsRow_RetainsWorksheetPageSetupRelationshipAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-printer-settings-001");
+        AssertPrinterSettingsReference(source, "generated-printer-settings-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-printer-settings-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-printer-settings-001");
+        AssertPrinterSettingsReference(saved, "generated-printer-settings-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedCustomXmlRow_RetainsPackageRelationshipsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-custom-xml-001");
+        AssertCustomXmlPackageGraph(source, "generated-custom-xml-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-custom-xml-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-custom-xml-001");
+        AssertCustomXmlPackageGraph(saved, "generated-custom-xml-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedCustomDocPropsRow_RetainsCustomDocumentPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-custom-docprops-001");
+        AssertCustomDocumentProperties(source, "generated-custom-docprops-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-custom-docprops-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-custom-docprops-001");
+        AssertCustomDocumentProperties(saved, "generated-custom-docprops-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedCalcChainRow_RetainsCalcChainAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-calc-chain-001");
+        AssertCalcChainReference(source, "generated-calc-chain-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-calc-chain-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-calc-chain-001");
+        AssertCalcChainReference(saved, "generated-calc-chain-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedDocumentPropertiesRow_RetainsStableDocumentPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-document-properties-001");
+        AssertStableDocumentProperties(source, "generated-document-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-document-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-document-properties-001");
+        AssertStableDocumentProperties(saved, "generated-document-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedHeaderFooterLegacyDrawingRow_RetainsPackageGraphAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-header-footer-legacy-drawing-001");
+        AssertHeaderFooterLegacyDrawingPackageGraph(source, "generated-header-footer-legacy-drawing-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-header-footer-legacy-drawing-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-header-footer-legacy-drawing-001");
+        AssertHeaderFooterLegacyDrawingPackageGraph(saved, "generated-header-footer-legacy-drawing-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetLegacyDrawingRow_RetainsPackageGraphAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-legacy-drawing-001");
+        AssertWorksheetLegacyDrawingPackageGraph(source, "generated-worksheet-legacy-drawing-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-legacy-drawing-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-legacy-drawing-001");
+        AssertWorksheetLegacyDrawingPackageGraph(saved, "generated-worksheet-legacy-drawing-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookExtensionListRow_RetainsUnknownWorkbookExtensionsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-extension-list-001");
+        AssertWorkbookExtensionList(source, "generated-workbook-extension-list-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-workbook-extension-list-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-extension-list-001");
+        AssertWorkbookExtensionList(saved, "generated-workbook-extension-list-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookPropertiesRow_RetainsPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-properties-001");
+        AssertWorkbookProperties(source, "generated-workbook-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-workbook-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-properties-001");
+        AssertWorkbookProperties(saved, "generated-workbook-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookCalculationRow_RetainsCalculationAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-calculation-001");
+        AssertWorkbookCalculation(source, "generated-workbook-calculation-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-workbook-calculation-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-calculation-001");
+        AssertWorkbookCalculation(saved, "generated-workbook-calculation-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookFileVersionRow_RetainsFileVersionAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-file-version-001");
+        AssertWorkbookFileVersion(source, "generated-workbook-file-version-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-workbook-file-version-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-file-version-001");
+        AssertWorkbookFileVersion(saved, "generated-workbook-file-version-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookFileRecoveryRow_RetainsFileRecoveryAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-file-recovery-001");
+        AssertWorkbookFileRecovery(source, "generated-workbook-file-recovery-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-workbook-file-recovery-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-file-recovery-001");
+        AssertWorkbookFileRecovery(saved, "generated-workbook-file-recovery-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookFileSharingRow_RetainsFileSharingAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-file-sharing-001");
+        AssertWorkbookFileSharing(source, "generated-workbook-file-sharing-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 15, 1), new TextValue("freex-workbook-file-sharing-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-file-sharing-001");
+        AssertWorkbookFileSharing(saved, "generated-workbook-file-sharing-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookProtectionNativeRow_RetainsProtectionAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-protection-native-001");
+        AssertWorkbookProtectionNative(source, "generated-workbook-protection-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.IsStructureProtected.Should().BeTrue();
+        workbook.StructureProtectionPassword.Should().Be("83AF");
+        workbook.ProtectionMetadata.Should().NotBeNull();
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "algorithmName").Should().Be("SHA-512");
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "hashValue").Should().Be("def456");
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "saltValue").Should().Be("salt456");
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "spinCount").Should().Be("100000");
+        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "lockWindows").Should().Be("1");
+        BagChildren(workbook.ProtectionMetadata, "workbookProtection").Should().HaveCount(2);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-workbook-protection-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-protection-native-001");
+        AssertWorkbookProtectionNative(saved, "generated-workbook-protection-native-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookSmartTagsRow_RetainsSmartTagsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-smart-tags-001");
+        AssertWorkbookSmartTags(source, "generated-workbook-smart-tags-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-workbook-smart-tags-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-smart-tags-001");
+        AssertWorkbookSmartTags(saved, "generated-workbook-smart-tags-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookFunctionGroupsRow_RetainsFunctionGroupsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-function-groups-001");
+        AssertWorkbookFunctionGroups(source, "generated-workbook-function-groups-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 13, 1), new TextValue("freex-workbook-function-groups-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-function-groups-001");
+        AssertWorkbookFunctionGroups(saved, "generated-workbook-function-groups-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookViewsRow_RetainsViewsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-views-001");
+        AssertWorkbookViews(source, "generated-workbook-views-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 14, 1), new TextValue("freex-workbook-views-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-views-001");
+        AssertWorkbookViews(saved, "generated-workbook-views-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookDefinedNamesNativeRow_RetainsDefinedNamesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-defined-names-native-001");
+        AssertWorkbookDefinedNamesNative(source, "generated-workbook-defined-names-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-defined-name-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-defined-names-native-001");
+        AssertWorkbookDefinedNamesNative(saved, "generated-workbook-defined-names-native-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedStylesheetNativeMetadataRow_RetainsStylesheetMetadataAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-stylesheet-native-metadata-001");
+        AssertStylesheetNativeMetadata(source, "generated-stylesheet-native-metadata-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.IndexedColors.TryGetColor(1, out var color).Should().BeTrue();
+        color.Should().Be(CellColor.FromArgb(1, 2, 3));
+        workbook.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreeXNativePivotStyle" &&
+            style.AppliesToPivotTables &&
+            !style.AppliesToTables &&
+            style.Elements.Any(element =>
+                element.Type == "wholeTable" &&
+                element.DifferentialFormatId == 0));
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-stylesheet-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-stylesheet-native-metadata-001");
+        AssertStylesheetNativeMetadata(saved, "generated-stylesheet-native-metadata-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorkbookThemeNativeSchemesRow_RetainsThemeSchemeDetailsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-workbook-theme-native-schemes-001");
+        AssertWorkbookThemeNativeSchemes(source, "generated-workbook-theme-native-schemes-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.Theme.Name.Should().Be("FreeX Native Scheme Theme");
+        workbook.Theme.MajorFontName.Should().Be("Major Native");
+        workbook.Theme.MinorFontName.Should().Be("Minor Native");
+        workbook.Theme.NativeColorSchemeXml.Should().Contain("lumMod");
+        workbook.Theme.NativeFontSchemeXml.Should().Contain("typeface=\"Major East Asia\"");
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-theme-scheme-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-workbook-theme-native-schemes-001");
+        AssertWorkbookThemeNativeSchemes(saved, "generated-workbook-theme-native-schemes-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetIgnoredErrorsRow_RetainsIgnoredErrorsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-ignored-errors-001");
+        AssertWorksheetIgnoredErrors(source, "generated-worksheet-ignored-errors-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-ignored-errors-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-ignored-errors-001");
+        AssertWorksheetIgnoredErrors(saved, "generated-worksheet-ignored-errors-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetCellWatchesRow_RetainsCellWatchesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-cell-watches-001");
+        AssertWorksheetCellWatches(source, "generated-worksheet-cell-watches-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-cell-watches-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-cell-watches-001");
+        AssertWorksheetCellWatches(saved, "generated-worksheet-cell-watches-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSingleXmlCellsRow_RetainsSingleXmlCellsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-single-xml-cells-001");
+        AssertWorksheetSingleXmlCells(source, "generated-worksheet-single-xml-cells-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-single-xml-cells-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-single-xml-cells-001");
+        AssertWorksheetSingleXmlCells(saved, "generated-worksheet-single-xml-cells-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetCalculationPropertiesRow_RetainsCalculationPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-calculation-properties-001");
+        AssertWorksheetCalculationProperties(source, "generated-worksheet-calculation-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).FullCalculationOnLoad.Should().BeTrue();
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-calculation-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-calculation-properties-001");
+        AssertWorksheetCalculationProperties(saved, "generated-worksheet-calculation-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSheetViewsRow_RetainsSheetViewsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sheet-views-001");
+        AssertWorksheetSheetViews(source, "generated-worksheet-sheet-views-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-views-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-sheet-views-001");
+        AssertWorksheetSheetViews(saved, "generated-worksheet-sheet-views-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSheetFormatRow_RetainsSheetFormatAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sheet-format-001");
+        AssertWorksheetSheetFormat(source, "generated-worksheet-sheet-format-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-format-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-sheet-format-001");
+        AssertWorksheetSheetFormat(saved, "generated-worksheet-sheet-format-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetPageBreaksRow_RetainsPageBreaksAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-page-breaks-001");
+        AssertWorksheetPageBreaks(source, "generated-worksheet-page-breaks-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-page-breaks-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-page-breaks-001");
+        AssertWorksheetPageBreaks(saved, "generated-worksheet-page-breaks-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetPrintOptionsRow_RetainsPrintOptionsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-print-options-001");
+        AssertWorksheetPrintOptions(source, "generated-worksheet-print-options-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-print-options-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-print-options-001");
+        AssertWorksheetPrintOptions(saved, "generated-worksheet-print-options-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetPageSetupNativeRow_RetainsPageSetupAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-page-setup-native-001");
+        AssertWorksheetPageSetupNative(source, "generated-worksheet-page-setup-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-page-setup-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-page-setup-native-001");
+        AssertWorksheetPageSetupNative(saved, "generated-worksheet-page-setup-native-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetHeaderFooterNativeRow_RetainsHeaderFooterAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-header-footer-native-001");
+        AssertWorksheetHeaderFooterNative(source, "generated-worksheet-header-footer-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-header-footer-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-header-footer-native-001");
+        AssertWorksheetHeaderFooterNative(saved, "generated-worksheet-header-footer-native-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetDimensionNativeRow_RetainsDimensionAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-dimension-native-001");
+        AssertWorksheetDimensionNative(source, "generated-worksheet-dimension-native-001 source", "A1");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-dimension-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-dimension-native-001");
+        AssertWorksheetDimensionNative(saved, "generated-worksheet-dimension-native-001 saved", "A1:B12");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSheetPropertiesRow_RetainsSheetPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sheet-properties-001");
+        AssertWorksheetSheetProperties(source, "generated-worksheet-sheet-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-sheet-properties-001");
+        AssertWorksheetSheetProperties(saved, "generated-worksheet-sheet-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetProtectionNativeRow_RetainsProtectionAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-protection-native-001");
+        AssertWorksheetProtectionNative(source, "generated-worksheet-protection-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-protection-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-protection-native-001");
+        AssertWorksheetProtectionNative(saved, "generated-worksheet-protection-native-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetProtectedRangesRow_RetainsProtectedRangesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-protected-ranges-001");
+        AssertWorksheetProtectedRanges(source, "generated-worksheet-protected-ranges-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        var allowEditRange = workbook.GetSheetAt(0).AllowEditRanges.Should().ContainSingle().Subject;
+        allowEditRange.Start.ToA1().Should().Be("B2");
+        allowEditRange.End.ToA1().Should().Be("C3");
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-protected-ranges-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-protected-ranges-001");
+        AssertWorksheetProtectedRanges(saved, "generated-worksheet-protected-ranges-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetCellStructureNativeRow_RetainsNativeMetadataAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-cell-structure-native-001");
+        AssertWorksheetCellStructureNative(source, "generated-worksheet-cell-structure-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-cell-structure-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-cell-structure-native-001");
+        AssertWorksheetCellStructureNative(saved, "generated-worksheet-cell-structure-native-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
+        AssertWorksheetPhoneticProperties(source, "generated-worksheet-phonetic-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-phonetic-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-phonetic-properties-001");
+        AssertWorksheetPhoneticProperties(saved, "generated-worksheet-phonetic-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSortStateRow_RetainsSortStateAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sort-state-001");
+        AssertWorksheetSortState(source, "generated-worksheet-sort-state-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sort-state-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-sort-state-001");
+        AssertWorksheetSortState(saved, "generated-worksheet-sort-state-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetDataConsolidationRow_RetainsDataConsolidationAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-data-consolidation-001");
+        AssertWorksheetDataConsolidation(source, "generated-worksheet-data-consolidation-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-data-consolidation-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-data-consolidation-001");
+        AssertWorksheetDataConsolidation(saved, "generated-worksheet-data-consolidation-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetAutoFilterMetadataRow_RetainsAutoFilterAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-auto-filter-metadata-001");
+        AssertWorksheetAutoFilterMetadata(source, "generated-worksheet-auto-filter-metadata-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        var loadedAutoFilter = workbook.GetSheetAt(0).AutoFilter;
+        loadedAutoFilter.Should().NotBeNull();
+        loadedAutoFilter!.Reference.Should().Be("A1:B3");
+        var loadedFilterColumn = loadedAutoFilter.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.ColumnId.Should().Be(0);
+        loadedFilterColumn.Values.Should().Equal("A");
+        loadedFilterColumn.IncludeBlank.Should().BeTrue();
+        workbook.GetSheetAt(0).FilterHiddenRows.Should().Contain(3u);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-auto-filter-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-auto-filter-metadata-001");
+        AssertWorksheetAutoFilterMetadata(saved, "generated-worksheet-auto-filter-metadata-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetCustomPropertiesRow_RetainsCustomPropertiesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-custom-properties-001");
+        AssertWorksheetCustomProperties(source, "generated-worksheet-custom-properties-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-custom-properties-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-custom-properties-001");
+        AssertWorksheetCustomProperties(saved, "generated-worksheet-custom-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetSmartTagsRow_RetainsSmartTagsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-smart-tags-001");
+        AssertWorksheetSmartTags(source, "generated-worksheet-smart-tags-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-smart-tags-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-smart-tags-001");
+        AssertWorksheetSmartTags(saved, "generated-worksheet-smart-tags-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetScenariosRow_RetainsScenariosAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-scenarios-001");
+        AssertWorksheetScenarios(source, "generated-worksheet-scenarios-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-scenarios-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-scenarios-001");
+        AssertWorksheetScenarios(saved, "generated-worksheet-scenarios-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetCustomSheetViewsRow_RetainsCustomSheetViewsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-custom-sheet-views-001");
+        AssertWorksheetCustomSheetViews(source, "generated-worksheet-custom-sheet-views-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-custom-sheet-views-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-custom-sheet-views-001");
+        AssertWorksheetCustomSheetViews(saved, "generated-worksheet-custom-sheet-views-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetExtensionListRow_RetainsSparklineAndUnknownExtensionsAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-extension-list-001");
+        AssertWorksheetExtensionList(source, "generated-worksheet-extension-list-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).Sparklines.Should().ContainSingle();
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-extlst-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-extension-list-001");
+        AssertWorksheetExtensionList(saved, "generated-worksheet-extension-list-001 saved");
+    }
+
+    private static void AssertWorksheetExtensionList(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var extensionList = worksheetXml.Root!.Element(worksheetNs + "extLst");
+        extensionList.Should().NotBeNull(because);
+        extensionList!.Elements(worksheetNs + "ext")
+            .Where(extension => string.Equals(extension.Attribute("uri")?.Value, "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+        extensionList.Descendants(x14Ns + "sparklineGroups").Should().ContainSingle(because);
+
+        var unknownExtension = extensionList.Elements(worksheetNs + "ext")
+            .Where(extension => string.Equals(extension.Attribute("uri")?.Value, "{FFEEDDCC-BBAA-9988-7766-554433221100}", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        unknownExtension.Descendants(x15Ns + "futureMetadata")
+            .Where(metadata => string.Equals(metadata.Attribute("name")?.Value, "FreeXUnknownWorksheetExtension", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertWorksheetCustomSheetViews(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var customSheetView = worksheetXml.Root!
+            .Element(worksheetNs + "customSheetViews")!
+            .Elements(worksheetNs + "customSheetView")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        customSheetView.Attribute("guid")!.Value.Should().Be("{11111111-1111-1111-1111-111111111111}", because);
+        customSheetView.Attribute("scale")!.Value.Should().Be("120", because);
+        customSheetView.Attribute("showGridLines")!.Value.Should().Be("0", because);
+        customSheetView.Attribute("showRowCol")!.Value.Should().Be("0", because);
+        customSheetView.Attribute("state")!.Value.Should().Be("visible", because);
+
+        var pane = customSheetView.Element(worksheetNs + "pane");
+        pane.Should().NotBeNull(because);
+        pane!.Attribute("topLeftCell")!.Value.Should().Be("B2", because);
+        pane.Attribute("activePane")!.Value.Should().Be("bottomRight", because);
+    }
+
+    private static void AssertWorksheetScenarios(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios");
+        scenarios.Should().NotBeNull(because);
+
+        var scenario = scenarios!.Elements(worksheetNs + "scenario")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        scenario.Attribute("name")!.Value.Should().Be("BestCase", because);
+        scenario.Attribute("comment")!.Value.Should().Be("Scenario comment", because);
+        scenario.Attribute("hidden")!.Value.Should().Be("1", because);
+        scenario.Attribute("locked")!.Value.Should().Be("1", because);
+        scenario.Attribute("user")!.Value.Should().Be("FreeXTest", because);
+
+        var inputCells = scenario.Elements(worksheetNs + "inputCells")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        inputCells.Attribute("r")!.Value.Should().Be("A1", because);
+        inputCells.Attribute("val")!.Value.Should().Be("42", because);
+    }
+
+    private static void AssertWorksheetSmartTags(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var cellSmartTags = worksheetXml.Root!
+            .Element(worksheetNs + "smartTags")!
+            .Elements(worksheetNs + "cellSmartTags")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        cellSmartTags.Attribute("r")!.Value.Should().Be("A1", because);
+
+        var smartTag = cellSmartTags.Elements(worksheetNs + "cellSmartTag")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        smartTag.Attribute("type")!.Value.Should().Be("0", because);
+        smartTag.Attribute("deleted")!.Value.Should().Be("0", because);
+
+        var property = smartTag.Elements(worksheetNs + "cellSmartTagPr")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        property.Attribute("key")!.Value.Should().Be("place", because);
+        property.Attribute("val")!.Value.Should().Be("Seattle", because);
+        property.Attribute("customSmartTagPropertyFlag")!.Value.Should().Be("keep", because);
+    }
+
+    private static void AssertWorksheetCustomProperties(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var customProperty = worksheetXml.Root!
+            .Element(worksheetNs + "customProperties")!
+            .Elements(worksheetNs + "customPr")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+
+        customProperty.Attribute("name")!.Value.Should().Be("FreeXNativeProperty", because);
+        customProperty.Attribute("id")!.Value.Should().Be("1", because);
+        customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetDataConsolidation(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var dataConsolidate = worksheetXml.Root!.Element(worksheetNs + "dataConsolidate");
+        dataConsolidate.Should().NotBeNull(because);
+        dataConsolidate!.Attribute("function")!.Value.Should().Be("sum", because);
+        dataConsolidate.Attribute("leftLabels")!.Value.Should().Be("1", because);
+        dataConsolidate.Attribute("topLabels")!.Value.Should().Be("1", because);
+        dataConsolidate.Attribute("link")!.Value.Should().Be("1", because);
+        dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep", because);
+
+        var dataRef = dataConsolidate
+            .Element(worksheetNs + "dataRefs")!
+            .Elements(worksheetNs + "dataRef")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        dataRef.Attribute("ref")!.Value.Should().Be("A1:B2", because);
+        dataRef.Attribute("sheet")!.Value.Should().Be("Data", because);
+        dataRef.Attribute("customDataRefFlag")!.Value.Should().Be("keep", because);
+    }
+
+    private static void AssertWorksheetAutoFilterMetadata(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var autoFilter = worksheetXml.Root!.Element(worksheetNs + "autoFilter");
+        autoFilter.Should().NotBeNull(because);
+        autoFilter!.Attribute("ref")!.Value.Should().Be("A1:B3", because);
+        var filterColumn = autoFilter.Elements(worksheetNs + "filterColumn")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        filterColumn.Attribute("colId")!.Value.Should().Be("0", because);
+        var filters = filterColumn.Element(worksheetNs + "filters");
+        filters.Should().NotBeNull(because);
+        filters!.Attribute("blank")!.Value.Should().Be("1", because);
+        filters.Elements(worksheetNs + "filter")
+            .Where(filter => string.Equals(filter.Attribute("val")?.Value, "A", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertWorksheetSortState(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var autoFilter = worksheetXml.Root!.Element(worksheetNs + "autoFilter");
+        autoFilter.Should().NotBeNull(because);
+        autoFilter!.Attribute("ref")!.Value.Should().Be("A1:B3", because);
+        autoFilter.Descendants(worksheetNs + "filter")
+            .Single(filter => string.Equals(filter.Attribute("val")?.Value, "A", StringComparison.Ordinal))
+            .Should()
+            .NotBeNull(because);
+
+        var sortState = worksheetXml.Root.Element(worksheetNs + "sortState");
+        sortState.Should().NotBeNull(because);
+        sortState!.Attribute("ref")!.Value.Should().Be("A1:A3", because);
+        sortState.Attribute("caseSensitive")!.Value.Should().Be("1", because);
+        sortState.Attribute("sortMethod")!.Value.Should().Be("stroke", because);
+        sortState.Attribute("customSortStateFlag")!.Value.Should().Be("keep", because);
+
+        var sortCondition = sortState.Elements(worksheetNs + "sortCondition")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        sortCondition.Attribute("ref")!.Value.Should().Be("A2:A3", because);
+        sortCondition.Attribute("descending")!.Value.Should().Be("1", because);
+        sortCondition.Attribute("sortBy")!.Value.Should().Be("cellColor", because);
+        sortCondition.Attribute("customSortConditionFlag")!.Value.Should().Be("keep", because);
+    }
+
+    private static void AssertWorksheetPhoneticProperties(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
+        phoneticProperties.Should().NotBeNull(because);
+        phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1", because);
+        phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana", because);
+        phoneticProperties.Attribute("alignment")!.Value.Should().Be("center", because);
+        phoneticProperties.Attribute("nativeOnly")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetCellWatches(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
+        cellWatches.Should().NotBeNull(because);
+        cellWatches!.Attribute("nativeContainer")!.Value.Should().Be("kept", because);
+
+        var cellWatch = cellWatches.Elements(worksheetNs + "cellWatch")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        cellWatch.Attribute("r")!.Value.Should().Be("A1", because);
+        cellWatch.Attribute("nativeWatch")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetSingleXmlCells(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var singleXmlCells = worksheetXml.Root!.Element(worksheetNs + "singleXmlCells");
+        singleXmlCells.Should().NotBeNull(because);
+        singleXmlCells!.Attribute("nativeSingleXmlCellsAttr")!.Value.Should().Be("kept", because);
+
+        var singleXmlCell = singleXmlCells.Elements(worksheetNs + "singleXmlCell")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        singleXmlCell.Attribute("id")!.Value.Should().Be("1", because);
+        singleXmlCell.Attribute("r")!.Value.Should().Be("A1", because);
+        singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1", because);
+        singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept", because);
+    }
+
+    private static void AssertWorksheetCalculationProperties(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
+        sheetCalcPr.Should().NotBeNull(because);
+        sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1", because);
+        sheetCalcPr.Attribute("calcId")!.Value.Should().Be("999", because);
+    }
+
+    private static void AssertWorksheetSheetViews(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+        sheetViews.Should().NotBeNull(because);
+        sheetViews!.Attribute("nativeSheetViewsAttr")!.Value.Should().Be("kept", because);
+        var sheetView = sheetViews.Elements(worksheetNs + "sheetView")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        sheetView.Attribute("workbookViewId")!.Value.Should().Be("0", because);
+        sheetView.Attribute("showZeros")!.Value.Should().Be("0", because);
+        sheetView.Attribute("rightToLeft")!.Value.Should().Be("1", because);
+        sheetView.Element(worksheetNs + "pivotSelection")!
+            .Attribute("pane")!.Value.Should().Be("topRight", because);
+    }
+
+    private static void AssertWorksheetSheetFormat(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetFormat = worksheetXml.Root!.Element(worksheetNs + "sheetFormatPr");
+        sheetFormat.Should().NotBeNull(because);
+        sheetFormat!.Attribute("baseColWidth")!.Value.Should().Be("12", because);
+        sheetFormat.Attribute("zeroHeight")!.Value.Should().Be("1", because);
+        sheetFormat.Attribute("thickTop")!.Value.Should().Be("1", because);
+        sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3", because);
+        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetPageBreaks(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var rowBreaks = worksheetXml.Root!.Element(worksheetNs + "rowBreaks");
+        rowBreaks.Should().NotBeNull(because);
+        rowBreaks!.Attribute("count")!.Value.Should().Be("1", because);
+        rowBreaks.Attribute("manualBreakCount")!.Value.Should().Be("1", because);
+        var rowBreak = rowBreaks.Elements(worksheetNs + "brk")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        rowBreak.Attribute("id")!.Value.Should().Be("20", because);
+        rowBreak.Attribute("max")!.Value.Should().Be("16383", because);
+        rowBreak.Attribute("man")!.Value.Should().Be("1", because);
+        rowBreak.Attribute("pt")!.Value.Should().Be("1", because);
+        rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native", because);
+
+        var columnBreaks = worksheetXml.Root.Element(worksheetNs + "colBreaks");
+        columnBreaks.Should().NotBeNull(because);
+        columnBreaks!.Attribute("count")!.Value.Should().Be("1", because);
+        columnBreaks.Attribute("manualBreakCount")!.Value.Should().Be("1", because);
+        var columnBreak = columnBreaks.Elements(worksheetNs + "brk")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        columnBreak.Attribute("id")!.Value.Should().Be("5", because);
+        columnBreak.Attribute("max")!.Value.Should().Be("1048575", because);
+        columnBreak.Attribute("man")!.Value.Should().Be("1", because);
+        columnBreak.Attribute("pt")!.Value.Should().Be("1", because);
+        columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native", because);
+    }
+
+    private static void AssertWorksheetPrintOptions(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
+        printOptions.Should().NotBeNull(because);
+        printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1", because);
+        printOptions.Attribute("customAttr")!.Value.Should().Be("print-native", because);
+        printOptions.Attribute("gridLines")?.Value.Should().NotBe("1", because);
+        printOptions.Attribute("headings")?.Value.Should().NotBe("1", because);
+        printOptions.Attribute("horizontalCentered")?.Value.Should().NotBe("1", because);
+        printOptions.Attribute("verticalCentered")?.Value.Should().NotBe("1", because);
+        printOptions.Element(freexNs + "nativePrintOptionsChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetPageSetupNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+        pageSetup.Should().NotBeNull(because);
+        pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1", because);
+        pageSetup.Attribute("copies")!.Value.Should().Be("3", because);
+        pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native", because);
+        pageSetup.Element(worksheetNs + "nativePageSetupChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetHeaderFooterNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
+        headerFooter.Should().NotBeNull(because);
+        headerFooter!.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept", because);
+        headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center", because);
+        headerFooter.Element(worksheetNs + "nativeHeaderFooterChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetDimensionNative(Stream package, string because, string expectedRef)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension");
+        dimension.Should().NotBeNull(because);
+        dimension!.Attribute("ref")!.Value.Should().Be(expectedRef, because);
+        dimension.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetSheetProperties(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
+        sheetPr.Should().NotBeNull(because);
+        sheetPr!.Attribute("filterMode")!.Value.Should().Be("1", because);
+        var pageSetUpPr = sheetPr.Element(worksheetNs + "pageSetUpPr");
+        pageSetUpPr.Should().NotBeNull(because);
+        pageSetUpPr!.Attribute("fitToPage")!.Value.Should().Be("1", because);
+        pageSetUpPr.Attribute("autoPageBreaks")!.Value.Should().Be("0", because);
+        sheetPr.Elements(freexNs + "sheetPrNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
+    }
+
+    private static void AssertWorksheetProtectionNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var protection = worksheetXml.Root!.Element(worksheetNs + "sheetProtection");
+        protection.Should().NotBeNull(because);
+        protection!.Attribute("sheet")!.Value.Should().Be("1", because);
+        protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512", because);
+        protection.Attribute("hashValue")!.Value.Should().Be("abc123", because);
+        protection.Attribute("saltValue")!.Value.Should().Be("salt123", because);
+        protection.Attribute("spinCount")!.Value.Should().Be("100000", because);
+        protection.Attribute("objects")!.Value.Should().Be("1", because);
+        protection.Attribute("scenarios")!.Value.Should().Be("1", because);
+        protection.Elements(freexNs + "sheetProtectionNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
+    }
+
+    private static void AssertWorksheetProtectedRanges(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var protectedRanges = worksheetXml.Root!.Element(worksheetNs + "protectedRanges");
+        protectedRanges.Should().NotBeNull(because);
+        var ranges = protectedRanges!.Elements(worksheetNs + "protectedRange").ToArray();
+        ranges.Should().HaveCount(2, because);
+
+        var editableRange = ranges.Should()
+            .ContainSingle(element => (string?)element.Attribute("name") == "NativeEditableRange", because)
+            .Subject;
+        editableRange.Attribute("sqref")!.Value.Should().Be("B2:C3", because);
+        editableRange.Attribute("password")!.Value.Should().Be("ABCD", because);
+        editableRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI", because);
+        editableRange.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Attribute("uri")!.Value.Should().Be("{FREEX-PROTECTED-RANGE-TEST}", because);
+        editableRange.Elements(freexNs + "protectedRangeNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
+
+        var nativeOnlyRange = ranges.Should()
+            .ContainSingle(element => (string?)element.Attribute("name") == "NativeMultiAreaRange", because)
+            .Subject;
+        nativeOnlyRange.Attribute("sqref")!.Value.Should().Be("B2 C3", because);
+        nativeOnlyRange.Attribute("password")!.Value.Should().Be("1234", because);
+    }
+
+    private static void AssertWorksheetCellStructureNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var cols = worksheetXml.Root!.Element(worksheetNs + "cols");
+        cols.Should().NotBeNull(because);
+        cols!.Attribute("nativeColsAttr")!.Value.Should().Be("kept", because);
+        var column = cols.Elements(worksheetNs + "col")
+            .Where(element => (string?)element.Attribute("min") == "2" && (string?)element.Attribute("max") == "2")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        column.Attribute("bestFit")!.Value.Should().Be("1", because);
+        column.Attribute("phonetic")!.Value.Should().Be("1", because);
+        column.Attribute("customAttr")!.Value.Should().Be("column-native", because);
+
+        var sheetData = worksheetXml.Root.Element(worksheetNs + "sheetData");
+        sheetData.Should().NotBeNull(because);
+        sheetData!.Attribute("nativeSheetDataAttr")!.Value.Should().Be("kept", because);
+        var row = sheetData.Elements(worksheetNs + "row")
+            .Where(element => (string?)element.Attribute("r") == "2")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        row.Attribute("thickTop")!.Value.Should().Be("1", because);
+        row.Attribute("ph")!.Value.Should().Be("1", because);
+        row.Attribute("customAttr")!.Value.Should().Be("row-native", because);
+        row.Element(freexNs + "rowNativeChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+        row.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Element(freexNs + "rowExt")!
+            .Attribute("value")!.Value.Should().Be("row-extension", because);
+
+        var cell = row.Elements(worksheetNs + "c")
+            .Where(element => (string?)element.Attribute("r") == "A2")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        cell.Attribute("cm")!.Value.Should().Be("2", because);
+        cell.Attribute("vm")!.Value.Should().Be("1", because);
+        cell.Attribute("ph")!.Value.Should().Be("1", because);
+        cell.Attribute("customAttr")!.Value.Should().Be("cell-native", because);
+        cell.Element(freexNs + "cellNativeChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+        cell.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Element(freexNs + "cellExt")!
+            .Attribute("value")!.Value.Should().Be("cell-extension", because);
+        var formula = cell.Element(worksheetNs + "f");
+        formula.Should().NotBeNull(because);
+        formula!.Attribute("t")!.Value.Should().Be("array", because);
+        formula.Attribute("ref")!.Value.Should().Be("A2:A2", because);
+        formula.Attribute("ca")!.Value.Should().Be("1", because);
+        formula.Attribute("customAttr")!.Value.Should().Be("formula-native", because);
+
+        var mergeCells = worksheetXml.Root.Element(worksheetNs + "mergeCells");
+        mergeCells.Should().NotBeNull(because);
+        mergeCells!.Attribute("nativeMergeContainerAttr")!.Value.Should().Be("kept", because);
+        var mergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
+            .Where(element => (string?)element.Attribute("ref") == "A4:B5")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        mergeCell.Attribute("nativeMergeCellAttr")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetIgnoredErrors(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var ignoredError = worksheetXml.Root!
+            .Element(worksheetNs + "ignoredErrors")!
+            .Elements(worksheetNs + "ignoredError")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+
+        ignoredError.Attribute("sqref")!.Value.Should().Be("A1", because);
+        ignoredError.Attribute("numberStoredAsText")!.Value.Should().Be("1", because);
+        ignoredError.Attribute("twoDigitTextYear")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorkbookExtensionList(Stream package, string because)
+    {
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Contain("{00112233-4455-6677-8899-AABBCCDDEEFF}", because)
+            .And.Contain("FreeXUnknownWorkbookExtension", because);
+    }
+
+    private static void AssertWorkbookProperties(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookProperties = workbookXml.Root!.Element(workbookNs + "workbookPr");
+        workbookProperties.Should().NotBeNull(because);
+        workbookProperties!.Attribute("date1904")!.Value.Should().Be("1", because);
+        workbookProperties.Attribute("defaultThemeVersion")!.Value.Should().Be("166925", because);
+        workbookProperties.Elements(freexNs + "workbookPrNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
+    }
+
+    private static void AssertWorkbookCalculation(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var calculationProperties = workbookXml.Root!.Element(workbookNs + "calcPr");
+        calculationProperties.Should().NotBeNull(because);
+        calculationProperties!.Attribute("calcMode")!.Value.Should().Be("manual", because);
+        calculationProperties.Attribute("iterate")!.Value.Should().Be("1", because);
+        calculationProperties.Attribute("iterateCount")!.Value.Should().Be("50", because);
+        calculationProperties.Attribute("calcId")!.Value.Should().Be("191029", because);
+        calculationProperties.Attribute("refMode")!.Value.Should().Be("A1", because);
+        calculationProperties.Attribute("fullPrecision")!.Value.Should().Be("0", because);
+        calculationProperties.Attribute("concurrentCalc")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorkbookFileVersion(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var fileVersion = workbookXml.Root!.Element(workbookNs + "fileVersion");
+        fileVersion.Should().NotBeNull(because);
+        fileVersion!.Attribute("appName")!.Value.Should().Be("xl", because);
+        fileVersion.Attribute("lastEdited")!.Value.Should().Be("7", because);
+        fileVersion.Attribute("lowestEdited")!.Value.Should().Be("7", because);
+        fileVersion.Attribute("rupBuild")!.Value.Should().Be("28129", because);
+        fileVersion.Attribute("customVersionFlag")!.Value.Should().Be("keep", because);
+    }
+
+    private static void AssertWorkbookFileRecovery(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var recoveryBlocks = workbookXml.Root!.Elements(workbookNs + "fileRecoveryPr").ToArray();
+        recoveryBlocks.Should().HaveCount(2, because);
+        recoveryBlocks[0].Attribute("autoRecover")!.Value.Should().Be("1", because);
+        recoveryBlocks[0].Attribute("crashSave")!.Value.Should().Be("1", because);
+        recoveryBlocks[0].Attribute("customRecoveryFlag")!.Value.Should().Be("keep", because);
+        recoveryBlocks[0].Attribute("repairLoad")!.Value.Should().Be("0", because);
+        recoveryBlocks[1].Attribute("dataExtractLoad")!.Value.Should().Be("1", because);
+        recoveryBlocks[1].Attribute("repairLoad")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorkbookFileSharing(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing");
+        fileSharing.Should().NotBeNull(because);
+        fileSharing!.Attribute("readOnlyRecommended")!.Value.Should().Be("1", because);
+        fileSharing.Attribute("userName")!.Value.Should().Be("FreeXTest", because);
+        fileSharing.Attribute("revisionsPassword")!.Value.Should().Be("1234", because);
+    }
+
+    private static void AssertWorkbookProtectionNative(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var protection = workbookXml.Root!.Element(workbookNs + "workbookProtection");
+        protection.Should().NotBeNull(because);
+        protection!.Attribute("lockStructure")!.Value.Should().Be("1", because);
+        protection.Attribute("lockWindows")!.Value.Should().Be("1", because);
+        protection.Attribute("workbookPassword")!.Value.Should().Be("83AF", because);
+        protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512", because);
+        protection.Attribute("hashValue")!.Value.Should().Be("def456", because);
+        protection.Attribute("saltValue")!.Value.Should().Be("salt456", because);
+        protection.Attribute("spinCount")!.Value.Should().Be("100000", because);
+        protection.Elements(freexNs + "workbookProtectionNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
+    }
+
+    private static void AssertWorkbookSmartTags(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var smartTagProperties = workbookXml.Root!.Element(workbookNs + "smartTagPr");
+        smartTagProperties.Should().NotBeNull(because);
+        smartTagProperties!.Attribute("embed")!.Value.Should().Be("1", because);
+        smartTagProperties.Attribute("show")!.Value.Should().Be("all", because);
+        smartTagProperties.Attribute("customSmartTagFlag")!.Value.Should().Be("keep", because);
+
+        var smartTagTypes = workbookXml.Root.Element(workbookNs + "smartTagTypes");
+        smartTagTypes.Should().NotBeNull(because);
+        smartTagTypes!.Attribute("customSmartTagTypesFlag")!.Value.Should().Be("keep", because);
+        var smartTagType = smartTagTypes.Elements(workbookNs + "smartTagType")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        smartTagType.Attribute("namespaceUri")!.Value.Should().Be("urn:schemas-microsoft-com:office:smarttags", because);
+        smartTagType.Attribute("name")!.Value.Should().Be("place", because);
+        smartTagType.Attribute("customSmartTagTypeFlag")!.Value.Should().Be("keep", because);
+    }
+
+    private static void AssertWorkbookFunctionGroups(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups");
+        functionGroups.Should().NotBeNull(because);
+        functionGroups!.Attribute("builtInGroupCount")!.Value.Should().Be("16", because);
+        functionGroups.Attribute("customFunctionGroupFlag")!.Value.Should().Be("keep", because);
+        var functionGroup = functionGroups.Elements(workbookNs + "functionGroup")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        functionGroup.Attribute("name")!.Value.Should().Be("FreeXNativeFunctions", because);
+        functionGroup.Attribute("customGroupFlag")!.Value.Should().Be("keep", because);
+    }
+
+    private static void AssertWorkbookViews(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var views = workbookXml.Root!
+            .Element(workbookNs + "bookViews")!
+            .Elements(workbookNs + "workbookView")
+            .ToList();
+        views.Should().HaveCount(2, because);
+        var hasPrimaryView = views.Any(view =>
+            string.Equals(view.Attribute("visibility")?.Value, "visible", StringComparison.Ordinal) &&
+            string.Equals(view.Attribute("showSheetTabs")?.Value, "0", StringComparison.Ordinal) &&
+            string.Equals(view.Attribute("tabRatio")?.Value, "700", StringComparison.Ordinal));
+        hasPrimaryView.Should().BeTrue(because);
+        var hasAdditionalView = views.Any(view =>
+            string.Equals(view.Attribute("visibility")?.Value, "hidden", StringComparison.Ordinal) &&
+            string.Equals(view.Attribute("customWorkbookViewFlag")?.Value, "kept", StringComparison.Ordinal) &&
+            string.Equals(view.Attribute("showHorizontalScroll")?.Value, "0", StringComparison.Ordinal));
+        hasAdditionalView.Should().BeTrue(because);
+
+        var customView = workbookXml.Root.Element(workbookNs + "customWorkbookViews")!
+            .Elements(workbookNs + "customWorkbookView")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        customView.Attribute("name")!.Value.Should().Be("FreeXView", because);
+        customView.Attribute("guid")!.Value.Should().Be("{22222222-2222-2222-2222-222222222222}", because);
+        customView.Attribute("includePrintSettings")!.Value.Should().Be("1", because);
+        customView.Attribute("includeHiddenRowCol")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorkbookDefinedNamesNative(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var definedName = workbookXml.Root!
+            .Element(workbookNs + "definedNames")!
+            .Elements(workbookNs + "definedName")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        definedName.Attribute("name")!.Value.Should().Be("DynamicSalesRange", because);
+        definedName.Attribute("hidden")!.Value.Should().Be("1", because);
+        definedName.Value.Should().Be("1+1", because);
+    }
+
+    private static void AssertStylesheetNativeMetadata(Stream package, string because)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        var colors = stylesXml.Root!.Element(workbookNs + "colors");
+        colors.Should().NotBeNull(because);
+        colors!.ToString(SaveOptions.DisableFormatting).Should().Contain("rgb=\"FF010203\"", because);
+
+        var tableStyles = stylesXml.Root.Element(workbookNs + "tableStyles");
+        tableStyles.Should().NotBeNull(because);
+        tableStyles!.Attribute("defaultPivotStyle")!.Value.Should().Be("PivotStyleMedium9", because);
+        tableStyles.Elements(workbookNs + "tableStyle")
+            .Where(element => string.Equals(element.Attribute("name")?.Value, "FreeXNativeTableStyle", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+        tableStyles.Elements(freexNs + "tableStylesNativeChild")
+            .Where(element => string.Equals(element.Attribute("value")?.Value, "kept", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+        tableStyles.Elements(workbookNs + "tableStyle")
+            .Where(element =>
+                string.Equals(element.Attribute("name")?.Value, "FreeXNativePivotStyle", StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("pivot")?.Value, "1", StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("table")?.Value, "0", StringComparison.Ordinal) &&
+                string.Equals(element.Element(workbookNs + "tableStyleElement")?.Attribute("dxfId")?.Value, "0", StringComparison.Ordinal))
+            .Should()
+            .ContainSingle(because);
+
+        var differentialStyle = stylesXml.Root.Element(workbookNs + "dxfs")!
+            .Elements(workbookNs + "dxf")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        differentialStyle.Attribute("nativePivotDxf")!.Value.Should().Be("kept", because);
+        differentialStyle.Element(freexNs + "pivotStyleDxfNativeChild")!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept", because);
+
+        var extensionList = stylesXml.Root.Element(workbookNs + "extLst");
+        extensionList.Should().NotBeNull(because);
+        extensionList!.ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Contain("{FFEEDDCC-7788-6655-4433-22110099AABB}", because)
+            .And.Contain("FreeXNativeStylesExtension", because);
+    }
+
+    private static void AssertWorkbookThemeNativeSchemes(Stream package, string because)
+    {
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var themeXml = LoadPackageXml(archive.GetEntry("xl/theme/theme1.xml")!);
+        var themeElements = themeXml.Root!.Element(drawingNs + "themeElements")!;
+        var colorScheme = themeElements.Element(drawingNs + "clrScheme")!;
+        colorScheme.Element(drawingNs + "accent1")!
+            .Element(drawingNs + "srgbClr")!
+            .Element(drawingNs + "lumMod")!
+            .Attribute("val")!
+            .Value
+            .Should()
+            .Be("75000", because);
+        var majorFont = themeElements.Element(drawingNs + "fontScheme")!.Element(drawingNs + "majorFont")!;
+        majorFont.Element(drawingNs + "ea")!
+            .Attribute("typeface")!
+            .Value
+            .Should()
+            .Be("Major East Asia", because);
+        majorFont.Element(drawingNs + "font")!
+            .Attribute("script")!
+            .Value
+            .Should()
+            .Be("Jpan", because);
+    }
+
+    private static void AssertHeaderFooterLegacyDrawingPackageGraph(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace officeNs = "urn:schemas-microsoft-com:office:office";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull(because);
+        archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels").Should().NotBeNull(because);
+        archive.GetEntry("xl/media/headerFooterImage1.png").Should().NotBeNull(because);
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var legacyDrawing = worksheetXml.Root!.Element(worksheetNs + "legacyDrawingHF");
+        legacyDrawing.Should().NotBeNull(because);
+        var relId = legacyDrawing!.Attribute(officeRelNs + "id")?.Value;
+        relId.Should().NotBeNullOrWhiteSpace(because);
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, relId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../drawings/vmlDrawing1.vml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+
+        var vmlDrawing = LoadPackageXml(archive.GetEntry("xl/drawings/vmlDrawing1.vml")!);
+        vmlDrawing.Descendants()
+            .Where(element => element.Attribute(officeNs + "relid")?.Value == "rIdImage1")
+            .Should()
+            .ContainSingle(because);
+
+        var vmlRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels")!);
+        vmlRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, "rIdImage1", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../media/headerFooterImage1.png", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertWorksheetLegacyDrawingPackageGraph(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull(because);
+        archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels").Should().NotBeNull(because);
+        archive.GetEntry("xl/media/vmlImage1.png").Should().NotBeNull(because);
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var legacyDrawing = worksheetXml.Root!.Element(worksheetNs + "legacyDrawing");
+        legacyDrawing.Should().NotBeNull(because);
+        legacyDrawing!.Attribute(officeRelNs + "id")!.Value.Should().Be("rIdFreeXLegacyDrawing", because);
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var hasLegacyDrawingRelationship = worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Count(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, "rIdFreeXLegacyDrawing", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../drawings/vmlDrawing1.vml", StringComparison.OrdinalIgnoreCase)) == 1;
+        hasLegacyDrawingRelationship.Should().BeTrue(because);
+
+        var vmlDrawing = LoadPackageXml(archive.GetEntry("xl/drawings/vmlDrawing1.vml")!);
+        vmlDrawing.Descendants()
+            .Single(element => string.Equals(element.Name.LocalName, "shape", StringComparison.OrdinalIgnoreCase))
+            .Attribute("id")!.Value.Should().Be("FreeXLegacyDrawingShape", because);
+
+        var vmlRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels")!);
+        var hasImageRelationship = vmlRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Count(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, "rIdFreeXVmlImage", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../media/vmlImage1.png", StringComparison.OrdinalIgnoreCase)) == 1;
+        hasImageRelationship.Should().BeTrue(because);
+    }
+
+    private static void AssertStableDocumentProperties(Stream package, string because)
+    {
+        XNamespace corePropertiesNs = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+        XNamespace dcNs = "http://purl.org/dc/elements/1.1/";
+        XNamespace extendedPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var coreProperties = LoadPackageXml(archive.GetEntry("docProps/core.xml")!);
+        coreProperties.Root!.Name.Should().Be(corePropertiesNs + "coreProperties", because);
+        coreProperties.Root.Element(dcNs + "title")!.Value.Should().Be("FreeX document property corpus", because);
+        coreProperties.Root.Element(dcNs + "subject")!.Value.Should().Be("Stable document properties retained", because);
+        coreProperties.Root.Element(corePropertiesNs + "keywords")!.Value.Should().Be("xlsx parity", because);
+        coreProperties.Root.Element(corePropertiesNs + "lastModifiedBy")!.Value.Should().Be("FreeX Fixture", because);
+
+        var appProperties = LoadPackageXml(archive.GetEntry("docProps/app.xml")!);
+        appProperties.Root!.Name.Should().Be(extendedPropertiesNs + "Properties", because);
+        appProperties.Root.Element(extendedPropertiesNs + "Application")!.Value.Should().Be("Microsoft Excel", because);
+        appProperties.Root.Element(extendedPropertiesNs + "Company")!.Value.Should().Be("FreeX Test Lab", because);
+        appProperties.Root.Element(extendedPropertiesNs + "Manager")!.Value.Should().Be("Workbook Fidelity", because);
+
+        var packageRelsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value.TrimStart('/'), "docProps/app.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertCalcChainReference(Stream package, string because)
+    {
+        XNamespace calcNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var calcChain = LoadPackageXml(archive.GetEntry("xl/calcChain.xml")!);
+        calcChain.Root!.Name.Should().Be(calcNs + "calcChain", because);
+        calcChain.Root.Elements(calcNs + "c").Should().ContainSingle(because)
+            .Which.Attribute("r")!.Value.Should().Be("A1", because);
+
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "calcChain.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertCustomDocumentProperties(Stream package, string because)
+    {
+        XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var customProperties = LoadPackageXml(archive.GetEntry("docProps/custom.xml")!);
+        var propertiesByName = customProperties.Root!
+            .Elements(customPropertiesNs + "property")
+            .ToDictionary(property => property.Attribute("name")?.Value ?? "", StringComparer.OrdinalIgnoreCase);
+        propertiesByName.Should().ContainKey("Department", because);
+        propertiesByName["Department"].Value.Should().Be("Compliance", because);
+        propertiesByName.Should().ContainKey("MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled", because);
+        propertiesByName["MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled"].Value.Should().Be("true", because);
+
+        var packageRelsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "docProps/custom.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertCustomXmlPackageGraph(Stream package, string because)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("customXml/item1.xml").Should().NotBeNull(because);
+        archive.GetEntry("customXml/itemProps1.xml").Should().NotBeNull(because);
+        archive.GetEntry("customXml/_rels/item1.xml.rels").Should().NotBeNull(because);
+
+        var packageRelsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "customXml/item1.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "https://schemas.freex.example/customXml/schema1.xsd", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+
+        var itemRelsXml = LoadPackageXml(archive.GetEntry("customXml/_rels/item1.xml.rels")!);
+        itemRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "itemProps1.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertPrinterSettingsReference(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/printerSettings/printerSettings1.bin").Should().NotBeNull(because);
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var relId = worksheetXml.Root?
+            .Element(worksheetNs + "pageSetup")?
+            .Attribute(officeRelNs + "id")?
+            .Value;
+        relId.Should().Be("rIdPrinterSettings1", because);
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var printerRelationships = worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Id")?.Value, "rIdPrinterSettings1", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "../printerSettings/printerSettings1.bin", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        printerRelationships.Should().ContainSingle(because);
+    }
+
+    [Fact]
+    public void PackageSummary_TreatsDocumentPropertiesAsFidelityCriticalParts()
+    {
+        var workbook = new Workbook("DocumentPropertiesCriticalParts");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("document properties"));
+
+        using var package = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, package);
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            ReplacePackageXml(
+                archive,
+                "docProps/core.xml",
+                new XDocument(new XElement(
+                    XName.Get("coreProperties", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
+                    new XElement(XName.Get("subject", "http://purl.org/dc/elements/1.1/"), "FreeX parity subject"))));
+            ReplacePackageXml(
+                archive,
+                "docProps/app.xml",
+                new XDocument(new XElement(
+                    XName.Get("Properties", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                    new XElement(XName.Get("Company", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"), "FreeX Test Lab"))));
+        }
+
+        package.Position = 0;
+        var summary = CapturePackageSummary(package);
+
+        summary.CriticalParts.Should().Contain("docProps/core.xml");
+        summary.CriticalParts.Should().Contain("docProps/app.xml");
+    }
+
+    [Fact]
+    public void PackageHealth_AllowsPercentEncodedInternalRelationshipTargets()
+    {
+        using var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="png" ContentType="image/png"/>
+                </Types>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/image%201.png"/>
+                </Relationships>
+                """);
+            archive.CreateEntry("xl/media/image 1.png");
+        }
+
+        package.Position = 0;
+        var act = () => AssertPackageHealth(package, "percent-encoded relationship target");
+
+        act.Should().NotThrow();
+    }
+
+    private static string[] CaptureKnownGapFixtureParts(string id)
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage(id);
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
+        return archive.Entries
+            .Select(entry => entry.FullName.Replace('\\', '/'))
+            .Where(IsFidelityCriticalPart)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> ContentTypeOverridesForParts(
+        PackagePartSummary package,
+        IReadOnlyList<string> partNames)
+    {
+        var overridePrefixes = partNames
+            .Select(part => "/" + part.TrimStart('/').Replace('\\', '/') + "=>")
+            .ToArray();
+
+        return package.CriticalContentTypeOverrides
+            .Where(entry => overridePrefixes.Any(prefix => entry.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> RelationshipDetailsForParts(
+        PackagePartSummary package,
+        IReadOnlyList<string> partNames)
+    {
+        var partSet = partNames
+            .Select(part => part.TrimStart('/').Replace('\\', '/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var relationshipPrefixes = partNames
+            .Select(GetRelationshipPartPathForPart)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path + "=>")
+            .ToArray();
+
+        return package.CriticalRelationshipDetails
+            .Where(entry =>
+                relationshipPrefixes.Any(prefix => entry.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ||
+                IsWorkbookRelationshipToCriticalPart(entry, partSet))
+            .ToArray();
+    }
+
+    private static string GetRelationshipPartPathForPart(string partName)
+    {
+        var path = partName.TrimStart('/').Replace('\\', '/');
+        if (string.Equals(path, "_rels/.rels", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("xl/_rels/", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        var slashIndex = path.LastIndexOf('/');
+        return slashIndex < 0
+            ? $"_rels/{path}.rels"
+            : $"{path[..slashIndex]}/_rels/{path[(slashIndex + 1)..]}.rels";
+    }
+
+    private static bool IsWorkbookRelationshipToCriticalPart(string relationshipDetail, ISet<string> partNames)
+    {
+        const string workbookRelsPrefix = "xl/_rels/workbook.xml.rels=>";
+        if (!relationshipDetail.StartsWith(workbookRelsPrefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var targetEnd = relationshipDetail.IndexOf("|type=", StringComparison.Ordinal);
+        if (targetEnd < 0)
+            return false;
+
+        var target = relationshipDetail[workbookRelsPrefix.Length..targetEnd];
+        if (string.Equals(target, "worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(target, "/xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var normalized = target.StartsWith("/", StringComparison.Ordinal)
+            ? target.TrimStart('/')
+            : target.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
+                ? target
+                : "xl/" + target.TrimStart('/');
+        return partNames.Contains(normalized);
+    }
+
+    [Fact]
+    public void GeneratedUnsupportedChartFixture_UsesCurrentlyUnsupportedChartFamily()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage("generated-unsupported-chart-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
+
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!).ToString();
+
+        chartXml.Should().Contain("mapChart");
+        chartXml.Should().NotContain("treemapChart", "treemap charts have a renderable chartEx writer path now and should not anchor the unsupported-chart fixture");
+        chartXml.Should().NotContain("radarChart", "radar charts are supported now and should not anchor the unsupported-chart fixture");
+        chartXml.Should().NotContain("surfaceChart", "surface charts are supported now and should not anchor the unsupported-chart fixture");
+    }
+
+    [Fact]
+    public void LocalPrivateCorpusRows_AreSkippedWhenFilesAreAbsent()
+    {
+        var workspace = FindWorkspaceRoot();
+        var privateRows = ReadManifestRows()
+            .Where(row => row.SourceType == "local-private")
+            .ToArray();
+
+        foreach (var row in privateRows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var stream = File.OpenRead(path);
+            var workbook = new XlsxFileAdapter().Load(stream);
+            workbook.SheetCount.Should().BeGreaterThan(0, row.Id);
+        }
+    }
+
+    [Fact]
+    public void PublicCorpusRows_OpenAndSaveWhenFilesArePresent()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Where(row => row.ExpectedStatus == "public-pass")
+            .ToArray();
+
+        rows.Should().HaveCountGreaterThanOrEqualTo(25, "the public corpus should include a meaningful real-workbook sample set");
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            var workbook = adapter.Load(source);
+            workbook.SheetCount.Should().BeGreaterThan(0, row.Id);
+            source.Position = 0;
+            AssertExpectedPublicPackageTags(row, source);
+            var before = CapturePublicComparableSummary(workbook);
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Length.Should().BeGreaterThan(0, row.Id);
+            AssertPackageHealth(saved, row.Id);
+            saved.Position = 0;
+            AssertExpectedPublicPackageTags(row, saved);
+
+            saved.Position = 0;
+            var roundTripped = adapter.Load(saved);
+            roundTripped.SheetCount.Should().BeGreaterThan(0, row.Id);
+            CapturePublicComparableSummary(roundTripped).Should().BeEquivalentTo(
+                before,
+                options => options
+                    .Using<double>(ctx => ctx.Subject.Should().BeApproximately(ctx.Expectation, 0.0001))
+                    .WhenTypeIs<double>()
+                    .WithStrictOrdering(),
+                row.Id);
+            AssertExpectedFeatureTags(row, roundTripped);
+        }
+    }
+
+    [Fact]
+    public void PublicCorpusRows_WithPackageTagAssertions_RetainPackageStructuresAfterModelEdit()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Where(row => row.ExpectedStatus == "public-pass")
+            .Where(HasExpectedPublicPackageTags)
+            .ToArray();
+
+        rows.Should().NotBeEmpty("public package-tag rows prove package-only structures are retained after ordinary model edits");
+
+        var adapter = new XlsxFileAdapter();
+        var inspectedRows = 0;
+        foreach (var row in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            AssertExpectedPublicPackageTags(row, source);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 18, 1), new TextValue("freex-public-package-tag-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Length.Should().BeGreaterThan(0, row.Id);
+            AssertPackageHealth(saved, row.Id);
+            saved.Position = 0;
+            AssertExpectedPublicPackageTags(row, saved);
+            inspectedRows++;
+        }
+
+        inspectedRows.Should().Be(rows.Length, "all public package-tag rows are redistributed in the checked-in corpus");
+    }
+
+    [Fact]
+    public void RegressionFormulaCachedRows_OpenSaveReloadPreservesFormulaCells()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "regression")
+            .Where(row => row.FeatureTags.Contains("cached-results", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        rows.Should().HaveCount(9, "the regression corpus currently declares nine Excel-authored cached formula workbooks");
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            File.Exists(path).Should().BeTrue(row.Id);
+
+            using var source = File.OpenRead(path);
+            var workbook = adapter.Load(source);
+            var before = CaptureFormulaCellSummaries(workbook);
+            before.Should().NotBeEmpty(row.Id);
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Length.Should().BeGreaterThan(0, row.Id);
+            AssertPackageHealth(saved, row.Id);
+
+            saved.Position = 0;
+            var roundTripped = adapter.Load(saved);
+            CaptureFormulaCellSummaries(roundTripped).Should().BeEquivalentTo(
+                before,
+                options => options.WithStrictOrdering(),
+                row.Id);
+        }
+    }
+
+    [Fact]
+    public void PublicCorpusRows_WithUnsupportedWarningTags_ReportExpectedFeaturesWhenFilesArePresent()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Select(row => new { Row = row, ExpectedKinds = ExpectedFeatureKindsFor(row) })
+            .Where(item => item.ExpectedKinds.Length > 0)
+            .ToArray();
+
+        rows.Should().NotBeEmpty("public corpus warning-tag rows prove real workbook warning detection, not only generated fixtures");
+
+        var inspectedRows = 0;
+        foreach (var item in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", item.Row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            var report = XlsxFeatureInspector.Inspect(source);
+            inspectedRows++;
+
+            report.Features.Select(feature => feature.Kind).Distinct()
+                .Should().Contain(item.ExpectedKinds, item.Row.Id);
+        }
+
+        inspectedRows.Should().BeGreaterThan(0, "at least one public corpus workbook with warning tags must be present to prove real-file warning detection");
+    }
+
+    [Fact]
+    public void PublicCorpusRows_WithUnsupportedWarningTags_RetainCriticalPackagePartsAfterModelEdit()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Select(row => new { Row = row, ExpectedKinds = ExpectedFeatureKindsFor(row) })
+            .Where(item => item.ExpectedKinds.Length > 0)
+            .ToArray();
+
+        rows.Should().NotBeEmpty("public corpus warning-tag rows should also prove real package retention");
+
+        var adapter = new XlsxFileAdapter();
+        var inspectedRows = 0;
+        foreach (var item in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", item.Row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            var before = CapturePackageSummary(source);
+            before.CriticalParts.Should().NotBeEmpty(item.Row.Id);
+            var retainedRelationshipDetails = RelationshipDetailsForParts(before, before.CriticalParts);
+            retainedRelationshipDetails.Should().NotBeEmpty(item.Row.Id);
+            var retainedContentTypeOverrides = ContentTypeOverridesForParts(before, before.CriticalParts);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-public-warning-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Position = 0;
+            var after = CapturePackageSummary(saved);
+            inspectedRows++;
+
+            after.CriticalParts.Should().Contain(before.CriticalParts, item.Row.Id);
+            after.CriticalRelationshipDetails.Should().Contain(retainedRelationshipDetails, item.Row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(retainedContentTypeOverrides, item.Row.Id);
+        }
+
+        inspectedRows.Should().BeGreaterThan(0, "at least one public warning workbook must be present to prove real-file package retention");
+    }
+
+    private static IReadOnlyList<ManifestRow> ReadManifestRows()
+    {
+        var manifestPath = Path.Combine(FindWorkspaceRoot(), "test-corpus", "manifest.csv");
+        return File.ReadAllLines(manifestPath)
+            .Skip(1)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(ParseManifestRow)
+            .ToArray();
+    }
+
+    private static ManifestRow ParseManifestRow(string line)
+    {
+        var columns = line.Split(',');
+        columns.Should().HaveCount(10);
+        return new ManifestRow(columns[0], columns[1], columns[2], columns[6], columns[7], columns[8], columns[9]);
+    }
+
+    private static string FindWorkspaceRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "test-corpus", "manifest.csv")))
+                return directory.FullName;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate FreeX workspace root.");
+    }
+
+    private sealed record ManifestRow(
+        string Id,
+        string Path,
+        string SourceType,
+        string FeatureTags,
+        string ExpectedWarnings,
+        string ExpectedStatus,
+        string Notes);
+
+    private static readonly IReadOnlyDictionary<XlsxUnsupportedFeatureKind, string> ExpectedWarningText =
+        new Dictionary<XlsxUnsupportedFeatureKind, string>
+        {
+            [XlsxUnsupportedFeatureKind.Macros] = "excluded VBA macro disclosed",
+            [XlsxUnsupportedFeatureKind.Charts] = "unsupported chart package disclosed",
+            [XlsxUnsupportedFeatureKind.EmbeddedObjects] = "unsupported embedded object disclosed",
+            [XlsxUnsupportedFeatureKind.PowerQuery] = "excluded Power Query disclosed",
+            [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed",
+            [XlsxUnsupportedFeatureKind.LinkedDataTypes] = "excluded linked data type disclosed",
+            [XlsxUnsupportedFeatureKind.ThreadedComments] = "unsupported threaded comment disclosed",
+            [XlsxUnsupportedFeatureKind.TrackChanges] = "unsupported track changes disclosed",
+            [XlsxUnsupportedFeatureKind.FormControls] = "unsupported form control disclosed",
+            [XlsxUnsupportedFeatureKind.DigitalSignatures] = "unsupported digital signature disclosed",
+            [XlsxUnsupportedFeatureKind.CustomRibbonUi] = "unsupported custom ribbon UI disclosed",
+            [XlsxUnsupportedFeatureKind.OfficeAddIns] = "unsupported Office add-in disclosed",
+            [XlsxUnsupportedFeatureKind.LiveWebQueries] = "unsupported live web query disclosed",
+            [XlsxUnsupportedFeatureKind.SensitivityLabels] = "unsupported sensitivity label disclosed",
+            [XlsxUnsupportedFeatureKind.SmartArtDiagrams] = "unsupported SmartArt diagram disclosed",
+            [XlsxUnsupportedFeatureKind.UnsupportedSheetTypes] = "unsupported sheet type disclosed"
+        };
+
+    private static XlsxUnsupportedFeatureKind[] ExpectedFeatureKindsFor(ManifestRow row)
+    {
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var expected = new List<XlsxUnsupportedFeatureKind>();
+
+        if (tags.Contains("macros"))
+            expected.Add(XlsxUnsupportedFeatureKind.Macros);
+
+        if (tags.Contains("unsupported-chart-family"))
+            expected.Add(XlsxUnsupportedFeatureKind.Charts);
+
+        if (tags.Contains("power-query") || tags.Contains("connections"))
+            expected.Add(XlsxUnsupportedFeatureKind.PowerQuery);
+
+        if (tags.Contains("data-model") || tags.Contains("power-pivot"))
+            expected.Add(XlsxUnsupportedFeatureKind.DataModel);
+
+        if (tags.Contains("linked-data-types") || tags.Contains("rich-data"))
+            expected.Add(XlsxUnsupportedFeatureKind.LinkedDataTypes);
+
+        if (tags.Contains("threaded-comments"))
+            expected.Add(XlsxUnsupportedFeatureKind.ThreadedComments);
+
+        if (tags.Contains("track-changes") || tags.Contains("revision-history"))
+            expected.Add(XlsxUnsupportedFeatureKind.TrackChanges);
+
+        if (tags.Contains("form-controls") || tags.Contains("activex"))
+            expected.Add(XlsxUnsupportedFeatureKind.FormControls);
+
+        if (tags.Contains("digital-signatures"))
+            expected.Add(XlsxUnsupportedFeatureKind.DigitalSignatures);
+
+        if (tags.Contains("custom-ribbon-ui"))
+            expected.Add(XlsxUnsupportedFeatureKind.CustomRibbonUi);
+
+        if (tags.Contains("office-addins") || tags.Contains("webextensions"))
+            expected.Add(XlsxUnsupportedFeatureKind.OfficeAddIns);
+
+        if (tags.Contains("live-web-queries") || tags.Contains("web-publish"))
+            expected.Add(XlsxUnsupportedFeatureKind.LiveWebQueries);
+
+        if (tags.Contains("sensitivity-labels") || tags.Contains("irm"))
+            expected.Add(XlsxUnsupportedFeatureKind.SensitivityLabels);
+
+        if (tags.Contains("smartart") || tags.Contains("diagrams"))
+            expected.Add(XlsxUnsupportedFeatureKind.SmartArtDiagrams);
+
+        if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets") || tags.Contains("unsupported-sheet-types"))
+            expected.Add(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);
+
+        if (tags.Contains("embedded-objects"))
+            expected.Add(XlsxUnsupportedFeatureKind.EmbeddedObjects);
+
+        return expected.Distinct().ToArray();
+    }
+
+    private static void AssertExpectedFeatureTags(ManifestRow row, Workbook workbook)
+    {
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var summary = CaptureSummary(workbook);
+
+        if (tags.Contains("hyperlinks"))
+            summary.Sheets.Sum(sheet => sheet.HyperlinkCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("comments") || tags.Contains("notes"))
+            summary.Sheets.Sum(sheet => sheet.CommentCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("merged-cells"))
+            summary.Sheets.Sum(sheet => sheet.MergedRegionCount).Should().BeGreaterThan(0, row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("sheet-names") && tags.Contains("boundary"))
+            summary.Sheets.Should().Contain(sheet => sheet.Name.Length == 31, row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("inline-strings"))
+            summary.Sheets
+                .SelectMany(sheet => sheet.Cells)
+                .Should()
+                .Contain(cell => cell.Value.Kind == "Text" && !string.IsNullOrEmpty(cell.Value.Value), row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("shared-strings"))
+            summary.Sheets
+                .SelectMany(sheet => sheet.Cells)
+                .Should()
+                .Contain(cell => cell.Value.Kind == "Text" && !string.IsNullOrEmpty(cell.Value.Value), row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("cell-types"))
+            summary.Sheets
+                .SelectMany(sheet => sheet.Cells)
+                .Select(cell => cell.Value.Kind)
+                .Distinct(StringComparer.Ordinal)
+                .Should()
+                .HaveCountGreaterThanOrEqualTo(3, row.Id);
+
+        if (tags.Contains("formulas"))
+            summary.Sheets.Sum(sheet => sheet.FormulaCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("cross-sheet"))
+        {
+            summary.SheetCount.Should().BeGreaterThan(1, row.Id);
+            workbook.Sheets
+                .SelectMany(sheet => sheet.EnumerateCells())
+                .Count(item => item.Cell.FormulaText?.Contains('!') == true)
+                .Should().BeGreaterThan(0, row.Id);
+        }
+
+        if (tags.Contains("named-ranges"))
+            summary.NamedRangeCount.Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("data-validation"))
+            summary.Sheets.Sum(sheet => sheet.DataValidationCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("conditional-formatting"))
+            summary.Sheets.Sum(sheet => sheet.ConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("color-scales"))
+            summary.Sheets.Sum(sheet => sheet.ColorScaleConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("data-bars"))
+            summary.Sheets.Sum(sheet => sheet.DataBarConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("icon-sets"))
+            summary.Sheets.Sum(sheet => sheet.IconSetConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("charts") && !tags.Contains("unsupported-chart-family"))
+            summary.Sheets.Sum(sheet => sheet.ChartCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("surface-charts"))
+        {
+            var chartTypes = workbook.Sheets
+                .SelectMany(sheet => sheet.Charts)
+                .Select(chart => chart.Type)
+                .ToArray();
+            chartTypes.Should().Contain([ChartType.Surface, ChartType.ThreeDSurface], row.Id);
+        }
+
+        if (row.SourceType == "generated" && (tags.Contains("styles") || tags.Contains("formatting")))
+            (workbook.Sheets.Sum(sheet => sheet.EnumerateCells().Count(item => item.Cell.StyleId != StyleId.Default)) +
+             summary.Sheets.Sum(sheet => sheet.StyleOnlyCellCount)).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("cell-types"))
+            summary.Sheets.Sum(sheet => sheet.CellCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("text-boxes"))
+            summary.Sheets.Sum(sheet => sheet.TextBoxCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("shapes"))
+            summary.Sheets.Sum(sheet => sheet.DrawingShapeCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("images"))
+            summary.Sheets.Sum(sheet => sheet.PictureCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("background-image"))
+            summary.Sheets.Count(sheet => sheet.HasBackgroundImage).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("sparklines"))
+            summary.Sheets.Sum(sheet => sheet.SparklineCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("pivottables"))
+            summary.Sheets.Sum(sheet => sheet.PivotTableCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("pivot-caches"))
+            summary.PivotCacheCount.Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("pivot-styles"))
+        {
+            summary.PivotTableStyleCount.Should().BeGreaterThan(0, row.Id);
+            summary.PivotTableStyleElementCount.Should().BeGreaterThan(0, row.Id);
+        }
+
+        if (tags.Contains("structured-tables") || tags.Contains("listobjects") || tags.Contains("tables"))
+            summary.Sheets.Sum(sheet => sheet.StructuredTableCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("protection"))
+        {
+            summary.IsStructureProtected.Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.IsProtected).Should().BeTrue(row.Id);
+            summary.Sheets.Sum(sheet => sheet.AllowEditRangeCount).Should().BeGreaterThan(0, row.Id);
+        }
+
+        if (tags.Contains("page-setup"))
+        {
+            summary.Sheets.Any(sheet => sheet.HasPrintArea || sheet.HasPrintTitleRows || sheet.HasPrintTitleColumns).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.PageOrientation == WorksheetPageOrientation.Landscape).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.PaperSize == WorksheetPaperSize.Letter).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.PageMargins == WorksheetPageMargins.Narrow).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.ScaleToFit.FitToPagesWide == 1 && sheet.ScaleToFit.FitToPagesTall == 1).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.PrintGridlines && sheet.PrintHeadings).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.HasPageHeader).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.HasPageFooter).Should().BeTrue(row.Id);
+        }
+
+        if (tags.Contains("structure"))
+        {
+            summary.Sheets.Sum(sheet => sheet.MergedRegionCount).Should().BeGreaterThan(0, row.Id);
+            summary.Sheets.Any(sheet => sheet.FrozenRows > 0 || sheet.FrozenCols > 0).Should().BeTrue(row.Id);
+            summary.Sheets.Sum(sheet => sheet.HiddenRowCount + sheet.HiddenColumnCount).Should().BeGreaterThan(0, row.Id);
+        }
+    }
+
+    private static WorkbookSummary CaptureSummary(Workbook workbook) =>
+        new(
+            workbook.SheetCount,
+            workbook.NamedRanges
+                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(pair => CaptureNamedRangeSummary(workbook, pair.Key, pair.Value))
+                .ToArray(),
+            workbook.NamedRanges.Count,
+            workbook.IsStructureProtected,
+            ToLegacyPasswordHash(workbook.StructureProtectionPassword),
+            workbook.PivotCaches.Select(CapturePivotCacheSummary).ToArray(),
+            workbook.PivotCaches.Count,
+            workbook.PivotCaches.Sum(cache => cache.Fields.Count),
+            workbook.PivotTableStyles
+                .OrderBy(style => style.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(CapturePivotTableStyleSummary)
+                .ToArray(),
+            workbook.PivotTableStyles.Count,
+            workbook.PivotTableStyles.Sum(style => style.Elements.Count),
+            CapturePivotNumberFormatCatalogSummary(workbook),
+            workbook.CustomViews
+                .OrderBy(view => view.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(CaptureCustomViewSummary)
+                .ToArray(),
+            workbook.CustomViews.Count,
+            CaptureWorkbookMetadataSummary(workbook),
+            CaptureWorkbookCalculationSummary(workbook),
+            CaptureWorkbookThemeSummary(workbook.Theme),
+            workbook.Sheets.Select(sheet => CaptureSheetSummary(workbook, sheet)).ToArray());
+
+    private static WorkbookMetadataSummary CaptureWorkbookMetadataSummary(Workbook workbook) =>
+        new(
+            workbook.Slicers
+                .OrderBy(slicer => slicer.PackagePart, StringComparer.OrdinalIgnoreCase)
+                .Select(slicer => new SlicerSummary(
+                    slicer.Name,
+                    slicer.Caption ?? "",
+                    slicer.CacheName,
+                    slicer.SourcePivotTableName ?? "",
+                    slicer.SourceFieldName ?? "",
+                    slicer.StyleName ?? "",
+                    slicer.SelectedItems.OrderBy(item => item, StringComparer.Ordinal).ToArray(),
+                    slicer.PackagePart))
+                .ToArray(),
+            workbook.Timelines
+                .OrderBy(timeline => timeline.PackagePart, StringComparer.OrdinalIgnoreCase)
+                .Select(timeline => new TimelineSummary(
+                    timeline.Name,
+                    timeline.Caption ?? "",
+                    timeline.CacheName,
+                    timeline.SourcePivotTableName ?? "",
+                    timeline.SourceFieldName ?? "",
+                    timeline.StyleName ?? "",
+                    timeline.StartDate ?? "",
+                    timeline.EndDate ?? "",
+                    timeline.SelectedStartDate ?? "",
+                    timeline.SelectedEndDate ?? "",
+                    timeline.PackagePart))
+                .ToArray(),
+            workbook.ExternalLinks
+                .OrderBy(link => link.PackagePart, StringComparer.OrdinalIgnoreCase)
+                .Select(link => new ExternalLinkSummary(
+                    link.PackagePart,
+                    link.TargetUri ?? "",
+                    link.TargetMode ?? ""))
+                .ToArray(),
+            workbook.WatchedCells
+                .Select(address => new WatchedCellSummary(
+                    workbook.GetSheet(address.Sheet)?.Name ?? "",
+                    address.Row,
+                    address.Col))
+                .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(cell => cell.Row)
+                .ThenBy(cell => cell.Column)
+                .ToArray(),
+            workbook.Scenarios
+                .OrderBy(scenario => scenario.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(scenario => new ScenarioSummary(
+                    scenario.Name,
+                    scenario.ChangingCells
+                        .Select(change => new ScenarioCellSummary(
+                            workbook.GetSheet(change.Address.Sheet)?.Name ?? "",
+                            change.Address.Row,
+                            change.Address.Col,
+                            CaptureScalarValueSummary(change.Value)))
+                        .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(cell => cell.Row)
+                        .ThenBy(cell => cell.Column)
+                        .ToArray()))
+                .ToArray());
+
+    private static WorkbookCalculationSummary CaptureWorkbookCalculationSummary(Workbook workbook) =>
+        new(
+            workbook.CalculationMode,
+            workbook.FullCalculationOnLoad,
+            workbook.ForceFullCalculation,
+            workbook.IterativeCalculation,
+            workbook.MaxCalculationIterations,
+            workbook.MaxCalculationChange);
+
+    private static IReadOnlyList<NumberFormatCatalogSummary> CapturePivotNumberFormatCatalogSummary(Workbook workbook)
+    {
+        var referencedIds = workbook.PivotCaches
+            .SelectMany(cache => cache.Fields)
+            .Select(field => field.NumberFormatId)
+            .Concat(workbook.Sheets
+                .SelectMany(sheet => sheet.PivotTables)
+                .SelectMany(pivot => pivot.DataFields)
+                .Select(field => field.NumberFormatId))
+            .Where(id => id is >= 164)
+            .Select(id => id!.Value)
+            .ToHashSet();
+
+        return workbook.NumberFormatCatalog
+            .Where(pair => referencedIds.Contains(pair.Key))
+            .OrderBy(pair => pair.Key)
+            .Select(pair => new NumberFormatCatalogSummary(pair.Key, pair.Value))
+            .ToArray();
+    }
+
+    private static WorkbookThemeSummary CaptureWorkbookThemeSummary(WorkbookTheme theme) =>
+        new(
+            theme.Name,
+            theme.MajorFontName,
+            theme.MinorFontName,
+            theme.EffectsName,
+            Enum.GetValues<WorkbookThemeColorSlot>()
+                .Select(slot => new ThemeColorSummary(slot, ToColorSummary(theme.GetColor(slot))))
+                .ToArray());
+
+    private static string ToColorSummary(CellColor color) =>
+        FormattableString.Invariant($"{color.R:X2}{color.G:X2}{color.B:X2}");
+
+    private static string ToLegacyPasswordHash(string? passwordOrHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordOrHash))
+            return "";
+        if (IsLegacyPasswordHash(passwordOrHash))
+            return passwordOrHash.ToUpperInvariant();
+
+        var hash = 0;
+        for (var i = 0; i < passwordOrHash.Length; i++)
+        {
+            var value = passwordOrHash[i] << (i + 1);
+            var rotatedBits = value >> 15;
+            value &= 0x7fff;
+            hash ^= value | rotatedBits;
+        }
+
+        hash ^= passwordOrHash.Length;
+        hash ^= 0xCE4B;
+        return hash.ToString("X4", CultureInfo.InvariantCulture);
+    }
+
+    private static bool IsLegacyPasswordHash(string value) =>
+        value.Length is > 0 and <= 4 &&
+        value.All(ch =>
+            ch is >= '0' and <= '9' ||
+            ch is >= 'A' and <= 'F' ||
+            ch is >= 'a' and <= 'f');
+
+    private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
+        new(
+            sheet.Name,
+            sheet.EnumerateCells()
+                .OrderBy(item => item.Address.Row)
+                .ThenBy(item => item.Address.Col)
+                .Select(item => CaptureCellSummary(workbook, item.Address, item.Cell))
+                .ToArray(),
+            sheet.CellCount,
+            sheet.EnumerateCells().Count(item => item.Cell.HasFormula),
+            sheet.MergedRegions.Count,
+            sheet.DataValidations.Select(CaptureDataValidationSummary).ToArray(),
+            sheet.DataValidations.Count,
+            sheet.ConditionalFormats
+                .OrderBy(format => format.AppliesTo.Start.Row)
+                .ThenBy(format => format.AppliesTo.Start.Col)
+                .ThenBy(format => format.AppliesTo.End.Row)
+                .ThenBy(format => format.AppliesTo.End.Col)
+                .ThenBy(format => format.Priority)
+                .ThenBy(format => format.RuleType)
+                .Select(CaptureConditionalFormatSummary)
+                .ToArray(),
+            sheet.ConditionalFormats.Count,
+            sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
+            sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
+            sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
+            sheet.Comments
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new CommentSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
+            sheet.Comments.Count,
+            sheet.Hyperlinks
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => CaptureHyperlinkSummary(sheet, pair))
+                .ToArray(),
+            sheet.Hyperlinks.Count,
+            sheet.Charts.Select(CaptureChartSummary).ToArray(),
+            sheet.Charts.Count,
+            sheet.PivotTables.Select(CapturePivotTableSummary).ToArray(),
+            sheet.PivotTables.Count,
+            sheet.PivotTables.Sum(pivot => pivot.RowFields.Count + pivot.ColumnFields.Count + pivot.PageFields.Count + pivot.DataFields.Count),
+            sheet.StructuredTables.Select(CaptureStructuredTableSummary).ToArray(),
+            sheet.StructuredTables.Count,
+            sheet.StructuredTables.Sum(table => table.Columns.Count),
+            sheet.Sparklines.Select(sparkline => new SparklineSummary(sparkline.Kind, ToRangeSummary(sparkline.DataRange), sparkline.Location.Row, sparkline.Location.Col)).ToArray(),
+            sheet.Sparklines.Count,
+            sheet.TextBoxes.Select(CaptureTextBoxSummary).ToArray(),
+            sheet.TextBoxes.Count,
+            sheet.DrawingShapes.Select(CaptureDrawingShapeSummary).ToArray(),
+            sheet.DrawingShapes.Count,
+            sheet.Pictures.Select(CapturePictureSummary).ToArray(),
+            sheet.Pictures.Count,
+            CaptureBackgroundImageSummary(sheet.BackgroundImage),
+            sheet.BackgroundImage is not null,
+            sheet.IsProtected,
+            ToLegacyPasswordHash(sheet.ProtectionPassword),
+            sheet.AllowEditRanges
+                .OrderBy(range => range.Start.Row)
+                .ThenBy(range => range.Start.Col)
+                .ThenBy(range => range.End.Row)
+                .ThenBy(range => range.End.Col)
+                .Select(ToRangeSummary)
+                .ToArray(),
+            sheet.AllowEditRanges.Count,
+            sheet.PrintArea.HasValue ? ToRangeSummary(sheet.PrintArea.Value) : null,
+            sheet.PrintArea is not null,
+            sheet.PrintTitleRows.HasValue ? ToRepeatRangeSummary(sheet.PrintTitleRows.Value) : null,
+            sheet.PrintTitleRows is not null,
+            sheet.PrintTitleColumns.HasValue ? ToRepeatRangeSummary(sheet.PrintTitleColumns.Value) : null,
+            sheet.PrintTitleColumns is not null,
+            sheet.PageOrientation,
+            sheet.PaperSize,
+            sheet.PageMargins,
+            sheet.HeaderMargin,
+            sheet.FooterMargin,
+            sheet.ScaleToFit,
+            sheet.PrintGridlines,
+            sheet.PrintHeadings,
+            CaptureHeaderFooterSummary(sheet.PageHeader),
+            !sheet.PageHeader.Equals(new WorksheetHeaderFooter("", "", "")),
+            CaptureHeaderFooterSummary(sheet.PageFooter),
+            !sheet.PageFooter.Equals(new WorksheetHeaderFooter("", "", "")),
+            sheet.DifferentFirstPageHeaderFooter ? CaptureHeaderFooterSummary(sheet.FirstPageHeader) : HeaderFooterSummary.Empty,
+            sheet.DifferentFirstPageHeaderFooter ? CaptureHeaderFooterSummary(sheet.FirstPageFooter) : HeaderFooterSummary.Empty,
+            sheet.DifferentOddEvenHeaderFooter ? CaptureHeaderFooterSummary(sheet.EvenPageHeader) : HeaderFooterSummary.Empty,
+            sheet.DifferentOddEvenHeaderFooter ? CaptureHeaderFooterSummary(sheet.EvenPageFooter) : HeaderFooterSummary.Empty,
+            sheet.DifferentFirstPageHeaderFooter,
+            sheet.DifferentOddEvenHeaderFooter,
+            sheet.HeaderFooterScaleWithDocument,
+            sheet.HeaderFooterAlignWithMargins,
+            CaptureHeaderFooterPictureSetSummary(sheet.PageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.PageFooterPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.FirstPageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.FirstPageFooterPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.EvenPageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.EvenPageFooterPictures),
+            sheet.CenterHorizontallyOnPage,
+            sheet.CenterVerticallyOnPage,
+            sheet.PageOrder,
+            sheet.FirstPageNumber,
+            sheet.PrintBlackAndWhite,
+            sheet.PrintDraftQuality,
+            sheet.PrintQualityDpi,
+            sheet.PrintErrorValue,
+            sheet.PrintComments,
+            sheet.DefaultColumnWidth,
+            sheet.DefaultRowHeight,
+            sheet.ColumnWidths
+                .OrderBy(pair => pair.Key)
+                .Where(pair => Math.Abs(pair.Value - sheet.DefaultColumnWidth) >= 0.01)
+                .Select(pair => new DimensionSummary(pair.Key, Math.Round(pair.Value, 2)))
+                .ToArray(),
+            sheet.RowHeights
+                .OrderBy(pair => pair.Key)
+                .Where(pair => Math.Abs(pair.Value - sheet.DefaultRowHeight) >= 0.01)
+                .Select(pair => new DimensionSummary(pair.Key, Math.Round(pair.Value, 2)))
+                .ToArray(),
+            sheet.RowPageBreaks.OrderBy(row => row).ToArray(),
+            sheet.RowPageBreaks.Count,
+            sheet.ColumnPageBreaks.OrderBy(column => column).ToArray(),
+            sheet.ColumnPageBreaks.Count,
+            sheet.FrozenRows,
+            sheet.FrozenCols,
+            sheet.SplitRow,
+            sheet.SplitColumn,
+            sheet.ViewMode,
+            sheet.ViewTopRow,
+            sheet.ViewLeftCol,
+            sheet.ActiveRow,
+            sheet.ActiveCol,
+            sheet.ShowGridlines,
+            sheet.ShowHeadings,
+            sheet.ShowRulers,
+            sheet.ZoomPercent,
+            sheet.ShowFormulas,
+            sheet.FullCalculationOnLoad,
+            CapturePhoneticSummary(sheet.PhoneticProperties),
+            sheet.IsHidden,
+            sheet.IsVeryHidden,
+            sheet.CodeName ?? "",
+            sheet.TabColor is null ? "" : ToColorSummary(sheet.TabColor.Value),
+            sheet.CustomProperties
+                .OrderBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(property => new WorksheetCustomPropertySummary(property.Name, property.Id))
+                .ToArray(),
+            CaptureEffectiveHiddenRows(sheet),
+            CaptureEffectiveHiddenRows(sheet).Length,
+            [],
+            0,
+            sheet.HiddenCols.OrderBy(column => column).ToArray(),
+            sheet.HiddenCols.Count,
+            sheet.RowOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new OutlineLevelSummary(pair.Key, pair.Value))
+                .ToArray(),
+            sheet.RowOutlineLevels.Count,
+            sheet.ColOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new OutlineLevelSummary(pair.Key, pair.Value))
+                .ToArray(),
+            sheet.ColOutlineLevels.Count,
+            sheet.GroupHiddenRows.OrderBy(row => row).ToArray(),
+            sheet.GroupHiddenRows.Count,
+            sheet.GroupHiddenCols.OrderBy(column => column).ToArray(),
+            sheet.GroupHiddenCols.Count,
+            sheet.GetStyleOnlyEntries()
+                .OrderBy(entry => entry.Key.Row)
+                .ThenBy(entry => entry.Key.Col)
+                .Select(entry => new StyleOnlyCellSummary(
+                    entry.Key.Row,
+                    entry.Key.Col,
+                    CaptureStyleSummary(workbook.GetStyle(entry.StyleId))))
+                .ToArray(),
+            sheet.GetStyleOnlyEntries().Count());
+
+    private static uint[] CaptureEffectiveHiddenRows(Sheet sheet) =>
+        sheet.HiddenRows
+            .Concat(sheet.FilterHiddenRows)
+            .Distinct()
+            .OrderBy(row => row)
+            .ToArray();
+
+    private static PhoneticSummary? CapturePhoneticSummary(WorksheetPhoneticProperties? properties) =>
+        properties is null
+            ? null
+            : new PhoneticSummary(
+                properties.FontId ?? "",
+                properties.Type ?? "",
+                properties.Alignment ?? "");
+
+    private static BackgroundImageSummary? CaptureBackgroundImageSummary(WorksheetBackgroundImage? background) =>
+        background is null
+            ? null
+            : new BackgroundImageSummary(
+                background.ContentType,
+                background.FileName ?? "",
+                background.ImageBytes.Length);
+
+    private static HyperlinkSummary CaptureHyperlinkSummary(Sheet sheet, KeyValuePair<CellAddress, string> pair)
+    {
+        sheet.HyperlinkMetadata.TryGetValue(pair.Key, out var metadata);
+        metadata ??= new HyperlinkMetadata();
+        return new HyperlinkSummary(
+            pair.Key.Row,
+            pair.Key.Col,
+            pair.Value,
+            metadata.LinkType,
+            metadata.ScreenTip,
+            metadata.Bookmark);
+    }
+
+    private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
+    {
+        var metadata = workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
+            ? savedMetadata
+            : NamedRangeMetadata.WorkbookScope;
+
+        return new NamedRangeSummary(
+            name,
+            metadata.Scope,
+            metadata.Comment,
+            ToRangeSummary(range));
+    }
+
+    private static IReadOnlyList<FormulaCellSummary> CaptureFormulaCellSummaries(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany(sheet => sheet.EnumerateCells()
+                .Where(item => item.Cell.HasFormula)
+                .OrderBy(item => item.Address.Row)
+                .ThenBy(item => item.Address.Col)
+                .Select(item => new FormulaCellSummary(
+                    sheet.Name,
+                    item.Address.Row,
+                    item.Address.Col,
+                    item.Cell.FormulaText ?? "",
+                    CaptureScalarValueSummary(item.Cell.Value))))
+            .ToArray();
+
+    private static CellSummary CaptureCellSummary(Workbook workbook, CellAddress address, Cell cell) =>
+        new(
+            address.Row,
+            address.Col,
+            cell.HasFormula ? new ScalarValueSummary("FormulaCachedValue", "") : CaptureScalarValueSummary(cell.Value),
+            cell.FormulaText ?? "",
+            cell.IgnoreFormulaError,
+            CaptureStyleSummary(workbook.GetStyle(cell.StyleId)));
+
+    private static ScalarValueSummary CaptureScalarValueSummary(ScalarValue value) =>
+        value switch
+        {
+            BlankValue => new ScalarValueSummary("Blank", ""),
+            NumberValue number => new ScalarValueSummary("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
+            BoolValue boolean => new ScalarValueSummary("Boolean", boolean.Value ? "TRUE" : "FALSE"),
+            TextValue text => new ScalarValueSummary("Text", text.Value),
+            DateTimeValue dateTime => new ScalarValueSummary("DateTime", dateTime.Value.ToString("R", CultureInfo.InvariantCulture)),
+            ErrorValue error => new ScalarValueSummary("Error", error.Code),
+            _ => new ScalarValueSummary(value.GetType().Name, value.ToString() ?? "")
+        };
+
+    private static CustomViewSummary CaptureCustomViewSummary(WorkbookCustomView view) =>
+        new(
+            view.Name,
+            view.IncludePrintSettings,
+            view.IncludeHiddenRowsColumnsAndFilterSettings,
+            view.Sheets
+                .OrderBy(sheet => sheet.SheetName, StringComparer.OrdinalIgnoreCase)
+                .Select(sheet => new CustomViewSheetSummary(
+                    sheet.SheetName,
+                    sheet.ViewMode,
+                    sheet.FrozenRows,
+                    sheet.FrozenCols,
+                    sheet.SplitRow,
+                    sheet.SplitColumn,
+                    sheet.ShowGridlines,
+                    sheet.ShowHeadings,
+                    sheet.ShowRulers,
+                    sheet.ZoomPercent,
+                    sheet.ShowFormulas))
+                .ToArray());
+
+    private static ChartSummary CaptureChartSummary(ChartModel chart) =>
+        new(
+            chart.Type,
+            chart.Title ?? "",
+            chart.XAxisTitle ?? "",
+            chart.YAxisTitle ?? "",
+            CaptureChartVisualSummary(chart),
+            CaptureChartAxisSummary(chart, isXAxis: true),
+            CaptureChartAxisSummary(chart, isXAxis: false),
+            chart.ShowLegend,
+            chart.IsPivotChart,
+            chart.PivotSourceFormatId,
+            chart.Uses1904DateSystem,
+            chart.Language ?? "",
+            chart.ChartStyleId,
+            chart.RoundedCorners,
+            chart.BlankDisplayMode,
+            chart.ShowDataLabelsOverMaximum,
+            chart.AutoTitleDeleted,
+            chart.ShowDataInHiddenRowsAndColumns,
+            CaptureChartProtectionSummary(chart.Protection),
+            CaptureChartPrintSettingsSummary(chart.PrintSettings),
+            CaptureChartColorMapSummary(chart.ColorMapOverride),
+            CaptureChartExternalDataSummary(chart.ExternalData),
+            CaptureChartManualLayoutSummary(chart.PlotAreaLayout),
+            CaptureChartManualLayoutSummary(chart.LegendLayout),
+            chart.LegendPosition,
+            chart.LegendOverlay,
+            chart.ShowDataLabels,
+            chart.ShowDataLabelValue,
+            chart.ShowDataLabelLegendKey,
+            chart.ShowDataLabelBubbleSize,
+            chart.ShowDataLabelCategoryName,
+            chart.ShowDataLabelSeriesName,
+            chart.ShowDataLabelPercentage,
+            chart.DataLabelPosition,
+            chart.DataLabelSeparator,
+            chart.DataLabelNumberFormat,
+            chart.ShowDataLabelCallouts,
+            chart.DataLabelFillColor is null ? "" : ToColorSummary(chart.DataLabelFillColor.Value),
+            chart.DataLabelFillThemeColor,
+            chart.DataLabelBorderColor is null ? "" : ToColorSummary(chart.DataLabelBorderColor.Value),
+            chart.DataLabelBorderThemeColor,
+            chart.DataLabelTextColor is null ? "" : ToColorSummary(chart.DataLabelTextColor.Value),
+            chart.DataLabelTextThemeColor,
+            chart.DataLabelBorderThickness,
+            chart.DataLabelFontSize,
+            chart.DataLabelAngle,
+            chart.BarGapWidth,
+            chart.BarOverlap,
+            chart.VaryColorsByPoint,
+            chart.BubbleScale,
+            chart.ShowNegativeBubbles,
+            chart.BubbleSizeRepresents,
+            CaptureChartTrendlineSummary(chart),
+            CaptureChartErrorBarSummary(chart),
+            CaptureChartGuideLineSummary(
+                chart.ShowDropLines,
+                chart.DropLineColor,
+                chart.DropLineThemeColor,
+                chart.DropLineThickness,
+                chart.DropLineDashStyle),
+            chart.StockSubtype,
+            CaptureChartGuideLineSummary(
+                chart.ShowHighLowLines,
+                chart.HighLowLineColor,
+                chart.HighLowLineThemeColor,
+                chart.HighLowLineThickness,
+                chart.HighLowLineDashStyle),
+            CaptureChartGuideLineSummary(
+                chart.ShowSeriesLines,
+                chart.SeriesLineColor,
+                chart.SeriesLineThemeColor,
+                chart.SeriesLineThickness,
+                chart.SeriesLineDashStyle),
+            CaptureChartUpDownBarsSummary(chart),
+            CaptureChartDataTableSummary(chart.DataTable),
+            CaptureChart3DViewSummary(chart.ThreeDView),
+            CaptureChartSurfaceFormatSummary(chart.FloorFormat),
+            CaptureChartSurfaceFormatSummary(chart.SideWallFormat),
+            CaptureChartSurfaceFormatSummary(chart.BackWallFormat),
+            new ChartRangeSummary(
+                chart.DataRange.Start.Row,
+                chart.DataRange.Start.Col,
+                chart.DataRange.End.Row,
+                chart.DataRange.End.Col));
+
+    private static ChartDataTableSummary? CaptureChartDataTableSummary(ChartDataTableModel? dataTable) =>
+        dataTable is null
+            ? null
+            : new ChartDataTableSummary(
+                dataTable.ShowHorizontalBorder,
+                dataTable.ShowVerticalBorder,
+                dataTable.ShowOutline,
+                dataTable.ShowLegendKeys);
+
+    private static ChartProtectionSummary? CaptureChartProtectionSummary(ChartProtectionModel? protection) =>
+        protection is null
+            ? null
+            : new ChartProtectionSummary(
+                protection.ChartObject,
+                protection.Data,
+                protection.Formatting,
+                protection.Selection,
+                protection.UserInterface);
+
+    private static ChartPrintSettingsSummary? CaptureChartPrintSettingsSummary(ChartPrintSettingsModel? printSettings) =>
+        printSettings is null
+            ? null
+            : new ChartPrintSettingsSummary(
+                CaptureChartPageMarginsSummary(printSettings.PageMargins),
+                CaptureChartPageSetupSummary(printSettings.PageSetup));
+
+    private static ChartPageMarginsSummary? CaptureChartPageMarginsSummary(ChartPageMarginsModel? pageMargins) =>
+        pageMargins is null
+            ? null
+            : new ChartPageMarginsSummary(
+                pageMargins.Left,
+                pageMargins.Right,
+                pageMargins.Top,
+                pageMargins.Bottom,
+                pageMargins.Header,
+                pageMargins.Footer);
+
+    private static ChartPageSetupSummary? CaptureChartPageSetupSummary(ChartPageSetupModel? pageSetup) =>
+        pageSetup is null
+            ? null
+            : new ChartPageSetupSummary(
+                pageSetup.PaperSize ?? "",
+                pageSetup.Orientation ?? "",
+                pageSetup.Copies,
+                pageSetup.BlackAndWhite,
+                pageSetup.Draft);
+
+    private static ChartTrendlineSummary CaptureChartTrendlineSummary(ChartModel chart) =>
+        new(
+            chart.ShowLinearTrendline,
+            chart.TrendlineType,
+            chart.TrendlinePeriod,
+            chart.TrendlineOrder,
+            chart.ShowTrendlineEquation,
+            chart.ShowTrendlineRSquared,
+            chart.TrendlineColor is null ? "" : ToColorSummary(chart.TrendlineColor.Value),
+            chart.TrendlineThemeColor,
+            chart.TrendlineThickness,
+            chart.TrendlineDashStyle);
+
+    private static ChartErrorBarSummary CaptureChartErrorBarSummary(ChartModel chart) =>
+        new(
+            chart.ShowErrorBars,
+            chart.ErrorBarKind,
+            chart.ErrorBarDirection,
+            chart.ErrorBarValue,
+            chart.ErrorBarEndCaps,
+            chart.ErrorBarColor is null ? "" : ToColorSummary(chart.ErrorBarColor.Value),
+            chart.ErrorBarThemeColor,
+            chart.ErrorBarThickness,
+            chart.ErrorBarDashStyle);
+    private static ChartGuideLineSummary CaptureChartGuideLineSummary(
+        bool show,
+        CellColor? color,
+        WorkbookThemeColorReference? themeColor,
+        double thickness,
+        ChartLineDashStyle dashStyle) =>
+        new(
+            show,
+            color is null ? "" : ToColorSummary(color.Value),
+            themeColor,
+            thickness,
+            dashStyle);
+
+    private static ChartUpDownBarsSummary CaptureChartUpDownBarsSummary(ChartModel chart) =>
+        new(
+            chart.ShowUpDownBars,
+            chart.UpDownBarGapWidth,
+            CaptureChartBarShapeSummary(
+                chart.UpBarFillColor,
+                chart.UpBarFillThemeColor,
+                chart.UpBarBorderColor,
+                chart.UpBarBorderThemeColor,
+                chart.UpBarBorderThickness),
+            CaptureChartBarShapeSummary(
+                chart.DownBarFillColor,
+                chart.DownBarFillThemeColor,
+                chart.DownBarBorderColor,
+                chart.DownBarBorderThemeColor,
+                chart.DownBarBorderThickness));
+
+    private static ChartBarShapeSummary CaptureChartBarShapeSummary(
+        CellColor? fillColor,
+        WorkbookThemeColorReference? fillThemeColor,
+        CellColor? borderColor,
+        WorkbookThemeColorReference? borderThemeColor,
+        double? borderThickness) =>
+        new(
+            fillColor is null ? "" : ToColorSummary(fillColor.Value),
+            fillThemeColor,
+            borderColor is null ? "" : ToColorSummary(borderColor.Value),
+            borderThemeColor,
+            borderThickness);
+
+    private static ChartVisualSummary CaptureChartVisualSummary(ChartModel chart) =>
+        new(
+            chart.ChartTitleTextColor is null ? "" : ToColorSummary(chart.ChartTitleTextColor.Value),
+            chart.ChartTitleTextThemeColor,
+            chart.ChartTitleFontSize,
+            chart.AxisTitleTextColor is null ? "" : ToColorSummary(chart.AxisTitleTextColor.Value),
+            chart.AxisTitleTextThemeColor,
+            chart.AxisTitleFontSize,
+            chart.ChartAreaFillColor is null ? "" : ToColorSummary(chart.ChartAreaFillColor.Value),
+            chart.ChartAreaFillThemeColor,
+            chart.PlotAreaFillColor is null ? "" : ToColorSummary(chart.PlotAreaFillColor.Value),
+            chart.PlotAreaFillThemeColor,
+            chart.PlotAreaBorderColor is null ? "" : ToColorSummary(chart.PlotAreaBorderColor.Value),
+            chart.PlotAreaBorderThemeColor,
+            chart.PlotAreaBorderThickness,
+            chart.LegendTextColor is null ? "" : ToColorSummary(chart.LegendTextColor.Value),
+            chart.LegendTextThemeColor,
+            chart.LegendFillColor is null ? "" : ToColorSummary(chart.LegendFillColor.Value),
+            chart.LegendFillThemeColor,
+            chart.LegendBorderColor is null ? "" : ToColorSummary(chart.LegendBorderColor.Value),
+            chart.LegendBorderThemeColor,
+            chart.LegendBorderThickness,
+            chart.LegendFontSize);
+
+    private static ChartAxisSummary CaptureChartAxisSummary(ChartModel chart, bool isXAxis) =>
+        isXAxis
+            ? new ChartAxisSummary(
+                chart.XAxisMinimum,
+                chart.XAxisMaximum,
+                chart.XAxisMajorUnit,
+                chart.XAxisMinorUnit,
+                chart.XAxisLogScale,
+                chart.XAxisNumberFormat,
+                chart.ShowXAxisMajorGridlines,
+                chart.ShowXAxisMinorGridlines,
+                chart.XAxisIsDateAxis,
+                chart.XAxisMajorGridlineColor is null ? "" : ToColorSummary(chart.XAxisMajorGridlineColor.Value),
+                chart.XAxisMinorGridlineColor is null ? "" : ToColorSummary(chart.XAxisMinorGridlineColor.Value),
+                chart.XAxisGridlineThickness,
+                chart.XAxisMajorTickStyle,
+                chart.XAxisMinorTickStyle,
+                chart.ShowXAxisLabels,
+                chart.XAxisLabelTextColor is null ? "" : ToColorSummary(chart.XAxisLabelTextColor.Value),
+                chart.XAxisLabelTextThemeColor,
+                chart.XAxisLabelFontSize,
+                chart.XAxisLabelAngle,
+                chart.XAxisLabelSkip,
+                chart.XAxisTickMarkSkip,
+                chart.XAxisLabelOffset,
+                chart.XAxisLineColor is null ? "" : ToColorSummary(chart.XAxisLineColor.Value),
+                chart.XAxisLineThickness)
+            : new ChartAxisSummary(
+                chart.YAxisMinimum,
+                chart.YAxisMaximum,
+                chart.YAxisMajorUnit,
+                chart.YAxisMinorUnit,
+                chart.YAxisLogScale,
+                chart.YAxisNumberFormat,
+                chart.ShowYAxisMajorGridlines,
+                chart.ShowYAxisMinorGridlines,
+                false,
+                chart.YAxisMajorGridlineColor is null ? "" : ToColorSummary(chart.YAxisMajorGridlineColor.Value),
+                chart.YAxisMinorGridlineColor is null ? "" : ToColorSummary(chart.YAxisMinorGridlineColor.Value),
+                chart.YAxisGridlineThickness,
+                chart.YAxisMajorTickStyle,
+                chart.YAxisMinorTickStyle,
+                chart.ShowYAxisLabels,
+                chart.YAxisLabelTextColor is null ? "" : ToColorSummary(chart.YAxisLabelTextColor.Value),
+                chart.YAxisLabelTextThemeColor,
+                chart.YAxisLabelFontSize,
+                chart.YAxisLabelAngle,
+                0,
+                0,
+                0,
+                chart.YAxisLineColor is null ? "" : ToColorSummary(chart.YAxisLineColor.Value),
+                chart.YAxisLineThickness);
+
+    private static ChartColorMapSummary? CaptureChartColorMapSummary(ChartColorMapOverrideModel? colorMap) =>
+        colorMap is null
+            ? null
+            : new ChartColorMapSummary(
+                colorMap.UseMasterColorMapping,
+                colorMap.OverrideMappings
+                    .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                    .Select(pair => new ChartColorMapEntrySummary(pair.Key, pair.Value))
+                    .ToArray());
+
+    private static ChartExternalDataSummary? CaptureChartExternalDataSummary(ChartExternalDataModel? externalData) =>
+        externalData is null
+            ? null
+            : new ChartExternalDataSummary(
+                externalData.RelationshipId ?? "",
+                externalData.RelationshipType ?? "",
+                externalData.Target ?? "",
+                externalData.TargetMode ?? "",
+                externalData.AutoUpdate);
+
+    private static ChartManualLayoutSummary? CaptureChartManualLayoutSummary(ChartManualLayoutModel? layout) =>
+        layout is null
+            ? null
+            : new ChartManualLayoutSummary(
+                layout.LayoutTarget ?? "",
+                layout.XMode ?? "",
+                layout.YMode ?? "",
+                layout.WidthMode ?? "",
+                layout.HeightMode ?? "",
+                layout.X,
+                layout.Y,
+                layout.Width,
+                layout.Height);
+
+    private static Chart3DViewSummary? CaptureChart3DViewSummary(Chart3DViewModel? view) =>
+        view is null
+            ? null
+            : new Chart3DViewSummary(
+                view.RotationX,
+                view.HeightPercent,
+                view.RotationY,
+                view.DepthPercent,
+                view.RightAngleAxes,
+                view.Perspective);
+
+    private static ChartSurfaceFormatSummary? CaptureChartSurfaceFormatSummary(ChartSurfaceFormatModel? format) =>
+        format is null
+            ? null
+            : new ChartSurfaceFormatSummary(
+                format.FillColor is null ? "" : ToColorSummary(format.FillColor.Value),
+                format.FillThemeColor,
+                format.BorderColor is null ? "" : ToColorSummary(format.BorderColor.Value),
+                format.BorderThemeColor,
+                format.BorderThickness);
+
+    private static PivotCacheSummary CapturePivotCacheSummary(PivotCacheModel cache) =>
+        new(
+            cache.CacheId,
+            cache.SourceType,
+            cache.SourceSheetName ?? "",
+            cache.SourceReference ?? "",
+            cache.SourceTableName ?? "",
+            cache.ConnectionId,
+            cache.IsOlap,
+            cache.RefreshOnLoad,
+            cache.SaveData,
+            cache.EnableRefresh,
+            cache.PreserveSourceSortFilter,
+            cache.MissingItemsLimit,
+            cache.RecordCount,
+            cache.CreatedVersion,
+            cache.MinRefreshableVersion,
+            cache.RefreshedVersion,
+            cache.RefreshedBy ?? "",
+            cache.RefreshedDateIso ?? "",
+            cache.Fields
+                .Select(field => new PivotCacheFieldSummary(
+                    field.Name,
+                    field.NumberFormatId,
+                    field.SharedItemCount,
+                    field.ContainsBlank,
+                    field.ContainsString,
+                    field.ContainsNumber,
+                    field.ContainsDate,
+                    field.ContainsMixedTypes,
+                    field.ContainsSemiMixedTypes,
+                    field.ContainsNonDate,
+                    field.ContainsInteger,
+                    field.ContainsLongText,
+                    field.MinValue,
+                    field.MaxValue,
+                    field.MinDate ?? "",
+                    field.MaxDate ?? "",
+                    field.SharedItems?.ToArray() ?? []))
+                .ToArray());
+
+    private static StructuredTableSummary CaptureStructuredTableSummary(StructuredTableModel table) =>
+        new(
+            table.Name,
+            table.DisplayName,
+            table.StyleName ?? "",
+            table.HasAutoFilter,
+            table.TotalsRowShown,
+            table.ShowFirstColumn,
+            table.ShowLastColumn,
+            table.ShowRowStripes,
+            table.ShowColumnStripes,
+            NormalizeXml(table.NativeSortStateXml),
+            new ChartRangeSummary(
+                table.Range.Start.Row,
+                table.Range.Start.Col,
+                table.Range.End.Row,
+                table.Range.End.Col),
+            table.Columns
+                .Select(column => new StructuredTableColumnSummary(
+                    column.Id,
+                    column.Name,
+                    column.TotalsRowLabel ?? "",
+                    column.TotalsRowFunction ?? "",
+                    column.CalculatedColumnFormula ?? "",
+                    column.TotalsRowFormula ?? ""))
+                .ToArray(),
+            table.FilterColumns
+                .OrderBy(filter => filter.ColumnId)
+                .Select(filter => new StructuredTableFilterColumnSummary(
+                    filter.ColumnId,
+                    filter.Values.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    filter.IncludeBlank,
+                    filter.CustomFilters
+                        .Select(customFilter => new StructuredTableCustomFilterSummary(
+                            customFilter.Operator ?? "",
+                            customFilter.Value ?? "",
+                            customFilter.NativeAttributes is null
+                                ? []
+                                : customFilter.NativeAttributes
+                                    .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                                    .Select(pair => new NativeAttributeSummary(pair.Key, pair.Value))
+                                    .ToArray()))
+                        .ToArray(),
+                    filter.CustomFiltersAnd,
+                    filter.CustomFiltersAndRaw ?? "",
+                    filter.NativeCustomFiltersAttributes is null
+                        ? []
+                        : filter.NativeCustomFiltersAttributes
+                            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                            .Select(pair => new NativeAttributeSummary(pair.Key, pair.Value))
+                            .ToArray(),
+                    filter.NativeFilterXmls.Select(NormalizeXml).ToArray(),
+                    filter.NativeAttributes is null
+                        ? []
+                        : filter.NativeAttributes
+                            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                            .Select(pair => new NativeAttributeSummary(pair.Key, pair.Value))
+                            .ToArray()))
+                .ToArray());
+
+    private static PivotTableStyleSummary CapturePivotTableStyleSummary(PivotTableStyleModel style) =>
+        new(
+            style.Name,
+            style.AppliesToPivotTables,
+            style.AppliesToTables,
+            style.Elements
+                .OrderBy(element => element.Type, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(element => element.DifferentialFormatId)
+                .ThenBy(element => element.Size)
+                .Select(element => new PivotTableStyleElementSummary(
+                    element.Type,
+                    element.DifferentialFormatId,
+                    element.Size))
+                .ToArray());
+
+    private static PivotTableSummary CapturePivotTableSummary(PivotTableModel pivot) =>
+        new(
+            pivot.Name,
+            pivot.CacheId,
+            ToRangeSummary(pivot.SourceRange),
+            ToRangeSummary(pivot.TargetRange),
+            pivot.DataOnRows,
+            pivot.FirstHeaderRow,
+            pivot.FirstDataRow,
+            pivot.FirstDataColumn,
+            pivot.ShowSubtotals,
+            pivot.SubtotalPlacement,
+            pivot.ShowRowGrandTotals,
+            pivot.ShowColumnGrandTotals,
+            pivot.RepeatItemLabels,
+            pivot.BlankLineAfterItems,
+            pivot.ReportLayout,
+            pivot.StyleName,
+            pivot.ShowRowHeaders,
+            pivot.ShowColumnHeaders,
+            pivot.ShowRowStripes,
+            pivot.ShowColumnStripes,
+            pivot.ShowFieldHeaders,
+            pivot.ShowContextualTooltips,
+            pivot.ShowPropertiesInTooltips,
+            pivot.ShowClassicLayout,
+            pivot.MergeAndCenterLabels,
+            pivot.ShowItemsWithNoDataOnRows,
+            pivot.ShowItemsWithNoDataOnColumns,
+            pivot.PageOverThenDown,
+            pivot.PageWrap,
+            pivot.EmptyValueText ?? "",
+            pivot.ApplyNumberFormats,
+            pivot.ApplyBorderFormats,
+            pivot.ApplyFontFormats,
+            pivot.ApplyPatternFormats,
+            pivot.AutofitColumnsOnUpdate,
+            pivot.PreserveFormattingOnUpdate,
+            pivot.ShowExpandCollapseButtons,
+            pivot.EnableDrill,
+            pivot.AsteriskTotals,
+            pivot.MultipleFieldFilters,
+            pivot.EnableFieldDialog,
+            pivot.EnableFieldProperties,
+            pivot.EnableDataValueEditing,
+            pivot.PrintTitles,
+            pivot.PrintExpandCollapseButtons,
+            pivot.AltTextTitle ?? "",
+            pivot.AltTextDescription ?? "",
+            pivot.DataCaption ?? "",
+            pivot.GrandTotalCaption ?? "",
+            pivot.MissingCaption ?? "",
+            pivot.ErrorCaption ?? "",
+            pivot.RowFields.Select(CapturePivotFieldSummary).ToArray(),
+            pivot.ColumnFields.Select(CapturePivotFieldSummary).ToArray(),
+            pivot.PageFields.Select(CapturePivotFieldSummary).ToArray(),
+            pivot.DataFields.Select(CapturePivotDataFieldSummary).ToArray());
+
+    private static PivotFieldSummary CapturePivotFieldSummary(PivotFieldModel field) =>
+        new(
+            field.SourceFieldIndex,
+            field.SelectedItem ?? "",
+            field.SelectedItems?.ToArray() ?? [],
+            field.Grouping,
+            field.GroupStart,
+            field.GroupEnd,
+            field.GroupInterval);
+
+    private static PivotDataFieldSummary CapturePivotDataFieldSummary(PivotDataFieldModel field) =>
+        new(
+            field.SourceFieldIndex,
+            field.Name,
+            field.SummaryFunction,
+            field.NumberFormatId,
+            field.CalculatedFieldName ?? "",
+            field.ShowValuesAs,
+            field.BaseFieldIndex,
+            field.BaseItem ?? "",
+            field.NumberFormatCode ?? "");
+
+    private static ChartRangeSummary ToRangeSummary(GridRange range) =>
+        new(
+            range.Start.Row,
+            range.Start.Col,
+            range.End.Row,
+            range.End.Col);
+
+    private static RepeatRangeSummary ToRepeatRangeSummary(WorksheetRepeatRange range) =>
+        new(range.Start, range.End);
+
+    private static HeaderFooterSummary CaptureHeaderFooterSummary(WorksheetHeaderFooter value) =>
+        new(
+            NormalizeHeaderFooterText(value.Left),
+            NormalizeHeaderFooterText(value.Center),
+            NormalizeHeaderFooterText(value.Right));
+
+    private static HeaderFooterPictureSetSummary CaptureHeaderFooterPictureSetSummary(WorksheetHeaderFooterPictureSet value) =>
+        new(
+            CaptureHeaderFooterPictureSummary(value.Left),
+            CaptureHeaderFooterPictureSummary(value.Center),
+            CaptureHeaderFooterPictureSummary(value.Right));
+
+    private static HeaderFooterPictureSummary? CaptureHeaderFooterPictureSummary(WorksheetHeaderFooterPicture? picture) =>
+        picture is null
+            ? null
+            : new HeaderFooterPictureSummary(
+                picture.ContentType,
+                picture.FileName ?? "",
+                picture.ImageBytes.Length,
+                picture.Width,
+                picture.Height);
+
+    private static string NormalizeHeaderFooterText(string text) =>
+        text
+            .Replace("&[Page]", "&P", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Pages]", "&N", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Date]", "&D", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Time]", "&T", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[File]", "&F", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Tab]", "&A", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Path]", "&Z", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeXml(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return "";
+
+        try
+        {
+            return XElement.Parse(xml).ToString(SaveOptions.DisableFormatting);
+        }
+        catch
+        {
+            return xml.Trim();
+        }
+    }
+
+    private static TextBoxSummary CaptureTextBoxSummary(TextBoxModel textBox) =>
+        new(
+            textBox.Name ?? "",
+            textBox.Text,
+            textBox.Title ?? "",
+            textBox.AltText ?? "",
+            textBox.Anchor.Row,
+            textBox.Anchor.Col,
+            textBox.Width,
+            textBox.Height,
+            textBox.RotationDegrees,
+            textBox.IsVisible,
+            textBox.FillColor,
+            textBox.OutlineColor,
+            textBox.FillThemeColor,
+            textBox.OutlineThemeColor);
+
+    private static DrawingShapeSummary CaptureDrawingShapeSummary(DrawingShapeModel shape) =>
+        new(
+            shape.Name ?? "",
+            shape.Kind,
+            shape.Title ?? "",
+            shape.AltText ?? "",
+            shape.Anchor.Row,
+            shape.Anchor.Col,
+            shape.Width,
+            shape.Height,
+            shape.RotationDegrees,
+            shape.IsVisible,
+            shape.FillColor,
+            shape.OutlineColor,
+            shape.GradientFillEndColor,
+            shape.FillThemeColor,
+            shape.OutlineThemeColor,
+            shape.HasShadowEffect);
+
+    private static PictureSummary CapturePictureSummary(PictureModel picture) =>
+        new(
+            picture.Name ?? "",
+            picture.Kind,
+            picture.Title ?? "",
+            picture.AltText ?? "",
+            picture.Anchor.Row,
+            picture.Anchor.Col,
+            picture.Width,
+            picture.Height,
+            picture.RotationDegrees,
+            picture.IsVisible,
+            picture.ContentType ?? "",
+            picture.ImageBytes?.Length ?? 0,
+            picture.CropLeft,
+            picture.CropTop,
+            picture.CropRight,
+            picture.CropBottom,
+            picture.IsLinkedToSourceRange,
+            picture.LinkedSourceRange is { } linkedSourceRange ? ToRangeSummary(linkedSourceRange) : null,
+            picture.LinkedSourceSheetName ?? "",
+            picture.SourceRowCount,
+            picture.SourceColumnCount,
+            picture.Cells
+                .OrderBy(cell => cell.RowOffset)
+                .ThenBy(cell => cell.ColumnOffset)
+                .Select(cell => new PictureCellSummary(cell.RowOffset, cell.ColumnOffset, cell.Text))
+                .ToArray());
+
+    private static ConditionalFormatSummary CaptureConditionalFormatSummary(ConditionalFormat format) =>
+        new(
+            format.RuleType,
+            format.Priority,
+            format.Operator,
+            format.Value1 ?? "",
+            format.Value2 ?? "",
+            CaptureStyleSummary(format.FormatIfTrue),
+            format.MinColor,
+            format.MidColor,
+            format.MaxColor,
+            format.UseThreeColorScale,
+            format.MinThresholdType,
+            format.MinThresholdValue ?? "",
+            format.MidThresholdType,
+            format.MidThresholdValue ?? "",
+            format.MaxThresholdType,
+            format.MaxThresholdValue ?? "",
+            format.DataBarColor,
+            format.DataBarMinThresholdType,
+            format.DataBarMinThresholdValue ?? "",
+            format.DataBarMaxThresholdType,
+            format.DataBarMaxThresholdValue ?? "",
+            format.DataBarShowValue,
+            format.DataBarMinLength,
+            format.DataBarMaxLength,
+            format.DataBarGradient,
+            format.DataBarBorder,
+            format.DataBarAxisPosition ?? "",
+            format.DataBarAxisColor,
+            format.DataBarNegativeFillColor,
+            format.DataBarNegativeBorderColor,
+            format.AboveAverage,
+            format.FormulaText ?? "",
+            format.IconSetStyle ?? "",
+            format.IconSetShowValue,
+            format.IconSetReverse,
+            format.IconSetThresholds.Select(threshold => new ConditionalFormatThresholdSummary(threshold.Type, threshold.Value ?? "")).ToArray(),
+            format.TopBottomRank,
+            format.TopBottomPercent,
+            format.TextRuleText ?? "",
+            format.DateOccurringPeriod ?? "",
+            format.StopIfTrue,
+            ToRangeSummary(format.AppliesTo));
+
+    private static CellStyleSummary? CaptureStyleSummary(CellStyle? style) =>
+        style is null
+            ? null
+            : new(
+                style.FontName,
+                style.FontSize,
+                style.Bold,
+                style.Italic,
+                style.Underline,
+                style.Strikethrough,
+                style.FontColor,
+                style.FillColor,
+                NormalizeFillPatternStyle(style),
+                style.FillPatternColor,
+                style.NumberFormat);
+
+    private static CellFillPatternStyle NormalizeFillPatternStyle(CellStyle style) =>
+        style.FillColor.HasValue && style.FillPatternStyle == CellFillPatternStyle.None
+            ? CellFillPatternStyle.Solid
+            : style.FillPatternStyle;
+
+    private static void AssertExpectedPublicPackageTags(ManifestRow row, Stream package)
+    {
+        if (row.SourceType != "public")
+            return;
+
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (!HasExpectedPublicPackageTags(row))
+            return;
+
+        var originalPosition = package.CanSeek ? package.Position : 0;
+        if (package.CanSeek)
+            package.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+            if (tags.Contains("styles") || tags.Contains("formatting"))
+                archive.GetEntry("xl/styles.xml").Should().NotBeNull(row.Id);
+
+            if (tags.Contains("hyperlinks"))
+                PublicWorksheetElements(archive, "hyperlink").Should().NotBeEmpty(row.Id);
+
+            if (tags.Contains("merged-cells"))
+                PublicWorksheetElements(archive, "mergeCell").Should().NotBeEmpty(row.Id);
+
+            if (tags.Contains("inline-strings"))
+                PublicWorksheetCells(archive)
+                    .Any(cell =>
+                        string.Equals(cell.Attribute("t")?.Value, "inlineStr", StringComparison.Ordinal) ||
+                        cell.Element(WorksheetNs + "is") is not null)
+                    .Should()
+                    .BeTrue(row.Id);
+
+            if (tags.Contains("cell-types"))
+                PublicWorksheetCells(archive)
+                    .Select(cell => cell.Attribute("t")?.Value ?? "n")
+                    .Distinct(StringComparer.Ordinal)
+                    .Should()
+                    .HaveCountGreaterThanOrEqualTo(3, row.Id);
+
+            if (tags.Contains("sheet-names") && tags.Contains("boundary"))
+                PublicWorkbookSheetNames(archive)
+                    .Should()
+                    .Contain(name => name.Length == 31, row.Id);
+
+            if (tags.Contains("unsupported-sheet-types"))
+                archive.Entries.Should().Contain(entry => entry.FullName.StartsWith("xl/chartsheets/", StringComparison.Ordinal), row.Id);
+        }
+        finally
+        {
+            if (package.CanSeek)
+                package.Position = originalPosition;
+        }
+    }
+
+    private static IReadOnlyList<XElement> PublicWorksheetElements(ZipArchive archive, string localName)
+    {
+        return PublicWorksheetXmlDocuments(archive)
+            .SelectMany(document => document.Descendants(WorksheetNs + localName))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<XElement> PublicWorksheetCells(ZipArchive archive) =>
+        PublicWorksheetElements(archive, "c");
+
+    private static IReadOnlyList<XDocument> PublicWorksheetXmlDocuments(ZipArchive archive)
+    {
+        return archive.Entries
+            .Where(entry => entry.FullName.StartsWith("xl/worksheets/", StringComparison.Ordinal) &&
+                            entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Select(LoadPackageXml)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> PublicWorkbookSheetNames(ZipArchive archive)
+    {
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        workbookEntry.Should().NotBeNull("public workbook packages should contain workbook.xml");
+
+        return LoadPackageXml(workbookEntry!)
+            .Descendants(WorksheetNs + "sheet")
+            .Select(sheet => sheet.Attribute("name")?.Value ?? "")
+            .Where(name => name.Length > 0)
+            .ToArray();
+    }
+
+    private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    private static bool HasExpectedPublicPackageTags(ManifestRow row)
+    {
+        if (row.SourceType != "public")
+            return false;
+
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return tags.Contains("styles") ||
+               tags.Contains("formatting") ||
+               tags.Contains("hyperlinks") ||
+               tags.Contains("merged-cells") ||
+               tags.Contains("inline-strings") ||
+               tags.Contains("cell-types") ||
+               (tags.Contains("sheet-names") && tags.Contains("boundary")) ||
+               tags.Contains("unsupported-sheet-types");
+    }
+
+    private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
+        new(
+            validation.Type,
+            validation.Operator,
+            validation.Formula1 ?? "",
+            validation.Formula2 ?? "",
+            validation.AllowBlank,
+            validation.ShowDropdown,
+            validation.AlertStyle,
+            validation.ShowInputMessage,
+            validation.ShowErrorMessage,
+            validation.ErrorTitle ?? "",
+            validation.ErrorMessage ?? "",
+            validation.PromptTitle ?? "",
+            validation.PromptMessage ?? "",
+            ToRangeSummary(validation.AppliesTo),
+            validation.AdditionalRanges.Select(ToRangeSummary).ToArray());
+
+    private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
+    {
+        var summary = CaptureSummary(workbook);
+        return summary with
+        {
+            Sheets = summary.Sheets
+                .Select(sheet => sheet with
+                {
+                    Cells = [],
+                    HeaderFooterAlignWithMargins = true,
+                    HeaderFooterScaleWithDocument = true,
+                    DefaultColumnWidth = 0,
+                    DefaultRowHeight = 0,
+                    ColumnWidths = [],
+                    RowHeights = [],
+                    StyleOnlyCells = [],
+                    StyleOnlyCellCount = 0
+                })
+                .ToArray()
+        };
+    }
+
+    private static PackagePartSummary CapturePackageSummary(Stream stream)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            return new PackagePartSummary(
+                archive.Entries
+                    .Select(entry => entry.FullName.Replace('\\', '/'))
+                    .Where(IsFidelityCriticalPart)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                archive.Entries
+                    .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                    .SelectMany(ReadRelationshipTargets)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                archive.Entries
+                    .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                    .SelectMany(ReadRelationshipDetails)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                ReadCriticalContentTypeOverrides(archive)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray());
+        }
+        finally
+        {
+            if (stream.CanSeek)
+                stream.Position = originalPosition;
+        }
+    }
+
+    private static void AssertPackageHealth(Stream stream, string because)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            var entries = archive.Entries
+                .Select(entry => entry.FullName.Replace('\\', '/'))
+                .ToArray();
+            entries.Should().OnlyHaveUniqueItems(because);
+
+            var entrySet = entries.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            archive.GetEntry("[Content_Types].xml").Should().NotBeNull(because);
+            foreach (var xmlEntry in archive.Entries.Where(entry =>
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                         entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+            {
+                using var xmlStream = xmlEntry.Open();
+                var load = () => XDocument.Load(xmlStream);
+                load.Should().NotThrow($"{because}: {xmlEntry.FullName} should be parseable XML");
+            }
+
+            foreach (var relsEntry in archive.Entries.Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+            {
+                var sourcePart = RelationshipSourcePart(relsEntry.FullName.Replace('\\', '/'));
+                var sourceDirectory = Path.GetDirectoryName(sourcePart)?.Replace('\\', '/') ?? string.Empty;
+                var relsXml = LoadPackageXml(relsEntry);
+                XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+                foreach (var relationship in relsXml.Root?.Elements(relNs + "Relationship") ?? [])
+                {
+                    if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var target = relationship.Attribute("Target")?.Value;
+                    if (string.IsNullOrWhiteSpace(target) || target.StartsWith("/", StringComparison.Ordinal))
+                        continue;
+
+                    target = Uri.UnescapeDataString(target);
+                    var resolved = NormalizePackagePath(string.IsNullOrWhiteSpace(sourceDirectory)
+                        ? target
+                        : $"{sourceDirectory}/{target}");
+                    entrySet.Should().Contain(resolved, $"{because}: {relsEntry.FullName} relationship target should exist");
+                }
+            }
+        }
+        finally
+        {
+            if (stream.CanSeek)
+                stream.Position = originalPosition;
+        }
+    }
+
+    private static string RelationshipSourcePart(string relsPath)
+    {
+        if (string.Equals(relsPath, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        var relsMarker = "/_rels/";
+        var markerIndex = relsPath.IndexOf(relsMarker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0 || !relsPath.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        var prefix = relsPath[..markerIndex];
+        var fileName = relsPath[(markerIndex + relsMarker.Length)..^".rels".Length];
+        return string.IsNullOrWhiteSpace(prefix) ? fileName : $"{prefix}/{fileName}";
+    }
+
+    private static string NormalizePackagePath(string path)
+    {
+        var parts = new List<string>();
+        foreach (var part in path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part == ".")
+                continue;
+            if (part == "..")
+            {
+                if (parts.Count > 0)
+                    parts.RemoveAt(parts.Count - 1);
+                continue;
+            }
+
+            parts.Add(part);
+        }
+
+        return string.Join("/", parts);
+    }
+
+    private static bool IsFidelityCriticalPart(string path) =>
+        path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/theme/theme1.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/styles.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/pivot", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/slicer", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/timeline", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/externalLinks/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/calcChain.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/connections.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/query", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/queries/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/model/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/datamodel/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/powerpivot/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/richData/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/threadedComments/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/persons/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/revisionHeaders/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/activeX/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/webextensions/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/webPublishItems.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/diagrams/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/dialogSheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/macroSheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/vbaProject.bin", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("docProps/core.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("docProps/app.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("docProps/custom.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/embeddings/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("customXml/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("customUI/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("_xmlsignatures/", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+
+    private static IEnumerable<string> ReadRelationshipTargets(ZipArchiveEntry relsEntry)
+    {
+        XDocument relsXml;
+        using (var stream = relsEntry.Open())
+            relsXml = XDocument.Load(stream);
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        return relsXml.Root?
+            .Elements(relNs + "Relationship")
+            .Select(rel => rel.Attribute("Target")?.Value)
+            .Where(target => !string.IsNullOrWhiteSpace(target))
+            .Where(target => !target!.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
+            .Select(target => $"{relsEntry.FullName.Replace('\\', '/')}=>{target!.Replace('\\', '/')}")
+            .ToArray() ?? [];
+    }
+
+    private static IEnumerable<string> ReadRelationshipDetails(ZipArchiveEntry relsEntry)
+    {
+        XDocument relsXml;
+        using (var stream = relsEntry.Open())
+            relsXml = XDocument.Load(stream);
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        return relsXml.Root?
+            .Elements(relNs + "Relationship")
+            .Where(rel => !string.IsNullOrWhiteSpace(rel.Attribute("Target")?.Value))
+            .Where(rel => !rel.Attribute("Target")!.Value.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
+            .Select(rel =>
+            {
+                var target = NormalizeRelationshipDetailTarget(
+                    relsEntry.FullName.Replace('\\', '/'),
+                    rel.Attribute("Target")!.Value,
+                    rel.Attribute("TargetMode")?.Value);
+                var type = rel.Attribute("Type")?.Value ?? "";
+                var targetMode = rel.Attribute("TargetMode")?.Value ?? "";
+                return $"{relsEntry.FullName.Replace('\\', '/')}=>{target}|type={type}|mode={targetMode}";
+            })
+            .ToArray() ?? [];
+    }
+
+    private static string NormalizeRelationshipDetailTarget(string relsPath, string target, string? targetMode)
+    {
+        target = target.Replace('\\', '/');
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+            return target;
+
+        if (target.StartsWith("/", StringComparison.Ordinal))
+            return NormalizePackagePath(target);
+
+        var sourcePart = RelationshipSourcePart(relsPath);
+        var sourceDirectory = Path.GetDirectoryName(sourcePart)?.Replace('\\', '/') ?? string.Empty;
+        return NormalizePackagePath(string.IsNullOrWhiteSpace(sourceDirectory)
+            ? target
+            : $"{sourceDirectory}/{target}");
+    }
+
+    private static IEnumerable<string> ReadCriticalContentTypeOverrides(ZipArchive archive)
+    {
+        var entry = archive.GetEntry("[Content_Types].xml");
+        if (entry is null)
+            return [];
+
+        XDocument contentTypesXml;
+        using (var stream = entry.Open())
+            contentTypesXml = XDocument.Load(stream);
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        return contentTypesXml.Root?
+            .Elements(contentTypeNs + "Override")
+            .Select(element => new
+            {
+                PartName = element.Attribute("PartName")?.Value,
+                ContentType = element.Attribute("ContentType")?.Value
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.PartName))
+            .Select(item => new
+            {
+                PartName = item.PartName!.TrimStart('/').Replace('\\', '/'),
+                ContentType = item.ContentType ?? ""
+            })
+            .Where(item => IsFidelityCriticalPart(item.PartName))
+            .Select(item => $"/{item.PartName}=>{item.ContentType}")
+            .ToArray() ?? [];
+    }
+
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
+    {
+        archive.GetEntry(entryName)?.Delete();
+        var entry = archive.CreateEntry(entryName);
+        using var stream = entry.Open();
+        document.Save(stream);
+    }
+
+    private static void WritePackageEntry(ZipArchive archive, string entryName, string content)
+    {
+        try
+        {
+            archive.GetEntry(entryName)?.Delete();
+        }
+        catch (NotSupportedException)
+        {
+            // ZipArchiveMode.Create does not allow entry lookup.
+        }
+
+        var entry = archive.CreateEntry(entryName);
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write(content);
+    }
+
+    private sealed record WorkbookSummary(
+        int SheetCount,
+        IReadOnlyList<NamedRangeSummary> NamedRanges,
+        int NamedRangeCount,
+        bool IsStructureProtected,
+        string StructureProtectionPassword,
+        IReadOnlyList<PivotCacheSummary> PivotCaches,
+        int PivotCacheCount,
+        int PivotCacheFieldCount,
+        IReadOnlyList<PivotTableStyleSummary> PivotTableStyles,
+        int PivotTableStyleCount,
+        int PivotTableStyleElementCount,
+        IReadOnlyList<NumberFormatCatalogSummary> NumberFormatCatalog,
+        IReadOnlyList<CustomViewSummary> CustomViews,
+        int CustomViewCount,
+        WorkbookMetadataSummary Metadata,
+        WorkbookCalculationSummary Calculation,
+        WorkbookThemeSummary Theme,
+        IReadOnlyList<SheetSummary> Sheets);
+
+    private sealed record WorkbookMetadataSummary(
+        IReadOnlyList<SlicerSummary> Slicers,
+        IReadOnlyList<TimelineSummary> Timelines,
+        IReadOnlyList<ExternalLinkSummary> ExternalLinks,
+        IReadOnlyList<WatchedCellSummary> WatchedCells,
+        IReadOnlyList<ScenarioSummary> Scenarios);
+
+    private sealed record SlicerSummary(
+        string Name,
+        string Caption,
+        string CacheName,
+        string SourcePivotTableName,
+        string SourceFieldName,
+        string StyleName,
+        IReadOnlyList<string> SelectedItems,
+        string PackagePart);
+
+    private sealed record TimelineSummary(
+        string Name,
+        string Caption,
+        string CacheName,
+        string SourcePivotTableName,
+        string SourceFieldName,
+        string StyleName,
+        string StartDate,
+        string EndDate,
+        string SelectedStartDate,
+        string SelectedEndDate,
+        string PackagePart);
+
+    private sealed record ExternalLinkSummary(
+        string PackagePart,
+        string TargetUri,
+        string TargetMode);
+
+    private sealed record WatchedCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column);
+
+    private sealed record ScenarioSummary(
+        string Name,
+        IReadOnlyList<ScenarioCellSummary> ChangingCells);
+
+    private sealed record ScenarioCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column,
+        ScalarValueSummary Value);
+
+    private sealed record WorkbookCalculationSummary(
+        WorkbookCalculationMode Mode,
+        bool FullCalculationOnLoad,
+        bool ForceFullCalculation,
+        bool IterativeCalculation,
+        int? MaxIterations,
+        double? MaxChange);
+
+    private sealed record WorkbookThemeSummary(
+        string Name,
+        string MajorFontName,
+        string MinorFontName,
+        string EffectsName,
+        IReadOnlyList<ThemeColorSummary> Colors);
+
+    private sealed record ThemeColorSummary(
+        WorkbookThemeColorSlot Slot,
+        string Color);
+
+    private sealed record NamedRangeSummary(
+        string Name,
+        string Scope,
+        string Comment,
+        ChartRangeSummary Range);
+
+    private sealed record SheetSummary(
+        string Name,
+        IReadOnlyList<CellSummary> Cells,
+        int CellCount,
+        int FormulaCount,
+        int MergedRegionCount,
+        IReadOnlyList<DataValidationSummary> DataValidations,
+        int DataValidationCount,
+        IReadOnlyList<ConditionalFormatSummary> ConditionalFormats,
+        int ConditionalFormatCount,
+        int ColorScaleConditionalFormatCount,
+        int DataBarConditionalFormatCount,
+        int IconSetConditionalFormatCount,
+        IReadOnlyList<CommentSummary> Comments,
+        int CommentCount,
+        IReadOnlyList<HyperlinkSummary> Hyperlinks,
+        int HyperlinkCount,
+        IReadOnlyList<ChartSummary> Charts,
+        int ChartCount,
+        IReadOnlyList<PivotTableSummary> PivotTables,
+        int PivotTableCount,
+        int PivotTableFieldCount,
+        IReadOnlyList<StructuredTableSummary> StructuredTables,
+        int StructuredTableCount,
+        int StructuredTableColumnCount,
+        IReadOnlyList<SparklineSummary> Sparklines,
+        int SparklineCount,
+        IReadOnlyList<TextBoxSummary> TextBoxes,
+        int TextBoxCount,
+        IReadOnlyList<DrawingShapeSummary> DrawingShapes,
+        int DrawingShapeCount,
+        IReadOnlyList<PictureSummary> Pictures,
+        int PictureCount,
+        BackgroundImageSummary? BackgroundImage,
+        bool HasBackgroundImage,
+        bool IsProtected,
+        string ProtectionPassword,
+        IReadOnlyList<ChartRangeSummary> AllowEditRanges,
+        int AllowEditRangeCount,
+        ChartRangeSummary? PrintArea,
+        bool HasPrintArea,
+        RepeatRangeSummary? PrintTitleRows,
+        bool HasPrintTitleRows,
+        RepeatRangeSummary? PrintTitleColumns,
+        bool HasPrintTitleColumns,
+        WorksheetPageOrientation PageOrientation,
+        WorksheetPaperSize PaperSize,
+        WorksheetPageMargins PageMargins,
+        double HeaderMargin,
+        double FooterMargin,
+        WorksheetScaleToFit ScaleToFit,
+        bool PrintGridlines,
+        bool PrintHeadings,
+        HeaderFooterSummary PageHeader,
+        bool HasPageHeader,
+        HeaderFooterSummary PageFooter,
+        bool HasPageFooter,
+        HeaderFooterSummary FirstPageHeader,
+        HeaderFooterSummary FirstPageFooter,
+        HeaderFooterSummary EvenPageHeader,
+        HeaderFooterSummary EvenPageFooter,
+        bool DifferentFirstPageHeaderFooter,
+        bool DifferentOddEvenHeaderFooter,
+        bool HeaderFooterScaleWithDocument,
+        bool HeaderFooterAlignWithMargins,
+        HeaderFooterPictureSetSummary PageHeaderPictures,
+        HeaderFooterPictureSetSummary PageFooterPictures,
+        HeaderFooterPictureSetSummary FirstPageHeaderPictures,
+        HeaderFooterPictureSetSummary FirstPageFooterPictures,
+        HeaderFooterPictureSetSummary EvenPageHeaderPictures,
+        HeaderFooterPictureSetSummary EvenPageFooterPictures,
+        bool CenterHorizontallyOnPage,
+        bool CenterVerticallyOnPage,
+        WorksheetPageOrder PageOrder,
+        int? FirstPageNumber,
+        bool PrintBlackAndWhite,
+        bool PrintDraftQuality,
+        int? PrintQualityDpi,
+        WorksheetPrintErrorValue PrintErrorValue,
+        WorksheetPrintComments PrintComments,
+        double DefaultColumnWidth,
+        double DefaultRowHeight,
+        IReadOnlyList<DimensionSummary> ColumnWidths,
+        IReadOnlyList<DimensionSummary> RowHeights,
+        IReadOnlyList<uint> RowPageBreaks,
+        int RowPageBreakCount,
+        IReadOnlyList<uint> ColumnPageBreaks,
+        int ColumnPageBreakCount,
+        uint FrozenRows,
+        uint FrozenCols,
+        uint? SplitRow,
+        uint? SplitColumn,
+        WorksheetViewMode ViewMode,
+        uint? ViewTopRow,
+        uint? ViewLeftColumn,
+        uint? ActiveRow,
+        uint? ActiveColumn,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool ShowRulers,
+        int ZoomPercent,
+        bool ShowFormulas,
+        bool FullCalculationOnLoad,
+        PhoneticSummary? PhoneticProperties,
+        bool IsHidden,
+        bool IsVeryHidden,
+        string CodeName,
+        string TabColor,
+        IReadOnlyList<WorksheetCustomPropertySummary> CustomProperties,
+        IReadOnlyList<uint> HiddenRows,
+        int HiddenRowCount,
+        IReadOnlyList<uint> FilterHiddenRows,
+        int FilterHiddenRowCount,
+        IReadOnlyList<uint> HiddenColumns,
+        int HiddenColumnCount,
+        IReadOnlyList<OutlineLevelSummary> RowOutlineLevels,
+        int RowOutlineLevelCount,
+        IReadOnlyList<OutlineLevelSummary> ColumnOutlineLevels,
+        int ColumnOutlineLevelCount,
+        IReadOnlyList<uint> GroupHiddenRows,
+        int GroupHiddenRowCount,
+        IReadOnlyList<uint> GroupHiddenColumns,
+        int GroupHiddenColumnCount,
+        IReadOnlyList<StyleOnlyCellSummary> StyleOnlyCells,
+        int StyleOnlyCellCount);
+
+    private sealed record CellSummary(
+        uint Row,
+        uint Column,
+        ScalarValueSummary Value,
+        string FormulaText,
+        bool IgnoreFormulaError,
+        CellStyleSummary? Style);
+
+    private sealed record FormulaCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column,
+        string FormulaText,
+        ScalarValueSummary CachedValue);
+
+    private sealed record ScalarValueSummary(string Kind, string Value);
+
+    private sealed record CustomViewSummary(
+        string Name,
+        bool IncludePrintSettings,
+        bool IncludeHiddenRowsColumnsAndFilterSettings,
+        IReadOnlyList<CustomViewSheetSummary> Sheets);
+
+    private sealed record CustomViewSheetSummary(
+        string SheetName,
+        WorksheetViewMode ViewMode,
+        uint FrozenRows,
+        uint FrozenCols,
+        uint? SplitRow,
+        uint? SplitColumn,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool ShowRulers,
+        int ZoomPercent,
+        bool ShowFormulas);
+
+    private sealed record CommentSummary(uint Row, uint Column, string Text);
+
+    private sealed record HyperlinkSummary(
+        uint Row,
+        uint Column,
+        string Target,
+        HyperlinkTargetKind LinkType,
+        string ScreenTip,
+        string Bookmark);
+
+    private sealed record OutlineLevelSummary(uint Index, int Level);
+
+    private sealed record StyleOnlyCellSummary(uint Row, uint Column, CellStyleSummary? Style);
+
+    private sealed record DimensionSummary(uint Index, double Value);
+
+    private sealed record PhoneticSummary(string FontId, string Type, string Alignment);
+
+    private sealed record WorksheetCustomPropertySummary(string Name, int Id);
+
+    private sealed record RepeatRangeSummary(uint Start, uint End);
+
+    private sealed record BackgroundImageSummary(string ContentType, string FileName, int ImageByteCount);
+
+    private sealed record HeaderFooterSummary(string Left, string Center, string Right)
+    {
+        public static HeaderFooterSummary Empty { get; } = new("", "", "");
+    }
+
+    private sealed record HeaderFooterPictureSetSummary(
+        HeaderFooterPictureSummary? Left,
+        HeaderFooterPictureSummary? Center,
+        HeaderFooterPictureSummary? Right);
+
+    private sealed record HeaderFooterPictureSummary(
+        string ContentType,
+        string FileName,
+        int ByteLength,
+        double Width,
+        double Height);
+
+    private sealed record ChartSummary(
+        ChartType Type,
+        string Title,
+        string XAxisTitle,
+        string YAxisTitle,
+        ChartVisualSummary Visual,
+        ChartAxisSummary XAxis,
+        ChartAxisSummary YAxis,
+        bool ShowLegend,
+        bool IsPivotChart,
+        int? PivotSourceFormatId,
+        bool Uses1904DateSystem,
+        string Language,
+        int? ChartStyleId,
+        bool RoundedCorners,
+        ChartBlankDisplayMode BlankDisplayMode,
+        bool ShowDataLabelsOverMaximum,
+        bool AutoTitleDeleted,
+        bool ShowDataInHiddenRowsAndColumns,
+        ChartProtectionSummary? Protection,
+        ChartPrintSettingsSummary? PrintSettings,
+        ChartColorMapSummary? ColorMapOverride,
+        ChartExternalDataSummary? ExternalData,
+        ChartManualLayoutSummary? PlotAreaLayout,
+        ChartManualLayoutSummary? LegendLayout,
+        ChartLegendPosition LegendPosition,
+        bool LegendOverlay,
+        bool ShowDataLabels,
+        bool ShowDataLabelValue,
+        bool ShowDataLabelLegendKey,
+        bool ShowDataLabelBubbleSize,
+        bool ShowDataLabelCategoryName,
+        bool ShowDataLabelSeriesName,
+        bool ShowDataLabelPercentage,
+        ChartDataLabelPosition DataLabelPosition,
+        ChartDataLabelSeparator DataLabelSeparator,
+        ChartDataLabelNumberFormat DataLabelNumberFormat,
+        bool ShowDataLabelCallouts,
+        string DataLabelFillColor,
+        WorkbookThemeColorReference? DataLabelFillThemeColor,
+        string DataLabelBorderColor,
+        WorkbookThemeColorReference? DataLabelBorderThemeColor,
+        string DataLabelTextColor,
+        WorkbookThemeColorReference? DataLabelTextThemeColor,
+        double DataLabelBorderThickness,
+        double DataLabelFontSize,
+        double DataLabelAngle,
+        int? BarGapWidth,
+        int? BarOverlap,
+        bool? VaryColorsByPoint,
+        int BubbleScale,
+        bool ShowNegativeBubbles,
+        ChartBubbleSizeRepresents BubbleSizeRepresents,
+        ChartTrendlineSummary Trendline,
+        ChartErrorBarSummary ErrorBars,
+        ChartGuideLineSummary DropLines,
+        StockChartSubtype StockSubtype,
+        ChartGuideLineSummary HighLowLines,
+        ChartGuideLineSummary SeriesLines,
+        ChartUpDownBarsSummary UpDownBars,
+        ChartDataTableSummary? DataTable,
+        Chart3DViewSummary? ThreeDView,
+        ChartSurfaceFormatSummary? FloorFormat,
+        ChartSurfaceFormatSummary? SideWallFormat,
+        ChartSurfaceFormatSummary? BackWallFormat,
+        ChartRangeSummary DataRange);
+
+    private sealed record ChartVisualSummary(
+        string ChartTitleTextColor,
+        WorkbookThemeColorReference? ChartTitleTextThemeColor,
+        double ChartTitleFontSize,
+        string AxisTitleTextColor,
+        WorkbookThemeColorReference? AxisTitleTextThemeColor,
+        double AxisTitleFontSize,
+        string ChartAreaFillColor,
+        WorkbookThemeColorReference? ChartAreaFillThemeColor,
+        string PlotAreaFillColor,
+        WorkbookThemeColorReference? PlotAreaFillThemeColor,
+        string PlotAreaBorderColor,
+        WorkbookThemeColorReference? PlotAreaBorderThemeColor,
+        double PlotAreaBorderThickness,
+        string LegendTextColor,
+        WorkbookThemeColorReference? LegendTextThemeColor,
+        string LegendFillColor,
+        WorkbookThemeColorReference? LegendFillThemeColor,
+        string LegendBorderColor,
+        WorkbookThemeColorReference? LegendBorderThemeColor,
+        double LegendBorderThickness,
+        double LegendFontSize);
+
+    private sealed record ChartAxisSummary(
+        double? Minimum,
+        double? Maximum,
+        double? MajorUnit,
+        double? MinorUnit,
+        bool LogScale,
+        ChartDataLabelNumberFormat NumberFormat,
+        bool ShowMajorGridlines,
+        bool ShowMinorGridlines,
+        bool IsDateAxis,
+        string MajorGridlineColor,
+        string MinorGridlineColor,
+        double GridlineThickness,
+        ChartAxisTickStyle MajorTickStyle,
+        ChartAxisTickStyle MinorTickStyle,
+        bool ShowLabels,
+        string LabelTextColor,
+        WorkbookThemeColorReference? LabelTextThemeColor,
+        double LabelFontSize,
+        double LabelAngle,
+        int LabelSkip,
+        int TickMarkSkip,
+        int LabelOffset,
+        string LineColor,
+        double LineThickness);
+
+    private sealed record ChartTrendlineSummary(
+        bool Show,
+        ChartTrendlineType Type,
+        int Period,
+        int Order,
+        bool ShowEquation,
+        bool ShowRSquared,
+        string Color,
+        WorkbookThemeColorReference? ThemeColor,
+        double Thickness,
+        ChartLineDashStyle DashStyle);
+
+    private sealed record ChartErrorBarSummary(
+        bool Show,
+        ChartErrorBarKind Kind,
+        ChartErrorBarDirection Direction,
+        double Value,
+        bool EndCaps,
+        string Color,
+        WorkbookThemeColorReference? ThemeColor,
+        double Thickness,
+        ChartLineDashStyle DashStyle);
+
+    private sealed record ChartGuideLineSummary(
+        bool Show,
+        string Color,
+        WorkbookThemeColorReference? ThemeColor,
+        double Thickness,
+        ChartLineDashStyle DashStyle);
+
+    private sealed record ChartUpDownBarsSummary(
+        bool Show,
+        int? GapWidth,
+        ChartBarShapeSummary UpBars,
+        ChartBarShapeSummary DownBars);
+
+    private sealed record ChartBarShapeSummary(
+        string FillColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        string BorderColor,
+        WorkbookThemeColorReference? BorderThemeColor,
+        double? BorderThickness);
+
+    private sealed record ChartColorMapSummary(
+        bool UseMasterColorMapping,
+        IReadOnlyList<ChartColorMapEntrySummary> OverrideMappings);
+
+    private sealed record ChartColorMapEntrySummary(string Key, string Value);
+
+    private sealed record ChartExternalDataSummary(
+        string RelationshipId,
+        string RelationshipType,
+        string Target,
+        string TargetMode,
+        bool? AutoUpdate);
+
+    private sealed record ChartManualLayoutSummary(
+        string LayoutTarget,
+        string XMode,
+        string YMode,
+        string WidthMode,
+        string HeightMode,
+        double? X,
+        double? Y,
+        double? Width,
+        double? Height);
+
+    private sealed record ChartDataTableSummary(
+        bool? ShowHorizontalBorder,
+        bool? ShowVerticalBorder,
+        bool? ShowOutline,
+        bool? ShowLegendKeys);
+
+    private sealed record Chart3DViewSummary(
+        int? RotationX,
+        int? HeightPercent,
+        int? RotationY,
+        int? DepthPercent,
+        bool? RightAngleAxes,
+        int? Perspective);
+
+    private sealed record ChartSurfaceFormatSummary(
+        string FillColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        string BorderColor,
+        WorkbookThemeColorReference? BorderThemeColor,
+        double? BorderThickness);
+
+    private sealed record ChartProtectionSummary(
+        bool? ChartObject,
+        bool? Data,
+        bool? Formatting,
+        bool? Selection,
+        bool? UserInterface);
+
+    private sealed record ChartPrintSettingsSummary(
+        ChartPageMarginsSummary? PageMargins,
+        ChartPageSetupSummary? PageSetup);
+
+    private sealed record ChartPageMarginsSummary(
+        double? Left,
+        double? Right,
+        double? Top,
+        double? Bottom,
+        double? Header,
+        double? Footer);
+
+    private sealed record ChartPageSetupSummary(
+        string PaperSize,
+        string Orientation,
+        int? Copies,
+        bool? BlackAndWhite,
+        bool? Draft);
+
+    private sealed record ChartRangeSummary(
+        uint StartRow,
+        uint StartColumn,
+        uint EndRow,
+        uint EndColumn);
+
+    private sealed record StructuredTableSummary(
+        string Name,
+        string DisplayName,
+        string StyleName,
+        bool HasAutoFilter,
+        bool TotalsRowShown,
+        bool ShowFirstColumn,
+        bool ShowLastColumn,
+        bool ShowRowStripes,
+        bool ShowColumnStripes,
+        string NativeSortStateXml,
+        ChartRangeSummary Range,
+        IReadOnlyList<StructuredTableColumnSummary> Columns,
+        IReadOnlyList<StructuredTableFilterColumnSummary> FilterColumns);
+
+    private sealed record StructuredTableColumnSummary(
+        int Id,
+        string Name,
+        string TotalsRowLabel,
+        string TotalsRowFunction,
+        string CalculatedColumnFormula,
+        string TotalsRowFormula);
+
+    private sealed record StructuredTableFilterColumnSummary(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<StructuredTableCustomFilterSummary> CustomFilters,
+        bool CustomFiltersAnd,
+        string CustomFiltersAndRaw,
+        IReadOnlyList<NativeAttributeSummary> NativeCustomFiltersAttributes,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyList<NativeAttributeSummary> NativeAttributes);
+
+    private sealed record StructuredTableCustomFilterSummary(
+        string Operator,
+        string Value,
+        IReadOnlyList<NativeAttributeSummary> NativeAttributes);
+
+    private sealed record NativeAttributeSummary(string Name, string Value);
+
+    private sealed record PivotTableSummary(
+        string Name,
+        int CacheId,
+        ChartRangeSummary SourceRange,
+        ChartRangeSummary TargetRange,
+        bool DataOnRows,
+        int FirstHeaderRow,
+        int FirstDataRow,
+        int FirstDataColumn,
+        bool ShowSubtotals,
+        PivotSubtotalPlacement SubtotalPlacement,
+        bool ShowRowGrandTotals,
+        bool ShowColumnGrandTotals,
+        bool RepeatItemLabels,
+        bool BlankLineAfterItems,
+        PivotReportLayout ReportLayout,
+        string StyleName,
+        bool ShowRowHeaders,
+        bool ShowColumnHeaders,
+        bool ShowRowStripes,
+        bool ShowColumnStripes,
+        bool ShowFieldHeaders,
+        bool ShowContextualTooltips,
+        bool ShowPropertiesInTooltips,
+        bool ShowClassicLayout,
+        bool MergeAndCenterLabels,
+        bool ShowItemsWithNoDataOnRows,
+        bool ShowItemsWithNoDataOnColumns,
+        bool PageOverThenDown,
+        int PageWrap,
+        string EmptyValueText,
+        bool ApplyNumberFormats,
+        bool ApplyBorderFormats,
+        bool ApplyFontFormats,
+        bool ApplyPatternFormats,
+        bool AutofitColumnsOnUpdate,
+        bool PreserveFormattingOnUpdate,
+        bool ShowExpandCollapseButtons,
+        bool EnableDrill,
+        bool AsteriskTotals,
+        bool MultipleFieldFilters,
+        bool EnableFieldDialog,
+        bool EnableFieldProperties,
+        bool EnableDataValueEditing,
+        bool PrintTitles,
+        bool PrintExpandCollapseButtons,
+        string AltTextTitle,
+        string AltTextDescription,
+        string DataCaption,
+        string GrandTotalCaption,
+        string MissingCaption,
+        string ErrorCaption,
+        IReadOnlyList<PivotFieldSummary> RowFields,
+        IReadOnlyList<PivotFieldSummary> ColumnFields,
+        IReadOnlyList<PivotFieldSummary> PageFields,
+        IReadOnlyList<PivotDataFieldSummary> DataFields);
+
+    private sealed record PivotCacheSummary(
+        int CacheId,
+        PivotCacheSourceType SourceType,
+        string SourceSheetName,
+        string SourceReference,
+        string SourceTableName,
+        int? ConnectionId,
+        bool IsOlap,
+        bool RefreshOnLoad,
+        bool SaveData,
+        bool EnableRefresh,
+        bool PreserveSourceSortFilter,
+        int? MissingItemsLimit,
+        int? RecordCount,
+        int? CreatedVersion,
+        int? MinRefreshableVersion,
+        int? RefreshedVersion,
+        string RefreshedBy,
+        string RefreshedDateIso,
+        IReadOnlyList<PivotCacheFieldSummary> Fields);
+
+    private sealed record PivotCacheFieldSummary(
+        string Name,
+        int? NumberFormatId,
+        int? SharedItemCount,
+        bool ContainsBlank,
+        bool ContainsString,
+        bool ContainsNumber,
+        bool ContainsDate,
+        bool ContainsMixedTypes,
+        bool ContainsSemiMixedTypes,
+        bool ContainsNonDate,
+        bool ContainsInteger,
+        bool ContainsLongText,
+        double? MinValue,
+        double? MaxValue,
+        string MinDate,
+        string MaxDate,
+        IReadOnlyList<string> SharedItems);
+
+    private sealed record PivotFieldSummary(
+        int SourceFieldIndex,
+        string SelectedItem,
+        IReadOnlyList<string> SelectedItems,
+        PivotFieldGrouping Grouping,
+        double? GroupStart,
+        double? GroupEnd,
+        double? GroupInterval);
+
+    private sealed record PivotDataFieldSummary(
+        int SourceFieldIndex,
+        string Name,
+        string SummaryFunction,
+        int? NumberFormatId,
+        string CalculatedFieldName,
+        PivotShowValuesAs ShowValuesAs,
+        int? BaseFieldIndex,
+        string BaseItem,
+        string NumberFormatCode);
+
+    private sealed record PivotTableStyleSummary(
+        string Name,
+        bool AppliesToPivotTables,
+        bool AppliesToTables,
+        IReadOnlyList<PivotTableStyleElementSummary> Elements);
+
+    private sealed record PivotTableStyleElementSummary(
+        string Type,
+        int? DifferentialFormatId,
+        int? Size);
+
+    private sealed record NumberFormatCatalogSummary(int Id, string FormatCode);
+
+    private sealed record SparklineSummary(
+        SparklineKind Kind,
+        ChartRangeSummary DataRange,
+        uint LocationRow,
+        uint LocationColumn);
+
+    private sealed record TextBoxSummary(
+        string Name,
+        string Text,
+        string Title,
+        string AltText,
+        uint AnchorRow,
+        uint AnchorColumn,
+        double Width,
+        double Height,
+        double RotationDegrees,
+        bool IsVisible,
+        CellColor? FillColor,
+        CellColor? OutlineColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        WorkbookThemeColorReference? OutlineThemeColor);
+
+    private sealed record DrawingShapeSummary(
+        string Name,
+        DrawingShapeKind Kind,
+        string Title,
+        string AltText,
+        uint AnchorRow,
+        uint AnchorColumn,
+        double Width,
+        double Height,
+        double RotationDegrees,
+        bool IsVisible,
+        CellColor? FillColor,
+        CellColor? OutlineColor,
+        CellColor? GradientFillEndColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        WorkbookThemeColorReference? OutlineThemeColor,
+        bool HasShadowEffect);
+
+    private sealed record PictureSummary(
+        string Name,
+        PictureKind Kind,
+        string Title,
+        string AltText,
+        uint AnchorRow,
+        uint AnchorColumn,
+        double Width,
+        double Height,
+        double RotationDegrees,
+        bool IsVisible,
+        string ContentType,
+        int ImageByteCount,
+        double CropLeft,
+        double CropTop,
+        double CropRight,
+        double CropBottom,
+        bool IsLinkedToSourceRange,
+        ChartRangeSummary? LinkedSourceRange,
+        string LinkedSourceSheetName,
+        uint SourceRowCount,
+        uint SourceColumnCount,
+        IReadOnlyList<PictureCellSummary> Cells);
+
+    private sealed record PictureCellSummary(uint RowOffset, uint ColumnOffset, string Text);
+
+    private sealed record DataValidationSummary(
+        DvType Type,
+        DvOperator Operator,
+        string Formula1,
+        string Formula2,
+        bool AllowBlank,
+        bool ShowDropdown,
+        DvAlertStyle AlertStyle,
+        bool ShowInputMessage,
+        bool ShowErrorMessage,
+        string ErrorTitle,
+        string ErrorMessage,
+        string PromptTitle,
+        string PromptMessage,
+        ChartRangeSummary AppliesTo,
+        IReadOnlyList<ChartRangeSummary> AdditionalRanges);
+
+    private sealed record ConditionalFormatSummary(
+        CfRuleType RuleType,
+        int Priority,
+        CfOperator Operator,
+        string Value1,
+        string Value2,
+        CellStyleSummary? FormatIfTrue,
+        RgbColor MinColor,
+        RgbColor MidColor,
+        RgbColor MaxColor,
+        bool UseThreeColorScale,
+        CfThresholdType MinThresholdType,
+        string MinThresholdValue,
+        CfThresholdType MidThresholdType,
+        string MidThresholdValue,
+        CfThresholdType MaxThresholdType,
+        string MaxThresholdValue,
+        RgbColor DataBarColor,
+        CfThresholdType DataBarMinThresholdType,
+        string DataBarMinThresholdValue,
+        CfThresholdType DataBarMaxThresholdType,
+        string DataBarMaxThresholdValue,
+        bool DataBarShowValue,
+        int? DataBarMinLength,
+        int? DataBarMaxLength,
+        bool DataBarGradient,
+        bool DataBarBorder,
+        string DataBarAxisPosition,
+        RgbColor? DataBarAxisColor,
+        RgbColor? DataBarNegativeFillColor,
+        RgbColor? DataBarNegativeBorderColor,
+        bool AboveAverage,
+        string FormulaText,
+        string IconSetStyle,
+        bool IconSetShowValue,
+        bool IconSetReverse,
+        IReadOnlyList<ConditionalFormatThresholdSummary> IconSetThresholds,
+        int TopBottomRank,
+        bool TopBottomPercent,
+        string TextRuleText,
+        string DateOccurringPeriod,
+        bool StopIfTrue,
+        ChartRangeSummary AppliesTo);
+
+    private sealed record ConditionalFormatThresholdSummary(CfThresholdType Type, string Value);
+
+    private sealed record CellStyleSummary(
+        string FontName,
+        double FontSize,
+        bool Bold,
+        bool Italic,
+        bool Underline,
+        bool Strikethrough,
+        CellColor FontColor,
+        CellColor? FillColor,
+        CellFillPatternStyle FillPatternStyle,
+        CellColor? FillPatternColor,
+        string NumberFormat);
+
+    private sealed record PackagePartSummary(
+        IReadOnlyList<string> CriticalParts,
+        IReadOnlyList<string> CriticalRelationshipTargets,
+        IReadOnlyList<string> CriticalRelationshipDetails,
+        IReadOnlyList<string> CriticalContentTypeOverrides);
+
+    // ── NativeXmlPreserveBag test helpers ────────────────────────────────────
+
+    private static string? BagAttr(NativeXmlPreserveBag? bag, string key, string attrName)
+    {
+        if (bag is null) return null;
+        var xml = bag.Get(key);
+        if (xml is null) return null;
+        try { return XElement.Parse(xml).Attribute(attrName)?.Value; } catch { return null; }
+    }
+
+    private static IReadOnlyList<string> BagChildren(NativeXmlPreserveBag? bag, string key)
+    {
+        if (bag is null) return [];
+        var xml = bag.Get(key);
+        if (xml is null) return [];
+        try
+        {
+            return XElement.Parse(xml).Elements()
+                .Select(e => e.ToString(SaveOptions.DisableFormatting))
+                .ToList();
+        }
+        catch { return []; }
+    }
+}

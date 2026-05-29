@@ -1,0 +1,882 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using FreeX.Core.Calc;
+using FreeX.Core.Commands;
+using FreeX.Core.Formula;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Host;
+
+public partial class MainWindow
+{
+    private void EnterEditMode()
+    {
+        if (_selectionAnchor.HasValue)
+            ShowInlineEditor(_selectionAnchor.Value);
+        else
+        {
+            FocusFormulaBarAtEnd();
+        }
+    }
+
+    private void EditActiveCellInFormulaBar()
+    {
+        CaptureFormulaEditCell();
+        if (SheetGrid.SelectedRange?.Start is { } address)
+        {
+            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(address);
+            FormulaBar.Text = FormatFormulaBarText(cell, address);
+        }
+
+        FocusFormulaBarAtEnd();
+    }
+
+    private void FocusFormulaBarAtEnd()
+    {
+        FormulaBar.Focus();
+        FormulaBar.CaretIndex = FormulaBar.Text.Length;
+        SetStatusBarModeText("Edit");
+    }
+
+    private void ShowInlineEditor(CellAddress addr)
+    {
+        HideValidationDropdown();
+        var vp = SheetGrid.Viewport;
+        if (vp == null) { FormulaBar.Focus(); return; }
+
+        var rowMetric = vp.RowMetrics.FirstOrDefault(r => r.Row == addr.Row);
+        var colMetric = vp.ColMetrics.FirstOrDefault(c => c.Col == addr.Col);
+        if (rowMetric == null || colMetric == null) { FormulaBar.Focus(); return; }
+
+        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
+        var text = FormatFormulaBarText(cell, addr);
+        _formulaEditCell = addr;
+        _formulaRangeEntryMode = false;
+        ClearFormulaReferenceEntrySpan();
+
+        if (_inlineEditor == null)
+        {
+            _inlineEditorChrome = new System.Windows.Controls.Border
+            {
+                Background = System.Windows.Media.Brushes.White,
+                BorderThickness = new System.Windows.Thickness(2),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(33, 115, 70)),
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
+            _inlineEditor = new System.Windows.Controls.TextBox
+            {
+                BorderThickness = new System.Windows.Thickness(0),
+                Padding         = new System.Windows.Thickness(4, 0, 4, 0),
+                FontFamily      = new System.Windows.Media.FontFamily("Calibri"),
+                FontSize        = 15.0,
+                Background      = System.Windows.Media.Brushes.Transparent,
+                AcceptsReturn   = false,
+                VerticalContentAlignment = System.Windows.VerticalAlignment.Center,
+            };
+            TextOptions.SetTextFormattingMode(_inlineEditor, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(_inlineEditor, TextRenderingMode.ClearType);
+            TextOptions.SetTextHintingMode(_inlineEditor, TextHintingMode.Fixed);
+            _inlineEditor.PreviewKeyDown += InlineEditor_KeyDown;
+            _inlineEditor.LostFocus  += InlineEditor_LostFocus;
+            _inlineEditor.TextChanged += (_, _) =>
+            {
+                SyncFormulaBarTextFromInlineEditor();
+                if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(_inlineEditor.Text))
+                    _formulaRangeEntryMode = true;
+                RefreshInlineEditorTextSurface();
+                RefreshInlineEditorChromeBorder();
+                RefreshFormulaReferenceHighlights();
+            };
+            _inlineFormulaReferenceOverlay = new System.Windows.Controls.TextBlock
+            {
+                FontFamily = new System.Windows.Media.FontFamily("Calibri"),
+                FontSize = 15.0,
+                IsHitTestVisible = false,
+                Margin = new Thickness(0),
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed
+            };
+            TextOptions.SetTextFormattingMode(_inlineFormulaReferenceOverlay, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(_inlineFormulaReferenceOverlay, TextRenderingMode.ClearType);
+            TextOptions.SetTextHintingMode(_inlineFormulaReferenceOverlay, TextHintingMode.Fixed);
+            EditOverlay.Children.Add(_inlineEditorChrome);
+            EditOverlay.Children.Add(_inlineEditor);
+            EditOverlay.Children.Add(_inlineFormulaReferenceOverlay);
+        }
+
+        // Cell metrics are in unzoomed coordinates; the EditOverlay is not transformed, so scale.
+        double zoom = _zoomLevel;
+        double cx = (colMetric.LeftOffset + SheetGrid.ActualRowHeaderWidth) * zoom;
+        double cy = (rowMetric.TopOffset  + FreeX.App.UI.GridView.ColHeaderHeight) * zoom;
+        double cellW = colMetric.Width  * zoom;
+        double cellH = rowMetric.Height * zoom;
+        var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
+
+        _inlineEditor.Text = text;
+        _inlineEditorChromeBaseRect = layout.EditorRect;
+        ApplyInlineEditorChromeFrame(FormulaInlineEditorOverflow.None);
+
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.TextOverlayRect.Left - 4);
+        System.Windows.Controls.Canvas.SetTop(_inlineEditor, layout.EditorRect.Top);
+        _inlineEditor.Width  = layout.TextOverlayRect.Width + 8;
+        _inlineEditor.Height = layout.EditorRect.Height;
+        if (_inlineFormulaReferenceOverlay is not null)
+        {
+            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
+            System.Windows.Controls.Canvas.SetTop(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Top);
+            _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
+            _inlineFormulaReferenceOverlay.Height = layout.TextOverlayRect.Height;
+        }
+        RefreshInlineEditorTextSurface();
+        RefreshInlineEditorChromeBorder();
+
+        if (_inlineEditorChrome is not null)
+            _inlineEditorChrome.Visibility = Visibility.Visible;
+        _inlineEditor.Visibility  = Visibility.Visible;
+        SheetGrid.EditingCell = addr;
+        EditOverlay.IsHitTestVisible = true;
+        RefreshFormulaReferenceHighlights();
+        _inlineEditor.Focus();
+        _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
+        _inlineEditor.SelectionLength = 0;
+        SetStatusBarModeText("Edit");
+    }
+
+    private void SyncFormulaBarTextFromInlineEditor()
+    {
+        if (_inlineEditor is null || _syncingFormulaEditorText || FormulaBar.Text == _inlineEditor.Text)
+            return;
+
+        try
+        {
+            _syncingFormulaEditorText = true;
+            FormulaBar.Text = _inlineEditor.Text;
+        }
+        finally
+        {
+            _syncingFormulaEditorText = false;
+        }
+    }
+
+    private void SyncInlineEditorTextFromFormulaBar()
+    {
+        if (_inlineEditor?.IsVisible != true || _syncingFormulaEditorText || _inlineEditor.Text == FormulaBar.Text)
+            return;
+
+        try
+        {
+            _syncingFormulaEditorText = true;
+            _inlineEditor.Text = FormulaBar.Text;
+        }
+        finally
+        {
+            _syncingFormulaEditorText = false;
+        }
+
+        RefreshInlineEditorTextSurface();
+        RefreshInlineEditorChromeBorder();
+    }
+
+    private void RefreshInlineEditorTextSurface()
+    {
+        if (_inlineEditor is null || _inlineEditorChromeBaseRect is not { } chromeBaseRect)
+            return;
+
+        var desiredTextWidth = MeasureEditorTextWidth(_inlineEditor);
+        var layout = FormulaInlineEditorLayoutPlanner.Create(
+            chromeBaseRect.Left,
+            chromeBaseRect.Top,
+            chromeBaseRect.Width,
+            chromeBaseRect.Height,
+            desiredTextWidth,
+            EditOverlay.ActualWidth);
+
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.TextOverlayRect.Left - 4);
+        _inlineEditor.Width = layout.TextOverlayRect.Width + 8;
+
+        if (_inlineFormulaReferenceOverlay is not null)
+        {
+            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
+            _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
+        }
+    }
+
+    private void RefreshInlineEditorChromeBorder()
+    {
+        if (_inlineEditorChrome is null || _inlineEditor is null || _inlineEditorChromeBaseRect is not { } chromeBaseRect)
+            return;
+
+        var overflow = GetInlineEditorTextOverflow(_inlineEditor, chromeBaseRect.Width);
+        ApplyInlineEditorChromeFrame(overflow);
+    }
+
+    private void ApplyInlineEditorChromeFrame(FormulaInlineEditorOverflow overflow)
+    {
+        if (_inlineEditorChrome is null || _inlineEditorChromeBaseRect is not { } chromeBaseRect)
+            return;
+
+        var chromeRect = FormulaInlineEditorLayoutPlanner.GetChromeRect(chromeBaseRect, overflow);
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditorChrome, chromeRect.Left);
+        System.Windows.Controls.Canvas.SetTop(_inlineEditorChrome, chromeRect.Top);
+        _inlineEditorChrome.Width = chromeRect.Width;
+        _inlineEditorChrome.Height = chromeRect.Height;
+        _inlineEditorChrome.BorderThickness = FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(overflow);
+    }
+
+    private static FormulaInlineEditorOverflow GetInlineEditorTextOverflow(System.Windows.Controls.TextBox editor, double chromeWidth)
+    {
+        if (chromeWidth <= 0 || string.IsNullOrEmpty(editor.Text))
+            return FormulaInlineEditorOverflow.None;
+
+        var formattedText = CreateEditorFormattedText(editor);
+
+        var innerWidth = Math.Max(0, chromeWidth - editor.Padding.Left - editor.Padding.Right);
+        var scrollOffset = Math.Max(0, editor.HorizontalOffset);
+        var spillsLeft = scrollOffset > 0;
+        var spillsRight = formattedText.WidthIncludingTrailingWhitespace - scrollOffset > innerWidth;
+        return new FormulaInlineEditorOverflow(spillsLeft, spillsRight);
+    }
+
+    private static double MeasureEditorTextWidth(System.Windows.Controls.TextBox editor) =>
+        string.IsNullOrEmpty(editor.Text)
+            ? 0
+            : CreateEditorFormattedText(editor).WidthIncludingTrailingWhitespace;
+
+    private static FormattedText CreateEditorFormattedText(System.Windows.Controls.TextBox editor)
+    {
+        var typeface = new Typeface(editor.FontFamily, editor.FontStyle, editor.FontWeight, editor.FontStretch);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(editor).PixelsPerDip;
+        return new FormattedText(
+            editor.Text,
+            CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            editor.FontSize,
+            Brushes.Black,
+            pixelsPerDip);
+    }
+
+    private void HideInlineEditor(bool commit)
+    {
+        if (_inlineEditor == null) return;
+        _inlineEditor.Visibility = Visibility.Collapsed;
+        if (_inlineEditorChrome is not null)
+            _inlineEditorChrome.Visibility = Visibility.Collapsed;
+        _inlineEditorChromeBaseRect = null;
+        SheetGrid.EditingCell = null;
+        FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
+        ClearFormulaReferenceGridOverlays();
+        EditOverlay.IsHitTestVisible = false;
+        if (commit)
+            FormulaBar.Text = _inlineEditor.Text;
+    }
+
+    private void InlineEditor_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.F2 && Keyboard.Modifiers == ModifierKeys.None && _inlineEditor is not null)
+        {
+            _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(_inlineEditor.Text, _formulaRangeEntryMode);
+            if (!_formulaRangeEntryMode)
+                ClearFormulaReferenceEntrySpan();
+            e.Handled = FormulaEditInteractionPlanner.IsFormulaText(_inlineEditor.Text);
+            return;
+        }
+
+        if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(e.Key, Keyboard.Modifiers, e.SystemKey) &&
+            _inlineEditor is not null)
+        {
+            if (TryCycleFormulaReference(_inlineEditor))
+            {
+                FormulaBar.Text = _inlineEditor.Text;
+                e.Handled = true;
+            }
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            HideInlineEditor(commit: false);
+            // Restore original text in formula bar
+            var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+            if (addr.HasValue)
+            {
+                var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+                FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
+            }
+            ClearFormulaRangeEntryState();
+            CancelCopyAndTransientModes();
+            FocusSheetGridIfNeeded();
+            e.Handled = true;
+            return;
+        }
+        var selectedRange = SheetGrid.SelectedRange;
+        if (selectedRange is null)
+            return;
+        var formulaRangeEntryActive = IsFormulaRangeEntryActive(_inlineEditor);
+        var inlineEditorCommitsOnArrow = FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
+            _inlineEditor?.Text,
+            _formulaRangeEntryMode);
+        var current = formulaRangeEntryActive
+            ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
+            : selectedRange.Value.Start;
+        var modifiers = Keyboard.Modifiers;
+        var pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+        var colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
+
+        if (formulaRangeEntryActive &&
+            FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                e.Key,
+                e.SystemKey,
+                modifiers,
+                current,
+                _workbook.GetSheet(_currentSheetId),
+                pageSize,
+                colPageSize) is { } formulaReferenceShortcutTarget)
+        {
+            if (TryApplyFormulaRangeSelection(
+                    formulaReferenceShortcutTarget,
+                    extendSelection: modifiers.HasFlag(ModifierKeys.Shift)))
+            {
+                EnsureCellVisible(formulaReferenceShortcutTarget);
+                e.Handled = true;
+            }
+            return;
+        }
+
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            e.Key,
+            modifiers,
+            current,
+            pageSize: pageSize,
+            allowFormulaBarNavigationKeys: false,
+            formulaRangeEntryActive: formulaRangeEntryActive,
+            inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow,
+            moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
+            enterDirection: _options.AfterEnterDirection,
+            systemKey: e.SystemKey);
+
+        if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
+        {
+            InsertLineBreak(_inlineEditor!);
+            FormulaBar.Text = _inlineEditor!.Text;
+            e.Handled = true;
+            return;
+        }
+
+        if (intent.Action == ExcelEditKeyAction.CommitSelection)
+        {
+            FormulaBar.Text = _inlineEditor!.Text;
+            if (CommitEditAcrossSelection(fillFormulaEditCellOnly: formulaRangeEntryActive))
+            {
+                HideInlineEditor(commit: false);
+                ClearFormulaRangeEntryState();
+            }
+            e.Handled = true;
+            return;
+        }
+
+        if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
+        {
+            if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)))
+            {
+                EnsureCellVisible(referenceTarget);
+                e.Handled = true;
+            }
+            return;
+        }
+
+        if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } next)
+        {
+            var text = _inlineEditor!.Text;
+            FormulaBar.Text = text;
+            if (string.IsNullOrEmpty(text))
+            {
+                HideInlineEditor(commit: false);
+                ClearFormulaRangeEntryState();
+                SetActiveCell(next);
+                EnsureCellVisible(next);
+                e.Handled = true;
+                return;
+            }
+
+            if (CommitEdit())
+            {
+                HideInlineEditor(commit: false);
+                ClearFormulaRangeEntryState();
+                SetActiveCell(next);
+                EnsureCellVisible(next);
+            }
+            e.Handled = true;
+        }
+    }
+
+    private static void InsertLineBreak(System.Windows.Controls.TextBox editor)
+    {
+        var edit = ExcelTextEditorPlanner.InsertLineBreak(
+            editor.Text,
+            editor.SelectionStart,
+            editor.SelectionLength,
+            Environment.NewLine);
+        ApplyTextEdit(editor, edit);
+    }
+
+    private void InlineEditor_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_inlineEditor?.IsVisible == true)
+        {
+            if (IsFormulaRangeEntryActive(_inlineEditor))
+                return;
+
+            FormulaBar.Text = _inlineEditor.Text;
+            HideInlineEditor(commit: true);
+            CommitEdit();
+        }
+    }
+
+    private void FocusSheetGridIfNeeded()
+    {
+        if (!ReferenceEquals(Keyboard.FocusedElement, SheetGrid))
+            SheetGrid.Focus();
+    }
+
+
+    private void SetSelectionMode(ExcelSelectionMode mode)
+    {
+        _selectionMode = mode;
+        if (mode != ExcelSelectionMode.Normal)
+            _endMode = false;
+        SetStatusBarModeText(mode switch
+        {
+            ExcelSelectionMode.Extend => "Extend Selection",
+            ExcelSelectionMode.Add => "Add to Selection",
+            _ => "Ready"
+        });
+    }
+
+    private void SetEndMode(bool enabled)
+    {
+        _endMode = enabled;
+        if (enabled)
+            _selectionMode = ExcelSelectionMode.Normal;
+        SetStatusBarModeText(enabled ? "End Mode" : "Ready");
+    }
+
+    private void SetStatusBarModeText(string text)
+    {
+        if (StatusStatsPanel is not null)
+            StatusStatsPanel.Visibility = Visibility.Collapsed;
+        if (StatusReadyText is null)
+            return;
+
+        StatusReadyText.Visibility = Visibility.Visible;
+        StatusReadyText.Text = text;
+    }
+
+    private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.F2 && e.KeyboardDevice.Modifiers == ModifierKeys.None)
+        {
+            _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(FormulaBar.Text, _formulaRangeEntryMode);
+            if (!_formulaRangeEntryMode)
+                ClearFormulaReferenceEntrySpan();
+            e.Handled = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
+        }
+        else if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
+                     e.Key,
+                     e.KeyboardDevice.Modifiers,
+                     e.SystemKey))
+        {
+            if (TryCycleFormulaReference(FormulaBar))
+                e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.Escape)
+        {
+            // Restore the original cell value and return focus to grid
+            var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+            if (addr.HasValue)
+            {
+                var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+                FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
+            }
+            ClearFormulaRangeEntryState();
+            ClearClipboardVisualState();
+            SheetGrid.Focus();
+            e.Handled = true;
+        }
+        else if (SheetGrid.SelectedRange is { } selectedRange)
+        {
+            var formulaRangeEntryActive = IsFormulaRangeEntryActive(FormulaBar);
+            var formulaTextActive = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
+            var current = formulaRangeEntryActive
+                ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange, _selectionCursor)
+                : selectedRange.Start;
+            int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+            int colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
+            var modifiers = e.KeyboardDevice.Modifiers;
+            if (formulaRangeEntryActive &&
+                FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+                    e.Key,
+                    e.SystemKey,
+                    modifiers,
+                    current,
+                    _workbook.GetSheet(_currentSheetId),
+                    pageSize,
+                    colPageSize) is { } formulaReferenceShortcutTarget)
+            {
+                if (TryApplyFormulaRangeSelection(
+                        formulaReferenceShortcutTarget,
+                        extendSelection: modifiers.HasFlag(ModifierKeys.Shift)))
+                {
+                    EnsureCellVisible(formulaReferenceShortcutTarget);
+                    e.Handled = true;
+                }
+                return;
+            }
+
+            var intent = ExcelEditKeyPlanner.GetIntent(
+                e.Key,
+                modifiers,
+                current,
+                pageSize,
+                allowFormulaBarNavigationKeys: !formulaTextActive,
+                formulaRangeEntryActive: formulaRangeEntryActive,
+                moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
+                enterDirection: _options.AfterEnterDirection,
+                systemKey: e.SystemKey);
+
+            if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
+            {
+                InsertLineBreak(FormulaBar);
+                e.Handled = true;
+            }
+            else if (intent.Action == ExcelEditKeyAction.CommitSelection)
+            {
+                if (CommitEditAcrossSelection(fillFormulaEditCellOnly: formulaRangeEntryActive))
+                    ClearFormulaRangeEntryState();
+                e.Handled = true;
+            }
+            else if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
+            {
+                if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Shift)))
+                {
+                    EnsureCellVisible(referenceTarget);
+                    e.Handled = true;
+                }
+            }
+            else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
+            {
+                if (CommitEdit())
+                {
+                    ClearFormulaRangeEntryState();
+                    SetActiveCell(target);
+                    EnsureCellVisible(target);
+                }
+
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)
+        {
+            RestoreCellAddressBoxText();
+            FocusSheetGridIfNeeded();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)
+            return;
+
+        if (!GoToDialog.TryParseReferenceRange(
+                CellAddressBox.Text,
+                _currentSheetId,
+                _workbook.NamedRanges,
+                out var selectedRange))
+        {
+            CellAddressBox.Focus();
+            CellAddressBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        _currentSheetId = selectedRange.Start.Sheet;
+        SetSelectionRange(selectedRange, selectedRange.Start);
+        EnsureCellVisible(selectedRange.Start);
+        UpdateViewport();
+        RefreshValidationDropdown();
+        e.Handled = true;
+    }
+
+    private void RestoreCellAddressBoxText()
+    {
+        CellAddressBox.Text = SheetGrid.SelectedRange is { } range
+            ? FormatRangeReference(range.Start, range.End)
+            : "A1";
+        CellAddressBox.SelectAll();
+    }
+
+    private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
+    {
+        var caretIndex = editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex;
+        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(editor.Text, caretIndex, out var edit))
+            return false;
+
+        ApplyTextEdit(editor, edit);
+        return true;
+    }
+
+    private static void ApplyTextEdit(System.Windows.Controls.TextBox editor, ExcelTextEdit edit)
+    {
+        editor.Text = edit.Text;
+        editor.SelectionStart = edit.SelectionStart;
+        editor.SelectionLength = edit.SelectionLength;
+    }
+
+    private bool CommitEdit()
+    {
+        if (SheetGrid.SelectedRange == null && _formulaEditCell is null) return false;
+        var addr = _formulaEditCell ?? SheetGrid.SelectedRange!.Value.Start;
+        var text = FormulaBar.Text;
+
+        if (!TryCreateCellFromEntryText(addr, text, out var newCell))
+            return false;
+
+        var committed = CommitPreparedEdits([(addr, newCell)], text, [addr], "Edit Cell");
+        if (committed)
+            ClearFormulaRangeEntryState();
+        return committed;
+    }
+
+    private bool CommitEditAcrossSelection(bool fillFormulaEditCellOnly = false)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return false;
+        if (fillFormulaEditCellOnly && _formulaEditCell is { } formulaCell)
+        {
+            var formulaText = FormulaBar.Text;
+            if (!TryCreateCellFromEntryText(formulaCell, formulaText, out var newCell))
+                return false;
+
+            var committed = CommitPreparedEdits([(formulaCell, newCell)], formulaText, [formulaCell], "Edit Cell");
+            if (committed)
+                ClearFormulaRangeEntryState();
+            return committed;
+        }
+
+        var text = FormulaBar.Text;
+        var edits = new List<(CellAddress Address, Cell NewCell)>();
+        foreach (var address in range.AllCells())
+        {
+            if (!TryCreateCellFromEntryText(address, text, out var newCell))
+                return false;
+
+            edits.Add((address, newCell));
+        }
+
+        if (edits.Count == 0)
+            return false;
+
+        return CommitPreparedEdits(
+            edits,
+            text,
+            edits.Select(edit => edit.Address).ToList(),
+            "Edit Selection");
+    }
+
+    private bool TryCreateCellFromEntryText(CellAddress addr, string text, out Cell newCell)
+    {
+        newCell = CellEntryParser.CreateCell(text, addr, _options.UseR1C1ReferenceStyle);
+
+        if (newCell.Value is { } value)
+        {
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            if (sheet != null)
+            {
+                var applicableRules = DataValidationService.GetApplicable(sheet, addr);
+                DataValidation? violatingRule = null;
+                string? violationMsg = null;
+                foreach (var dv in applicableRules)
+                {
+                    var msg = DataValidationService.Validate(dv, value, sheet, addr, _workbook);
+                    if (msg != null) { violatingRule = dv; violationMsg = msg; break; }
+                }
+
+                if (violationMsg != null && violatingRule != null)
+                {
+                    var dvRule = violatingRule;
+                    var action = DataValidationService.GetInvalidEntryAction(dvRule);
+                    if (action == DataValidationInvalidEntryAction.Block)
+                    {
+                        var icon = dvRule.AlertStyle switch
+                        {
+                            DvAlertStyle.Information => MessageBoxImage.Information,
+                            DvAlertStyle.Warning => MessageBoxImage.Warning,
+                            _ => MessageBoxImage.Error
+                        };
+                        MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                            MessageBoxButton.OK, icon);
+                        RefreshValidationDropdown();
+                        return false;
+                    }
+
+                    if (action == DataValidationInvalidEntryAction.AskToContinue)
+                    {
+                        var icon = dvRule.AlertStyle switch
+                        {
+                            DvAlertStyle.Information => MessageBoxImage.Information,
+                            DvAlertStyle.Warning => MessageBoxImage.Warning,
+                            _ => MessageBoxImage.Error
+                        };
+                        var buttons = dvRule.AlertStyle == DvAlertStyle.Information
+                            ? MessageBoxButton.OKCancel
+                            : MessageBoxButton.YesNo;
+                        var result = MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                            buttons, icon);
+                        if (result is MessageBoxResult.No or MessageBoxResult.Cancel)
+                        {
+                            RefreshValidationDropdown();
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private bool CommitPreparedEdits(
+        IReadOnlyList<(CellAddress Address, Cell NewCell)> edits,
+        string text,
+        IReadOnlyList<CellAddress> fallbackAffectedCells,
+        string title)
+    {
+        if (!TryExecuteEditCells(edits, title, out var outcome))
+            return false;
+
+        var affectedCells = outcome.AffectedCells ?? fallbackAffectedCells;
+        if (text.StartsWith("="))
+        {
+            // For now, we manually register dependencies because we haven't automated this in the command yet.
+            try
+            {
+                foreach (var affected in affectedCells)
+                {
+                    var formulaA1 = _options.UseR1C1ReferenceStyle
+                        ? FormulaReferenceStyleService.ToA1(text.Substring(1), affected)
+                        : text.Substring(1);
+                    var lexer = new Lexer("=" + formulaA1);
+                    var parser = new Parser(lexer.Tokenize());
+                    var ast = parser.Parse();
+                    _recalcEngine.RegisterFormulaDependencies(affected, ast, affected.Sheet, _workbook);
+                }
+            }
+            catch
+            {
+                // Formula syntax is invalid; clear stale dependencies so this cell
+                // does not incorrectly depend on previously-referenced cells.
+                foreach (var affected in affectedCells)
+                    _recalcEngine.ClearFormulaDependencies(affected);
+            }
+        }
+        else
+        {
+            foreach (var affected in affectedCells)
+                _recalcEngine.ClearFormulaDependencies(affected);
+        }
+
+        RecalculateIfAutomatic(affectedCells);
+        UpdateViewport();
+        RefreshStatusBar();
+        RefreshValidationDropdown();
+        return true;
+    }
+
+    private void UpdateTitleBar()
+    {
+        var displayName = WorkbookTitleFormatter.Format(_workbook.Name, _workbookDirty, IsWorkbookGrouped());
+        WorkbookNameText.Text = displayName;
+        this.Title = displayName;
+    }
+
+    private bool IsWorkbookGrouped()
+        => SheetTabListPlanner.IsWorkbookGrouped(_workbook, _currentSheetId, _groupedSheetIds);
+
+    // ── Start screen ─────────────────────────────────────────────────────────
+
+    private bool? ShowOwnedDialog(Window dialog)
+    {
+        RecordDiagnosticEvent("dialog_opened", new Dictionary<string, string?>
+        {
+            ["dialog"] = dialog.GetType().Name
+        });
+        dialog.Owner = this;
+        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        dialog.ShowActivated = true;
+        Activate();
+        return dialog.ShowDialog();
+    }
+
+    private MessageBoxResult ShowOwnedMessage(
+        string messageBoxText,
+        string caption,
+        MessageBoxButton button,
+        MessageBoxImage icon)
+    {
+        Activate();
+        // Delegate to IUserMessageService where possible; for YesNo/YesNoCancel/OKCancel
+        // the raw call is used because the service's AskYesNo covers only the binary case.
+        return MessageBox.Show(this, messageBoxText, caption, button, icon);
+    }
+
+    private bool TryHandleTopLevelRibbonKeyTip(string keyTip)
+    {
+        return RibbonTopLevelKeyTipRouter.Resolve(keyTip) switch
+        {
+            { Kind: RibbonTopLevelKeyTipActionKind.BackstageFile } => OpenFileBackstageFromKeyTip(),
+            { Kind: RibbonTopLevelKeyTipActionKind.RibbonTab, RibbonTabHeader: { } header } => SelectRibbonTabByHeader(header),
+            _ => false
+        };
+    }
+
+    private bool SelectRibbonTabByHeader(string header)
+    {
+        if (RibbonTabs == null)
+            return false;
+
+        foreach (var item in RibbonTabs.Items)
+        {
+            if (item is TabItem { Header: string tabHeader } &&
+                string.Equals(tabHeader, header, StringComparison.OrdinalIgnoreCase))
+            {
+                var selectionChanged = !ReferenceEquals(RibbonTabs.SelectedItem, item);
+                if (selectionChanged)
+                {
+                    ChangeRibbonSelectionWithoutTabNormalization(() => RibbonTabs.SelectedItem = item);
+                    UpdateRibbonLayoutIfNeeded(RibbonTabs, force: true);
+                    NormalizeRibbonSurfaceAfterTabSelection();
+                }
+                else
+                {
+                    UpdateRibbonLayoutIfNeeded(RibbonTabs);
+                    NormalizeRibbonSurface(forceCompact: true);
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+}

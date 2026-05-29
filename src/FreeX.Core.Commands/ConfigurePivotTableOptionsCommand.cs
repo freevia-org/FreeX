@@ -1,0 +1,401 @@
+using FreeX.Core.Model;
+
+namespace FreeX.Core.Commands;
+
+public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly string _pivotTableName;
+    private readonly bool _showRowGrandTotals;
+    private readonly bool _showColumnGrandTotals;
+    private readonly bool _showSubtotals;
+    private readonly PivotSubtotalPlacement _subtotalPlacement;
+    private readonly bool _repeatItemLabels;
+    private readonly bool _blankLineAfterItems;
+    private readonly string _styleName;
+    private readonly PivotReportLayout _reportLayout;
+    private readonly int? _compactRowLabelIndent;
+    private readonly bool _showRowHeaders;
+    private readonly bool _showColumnHeaders;
+    private readonly bool _showRowStripes;
+    private readonly bool _showColumnStripes;
+    private readonly bool? _showFieldHeaders;
+    private readonly bool? _showContextualTooltips;
+    private readonly bool? _showPropertiesInTooltips;
+    private readonly bool? _showClassicLayout;
+    private readonly bool? _mergeAndCenterLabels;
+    private readonly bool? _showItemsWithNoDataOnRows;
+    private readonly bool? _showItemsWithNoDataOnColumns;
+    private readonly bool? _pageOverThenDown;
+    private readonly int? _pageWrap;
+    private readonly string? _emptyValueText;
+    private readonly bool _updateEmptyValueText;
+    private readonly string? _errorCaption;
+    private readonly bool _updateErrorCaption;
+    private readonly bool? _enableDrill;
+    private readonly bool? _refreshOnOpen;
+    private readonly bool? _saveSourceData;
+    private readonly bool? _enableRefresh;
+    private readonly bool? _preserveSourceSortFilter;
+    private readonly int? _missingItemsLimit;
+    private readonly bool _updateMissingItemsLimit;
+    private readonly bool? _printTitles;
+    private readonly bool? _printExpandCollapseButtons;
+    private readonly bool? _showExpandCollapseButtons;
+    private readonly bool? _autofitColumnsOnUpdate;
+    private readonly bool? _preserveFormattingOnUpdate;
+    private readonly string? _altTextTitle;
+    private readonly string? _altTextDescription;
+    private readonly bool _updateAltText;
+    private PivotOptionsSnapshot? _snapshot;
+    private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+
+    public ConfigurePivotTableOptionsCommand(
+        SheetId sheetId,
+        string pivotTableName,
+        bool showRowGrandTotals,
+        bool showColumnGrandTotals,
+        bool showSubtotals,
+        PivotSubtotalPlacement subtotalPlacement,
+        bool repeatItemLabels,
+        bool blankLineAfterItems,
+        string styleName,
+        bool showRowHeaders = true,
+        bool showColumnHeaders = true,
+        bool showRowStripes = false,
+        bool showColumnStripes = false,
+        PivotReportLayout reportLayout = PivotReportLayout.Tabular,
+        string? emptyValueText = null,
+        bool updateEmptyValueText = false,
+        bool? refreshOnOpen = null,
+        bool? saveSourceData = null,
+        bool? enableRefresh = null,
+        bool? preserveSourceSortFilter = null,
+        int? missingItemsLimit = null,
+        bool updateMissingItemsLimit = false,
+        bool? printTitles = null,
+        bool? printExpandCollapseButtons = null,
+        string? altTextTitle = null,
+        string? altTextDescription = null,
+        int? compactRowLabelIndent = null,
+        bool updateAltText = false,
+        bool? showExpandCollapseButtons = null,
+        bool? autofitColumnsOnUpdate = null,
+        bool? preserveFormattingOnUpdate = null,
+        bool? showFieldHeaders = null,
+        bool? showContextualTooltips = null,
+        bool? showPropertiesInTooltips = null,
+        bool? showClassicLayout = null,
+        bool? mergeAndCenterLabels = null,
+        bool? showItemsWithNoDataOnRows = null,
+        bool? showItemsWithNoDataOnColumns = null,
+        bool? pageOverThenDown = null,
+        int? pageWrap = null,
+        string? errorCaption = null,
+        bool updateErrorCaption = false,
+        bool? enableDrill = null)
+    {
+        _sheetId = sheetId;
+        _pivotTableName = pivotTableName;
+        _showRowGrandTotals = showRowGrandTotals;
+        _showColumnGrandTotals = showColumnGrandTotals;
+        _showSubtotals = showSubtotals;
+        _subtotalPlacement = subtotalPlacement;
+        _repeatItemLabels = repeatItemLabels;
+        _blankLineAfterItems = blankLineAfterItems;
+        _styleName = styleName;
+        _reportLayout = reportLayout;
+        _compactRowLabelIndent = compactRowLabelIndent is { } indent
+            ? NormalizeCompactRowLabelIndent(indent)
+            : null;
+        _showRowHeaders = showRowHeaders;
+        _showColumnHeaders = showColumnHeaders;
+        _showRowStripes = showRowStripes;
+        _showColumnStripes = showColumnStripes;
+        _showFieldHeaders = showFieldHeaders;
+        _showContextualTooltips = showContextualTooltips;
+        _showPropertiesInTooltips = showPropertiesInTooltips;
+        _showClassicLayout = showClassicLayout;
+        _mergeAndCenterLabels = mergeAndCenterLabels;
+        _showItemsWithNoDataOnRows = showItemsWithNoDataOnRows;
+        _showItemsWithNoDataOnColumns = showItemsWithNoDataOnColumns;
+        _pageOverThenDown = pageOverThenDown;
+        _pageWrap = pageWrap is { } wrap ? NormalizePageWrap(wrap) : null;
+        _emptyValueText = NormalizeEmptyValueText(emptyValueText);
+        _updateEmptyValueText = updateEmptyValueText;
+        _errorCaption = NormalizeOptionalText(errorCaption);
+        _updateErrorCaption = updateErrorCaption;
+        _enableDrill = enableDrill;
+        _refreshOnOpen = refreshOnOpen;
+        _saveSourceData = saveSourceData;
+        _enableRefresh = enableRefresh;
+        _preserveSourceSortFilter = preserveSourceSortFilter;
+        _missingItemsLimit = NormalizeMissingItemsLimit(missingItemsLimit);
+        _updateMissingItemsLimit = updateMissingItemsLimit;
+        _printTitles = printTitles;
+        _printExpandCollapseButtons = printExpandCollapseButtons;
+        _showExpandCollapseButtons = showExpandCollapseButtons;
+        _autofitColumnsOnUpdate = autofitColumnsOnUpdate;
+        _preserveFormattingOnUpdate = preserveFormattingOnUpdate;
+        _altTextTitle = NormalizeEmptyValueText(altTextTitle);
+        _altTextDescription = NormalizeEmptyValueText(altTextDescription);
+        _updateAltText = updateAltText || _altTextTitle is not null || _altTextDescription is not null;
+    }
+
+    public string Label => "Configure PivotTable Options";
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
+        if (pivotTable is null)
+            return new CommandOutcome(false, "PivotTable was not found.");
+
+        var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+        _snapshot = PivotOptionsSnapshot.Capture(pivotTable, cache);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+
+        pivotTable.ShowRowGrandTotals = _showRowGrandTotals;
+        pivotTable.ShowColumnGrandTotals = _showColumnGrandTotals;
+        pivotTable.ShowSubtotals = _showSubtotals;
+        pivotTable.SubtotalPlacement = _subtotalPlacement;
+        pivotTable.RepeatItemLabels = _repeatItemLabels;
+        pivotTable.BlankLineAfterItems = _blankLineAfterItems;
+        pivotTable.StyleName = _styleName;
+        pivotTable.ReportLayout = _reportLayout;
+        if (_compactRowLabelIndent is { } compactRowLabelIndent)
+            pivotTable.CompactRowLabelIndent = compactRowLabelIndent;
+        pivotTable.ShowRowHeaders = _showRowHeaders;
+        pivotTable.ShowColumnHeaders = _showColumnHeaders;
+        pivotTable.ShowRowStripes = _showRowStripes;
+        pivotTable.ShowColumnStripes = _showColumnStripes;
+        if (_showFieldHeaders is { } showFieldHeaders)
+            pivotTable.ShowFieldHeaders = showFieldHeaders;
+        if (_showContextualTooltips is { } showContextualTooltips)
+            pivotTable.ShowContextualTooltips = showContextualTooltips;
+        if (_showPropertiesInTooltips is { } showPropertiesInTooltips)
+            pivotTable.ShowPropertiesInTooltips = showPropertiesInTooltips;
+        if (_showClassicLayout is { } showClassicLayout)
+            pivotTable.ShowClassicLayout = showClassicLayout;
+        if (_mergeAndCenterLabels is { } mergeAndCenterLabels)
+            pivotTable.MergeAndCenterLabels = mergeAndCenterLabels;
+        if (_showItemsWithNoDataOnRows is { } showItemsWithNoDataOnRows)
+            pivotTable.ShowItemsWithNoDataOnRows = showItemsWithNoDataOnRows;
+        if (_showItemsWithNoDataOnColumns is { } showItemsWithNoDataOnColumns)
+            pivotTable.ShowItemsWithNoDataOnColumns = showItemsWithNoDataOnColumns;
+        if (_pageOverThenDown is { } pageOverThenDown)
+            pivotTable.PageOverThenDown = pageOverThenDown;
+        if (_pageWrap is { } pageWrap)
+            pivotTable.PageWrap = pageWrap;
+        if (_updateEmptyValueText)
+            pivotTable.EmptyValueText = _emptyValueText;
+        if (_updateErrorCaption)
+            pivotTable.ErrorCaption = _errorCaption;
+        if (_enableDrill is { } enableDrill)
+            pivotTable.EnableDrill = enableDrill;
+        if (_printTitles is { } printTitles)
+            pivotTable.PrintTitles = printTitles;
+        if (_printExpandCollapseButtons is { } printExpandCollapseButtons)
+            pivotTable.PrintExpandCollapseButtons = printExpandCollapseButtons;
+        if (_showExpandCollapseButtons is { } showExpandCollapseButtons)
+            pivotTable.ShowExpandCollapseButtons = showExpandCollapseButtons;
+        if (_autofitColumnsOnUpdate is { } autofitColumnsOnUpdate)
+            pivotTable.AutofitColumnsOnUpdate = autofitColumnsOnUpdate;
+        if (_preserveFormattingOnUpdate is { } preserveFormattingOnUpdate)
+            pivotTable.PreserveFormattingOnUpdate = preserveFormattingOnUpdate;
+        if (_updateAltText)
+        {
+            pivotTable.AltTextTitle = _altTextTitle;
+            pivotTable.AltTextDescription = _altTextDescription;
+        }
+        if (cache is not null)
+        {
+            if (_refreshOnOpen is { } refreshOnOpen)
+                cache.RefreshOnLoad = refreshOnOpen;
+            if (_saveSourceData is { } saveSourceData)
+                cache.SaveData = saveSourceData;
+            if (_enableRefresh is { } enableRefresh)
+                cache.EnableRefresh = enableRefresh;
+            if (_preserveSourceSortFilter is { } preserveSourceSortFilter)
+                cache.PreserveSourceSortFilter = preserveSourceSortFilter;
+            if (_updateMissingItemsLimit)
+                cache.MissingItemsLimit = _missingItemsLimit;
+        }
+
+        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
+        var cache = pivotTable is null
+            ? null
+            : ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+        if (pivotTable is not null && _snapshot is not null)
+            _snapshot.Restore(pivotTable, cache);
+        AddPivotTableCommand.Restore(sheet, _targetSnapshot);
+        _snapshot = null;
+        _targetSnapshot = null;
+    }
+
+    private sealed record PivotOptionsSnapshot(
+        bool ShowRowGrandTotals,
+        bool ShowColumnGrandTotals,
+        bool ShowSubtotals,
+        PivotSubtotalPlacement SubtotalPlacement,
+        bool RepeatItemLabels,
+        bool BlankLineAfterItems,
+        string StyleName,
+        PivotReportLayout ReportLayout,
+        int CompactRowLabelIndent,
+        bool ShowRowHeaders,
+        bool ShowColumnHeaders,
+        bool ShowRowStripes,
+        bool ShowColumnStripes,
+        bool ShowFieldHeaders,
+        bool ShowContextualTooltips,
+        bool ShowPropertiesInTooltips,
+        bool ShowClassicLayout,
+        bool MergeAndCenterLabels,
+        bool ShowItemsWithNoDataOnRows,
+        bool ShowItemsWithNoDataOnColumns,
+        bool PageOverThenDown,
+        int PageWrap,
+        string? EmptyValueText,
+        string? ErrorCaption,
+        bool? RefreshOnLoad,
+        bool? SaveData,
+        bool? EnableRefresh,
+        bool? PreserveSourceSortFilter,
+        int? MissingItemsLimit,
+        bool PrintTitles,
+        bool PrintExpandCollapseButtons,
+        bool ShowExpandCollapseButtons,
+        bool AutofitColumnsOnUpdate,
+        bool PreserveFormattingOnUpdate,
+        string? AltTextTitle,
+        string? AltTextDescription,
+        bool EnableDrill)
+    {
+        public static PivotOptionsSnapshot Capture(PivotTableModel pivotTable, PivotCacheModel? cache) =>
+            new(
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ReportLayout,
+                pivotTable.CompactRowLabelIndent,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ShowFieldHeaders,
+                pivotTable.ShowContextualTooltips,
+                pivotTable.ShowPropertiesInTooltips,
+                pivotTable.ShowClassicLayout,
+                pivotTable.MergeAndCenterLabels,
+                pivotTable.ShowItemsWithNoDataOnRows,
+                pivotTable.ShowItemsWithNoDataOnColumns,
+                pivotTable.PageOverThenDown,
+                pivotTable.PageWrap,
+                pivotTable.EmptyValueText,
+                pivotTable.ErrorCaption,
+                cache?.RefreshOnLoad,
+                cache?.SaveData,
+                cache?.EnableRefresh,
+                cache?.PreserveSourceSortFilter,
+                cache?.MissingItemsLimit,
+                pivotTable.PrintTitles,
+                pivotTable.PrintExpandCollapseButtons,
+                pivotTable.ShowExpandCollapseButtons,
+                pivotTable.AutofitColumnsOnUpdate,
+                pivotTable.PreserveFormattingOnUpdate,
+                pivotTable.AltTextTitle,
+                pivotTable.AltTextDescription,
+                pivotTable.EnableDrill);
+
+        public void Restore(PivotTableModel pivotTable, PivotCacheModel? cache)
+        {
+            pivotTable.ShowRowGrandTotals = ShowRowGrandTotals;
+            pivotTable.ShowColumnGrandTotals = ShowColumnGrandTotals;
+            pivotTable.ShowSubtotals = ShowSubtotals;
+            pivotTable.SubtotalPlacement = SubtotalPlacement;
+            pivotTable.RepeatItemLabels = RepeatItemLabels;
+            pivotTable.BlankLineAfterItems = BlankLineAfterItems;
+            pivotTable.StyleName = StyleName;
+            pivotTable.ReportLayout = ReportLayout;
+            pivotTable.CompactRowLabelIndent = CompactRowLabelIndent;
+            pivotTable.ShowRowHeaders = ShowRowHeaders;
+            pivotTable.ShowColumnHeaders = ShowColumnHeaders;
+            pivotTable.ShowRowStripes = ShowRowStripes;
+            pivotTable.ShowColumnStripes = ShowColumnStripes;
+            pivotTable.ShowFieldHeaders = ShowFieldHeaders;
+            pivotTable.ShowContextualTooltips = ShowContextualTooltips;
+            pivotTable.ShowPropertiesInTooltips = ShowPropertiesInTooltips;
+            pivotTable.ShowClassicLayout = ShowClassicLayout;
+            pivotTable.MergeAndCenterLabels = MergeAndCenterLabels;
+            pivotTable.ShowItemsWithNoDataOnRows = ShowItemsWithNoDataOnRows;
+            pivotTable.ShowItemsWithNoDataOnColumns = ShowItemsWithNoDataOnColumns;
+            pivotTable.PageOverThenDown = PageOverThenDown;
+            pivotTable.PageWrap = PageWrap;
+            pivotTable.EmptyValueText = EmptyValueText;
+            pivotTable.ErrorCaption = ErrorCaption;
+            pivotTable.PrintTitles = PrintTitles;
+            pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;
+            pivotTable.ShowExpandCollapseButtons = ShowExpandCollapseButtons;
+            pivotTable.AutofitColumnsOnUpdate = AutofitColumnsOnUpdate;
+            pivotTable.PreserveFormattingOnUpdate = PreserveFormattingOnUpdate;
+            pivotTable.AltTextTitle = AltTextTitle;
+            pivotTable.AltTextDescription = AltTextDescription;
+            pivotTable.EnableDrill = EnableDrill;
+            if (cache is not null)
+            {
+                if (RefreshOnLoad is { } refreshOnLoad)
+                    cache.RefreshOnLoad = refreshOnLoad;
+                if (SaveData is { } saveData)
+                    cache.SaveData = saveData;
+                if (EnableRefresh is { } enableRefresh)
+                    cache.EnableRefresh = enableRefresh;
+                if (PreserveSourceSortFilter is { } preserveSourceSortFilter)
+                    cache.PreserveSourceSortFilter = preserveSourceSortFilter;
+                cache.MissingItemsLimit = MissingItemsLimit;
+            }
+        }
+    }
+
+    private static string? NormalizeEmptyValueText(string? text)
+    {
+        return NormalizeOptionalText(text);
+    }
+
+    private static string? NormalizeOptionalText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        return text.Trim();
+    }
+
+    private static int NormalizeCompactRowLabelIndent(int indent) => Math.Clamp(indent, 0, 15);
+
+    private static int NormalizePageWrap(int pageWrap) => Math.Clamp(pageWrap, 0, 255);
+
+    private static int? NormalizeMissingItemsLimit(int? value) =>
+        value switch
+        {
+            null => null,
+            <= 0 => 0,
+            _ => 1_048_576
+        };
+}
+

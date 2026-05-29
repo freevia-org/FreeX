@@ -1,0 +1,114 @@
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Input;
+
+namespace FreeX.App.Host;
+
+public sealed record CreateNamesFromSelectionDialogResult(
+    bool UseTopRow,
+    bool UseLeftColumn,
+    bool UseBottomRow,
+    bool UseRightColumn);
+
+public sealed class CreateNamesFromSelectionDialog : Window
+{
+    private readonly CheckBox _topRow = new() { Content = "_Top row", IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _leftColumn = new() { Content = "_Left column", IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _bottomRow = new() { Content = "_Bottom row", Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _rightColumn = new() { Content = "_Right column", Margin = new Thickness(0, 4, 0, 0) };
+
+    public CreateNamesFromSelectionDialogResult Result { get; private set; } =
+        new(UseTopRow: true, UseLeftColumn: true, UseBottomRow: false, UseRightColumn: false);
+
+    public bool UseTopRow => Result.UseTopRow;
+    public bool UseLeftColumn => Result.UseLeftColumn;
+    public bool UseBottomRow => Result.UseBottomRow;
+    public bool UseRightColumn => Result.UseRightColumn;
+
+    public CreateNamesFromSelectionDialog()
+    {
+        Title = "Create Names from Selection";
+        Width = 280;
+        Height = 230;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+
+        var root = new StackPanel { Margin = new Thickness(16) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Create names from values in the:",
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        var group = new GroupBox { Header = "Create names from", Margin = new Thickness(0, 0, 0, 10) };
+        AutomationProperties.SetName(group, "Create names from selected labels");
+        AutomationProperties.SetHelpText(group, "Choose which row or column labels Excel uses to create named ranges.");
+        var options = new StackPanel { Margin = new Thickness(8, 4, 8, 8) };
+        options.Children.Add(_topRow);
+        options.Children.Add(_leftColumn);
+        options.Children.Add(_bottomRow);
+        options.Children.Add(_rightColumn);
+        group.Content = options;
+        root.Children.Add(group);
+        root.Children.Add(new TextBlock
+        {
+            Text = "Excel creates named ranges from the selected row or column labels.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = SystemColors.GrayTextBrush,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76));
+
+        Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    public static bool TryCreateResult(
+        bool useTopRow,
+        bool useLeftColumn,
+        bool useBottomRow,
+        bool useRightColumn,
+        out CreateNamesFromSelectionDialogResult result,
+        out string? error)
+    {
+        result = new CreateNamesFromSelectionDialogResult(useTopRow, useLeftColumn, useBottomRow, useRightColumn);
+        if (!useTopRow && !useLeftColumn && !useBottomRow && !useRightColumn)
+        {
+            error = "Select at least one row or column label position.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private void Accept()
+    {
+        if (!TryCreateResult(
+            _topRow.IsChecked == true,
+            _leftColumn.IsChecked == true,
+            _bottomRow.IsChecked == true,
+            _rightColumn.IsChecked == true,
+            out var result,
+            out var error))
+        {
+            MessageBox.Show(
+                this,
+                error ?? "Select at least one row or column label position.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInitialKeyboardTarget();
+            return;
+        }
+
+        Result = result;
+        DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _topRow.Focus();
+        Keyboard.Focus(_topRow);
+    }
+}

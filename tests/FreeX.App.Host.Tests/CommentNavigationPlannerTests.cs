@@ -1,0 +1,215 @@
+using System.Diagnostics;
+using System.IO;
+using FluentAssertions;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed class CommentNavigationPlannerTests
+{
+    [Fact]
+    public void OrderedComments_SortsByRowThenColumn()
+    {
+        var sheetId = SheetId.New();
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [new(sheetId, 4, 1)] = "C",
+            [new(sheetId, 2, 3)] = "B",
+            [new(sheetId, 2, 1)] = "A"
+        };
+
+        CommentNavigationPlanner.OrderedCommentAddresses(comments)
+            .Should()
+            .Equal(new CellAddress(sheetId, 2, 1), new CellAddress(sheetId, 2, 3), new CellAddress(sheetId, 4, 1));
+    }
+
+    [Fact]
+    public void OrderedComments_IncludesThreadedComments()
+    {
+        var sheetId = SheetId.New();
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [new(sheetId, 4, 1)] = "Note"
+        };
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [new(sheetId, 2, 1)] = new("Thread"),
+            [new(sheetId, 3, 2)] = new("Discussion")
+        };
+
+        CommentNavigationPlanner.OrderedCommentAddresses(comments, threadedComments)
+            .Should()
+            .Equal(new CellAddress(sheetId, 2, 1), new CellAddress(sheetId, 3, 2), new CellAddress(sheetId, 4, 1));
+    }
+
+    [Fact]
+    public void NextComment_WrapsForwardAndBackward()
+    {
+        var sheetId = SheetId.New();
+        var comments = new[]
+        {
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 2, 1),
+            new CellAddress(sheetId, 4, 1)
+        };
+
+        CommentNavigationPlanner.FindNext(comments, new CellAddress(sheetId, 2, 1), previous: false)
+            .Should()
+            .Be(new CellAddress(sheetId, 4, 1));
+        CommentNavigationPlanner.FindNext(comments, new CellAddress(sheetId, 4, 1), previous: false)
+            .Should()
+            .Be(new CellAddress(sheetId, 1, 1));
+        CommentNavigationPlanner.FindNext(comments, new CellAddress(sheetId, 1, 1), previous: true)
+            .Should()
+            .Be(new CellAddress(sheetId, 4, 1));
+    }
+
+    [Fact]
+    public void NextComment_UsesIndexedLookupForLargeOrderedLists()
+    {
+        var sheetId = SheetId.New();
+        var comments = Enumerable.Range(1, 100_000)
+            .Select(index => new CellAddress(sheetId, (uint)index, 1))
+            .ToArray();
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CommentNavigationPlanner.cs"));
+
+        source.Should().Contain("FindFirstAfter");
+        source.Should().NotContain("FirstOrDefault(address => address.Row > current.Row");
+        source.Should().NotContain("LastOrDefault(address => address.Row < current.Row");
+
+        var stopwatch = Stopwatch.StartNew();
+        for (var index = 0; index < 10_000; index++)
+        {
+            var row = (uint)((index * 37) % comments.Length + 1);
+            var current = new CellAddress(sheetId, row, 1);
+            CommentNavigationPlanner.FindNext(comments, current, previous: false)
+                .Should()
+                .Be(row == 100_000 ? comments[0] : new CellAddress(sheetId, row + 1, 1));
+            CommentNavigationPlanner.FindNext(comments, current, previous: true)
+                .Should()
+                .Be(row == 1 ? comments[^1] : new CellAddress(sheetId, row - 1, 1));
+        }
+
+        stopwatch.Stop();
+        Console.WriteLine($"Comment navigation indexed lookup: {stopwatch.ElapsedMilliseconds}ms for 20000 lookups");
+        stopwatch.ElapsedMilliseconds.Should().BeLessThan(500);
+    }
+
+    [Fact]
+    public void FormatCommentList_UsesA1AddressesInSortedOrder()
+    {
+        var sheetId = SheetId.New();
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [new(sheetId, 3, 2)] = "Later",
+            [new(sheetId, 1, 1)] = "First"
+        };
+
+        CommentNavigationPlanner.FormatCommentList(comments)
+            .Should()
+            .Be(string.Join(Environment.NewLine, "A1: First", "B3: Later"));
+    }
+
+    [Fact]
+    public void FormatCommentList_IncludesThreadedComments()
+    {
+        var sheetId = SheetId.New();
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [new(sheetId, 3, 2)] = "Later note"
+        };
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [new(sheetId, 1, 1)] = new("First thread")
+        };
+
+        CommentNavigationPlanner.FormatCommentList(comments, threadedComments)
+            .Should()
+            .Be(string.Join(Environment.NewLine, "A1: FreeX: First thread", "B3: Later note"));
+    }
+
+    [Fact]
+    public void FormatCommentList_IncludesThreadedAuthorsRepliesAndResolvedState()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 1, 1);
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [address] = new("Please review total", "Quinn")
+            {
+                Replies =
+                [
+                    new CommentReply("Updated", "Codex"),
+                    new CommentReply("Looks good", "Quinn")
+                ],
+                IsResolved = true
+            }
+        };
+
+        CommentNavigationPlanner.FormatCommentList(new Dictionary<CellAddress, string>(), threadedComments)
+            .Should()
+            .Be("A1: Quinn: Please review total | Codex: Updated | Quinn: Looks good | Resolved");
+    }
+
+    [Fact]
+    public void FormatCommentList_ShowsNoteAndThreadWhenCellHasBoth()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 2, 2);
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [address] = "Local note"
+        };
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [address] = new("Threaded reply", "Codex")
+        };
+
+        CommentNavigationPlanner.FormatCommentList(comments, threadedComments)
+            .Should()
+            .Be(string.Join(Environment.NewLine, "B2: Note: Local note", "B2: Threaded: Codex: Threaded reply"));
+    }
+
+    [Fact]
+    public void GetDefaultCommentText_ReturnsExistingCommentForSelectedCell()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 2, 2);
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [address] = "Existing note"
+        };
+
+        CommentNavigationPlanner.GetDefaultCommentText(comments, address)
+            .Should()
+            .Be("Existing note");
+        CommentNavigationPlanner.GetDefaultCommentText(comments, new CellAddress(sheetId, 3, 3))
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void FormatCellCommentPreview_ShowsNotesAndThreadedCommentsForHoveredCell()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 2, 2);
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [address] = "Local note"
+        };
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [address] = new("Please review total", "Quinn")
+            {
+                Replies = [new CommentReply("Updated", "Codex")]
+            }
+        };
+
+        CommentNavigationPlanner.FormatCellCommentPreview(comments, threadedComments, address)
+            .Should()
+            .Be(string.Join(Environment.NewLine, "Note: Local note", "Quinn: Please review total | Codex: Updated"));
+        CommentNavigationPlanner.FormatCellCommentPreview(comments, threadedComments, new CellAddress(sheetId, 3, 3))
+            .Should()
+            .BeNull();
+    }
+}

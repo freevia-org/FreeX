@@ -68,7 +68,7 @@ $dpi   = [Win32c]::GetScreenDpi()
 $scale = $dpi / 96.0
 Write-Host "Screen DPI: $dpi  Scale: $scale"
 
-$exe = Join-Path $repoRoot "src\Freexcel.App.Host\bin\Release\net10.0-windows10.0.19041.0\Freexcel.App.Host.exe"
+$exe = Join-Path $repoRoot "src\FreeX.App.Host\bin\Release\net10.0-windows10.0.19041.0\FreeX.App.Host.exe"
 $proc = Start-Process -FilePath $exe -PassThru
 Write-Host "Launched PID $($proc.Id)"
 

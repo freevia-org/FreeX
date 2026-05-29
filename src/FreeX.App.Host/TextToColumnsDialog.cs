@@ -1,0 +1,322 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Media;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Host;
+
+public sealed record TextToColumnsRangeSelectionRequest(
+    string CurrentText,
+    bool CollapseDialog = true);
+
+public sealed partial class TextToColumnsDialog : Window
+{
+    private static readonly string[] DateColumnFormatLabels = ["MDY", "DMY", "YMD", "MYD", "DYM", "YDM"];
+
+    private readonly RadioButton _delimitedButton = new() { Content = "_Delimited", IsChecked = true };
+    private readonly RadioButton _fixedWidthButton = new() { Content = "Fi_xed width" };
+    private readonly CheckBox _tabBox = new() { Content = "_Tab" };
+    private readonly CheckBox _semicolonBox = new() { Content = "_Semicolon" };
+    private readonly CheckBox _commaBox = new() { Content = "_Comma", IsChecked = true };
+    private readonly CheckBox _spaceBox = new() { Content = "S_pace" };
+    private readonly CheckBox _otherBox = new() { Content = "_Other:" };
+    private readonly TextBox _customBox = new() { Width = 48, Margin = new Thickness(6, 0, 0, 0) };
+    private readonly ComboBox _textQualifierBox = new() { Width = 130, Margin = new Thickness(8, 0, 0, 0) };
+    private readonly CheckBox _treatConsecutiveDelimitersBox = new() { Content = "_Treat consecutive delimiters as one", Margin = new Thickness(0, 8, 0, 0) };
+    private readonly TextBox _fixedWidthBreaksBox = new() { Text = "10,20" };
+    private readonly Canvas _fixedWidthRuler = new()
+    {
+        Height = 58,
+        Background = Brushes.White,
+        ClipToBounds = true
+    };
+    private readonly TextBox _destinationBox = new() { Width = 120 };
+    private readonly ComboBox _formatColumnBox = new() { Width = 110, Margin = new Thickness(0, 0, 10, 0) };
+    private readonly RadioButton _formatGeneralButton = new() { Content = "_General", IsChecked = true };
+    private readonly RadioButton _formatTextButton = new() { Content = "_Text" };
+    private readonly RadioButton _formatDateButton = new() { Content = "_Date:" };
+    private readonly ComboBox _dateFormatBox = new() { Width = 72, Margin = new Thickness(8, 0, 0, 0) };
+    private readonly RadioButton _formatSkipButton = new() { Content = "Do not import column (_skip)" };
+    private readonly TextBox _decimalSeparatorBox = new() { Text = ".", Width = 42 };
+    private readonly TextBox _thousandsSeparatorBox = new() { Text = ",", Width = 42 };
+    private readonly CheckBox _trailingMinusBox = new() { Content = "_Trailing minus for negative numbers" };
+    private readonly ListView _previewGrid = new() { Height = 88 };
+    private readonly IReadOnlyList<string> _previewRows;
+    private readonly Dictionary<int, TextToColumnsColumnFormat> _columnFormats = [];
+    private readonly CellAddress _defaultDestination;
+    private readonly Action<TextToColumnsRangeSelectionRequest>? _requestRangeSelection;
+    private readonly TextBlock _wizardHeader = new() { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
+    private readonly TextBlock _wizardInstruction = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
+    private Button? _backButton;
+    private Button? _nextButton;
+    private Button? _finishButton;
+    private FrameworkElement? _originalDataTypePanel;
+    private FrameworkElement? _delimiterPanel;
+    private FrameworkElement? _fixedWidthPanel;
+    private FrameworkElement? _dataPreviewLabel;
+    private FrameworkElement? _columnFormatPanel;
+    private FrameworkElement? _destinationPanel;
+    private int _previewColumnCount = 1;
+    private int _wizardStep = 1;
+    private bool _suppressColumnFormatSync;
+    private bool _suppressFixedWidthSync;
+    private int? _dragBreakIndex;
+
+    public TextToColumnsDialogResult? Result { get; private set; }
+    public TextToColumnsRangeSelectionRequest? RangeSelectionRequest { get; private set; }
+
+    public TextToColumnsDialog(
+        IEnumerable<string>? previewRows = null,
+        CellAddress? defaultDestination = null,
+        Action<TextToColumnsRangeSelectionRequest>? requestRangeSelection = null)
+    {
+        _previewRows = NormalizePreviewRows(previewRows);
+        _defaultDestination = defaultDestination ?? new CellAddress(SheetId.New(), 1, 1);
+        _requestRangeSelection = requestRangeSelection;
+        _destinationBox.Text = _defaultDestination.ToA1();
+
+        Title = "Text to Columns";
+        Width = 500;
+        Height = 430;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ShowInTaskbar = false;
+
+        _otherBox.Checked += (_, _) => _customBox.Focus();
+        foreach (var box in new[] { _tabBox, _semicolonBox, _commaBox, _spaceBox, _otherBox })
+        {
+            box.Checked += (_, _) => RefreshMode();
+            box.Unchecked += (_, _) => RefreshMode();
+        }
+        _delimitedButton.Checked += (_, _) => RefreshMode();
+        _fixedWidthButton.Checked += (_, _) => RefreshMode();
+        _customBox.TextChanged += (_, _) => RefreshPreview();
+        _textQualifierBox.SelectionChanged += (_, _) => RefreshPreview();
+        _treatConsecutiveDelimitersBox.Checked += (_, _) => RefreshPreview();
+        _treatConsecutiveDelimitersBox.Unchecked += (_, _) => RefreshPreview();
+        _fixedWidthBreaksBox.TextChanged += (_, _) =>
+        {
+            if (!_suppressFixedWidthSync)
+                RefreshPreview();
+        };
+        _fixedWidthRuler.MouseLeftButtonDown += FixedWidthRuler_MouseLeftButtonDown;
+        _fixedWidthRuler.MouseMove += FixedWidthRuler_MouseMove;
+        _fixedWidthRuler.MouseLeftButtonUp += FixedWidthRuler_MouseLeftButtonUp;
+        _fixedWidthRuler.MouseRightButtonDown += FixedWidthRuler_MouseRightButtonDown;
+        _formatColumnBox.SelectionChanged += (_, _) => SyncColumnFormatControls();
+        _formatGeneralButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.General);
+        _formatTextButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.Text);
+        _formatDateButton.Checked += (_, _) => StoreSelectedColumnFormat(SelectedDateColumnFormat());
+        _dateFormatBox.SelectionChanged += (_, _) =>
+        {
+            if (_formatDateButton.IsChecked == true)
+                StoreSelectedColumnFormat(SelectedDateColumnFormat());
+        };
+        _formatSkipButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.Skip);
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        var buttons = CreateWizardButtonRow();
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+
+        var body = new StackPanel();
+        DockPanel.SetDock(body, Dock.Top);
+        root.Children.Add(body);
+
+        body.Children.Add(_wizardHeader);
+        body.Children.Add(_wizardInstruction);
+        _originalDataTypePanel = CreateOriginalDataTypePanel();
+        _delimiterPanel = CreateDelimiterPanel();
+        _fixedWidthPanel = CreateFixedWidthPanel();
+        _dataPreviewLabel = new TextBlock { Text = "Data preview", Margin = new Thickness(0, 10, 0, 4) };
+        _columnFormatPanel = CreateColumnFormatPanel();
+        _destinationPanel = CreateDestinationPanel();
+        body.Children.Add(_originalDataTypePanel);
+        body.Children.Add(_delimiterPanel);
+        body.Children.Add(_fixedWidthPanel);
+        body.Children.Add(_dataPreviewLabel);
+        body.Children.Add(_previewGrid);
+        body.Children.Add(_columnFormatPanel);
+        body.Children.Add(_destinationPanel);
+
+        Content = root;
+        UpdateWizardStep();
+        RefreshMode();
+        RefreshPreview();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private GroupBox CreateFixedWidthPanel()
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Click the ruler to create a break line, drag to move it, or right-click a line to remove it.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        panel.Children.Add(_fixedWidthRuler);
+
+        var breakRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        breakRow.Children.Add(new Label
+        {
+            Content = "_Breaks:",
+            Target = _fixedWidthBreaksBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 3, 8, 0)
+        });
+        _fixedWidthBreaksBox.Width = 160;
+        breakRow.Children.Add(_fixedWidthBreaksBox);
+        panel.Children.Add(breakRow);
+
+        return new GroupBox
+        {
+            Header = "Fixed width",
+            Content = panel,
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+    }
+
+    private void Accept()
+    {
+        try
+        {
+            if (!TryParseDestination(_destinationBox.Text, _defaultDestination, out var destination))
+            {
+                FocusInvalidDestinationInput();
+                throw new ArgumentException("Enter a single destination cell, such as F2.");
+            }
+
+            if (_fixedWidthButton.IsChecked == true &&
+                !TryParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text, FixedWidthMaxLength(), out _))
+            {
+                FocusInvalidFixedWidthBreaksInput();
+                throw new ArgumentException("Enter at least one fixed-width break position.");
+            }
+
+            if (_fixedWidthButton.IsChecked != true && SelectedDelimiterKinds().Count == 0)
+            {
+                FocusInvalidDelimiterSelectionInput();
+                throw new ArgumentException("Select at least one delimiter.");
+            }
+
+            if (_fixedWidthButton.IsChecked != true && _otherBox.IsChecked == true && string.IsNullOrEmpty(_customBox.Text))
+            {
+                FocusInvalidCustomDelimiterInput();
+                throw new ArgumentException("Custom delimiter is required.");
+            }
+
+            if (!TryParseAdvancedSeparator(_decimalSeparatorBox.Text, out _))
+            {
+                FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
+                throw new ArgumentException("Enter a single decimal separator.");
+            }
+
+            if (!TryParseAdvancedSeparator(_thousandsSeparatorBox.Text, out _))
+            {
+                FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
+                throw new ArgumentException("Enter a single thousands separator.");
+            }
+
+            Result = _fixedWidthButton.IsChecked == true
+                ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text, destination, BuildColumnFormats(_previewColumnCount), BuildAdvancedOptions())
+                : CreateResult(
+                    SelectedDelimiterKinds(),
+                    _customBox.Text,
+                    SelectedTextQualifier(),
+                    _treatConsecutiveDelimitersBox.IsChecked == true,
+                    destination,
+                    BuildColumnFormats(_previewColumnCount),
+                    BuildAdvancedOptions());
+            DialogResult = true;
+        }
+        catch (Exception ex)
+        {
+            DialogMessageHelper.ShowWarning(this, ex.Message, Title);
+            RefocusInvalidInputAfterWarning(ex.Message);
+        }
+    }
+
+    private void RefocusInvalidInputAfterWarning(string message)
+    {
+        switch (message)
+        {
+            case "Enter a single destination cell, such as F2.":
+                FocusInvalidDestinationInput();
+                break;
+            case "Enter at least one fixed-width break position.":
+                FocusInvalidFixedWidthBreaksInput();
+                break;
+            case "Select at least one delimiter.":
+                FocusInvalidDelimiterSelectionInput();
+                break;
+            case "Custom delimiter is required.":
+                FocusInvalidCustomDelimiterInput();
+                break;
+            case "Enter a single decimal separator.":
+                FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
+                break;
+            case "Enter a single thousands separator.":
+                FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
+                break;
+        }
+    }
+
+    private void RefreshPreview()
+    {
+        IReadOnlyList<string[]> rows;
+        try
+        {
+            if (_fixedWidthButton.IsChecked == true)
+            {
+                var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);
+                rows = _previewRows
+                    .Select(row => TextToColumnsPlanner.SplitFixedWidthText(row, positions).ToArray())
+                    .ToList();
+            }
+            else
+            {
+                var result = CreateResult(
+                    SelectedDelimiterKinds(),
+                    _customBox.Text,
+                    SelectedTextQualifier(),
+                    _treatConsecutiveDelimitersBox.IsChecked == true,
+                    _defaultDestination);
+                rows = _previewRows
+                    .Select(row => TextToColumnsPlanner.SplitText(
+                        row,
+                        result.Delimiters,
+                        result.TextQualifierChar,
+                        result.TreatConsecutiveDelimitersAsOne).ToArray())
+                    .ToList();
+            }
+        }
+        catch
+        {
+            rows = _previewRows
+                .Select(row => TextToColumnsPlanner.SplitText(row, ",").ToArray())
+                .ToList();
+        }
+
+        var columnCount = Math.Max(1, rows.Count == 0 ? 1 : rows.Max(row => row.Length));
+        _previewColumnCount = columnCount;
+        var view = new GridView();
+        for (var index = 0; index < columnCount; index++)
+        {
+            view.Columns.Add(new GridViewColumn
+            {
+                Header = $"Column {index + 1}",
+                DisplayMemberBinding = new Binding($"[{index}]"),
+                Width = index == 0 ? 140 : 100
+            });
+        }
+
+        _previewGrid.View = view;
+        _previewGrid.ItemsSource = rows.Select(row => PadRow(row, columnCount)).ToList();
+        RefreshFixedWidthRuler();
+        RefreshColumnFormatChoices(columnCount);
+    }
+
+}

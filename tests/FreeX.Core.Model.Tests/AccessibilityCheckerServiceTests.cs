@@ -1,0 +1,617 @@
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+using FluentAssertions;
+
+namespace FreeX.Core.Model.Tests;
+
+public sealed class AccessibilityCheckerServiceTests
+{
+    [Fact]
+    public void FindIssues_FlagsMergedCellsAndObjectsWithoutAltText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+
+        sheet.AddMergedRegion(new GridRange(a1, b2));
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 1),
+            Kind = PictureKind.Image
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 6, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Process block"
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().Contain(i => i.Kind == AccessibilityIssueKind.MergedCells);
+        issues.Should().Contain(i => i.Kind == AccessibilityIssueKind.MissingAltText);
+        issues.Should().NotContain(i => i.Location.Contains("6,1", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FindIssues_FlagsChartsWithoutTitleText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = dataRange,
+            Title = "   "
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = dataRange,
+            Title = "Sales by quarter"
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().HaveCount(2);
+        issues.Should().OnlyContain(i => i.Kind == AccessibilityIssueKind.ChartMissingTitle);
+        issues.Should().OnlyContain(i => i.SheetId == sheet.Id);
+        issues.Should().OnlyContain(i => i.SheetName == "Charts");
+        issues.Should().OnlyContain(i => i.Location == "A1:B4");
+        issues.Should().OnlyContain(i => i.Message == "Chart is missing a title.");
+    }
+
+    [Theory]
+    [InlineData("Chart Title")]
+    [InlineData("chart title")]
+    [InlineData("Title")]
+    public void FindIssues_FlagsChartsWithGenericTitleText(string title)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = title
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = dataRange,
+            Title = "Sales by quarter"
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.GenericChartTitle).Subject;
+
+        issue.Location.Should().Be("A1:B4");
+        issue.Message.Should().Be("Chart title should describe the chart.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastChartTitleText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            ChartAreaFillColor = new CellColor(130, 130, 130),
+            ChartTitleTextColor = new CellColor(120, 120, 120)
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastChartText).Subject;
+
+        issue.Location.Should().Be("A1:B4");
+        issue.Message.Should().Be("Chart title should have at least 4.5:1 contrast against its background.");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresChartTextWithSufficientContrast()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            ChartAreaFillColor = CellColor.White,
+            ChartTitleTextColor = CellColor.Black,
+            AxisTitleTextColor = CellColor.Black,
+            LegendTextColor = CellColor.Black,
+            LegendFillColor = CellColor.White
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastChartText);
+    }
+
+    [Theory]
+    [InlineData("Picture 1")]
+    [InlineData("Image")]
+    [InlineData("Shape")]
+    [InlineData("Text box")]
+    public void FindIssues_FlagsObjectsWithGenericAltText(string altText)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = PictureKind.Image,
+            AltText = altText
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Quarterly revenue callout"
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.GenericAltText).Subject;
+        issue.Location.Should().Be("A3");
+        issue.Message.Should().Be("Picture alternate text should describe the object.");
+    }
+
+    [Fact]
+    public void FindIssues_AllowsSpecificAltText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Q1 revenue rose 8%",
+            AltText = "Q1 revenue summary annotation"
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.GenericAltText);
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresHiddenDrawingObjectsForAltTextChecks()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            IsVisible = false
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = PictureKind.Image,
+            AltText = "Picture 1",
+            IsVisible = false
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            IsVisible = false
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Shape",
+            IsVisible = false
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 1),
+            Text = "Hidden annotation",
+            IsVisible = false
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 6, 1),
+            Text = "Hidden annotation",
+            AltText = "Text box",
+            IsVisible = false
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i =>
+                i.Kind == AccessibilityIssueKind.MissingAltText ||
+                i.Kind == AccessibilityIssueKind.GenericAltText)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresHiddenChartsForTitleChecks()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            IsVisible = false
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = dataRange,
+            Title = "Chart Title",
+            IsVisible = false
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i =>
+                i.Kind == AccessibilityIssueKind.ChartMissingTitle ||
+                i.Kind == AccessibilityIssueKind.GenericChartTitle)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHyperlinksWhoseDisplayTextIsTheUrl()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var urlAddress = new CellAddress(sheet.Id, 1, 1);
+        var descriptiveAddress = new CellAddress(sheet.Id, 2, 1);
+
+        sheet.SetCell(urlAddress, new TextValue("https://example.com/report"));
+        sheet.Hyperlinks[urlAddress] = "https://example.com/report";
+        sheet.SetCell(descriptiveAddress, new TextValue("Quarterly report"));
+        sheet.Hyperlinks[descriptiveAddress] = "https://example.com/report";
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl).Subject;
+        issue.SheetId.Should().Be(sheet.Id);
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Location.Should().Be("A1");
+        issue.Message.Should().Be("Hyperlink display text should describe the destination.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHyperlinksWhoseDisplayTextLooksLikeAUrl()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var urlAddress = new CellAddress(sheet.Id, 1, 1);
+        var descriptiveAddress = new CellAddress(sheet.Id, 2, 1);
+
+        sheet.SetCell(urlAddress, new TextValue("www.example.com/report"));
+        sheet.Hyperlinks[urlAddress] = "https://example.com/report?download=1";
+        sheet.SetCell(descriptiveAddress, new TextValue("Download the quarterly report"));
+        sheet.Hyperlinks[descriptiveAddress] = "https://example.com/report?download=1";
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl).Subject;
+        issue.Location.Should().Be("A1");
+    }
+
+    [Theory]
+    [InlineData("HTTPS://EXAMPLE.COM/REPORT", "https://example.com/report")]
+    [InlineData("mailto:help@example.com", "mailto:help@example.com?subject=Support")]
+    [InlineData("ftp://example.com/report.csv", "ftp://example.com/report.csv?download=1")]
+    public void FindIssues_FlagsHyperlinksWhoseDisplayTextIsARawDestination(string displayText, string target)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.SetCell(address, new TextValue(displayText));
+        sheet.Hyperlinks[address] = target;
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl)
+            .Which.Location.Should().Be("A1");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("click here")]
+    [InlineData("Click Here")]
+    [InlineData("here")]
+    [InlineData("link")]
+    [InlineData("more")]
+    [InlineData("read more")]
+    [InlineData("learn more")]
+    public void FindIssues_FlagsHyperlinksWithBlankOrGenericDisplayText(string displayText)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.SetCell(address, new TextValue(displayText));
+        sheet.Hyperlinks[address] = "https://example.com/report";
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl)
+            .Which.Location.Should().Be("A1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsDefaultWorksheetNames()
+    {
+        var workbook = new Workbook("Accessibility");
+        var defaultSheet = workbook.AddSheet("Sheet1");
+        workbook.AddSheet("Q1 Revenue");
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.DefaultWorksheetName).Subject;
+
+        issue.SheetId.Should().Be(defaultSheet.Id);
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Location.Should().Be("Sheet1");
+        issue.Message.Should().Be("Worksheet tab names should describe their contents.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHiddenSheetsThatContainContent()
+    {
+        var workbook = new Workbook("Accessibility");
+        var hiddenSheet = workbook.AddSheet("Archived Data");
+        hiddenSheet.IsHidden = true;
+        hiddenSheet.SetCell(new CellAddress(hiddenSheet.Id, 2, 3), new TextValue("Confidential forecast"));
+
+        var visibleEmptySheet = workbook.AddSheet("Visible Summary");
+        var hiddenEmptySheet = workbook.AddSheet("Empty Archive");
+        hiddenEmptySheet.IsHidden = true;
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HiddenSheetWithContent).Subject;
+        issue.SheetId.Should().Be(hiddenSheet.Id);
+        issue.SheetName.Should().Be("Archived Data");
+        issue.Location.Should().Be("Archived Data");
+        issue.Message.Should().Be("Hidden sheets with content may not be available to assistive technologies.");
+        issues.Should().NotContain(i => i.SheetId == visibleEmptySheet.Id);
+        issues.Should().NotContain(i => i.SheetId == hiddenEmptySheet.Id && i.Kind == AccessibilityIssueKind.HiddenSheetWithContent);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHiddenRowsAndColumnsThatContainContent()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Q1 Revenue");
+        sheet.HiddenRows.Add(4);
+        sheet.GroupHiddenRows.Add(5);
+        sheet.HiddenCols.Add(3);
+        sheet.GroupHiddenCols.Add(6);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Hidden row note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new TextValue("Grouped row note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Hidden column note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 6), new TextValue("Grouped column note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new TextValue("Visible note"));
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .BeEquivalentTo(["4:4", "5:5"]);
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenColumnWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .BeEquivalentTo(["C:C", "F:F"]);
+        issues.Should().NotContain(i => i.Location == "H8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsStructuredTablesWithBlankHeaderText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(" "));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            HeaderRowCount = 1,
+            HasAutoFilter = true,
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.TableMissingHeaderText).Subject;
+
+        issue.SheetId.Should().Be(sheet.Id);
+        issue.SheetName.Should().Be("Sales");
+        issue.Location.Should().Be("B1");
+        issue.Message.Should().Be("Table headers should not be blank.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WithExplicitFontAndFill()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 3, 2);
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(120, 120, 120),
+            FillColor = new CellColor(130, 130, 130)
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Projected revenue"),
+            StyleId = lowContrastStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.SheetId.Should().Be(sheet.Id);
+        issue.SheetName.Should().Be("Sales");
+        issue.Location.Should().Be("B3");
+        issue.Message.Should().Be("Cell text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WithDefaultWhiteBackground()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(245, 245, 245)
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Low contrast on no fill"),
+            StyleId = lowContrastStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("A1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromMatchingConditionalFormat()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(address, new TextValue("At risk"));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            RuleType = CfRuleType.ContainsText,
+            TextRuleText = "risk",
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(120, 120, 120),
+                FillColor = new CellColor(130, 130, 130)
+            }
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("B2");
+        issue.Message.Should().Be("Cell text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresConditionalFormatContrastWhenRuleDoesNotMatchCell()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(address, new TextValue("On track"));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            RuleType = CfRuleType.ContainsText,
+            TextRuleText = "risk",
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(120, 120, 120),
+                FillColor = new CellColor(130, 130, 130)
+            }
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
+    [Theory]
+    [InlineData(18, false)]
+    [InlineData(14, true)]
+    public void FindIssues_UsesLowerContrastThresholdForLargeCellText(double fontSize, bool bold)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var largeTextStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(120, 120, 120),
+            FillColor = CellColor.White,
+            FontSize = fontSize,
+            Bold = bold
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = new TextValue("Large readable heading"),
+            StyleId = largeTextStyle
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresBlankCellsAndSufficientContrast()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(245, 245, 245)
+        });
+        var sufficientContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = CellColor.Black,
+            FillColor = CellColor.White
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = BlankValue.Instance,
+            StyleId = lowContrastStyle
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell
+        {
+            Value = new TextValue("Readable text"),
+            StyleId = sufficientContrastStyle
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+}

@@ -1,0 +1,47 @@
+using FreeX.Core.Model;
+
+namespace FreeX.Core.Commands;
+
+/// <summary>
+/// Undo-safe command that applies the result of a Goal Seek operation
+/// by setting the changing cell to the found value.
+/// </summary>
+public sealed class GoalSeekCommand : IWorkbookCommand
+{
+    private readonly CellAddress _changingCell;
+    private readonly double _newValue;
+    private Cell? _originalCell;
+
+    public string Label => "Goal Seek";
+
+    public GoalSeekCommand(CellAddress changingCell, double newValue)
+    {
+        _changingCell = changingCell;
+        _newValue = newValue;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (!double.IsFinite(_newValue))
+            return new CommandOutcome(false, ErrorMessage: "Goal Seek result must be a finite number.");
+
+        var sheet = ctx.GetSheet(_changingCell.Sheet);
+        if (sheet is null)
+            return new CommandOutcome(false, ErrorMessage: "Sheet no longer exists.");
+
+        _originalCell = sheet.GetCell(_changingCell)?.Clone();
+        sheet.SetCell(_changingCell, new NumberValue(_newValue));
+        return new CommandOutcome(true, AffectedCells: [_changingCell]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_changingCell.Sheet);
+        if (sheet is null) return;
+
+        if (_originalCell is not null)
+            sheet.SetCell(_changingCell, _originalCell.Clone());
+        else
+            sheet.ClearCell(_changingCell);
+    }
+}

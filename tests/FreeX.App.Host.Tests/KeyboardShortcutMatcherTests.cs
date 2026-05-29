@@ -1,0 +1,497 @@
+using System.Linq;
+using System.Reflection;
+using System.Windows.Input;
+using FluentAssertions;
+using FreeX.Core.Commands;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed class KeyboardShortcutMatcherTests
+{
+    private static readonly ModifierKeys[] ModifierCombinations =
+    [
+        ModifierKeys.None,
+        ModifierKeys.Control,
+        ModifierKeys.Shift,
+        ModifierKeys.Alt,
+        ModifierKeys.Control | ModifierKeys.Shift,
+        ModifierKeys.Control | ModifierKeys.Alt,
+        ModifierKeys.Shift | ModifierKeys.Alt,
+        ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt
+    ];
+
+    [Fact]
+    public void CommandShortcutRules_DoNotMatchTheSamePhysicalChord()
+    {
+        var field = typeof(KeyboardShortcutMatcher).GetField("CommandShortcutRules", BindingFlags.NonPublic | BindingFlags.Static);
+        field.Should().NotBeNull();
+        var rules = (Array)field!.GetValue(null)!;
+
+        var collisions = EnumeratePhysicalChords()
+            .Select(chord => new
+            {
+                Chord = chord,
+                Matches = rules.Cast<object>()
+                    .Where(rule => RuleMatches(rule, chord.Key, chord.Modifiers))
+                    .Select(rule => RuleShortcut(rule).ToString())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList()
+            })
+            .Where(result => result.Matches.Count > 1)
+            .Select(result => $"{result.Chord.Modifiers}+{result.Chord.Key}: {string.Join(", ", result.Matches)}")
+            .ToList();
+
+        collisions.Should().BeEmpty("a workbook command shortcut chord must dispatch to only one command");
+    }
+
+    [Fact]
+    public void CommandShortcutRules_CoverEveryCommandShortcut()
+    {
+        var field = typeof(KeyboardShortcutMatcher).GetField("CommandShortcutRules", BindingFlags.NonPublic | BindingFlags.Static);
+        field.Should().NotBeNull();
+        var rules = (Array)field!.GetValue(null)!;
+
+        var coveredShortcuts = rules
+            .Cast<object>()
+            .Select(RuleShortcut)
+            .Distinct()
+            .ToArray();
+
+        coveredShortcuts.Should().BeEquivalentTo(
+            Enum.GetValues<KeyboardCommandShortcut>(),
+            "every keyboard command enum value should remain reachable from at least one physical shortcut");
+    }
+
+    [Fact]
+    public void ShortcutFamilies_DoNotReuseTheSamePhysicalChord()
+    {
+        var collisions = EnumeratePhysicalChords()
+            .Select(chord => new
+            {
+                Chord = chord,
+                Matches = GetShortcutFamilyMatches(chord.Key, Key.None, chord.Modifiers).ToList()
+            })
+            .Concat(EnumeratePhysicalChords()
+                .Select(chord => new
+                {
+                    Chord = chord,
+                    Matches = GetShortcutFamilyMatches(Key.None, chord.Key, chord.Modifiers).ToList()
+                }))
+            .Concat(EnumeratePhysicalChords()
+                .Select(chord => new
+                {
+                    Chord = chord,
+                    Matches = GetShortcutFamilyMatches(Key.System, chord.Key, chord.Modifiers).ToList()
+                }))
+            .Where(result => result.Matches.Count > 1)
+            .Select(result => $"{result.Chord.Modifiers}+{result.Chord.Key}: {string.Join(", ", result.Matches)}")
+            .ToList();
+
+        collisions.Should().BeEmpty("a physical keyboard chord should have one active workbook/grid shortcut meaning in a given scope");
+    }
+
+    [Theory]
+    [InlineData(Key.Add, Key.None, ModifierKeys.Control, true)]
+    [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control, true)]
+    [InlineData(Key.None, Key.Add, ModifierKeys.Control, true)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Control, true)]
+    [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control | ModifierKeys.Shift, true)]
+    [InlineData(Key.None, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, true)]
+    [InlineData(Key.Add, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.System, Key.Add, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.C, Key.OemPlus, ModifierKeys.Control, false)]
+    [InlineData(Key.C, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    public void IsCtrlPlus_RecognizesExcelInsertShortcut(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
+    {
+        KeyboardShortcutMatcher.IsCtrlPlus(key, systemKey, modifiers).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.Subtract, Key.None, ModifierKeys.Control, true)]
+    [InlineData(Key.OemMinus, Key.None, ModifierKeys.Control, true)]
+    [InlineData(Key.None, Key.OemMinus, ModifierKeys.Control, true)]
+    [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control, true)]
+    [InlineData(Key.Subtract, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.System, Key.Subtract, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.C, Key.OemMinus, ModifierKeys.Control, false)]
+    public void IsCtrlMinus_RecognizesExcelDeleteShortcut(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
+    {
+        KeyboardShortcutMatcher.IsCtrlMinus(key, systemKey, modifiers).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Alt, true)]
+    [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Alt, true)]
+    [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt, false)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control, false)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt, false)]
+    [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.C, Key.V, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    public void IsPasteSpecialShortcut_RecognizesExcelCtrlAltVOnly(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
+    {
+        KeyboardShortcutMatcher.IsPasteSpecialShortcut(key, systemKey, modifiers).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.D9, ModifierKeys.Control, KeyboardGridShortcut.HideRows)]
+    [InlineData(Key.NumPad9, ModifierKeys.Control, KeyboardGridShortcut.HideRows)]
+    [InlineData(Key.D9, ModifierKeys.Control | ModifierKeys.Shift, KeyboardGridShortcut.UnhideRows)]
+    [InlineData(Key.D0, ModifierKeys.Control, KeyboardGridShortcut.HideColumns)]
+    [InlineData(Key.NumPad0, ModifierKeys.Control | ModifierKeys.Shift, KeyboardGridShortcut.UnhideColumns)]
+    [InlineData(Key.D8, ModifierKeys.Control, null)]
+    public void TryGetGridShortcut_MapsHideAndUnhideShortcuts(Key key, ModifierKeys modifiers, KeyboardGridShortcut? expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetGridShortcut(key, modifiers, out var shortcut);
+
+        result.Should().Be(expected is not null);
+        if (expected is not null)
+            shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.Space, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectAll)]
+    [InlineData(Key.Space, ModifierKeys.Control, KeyboardSelectionShortcut.SelectWholeColumns)]
+    [InlineData(Key.Space, ModifierKeys.Shift, KeyboardSelectionShortcut.SelectWholeRows)]
+    [InlineData(Key.Multiply, ModifierKeys.Control, KeyboardSelectionShortcut.SelectCurrentRegion)]
+    [InlineData(Key.Multiply, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
+    [InlineData(Key.D8, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
+    [InlineData(Key.D8, ModifierKeys.Control, null)]
+    public void TryGetSelectionShortcut_MapsExcelSelectionShortcuts(Key key, ModifierKeys modifiers, KeyboardSelectionShortcut? expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetSelectionShortcut(key, modifiers, out var shortcut);
+
+        result.Should().Be(expected is not null);
+        if (expected is not null)
+            shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.N, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.NewWorkbook)]
+    [InlineData(Key.O, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenWorkbook)]
+    [InlineData(Key.S, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SaveWorkbook)]
+    [InlineData(Key.C, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Copy)]
+    [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.Copy)]
+    [InlineData(Key.Insert, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Copy)]
+    [InlineData(Key.X, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Cut)]
+    [InlineData(Key.Delete, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.Cut)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Paste)]
+    [InlineData(Key.Insert, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.Paste)]
+    [InlineData(Key.A, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectCurrentRegionOrAll)]
+    [InlineData(Key.Z, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Undo)]
+    [InlineData(Key.Y, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Redo)]
+    [InlineData(Key.T, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
+    [InlineData(Key.L, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
+    [InlineData(Key.K, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.InsertHyperlink)]
+    [InlineData(Key.D, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.FillDown)]
+    [InlineData(Key.R, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.FillRight)]
+    [InlineData(Key.E, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.FlashFill)]
+    [InlineData(Key.OemSemicolon, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.InsertCurrentDate)]
+    [InlineData(Key.OemSemicolon, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.InsertCurrentTime)]
+    [InlineData(Key.Oem3, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.ToggleShowFormulas)]
+    [InlineData(Key.D8, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.ToggleOutlineSymbols)]
+    [InlineData(Key.PageUp, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.ActivatePreviousSheet)]
+    [InlineData(Key.PageDown, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.ActivateNextSheet)]
+    [InlineData(Key.PageUp, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectPreviousSheetGroup)]
+    [InlineData(Key.PageDown, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectNextSheetGroup)]
+    [InlineData(Key.D1, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenFormatCells)]
+    [InlineData(Key.NumPad1, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenFormatCells)]
+    [InlineData(Key.F, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Find)]
+    [InlineData(Key.H, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Replace)]
+    [InlineData(Key.F3, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.NameManager)]
+    [InlineData(Key.F3, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.CreateNamesFromSelection)]
+    [InlineData(Key.F3, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.InsertFunction)]
+    [InlineData(Key.F7, Key.None, ModifierKeys.None, KeyboardCommandShortcut.SpellCheck)]
+    [InlineData(Key.F4, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CloseWorkbook)]
+    [InlineData(Key.W, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CloseWorkbook)]
+    [InlineData(Key.F9, Key.None, ModifierKeys.None, KeyboardCommandShortcut.CalculateNow)]
+    [InlineData(Key.F9, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.CalculateSheet)]
+    [InlineData(Key.F9, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.CalculateNow)]
+    [InlineData(Key.F9, Key.None, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.RebuildDependenciesAndCalculate)]
+    [InlineData(Key.U, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.ToggleFormulaBarExpansion)]
+    [InlineData(Key.Q, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.QuickAnalysis)]
+    [InlineData(Key.P, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenPrintPreview)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.PasteValues)]
+    [InlineData(Key.L, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.ToggleFilter)]
+    [InlineData(Key.F5, Key.None, ModifierKeys.None, KeyboardCommandShortcut.GoTo)]
+    [InlineData(Key.G, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.GoTo)]
+    [InlineData(Key.None, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
+    [InlineData(Key.F11, Key.None, ModifierKeys.None, KeyboardCommandShortcut.InsertChartSheet)]
+    [InlineData(Key.None, Key.OemPlus, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.None, Key.Add, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.None, Key.Right, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.GroupSelection)]
+    [InlineData(Key.None, Key.Left, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.UngroupSelection)]
+    [InlineData(Key.F, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenFormatCellsFont)]
+    [InlineData(Key.P, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenFormatCellsFont)]
+    [InlineData(Key.G, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.WorkbookStatistics)]
+    [InlineData(Key.F2, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.NewNote)]
+    [InlineData(Key.F2, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.NewThreadedComment)]
+    [InlineData(Key.F12, Key.None, ModifierKeys.None, KeyboardCommandShortcut.SaveAs)]
+    [InlineData(Key.F1, Key.None, ModifierKeys.None, KeyboardCommandShortcut.OpenHelp)]
+    [InlineData(Key.F10, Key.None, ModifierKeys.None, KeyboardCommandShortcut.ShowKeyTips)]
+    [InlineData(Key.F6, Key.None, ModifierKeys.None, KeyboardCommandShortcut.CycleShellFocus)]
+    [InlineData(Key.F6, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.CycleShellFocus)]
+    [InlineData(Key.F10, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.OpenContextMenu)]
+    [InlineData(Key.Apps, Key.None, ModifierKeys.None, KeyboardCommandShortcut.OpenContextMenu)]
+    [InlineData(Key.F2, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.EditInFormulaBar)]
+    [InlineData(Key.F11, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
+    [InlineData(Key.None, Key.F1, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
+    [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.Add, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.OemMinus, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    [InlineData(Key.Subtract, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    [InlineData(Key.OemQuotes, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CopyFormulaFromAbove)]
+    [InlineData(Key.OemQuotes, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.CopyValueFromAbove)]
+    [InlineData(Key.None, Key.Down, ModifierKeys.Alt, KeyboardCommandShortcut.OpenActiveDropdown)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.ScrollActiveCellIntoView)]
+    [InlineData(Key.OemPeriod, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CycleSelectionCorner)]
+    [InlineData(Key.Decimal, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CycleSelectionCorner)]
+    [InlineData(Key.OemOpenBrackets, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectDirectPrecedents)]
+    [InlineData(Key.OemCloseBrackets, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectDirectDependents)]
+    [InlineData(Key.OemOpenBrackets, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectAllPrecedents)]
+    [InlineData(Key.OemCloseBrackets, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectAllDependents)]
+    [InlineData(Key.O, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectCellsWithComments)]
+    [InlineData(Key.None, Key.Oem1, ModifierKeys.Alt, KeyboardCommandShortcut.SelectVisibleCellsOnly)]
+    [InlineData(Key.F2, Key.None, ModifierKeys.None, KeyboardCommandShortcut.EditCell)]
+    [InlineData(Key.Delete, Key.None, ModifierKeys.None, KeyboardCommandShortcut.ClearSelection)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.None, KeyboardCommandShortcut.ClearSelectionAndEdit)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.ClearSelectionAndEdit)]
+    [InlineData(Key.F4, Key.None, ModifierKeys.None, KeyboardCommandShortcut.RepeatLastAction)]
+    public void TryGetCommandShortcut_MapsCommonExcelShortcuts(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        KeyboardCommandShortcut expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out var shortcut);
+
+        result.Should().BeTrue();
+        shortcut.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.System, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
+    [InlineData(Key.System, Key.F1, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.System, Key.Add, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.System, Key.Down, ModifierKeys.Alt, KeyboardCommandShortcut.OpenActiveDropdown)]
+    [InlineData(Key.System, Key.Right, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.GroupSelection)]
+    [InlineData(Key.System, Key.Left, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.UngroupSelection)]
+    [InlineData(Key.System, Key.Oem1, ModifierKeys.Alt, KeyboardCommandShortcut.SelectVisibleCellsOnly)]
+    [InlineData(Key.System, Key.F9, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.CalculateNow)]
+    [InlineData(Key.System, Key.F9, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.RebuildDependenciesAndCalculate)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.System, Key.Add, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    [InlineData(Key.System, Key.Subtract, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    public void TryGetCommandShortcut_MapsSystemKeyCommandShortcuts(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        KeyboardCommandShortcut expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out var shortcut);
+
+        result.Should().BeTrue();
+        shortcut.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.C, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.X, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.A, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.A, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.N, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.O, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.S, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.T, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.L, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.K, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.D, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.R, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.E, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.PageUp, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.PageDown, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.Z, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.D8, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.Y, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.Y, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.Oem3, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemSemicolon, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemQuotes, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemOpenBrackets, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemCloseBrackets, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.P, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.L, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemSemicolon, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemQuotes, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemOpenBrackets, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemCloseBrackets, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F1, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F2, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F3, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F4, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F4, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F6, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F6, ModifierKeys.Control)]
+    [InlineData(Key.System, Key.F6, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.System, Key.F6, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F9, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F10, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F10, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F11, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F11, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F12, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F12, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.Apps, ModifierKeys.Alt)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Alt)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Alt | ModifierKeys.Shift)]
+    public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out _);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(Key.Oem3, NumberFormatShortcut.General)]
+    [InlineData(Key.D1, NumberFormatShortcut.Number)]
+    [InlineData(Key.D2, NumberFormatShortcut.Time)]
+    [InlineData(Key.D3, NumberFormatShortcut.Date)]
+    [InlineData(Key.D4, NumberFormatShortcut.Currency)]
+    [InlineData(Key.D5, NumberFormatShortcut.Percentage)]
+    [InlineData(Key.D6, NumberFormatShortcut.Scientific)]
+    public void TryGetNumberFormatShortcut_MapsCtrlShiftNumberShortcuts(Key key, NumberFormatShortcut expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetNumberFormatShortcut(
+            key,
+            ModifierKeys.Control | ModifierKeys.Shift,
+            out var shortcut);
+
+        result.Should().BeTrue();
+        shortcut.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.Oem3)]
+    [InlineData(Key.D1)]
+    [InlineData(Key.D2)]
+    [InlineData(Key.D3)]
+    [InlineData(Key.D4)]
+    [InlineData(Key.D5)]
+    [InlineData(Key.D6)]
+    public void TryGetNumberFormatShortcut_DoesNotStealAltModifiedChords(Key key)
+    {
+        var result = KeyboardShortcutMatcher.TryGetNumberFormatShortcut(
+            key,
+            ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt,
+            out _);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(Key.B, ModifierKeys.Control, FontToggleShortcut.Bold)]
+    [InlineData(Key.D2, ModifierKeys.Control, FontToggleShortcut.Bold)]
+    [InlineData(Key.I, ModifierKeys.Control, FontToggleShortcut.Italic)]
+    [InlineData(Key.D3, ModifierKeys.Control, FontToggleShortcut.Italic)]
+    [InlineData(Key.U, ModifierKeys.Control, FontToggleShortcut.Underline)]
+    [InlineData(Key.D4, ModifierKeys.Control, FontToggleShortcut.Underline)]
+    [InlineData(Key.D5, ModifierKeys.Control, FontToggleShortcut.Strikethrough)]
+    [InlineData(Key.NumPad5, ModifierKeys.Control, FontToggleShortcut.Strikethrough)]
+    public void TryGetFontToggleShortcut_MapsExcelFontShortcuts(Key key, ModifierKeys modifiers, FontToggleShortcut? expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetFontToggleShortcut(key, modifiers, out var shortcut);
+
+        result.Should().Be(expected is not null);
+        if (expected is not null)
+            shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.B, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.B, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.I, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.I, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.U, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.U, ModifierKeys.Control | ModifierKeys.Shift)]
+    public void TryGetFontToggleShortcut_DoesNotStealExtraModifierCombinations(Key key, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetFontToggleShortcut(key, modifiers, out _);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(Key.D7, ModifierKeys.Control | ModifierKeys.Shift, BorderKeyboardShortcut.Outline)]
+    [InlineData(Key.OemMinus, ModifierKeys.Control | ModifierKeys.Shift, BorderKeyboardShortcut.ClearOutline)]
+    [InlineData(Key.D7, ModifierKeys.Control, null)]
+    public void TryGetBorderShortcut_MapsOutlineBorderShortcuts(Key key, ModifierKeys modifiers, BorderKeyboardShortcut? expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetBorderShortcut(key, modifiers, out var shortcut);
+
+        result.Should().Be(expected is not null);
+        if (expected is not null)
+            shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.D7)]
+    [InlineData(Key.OemMinus)]
+    public void TryGetBorderShortcut_DoesNotStealAltModifiedChords(Key key)
+    {
+        var result = KeyboardShortcutMatcher.TryGetBorderShortcut(
+            key,
+            ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt,
+            out _);
+
+        result.Should().BeFalse();
+    }
+
+    private static IEnumerable<(Key Key, ModifierKeys Modifiers)> EnumeratePhysicalChords()
+    {
+        foreach (var key in Enum.GetValues<Key>().Where(key => key != Key.None))
+        foreach (var modifiers in ModifierCombinations)
+            yield return (key, modifiers);
+    }
+
+    private static IEnumerable<string> GetShortcutFamilyMatches(Key key, Key systemKey, ModifierKeys modifiers)
+    {
+        var effectiveKey = key is Key.None or Key.System ? systemKey : key;
+
+        if (KeyboardShortcutMatcher.IsCtrlPlus(key, systemKey, modifiers))
+            yield return "Insert cells";
+        if (KeyboardShortcutMatcher.IsCtrlMinus(key, systemKey, modifiers))
+            yield return "Delete cells";
+        if (KeyboardShortcutMatcher.IsPasteSpecialShortcut(key, systemKey, modifiers))
+            yield return "Paste special";
+        if (KeyboardShortcutMatcher.TryGetGridShortcut(effectiveKey, modifiers, out var gridShortcut))
+            yield return $"Grid:{gridShortcut}";
+        if (KeyboardShortcutMatcher.TryGetSelectionShortcut(effectiveKey, modifiers, out var selectionShortcut))
+            yield return $"Selection:{selectionShortcut}";
+        if (KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out var commandShortcut))
+            yield return $"Command:{commandShortcut}";
+        if (KeyboardShortcutMatcher.TryGetNumberFormatShortcut(effectiveKey, modifiers, out var numberFormatShortcut))
+            yield return $"NumberFormat:{numberFormatShortcut}";
+        if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(effectiveKey, modifiers, out var fontToggleShortcut))
+            yield return $"Font:{fontToggleShortcut}";
+        if (KeyboardShortcutMatcher.TryGetBorderShortcut(effectiveKey, modifiers, out var borderShortcut))
+            yield return $"Border:{borderShortcut}";
+    }
+
+    private static bool RuleMatches(object rule, Key key, ModifierKeys modifiers)
+    {
+        var matches = (Func<Key, ModifierKeys, bool>)rule.GetType().GetProperty("Matches")!.GetValue(rule)!;
+        return matches(key, modifiers);
+    }
+
+    private static KeyboardCommandShortcut RuleShortcut(object rule) =>
+        (KeyboardCommandShortcut)rule.GetType().GetProperty("Shortcut")!.GetValue(rule)!;
+}

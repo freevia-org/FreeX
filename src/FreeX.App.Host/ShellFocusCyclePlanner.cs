@@ -1,0 +1,50 @@
+namespace FreeX.App.Host;
+
+public static class ShellFocusCyclePlanner
+{
+    private static readonly ShellFocusTarget[] Cycle =
+    [
+        ShellFocusTarget.Worksheet,
+        ShellFocusTarget.Ribbon,
+        ShellFocusTarget.FormulaBar,
+        ShellFocusTarget.SheetTabs,
+        ShellFocusTarget.TaskPane,
+        ShellFocusTarget.StatusBar
+    ];
+
+    public static ShellFocusTarget GetNext(ShellFocusTarget current, bool reverse)
+    {
+        var index = Array.IndexOf(Cycle, current);
+        if (index < 0)
+            index = 0;
+
+        var offset = reverse ? -1 : 1;
+        var nextIndex = (index + offset + Cycle.Length) % Cycle.Length;
+        return Cycle[nextIndex];
+    }
+
+    public static ShellFocusTarget GetNextAvailable(
+        ShellFocusTarget current,
+        bool reverse,
+        Predicate<ShellFocusTarget> isAvailable)
+    {
+        for (var attempt = 0; attempt < Cycle.Length; attempt++)
+        {
+            current = GetNext(current, reverse);
+            if (isAvailable(current))
+                return current;
+        }
+
+        return ShellFocusTarget.Worksheet;
+    }
+}
+
+public enum ShellFocusTarget
+{
+    Worksheet,
+    Ribbon,
+    FormulaBar,
+    SheetTabs,
+    TaskPane,
+    StatusBar
+}

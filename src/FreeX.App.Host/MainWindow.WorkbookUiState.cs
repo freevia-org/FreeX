@@ -1,0 +1,255 @@
+using System.Collections.Generic;
+using System.Windows;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
+using CellVAlign = FreeX.Core.Model.VerticalAlignment;
+
+namespace FreeX.App.Host;
+
+public partial class MainWindow
+{
+    private void ApplyOptionsToView()
+    {
+        SheetGrid.UseR1C1ReferenceStyle = _options.UseR1C1ReferenceStyle;
+        _suppressAppViewOptionSync = true;
+        try
+        {
+            if (ViewFormulaBarChk is not null)
+                ViewFormulaBarChk.IsChecked = _options.ShowFormulaBar;
+            if (FormulaBarBorder is not null)
+                FormulaBarBorder.Visibility = _options.ShowFormulaBar ? Visibility.Visible : Visibility.Collapsed;
+            _formulaBarExpanded = _options.FormulaBarExpanded;
+            ApplyFormulaBarExpansion();
+        }
+        finally
+        {
+            _suppressAppViewOptionSync = false;
+        }
+
+        if (SheetGrid.SelectedRange is { } range)
+        {
+            CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(range.Start), range.Start);
+        }
+    }
+
+    private void RecalculateWorkbook()
+    {
+        _recalcEngine.RecalculateAllFormulas(_workbook);
+        InvalidateNavigationCaches();
+    }
+
+    private void RebuildDependenciesAndCalculate()
+    {
+        _recalcEngine.RebuildFormulaDependencies(_workbook);
+        _recalcEngine.RecalculateAllFormulas(_workbook);
+        InvalidateNavigationCaches();
+        UpdateViewport();
+    }
+
+    private void RecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
+    {
+        if (_workbook.CalculationMode == WorkbookCalculationMode.Automatic)
+        {
+            _recalcEngine.Recalculate(_workbook, changedCells);
+            InvalidateNavigationCaches();
+        }
+    }
+
+    private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.WidthChanged)
+            NormalizeRibbonSurfaceAfterResize();
+        ScheduleViewportResizeRefresh();
+    }
+
+    private void ScheduleViewportResizeRefresh()
+    {
+        if (!_resizeViewportRefreshPending)
+            SheetGrid.IsLiveResizing = true;
+
+        _resizeViewportRefreshPending = true;
+        _resizeViewportRefreshTimer ??= CreateResizeViewportRefreshTimer();
+        _resizeViewportRefreshTimer.Stop();
+        if (_isInWindowResizeMoveLoop)
+            return;
+
+        _resizeViewportRefreshTimer.Start();
+    }
+
+    private System.Windows.Threading.DispatcherTimer CreateResizeViewportRefreshTimer()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background,
+            Dispatcher)
+        {
+            Interval = System.TimeSpan.FromMilliseconds(ResizeViewportRefreshDelayMilliseconds)
+        };
+
+        timer.Tick += (_, _) => CompleteViewportResizeRefresh();
+
+        return timer;
+    }
+
+    private void CompleteViewportResizeRefresh()
+    {
+        _resizeViewportRefreshTimer?.Stop();
+        _resizeViewportRefreshPending = false;
+        SheetGrid.IsLiveResizing = false;
+        UpdateViewport();
+    }
+
+    private string FormatCellReference(CellAddress address) =>
+        SpreadsheetDisplayFormatter.FormatCellReference(address, _options.UseR1C1ReferenceStyle);
+
+    private string FormatColumnReference(uint column) =>
+        SpreadsheetDisplayFormatter.FormatColumnReference(column, _options.UseR1C1ReferenceStyle);
+
+    private string FormatRangeReference(CellAddress start, CellAddress end) =>
+        SpreadsheetDisplayFormatter.FormatRangeReference(start, end, _options.UseR1C1ReferenceStyle);
+
+    private string FormatFormulaBarText(Cell? cell, CellAddress address) =>
+        SpreadsheetDisplayFormatter.FormatFormulaBarText(cell, address, _options.UseR1C1ReferenceStyle);
+
+    private void RefreshToolbar()
+    {
+        var canUndo = _commandBus.CanUndo(_workbook.Id);
+        var canRedo = _commandBus.CanRedo(_workbook.Id);
+
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            _toolbarVisualStateCache.Clear();
+            _lastToolbarVisualState = null;
+            UndoQatBtn.IsEnabled = canUndo;
+            RedoQatBtn.IsEnabled = canRedo;
+            return;
+        }
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+        {
+            _toolbarVisualStateCache.Clear();
+            _lastToolbarVisualState = null;
+            UndoQatBtn.IsEnabled = canUndo;
+            RedoQatBtn.IsEnabled = canRedo;
+            return;
+        }
+        var styleId = sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default;
+        if (_toolbarVisualStateCache.TryGetCurrent(styleId, canUndo, canRedo, out _))
+            return;
+
+        var state = _toolbarVisualStateCache.GetOrCreate(
+            styleId,
+            canUndo,
+            canRedo,
+            () => ToolbarVisualState.From(_workbook.GetStyle(styleId), canUndo, canRedo));
+        if (state == _lastToolbarVisualState)
+            return;
+
+        _suppressToolbarSync = true;
+        try
+        {
+            UndoQatBtn.IsEnabled = state.CanUndo;
+            RedoQatBtn.IsEnabled = state.CanRedo;
+            BoldButton.IsChecked = state.Bold;
+            ItalicButton.IsChecked = state.Italic;
+            UnderlineButton.IsChecked = state.Underline;
+            StrikeButton.IsChecked = state.Strikethrough;
+            AlignTopBtn.IsChecked = state.VerticalAlignment == CellVAlign.Top;
+            AlignMiddleBtn.IsChecked = state.VerticalAlignment == CellVAlign.Center;
+            AlignBottomBtn.IsChecked = state.VerticalAlignment == CellVAlign.Bottom;
+            AlignLeftBtn.IsChecked = state.HorizontalAlignment == CellHAlign.Left;
+            AlignCenterBtn.IsChecked = state.HorizontalAlignment == CellHAlign.Center;
+            AlignRightBtn.IsChecked = state.HorizontalAlignment == CellHAlign.Right;
+            WrapTextBtn.IsChecked = state.WrapText;
+            if (FontNameBox.Items.Contains(state.FontName))
+                FontNameBox.SelectedItem = state.FontName;
+            if (FontSizeBox.Items.Contains(state.FontSizeText))
+                FontSizeBox.SelectedItem = state.FontSizeText;
+            _lastToolbarVisualState = state;
+        }
+        finally
+        {
+            _suppressToolbarSync = false;
+        }
+    }
+
+    private void ApplyStyleDiff(StyleDiff diff)
+    {
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteRepeatableApplyStyle(diff, "Apply Style"))
+            return;
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private void FindButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new FindReplaceDialog(
+            () => _workbook,
+            _commandBus,
+            NavigateToCell,
+            replaceMode: false,
+            () => _currentSheetId,
+            () => SheetGrid.SelectedRange?.Start)
+        {
+            Owner = this
+        };
+        dlg.Show();
+    }
+
+    private void ReplaceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new FindReplaceDialog(
+            () => _workbook,
+            _commandBus,
+            NavigateToCell,
+            replaceMode: true,
+            () => _currentSheetId,
+            () => SheetGrid.SelectedRange?.Start)
+        {
+            Owner = this
+        };
+        dlg.Show();
+    }
+
+    private void NavigateToCell(CellAddress addr)
+    {
+        _currentSheetId = addr.Sheet;
+        SetActiveCell(addr);
+        EnsureCellVisible(addr);
+        UpdateViewport();
+    }
+
+    private void RefreshSheetProtectionUi()
+    {
+        if (ProtectSheetButton is null)
+            return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var uiText = SheetProtectionWorkflow.GetUiText(sheet);
+        ProtectSheetButton.Content = uiText.ButtonContent;
+        RibbonTooltip.SetTitle(ProtectSheetButton, uiText.TooltipTitle);
+        RibbonTooltip.SetDescription(ProtectSheetButton, uiText.TooltipDescription);
+
+        if (AllowEditRangesButton is not null)
+            AllowEditRangesButton.IsEnabled = !sheet.IsProtected;
+    }
+
+    private void RefreshWorkbookProtectionUi()
+    {
+        if (ProtectWorkbookButton is null)
+            return;
+
+        var uiText = WorkbookProtectionWorkflow.GetUiText(_workbook);
+        ProtectWorkbookButton.Content = uiText.ButtonContent;
+        RibbonTooltip.SetTitle(ProtectWorkbookButton, uiText.TooltipTitle);
+        RibbonTooltip.SetDescription(ProtectWorkbookButton, uiText.TooltipDescription);
+    }
+}

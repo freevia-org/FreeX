@@ -1,6 +1,6 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 
-$iconDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'src/Freexcel.App.Host/Resources/CommandIconsSvg'
+$iconDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'src/FreeX.App.Host/Resources/CommandIconsSvg'
 $baseFiles = Get-ChildItem $iconDir -Filter '*.svg' | Where-Object { $_.BaseName -notmatch '-(small|large)$' }
 $culture = [Globalization.CultureInfo]::InvariantCulture
 $starGlyph = [char]0x2605

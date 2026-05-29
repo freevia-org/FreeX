@@ -1,0 +1,987 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Host;
+
+public partial class MainWindow
+{
+    private void InsertChartButton_Click(object sender, RoutedEventArgs e)
+        => InsertChartOfType(ChartType.Column);
+
+    private void InsertEmbeddedChart() => InsertChartOfType(ChartType.Column);
+
+    private void InsertChartSheet()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+
+        AddChartSheetCommand? command = null;
+        IWorkbookCommand CreateCommand()
+        {
+            var currentRange = SheetGrid.SelectedRange ?? range;
+            command = new AddChartSheetCommand(_currentSheetId, currentRange, ChartType.Column, "Chart");
+            return command;
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Insert Chart Sheet");
+            return;
+        }
+
+        _repeatPostAction = null;
+        if (command?.CreatedSheetId is { } createdSheetId)
+        {
+            _currentSheetId = createdSheetId;
+            _groupedSheetIds.Clear();
+            _groupedSheetIds.Add(_currentSheetId);
+            _sheetGroupAnchor = _currentSheetId;
+        }
+
+        RefreshSheetTabs();
+        UpdateViewport();
+    }
+
+    private void InsertChartOfType(ChartType type)
+    {
+        if (!ChartTypeSupport.IsRenderable(type))
+        {
+            ShowDeferredChartFamilyMessage();
+            return;
+        }
+
+        if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Insert Chart",
+                range,
+                currentRange => new AddChartCommand(_currentSheetId, currentRange, type, "Chart")))
+            return;
+
+        UpdateViewport();
+    }
+
+
+    private void InsertChartPickerBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new InsertChartDialog { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        InsertChartOfType(dialog.Result.ChartType);
+    }
+
+    private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveNormalChart("Change Chart Type", out var chart))
+            return;
+
+        var dialog = new ChangeChartTypeDialog(chart.Type) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryExecuteCommand(new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), "Change Chart Type"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void SelectChartDataSourceBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveNormalChart("Select Data Source", out var chart))
+            return;
+
+        SelectDataSourceDialog? dialog = null;
+        dialog = new SelectDataSourceDialog(
+            FormatRangeReference(chart.DataRange.Start, chart.DataRange.End),
+            chart.FirstColIsCategories,
+            request => ApplySelectDataSourceRangeSelection(dialog, request),
+            sheetId: _currentSheetId)
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, out var dataRange))
+        {
+            _messageService.ShowWarning("Enter a valid chart data range.", "Select Data Source");
+            return;
+        }
+
+        if (!TryExecuteCommand(
+                new ChangeChartSourceCommand(
+                    _currentSheetId,
+                    chart.Id,
+                    dataRange,
+                    firstRowIsHeader: chart.FirstRowIsHeader,
+                    firstColIsCategories: dialog.Result.FirstColumnIsCategories),
+                "Select Data Source"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ApplySelectDataSourceRangeSelection(
+        SelectDataSourceDialog? dialog,
+        SelectDataSourceRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
+    private void MoveChartBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveNormalChart("Move Chart", out var chart))
+            return;
+
+        var currentSheet = _workbook.GetSheet(_currentSheetId);
+        if (currentSheet is null)
+            return;
+
+        var dialog = new MoveChartDialog(currentSheet.Name) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (dialog.Result.TargetKind == MoveChartTargetKind.NewChartSheet)
+        {
+            if (!TryExecuteCommand(new MoveChartToNewSheetCommand(_currentSheetId, chart.Id, dialog.Result.TargetName), "Move Chart"))
+                return;
+
+            var createdSheet = _workbook.GetSheet(dialog.Result.TargetName);
+            if (createdSheet is not null)
+                _currentSheetId = createdSheet.Id;
+        }
+        else
+        {
+            var targetSheet = _workbook.GetSheet(dialog.Result.TargetName);
+            if (targetSheet is null)
+            {
+                _messageService.ShowWarning("Target sheet was not found.", "Move Chart");
+                return;
+            }
+
+            if (!TryExecuteCommand(new MoveChartCommand(_currentSheetId, chart.Id, targetSheet.Id), "Move Chart"))
+                return;
+
+            _currentSheetId = targetSheet.Id;
+        }
+
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        RefreshSheetTabs();
+        UpdateViewport();
+    }
+
+    private void ChartStylesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog("Chart Styles", "Insert or select a chart before choosing a chart style.", out var chart))
+            return;
+
+        var dialog = new ChartStyleDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryExecuteCommand(new SetChartStyleCommand(_currentSheetId, chart.Id, dialog.Result.ChartStyleId), "Chart Styles"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void FormatChartAreaBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog("Format Chart Area", "Insert or select a chart before formatting the chart area.", out var chart))
+            return;
+
+        var dialog = new ChartAreaLegendDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!ApplyChartLayoutDialogResult("Format Chart Area", chart, dialog.Result.ToOptions()))
+            return;
+
+        UpdateViewport();
+    }
+
+    private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        chart = sheet?.Charts.FirstOrDefault(item => !item.IsPivotChart) ?? null!;
+        if (chart is not null)
+            return true;
+
+        _messageService.ShowInfo("Insert or select a chart before using this command.", caption);
+        return false;
+    }
+
+    private void ChartColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Column);
+    private void ChartStackedColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.StackedColumn);
+    private void ChartPercentStackedColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.PercentStackedColumn);
+    private void ChartLineMenuItem_Click(object sender, RoutedEventArgs e)   => InsertChartOfType(ChartType.Line);
+    private void Chart3DLineMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDLine);
+    private void ChartPieMenuItem_Click(object sender, RoutedEventArgs e)    => InsertChartOfType(ChartType.Pie);
+    private void Chart3DPieMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDPie);
+    private void ChartDoughnutMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Doughnut);
+    private void ChartBarMenuItem_Click(object sender, RoutedEventArgs e)    => InsertChartOfType(ChartType.Bar);
+    private void ChartStackedBarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.StackedBar);
+    private void ChartPercentStackedBarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.PercentStackedBar);
+    private void ChartAreaMenuItem_Click(object sender, RoutedEventArgs e)   => InsertChartOfType(ChartType.Area);
+    private void Chart3DAreaMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDArea);
+    private void ChartScatterMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Scatter);
+    private void ChartBubbleMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Bubble);
+    private void ChartRadarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Radar);
+    private void ChartStockMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Stock);
+    private void ChartSurfaceMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Surface);
+    private void Chart3DSurfaceMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDSurface);
+    private void Chart3DColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDColumn);
+    private void Chart3DBarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDBar);
+    private void ChartTreemapMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Treemap);
+    private void ChartSunburstMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Sunburst);
+    private void ChartHistogramMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Histogram);
+    private void ChartParetoMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Pareto);
+    private void ChartBoxAndWhiskerMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.BoxAndWhisker);
+    private void ChartWaterfallMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Waterfall);
+    private void ChartFunnelMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Funnel);
+    private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e) => ShowDeferredChartFamilyMessage();
+
+    private void ShowDeferredChartFamilyMessage() =>
+        _messageService.ShowInfo(
+            "This chart family is retained when opening XLSX files, but authoring and rendering are deferred until its data model and renderer are implemented.",
+            "Chart family deferred");
+
+    private void ChartFirstSliceAngleBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                "First Slice Angle",
+                "Insert or select a pie or doughnut chart before changing first-slice angle.",
+                chart => chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut,
+                "First-slice angle only applies to pie and doughnut charts.",
+                chart => new ChartLayoutOptions(FirstSliceAngle: chart.FirstSliceAngle >= 270 ? 0 : chart.FirstSliceAngle + 90)))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartDoughnutHoleSizeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                "Doughnut Hole Size",
+                "Insert or select a doughnut chart before changing hole size.",
+                chart => chart.Type == ChartType.Doughnut,
+                "Doughnut hole size only applies to doughnut charts.",
+                chart => new ChartLayoutOptions(
+                    DoughnutHoleSize: chart.DoughnutHoleSize switch
+                    {
+                        < 0.45 => 0.55,
+                        < 0.7 => 0.75,
+                        _ => 0.35
+                    })))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartExplodedSliceBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                "Explode Slice",
+                "Insert or select a pie or doughnut chart before exploding a slice.",
+                chart => chart.Type is (ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut) && ChartTypeSupport.GetDataPointCount(chart) > 0,
+                "Exploded slices require a pie or doughnut chart with chart data.",
+                chart =>
+                {
+                    var sliceCount = ChartTypeSupport.GetDataPointCount(chart);
+                    var nextIndex = chart.ExplodedSliceIndex < 0
+                        ? 0
+                        : chart.ExplodedSliceIndex + 1 >= sliceCount ? -1 : chart.ExplodedSliceIndex + 1;
+                    var nextDistance = nextIndex < 0
+                        ? 0.1
+                        : chart.ExplodedSliceDistance >= 0.22 ? 0.1 : chart.ExplodedSliceDistance + 0.06;
+                    return new ChartLayoutOptions(ExplodedSliceIndex: nextIndex, ExplodedSliceDistance: nextDistance);
+                }))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartBarFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Bar/Column",
+                "Insert or select a bar or column chart before changing gap width.",
+                out var chart))
+            return;
+
+        if (!ChartTypeSupport.SupportsBarGapWidth(chart.Type))
+        {
+            _messageService.ShowInfo("Gap width and overlap only apply to bar and column charts.", "Format Bar/Column");
+            return;
+        }
+
+        var dialog = new ChartBarFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Bar/Column", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartBubbleFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Bubble Chart",
+                "Insert or select a bubble chart before changing bubble options.",
+                out var chart))
+            return;
+
+        if (chart.Type != ChartType.Bubble)
+        {
+            _messageService.ShowInfo("Bubble format options only apply to bubble charts.", "Format Bubble Chart");
+            return;
+        }
+
+        var dialog = new ChartBubbleFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Bubble Chart", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartPieFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Pie/Doughnut",
+                "Insert or select a pie or doughnut chart before changing pie options.",
+                out var chart))
+            return;
+
+        if (!ChartTypeSupport.SupportsFirstSliceAngle(chart.Type))
+        {
+            _messageService.ShowInfo("Pie format options only apply to pie and doughnut charts.", "Format Pie/Doughnut");
+            return;
+        }
+
+        var dialog = new ChartPieFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Pie/Doughnut", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartStockFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Stock Chart",
+                "Insert or select a stock chart before changing stock options.",
+                out var chart))
+            return;
+
+        if (chart.Type != ChartType.Stock)
+        {
+            _messageService.ShowInfo("Stock format options only apply to stock charts.", "Format Stock Chart");
+            return;
+        }
+
+        var dialog = new ChartStockFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Stock Chart", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ShowChartDataLabelsDialog();
+    }
+
+    private void ShowChartDataLabelsDialog()
+    {
+        if (!TryGetFirstChartForDialog("Format Data Labels", "Insert or select a chart before changing data labels.", out var chart))
+            return;
+
+        var dialog = new ChartDataLabelsDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Data Labels", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartDataLabelPositionBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ShowChartDataLabelsDialog();
+    }
+
+    private void ChartDataLabelCategoryBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Category Name",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                ShowDataLabelCategoryName: !chart.ShowDataLabelCategoryName));
+    }
+
+    private void ChartDataLabelSeriesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Series Name",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                ShowDataLabelSeriesName: !chart.ShowDataLabelSeriesName));
+    }
+
+    private void ChartDataLabelPercentageBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Percentage",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                ShowDataLabelPercentage: !chart.ShowDataLabelPercentage));
+    }
+
+    private void ChartDataLabelSeparatorBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Label Separator",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                DataLabelSeparator: ChartOptionCycler.NextDataLabelSeparator(chart.DataLabelSeparator)));
+    }
+
+    private void ChartDataLabelNumberFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Label Number Format",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                DataLabelNumberFormat: ChartOptionCycler.NextDataLabelNumberFormat(chart.DataLabelNumberFormat)));
+    }
+
+    private void ChartDataLabelCalloutBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Data Callout",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                ShowDataLabelCallouts: !chart.ShowDataLabelCallouts));
+    }
+
+    private void ChartDataLabelFillBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Data Label Fill",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                DataLabelFillColor: ChartOptionCycler.NextSeriesColor(chart.DataLabelFillColor)));
+    }
+
+    private void ChartDataLabelTextBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Data Label Text",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                DataLabelTextColor: ChartOptionCycler.NextSeriesColor(chart.DataLabelTextColor)));
+    }
+
+    private void ChartDataLabelBorderBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Data Label Border",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                DataLabelBorderColor: ChartOptionCycler.NextSeriesColor(chart.DataLabelBorderColor),
+                DataLabelBorderThickness: chart.DataLabelBorderThickness >= 3 ? 0.75 : chart.DataLabelBorderThickness + 0.75));
+    }
+
+    private void ChartDataLabelSizeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Data Label Size",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                DataLabelFontSize: chart.DataLabelFontSize >= 16 ? 9 : chart.DataLabelFontSize + 1));
+    }
+
+    private void ChartDataLabelAngleBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDataLabelOption(
+            "Data Label Angle",
+            chart => new ChartLayoutOptions(
+                ShowDataLabels: true,
+                DataLabelAngle: ChartOptionCycler.NextAxisLabelAngle(chart.DataLabelAngle)));
+    }
+
+    private void ChartPointDataLabelBtn_Click(object sender, RoutedEventArgs e)
+    {
+        const string caption = "Format Data Point Label";
+        if (!TryExecuteRepeatableChartLayout(
+                caption,
+                "Insert or select a chart before changing point data-label formatting.",
+                chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && ChartTypeSupport.GetDataPointCount(chart) > 0,
+                "Add chart data points before changing point data-label formatting.",
+                chart =>
+                {
+                    var formats = chart.PointDataLabelFormats.ToList();
+                    var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0 && format.PointIndex == 0);
+                    var current = existingIndex >= 0 ? formats[existingIndex] : new ChartPointDataLabelFormat(0, 0);
+                    var updated = current with
+                    {
+                        FillColor = ChartOptionCycler.NextSeriesColor(current.FillColor),
+                        BorderColor = ChartOptionCycler.NextSeriesColor(current.BorderColor ?? current.FillColor),
+                        BorderThickness = current.BorderThickness is null or >= 3 ? 0.75 : current.BorderThickness.Value + 0.75,
+                        TextColor = ChartOptionCycler.NextSeriesColor(current.TextColor),
+                        FontSize = current.FontSize is null or >= 16 ? 9 : current.FontSize.Value + 1
+                    };
+                    if (existingIndex >= 0)
+                        formats[existingIndex] = updated;
+                    else
+                        formats.Add(updated);
+                    return new ChartLayoutOptions(
+                        ShowDataLabels: true,
+                        PointDataLabelFormats: formats);
+                }))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartAreaFillBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Chart Area Fill",
+            chart => new ChartLayoutOptions(ChartAreaFillColor: ChartOptionCycler.NextSeriesColor(chart.ChartAreaFillColor)));
+    }
+
+    private void ChartTitleColorBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Chart Title Color",
+            chart => new ChartLayoutOptions(ChartTitleTextColor: ChartOptionCycler.NextSeriesColor(chart.ChartTitleTextColor)));
+    }
+
+    private void ChartTitlesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        const string caption = "Chart Titles";
+        if (!TryGetFirstChartForDialog(caption, "Insert or select a chart before editing chart titles.", out var chart))
+            return;
+
+        var dialog = new ChartTitlesDialog(chart.Title, chart.XAxisTitle, chart.YAxisTitle) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartTitleSizeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Chart Title Size",
+            chart => new ChartLayoutOptions(ChartTitleFontSize: chart.ChartTitleFontSize >= 24 ? 12 : chart.ChartTitleFontSize + 2));
+    }
+
+    private void ChartAxisTitleColorBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Axis Title Color",
+            chart => new ChartLayoutOptions(AxisTitleTextColor: ChartOptionCycler.NextSeriesColor(chart.AxisTitleTextColor)));
+    }
+
+    private void ChartAxisTitleSizeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Axis Title Size",
+            chart => new ChartLayoutOptions(AxisTitleFontSize: chart.AxisTitleFontSize >= 18 ? 9 : chart.AxisTitleFontSize + 1));
+    }
+
+    private void ChartPlotAreaFillBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Plot Area Fill",
+            chart => new ChartLayoutOptions(PlotAreaFillColor: ChartOptionCycler.NextSeriesColor(chart.PlotAreaFillColor)));
+    }
+
+    private void ChartPlotAreaBorderBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Plot Area Border",
+            chart => new ChartLayoutOptions(
+                PlotAreaBorderColor: ChartOptionCycler.NextSeriesColor(chart.PlotAreaBorderColor),
+                PlotAreaBorderThickness: chart.PlotAreaBorderThickness >= 3 ? 1 : chart.PlotAreaBorderThickness + 0.75));
+    }
+
+    private void ChartLegendTextBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Legend Text",
+            chart => new ChartLayoutOptions(LegendTextColor: ChartOptionCycler.NextSeriesColor(chart.LegendTextColor)));
+    }
+
+    private void ChartLegendFillBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Legend Fill",
+            chart => new ChartLayoutOptions(LegendFillColor: ChartOptionCycler.NextSeriesColor(chart.LegendFillColor)));
+    }
+
+    private void ChartLegendBorderBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Legend Border",
+            chart => new ChartLayoutOptions(
+                LegendBorderColor: ChartOptionCycler.NextSeriesColor(chart.LegendBorderColor),
+                LegendBorderThickness: chart.LegendBorderThickness >= 3 ? 0.75 : chart.LegendBorderThickness + 0.75));
+    }
+
+    private void ChartLegendSizeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Legend Font Size",
+            chart => new ChartLayoutOptions(LegendFontSize: chart.LegendFontSize >= 16 ? 9 : chart.LegendFontSize + 1));
+    }
+
+    private void ChartLegendOverlayBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleChartAreaOption(
+            "Legend Overlay",
+            chart => new ChartLayoutOptions(ShowLegend: true, LegendOverlay: !chart.LegendOverlay));
+    }
+
+    private void ToggleDataLabelOption(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                caption,
+                "Insert or select a chart before changing data label options.",
+                null,
+                null,
+                optionsFactory))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ToggleChartAreaOption(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                caption,
+                "Insert or select a chart before changing chart area formatting.",
+                null,
+                null,
+                optionsFactory))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartTrendlineBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ShowChartTrendlineDialog();
+    }
+
+    private void ShowChartTrendlineDialog()
+    {
+        if (!TryGetFirstChartForDialog("Format Trendline", "Insert or select a chart before changing trendlines.", out var chart))
+            return;
+
+        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
+        {
+            ShowCommandError(new CommandOutcome(false, "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts."), "Format Trendline");
+            return;
+        }
+
+        var dialog = new ChartTrendlineOptionsDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Trendline", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartTrendlineTypeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ShowChartTrendlineDialog();
+    }
+
+    private void ChartTrendlinePeriodBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                "Moving Average Period",
+                "Insert or select a chart before changing moving-average period.",
+                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
+                "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
+                chart => new ChartLayoutOptions(
+                    ShowLinearTrendline: true,
+                    TrendlineType: ChartTrendlineType.MovingAverage,
+                    TrendlinePeriod: chart.TrendlinePeriod >= 6 ? 2 : chart.TrendlinePeriod + 1)))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartTrendlineOrderBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                "Polynomial Order",
+                "Insert or select a chart before changing polynomial order.",
+                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
+                "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
+                chart => new ChartLayoutOptions(
+                    ShowLinearTrendline: true,
+                    TrendlineType: ChartTrendlineType.Polynomial,
+                    TrendlineOrder: chart.TrendlineOrder >= 6 ? 2 : chart.TrendlineOrder + 1)))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartTrendlineEquationBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleTrendlineInfo(
+            "Trendline Equation",
+            chart => new ChartLayoutOptions(
+                ShowLinearTrendline: true,
+                ShowTrendlineEquation: !chart.ShowTrendlineEquation));
+    }
+
+    private void ChartTrendlineRSquaredBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleTrendlineInfo(
+            "R-squared",
+            chart => new ChartLayoutOptions(
+                ShowLinearTrendline: true,
+                ShowTrendlineRSquared: !chart.ShowTrendlineRSquared));
+    }
+
+    private void ChartTrendlineColorBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleTrendlineInfo(
+            "Trendline Color",
+            chart => new ChartLayoutOptions(
+                ShowLinearTrendline: true,
+                TrendlineColor: ChartOptionCycler.NextTrendlineColor(chart.TrendlineColor)));
+    }
+
+    private void ChartTrendlineDashBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleTrendlineInfo(
+            "Trendline Dash",
+            chart => new ChartLayoutOptions(
+                ShowLinearTrendline: true,
+                TrendlineDashStyle: chart.TrendlineDashStyle switch
+                {
+                    ChartLineDashStyle.Dash => ChartLineDashStyle.Dot,
+                    ChartLineDashStyle.Dot => ChartLineDashStyle.Solid,
+                    _ => ChartLineDashStyle.Dash
+                }));
+    }
+
+    private void ChartTrendlineWidthBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleTrendlineInfo(
+            "Trendline Width",
+            chart => new ChartLayoutOptions(
+                ShowLinearTrendline: true,
+                TrendlineThickness: chart.TrendlineThickness >= 3 ? 1.5 : chart.TrendlineThickness + 0.75));
+    }
+
+    private void ChartErrorBarsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog("Format Error Bars", "Insert or select a chart before changing error bars.", out var chart))
+            return;
+
+        var dialog = new ChartErrorBarsDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!ApplyChartLayoutDialogResult("Format Error Bars", chart, dialog.Result.ToOptions()))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ToggleTrendlineInfo(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                caption,
+                "Insert or select a chart before changing trendline information.",
+                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
+                "Trendline information is currently supported for column, line, bar, scatter, bubble, and area charts.",
+                optionsFactory))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartSecondaryAxisSeriesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                "Secondary Axis Series",
+                "Insert or select a chart before changing secondary-axis series.",
+                chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) && ChartOptionCycler.GetSeriesCount(chart) >= 2,
+                "Secondary value axes require a supported chart with at least two data series.",
+                chart =>
+                {
+                    var next = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
+                    return new ChartLayoutOptions(
+                        ShowSecondaryAxis: next.ShowSecondaryAxis,
+                        SecondaryAxisSeriesIndexes: next.SeriesIndexes);
+                }))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartComboBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                "Combo Chart",
+                "Insert or select a chart before changing combo chart options.",
+                chart => ChartTypeSupport.SupportsComboLineOverlay(chart.Type) &&
+                         (chart.UseComboLineForSecondarySeries || ChartTypeSupport.SupportsComboLineOverlay(chart)),
+                "Combo line overlays require a supported chart with at least two data series.",
+                chart => new ChartLayoutOptions(
+                    UseComboLineForSecondarySeries: !chart.UseComboLineForSecondarySeries,
+                    ComboLineSeriesIndexes: !chart.UseComboLineForSecondarySeries ? chart.ComboLineSeriesIndexes : [])))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartComboSeriesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                "Combo Chart Series",
+                "Insert or select a chart before changing combo chart series.",
+                chart => ChartTypeSupport.SupportsComboLineOverlay(chart.Type) && ChartTypeSupport.SupportsComboLineOverlay(chart),
+                "Combo line overlays require a supported chart with at least two data series.",
+                chart =>
+                {
+                    var nextIndexes = ChartOptionCycler.GetNextComboLineSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
+                    return new ChartLayoutOptions(
+                        UseComboLineForSecondarySeries: nextIndexes.Length > 0,
+                        ComboLineSeriesIndexes: nextIndexes);
+                }))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ChartSeriesColorBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ShowChartSeriesFormatDialog();
+    }
+
+    private void ChartSeriesWidthBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleSeriesFormat(
+            "Series Width",
+            format => format with
+            {
+                StrokeThickness = format.StrokeThickness is null or >= 4 ? 1.5 : format.StrokeThickness.Value + 0.75
+            });
+    }
+
+    private void ChartSeriesDashBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleSeriesFormat(
+            "Series Dash",
+            format => format with
+            {
+                DashStyle = format.DashStyle switch
+                {
+                    null => ChartLineDashStyle.Dash,
+                    ChartLineDashStyle.Dash => ChartLineDashStyle.Dot,
+                    ChartLineDashStyle.Dot => ChartLineDashStyle.Solid,
+                    _ => null
+                }
+            });
+    }
+
+    private void ChartSeriesMarkerBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ShowChartSeriesFormatDialog();
+    }
+
+    private void ShowChartSeriesFormatDialog()
+    {
+        if (!TryGetFirstChartForDialog("Format Data Series", "Insert or select a chart before changing series formatting.", out var chart))
+            return;
+
+        var seriesCount = ChartOptionCycler.GetSeriesCount(chart);
+        if (seriesCount <= 0)
+        {
+            ShowCommandError(new CommandOutcome(false, "Add data series before changing series formatting."), "Format Data Series");
+            return;
+        }
+
+        var dialog = new ChartSeriesFormatDialog(chart, ChartOptionCycler.GetSeriesCount(chart)) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Data Series", chart, dialog.Result.ToOptions(chart.SeriesFormats));
+    }
+
+    private void ChartSeriesMarkerSizeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleSeriesFormat(
+            "Marker Size",
+            format => format with
+            {
+                MarkerSize = format.MarkerSize is null or >= 12 ? 5 : format.MarkerSize.Value + 2
+            },
+            chart => ChartTypeSupport.SupportsSeriesMarkers(chart.Type),
+            "Series marker shape and size are currently supported for line and scatter charts.");
+    }
+
+    private void ToggleSeriesFormat(
+        string caption,
+        Func<ChartSeriesFormat, ChartSeriesFormat> update,
+        Func<ChartModel, bool>? canApply = null,
+        string? unsupportedMessage = null)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                caption,
+                "Insert or select a chart before changing series formatting.",
+                chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && (canApply?.Invoke(chart) ?? true),
+                unsupportedMessage ?? "Add data series before changing series formatting.",
+                chart =>
+                {
+                    var formats = chart.SeriesFormats.ToList();
+                    var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0);
+                    var current = existingIndex >= 0 ? formats[existingIndex] : new ChartSeriesFormat(0);
+                    var updated = update(current);
+                    if (existingIndex >= 0)
+                        formats[existingIndex] = updated;
+                    else
+                        formats.Add(updated);
+                    return new ChartLayoutOptions(SeriesFormats: formats);
+                }))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void InsertChartOfType(string type)
+    {
+        InsertChartOfType(ChartOptionCycler.ParseChartType(type));
+    }
+
+}

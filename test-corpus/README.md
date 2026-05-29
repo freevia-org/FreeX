@@ -1,10 +1,10 @@
-# Freexcel XLSX Test Corpus
+# FreeX XLSX Test Corpus
 
-This folder is the workspace for the Sprint 2 XLSX fidelity corpus. The corpus measures whether Freexcel opens and re-saves supported workbook content without data loss, while separately tracking excluded or deferred Excel features that should produce user-facing warnings.
+This folder is the workspace for the Sprint 2 XLSX fidelity corpus. The corpus measures whether FreeX opens and re-saves supported workbook content without data loss, while separately tracking excluded or deferred Excel features that should produce user-facing warnings.
 
 ## Folder Policy
 
-- `generated/` contains deterministic workbooks created from Freexcel tests or helper scripts.
+- `generated/` contains deterministic workbooks created from FreeX tests or helper scripts.
 - `public/` contains public workbooks only after redistribution rights are confirmed.
 - `regressions/` contains minimal workbooks that reproduce fixed bugs.
 - `local-private/` is for user-provided local samples and must not be committed.

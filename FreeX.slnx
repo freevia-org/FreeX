@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FreeX.App.Host/FreeX.App.Host.csproj" />
+    <Project Path="src/FreeX.App.UI/FreeX.App.UI.csproj" />
+    <Project Path="src/FreeX.Core.Calc/FreeX.Core.Calc.csproj" />
+    <Project Path="src/FreeX.Core.Commands/FreeX.Core.Commands.csproj" />
+    <Project Path="src/FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
+    <Project Path="src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <Project Path="src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj" />
+    <Project Path="tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj" />
+    <Project Path="tests/FreeX.Core.IO.Tests/FreeX.Core.IO.Tests.csproj" />
+    <Project Path="tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj" />
+    <Project Path="tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj" />
+    <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj" />
+    <Project Path="tests/FreeX.Fixtures/FreeX.Fixtures.csproj" />
+    <Project Path="tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj" />
+  </Folder>
+</Solution>

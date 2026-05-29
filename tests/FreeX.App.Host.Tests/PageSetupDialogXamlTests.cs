@@ -1,0 +1,505 @@
+using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Xml.Linq;
+using FreeX.Core.Commands;
+using FluentAssertions;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed class PageSetupDialogXamlTests
+{
+    [Fact]
+    public void PageSetupDialog_ExposesKeyboardAccessKeysForTabsOptionsAndButtons()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+
+        foreach (var header in new[]
+        {
+            "_Page",
+            "_Margins",
+            "_Header/Footer",
+            "_Sheet"
+        })
+            xaml.Should().Contain($"Header=\"{header}\"");
+
+        foreach (var content in new[]
+        {
+            "_Orientation:",
+            "_Paper size:",
+            "First _page number:",
+            "Print _quality:",
+            "_Left:",
+            "_Right:",
+            "_Top:",
+            "_Bottom:",
+            "_Header:",
+            "_Footer:",
+            "_Header preset:",
+            "_Footer preset:",
+            "Custom _Header...",
+            "Custom _Footer...",
+            "_Different first page",
+            "Different _odd and even pages",
+            "_Scale with document",
+            "_Align with page margins",
+            "Print _area:",
+            "_Rows to repeat at top:",
+            "_Columns to repeat at left:",
+            "_Center horizontally",
+            "Center _vertically",
+            "_Print gridlines",
+            "Print row and column _headings",
+            "Pa_ge order:",
+            "_Black and white",
+            "_Draft quality",
+            "Cell _errors as:",
+            "Co_mments:",
+            "_OK",
+            "_Cancel"
+        })
+            xaml.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PageSetupDialogOpenedFromKeyboard_FocusesOrientationBox()
+    {
+        var source = ReadPageSetupDialogSource();
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("PageSetupInitialFocusTarget.PageOrientation");
+        source.Should().Contain("OrientationBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(OrientationBox);");
+    }
+
+    [Fact]
+    public void PrintTitlesCommand_OpensPageSetupSheetTabWithRowsRepeatFocus()
+    {
+        var source = ReadPageSetupDialogSource();
+        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("PageSetupInitialFocusTarget.RepeatRows");
+        source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
+        source.Should().Contain("DialogFocus.FocusAndSelect(RowsRepeatBox);");
+        handlerSource.Should().Contain("PrintTitlesBtn_Click");
+        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.RepeatRows);");
+        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);");
+        handlerSource.Should().Contain("initialFocusTarget) { Owner = this }");
+    }
+
+    [Fact]
+    public void ScaleToFitCommand_OpensPageSetupPageTabWithActiveScalingInputFocus()
+    {
+        var source = ReadPageSetupDialogSource();
+        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("PageSetupInitialFocusTarget.ScaleToFit");
+        source.Should().Contain("PageSetupTabs.SelectedItem = PageTab;");
+        source.Should().Contain("AdjustToRadioButton.IsChecked == true");
+        source.Should().Contain("? ScalePercentBox");
+        source.Should().Contain(": FitPagesWideBox");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+        handlerSource.Should().Contain("ScaleToFitBtn_Click");
+        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit);");
+    }
+
+    [Fact]
+    public void PageTab_UsesExcelLikeScalingChoices()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        document.Descendants(presentation + "GroupBox")
+            .Single(element => element.Attribute("Header")?.Value == "Scaling")
+            .Descendants(presentation + "RadioButton")
+            .Select(element => element.Attribute("Content")?.Value)
+            .Should()
+            .Contain(["_Adjust to:", "_Fit to:"]);
+
+        foreach (var name in new[] { "ScalePercentBox", "FitPagesWideBox", "FitPagesTallBox" })
+        {
+            document.Descendants()
+                .Any(element => element.Attribute(x + "Name")?.Value == name)
+                .Should().BeTrue($"{name} should exist for Excel-style scaling input");
+        }
+    }
+
+    [Fact]
+    public void PageTab_DisablesInactiveScalingInputsByMode()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var source = ReadPageSetupDialogSource();
+
+        xaml.Should().Contain("Checked=\"ScalingMode_Changed\"");
+        source.Should().Contain("UpdateScalingInputState");
+        source.Should().Contain("ScalePercentBox.IsEnabled = adjustTo");
+        source.Should().Contain("FitPagesWideBox.IsEnabled = fitTo");
+        source.Should().Contain("FitPagesTallBox.IsEnabled = fitTo");
+    }
+
+    [Fact]
+    public void HeaderFooterTab_ReusesSupportedPresetAndCustomDialogConcepts()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var tab = document.Descendants(presentation + "TabItem")
+            .Single(element => element.Attribute("Header")?.Value == "_Header/Footer");
+
+        foreach (var name in new[]
+        {
+            "HeaderPresetBox",
+            "FooterPresetBox",
+            "CustomHeaderButton",
+            "CustomFooterButton",
+            "DifferentFirstPageBox",
+            "DifferentOddEvenBox",
+            "ScaleWithDocumentBox",
+            "AlignWithMarginsBox"
+        })
+        {
+            tab.Descendants()
+                .Any(element => element.Attribute(x + "Name")?.Value == name)
+                .Should().BeTrue($"{name} should exist on the Page Setup Header/Footer tab");
+        }
+
+        var headerPresets = tab
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "HeaderPresetBox")
+            .Elements(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("Content")?.Value);
+        var footerPresets = tab
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FooterPresetBox")
+            .Elements(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("Content")?.Value);
+
+        headerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Confidential, Page 1", "Date, Page 1", "File path"]);
+        footerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Time", "Date, Page 1", "File name"]);
+    }
+
+    [Fact]
+    public void SheetTab_ExposesCurrentSelectionRangePickerButtonsForPrintRanges()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var source = ReadPageSetupDialogSource();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        foreach (var (buttonName, targetName, automationName) in new[]
+        {
+            ("PrintAreaPickerButton", "PrintAreaBox", "Select print area"),
+            ("RowsRepeatPickerButton", "RowsRepeatBox", "Select rows to repeat"),
+            ("ColumnsRepeatPickerButton", "ColumnsRepeatBox", "Select columns to repeat")
+        })
+        {
+            var button = document.Descendants(presentation + "Button")
+                .SingleOrDefault(element => element.Attribute(x + "Name")?.Value == buttonName);
+
+            button.Should().NotBeNull($"{buttonName} should expose Excel-like picker affordance");
+            button!.Attribute("Content")?.Value.Should().Be("...");
+            button.Attribute("Click")?.Value.Should().Be("RangePickerButton_Click");
+            button.Attribute("ToolTip")?.Value.Should().Contain("Collapse dialog");
+            button.Attribute("Tag")?.Value.Should().Be(targetName);
+            button.Attribute(x + "Name")?.Value.Should().Be(buttonName);
+            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(automationName);
+        }
+
+        source.Should().Contain("RangePickerButton_Click");
+        source.Should().Contain("private readonly GridRange? _currentSelection");
+        source.Should().Contain("PageSetupRangeSelectionRequest");
+        source.Should().Contain("RangeSelectionRequest = CreateRangeSelectionRequest");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+        source.Should().Contain("target.Text = PageSetupRangeSelectionFormatter.Format(");
+        source.Should().Contain("GetRangeSelectionTarget(targetName)");
+        var pickerHandlerSource = source[
+            source.IndexOf("private void RangePickerButton_Click", StringComparison.Ordinal)..
+            source.IndexOf("public static PageSetupRangeSelectionRequest", StringComparison.Ordinal)];
+        pickerHandlerSource.Should().Contain("DialogFocus.FocusAndSelect(target)");
+    }
+
+    [Fact]
+    public void PageSetupRangeSelectionRequest_UsesExcelCollapseIntent()
+    {
+        PageSetupDialog.CreateRangeSelectionRequest(PageSetupRangeSelectionTarget.PrintArea, " A1:C10 ")
+            .Should()
+            .Be(new PageSetupRangeSelectionRequest(PageSetupRangeSelectionTarget.PrintArea, "A1:C10", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void PageSetupDialogApplyRangeSelection_UpdatesRequestedSheetTabBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book1").AddSheet("Sheet1");
+            var dialog = new PageSetupDialog(sheet);
+            try
+            {
+                dialog.ApplyRangeSelection(PageSetupRangeSelectionTarget.PrintArea, "B2:D8");
+                dialog.ApplyRangeSelection(PageSetupRangeSelectionTarget.RepeatRows, "2:4");
+                dialog.ApplyRangeSelection(PageSetupRangeSelectionTarget.RepeatColumns, "B:D");
+
+                ((TextBox)dialog.FindName("PrintAreaBox")).Text.Should().Be("B2:D8");
+                ((TextBox)dialog.FindName("RowsRepeatBox")).Text.Should().Be("2:4");
+                ((TextBox)dialog.FindName("ColumnsRepeatBox")).Text.Should().Be("B:D");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void PageSetupHandler_WiresRangePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("new PageSetupDialog(");
+        source.Should().Contain("request => ApplyPageSetupRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyPageSetupRangeSelection(");
+        source.Should().Contain("PageSetupRangeSelectionRequest request");
+        source.Should().Contain("PageSetupRangeSelectionFormatter.Format(");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Theory]
+    [InlineData(PageSetupRangeSelectionTarget.PrintArea, false, "$B$2:$D$8")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatRows, false, "$2:$8")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatColumns, false, "$B:$D")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatRows, true, "R2:R8")]
+    [InlineData(PageSetupRangeSelectionTarget.PrintArea, true, "R2C2:R8C4")]
+    [InlineData(PageSetupRangeSelectionTarget.RepeatColumns, true, "C2:C4")]
+    public void PageSetupRangeSelectionFormatter_FormatsPickerSelectionForTarget(
+        PageSetupRangeSelectionTarget target,
+        bool useR1C1ReferenceStyle,
+        string expected)
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 4));
+
+        PageSetupRangeSelectionFormatter.Format(target, range, useR1C1ReferenceStyle)
+            .Should()
+            .Be(expected);
+    }
+
+    [Fact]
+    public void PageSetupRangeSelectionFormatter_FormatsSingleCellPrintAreaWithoutRangeSeparator()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 4, 3);
+        var range = new GridRange(address, address);
+
+        PageSetupRangeSelectionFormatter.Format(
+                PageSetupRangeSelectionTarget.PrintArea,
+                range,
+                useR1C1ReferenceStyle: false)
+            .Should()
+            .Be("$C$4");
+    }
+
+    [Fact]
+    public void PageSetupDialogInvalidPrintArea_SelectsSheetTabPrintAreaBox()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var source = ReadPageSetupDialogSource();
+
+        xaml.Should().Contain("x:Name=\"PageSetupTabs\"");
+        xaml.Should().Contain("x:Name=\"SheetTab\"");
+        source.Should().Contain("FocusInvalidPrintArea();");
+        source.Should().Contain("private void FocusInvalidPrintArea()");
+        source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
+        source.Should().Contain("DialogFocus.FocusAndSelect(PrintAreaBox);");
+    }
+
+    [Fact]
+    public void PageSetupDialogInvalidPrintTitles_SelectsSheetTabInvalidTitleBox()
+    {
+        var source = ReadPageSetupDialogSource();
+
+        source.Should().Contain("FocusInvalidPrintTitles();");
+        source.Should().Contain("private void FocusInvalidPrintTitles()");
+        source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+    }
+
+    [Fact]
+    public void PageSetupDialogInvalidPageTabNumber_SelectsPageTabInvalidBox()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var source = ReadPageSetupDialogSource();
+
+        xaml.Should().Contain("x:Name=\"PageTab\"");
+        source.Should().Contain("FocusInvalidPageTabNumber(FirstPageNumberBox);");
+        source.Should().Contain("FocusInvalidPageTabNumber(PrintQualityBox);");
+        source.Should().Contain("private void FocusInvalidPageTabNumber(TextBox target)");
+        source.Should().Contain("PageSetupTabs.SelectedItem = PageTab;");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+    }
+
+    [Fact]
+    public void PageSetupDialogInvalidMargin_SelectsMarginsTabInvalidBox()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var source = ReadPageSetupDialogSource();
+
+        xaml.Should().Contain("x:Name=\"MarginsTab\"");
+        source.Should().Contain("FocusInvalidMarginInput();");
+        source.Should().Contain("FocusInvalidHeaderFooterMargin();");
+        source.Should().Contain("private void FocusInvalidMarginInput()");
+        source.Should().Contain("private void FocusMarginsTabTextBox(TextBox target)");
+        source.Should().Contain("PageSetupTabs.SelectedItem = MarginsTab;");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+    }
+
+    [Fact]
+    public void PageSetupDialogInvalidScaling_SelectsPageTabActiveScalingBox()
+    {
+        var source = ReadPageSetupDialogSource();
+
+        source.Should().Contain("FocusInvalidScalingInput();");
+        source.Should().Contain("private void FocusInvalidScalingInput()");
+        source.Should().Contain("PageSetupTabs.SelectedItem = PageTab;");
+        source.Should().Contain("ScalePercentBox");
+        source.Should().Contain("FitPagesWideBox");
+        source.Should().Contain("FitPagesTallBox");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+    }
+
+    [Fact]
+    public void Footer_ExposesExcelPrintActionsAndPrinterOptionsAction()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var source = ReadPageSetupDialogSource();
+        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+
+        foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
+            xaml.Should().Contain($"Content=\"{content}\"");
+
+        xaml.Should().Contain("Click=\"OptionsButton_Click\"");
+        xaml.Should().NotContain("IsEnabled=\"False\"");
+        xaml.Should().NotContain("not available yet");
+        source.Should().Contain("PageSetupDialogAction.Options");
+        source.Should().Contain("PageSetupDialogAction.PrintPreview");
+        source.Should().Contain("PageSetupDialogAction.Print");
+        handlerSource.Should().Contain("PageSetupDialogAction.Options");
+        handlerSource.Should().Contain("ShowPageSetupPrinterOptions()");
+        handlerSource.Should().Contain("PrintButton_Click(this, new RoutedEventArgs())");
+    }
+
+    [Fact]
+    public void PageSetupHandler_AppliesHeaderFooterValuesReturnedByDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+        var builderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupCommandBuilder.cs"));
+
+        source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
+        builderSource.Should().Contain("new CompositeWorkbookCommand(");
+        source.Should().Contain("new PageSetupDialog(");
+        source.Should().Contain("SheetGrid.SelectedRange");
+        builderSource.Should().Contain("new SetHeaderFooterCommand(");
+        builderSource.Should().Contain("dialog.FirstPageHeader");
+        builderSource.Should().Contain("dialog.EvenPageFooter");
+        builderSource.Should().Contain("dialog.ScaleHeaderFooterWithDocument");
+        builderSource.Should().Contain("dialog.AlignHeaderFooterWithMargins");
+    }
+
+    [Fact]
+    public void PageSetupHandler_AppliesPrintAreaReturnedByDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+        var builderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupCommandBuilder.cs"));
+
+        source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
+        builderSource.Should().Contain("CreatePrintAreaCommand(sheetId, dialog.PrintArea)");
+        builderSource.Should().Contain("new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))");
+        builderSource.Should().Contain("new ClearPrintAreaCommand(sheetId)");
+    }
+
+    [Fact]
+    public void PageSetupDialogCommand_AppliesCenterOnPageAndPageOrderSelections()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Sheet1");
+            var dialog = new PageSetupDialog(sheet);
+            try
+            {
+                ((CheckBox)dialog.FindName("CenterHorizontallyBox")).IsChecked = true;
+                ((CheckBox)dialog.FindName("CenterVerticallyBox")).IsChecked = true;
+                SelectComboItemByTag((ComboBox)dialog.FindName("PageOrderBox"), "OverThenDown");
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
+                var outcome = PageSetupCommandBuilder.Build(sheet.Id, dialog).Apply(new SimpleCtx(workbook));
+
+                outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+                sheet.CenterHorizontallyOnPage.Should().BeTrue();
+                sheet.CenterVerticallyOnPage.Should().BeTrue();
+                sheet.PageOrder.Should().Be(WorksheetPageOrder.OverThenDown);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void UiTestCatalog_PageSetupRowNoLongerListsCenterAndPageOrderProofAsRemaining()
+    {
+        var catalog = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var pageSetupRow = catalog.Single(line => line.StartsWith("| UI-CMD-PAGE-003 |", StringComparison.Ordinal));
+
+        pageSetupRow.Should().Contain("Center on Page and Page Order dialog choices flow through the command builder into the worksheet model");
+        pageSetupRow.Should().NotContain("Remaining work is Center on Page, Page Order");
+    }
+
+    private static string ReadPageSetupDialogSource() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.HeaderFooter.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.Population.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.RangeSelection.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.ValidationFocus.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupRangeSelectionFormatter.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupCommandBuilder.cs")));
+
+    private static void SelectComboItemByTag(ComboBox comboBox, string tag)
+    {
+        comboBox.SelectedItem = comboBox.Items
+            .OfType<ComboBoxItem>()
+            .Single(item => string.Equals(item.Tag as string, tag, StringComparison.Ordinal));
+    }
+
+    private static void InvokePrivateAllowingNonModalDialogResult(PageSetupDialog dialog, string methodName)
+    {
+        var method = typeof(PageSetupDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        try
+        {
+            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
+                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+        }
+    }
+
+    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
+    }
+}

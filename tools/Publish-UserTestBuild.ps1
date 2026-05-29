@@ -5,16 +5,16 @@ param(
     [string]$Version = "",
     [ValidateSet("SingleFile", "Folder", "Msix")]
     [string]$PublishMode = "SingleFile",
-    [string]$MsixCertificatePath = $env:FREEXCEL_MSIX_CERTIFICATE_PATH,
-    [string]$MsixCertificatePassword = $env:FREEXCEL_MSIX_CERTIFICATE_PASSWORD,
-    [string]$MsixTimestampUrl = $env:FREEXCEL_MSIX_TIMESTAMP_URL
+    [string]$MsixCertificatePath = $env:FREEX_MSIX_CERTIFICATE_PATH,
+    [string]$MsixCertificatePassword = $env:FREEX_MSIX_CERTIFICATE_PASSWORD,
+    [string]$MsixTimestampUrl = $env:FREEX_MSIX_TIMESTAMP_URL
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$projectPath = Join-Path $repoRoot "src\Freexcel.App.Host\Freexcel.App.Host.csproj"
-$appInfoPath = Join-Path $repoRoot "src\Freexcel.App.Host\AppInfo.cs"
+$projectPath = Join-Path $repoRoot "src\FreeX.App.Host\FreeX.App.Host.csproj"
+$appInfoPath = Join-Path $repoRoot "src\FreeX.App.Host\AppInfo.cs"
 $appInfo = Get-Content -LiteralPath $appInfoPath -Raw
 
 function ConvertTo-MsixPackageVersion {
@@ -77,7 +77,7 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commitId)) {
 
 $buildStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $modeSlug = $PublishMode.ToLowerInvariant()
-$artifactName = "freexcel-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug"
+$artifactName = "freex-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug"
 if ([System.IO.Path]::IsPathRooted($OutputRoot)) {
     $artifactRoot = $OutputRoot
 } else {
@@ -132,7 +132,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $launchExeName = "$artifactName.exe"
-$defaultExePath = Join-Path $publishDir "Freexcel.App.Host.exe"
+$defaultExePath = Join-Path $publishDir "FreeX.App.Host.exe"
 $launchExePath = Join-Path $publishDir $launchExeName
 if (-not (Test-Path -LiteralPath $defaultExePath)) {
     throw "Expected apphost was not published at $defaultExePath"
@@ -174,10 +174,10 @@ if ($PublishMode -eq "Msix") {
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap rescap">
-  <Identity Name="Freexcel.Tester" Publisher="CN=FreexcelLocal" Version="$msixVersion" />
+  <Identity Name="FreeX.Tester" Publisher="CN=FreeXLocal" Version="$msixVersion" />
   <Properties>
-    <DisplayName>Freexcel</DisplayName>
-    <PublisherDisplayName>Freexcel</PublisherDisplayName>
+    <DisplayName>FreeX</DisplayName>
+    <PublisherDisplayName>FreeX</PublisherDisplayName>
     <Logo>Assets\Square150x150Logo.png</Logo>
   </Properties>
   <Dependencies>
@@ -187,8 +187,8 @@ if ($PublishMode -eq "Msix") {
     <Resource Language="en-us" />
   </Resources>
   <Applications>
-    <Application Id="Freexcel" Executable="$msixExeName" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="Freexcel" Description="Freexcel tester build" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+    <Application Id="FreeX" Executable="$msixExeName" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="FreeX" Description="FreeX tester build" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
     </Application>
   </Applications>
   <Capabilities>
@@ -265,7 +265,7 @@ if ($PublishMode -eq "Msix") {
 }
 
 if ($PublishMode -eq "Folder") {
-    $launcherPath = Join-Path $publishDir "Freexcel.cmd"
+    $launcherPath = Join-Path $publishDir "FreeX.cmd"
     $launcher = @"
 @echo off
 setlocal
@@ -283,12 +283,12 @@ start "" "%APP_EXE%"
 exit /b 0
 
 :missing_runtime
-echo Freexcel needs the Microsoft .NET 10 Desktop Runtime.
+echo FreeX needs the Microsoft .NET 10 Desktop Runtime.
 echo.
 echo Install the Desktop Runtime for Windows from:
 echo %RUNTIME_URL%
 echo.
-echo After installation, run Freexcel.cmd again.
+echo After installation, run FreeX.cmd again.
 echo.
 choice /M "Open the .NET 10 download page now"
 if errorlevel 2 exit /b 1
@@ -299,7 +299,7 @@ exit /b 1
 }
 
 $readmePath = Join-Path $publishDir "README.txt"
-$runCommand = if ($PublishMode -eq "SingleFile") { $launchExeName } else { "Freexcel.cmd" }
+$runCommand = if ($PublishMode -eq "SingleFile") { $launchExeName } else { "FreeX.cmd" }
 $runtimeGuidance = if ($PublishMode -eq "SingleFile") {
     @"
 This is a framework-dependent single-file Windows build. It is small to share
@@ -324,7 +324,7 @@ If the runtime is already installed, the launcher starts $launchExeName.
 }
 
 $readme = @"
-Freexcel user test build
+FreeX user test build
 
 Version:
   $Version
@@ -338,12 +338,12 @@ Run:
 $runtimeGuidance
 
 Local diagnostics:
-  Freexcel writes local tester diagnostics and crash reports to:
-    %LOCALAPPDATA%\Freexcel\Diagnostics
+  FreeX writes local tester diagnostics and crash reports to:
+    %LOCALAPPDATA%\FreeX\Diagnostics
 
   These files stay on the tester's machine unless they choose to attach them
-  to an issue report. To disable local diagnostics for a run, start Freexcel
-  with FREEXCEL_DIAGNOSTICS=0 in the environment.
+  to an issue report. To disable local diagnostics for a run, start FreeX
+  with FREEX_DIAGNOSTICS=0 in the environment.
 "@
 Set-Content -LiteralPath $readmePath -Value $readme -Encoding ASCII
 

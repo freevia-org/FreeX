@@ -1,0 +1,23 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="FreeXGreenBrush" Color="#217346"/>
+    <SolidColorBrush x:Key="FreeXGreenDarkBrush" Color="#185C37"/>
+    <SolidColorBrush x:Key="FreeXTitleBarBrush" Color="#217346"/>
+    <SolidColorBrush x:Key="FreeXTitleBarHoverBrush" Color="#2D8A57"/>
+    <SolidColorBrush x:Key="FreeXTitleBarPressedBrush" Color="#185C37"/>
+    <SolidColorBrush x:Key="FreeXTitleBarDisabledBrush" Color="#7FB89B"/>
+    <SolidColorBrush x:Key="FreeXTitleBarButtonBorderBrush" Color="#55FFFFFF"/>
+    <SolidColorBrush x:Key="FreeXGreenSoftBrush" Color="#EAF4EF"/>
+    <SolidColorBrush x:Key="FreeXGreenPressedBrush" Color="#D6EADE"/>
+    <SolidColorBrush x:Key="FreeXTextBrush" Color="#1F1F1F"/>
+    <SolidColorBrush x:Key="FreeXMutedTextBrush" Color="#5F6368"/>
+    <SolidColorBrush x:Key="FreeXSubtleTextBrush" Color="#767676"/>
+    <SolidColorBrush x:Key="FreeXRibbonSurfaceBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="FreeXChromeSurfaceBrush" Color="#F7F8F8"/>
+    <SolidColorBrush x:Key="FreeXSheetSurfaceBrush" Color="#F3F3F3"/>
+    <SolidColorBrush x:Key="FreeXStatusSurfaceBrush" Color="#217346"/>
+    <SolidColorBrush x:Key="FreeXBorderBrush" Color="#DADCE0"/>
+    <SolidColorBrush x:Key="FreeXBorderStrongBrush" Color="#C8CCD0"/>
+    <SolidColorBrush x:Key="FreeXDangerBrush" Color="#C42B1C"/>
+    <SolidColorBrush x:Key="FreeXWhiteBrush" Color="#FFFFFF"/>
+</ResourceDictionary>

@@ -1,0 +1,439 @@
+using FreeX.Core.Model;
+using System.IO.Compression;
+using System.Xml.Linq;
+
+namespace FreeX.Core.IO;
+
+internal static class XlsxWorkbookMetadataReader
+{
+    public static Dictionary<int, string> LoadNumberFormatCatalog(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var stylesEntry = archive.GetEntry("xl/styles.xml");
+            if (stylesEntry is null)
+                return [];
+
+            var stylesXml = LoadXml(stylesEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var result = new Dictionary<int, string>();
+            foreach (var format in stylesXml.Root?
+                         .Element(workbookNs + "numFmts")?
+                         .Elements(workbookNs + "numFmt") ?? [])
+            {
+                var id = XlsxXmlAttributeReader.ReadIntAttribute(format, "numFmtId");
+                var code = format.Attribute("formatCode")?.Value;
+                if (id is >= 164 && !string.IsNullOrWhiteSpace(code))
+                    result[id.Value] = code;
+            }
+
+            return result;
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public static WorkbookProtectionState LoadProtection(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return WorkbookProtectionState.None;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var protection = workbookXml.Root?.Element(workbookNs + "workbookProtection");
+            if (protection is null)
+                return WorkbookProtectionState.None;
+
+            var isStructureProtected =
+                XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockStructure") ||
+                XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockWindows");
+
+            if (!isStructureProtected)
+                return WorkbookProtectionState.None;
+
+            var passwordHash =
+                protection.Attribute("workbookPassword")?.Value ??
+                protection.Attribute("revisionsPassword")?.Value;
+
+            return new WorkbookProtectionState(true, passwordHash);
+        }
+        catch
+        {
+            return WorkbookProtectionState.None;
+        }
+    }
+
+    public static NativeXmlPreserveBag? LoadProtectionMetadata(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var protection = workbookXml.Root?.Element(workbookNs + "workbookProtection");
+            if (protection is null)
+                return null;
+
+            var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var attribute in protection.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration ||
+                    string.Equals(attribute.Name.LocalName, "lockStructure", StringComparison.Ordinal) ||
+                    string.Equals(attribute.Name.LocalName, "workbookPassword", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                attrs[attribute.Name.ToString()] = attribute.Value;
+            }
+
+            var children = protection.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList();
+
+            var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
+            if (serialized is null)
+                return null;
+
+            var bag = new NativeXmlPreserveBag();
+            bag.Set("workbookProtection", serialized);
+            return bag;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static bool LoadUses1904DateSystem(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return false;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            return XlsxXmlAttributeReader.ReadBoolAttribute(
+                workbookXml.Root?.Element(workbookNs + "workbookPr"),
+                "date1904");
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static NativeXmlPreserveBag? LoadWorkbookProperties(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookProperties = workbookXml.Root?.Element(workbookNs + "workbookPr");
+            if (workbookProperties is null)
+                return null;
+
+            var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var attribute in workbookProperties.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration ||
+                    string.Equals(attribute.Name.LocalName, "date1904", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                attrs[attribute.Name.ToString()] = attribute.Value;
+            }
+
+            var children = workbookProperties.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList();
+
+            var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
+            if (serialized is null)
+                return null;
+
+            var bag = new NativeXmlPreserveBag();
+            bag.Set("workbookPr", serialized);
+            return bag;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static WorkbookViewProperties LoadWorkbookViewProperties(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return WorkbookViewProperties.Empty;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var primaryView = workbookXml.Root?
+                .Element(workbookNs + "bookViews")?
+                .Elements(workbookNs + "workbookView")
+                .FirstOrDefault(view =>
+                    XlsxXmlAttributeReader.ReadIntAttribute(view, "firstSheet") is null or 0 &&
+                    XlsxXmlAttributeReader.ReadIntAttribute(view, "activeTab") is null or 0);
+            primaryView ??= workbookXml.Root?
+                .Element(workbookNs + "bookViews")?
+                .Element(workbookNs + "workbookView");
+
+            if (primaryView is null)
+                return WorkbookViewProperties.Empty;
+
+            return new WorkbookViewProperties(
+                XlsxXmlAttributeReader.ReadNullableBoolAttribute(primaryView, "showSheetTabs"),
+                XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "tabRatio"),
+                XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "firstSheet"),
+                XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "activeTab"));
+        }
+        catch
+        {
+            return WorkbookViewProperties.Empty;
+        }
+    }
+
+    public static WorkbookFileSharingModel? LoadFileSharing(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var fileSharing = workbookXml.Root?.Element(workbookNs + "fileSharing");
+            if (fileSharing is null)
+                return null;
+
+            return new WorkbookFileSharingModel
+            {
+                ReadOnlyRecommended = XlsxXmlAttributeReader.ReadNullableBoolAttribute(fileSharing, "readOnlyRecommended"),
+                UserName = fileSharing.Attribute("userName")?.Value,
+                ReservationPassword = fileSharing.Attribute("reservationPassword")?.Value
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static List<WorkbookFileRecoveryPropertiesModel> LoadFileRecoveryProperties(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return [];
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            return workbookXml.Root?
+                .Elements(workbookNs + "fileRecoveryPr")
+                .Select(XlsxWorkbookMetadataMapper.ToFileRecoveryProperties)
+                .ToList() ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public static WorkbookFileVersionModel? LoadFileVersion(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var fileVersion = workbookXml.Root?.Element(workbookNs + "fileVersion");
+            return fileVersion is null ? null : XlsxWorkbookMetadataMapper.ToFileVersion(fileVersion);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static WorkbookFunctionGroupsModel? LoadFunctionGroups(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var functionGroups = workbookXml.Root?.Element(workbookNs + "functionGroups");
+            return functionGroups is null ? null : XlsxWorkbookMetadataMapper.ToFunctionGroups(functionGroups, workbookNs);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static WorkbookSmartTagMetadataModel? LoadSmartTags(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var smartTagProperties = workbookXml.Root?.Element(workbookNs + "smartTagPr");
+            var smartTagTypes = workbookXml.Root?.Element(workbookNs + "smartTagTypes");
+            if (smartTagProperties is null && smartTagTypes is null)
+                return null;
+
+            return XlsxWorkbookMetadataMapper.ToSmartTags(smartTagProperties, smartTagTypes, workbookNs);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static WorkbookCalculationProperties LoadCalculationProperties(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return WorkbookCalculationProperties.Default;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var calcPr = workbookXml.Root?.Element(workbookNs + "calcPr");
+            if (calcPr is null)
+                return WorkbookCalculationProperties.Default;
+
+            var mode = string.Equals(calcPr.Attribute("calcMode")?.Value, "manual", StringComparison.OrdinalIgnoreCase)
+                ? WorkbookCalculationMode.Manual
+                : string.Equals(calcPr.Attribute("calcMode")?.Value, "auto", StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(calcPr.Attribute("calcMode")?.Value, "autoNoTable", StringComparison.OrdinalIgnoreCase)
+                    ? WorkbookCalculationMode.Automatic
+                    : (WorkbookCalculationMode?)null;
+
+            return new WorkbookCalculationProperties(
+                mode,
+                XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "fullCalcOnLoad"),
+                XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "forceFullCalc"),
+                XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "iterate"),
+                XlsxXmlAttributeReader.ReadIntAttribute(calcPr, "iterateCount"),
+                XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"));
+        }
+        catch
+        {
+            return WorkbookCalculationProperties.Default;
+        }
+    }
+
+    public static IReadOnlyList<XlsxWorkbookCustomView> LoadCustomViews(Stream xlsxStream)
+    {
+        var views = new List<XlsxWorkbookCustomView>();
+
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return views;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var view in workbookXml.Root?
+                         .Element(workbookNs + "customWorkbookViews")?
+                         .Elements(workbookNs + "customWorkbookView") ?? [])
+            {
+                var customView = XlsxWorkbookMetadataMapper.ToCustomView(view);
+                if (!string.IsNullOrWhiteSpace(customView.Id) && !string.IsNullOrWhiteSpace(customView.Name))
+                    views.Add(customView);
+            }
+        }
+        catch
+        {
+            // Custom views are best-effort; ClosedXML still loads workbook content.
+        }
+
+        return views;
+    }
+
+    private static XDocument LoadXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+}
+
+internal sealed record WorkbookProtectionState(bool IsStructureProtected, string? PasswordHash)
+{
+    public static WorkbookProtectionState None { get; } = new(false, null);
+}
+
+internal sealed record WorkbookCalculationProperties(
+    WorkbookCalculationMode? Mode,
+    bool FullCalculationOnLoad,
+    bool ForceFullCalculation,
+    bool IterativeCalculation,
+    int? MaxIterations,
+    double? MaxChange)
+{
+    public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null);
+}
+
+internal sealed record WorkbookViewProperties(
+    bool? ShowSheetTabs,
+    int? SheetTabRatio,
+    int? FirstVisibleSheetIndex,
+    int? ActiveSheetIndex)
+{
+    public static WorkbookViewProperties Empty { get; } = new(null, null, null, null);
+}
+
+internal sealed record XlsxWorkbookCustomView(
+    string Id,
+    string Name,
+    bool IncludePrintSettings = true,
+    bool IncludeHiddenRowsColumnsAndFilterSettings = true);
+

@@ -1,0 +1,573 @@
+using System;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Windows;
+using FreeX.Core.Calc;
+using FreeX.Core.Commands;
+using FreeX.Core.IO;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Host;
+
+public partial class MainWindow
+{
+    private void GetDataBtn_Click(object sender, RoutedEventArgs e)
+    {
+        string[] dataExtensions = [".csv", ".txt", ".tsv", ".tab", ".xml"];
+        var adapters = _fileAdapters
+            .Where(adapter => dataExtensions.Contains(adapter.Extension, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        if (adapters.Count == 0)
+        {
+            RecordDiagnosticEvent("import_failed", new Dictionary<string, string?>
+            {
+                ["reason"] = "no_adapter"
+            });
+            ShowOwnedMessage("No import adapters are available.", "Get Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = filter,
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        var ext = System.IO.Path.GetExtension(dialog.FileName).ToLowerInvariant();
+        var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format);
+        if (adapter is null)
+        {
+            RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, null, "unsupported_extension"));
+            return;
+        }
+
+        try
+        {
+            using var stream = System.IO.File.OpenRead(dialog.FileName);
+            var imported = adapter.Load(stream);
+            if (imported.Sheets.Count == 0)
+            {
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "empty_workbook", imported.Sheets.Count));
+                return;
+            }
+
+            var destination = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
+            if (!TryExecuteCommand(new ImportSheetCommand(_currentSheetId, destination, imported.Sheets[0]), "Get Data", out var outcome))
+            {
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "command_failed", imported.Sheets.Count));
+                return;
+            }
+
+            RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+            SetActiveCell(destination);
+            EnsureCellVisible(destination);
+            UpdateViewport();
+            RefreshStatusBar();
+            RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, null, imported.Sheets.Count));
+        }
+        catch (Exception ex)
+        {
+            var diagnostic = ImportFailureDiagnosticFactory.FromException(ext, ex);
+            RecordDiagnosticEvent(
+                "import_failed",
+                BuildImportDiagnosticProperties(
+                    ext,
+                    format?.FormatName ?? adapter.FormatName,
+                    diagnostic.Reason,
+                    errorDetail: diagnostic.Detail));
+            ShowOwnedMessage(diagnostic.UserMessage, "Get Data", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private static Dictionary<string, string?> BuildImportDiagnosticProperties(
+        string extension,
+        string? format,
+        string? reason = null,
+        int? worksheetCount = null,
+        string? errorDetail = null)
+    {
+        var properties = new Dictionary<string, string?>
+        {
+            ["extension"] = extension,
+            ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(extension)
+        };
+        if (!string.IsNullOrWhiteSpace(format))
+            properties["format"] = format;
+        if (worksheetCount is not null)
+            properties["worksheetCount"] = worksheetCount.Value.ToString(CultureInfo.InvariantCulture);
+        if (!string.IsNullOrWhiteSpace(reason))
+            properties["reason"] = reason;
+        if (!string.IsNullOrWhiteSpace(errorDetail))
+            properties["errorDetail"] = errorDetail;
+        return properties;
+    }
+    private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click(sender, e);
+
+    private void TextToColumnsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TextToColumnsDialog.CanConvertRange(range))
+        {
+            _messageService.ShowInfo(
+                "Text to Columns works on one column at a time. Select a single column of cells and try again.",
+                "Text to Columns");
+            return;
+        }
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        TextToColumnsDialog? dialog = null;
+        dialog = new TextToColumnsDialog(
+            TextToColumnsDialog.BuildPreviewRows(sheet, range),
+            range.Start,
+            request => ApplyTextToColumnsRangeSelection(dialog, request)) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
+
+        var currentRange = SheetGrid.SelectedRange ?? range;
+        var edits = BuildTextToColumnsEdits(currentRange, dialog.Result);
+        if (sheet is not null &&
+            TextToColumnsPlanner.FindOverwriteTargets(sheet, edits, currentRange).Count > 0 &&
+            !_messageService.AskYesNo("There's already data here. Do you want to replace it?", "Text to Columns"))
+        {
+            return;
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, () => CreateTextToColumnsCommand(edits));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Text to Columns");
+            return;
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+    }
+
+    private void ApplyTextToColumnsRangeSelection(
+        TextToColumnsDialog? dialog,
+        TextToColumnsRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(selectedRange.Start);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
+    private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, TextToColumnsDialogResult result)
+    {
+        return CreateTextToColumnsCommand(BuildTextToColumnsEdits(range, result));
+    }
+
+    private IWorkbookCommand CreateTextToColumnsCommand(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        return targetSheetIds.Count > 1
+            ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
+            : new EditCellsCommand(_currentSheetId, edits);
+    }
+
+    private IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildTextToColumnsEdits(
+        GridRange range,
+        TextToColumnsDialogResult result)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return [];
+
+        return result.SplitMode == TextToColumnsSplitMode.FixedWidth
+            ? TextToColumnsPlanner.BuildFixedWidthEdits(
+                sheet,
+                range,
+                result.Destination ?? range.Start,
+                result.FixedWidthBreakPositions ?? [],
+                result.ColumnFormats,
+                result.AdvancedOptions)
+            : TextToColumnsPlanner.BuildEdits(
+                sheet,
+                range,
+                result.Destination ?? range.Start,
+                result.Delimiters,
+                result.TextQualifierChar,
+                result.TreatConsecutiveDelimitersAsOne,
+                result.ColumnFormats,
+                result.AdvancedOptions);
+    }
+
+    private void RemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var columns = sheet is null
+            ? RemoveDuplicatesDialog.BuildColumnChoices(range)
+            : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range);
+        var genericColumns = sheet is null
+            ? RemoveDuplicatesDialog.BuildColumnChoices(range)
+            : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false);
+        var hasHeaders = sheet is not null && RemoveDuplicatesDialog.GuessHasHeaders(sheet, range);
+        var dialog = new RemoveDuplicatesDialog(columns, genericColumns, hasHeaders) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
+
+        RemoveDuplicateRowsCommand? command = null;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Remove Duplicates",
+                range,
+                currentRange =>
+                {
+                    command = new RemoveDuplicateRowsCommand(
+                        _currentSheetId,
+                        RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders),
+                        dialog.Result.SelectedColumnOffsets);
+                    return command;
+                }))
+            return;
+
+        ShowOwnedMessage($"Removed {command?.RemovedRowCount ?? 0} duplicate rows.", "Remove Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
+        UpdateViewport();
+    }
+
+    private void AdvancedFilterBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var defaultList = SheetGrid.SelectedRange is { } selected
+            ? FormatWorkbookRange(selected)
+            : "A1:C10";
+        AdvancedFilterDialog? dialog = null;
+        dialog = new AdvancedFilterDialog(
+            _currentSheetId,
+            defaultList,
+            ResolveSheetIdByName,
+            request => ApplyAdvancedFilterRangeSelection(dialog, request)) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
+
+        var result = dialog.Result;
+        var outcome = _commandBus.ExecuteRepeatable(
+            _workbook.Id,
+            () => new AdvancedFilterCommand(
+                result.ListRange,
+                result.CriteriaRange,
+                result.CopyToCell,
+                result.UniqueRecordsOnly,
+                result.CopyToRange));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Advanced Filter");
+            return;
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        if (result.CopyToCell is { } destinationCell)
+            SetActiveCell(destinationCell);
+        UpdateViewport();
+    }
+
+    private void ApplyAdvancedFilterRangeSelection(
+        AdvancedFilterDialog? dialog,
+        AdvancedFilterRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
+    private bool TryParseAdvancedFilterRange(string input, out GridRange range)
+        => AdvancedFilterInputParser.TryParseRange(
+            _currentSheetId,
+            input,
+            ResolveSheetIdByName,
+            out range);
+
+    private SheetId? ResolveSheetIdByName(string sheetName) =>
+        _workbook.Sheets.FirstOrDefault(item =>
+            string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id;
+
+    private void ConsolidateBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SheetGrid.SelectedRange;
+        var defaultSource = selected?.ToString() ?? "A1:B2";
+        var defaultDestination = selected?.Start.ToA1() ?? "A1";
+        ConsolidateDialog? dialog = null;
+        dialog = new ConsolidateDialog(
+            _currentSheetId,
+            defaultSource,
+            defaultDestination,
+            request => ApplyConsolidateRangeSelection(dialog, request)) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
+
+        var outcome = _commandBus.ExecuteRepeatable(
+            _workbook.Id,
+            () => new ConsolidateCommand(
+                dialog.Result.SourceRanges,
+                dialog.Result.DestinationCell,
+                dialog.Result.Function,
+                dialog.Result.UseTopRowLabels,
+                dialog.Result.UseLeftColumnLabels,
+                dialog.Result.CreateLinksToSourceData));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Consolidate");
+            return;
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        SetActiveCell(dialog.Result.DestinationCell);
+        EnsureCellVisible(dialog.Result.DestinationCell);
+        UpdateViewport();
+    }
+
+    private void ApplyConsolidateRangeSelection(
+        ConsolidateDialog? dialog,
+        ConsolidateRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = request.Target == ConsolidateRangeSelectionTarget.DestinationCell
+            ? FormatCellReference(selectedRange.Start)
+            : FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
+    // ── What-If Analysis ─────────────────────────────────────────────────────
+
+    private void SubtotalBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            _messageService.ShowInfo("Select a range with a header row and data rows.", "Subtotal");
+            return;
+        }
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var dialog = new SubtotalDialog(sheet is null ? null : SubtotalDialog.BuildColumnChoices(sheet, range)) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
+
+        if (dialog.Result.Action == SubtotalDialogAction.RemoveAll)
+        {
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Remove Subtotals",
+                    range,
+                    currentRange => new RemoveSubtotalRowsCommand(_currentSheetId, currentRange),
+                    out var removeOutcome))
+                return;
+
+            RecalculateIfAutomatic(removeOutcome.AffectedCells ?? []);
+            UpdateViewport();
+            return;
+        }
+
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Subtotal",
+                range,
+                currentRange =>
+                {
+                    var subtotalCommand = new SubtotalCommand(
+                        _currentSheetId,
+                        currentRange,
+                        groupByColumnOffset: dialog.Result.GroupColumnOffset,
+                        subtotalColumnOffsets: dialog.Result.SubtotalColumnOffsets,
+                        functionNumber: dialog.Result.FunctionNumber,
+                        pageBreakBetweenGroups: dialog.Result.PageBreakBetweenGroups,
+                        summaryBelowData: dialog.Result.SummaryBelowData);
+                    return dialog.Result.ReplaceCurrentSubtotals
+                        ? new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(_currentSheetId, currentRange), subtotalCommand])
+                        : subtotalCommand;
+                },
+                out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+    }
+
+    private void GoalSeekBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedCell = _selectionAnchor;
+        GoalSeekDialog? dlg = null;
+        dlg = new GoalSeekDialog(
+            _currentSheetId,
+            selectedCell,
+            request => ApplyGoalSeekRangeSelection(dlg, request)) { Owner = this };
+
+        if (dlg.ShowDialog() != true)
+            return;
+
+        var setCell = dlg.SetCell!.Value;
+        var changingCell = dlg.ChangingCell!.Value;
+        var targetValue = dlg.TargetValue;
+
+        var result = GoalSeekService.Seek(_workbook, _recalcEngine, setCell, targetValue, changingCell);
+
+        var statusDialog = new GoalSeekStatusDialog(result, targetValue) { Owner = this };
+        if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)
+        {
+            var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
+            if (TryExecuteCommand(cmd, "Goal Seek"))
+                RecalculateIfAutomatic([changingCell]);
+        }
+    }
+
+    private void ApplyGoalSeekRangeSelection(
+        GoalSeekDialog? dialog,
+        GoalSeekRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, selectedRange.Start);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
+    // ── Review tab ────────────────────────────────────────────────────────────
+
+    private void ForecastSheetBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            _messageService.ShowInfo("Select a two-column range with headers and at least two data rows.", "Forecast Sheet");
+            return;
+        }
+
+        var dialog = new ForecastSheetDialog { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryExecuteCommand(new ForecastSheetCommand(range, dialog.Result.Periods), "Forecast Sheet"))
+            return;
+
+        var forecastSheet = _workbook.Sheets.LastOrDefault();
+        if (forecastSheet is not null)
+        {
+            _currentSheetId = forecastSheet.Id;
+            _groupedSheetIds.Clear();
+            _groupedSheetIds.Add(_currentSheetId);
+            SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+        }
+
+        RecalculateWorkbook();
+        UpdateViewport();
+        RefreshSheetTabs();
+        RefreshStatusBar();
+    }
+
+    private void DataTableBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            _messageService.ShowInfo("Select the data table range, including the formula row and input values.", "Data Table");
+            return;
+        }
+
+        DataTableDialog? dialog = null;
+        dialog = new DataTableDialog(
+            _currentSheetId,
+            range,
+            request => ApplyDataTableRangeSelection(dialog, request)) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null)
+            return;
+        var formulaCell = dialog.Result.FormulaCell;
+        Func<GridRange, IWorkbookCommand> createCommand;
+        if (dialog.Result.Mode == DataTableMode.TwoVariable)
+        {
+            createCommand = currentRange => new TwoVariableDataTableCommand(currentRange, formulaCell, dialog.Result.RowInputCell!.Value, dialog.Result.ColumnInputCell!.Value);
+        }
+        else
+        {
+            var inputCell = dialog.Result.RowInputCell ?? dialog.Result.ColumnInputCell!.Value;
+            createCommand = currentRange => new OneVariableDataTableCommand(currentRange, formulaCell, inputCell, dialog.Result.Orientation);
+        }
+
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Data Table",
+                range,
+                createCommand,
+                out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private void ApplyDataTableRangeSelection(
+        DataTableDialog? dialog,
+        DataTableRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, selectedRange.Start);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+}

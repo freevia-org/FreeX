@@ -84,7 +84,7 @@ function Get-ImageMsoName {
     }
 
     $map = @{
-        "Freexcel" = "MicrosoftExcel"
+        "FreeX" = "MicrosoftExcel"
         "Save" = "FileSave"
         "Save As" = "FileSaveAs"
         "Undo" = "Undo"
@@ -245,7 +245,7 @@ function Get-ImageMsoName {
     return ConvertTo-ImageMsoGuess $Command
 }
 
-function New-FreexcelIconCell {
+function New-FreeXIconCell {
     param(
         [string]$Slug,
         [string]$Suffix,
@@ -256,10 +256,10 @@ function New-FreexcelIconCell {
     $repoRoot = Split-Path $PSScriptRoot -Parent
     $requestedFileName = if ($Suffix) { "$Slug-$Suffix.svg" } else { "$Slug.svg" }
     $fileName = $requestedFileName
-    $literalPath = Join-Path $repoRoot "src\Freexcel.App.Host\Resources\CommandIconsSvg\$fileName"
+    $literalPath = Join-Path $repoRoot "src\FreeX.App.Host\Resources\CommandIconsSvg\$fileName"
     if (-not (Test-Path -LiteralPath $literalPath)) {
         $baseFileName = "$Slug.svg"
-        $baseLiteralPath = Join-Path $repoRoot "src\Freexcel.App.Host\Resources\CommandIconsSvg\$baseFileName"
+        $baseLiteralPath = Join-Path $repoRoot "src\FreeX.App.Host\Resources\CommandIconsSvg\$baseFileName"
         if (-not $Suffix -or -not (Test-Path -LiteralPath $baseLiteralPath)) {
             return "<span class=""missing"">missing<br><code>$requestedFileName</code></span>"
         }
@@ -268,7 +268,7 @@ function New-FreexcelIconCell {
         $literalPath = $baseLiteralPath
     }
 
-    $relativePath = "../src/Freexcel.App.Host/Resources/CommandIconsSvg/$fileName"
+    $relativePath = "../src/FreeX.App.Host/Resources/CommandIconsSvg/$fileName"
     $fallbackLabel = if ($fileName -ne $requestedFileName) { "<code>fallback from $requestedFileName</code>" } else { "" }
     return "<div class=""icon-sample""><img src=""$relativePath"" width=""$CssSize"" height=""$CssSize"" alt=""$Label $CssSize px""><code>$fileName</code>$fallbackLabel</div>"
 }
@@ -279,7 +279,7 @@ function New-AppIconCell {
         [int]$CssSize
     )
 
-    return "<div class=""icon-sample""><img src=""../src/Freexcel.App.Host/Resources/Freexcel.ico"" width=""$CssSize"" height=""$CssSize"" alt=""$Label app icon $CssSize px""><code>Freexcel.ico</code></div>"
+    return "<div class=""icon-sample""><img src=""../src/FreeX.App.Host/Resources/FreeX.ico"" width=""$CssSize"" height=""$CssSize"" alt=""$Label app icon $CssSize px""><code>FreeX.ico</code></div>"
 }
 
 function New-NoIconCell {
@@ -440,7 +440,7 @@ foreach ($row in $rows) {
     }
 
     $hasNoIcon = $row.Notes -match 'No icon|Keep as text control|native slider'
-    if ($row.Command -eq "Freexcel") {
+    if ($row.Command -eq "FreeX") {
         $small = New-AppIconCell $row.Command 22
         $base = New-AppIconCell $row.Command 32
         $large = New-AppIconCell $row.Command 40
@@ -449,9 +449,9 @@ foreach ($row in $rows) {
         $base = New-NoIconCell "text/native control"
         $large = New-NoIconCell "text/native control"
     } else {
-        $small = New-FreexcelIconCell $row.Slug "small" $row.Command 22
-        $base = New-FreexcelIconCell $row.Slug "" $row.Command 32
-        $large = New-FreexcelIconCell $row.Slug "large" $row.Command 32
+        $small = New-FreeXIconCell $row.Slug "small" $row.Command 22
+        $base = New-FreeXIconCell $row.Slug "" $row.Command 32
+        $large = New-FreeXIconCell $row.Slug "large" $row.Command 32
     }
     $excelUrl = if ($row.ImageMso) { "https://www.spreadsheet1.com/imagemso/$($row.ImageMso).png" } else { "" }
     $excelCell = if ($excelUrl -and (Test-ExcelIconName $row.ImageMso)) {
@@ -487,7 +487,7 @@ $html = @"
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Freexcel Iconset Preview</title>
+  <title>FreeX Iconset Preview</title>
   <style>
     :root { color-scheme: light; --green:#217346; --grid:#d7d7d7; --ink:#1f1f1f; --muted:#666; --soft:#f6f7f8; }
     body { margin: 0; font: 13px/1.35 "Segoe UI", Arial, sans-serif; color: var(--ink); background: white; }
@@ -526,8 +526,8 @@ $html = @"
 </head>
 <body>
   <header>
-    <h1>Freexcel Iconset Preview</h1>
-    <div class="meta">Generated from <code>$SourceInventory</code> and <code>$ReviewNotesPath</code>. Freexcel columns show current SVG assets from <code>src/Freexcel.App.Host/Resources/CommandIconsSvg</code>. Excel comparison icons are linked by ImageMso name to Spreadsheet1's Microsoft Office ImageMso gallery for review reference.</div>
+    <h1>FreeX Iconset Preview</h1>
+    <div class="meta">Generated from <code>$SourceInventory</code> and <code>$ReviewNotesPath</code>. FreeX columns show current SVG assets from <code>src/FreeX.App.Host/Resources/CommandIconsSvg</code>. Excel comparison icons are linked by ImageMso name to Spreadsheet1's Microsoft Office ImageMso gallery for review reference.</div>
   </header>
   <main>
     <table>
@@ -537,10 +537,10 @@ $html = @"
       <thead>
         <tr>
           <th>Label / Command</th>
-          <th>Freexcel slug</th>
-          <th>Freexcel small</th>
-          <th>Freexcel base</th>
-          <th>Freexcel large</th>
+          <th>FreeX slug</th>
+          <th>FreeX small</th>
+          <th>FreeX base</th>
+          <th>FreeX large</th>
           <th>MS Excel comparison</th>
           <th>Design note</th>
           <th>Review finding</th>

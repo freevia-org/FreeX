@@ -1,0 +1,1701 @@
+using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Media;
+using FluentAssertions;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed class PivotWorkflowDialogTests
+{
+    [Fact]
+    public void PivotTableDialog_CreateResult_CapturesExcelCreatePivotChoices()
+    {
+        var result = PivotTableDialog.CreateResult(
+            "  Sales!A1:D20  ",
+            PivotTableDestinationKind.ExistingWorksheet,
+            "  Report!F3  ",
+            openFieldList: true);
+
+        result.SourceRangeText.Should().Be("Sales!A1:D20");
+        result.DestinationKind.Should().Be(PivotTableDestinationKind.ExistingWorksheet);
+        result.DestinationRangeText.Should().Be("Report!F3");
+        result.OpenFieldList.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PivotTableDialog_DefaultResult_UsesNewWorksheetDestinationAndFieldList()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sales");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 20, 4));
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableDialog(workbook, sheet.Id, range);
+
+            dialog.Result.SourceRangeText.Should().Be("Sales!A1:D20");
+            dialog.Result.DestinationKind.Should().Be(PivotTableDestinationKind.NewWorksheet);
+            dialog.Result.DestinationRangeText.Should().BeEmpty();
+            dialog.Result.OpenFieldList.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void PivotTableDialog_ExposesReferencePickersForSourceAndExistingLocation()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("AddLabeledReferenceEditor(");
+        source.Should().Contain("_sourceRangeBox,");
+        source.Should().Contain("_destinationRangeBox,");
+        source.Should().Contain("CreateReferenceEditor(textBox, automationName, target, editorMargin)");
+        source.Should().Contain("Select PivotTable source range");
+        source.Should().Contain("Select PivotTable location");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+        source.Should().Contain("UpdateDestinationState");
+    }
+
+    [Fact]
+    public void PivotTableDialog_ExposesOnlySupportedSourceAndPlacementChoices()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("Choose the data that you want to analyze");
+        source.Should().Contain("_selectTableRangeButton");
+        source.Should().Contain("_New worksheet");
+        source.Should().Contain("_Existing worksheet");
+        source.Should().NotContain("_externalSourceButton");
+        source.Should().NotContain("_dataModelBox");
+        source.Should().NotContain("Use an _external data source");
+        source.Should().NotContain("Add this data to the Data _Model");
+    }
+
+    [Fact]
+    public void PivotTableDialog_ExposesKeyboardAccessKeysForChoicesAndButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("Content = \"_Create\"");
+        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Content = \"_New worksheet\"");
+        source.Should().Contain("Content = \"_Existing worksheet\"");
+        source.Should().Contain("Content = \"Open PivotTable _Fields pane\"");
+        source.Should().NotContain("Content = \"Use an _external data source\"");
+        source.Should().NotContain("Content = \"Add this data to the Data _Model\"");
+    }
+
+    [Fact]
+    public void PivotTableDialog_LabelsRangeEditorsWithAccessKeyTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "AddLabeledReferenceEditor(",
+            "\"Table/_Range:\"",
+            "\"_Location:\"",
+            "_sourceRangeBox,",
+            "_destinationRangeBox,",
+            "new Label",
+            "Target = textBox",
+            "private void AddLabeledReferenceEditor",
+            "CreateReferenceEditor(textBox, automationName, target, editorMargin)"
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableDialog_RangeEditorsExposeAutomationNames()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_sourceRangeBox, \"PivotTable source range\");");
+        source.Should().Contain("AutomationProperties.SetName(_destinationRangeBox, \"PivotTable location\");");
+    }
+
+    [Fact]
+    public void PivotTableDialogOpenedFromKeyboard_FocusesSourceRange()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("FocusRangeSelectionInput(_sourceRangeBox);");
+    }
+
+    [Fact]
+    public void PivotTableDialogRangePicker_RefocusesSelectedInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private void UpdateDestinationState", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+    }
+
+    [Fact]
+    public void PivotTableDialogInvalidRanges_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid PivotTable source range.\", _sourceRangeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a destination cell on the active worksheet.\", _destinationRangeBox);");
+        source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sourceSheetId, _sourceRangeBox.Text, ResolveSheetIdByName, out _)");
+        source.Should().Contain("destinationRange.Start.Sheet != _sourceSheetId");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+    }
+
+    [Fact]
+    public void PivotTableRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        PivotTableDialog.CreateRangeSelectionRequest(PivotTableRangeSelectionTarget.DestinationRange, " Report!F3 ")
+            .Should()
+            .Be(new PivotTableRangeSelectionRequest(
+                PivotTableRangeSelectionTarget.DestinationRange,
+                "Report!F3",
+                CollapseDialog: true));
+    }
+
+    [Fact]
+    public void PivotTableApplyRangeSelection_UpdatesRequestedReferenceBox()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sales");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 20, 4));
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableDialog(workbook, sheet.Id, range);
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                dialog.ApplyRangeSelection(PivotTableRangeSelectionTarget.SourceRange, "Sales!A1:E40");
+                dialog.ApplyRangeSelection(PivotTableRangeSelectionTarget.DestinationRange, "Sales!H3");
+
+                textBoxes[0].Text.Should().Be("Sales!A1:E40");
+                textBoxes[1].Text.Should().Be("Sales!H3");
+                textBoxes[1].IsEnabled.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresPivotTableRangePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotCommands.cs"));
+
+        source.Should().Contain("new PivotTableDialog(");
+        source.Should().Contain("request => ApplyPivotTableRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyPivotTableRangeSelection(");
+        source.Should().Contain("PivotTableRangeSelectionRequest request");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Theory]
+    [InlineData("Select PivotTable source range", PivotTableRangeSelectionTarget.SourceRange, "Sales!A1:D20")]
+    [InlineData("Select PivotTable location", PivotTableRangeSelectionTarget.DestinationRange, "Sales!F1")]
+    public void PivotTableReferencePickers_RaiseRangeSelectionRequest(
+        string automationName,
+        PivotTableRangeSelectionTarget expectedTarget,
+        string expectedText)
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sales");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 20, 4));
+
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<PivotTableRangeSelectionRequest>();
+            var dialog = new PivotTableDialog(workbook, sheet.Id, range, requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new PivotTableRangeSelectionRequest(
+                    expectedTarget,
+                    expectedText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void PivotTableDataSourceDialog_CreateResult_TrimsSourceRangeText()
+    {
+        PivotTableDataSourceDialog.CreateResult("  Sales!A1:E200  ")
+            .SourceRangeText
+            .Should()
+            .Be("Sales!A1:E200");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        PivotTableDataSourceDialog.CreateRangeSelectionRequest(" Sales!A1:E200 ")
+            .Should()
+            .Be(new PivotTableDataSourceRangeSelectionRequest("Sales!A1:E200", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void PivotTableDataSourceDialog_ExposesReferencePickerForSourceRange()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("CreateReferenceEditor(_sourceBox");
+        source.Should().Contain("Select PivotTable source range");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("PivotTableDataSourceRangeSelectionRequest");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceDialog_SourceRangeEditorExposesAutomationName()
+    {
+        var source = ReadClassSource(
+            "PivotTableDataSourceDialog.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+
+        source.Should().Contain("AutomationProperties.SetName(_sourceBox, \"PivotTable source range\");");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceDialogOpenedFromKeyboard_FocusesSourceRange()
+    {
+        var source = ReadClassSource(
+            "PivotTableDataSourceDialog.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("FocusRangeSelectionInput(_sourceBox);");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceRangePicker_RefocusesSourceInputAfterRequest()
+    {
+        var source = ReadClassSource(
+            "PivotTableDataSourceDialog.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+
+        source.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceDialogInvalidRange_ShowsOwnedWarningAndRefocusesSource()
+    {
+        var source = ReadClassSource(
+            "PivotTableDataSourceDialog.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotCommands.cs"));
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sheetId, _sourceBox.Text, ResolveSheetIdByName, out _)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid PivotTable source range.\", _sourceBox);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
+        source.Should().Contain("FocusRangeSelectionInput(target);");
+        commandSource.Should().Contain("sheetId: sheet.Id");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceReferencePicker_RaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<PivotTableDataSourceRangeSelectionRequest>();
+            var dialog = new PivotTableDataSourceDialog(" Sales!A1:E200 ", requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == "Select PivotTable source range");
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new PivotTableDataSourceRangeSelectionRequest(
+                    "Sales!A1:E200",
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void PivotTableDataSourceApplyRangeSelection_UpdatesSourceBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableDataSourceDialog("Sales!A1:E200");
+            dialog.Show();
+            try
+            {
+                dialog.ApplyRangeSelection("Sales!B2:F40");
+
+                var sourceBox = FindVisualChildren<TextBox>(dialog).Single();
+                sourceBox.Text.Should().Be("Sales!B2:F40");
+                sourceBox.SelectionLength.Should().Be("Sales!B2:F40".Length);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainWindow_WiresPivotTableDataSourceRangePickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotCommands.cs"));
+
+        source.Should().Contain("new PivotTableDataSourceDialog(");
+        source.Should().Contain("request => ApplyPivotTableDataSourceRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyPivotTableDataSourceRangeSelection(");
+        source.Should().Contain("PivotTableDataSourceRangeSelectionRequest request");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
+    public void PivotAuxiliaryDialogs_LabelEditableFieldsWithAccessKeyTargets()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        foreach (var content in new[]
+        {
+            "PivotDialogLayout.AddLabeledControl(",
+            "\"Table/_Range:\"",
+            "CreateReferenceEditor(_sourceBox",
+            "_sourceBox,",
+            "PivotDialogLayout.AddLabeledControl(fieldPanel, \"_Field to connect\", _fieldBox",
+            "PivotDialogLayout.AddLabeledControl(fieldPanel, \"Slicer _caption\", _nameBox",
+            "PivotDialogLayout.AddLabeledControl(fieldPanel, \"_Date field to connect\", _fieldBox",
+            "PivotDialogLayout.AddLabeledControl(fieldPanel, \"Timeline _caption\", _nameBox",
+            "InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery",
+            "AutomationProperties.SetName(_styleGallery, \"PivotChart style gallery\")",
+            "AddCombo(selectionPanel, \"_Field\", _fieldBox",
+            "AddCombo(groupingPanel, \"_Group by\", _groupingBox",
+            "AddTextBox(rangePanel, \"_Starting at\", _startBox",
+            "AddTextBox(rangePanel, \"_Ending at\", _endBox",
+            "AddTextBox(rangePanel, \"_By\", _intervalBox",
+            "AddTextBox(formulaPanel, \"_Name:\", _nameBox",
+            "AddTextBox(formulaPanel, \"_Formula:\", _formulaBox",
+            "PivotDialogLayout.AddLabeledControl(itemPanel, \"Source _field:\", _fieldBox",
+            "AddTextBox(itemPanel, \"_Name:\", _nameBox",
+            "AddTextBox(itemPanel, \"Item _formula:\", _formulaBox",
+            "public static void AddLabeledControl(Panel stack, string label, UIElement control",
+            "Target = target"
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void InsertSlicerDialog_CreateResult_CapturesFieldAndSlicerName()
+    {
+        InsertSlicerDialog.CreateResult("  Region  ", "  Region Slicer  ")
+            .Should()
+            .Be(new InsertSlicerDialogResult("Region", "Region Slicer"));
+    }
+
+    [Fact]
+    public void InsertSlicerDialog_TryCreateResult_RejectsBlankFieldOrCaption()
+    {
+        InsertSlicerDialog.TryCreateResult(" ", "Region Slicer", out _, out var fieldError)
+            .Should()
+            .BeFalse();
+        fieldError.Should().Be("Select a field to connect.");
+
+        InsertSlicerDialog.TryCreateResult("Region", " ", out _, out var captionError)
+            .Should()
+            .BeFalse();
+        captionError.Should().Be("Enter a slicer caption.");
+    }
+
+    [Fact]
+    public void InsertSlicerDialog_AcceptWarnsAndRefocusesInvalidInput()
+    {
+        var source = ReadClassSource(
+            "PivotSlicerTimelineDialogs.cs",
+            "public sealed class InsertSlicerDialog",
+            "public sealed record InsertTimelineDialogResult");
+
+        source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter slicer options.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
+        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("textBox.SelectAll();");
+    }
+
+    [Fact]
+    public void InsertSlicerDialog_ExposesExcelLikeFieldSelectionShell()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Choose fields");
+        source.Should().Contain("_Field to connect");
+        source.Should().Contain("Slicer _caption");
+        source.Should().Contain("DialogButtonRowFactory.Create");
+        source.Should().NotContain("Slicers make it faster to filter a PivotTable");
+    }
+
+    [Fact]
+    public void InsertSlicerDialogOpenedFromKeyboard_FocusesFieldBox()
+    {
+        var source = ReadClassSource(
+            "PivotSlicerTimelineDialogs.cs",
+            "public sealed class InsertSlicerDialog",
+            "public sealed record InsertTimelineDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_fieldBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_fieldBox);");
+    }
+
+    [Fact]
+    public void InsertTimelineDialog_CreateResult_CapturesDateFieldAndTimelineName()
+    {
+        InsertTimelineDialog.CreateResult("  Order Date  ", "  Order Date Timeline  ")
+            .Should()
+            .Be(new InsertTimelineDialogResult("Order Date", "Order Date Timeline"));
+    }
+
+    [Fact]
+    public void InsertTimelineDialog_TryCreateResult_RejectsBlankDateFieldOrCaption()
+    {
+        InsertTimelineDialog.TryCreateResult(" ", "Order Date Timeline", out _, out var fieldError)
+            .Should()
+            .BeFalse();
+        fieldError.Should().Be("Select a date field to connect.");
+
+        InsertTimelineDialog.TryCreateResult("Order Date", " ", out _, out var captionError)
+            .Should()
+            .BeFalse();
+        captionError.Should().Be("Enter a timeline caption.");
+    }
+
+    [Fact]
+    public void InsertTimelineDialog_AcceptWarnsAndRefocusesInvalidInput()
+    {
+        var source = ReadClassSource(
+            "PivotSlicerTimelineDialogs.cs",
+            "public sealed class InsertTimelineDialog",
+            "");
+
+        source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter timeline options.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
+        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("textBox.SelectAll();");
+    }
+
+    [Fact]
+    public void InsertTimelineDialog_ExposesExcelLikeDateFieldSelectionShell()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Choose date fields");
+        source.Should().Contain("_Date field to connect");
+        source.Should().Contain("Timeline _caption");
+        source.Should().NotContain("Timelines filter PivotTables by date");
+    }
+
+    [Fact]
+    public void InsertTimelineDialogOpenedFromKeyboard_FocusesFieldBox()
+    {
+        var source = ReadClassSource(
+            "PivotSlicerTimelineDialogs.cs",
+            "public sealed class InsertTimelineDialog",
+            "");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_fieldBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_fieldBox);");
+    }
+
+    [Fact]
+    public void PivotChartTypeDialog_PreselectsCurrentTypeAndBuildsResult()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotChartTypeDialog(ChartType.Line);
+
+            dialog.SelectedChartType.Should().Be(ChartType.Line);
+            PivotChartTypeDialog.CreateResult(ChartType.StackedColumn)
+                .Should()
+                .Be(new PivotChartTypeDialogResult(ChartType.StackedColumn));
+        });
+    }
+
+    [Fact]
+    public void PivotChartTypeDialog_ExposesSelectableRecommendedPivotCharts()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Header = \"_Recommended PivotCharts\"");
+        source.Should().Contain("Header = \"_All Charts\"");
+        source.Should().Contain("private readonly ListBox _recommendedGallery");
+        source.Should().Contain("CreateRecommendedChartsPanel(_recommendedGallery)");
+        source.Should().Contain("SelectedGalleryChoice()");
+        source.Should().NotContain("Pick a chart type for the selected PivotTable data");
+        source.Should().Contain("InsertChartDialog.CreateAllChartsPanel");
+        source.Should().Contain("Chart categories");
+        source.Should().Contain("Chart subtype gallery");
+        source.Should().NotContain("private readonly ComboBox _chartTypeBox");
+    }
+
+    [Fact]
+    public void PivotChartTypeDialogOpenedFromKeyboard_FocusesRecommendedGallery()
+    {
+        var source = ReadClassSource(
+            "PivotChartTypeDialog.cs",
+            "public sealed class PivotChartTypeDialog",
+            "");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_recommendedGallery.Focus();");
+        source.Should().Contain("Keyboard.Focus(_recommendedGallery);");
+    }
+
+    [Fact]
+    public void PivotChartInsert_UsesTypeDialogInsteadOfHardCodedColumn()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotChartCommands.cs"));
+        var methodStart = source.IndexOf("private void PivotChartBtn_Click", StringComparison.Ordinal);
+        var methodEnd = source.IndexOf("private void PivotChartChangeTypeBtn_Click", StringComparison.Ordinal);
+        methodStart.Should().BeGreaterThanOrEqualTo(0);
+        methodEnd.Should().BeGreaterThan(methodStart);
+        var method = source[methodStart..methodEnd];
+
+        method.Should().Contain("new PivotChartTypeDialog(ChartType.Column)");
+        method.Should().Contain("dialog.Result.ChartType");
+        method.Should().NotContain("new AddPivotChartCommand(_currentSheetId, pivotTable.Name, ChartType.Column");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_CapturesModeledLayoutAndStyleSettings()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: false,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Top,
+            repeatItemLabels: false,
+            blankLineAfterItems: true,
+            styleName: "  PivotStyleMedium9  ",
+            showRowHeaders: false,
+            showColumnHeaders: true,
+            showRowStripes: true,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Outline,
+            emptyValueText: "  N/A  ",
+            refreshOnOpen: true,
+            saveSourceData: false,
+            enableRefresh: false,
+            preserveSourceSortFilter: false,
+            missingItemsLimit: 42,
+            showExpandCollapseButtons: false,
+            autofitColumnsOnUpdate: false,
+            preserveFormattingOnUpdate: false,
+            showFieldHeaders: false,
+            showContextualTooltips: false,
+            showPropertiesInTooltips: false,
+            showClassicLayout: true,
+            mergeAndCenterLabels: true,
+            pageOverThenDown: true,
+            pageWrap: 4,
+            compactRowLabelIndent: 3,
+            enableDrill: false);
+
+        result.Should().BeEquivalentTo(new
+        {
+            ShowRowGrandTotals = true,
+            ShowColumnGrandTotals = false,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            RepeatItemLabels = false,
+            BlankLineAfterItems = true,
+            StyleName = "PivotStyleMedium9",
+            ShowRowHeaders = false,
+            ShowColumnHeaders = true,
+            ShowRowStripes = true,
+            ShowColumnStripes = false,
+            ReportLayout = PivotReportLayout.Outline,
+            EmptyValueText = "N/A",
+            ErrorValueText = (string?)null,
+            RefreshOnOpen = true,
+            SaveSourceData = false,
+            EnableRefresh = false,
+            PreserveSourceSortFilter = false,
+            MissingItemsLimit = 1_048_576,
+            ShowExpandCollapseButtons = false,
+            AutofitColumnsOnUpdate = false,
+            PreserveFormattingOnUpdate = false,
+            ShowFieldHeaders = false,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
+            PageOverThenDown = true,
+            PageWrap = 4,
+            CompactRowLabelIndent = 3,
+            EnableDrill = false
+        });
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_CapturesEmptyAndErrorValueText()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Tabular,
+            emptyValueText: "  N/A  ",
+            errorValueText: "  #VALUE!  ");
+
+        result.EmptyValueText.Should().Be("N/A");
+        result.ErrorValueText.Should().Be("#VALUE!");
+
+        var blankResult = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Tabular,
+            emptyValueText: " ",
+            errorValueText: " \t ");
+
+        blankResult.EmptyValueText.Should().BeNull();
+        blankResult.ErrorValueText.Should().BeNull();
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_KeepsExistingPositionalOptionalOrder()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            true,
+            true,
+            true,
+            PivotSubtotalPlacement.Bottom,
+            false,
+            false,
+            "PivotStyleLight16",
+            true,
+            true,
+            false,
+            false,
+            PivotReportLayout.Tabular,
+            "empty",
+            true,
+            false,
+            false,
+            false,
+            0,
+            true,
+            true,
+            "title",
+            "description",
+            2,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            7,
+            "error");
+
+        result.ErrorValueText.Should().Be("error");
+        result.EnableDrill.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_FromPivotTable_UsesConnectedCacheDataOptions()
+    {
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 7,
+            StyleName = "PivotStyleMedium4"
+        };
+        var cache = new PivotCacheModel
+        {
+            CacheId = 7,
+            RefreshOnLoad = true,
+            SaveData = false,
+            EnableRefresh = false,
+            PreserveSourceSortFilter = false,
+            MissingItemsLimit = 0
+        };
+
+        PivotTableOptionsDialog.FromPivotTable(pivotTable, cache)
+            .Should()
+            .Match<PivotTableOptionsDialogResult>(result =>
+                result.RefreshOnOpen &&
+                !result.SaveSourceData &&
+                !result.EnableRefresh &&
+                !result.PreserveSourceSortFilter &&
+                result.MissingItemsLimit == 0);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_FromPivotTable_UsesCurrentPivotSettings()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 4)),
+            TargetRange = new GridRange(new CellAddress(sheetId, 15, 1), new CellAddress(sheetId, 22, 4)),
+            ShowRowGrandTotals = false,
+            ShowColumnGrandTotals = true,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            RepeatItemLabels = false,
+            BlankLineAfterItems = true,
+            ReportLayout = PivotReportLayout.Compact,
+            StyleName = "PivotStyleDark4",
+            ShowRowHeaders = true,
+            ShowColumnHeaders = false,
+            ShowRowStripes = true,
+            ShowColumnStripes = true,
+            EmptyValueText = "-",
+            ErrorCaption = "(error)",
+            ShowExpandCollapseButtons = false,
+            PrintExpandCollapseButtons = true,
+            AutofitColumnsOnUpdate = false,
+            PreserveFormattingOnUpdate = false,
+            ShowFieldHeaders = false,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
+            PageOverThenDown = true,
+            PageWrap = 2,
+            CompactRowLabelIndent = 5,
+            EnableDrill = false
+        };
+
+        PivotTableOptionsDialog.FromPivotTable(pivotTable)
+            .Should()
+            .BeEquivalentTo(new
+            {
+                ShowRowGrandTotals = false,
+                ShowColumnGrandTotals = true,
+                ShowSubtotals = true,
+                SubtotalPlacement = PivotSubtotalPlacement.Top,
+                RepeatItemLabels = false,
+                BlankLineAfterItems = true,
+                StyleName = "PivotStyleDark4",
+                ShowRowHeaders = true,
+                ShowColumnHeaders = false,
+                ShowRowStripes = true,
+                ShowColumnStripes = true,
+                ReportLayout = PivotReportLayout.Compact,
+                EmptyValueText = "-",
+                ErrorValueText = "(error)",
+                PrintExpandCollapseButtons = true,
+                ShowExpandCollapseButtons = false,
+                AutofitColumnsOnUpdate = false,
+                PreserveFormattingOnUpdate = false,
+                ShowFieldHeaders = false,
+                ShowContextualTooltips = false,
+                ShowPropertiesInTooltips = false,
+                ShowClassicLayout = true,
+                MergeAndCenterLabels = true,
+                PageOverThenDown = true,
+                PageWrap = 2,
+                CompactRowLabelIndent = 5,
+                EnableDrill = false
+            });
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesBroaderPivotStyleGalleryAndPreservesCurrentStyle()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 4)),
+            TargetRange = new GridRange(new CellAddress(sheetId, 15, 1), new CellAddress(sheetId, 22, 4)),
+            StyleName = "PivotStyleMedium10"
+        };
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableOptionsDialog(pivotTable);
+            var styleBox = (ComboBox)typeof(PivotTableOptionsDialog)
+                .GetField("_styleBox", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleNames = styleBox.Items.Cast<object>().Select(item => item.ToString()).ToList();
+
+            styleNames.Should().Contain(["PivotStyleLight16", "PivotStyleMedium10", "PivotStyleDark7"]);
+            styleNames.Should().HaveCountGreaterThan(12);
+            styleBox.SelectedItem.Should().Be("PivotStyleMedium10");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void PivotStyleCatalog_ListsBuiltInLightMediumAndDarkStylesAndPreservesCustomCurrentStyle()
+    {
+        var styleNames = PivotStyleCatalog.GetStyleNames("  MyWorkbookPivotStyle  ");
+
+        styleNames.Should().HaveCount(85);
+        styleNames.Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"));
+        styleNames.Skip(28).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"));
+        styleNames.Skip(56).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}"));
+        styleNames[^1].Should().Be("MyWorkbookPivotStyle");
+    }
+
+    [Fact]
+    public void PivotStyleCatalog_DoesNotDuplicateBuiltInCurrentStyle()
+    {
+        PivotStyleCatalog.GetStyleNames("pivotstylemedium10")
+            .Should()
+            .HaveCount(84)
+            .And
+            .ContainSingle(styleName => string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_UsesCurrentStyleAsInitialSelectionAndPreservesCustomStyle()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotStyleGalleryDialog("CustomPivotStyle");
+            var styleGallery = (ListBox)typeof(PivotStyleGalleryDialog)
+                .GetField("_styleGallery", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleNames = styleGallery.Items.Cast<object>().Select(item => item.ToString()).ToList();
+
+            styleNames.Should().HaveCount(85);
+            styleNames.Should().Contain("CustomPivotStyle");
+            styleGallery.SelectedItem.Should().Be("CustomPivotStyle");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_LabelsStyleGalleryWithAccessKeyAndAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotStyleGalleryDialog.cs"));
+
+        source.Should().Contain("new Label { Content = \"_PivotTable style:\", Target = _styleGallery");
+        source.Should().Contain("AutomationProperties.SetName(_styleGallery, \"PivotTable style gallery\");");
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_CreateResult_NormalizesBlankStyleToDefault()
+    {
+        PivotStyleGalleryDialog.CreateResult("  PivotStyleDark28  ")
+            .Should()
+            .Be(new PivotStyleGalleryDialogResult("PivotStyleDark28"));
+
+        PivotStyleGalleryDialog.CreateResult("  ")
+            .Should()
+            .Be(new PivotStyleGalleryDialogResult("PivotStyleLight16"));
+    }
+
+    [Fact]
+    public void MainWindow_PivotStyleGalleryButton_OpensLightweightGalleryInsteadOfOptionsDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotDesignCommands.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void PivotStyleGalleryBtn_Click", StringComparison.Ordinal)..
+            source.IndexOf("private void PivotRowHeadersBtn_Click", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("ShowPivotStyleGalleryDialog();");
+        handlerSource.Should().NotContain("ShowPivotTableOptionsDialog();");
+        source.Should().Contain("private void ShowPivotStyleGalleryDialog()");
+        source.Should().Contain("new PivotStyleGalleryDialog(pivotTable.StyleName)");
+        source.Should().Contain("styleName: dialog.Result.StyleName");
+    }
+
+    [Fact]
+    public void MainWindow_PivotStyleOptionButtons_PreserveCurrentStyleAndToggleOnlyTargetFlag()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotDesignCommands.cs"));
+
+        AssertPivotStyleOptionHandler(source, "PivotRowHeadersBtn_Click", "!pivotTable.ShowRowHeaders");
+        AssertPivotStyleOptionHandler(source, "PivotColumnHeadersBtn_Click", "!pivotTable.ShowColumnHeaders");
+        AssertPivotStyleOptionHandler(source, "PivotBandedRowsBtn_Click", "!pivotTable.ShowRowStripes");
+        AssertPivotStyleOptionHandler(source, "PivotBandedColumnsBtn_Click", "!pivotTable.ShowColumnStripes");
+    }
+
+    private static void AssertPivotStyleOptionHandler(string source, string handlerName, string toggledFlag)
+    {
+        var start = source.IndexOf($"private void {handlerName}", StringComparison.Ordinal);
+        var end = source.IndexOf("    private void", start + 1, StringComparison.Ordinal);
+        var handlerSource = source[start..end];
+
+        handlerSource.Should().Contain("ApplyPivotOptions(");
+        handlerSource.Should().Contain("pivotTable.StyleName");
+        handlerSource.Should().Contain(toggledFlag);
+        handlerSource.Should().NotContain("PivotStyleLight16");
+        handlerSource.Should().NotContain("PivotStyleMedium");
+        handlerSource.Should().NotContain("PivotStyleDark");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_UsesExcelStyleTabbedOptionShell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableOptionsDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "_Layout & Format",
+            "_Totals & Filters",
+            "_Display",
+            "_Data",
+            "_Printing",
+            "_Alt Text",
+            "_emptyCellsBox",
+            "_compactIndentBox",
+            "_autofitColumnsBox",
+            "_preserveFormattingBox",
+            "_refreshOnOpenBox",
+            "_enableRefreshBox",
+            "_preserveSourceSortFilterBox",
+            "_enableShowDetailsBox",
+            "_missingItemsLimitBox",
+            "_fieldHeadersBox",
+            "_showExpandCollapseBox",
+            "_printTitlesBox",
+            "_printExpandCollapseBox",
+            "_altTextTitleBox",
+            "_altTextDescriptionBox",
+            "Loaded += (_, _) => FocusInitialKeyboardTarget();",
+            "private void FocusInitialKeyboardTarget()",
+            "_reportLayoutBox.Focus();",
+            "Keyboard.Focus(_reportLayoutBox);"
+        })
+            source.Should().Contain(content);
+        source.Should().NotContain("Title and description metadata can be added in a future pass.");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesPrintingTab()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Header = \"_Printing\"");
+        source.Should().Contain("Show expand/collapse _buttons");
+        source.Should().Contain("Set print _titles");
+        source.Should().Contain("Print expand/collapse _buttons when displayed on PivotTable");
+        source.Should().NotContain("Print titles and print expand/collapse buttons are not yet available.");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesExcelLikeGroupsInsideTabs()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        foreach (var content in new[]
+        {
+            "Layout section",
+            "Format section",
+            "Grand totals",
+            "PivotTable Style Options",
+            "Data options",
+            "Print options",
+            "Alt Text",
+            "Preserve source sort and _filter settings",
+            "Retain items _deleted from the data source",
+            "Display field _captions and filter drop-downs",
+            "Show items with no data on _rows",
+            "Show items with no data on _columns"
+        })
+            source.Should().Contain(content);
+
+        source.Should().NotContain("Field list and buttons remain available");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ModelsPreserveSourceSortFilterOption()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("private readonly CheckBox _preserveSourceSortFilterBox");
+        source.Should().Contain("Content = \"Preserve source sort and _filter settings\"");
+        source.Should().Contain("PreserveSourceSortFilter");
+        source.Should().Contain("AddCheckBox(dataPanel, _preserveSourceSortFilterBox)");
+        source.Should().NotContain("IsEnabled = false");
+        source.Should().NotContain("changing this option is not modeled yet");
+        source.Should().NotContain("new CheckBox { Content = \"Preserve source sort and _filter settings\"");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_LabelsEditableOptionsWithAccessKeyTargets()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        foreach (var content in new[]
+        {
+            "AddLabeledControl(layoutPanel, \"_Report layout\", _reportLayoutBox",
+            "AddLabeledControl(layoutPanel, \"When in compact form _indent row labels\", _compactIndentBox",
+            "AddLabeledControl(formatPanel, \"For _empty cells show:\", _emptyCellsBox",
+            "AddLabeledControl(formatPanel, \"For error _values show:\", _errorValuesBox",
+            "AddLabeledControl(dataPanel, \"Retain items _deleted from the data source\", _missingItemsLimitBox",
+            "AddLabeledControl(filtersPanel, \"Subtotal _placement\", _subtotalPlacementBox",
+            "AddLabeledControl(stylePanel, \"PivotTable _style\", _styleBox",
+            "new Label",
+            "Content = label",
+            "Target = control"
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialogInvalidNumericOptions_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotTableOptionsDialog.cs",
+            "public sealed partial class PivotTableOptionsDialog",
+            "");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a compact row label indent from 0 to 15.\", _compactIndentBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter page fields per column from 0 to 255.\", _pageWrapBox);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
+        source.Should().Contain("_tabs.SelectedItem = _layoutTab;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesAccessKeysForModeledCheckboxes()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        foreach (var content in new[]
+        {
+            "Content = \"Show _row grand totals\"",
+            "Content = \"Show _column grand totals\"",
+            "Content = \"Show _subtotals\"",
+            "Content = \"_Repeat item labels\"",
+            "Content = \"Insert _blank line after each item\"",
+            "Content = \"Row _headers\"",
+            "Content = \"Column hea_ders\"",
+            "Content = \"Display field _captions and filter drop-downs\"",
+            "Content = \"Show items with no data on _rows\"",
+            "Content = \"Show items with no data on _columns\"",
+            "Content = \"Banded _rows\"",
+            "Content = \"Banded c_olumns\"",
+            "Content = \"_Autofit column widths on update\"",
+            "Content = \"_Preserve cell formatting on update\"",
+            "Content = \"_Refresh data when opening the file\"",
+            "Content = \"_Enable refresh\"",
+            "Content = \"Enable Show De_tails\"",
+            "Content = \"Show expand/collapse _buttons\"",
+            "Content = \"Set print _titles\"",
+            "Content = \"Print expand/collapse _buttons when displayed on PivotTable\""
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_DataTabAccessKeysAreUnique()
+    {
+        string[] dataTabLabels =
+        [
+            "_Refresh data when opening the file",
+            "_Save source data with file",
+            "_Enable refresh",
+            "Enable Show De_tails",
+            "Preserve source sort and _filter settings",
+            "Retain items _deleted from the data source"
+        ];
+
+        var accessKeys = dataTabLabels
+            .Select(label => char.ToUpperInvariant(label[label.IndexOf('_') + 1]))
+            .ToList();
+
+        accessKeys.Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ResultIncludesPrintingAndAltText()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: false,
+            showSubtotals: true,
+            PivotSubtotalPlacement.Top,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            " PivotStyleMedium4 ",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: true,
+            PivotReportLayout.Outline,
+            emptyValueText: " - ",
+            refreshOnOpen: true,
+            saveSourceData: false,
+            enableRefresh: false,
+            missingItemsLimit: 0,
+            compactRowLabelIndent: 6,
+            showExpandCollapseButtons: false,
+            autofitColumnsOnUpdate: false,
+            preserveFormattingOnUpdate: false,
+            showFieldHeaders: false,
+            showContextualTooltips: false,
+            showPropertiesInTooltips: false,
+            showClassicLayout: true,
+            mergeAndCenterLabels: true,
+            showItemsWithNoDataOnRows: true,
+            showItemsWithNoDataOnColumns: true,
+            printTitles: true,
+            printExpandCollapseButtons: true,
+            altTextTitle: "  Sales pivot ",
+            altTextDescription: " Quarterly sales summary ");
+
+        result.ShowExpandCollapseButtons.Should().BeFalse();
+        result.AutofitColumnsOnUpdate.Should().BeFalse();
+        result.PreserveFormattingOnUpdate.Should().BeFalse();
+        result.ShowFieldHeaders.Should().BeFalse();
+        result.ShowContextualTooltips.Should().BeFalse();
+        result.ShowPropertiesInTooltips.Should().BeFalse();
+        result.ShowClassicLayout.Should().BeTrue();
+        result.MergeAndCenterLabels.Should().BeTrue();
+        result.ShowItemsWithNoDataOnRows.Should().BeTrue();
+        result.ShowItemsWithNoDataOnColumns.Should().BeTrue();
+        result.EnableRefresh.Should().BeFalse();
+        result.MissingItemsLimit.Should().Be(0);
+        result.PrintTitles.Should().BeTrue();
+        result.PrintExpandCollapseButtons.Should().BeTrue();
+        result.CompactRowLabelIndent.Should().Be(6);
+        result.AltTextTitle.Should().Be("Sales pivot");
+        result.AltTextDescription.Should().Be("Quarterly sales summary");
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_CreateResult_TrimsFieldAndClampsNumberRangeInterval()
+    {
+        var result = PivotFieldGroupingDialog.CreateResult(
+            "  Order Date  ",
+            sourceFieldIndex: -3,
+            PivotFieldGrouping.NumberRange,
+            "  10  ",
+            "  90  ",
+            "  -5  ",
+            ungroup: false);
+
+        result.Should().Be(new PivotFieldGroupingDialogResult(
+            "Order Date",
+            0,
+            PivotFieldGrouping.NumberRange,
+            10,
+            90,
+            1,
+            false));
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_CreateResult_UngroupClearsGroupingSettings()
+    {
+        var result = PivotFieldGroupingDialog.CreateResult(
+            " Region ",
+            sourceFieldIndex: 2,
+            PivotFieldGrouping.Month,
+            "1",
+            "12",
+            "3",
+            ungroup: true);
+
+        result.Should().Be(new PivotFieldGroupingDialogResult(
+            "Region",
+            2,
+            PivotFieldGrouping.None,
+            null,
+            null,
+            null,
+            true));
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_FromPivotField_UsesCurrentFieldSettings()
+    {
+        var field = new PivotFieldModel(
+            SourceFieldIndex: 1,
+            Grouping: PivotFieldGrouping.Month,
+            GroupStart: 44562,
+            GroupEnd: 44927,
+            GroupInterval: 2);
+
+        PivotFieldGroupingDialog.FromPivotField(["Region", "Order Date"], field)
+            .Should()
+            .Be(new PivotFieldGroupingDialogResult(
+                "Order Date",
+                1,
+                PivotFieldGrouping.Month,
+                44562,
+                44927,
+                2,
+                false));
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_FromPivotField_DefaultsToFirstFieldWhenCurrentSettingsAreMissing()
+    {
+        PivotFieldGroupingDialog.FromPivotField(["Region", "Order Date"], currentField: null)
+            .Should()
+            .Be(new PivotFieldGroupingDialogResult(
+                "Region",
+                0,
+                PivotFieldGrouping.None,
+                null,
+                null,
+                null,
+                false));
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_ExposesExcelLikeGroupingSections()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Selection");
+        source.Should().Contain("Group by");
+        source.Should().Contain("Range");
+        source.Should().NotContain("Select the PivotTable field and grouping interval");
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialogOpenedFromKeyboard_FocusesFieldBox()
+    {
+        var source = ReadClassSource(
+            "PivotFieldGroupingDialog.cs",
+            "public sealed class PivotFieldGroupingDialog",
+            "");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_fieldBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_fieldBox);");
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialogInvalidNumberRangeIntervals_ShowOwnedWarningAndRefocusByBox()
+    {
+        var source = ReadClassSource(
+            "PivotFieldGroupingDialog.cs",
+            "public sealed class PivotFieldGroupingDialog",
+            "");
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive grouping interval.\", _intervalBox);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
+        source.Should().Contain("string.IsNullOrWhiteSpace(value)");
+        source.Should().Contain("!double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out interval)");
+        source.Should().Contain("interval <= 0");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialogInvalidBounds_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotFieldGroupingDialog.cs",
+            "public sealed class PivotFieldGroupingDialog",
+            "");
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid starting value or leave it blank.\", _startBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid ending value or leave it blank.\", _endBox);");
+        source.Should().Contain("TryParseOptionalFiniteDouble(_startBox.Text, out _)");
+        source.Should().Contain("TryParseOptionalFiniteDouble(_endBox.Text, out _)");
+        source.Should().Contain("double.IsFinite(parsed)");
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialog_CreateResult_TrimsAndBuildsModel()
+    {
+        var result = PivotCalculatedFieldDialog.CreateResult("  Revenue  ", "  Sales-Cost  ");
+
+        result.Should().Be(new PivotCalculatedFieldDialogResult("Revenue", "Sales-Cost"));
+        result.ToModel().Should().Be(new PivotCalculatedFieldModel("Revenue", "Sales-Cost"));
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialog_ExposesExcelLikeFormulaEditorShell()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Name and formula");
+        source.Should().Contain("AddTextBox(formulaPanel, \"_Name:\", _nameBox");
+        source.Should().Contain("Formula:");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_nameBox.Focus();");
+        source.Should().Contain("_nameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_nameBox);");
+        source.Should().NotContain("Use field names in formulas");
+        source.Should().NotContain("Calculated fields are added to the Values area");
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialog_ExposesFieldsListAndInsertFieldControl()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("private readonly ListBox _fieldList");
+        source.Should().Contain("Available _fields");
+        source.Should().Contain("Insert _Field");
+        source.Should().Contain("InsertSelectedField");
+        source.Should().Contain("InsertFormulaReference");
+    }
+
+    [Fact]
+    public void PivotCalculatedDialogs_FieldAndItemListsExposeAutomationNames()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("AutomationProperties.SetName(_fieldList, \"Available fields\");");
+        source.Should().Contain("AutomationProperties.SetName(_itemList, \"Available items\");");
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialogInvalidRequiredInputs_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotCalculatedDialogs.cs",
+            "public sealed class PivotCalculatedFieldDialog",
+            "public sealed record PivotCalculatedItemDialogResult");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated field name.\", _nameBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated field formula.\", _formulaBox);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialog_InsertFormulaReference_InsertsQuotedFieldAtCaret()
+    {
+        PivotCalculatedFieldDialog.InsertFormulaReference("Sales+Cost", "[Region Name]", 6, 0)
+            .Should()
+            .Be("Sales+[Region Name]Cost");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_CreateResult_TrimsClampsAndBuildsModel()
+    {
+        var result = PivotCalculatedItemDialog.CreateResult(
+            "  Region  ",
+            sourceFieldIndex: -8,
+            "  East + West  ",
+            "  East+West  ");
+
+        result.Should().Be(new PivotCalculatedItemDialogResult("Region", 0, "East + West", "East+West"));
+        result.ToModel().Should().Be(new PivotCalculatedItemModel(0, "East + West", "East+West"));
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_ExposesExcelLikeFormulaEditorShell()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Field and item");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_nameBox.Focus();");
+        source.Should().Contain("_nameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_nameBox);");
+        source.Should().NotContain("Calculated items are evaluated within the selected field");
+        source.Should().Contain("PivotDialogLayout.AddLabeledControl(itemPanel, \"Source _field:\", _fieldBox");
+        source.Should().Contain("AddTextBox(itemPanel, \"_Name:\", _nameBox");
+        source.Should().Contain("AddTextBox(itemPanel, \"Item _formula:\", _formulaBox");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_ExposesFieldItemListsAndInsertionControls()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("private readonly ListBox _fieldList");
+        source.Should().Contain("private readonly ListBox _itemList");
+        source.Should().Contain("Available _items");
+        source.Should().Contain("Insert _Field");
+        source.Should().Contain("Insert _Item");
+        source.Should().Contain("RefreshItemList");
+        source.Should().Contain("InsertSelectedItem");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialogInvalidRequiredInputs_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotCalculatedDialogs.cs",
+            "public sealed class PivotCalculatedItemDialog",
+            "");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated item name.\", _nameBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated item formula.\", _formulaBox);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_InsertFormulaReference_ReplacesSelectedFormulaText()
+    {
+        PivotCalculatedItemDialog.InsertFormulaReference("East+West", "North", 5, 4)
+            .Should()
+            .Be("East+North");
+    }
+
+    [Fact]
+    public void PivotChartOptionsDialog_CreateResult_ParsesAndClampsStyle()
+    {
+        PivotChartOptionsDialog.CreateResult(
+                " 99 ",
+                showFieldButtons: false,
+                showReportFilterButtons: true,
+                showAxisFieldButtons: false,
+                showValueFieldButtons: true)
+            .Should()
+            .Be(new PivotChartOptionsDialogResult(48, false, true, false, true));
+
+        PivotChartOptionsDialog.CreateResult(
+                "not-a-style",
+                showFieldButtons: true,
+                showReportFilterButtons: false,
+                showAxisFieldButtons: true,
+                showValueFieldButtons: false)
+            .Should()
+            .Be(new PivotChartOptionsDialogResult(null, true, false, true, false));
+
+        PivotChartOptionsDialog.CreateResult(
+                99,
+                showFieldButtons: true,
+                showReportFilterButtons: true,
+                showAxisFieldButtons: true,
+                showValueFieldButtons: true,
+                roundedCorners: true,
+                showHiddenData: true,
+                blankDisplayMode: ChartBlankDisplayMode.Zero)
+            .Should()
+            .Be(new PivotChartOptionsDialogResult(48, true, true, true, true, false, false, true, true, ChartBlankDisplayMode.Zero));
+    }
+
+    [Fact]
+    public void PivotChartOptionsDialog_FromChart_UsesCurrentSettings()
+    {
+        var chart = new ChartModel
+        {
+            ChartStyleId = 12,
+            ShowPivotChartFieldButtons = false,
+            ShowPivotChartReportFilterButtons = true,
+            ShowPivotChartAxisFieldButtons = false,
+            ShowPivotChartValueFieldButtons = true,
+            DataTable = new ChartDataTableModel { ShowLegendKeys = true },
+            RoundedCorners = true,
+            ShowDataInHiddenRowsAndColumns = true,
+            BlankDisplayMode = ChartBlankDisplayMode.Span
+        };
+
+        PivotChartOptionsDialog.FromChart(chart)
+            .Should()
+            .Be(new PivotChartOptionsDialogResult(12, false, true, false, true, true, true, true, true, ChartBlankDisplayMode.Span));
+    }
+
+    [Fact]
+    public void PivotChartOptionsDialog_ExposesExcelLikeStyleAndFieldButtonGroups()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Chart style");
+        source.Should().Contain("_styleGallery");
+        source.Should().Contain("PivotChart style gallery");
+        source.Should().Contain("ChartStyleDialog.GetStyleOptions()");
+        source.Should().NotContain("Chart _style ID");
+        source.Should().Contain("Field buttons");
+        source.Should().Contain("_Show field buttons on chart");
+        source.Should().Contain("Report _filter buttons");
+        source.Should().Contain("_Axis field buttons");
+        source.Should().Contain("_Value field buttons");
+        source.Should().Contain("Show data _table");
+        source.Should().Contain("Show legend _keys");
+        source.Should().Contain("_Rounded corners");
+        source.Should().Contain("Show data in _hidden rows and columns");
+        source.Should().Contain("_Blank cells");
+        source.Should().NotContain("Style IDs match the built-in Excel chart style gallery");
+        source.Should().NotContain("Field buttons let you filter and rearrange PivotChart data directly on the chart");
+    }
+
+    [Fact]
+    public void PivotChartOptionsDialog_UsesVisualStyleGalleryAndPreservesCurrentStyle()
+    {
+        var chart = new ChartModel
+        {
+            IsPivotChart = true,
+            ChartStyleId = 12
+        };
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotChartOptionsDialog(chart);
+            var gallery = (ListBox)typeof(PivotChartOptionsDialog)
+                .GetField("_styleGallery", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleOptions = gallery.Items.Cast<ChartStyleOption>().ToList();
+
+            styleOptions.Should().HaveCount(49);
+            styleOptions[0].Should().Be(new ChartStyleOption(null, "Automatic", "Use current chart formatting"));
+            gallery.SelectedItem.Should().Be(styleOptions.Single(option => option.StyleId == 12));
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void PivotChartOptionsDialogOpenedFromKeyboard_FocusesStyleGallery()
+    {
+        var source = ReadClassSource(
+            "PivotChartOptionsDialog.cs",
+            "public sealed class PivotChartOptionsDialog",
+            "");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_styleGallery.Focus();");
+        source.Should().Contain("Keyboard.Focus(_styleGallery);");
+    }
+
+    [Fact]
+    public void PivotAuxiliaryDialogs_ExposeAccessKeysForModeledCheckboxes()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Content = \"_Show field buttons on chart\"");
+        source.Should().Contain("Content = \"Report _filter buttons\"");
+        source.Should().Contain("Content = \"_Axis field buttons\"");
+        source.Should().Contain("Content = \"_Value field buttons\"");
+        source.Should().Contain("Content = \"_Ungroup selected field\"");
+    }
+
+    private static string ReadPivotWorkflowSource()
+    {
+        return string.Join(
+            "\n",
+            new[]
+            {
+                "PivotFieldGroupingDialog.cs",
+                "PivotTableDataSourceDialog.cs",
+                "PivotChartTypeDialog.cs",
+                "PivotDialogLayout.cs",
+                "PivotChartOptionsDialog.cs",
+                "PivotSlicerTimelineDialogs.cs",
+                "PivotCalculatedDialogs.cs",
+                "PivotStyleCatalog.cs",
+                "PivotStyleGalleryDialog.cs",
+                "PivotTableOptionsDialog.cs",
+                "PivotTableOptionsDialog.Result.cs"
+            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName))));
+    }
+
+    private static string ReadClassSource(string fileName, string startMarker, string endMarker)
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName));
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        var end = string.IsNullOrEmpty(endMarker)
+            ? source.Length
+            : source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        if (end < 0)
+            end = source.Length;
+        end.Should().BeGreaterThan(start);
+        return source[start..end];
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
+    }
+}

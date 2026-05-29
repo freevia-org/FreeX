@@ -1,0 +1,201 @@
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Input;
+
+namespace FreeX.App.Host;
+
+public sealed record FunctionArgumentSpec(string Name, string Description, bool Optional = false);
+
+public sealed partial class FunctionArgumentsDialog : Window
+{
+    private readonly string _functionName;
+    private readonly IReadOnlyList<FunctionArgumentSpec> _arguments;
+    private readonly List<TextBox> _argumentBoxes = [];
+    private readonly TextBlock _formulaPreview = new();
+
+    public string? ResultFormula { get; private set; }
+
+    public FunctionArgumentsDialog(InsertFunctionCatalogEntry function)
+    {
+        _functionName = function.Name.Trim().ToUpperInvariant();
+        _arguments = GetArgumentSpecs(_functionName);
+
+        Title = "Function Arguments";
+        Width = 520;
+        Height = Math.Max(300, Math.Min(620, 220 + (_arguments.Count * 58)));
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ShowInTaskbar = false;
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        var btnRow = CreateButtonRow();
+        DockPanel.SetDock(btnRow, Dock.Bottom);
+        root.Children.Add(btnRow);
+
+        var body = new StackPanel();
+        root.Children.Add(body);
+        body.Children.Add(new TextBlock
+        {
+            Text = _functionName,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        body.Children.Add(new TextBlock
+        {
+            Text = function.Description,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = SystemColors.GrayTextBrush,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        var argumentLabels = CreateArgumentLabels(_arguments);
+        for (var index = 0; index < _arguments.Count; index++)
+            AddArgumentRow(body, _arguments[index], argumentLabels[index]);
+
+        body.Children.Add(new TextBlock { Text = "Formula result =", Margin = new Thickness(0, 12, 0, 2) });
+        _formulaPreview.FontWeight = FontWeights.SemiBold;
+        _formulaPreview.TextWrapping = TextWrapping.Wrap;
+        AutomationProperties.SetName(_formulaPreview, "Formula result");
+        AutomationProperties.SetHelpText(_formulaPreview, "Shows the formula that will be inserted from the current argument values.");
+        body.Children.Add(_formulaPreview);
+        UpdatePreview();
+
+        Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    public static IReadOnlyList<FunctionArgumentSpec> GetArgumentSpecs(string functionName)
+    {
+        var normalized = functionName.Trim().ToUpperInvariant();
+        if (KnownArguments.TryGetValue(normalized, out var arguments))
+            return arguments;
+
+        return [new FunctionArgumentSpec("Number1", "The first value, reference, or expression.")];
+    }
+
+    public static string CreateFormula(string functionName, IEnumerable<string?> arguments)
+    {
+        var normalized = functionName.Trim().ToUpperInvariant();
+        var cleaned = arguments.Select(argument => argument?.Trim() ?? "").ToList();
+        while (cleaned.Count > 0 && cleaned[^1].Length == 0)
+            cleaned.RemoveAt(cleaned.Count - 1);
+
+        return $"{normalized}({string.Join(", ", cleaned)})";
+    }
+
+    public static IReadOnlyList<string> CreateArgumentLabels(IEnumerable<FunctionArgumentSpec> arguments)
+    {
+        var usedAccessKeys = new HashSet<char>();
+        return arguments.Select(argument => CreateArgumentLabel(argument.Name, usedAccessKeys)).ToList();
+    }
+
+    private static string CreateArgumentLabel(string argumentName, ISet<char> usedAccessKeys)
+    {
+        var accessIndex = -1;
+        for (var index = 0; index < argumentName.Length; index++)
+        {
+            var candidate = argumentName[index];
+            if (!char.IsLetterOrDigit(candidate))
+                continue;
+
+            var normalized = char.ToUpperInvariant(candidate);
+            if (!usedAccessKeys.Add(normalized))
+                continue;
+
+            accessIndex = index;
+            break;
+        }
+
+        var label = string.Concat(argumentName.Select((character, index) =>
+            $"{(index == accessIndex ? "_" : "")}{(character == '_' ? "__" : character)}"));
+        return $"{label}:";
+    }
+
+    private void AddArgumentRow(Panel body, FunctionArgumentSpec argument, string labelText)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var box = new TextBox { Margin = new Thickness(8, 0, 0, 2) };
+        box.TextChanged += (_, _) => UpdatePreview();
+        _argumentBoxes.Add(box);
+
+        var label = new Label
+        {
+            Content = labelText,
+            Target = box,
+            Padding = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        grid.Children.Add(label);
+        Grid.SetColumn(box, 1);
+        grid.Children.Add(box);
+
+        var help = new TextBlock
+        {
+            Text = argument.Description,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = SystemColors.GrayTextBrush,
+            FontSize = 11,
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+        Grid.SetRow(help, 1);
+        Grid.SetColumn(help, 1);
+        grid.Children.Add(help);
+
+        body.Children.Add(grid);
+    }
+
+    private void UpdatePreview()
+    {
+        _formulaPreview.Text = CreateFormula(_functionName, _argumentBoxes.Select(box => box.Text));
+    }
+
+    private void Accept()
+    {
+        ResultFormula = CreateFormula(_functionName, _argumentBoxes.Select(box => box.Text));
+        DialogResult = true;
+    }
+
+    private StackPanel CreateButtonRow()
+    {
+        var btnRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        var help = new Button { Content = "_Help on this function", Width = 146, Margin = new Thickness(0, 0, 8, 0) };
+        help.Click += (_, _) => ShowFunctionHelp();
+        var ok = new Button { Content = "_OK", Width = 76, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        ok.Click += (_, _) => Accept();
+        var cancel = new Button { Content = "_Cancel", Width = 76, IsCancel = true };
+        btnRow.Children.Add(help);
+        btnRow.Children.Add(ok);
+        btnRow.Children.Add(cancel);
+        return btnRow;
+    }
+
+    private void ShowFunctionHelp()
+    {
+        DialogMessageHelper.ShowInfo(this,
+            $"{_functionName}()\n\n{string.Join(Environment.NewLine, _arguments.Select(argument => $"{argument.Name}: {argument.Description}"))}",
+            "Function Help");
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        var firstArgument = _argumentBoxes.FirstOrDefault();
+        if (firstArgument is null)
+            return;
+
+        firstArgument.Focus();
+        firstArgument.SelectAll();
+        Keyboard.Focus(firstArgument);
+    }
+
+}

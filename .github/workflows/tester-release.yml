@@ -67,21 +67,21 @@ jobs:
 
       - name: Restore
         shell: pwsh
-        run: dotnet restore Freexcel.slnx
+        run: dotnet restore FreeX.slnx
 
       - name: Build
         shell: pwsh
-        run: dotnet build Freexcel.slnx --configuration Release --no-restore
+        run: dotnet build FreeX.slnx --configuration Release --no-restore
 
       - name: Test
         shell: pwsh
-        run: dotnet test Freexcel.slnx --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
+        run: dotnet test FreeX.slnx --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: freexcel-${{ github.run_id }}-${{ github.run_attempt }}-test-results
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-test-results
           path: "**/TestResults/tests.trx"
           if-no-files-found: warn
 
@@ -151,7 +151,7 @@ jobs:
           if ($displayVersion -notmatch '^[vV]') {
             $displayVersion = "v$displayVersion"
           }
-          $releaseName = "Freexcel (Test Release) $displayVersion ($releaseStamp) Run $runNumber Attempt $runAttempt ($shortSha)"
+          $releaseName = "FreeX (Test Release) $displayVersion ($releaseStamp) Run $runNumber Attempt $runAttempt ($shortSha)"
 
           "version=$versionLabel" >> $env:GITHUB_OUTPUT
           "version_slug=$versionSlug" >> $env:GITHUB_OUTPUT
@@ -163,7 +163,7 @@ jobs:
       - name: Publish single-file tester exe
         shell: pwsh
         run: |
-          $outputRoot = Join-Path $env:RUNNER_TEMP "freexcel-release"
+          $outputRoot = Join-Path $env:RUNNER_TEMP "freex-release"
           New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
           tools/Publish-UserTestBuild.ps1 `
             -Configuration Release `
@@ -172,7 +172,7 @@ jobs:
             -Version "${{ steps.meta.outputs.version }}" `
             -PublishMode SingleFile
 
-          $versionedExe = Get-ChildItem -LiteralPath $outputRoot -Filter "freexcel-*-win-x64-singlefile.exe" |
+          $versionedExe = Get-ChildItem -LiteralPath $outputRoot -Filter "freex-*-win-x64-singlefile.exe" |
             Sort-Object LastWriteTimeUtc -Descending |
             Select-Object -First 1
           if ($null -eq $versionedExe) {
@@ -182,7 +182,7 @@ jobs:
           $uploadRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts\upload"
           New-Item -ItemType Directory -Force -Path $uploadRoot | Out-Null
           Copy-Item -LiteralPath $versionedExe.FullName -Destination (Join-Path $uploadRoot $versionedExe.Name) -Force
-          $latestExePath = Join-Path $uploadRoot "Freexcel-latest-win-x64.exe"
+          $latestExePath = Join-Path $uploadRoot "FreeX-latest-win-x64.exe"
           Copy-Item -LiteralPath $versionedExe.FullName -Destination $latestExePath -Force
 
           $versionedHashPath = "$($versionedExe.FullName).sha256"
@@ -192,27 +192,27 @@ jobs:
 
           Copy-Item -LiteralPath $versionedHashPath -Destination (Join-Path $uploadRoot "$($versionedExe.Name).sha256") -Force
           $latestHash = Get-FileHash -LiteralPath $latestExePath -Algorithm SHA256
-          Set-Content -LiteralPath "$latestExePath.sha256" -Value "$($latestHash.Hash.ToLowerInvariant())  Freexcel-latest-win-x64.exe" -Encoding ASCII
+          Set-Content -LiteralPath "$latestExePath.sha256" -Value "$($latestHash.Hash.ToLowerInvariant())  FreeX-latest-win-x64.exe" -Encoding ASCII
 
       - name: Publish MSIX package
         shell: pwsh
         run: |
-          $outputRoot = Join-Path $env:RUNNER_TEMP "freexcel-release"
+          $outputRoot = Join-Path $env:RUNNER_TEMP "freex-release"
           $certificatePath = ""
-          $certificateBase64 = "${{ secrets.FREEXCEL_MSIX_CERTIFICATE_BASE64 }}"
+          $certificateBase64 = "${{ secrets.FREEX_MSIX_CERTIFICATE_BASE64 }}"
           if (-not [string]::IsNullOrWhiteSpace($certificateBase64)) {
-            $certificatePath = Join-Path $env:RUNNER_TEMP "freexcel-msix-signing.pfx"
+            $certificatePath = Join-Path $env:RUNNER_TEMP "freex-msix-signing.pfx"
             [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($certificateBase64))
           }
 
           $signArgs = @()
           if (-not [string]::IsNullOrWhiteSpace($certificatePath)) {
             $signArgs += @("-MsixCertificatePath", $certificatePath)
-            $certificatePassword = "${{ secrets.FREEXCEL_MSIX_CERTIFICATE_PASSWORD }}"
+            $certificatePassword = "${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}"
             if (-not [string]::IsNullOrWhiteSpace($certificatePassword)) {
               $signArgs += @("-MsixCertificatePassword", $certificatePassword)
             }
-            $timestampUrl = "${{ vars.FREEXCEL_MSIX_TIMESTAMP_URL }}"
+            $timestampUrl = "${{ vars.FREEX_MSIX_TIMESTAMP_URL }}"
             if (-not [string]::IsNullOrWhiteSpace($timestampUrl)) {
               $signArgs += @("-MsixTimestampUrl", $timestampUrl)
             }
@@ -226,7 +226,7 @@ jobs:
             -PublishMode Msix `
             @signArgs
 
-          $versionedMsix = Get-ChildItem -LiteralPath $outputRoot -Filter "freexcel-*-win-x64-msix.msix" |
+          $versionedMsix = Get-ChildItem -LiteralPath $outputRoot -Filter "freex-*-win-x64-msix.msix" |
             Sort-Object LastWriteTimeUtc -Descending |
             Select-Object -First 1
           if ($null -eq $versionedMsix) {
@@ -236,7 +236,7 @@ jobs:
           $uploadRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts\upload"
           New-Item -ItemType Directory -Force -Path $uploadRoot | Out-Null
           Copy-Item -LiteralPath $versionedMsix.FullName -Destination (Join-Path $uploadRoot $versionedMsix.Name) -Force
-          $latestMsixPath = Join-Path $uploadRoot "Freexcel-latest-win-x64.msix"
+          $latestMsixPath = Join-Path $uploadRoot "FreeX-latest-win-x64.msix"
           Copy-Item -LiteralPath $versionedMsix.FullName -Destination $latestMsixPath -Force
 
           $versionedHashPath = "$($versionedMsix.FullName).sha256"
@@ -246,47 +246,47 @@ jobs:
 
           Copy-Item -LiteralPath $versionedHashPath -Destination (Join-Path $uploadRoot "$($versionedMsix.Name).sha256") -Force
           $latestHash = Get-FileHash -LiteralPath $latestMsixPath -Algorithm SHA256
-          Set-Content -LiteralPath "$latestMsixPath.sha256" -Value "$($latestHash.Hash.ToLowerInvariant())  Freexcel-latest-win-x64.msix" -Encoding ASCII
+          Set-Content -LiteralPath "$latestMsixPath.sha256" -Value "$($latestHash.Hash.ToLowerInvariant())  FreeX-latest-win-x64.msix" -Encoding ASCII
 
       - name: Upload versioned artifact
         uses: actions/upload-artifact@v7
         with:
-          name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile
-          path: artifacts/upload/freexcel-*-win-x64-singlefile.exe
+          name: freex-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile
+          path: artifacts/upload/freex-*-win-x64-singlefile.exe
           if-no-files-found: error
 
       - name: Upload latest artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Freexcel-latest-win-x64.exe
-          path: artifacts/upload/Freexcel-latest-win-x64.exe
+          name: FreeX-latest-win-x64.exe
+          path: artifacts/upload/FreeX-latest-win-x64.exe
           if-no-files-found: error
 
       - name: Upload EXE checksum artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile-sha256
+          name: freex-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile-sha256
           path: artifacts/upload/*.exe.sha256
           if-no-files-found: error
 
       - name: Upload versioned MSIX artifact
         uses: actions/upload-artifact@v7
         with:
-          name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-msix
-          path: artifacts/upload/freexcel-*-win-x64-msix.msix
+          name: freex-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-msix
+          path: artifacts/upload/freex-*-win-x64-msix.msix
           if-no-files-found: error
 
       - name: Upload latest MSIX artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Freexcel-latest-win-x64.msix
-          path: artifacts/upload/Freexcel-latest-win-x64.msix
+          name: FreeX-latest-win-x64.msix
+          path: artifacts/upload/FreeX-latest-win-x64.msix
           if-no-files-found: error
 
       - name: Upload MSIX checksum artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-msix-sha256
+          name: freex-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-msix-sha256
           path: artifacts/upload/*.msix.sha256
           if-no-files-found: error
 
@@ -294,7 +294,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          FREEXCEL_RELEASE_NOTES: ${{ inputs.release_notes }}
+          FREEX_RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
           $tag = "${{ steps.meta.outputs.tag }}"
           $title = "${{ steps.meta.outputs.release_name }}"
@@ -332,12 +332,12 @@ jobs:
           }
 
           $notes = @"
-          Tester build for Freexcel.
+          Tester build for FreeX.
 
           Commit: ${{ github.sha }}
-          Download the stable latest asset: Freexcel-latest-win-x64.exe
-          Checksum for the latest single-file asset: Freexcel-latest-win-x64.exe.sha256
-          MSIX package: Freexcel-latest-win-x64.msix
+          Download the stable latest asset: FreeX-latest-win-x64.exe
+          Checksum for the latest single-file asset: FreeX-latest-win-x64.exe.sha256
+          MSIX package: FreeX-latest-win-x64.msix
 
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
           The MSIX package is signed when the release workflow has certificate secrets configured; otherwise it remains unsigned for local packaging validation. Installer trust validation and Store submission remain release-gate tasks.
@@ -350,7 +350,7 @@ jobs:
 
           $promotionStatus
           "@
-          $extraNotes = $env:FREEXCEL_RELEASE_NOTES
+          $extraNotes = $env:FREEX_RELEASE_NOTES
           if (-not [string]::IsNullOrWhiteSpace($extraNotes)) {
             $notes = $notes.TrimEnd() + @"
 

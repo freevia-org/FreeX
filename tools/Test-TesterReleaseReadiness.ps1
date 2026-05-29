@@ -104,8 +104,8 @@ foreach ($marker in @(
     "accessibility_known_issues:",
     "Public-preview promotion requires completed accessibility gate inputs",
     "gh release create",
-    "Freexcel-latest-win-x64.exe",
-    "Freexcel-latest-win-x64.msix"
+    "FreeX-latest-win-x64.exe",
+    "FreeX-latest-win-x64.msix"
 )) {
     Assert-Contains -Text $workflow -Expected $marker -Label "Tester Release workflow"
 }
