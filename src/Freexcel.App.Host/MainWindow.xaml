@@ -3752,12 +3752,12 @@
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="28" Padding="0"
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="27" Padding="0"
                         FontSize="13" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreexcelGreenDarkBrush}"
-                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
-                        VerticalAlignment="Stretch" VerticalContentAlignment="Center"
+                        VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
                         local:RibbonTooltip.Title="Scroll Tabs Left"
                         local:RibbonTooltip.KeyTip="SL"
@@ -4063,12 +4063,12 @@
                         IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;"
-                        Width="18" Height="28" Padding="0"
+                        Width="18" Height="27" Padding="0"
                         FontSize="13" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreexcelGreenDarkBrush}"
-                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
-                        VerticalAlignment="Stretch" VerticalContentAlignment="Center"
+                        VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
                         local:RibbonTooltip.Title="Scroll Tabs Right"
                         local:RibbonTooltip.KeyTip="SR"
