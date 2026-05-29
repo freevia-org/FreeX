@@ -1900,6 +1900,15 @@ public class FunctionLibraryTests
     // ── VALUE ─────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Rept_SupplementaryUnicodeCountsExcelCharactersForCellLimit()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=LEN(REPT(\"😀\",32767))", sheet).Should().Be(new NumberValue(32767));
+        _eval.Evaluate("=REPT(\"😀\",32768)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Rept_SameShapeTimesArgument_SpillsElementwise()
     {
         var sheet = MakeSheet(
