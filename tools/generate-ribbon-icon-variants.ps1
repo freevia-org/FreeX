@@ -1,13 +1,17 @@
 $ErrorActionPreference = 'Stop'
 
 $iconDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'src/FreeX.App.Host/Resources/CommandIconsSvg'
-$baseFiles = Get-ChildItem $iconDir -Filter '*.svg' | Where-Object { $_.BaseName -notmatch '-(small|large)$' }
+$baseFiles = Get-ChildItem $iconDir -Filter '*.svg' |
+    Where-Object { $_.BaseName -notmatch '-(small|large)$' } |
+    Sort-Object Name
 $culture = [Globalization.CultureInfo]::InvariantCulture
 $starGlyph = [char]0x2605
 $sparkleGlyph = [char]0x2726
+$piGlyph = [char]0x03C0
 $sigmaGlyph = [char]0x03A3
 $boltGlyph = [char]0x26A1
 $checkGlyph = [char]0x2713
+$pencilGlyph = [char]0x270E
 
 function S([double]$v, [int]$n) { [math]::Round($v * $n / 20.0, 2).ToString($culture) }
 function SW([double]$v) {
@@ -161,7 +165,7 @@ function Body($slug, [int]$n) {
         '^insert-function$' { return (Doc $n) + "`n" + (Txt 'fx' 10.5 10.8 7.2 $n) }
         '^autosum$' { return Txt $sigmaGlyph 10 10 13 $n }
         '^recently-used$' { return "  <circle class=""r"" cx=""$(S 10 $n)"" cy=""$(S 10 $n)"" r=""$(S 6 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (L 10 10 10 6 $n 'r' 1) + "`n" + (L 10 10 14 10 $n 'r' 1) }
-        '^math-trig$' { return (Txt 'π' 7 9.5 9.5 $n) + "`n" + (Txt '∑' 14 10 9.5 $n) }
+        '^math-trig$' { return (Txt $piGlyph 7 9.5 9.5 $n) + "`n" + (Txt $sigmaGlyph 14 10 9.5 $n) }
         '^text$' { return Txt 'T' 10 10 12 $n 'font-family="Georgia,serif"' }
         '^text-box$' { return (Rct 3 5 14 10 $n) + "`n" + (Txt 'T' 10 10 10 $n) }
         '^date-time$|^date-time-formats$' { return "  <rect class=""f s"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 11 $n)"" stroke-width=""$(S 1 $n)""/>`n  <rect class=""b"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 3 $n)""/>`n" + (Txt '7' 10 12 6 $n) }
@@ -228,7 +232,7 @@ function Body($slug, [int]$n) {
         '^statistics$|^workbook-stats$|^workbook-statistics$' { return "  <rect class=""b"" x=""$(S 5 $n)"" y=""$(S 10 $n)"" width=""$(S 2.5 $n)"" height=""$(S 6 $n)""/><rect class=""k"" x=""$(S 9 $n)"" y=""$(S 6 $n)"" width=""$(S 2.5 $n)"" height=""$(S 10 $n)""/><rect class=""g"" x=""$(S 13 $n)"" y=""$(S 3.5 $n)"" width=""$(S 2.5 $n)"" height=""$(S 12.5 $n)""/>" }
         '^accessibility-checker$|^accessibility$' { return "  <circle class=""b"" cx=""$(S 10 $n)"" cy=""$(S 4.5 $n)"" r=""$(S 1.7 $n)""/>`n" + (L 5 8 15 8 $n 'r' 1) + "`n" + (L 10 8 10 14 $n 'r' 1) + "`n" + (L 10 14 6 18 $n 'r' 1) + "`n" + (L 10 14 14 18 $n 'r' 1) }
         '^alt-text$' { return (Rct 3.5 5 13 10 $n) + "`n" + (Txt 'ALT' 10 10 6.5 $n) }
-        '^allow-edit-ranges$' { return (Grid $n) + "`n  <rect class=""g2"" x=""$(S 6.5 $n)"" y=""$(S 6.5 $n)"" width=""$(S 7 $n)"" height=""$(S 7 $n)"" opacity="".6""/>`n" + (Txt '✎' 14 14 6 $n) }
+        '^allow-edit-ranges$' { return (Grid $n) + "`n  <rect class=""g2"" x=""$(S 6.5 $n)"" y=""$(S 6.5 $n)"" width=""$(S 7 $n)"" height=""$(S 7 $n)"" opacity="".6""/>`n" + (Txt $pencilGlyph 14 14 6 $n) }
         '^share$' { return "  <circle class=""b"" cx=""$(S 5.5 $n)"" cy=""$(S 8 $n)"" r=""$(S 2 $n)""/><circle class=""b"" cx=""$(S 14.5 $n)"" cy=""$(S 5 $n)"" r=""$(S 2 $n)""/><circle class=""b"" cx=""$(S 14 $n)"" cy=""$(S 15 $n)"" r=""$(S 2 $n)""/>`n" + (L 7.5 7.4 12.5 5.7 $n 'r' 1) + "`n" + (L 7.2 9 12.2 14 $n 'r' 1) }
         '^help$' { return "  <circle cx=""$(S 10 $n)"" cy=""$(S 10 $n)"" r=""$(S 7 $n)"" fill=""none"" stroke=""#2f5597"" stroke-width=""1"" vector-effect=""non-scaling-stroke""/>`n" + (Txt '?' 10 10.2 11 $n) }
         '^contact-support$' { return "  <path class=""r"" d=""M$(S 5 $n) $(S 11 $n) V$(S 10 $n) C$(S 5 $n) $(S 5 $n) $(S 15 $n) $(S 5 $n) $(S 15 $n) $(S 10 $n) V$(S 11 $n)"" stroke-width=""1""/>`n  <rect class=""b"" x=""$(S 3.5 $n)"" y=""$(S 10 $n)"" width=""$(S 3 $n)"" height=""$(S 5 $n)"" rx=""$(S 1 $n)""/>`n  <rect class=""b"" x=""$(S 13.5 $n)"" y=""$(S 10 $n)"" width=""$(S 3 $n)"" height=""$(S 5 $n)"" rx=""$(S 1 $n)""/>`n" + (L 15 15 11 17 $n 'r' 1) }
@@ -236,7 +240,7 @@ function Body($slug, [int]$n) {
         '^about$|^info$' { return "  <circle cx=""$(S 10 $n)"" cy=""$(S 10 $n)"" r=""$(S 7 $n)"" fill=""none"" stroke=""#2f5597"" stroke-width=""1"" vector-effect=""non-scaling-stroke""/>`n" + (Txt 'i' 10 10.4 12 $n) }
         '^send-feedback$' { return "  <path class=""f s"" d=""M$(S 4 $n) $(S 5 $n) H$(S 16 $n) V$(S 13 $n) H$(S 10 $n) L$(S 6 $n) $(S 16 $n) V$(S 13 $n) H$(S 4 $n) Z"" stroke-width=""1""/>`n" + (Txt '!' 10 9.5 8 $n) }
         '^new-note$|^comment-note$|^new-comment$' { return "  <path class=""y s"" d=""M$(S 4 $n) $(S 5 $n) H$(S 16 $n) V$(S 13 $n) H$(S 10 $n) L$(S 6 $n) $(S 16 $n) V$(S 13 $n) H$(S 4 $n) Z"" stroke-width=""1""/>`n" + (Txt '+' 14 7 6 $n) }
-        '^edit-note$' { return "  <path class=""y s"" d=""M$(S 4 $n) $(S 5 $n) H$(S 16 $n) V$(S 13 $n) H$(S 10 $n) L$(S 6 $n) $(S 16 $n) V$(S 13 $n) H$(S 4 $n) Z"" stroke-width=""1""/>`n" + (Txt '✎' 14 8 6 $n) }
+        '^edit-note$' { return "  <path class=""y s"" d=""M$(S 4 $n) $(S 5 $n) H$(S 16 $n) V$(S 13 $n) H$(S 10 $n) L$(S 6 $n) $(S 16 $n) V$(S 13 $n) H$(S 4 $n) Z"" stroke-width=""1""/>`n" + (Txt $pencilGlyph 14 8 6 $n) }
         '^delete-note$' { return "  <path class=""y s"" d=""M$(S 4 $n) $(S 5 $n) H$(S 16 $n) V$(S 13 $n) H$(S 10 $n) L$(S 6 $n) $(S 16 $n) V$(S 13 $n) H$(S 4 $n) Z"" stroke-width=""1""/>`n" + (L 12 5 17 10 $n 'r' 1) + "`n" + (L 17 5 12 10 $n 'r' 1) }
         '^previous-note$' { return "  <path class=""y s"" d=""M$(S 5 $n) $(S 5 $n) H$(S 17 $n) V$(S 13 $n) H$(S 11 $n) L$(S 7 $n) $(S 16 $n) V$(S 13 $n) H$(S 5 $n) Z"" stroke-width=""1""/>`n" + (Arrow 13 10 8 10 $n 'b' 1) }
         '^next-note$' { return "  <path class=""y s"" d=""M$(S 3 $n) $(S 5 $n) H$(S 15 $n) V$(S 13 $n) H$(S 9 $n) L$(S 5 $n) $(S 16 $n) V$(S 13 $n) H$(S 3 $n) Z"" stroke-width=""1""/>`n" + (Arrow 7 10 12 10 $n 'b' 1) }
@@ -255,6 +259,7 @@ function Body($slug, [int]$n) {
     }
 }
 
+$generatedCount = 0
 foreach ($file in $baseFiles) {
     foreach ($size in 20, 32) {
         $suffix = if ($size -eq 20) { 'small' } else { 'large' }
@@ -265,7 +270,8 @@ foreach ($file in $baseFiles) {
         }
 
         Set-Content -Path (Join-Path $iconDir "$($file.BaseName)-$suffix.svg") -Encoding UTF8 -Value (Svg $size $body)
+        $generatedCount++
     }
 }
 
-Write-Host "Generated $($baseFiles.Count * 2) native ribbon SVG variants."
+Write-Host "Generated $generatedCount native ribbon SVG variants."
