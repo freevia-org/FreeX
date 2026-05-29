@@ -157,7 +157,7 @@ public partial class MainWindow
                 continue;
             }
 
-            var badge = CreateKeyTipBadge(keyTip);
+            var badge = CreateKeyTipBadge(keyTip.Trim());
             badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             var badgeSize = badge.DesiredSize;
             var point = RibbonKeyTipOverlayPlacement.PlaceBadge(

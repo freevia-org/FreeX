@@ -328,7 +328,10 @@ public partial class GridView
         foreach (var rm in rows)
         {
             var top = rm.TopOffset + rowOrigin;
-            if (pos.Y >= top && pos.Y < top + rm.Height)
+            if (pos.Y < top)
+                break;
+
+            if (pos.Y < top + rm.Height)
             {
                 row = rm.Row;
                 break;
@@ -338,7 +341,10 @@ public partial class GridView
         foreach (var cm in cols)
         {
             var left = cm.LeftOffset + colOrigin;
-            if (pos.X >= left && pos.X < left + cm.Width)
+            if (pos.X < left)
+                break;
+
+            if (pos.X < left + cm.Width)
             {
                 col = cm.Col;
                 break;

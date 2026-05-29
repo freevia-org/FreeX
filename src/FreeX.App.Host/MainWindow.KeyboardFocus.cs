@@ -291,10 +291,12 @@ public partial class MainWindow
         if (SlicerTimelinePane?.Visibility != Visibility.Visible)
             return false;
 
-        return TryFocusTaskPaneElement(SlicerTimelinePaneCloseBtn);
+        SlicerTimelinePane.Focusable = true;
+        return TryFocusTaskPaneElement(SlicerTimelinePaneCloseBtn) ||
+               TryFocusTaskPaneElement(SlicerTimelinePane);
     }
 
-    private bool TryFocusTaskPaneElement(Control? control)
+    private bool TryFocusTaskPaneElement(FrameworkElement? control)
     {
         if (control is null || !control.IsVisible || !control.IsEnabled)
             return false;

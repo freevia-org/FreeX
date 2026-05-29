@@ -113,6 +113,8 @@ foreach ($marker in @(
 }
 
 $distributionPlan = Get-Content -LiteralPath $distributionPlanFile -Raw
+Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "At $overallCompletion% completion, default tester releases use the ``$stream`` stream." -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "Keyboard-only smoke validation" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "Screen-reader smoke validation" -Label "Test distribution plan"
