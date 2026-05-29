@@ -28,4 +28,24 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
         source.Should().Contain("case WorksheetContextMenuAction.DeleteColumns:");
         source.Should().Contain("DeleteSelectedColumns();");
     }
+
+    [Fact]
+    public void GridContextMenuClearsTransientCellUiBeforeOpeningMenu()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        var contextMenuRequested = source[
+            source.IndexOf("private void OnGridContextMenuRequested", StringComparison.Ordinal)..
+            source.IndexOf("private void OnGridHeaderContextMenuRequested", StringComparison.Ordinal)];
+
+        contextMenuRequested.Should().Contain("HideValidationDropdown();");
+        contextMenuRequested.Should().Contain("ClearCommentPreview();");
+        contextMenuRequested.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(contextMenuRequested.IndexOf("var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);", StringComparison.Ordinal));
+        contextMenuRequested.IndexOf("ClearCommentPreview();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(contextMenuRequested.IndexOf("var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);", StringComparison.Ordinal));
+    }
 }
