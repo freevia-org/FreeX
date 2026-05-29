@@ -53,6 +53,9 @@ public sealed class MainWindowMouseSelectionSourceTests
         mouseMove.Should().Contain("_dragSelectAddsAdditionalRange = false;");
         mouseMove.Should().Contain("SheetGrid.ReleaseMouseCapture();");
         mouseMove.Should().Contain("CompleteDragSelectionStatusRefresh();");
+        mouseMove.Should().Contain("if (hitAddr.HasValue)");
+        mouseMove.Should().Contain("UpdateCommentPreview(hitAddr.Value);");
+        mouseMove.Should().Contain("ClearCommentPreview();");
         mouseMove.Should().Contain("e.Handled = true;");
         mouseMove.IndexOf("if (e.LeftButton != MouseButtonState.Pressed)", StringComparison.Ordinal)
             .Should()
@@ -60,6 +63,9 @@ public sealed class MainWindowMouseSelectionSourceTests
         mouseMove.IndexOf("e.Handled = true;", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal));
+        mouseMove.IndexOf("CompleteDragSelectionStatusRefresh();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.IndexOf("UpdateCommentPreview(hitAddr.Value);", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -834,6 +834,10 @@ public partial class MainWindow
             _dragSelectAddsAdditionalRange = false;
             SheetGrid.ReleaseMouseCapture();
             CompleteDragSelectionStatusRefresh();
+            if (hitAddr.HasValue)
+                UpdateCommentPreview(hitAddr.Value);
+            else
+                ClearCommentPreview();
             e.Handled = true;
             return;
         }
