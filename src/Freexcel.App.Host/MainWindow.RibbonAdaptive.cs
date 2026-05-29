@@ -199,6 +199,23 @@ public partial class MainWindow
         return snapshots;
     }
 
+    private void InvalidateRibbonAdaptiveMeasurementCaches()
+    {
+        _ribbonAdaptiveMeasurementCacheKey = null;
+        _ribbonAdaptiveGroupCache = null;
+        _ribbonAdaptiveFixedChromeWidthCache = 0;
+        _ribbonResizeThresholdCacheKey = null;
+        _ribbonResizeThresholds = [];
+        _ribbonCompactSnapshotCacheKey = null;
+        _ribbonCompactGroupSnapshotCache = null;
+        _lastRibbonAdaptiveAppliedStateKey = null;
+        _lastRibbonAdaptiveAppliedStates = null;
+        _lastRibbonCollapsedFootprintMode = null;
+        _ribbonCorrectedStateCache.Clear();
+        _ribbonMeasuredOverflowCache.Clear();
+        _ribbonAdaptiveStateDiffInvalidated = true;
+    }
+
     private double GetRibbonAvailableWidth(StackPanel activePanel)
     {
         var ribbonScrollViewer = ReferenceEquals(_ribbonAdaptiveControlCachePanel, activePanel)

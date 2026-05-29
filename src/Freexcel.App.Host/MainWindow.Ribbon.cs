@@ -74,7 +74,7 @@ public partial class MainWindow
         AlignRibbonIconColumns(surface);
         HideRibbonScrollBars(root, surface);
         ApplyToolbarDropdownWhiteBackgrounds(surface);
-        _ribbonAdaptiveStateDiffInvalidated = true;
+        InvalidateRibbonAdaptiveMeasurementCaches();
     }
 
     private void NormalizeRibbonGroupMetadata(RibbonStaticSurfaceSnapshot surface)
