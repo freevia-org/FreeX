@@ -424,6 +424,27 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void FormatPainterMouseUpRefreshesCommentPreviewAfterApplyingSelection()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseUp = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal)..];
+        var formatPainterBlock = mouseUp[
+            mouseUp.IndexOf("if (_formatPainterTargetSelectionActive)", StringComparison.Ordinal)..
+            mouseUp.IndexOf("if (!_dragSelectActive) return;", StringComparison.Ordinal)];
+
+        formatPainterBlock.Should().Contain("TryApplyFormatPainter(selectedRange);");
+        formatPainterBlock.Should().Contain("if (hitAddr.HasValue)");
+        formatPainterBlock.Should().Contain("UpdateCommentPreview(hitAddr.Value);");
+        formatPainterBlock.Should().Contain("ClearCommentPreview();");
+        formatPainterBlock.IndexOf("TryApplyFormatPainter(selectedRange);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(formatPainterBlock.IndexOf("UpdateCommentPreview(hitAddr.Value);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MouseDownUpdatesActiveSplitPaneRegionOnlyAfterCellHit()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
