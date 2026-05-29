@@ -278,6 +278,7 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=WEEKNUM(DATE(1900,1,1),21)", 52)]
     [InlineData("=WEEKNUM(DATE(1900,1,7),21)", 1)]
     [InlineData("=WEEKNUM(DATE(1900,1,8),21)", 1)]
+    [InlineData("=WEEKNUM(0,21)", 52)]
     public void Weeknum_UsesExcelSerialWeekdays(string formula, double expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));

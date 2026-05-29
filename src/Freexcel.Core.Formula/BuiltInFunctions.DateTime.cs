@@ -465,10 +465,10 @@ public static partial class BuiltInFunctions
     private static ScalarValue WeeknumScalar(ScalarValue value, int returnType)
     {
         if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
-        if (Math.Floor(ToNumber(value)) == 0)
-            return new NumberValue(0);
         if (returnType == 21)
             return new NumberValue(ExcelIsoWeeknum(dt));
+        if (Math.Floor(ToNumber(value)) == 0)
+            return new NumberValue(0);
 
         int firstDay = returnType switch
         {
