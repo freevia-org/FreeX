@@ -904,6 +904,8 @@ public static partial class BuiltInFunctions
     {
         if (first is ErrorValue e0) return e0;
         if (second is ErrorValue e1) return e1;
+        var firstIsReferenceArray = first is RangeValue;
+        var secondIsReferenceArray = second is RangeValue;
         var firstRange = first is RangeValue range0 ? range0 : SingleCellArray(first);
         var secondRange = second is RangeValue range1 ? range1 : SingleCellArray(second);
         if (firstRange.RowCount != secondRange.RowCount || firstRange.ColCount != secondRange.ColCount)
@@ -917,15 +919,53 @@ public static partial class BuiltInFunctions
                 var right = secondRange.Cells[row, col];
                 if (left is ErrorValue leftError) return leftError;
                 if (right is ErrorValue rightError) return rightError;
-                if (IsNonFiniteDirectTextNumber(left) || IsNonFiniteDirectTextNumber(right))
-                    return ErrorValue.Num;
-                if (!TryMathAggregateNumber(left, out var x) || !TryMathAggregateNumber(right, out var y))
-                    return ErrorValue.Value;
+                if (!TrySumXPairNumber(left, firstIsReferenceArray, out var x, out var leftErrorValue))
+                {
+                    if (leftErrorValue is not null) return leftErrorValue;
+                    continue;
+                }
+
+                if (!TrySumXPairNumber(right, secondIsReferenceArray, out var y, out var rightErrorValue))
+                {
+                    if (rightErrorValue is not null) return rightErrorValue;
+                    continue;
+                }
+
                 total += map(x, y);
                 if (!double.IsFinite(total)) return ErrorValue.Num;
             }
 
         return NumberResult(total);
+    }
+
+    private static bool TrySumXPairNumber(ScalarValue value, bool isReferenceArray, out double number, out ErrorValue? error)
+    {
+        number = 0;
+        error = null;
+
+        if (isReferenceArray)
+        {
+            if (!TryCellNumber(value, out number))
+                return false;
+
+            if (double.IsFinite(number))
+                return true;
+
+            error = ErrorValue.Num;
+            return false;
+        }
+
+        if (IsNonFiniteDirectTextNumber(value))
+        {
+            error = ErrorValue.Num;
+            return false;
+        }
+
+        if (TryMathAggregateNumber(value, out number))
+            return true;
+
+        error = ErrorValue.Value;
+        return false;
     }
 
     private static IEnumerable<ScalarValue> FlattenMathArguments(ScalarValue value)
