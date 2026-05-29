@@ -150,20 +150,30 @@ public partial class GridView
         }
         else
         {
-            var (target, _, _) = HitTestResize(pos);
             var selectedObjectDragKind = ObjectDragKind.None;
             if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
                 selectedObjectDragKind = HitTestObjectHandle(pos, GetSelectedObjectRect());
+            if (selectedObjectDragKind != ObjectDragKind.None)
+            {
+                Cursor = ObjectDragCursor(selectedObjectDragKind);
+                return;
+            }
+
             var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None &&
                 HitTestDrawingObject(pos).Id != Guid.Empty;
+            if (hoveringObjectBody)
+            {
+                Cursor = Cursors.SizeAll;
+                return;
+            }
+
+            var (target, _, _) = HitTestResize(pos);
             var marginGuide = HitTestPageMarginGuide(pos);
             var splitHandle = Viewport is null ? SplitDividerHandle.None : HitTestSplitDividerHandle(Viewport, pos);
             var splitScrollbarHit = Viewport is null
                 ? null
                 : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight), pos);
-            Cursor = selectedObjectDragKind != ObjectDragKind.None ? ObjectDragCursor(selectedObjectDragKind)
-                   : hoveringObjectBody ? Cursors.SizeAll
-                   : target == ResizeTarget.Column ? Cursors.SizeWE
+            Cursor = target == ResizeTarget.Column ? Cursors.SizeWE
                    : target == ResizeTarget.Row    ? Cursors.SizeNS
                    : splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll
                    : splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE
