@@ -91,6 +91,26 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void ShiftCellMouseSelectionHidesValidationDropdownBeforeExtendingRange()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseDown = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
+        var shiftCellSelection = mouseDown[
+            mouseDown.IndexOf("if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)", StringComparison.Ordinal)..
+            mouseDown.IndexOf("else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)", StringComparison.Ordinal)];
+
+        shiftCellSelection.Should().Contain("HideValidationDropdown();");
+        shiftCellSelection.Should().Contain("ExtendSelection(_selectionAnchor.Value, newAddr);");
+        shiftCellSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(shiftCellSelection.IndexOf("ExtendSelection(_selectionAnchor.Value, newAddr);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MouseDownSelectionIgnoresNonLeftButtonsBeforeHitTesting()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
