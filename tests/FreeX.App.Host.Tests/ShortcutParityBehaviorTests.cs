@@ -25,6 +25,21 @@ public sealed class ShortcutParityBehaviorTests
         shortcut.Should().Be(KeyboardCommandShortcut.OpenPrintPreview);
     }
 
+    // --- Ctrl+Z / Alt+Backspace (Undo) ---
+
+    [Theory]
+    [InlineData(Key.Z, Key.None, ModifierKeys.Control)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.Back, ModifierKeys.Alt)]
+    public void UndoShortcuts_AreRegisteredAsUndoCommand(Key key, Key systemKey, ModifierKeys modifiers)
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            key, systemKey, modifiers, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.Undo);
+    }
+
     [Fact]
     public void PrintSettingsPanel_ExposesOrientationPaperSizeMarginsAndScalingControls()
     {

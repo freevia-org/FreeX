@@ -483,6 +483,25 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void GridObjectDragPlanner_DoesNotTreatUnsupportedTopLeftHandlesAsMove()
+    {
+        var start = new Rect(10, 20, 80, 40);
+
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Top), start)
+            .Should().Be(ObjectDragKind.None);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + start.Width / 2, start.Top), start)
+            .Should().Be(ObjectDragKind.None);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Top + start.Height / 2), start)
+            .Should().Be(ObjectDragKind.None);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Top), start)
+            .Should().Be(ObjectDragKind.ResizeE);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Bottom), start)
+            .Should().Be(ObjectDragKind.ResizeS);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 16, start.Top + 16), start)
+            .Should().Be(ObjectDragKind.Move);
+    }
+
+    [Fact]
     public void GridObjectDragPlanner_IncludesResizeHandleHitZoneBoundary()
     {
         var start = new Rect(10, 20, 80, 40);

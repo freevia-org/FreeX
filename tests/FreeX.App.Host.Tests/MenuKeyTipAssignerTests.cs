@@ -29,6 +29,62 @@ public sealed class MenuKeyTipAssignerTests
     }
 
     [Fact]
+    public void PrefersAuthoredAccessKeyMarkerWhenAssigningDynamicMenuKeyTips()
+    {
+        RunSta(() =>
+        {
+            var saveAs = new MenuItem { Header = "Save _As" };
+            var save = new MenuItem { Header = "_Save" };
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([saveAs, save]);
+
+            RibbonTooltip.GetKeyTip(saveAs).Should().Be("A");
+            RibbonTooltip.GetKeyTip(save).Should().Be("S");
+        });
+    }
+
+    [Fact]
+    public void ReadsAccessTextHeaderWhenAssigningDynamicMenuKeyTips()
+    {
+        RunSta(() =>
+        {
+            var saveAs = new MenuItem { Header = new AccessText { Text = "Save _As" } };
+            var save = new MenuItem { Header = new AccessText { Text = "_Save" } };
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([saveAs, save]);
+
+            RibbonTooltip.GetKeyTip(saveAs).Should().Be("A");
+            RibbonTooltip.GetKeyTip(save).Should().Be("S");
+        });
+    }
+
+    [Fact]
+    public void ReadsTextBlockHeaderWhenAssigningDynamicMenuKeyTips()
+    {
+        RunSta(() =>
+        {
+            var saveAs = new MenuItem { Header = new TextBlock { Text = "Save _As" } };
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([saveAs]);
+
+            RibbonTooltip.GetKeyTip(saveAs).Should().Be("A");
+        });
+    }
+
+    [Fact]
+    public void TreatsEscapedUnderscoreAsLiteralHeaderTextWhenAssigningDynamicMenuKeyTips()
+    {
+        RunSta(() =>
+        {
+            var saveAs = new MenuItem { Header = "Save __As" };
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([saveAs]);
+
+            RibbonTooltip.GetKeyTip(saveAs).Should().Be("S");
+        });
+    }
+
+    [Fact]
     public void PreservesExistingKeyTipsAndFillsOnlyMissingItems()
     {
         RunSta(() =>
@@ -125,6 +181,58 @@ public sealed class MenuKeyTipAssignerTests
 
             RibbonTooltip.GetKeyTip(copy).Should().Be("C");
             RibbonTooltip.GetKeyTip(clear).Should().Be("L");
+        });
+    }
+
+    [Fact]
+    public void AssignsNestedSubmenuKeyTipsInTheirOwnScopes()
+    {
+        RunSta(() =>
+        {
+            var clear = new MenuItem { Header = "Clear" };
+            var paste = new MenuItem { Header = "Paste" };
+            var copy = new MenuItem { Header = "Copy" };
+            var cut = new MenuItem { Header = "Cut" };
+            var clearContents = new MenuItem { Header = "Clear Contents" };
+            paste.Items.Add(copy);
+            paste.Items.Add(cut);
+            paste.Items.Add(clearContents);
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([clear, paste]);
+
+            RibbonTooltip.GetKeyTip(clear).Should().Be("C");
+            RibbonTooltip.GetKeyTip(paste).Should().Be("P");
+            new[] { copy, cut, clearContents }
+                .Select(RibbonTooltip.GetKeyTip)
+                .Should()
+                .Equal("C", "U", "L");
+            new[] { copy, cut, clearContents }
+                .Select(item => item.InputGestureText)
+                .Should()
+                .Equal("C", "U", "L");
+        });
+    }
+
+    [Fact]
+    public void RepairsNestedExistingKeyTipsWithoutLeakingTopLevelScope()
+    {
+        RunSta(() =>
+        {
+            var clear = new MenuItem { Header = "Clear" };
+            var paste = new MenuItem { Header = "Paste" };
+            var copy = new MenuItem { Header = "Copy" };
+            RibbonTooltip.SetKeyTip(copy, "C");
+            var cut = new MenuItem { Header = "Cut" };
+            RibbonTooltip.SetKeyTip(cut, "C");
+            paste.Items.Add(copy);
+            paste.Items.Add(cut);
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([clear, paste]);
+
+            RibbonTooltip.GetKeyTip(clear).Should().Be("C");
+            RibbonTooltip.GetKeyTip(paste).Should().Be("P");
+            RibbonTooltip.GetKeyTip(copy).Should().Be("C");
+            RibbonTooltip.GetKeyTip(cut).Should().Be("U");
         });
     }
 
