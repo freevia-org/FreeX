@@ -70,7 +70,6 @@ public static partial class BuiltInFunctions
         if (year >= 0 && year < 1900)
             year += 1900;
         if (year < 0 || year > 9999) return ErrorValue.Num;
-        if (year == 1900 && month < 1) return ErrorValue.Num;
         try
         {
             var dt = new DateTime(year, 1, 1)
