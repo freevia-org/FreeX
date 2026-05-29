@@ -18,6 +18,9 @@ internal static class RibbonAdaptiveLayoutEngine
         states = RibbonAdaptivePriorityPlanner
             .ApplyRuntimePriorityStates(availableWidth, groupNames, states)
             .ToArray();
+        states = RibbonAdaptivePriorityPlanner
+            .ApplyRuntimeVisibilityStates(availableWidth, groupNames, states)
+            .ToArray();
 
         FitStatesToWidth(states, groups, fixedChromeWidth, availableWidth);
         ExpandStatesIntoAvailableWidth(states, groups, fixedChromeWidth, availableWidth);
@@ -73,6 +76,13 @@ internal static class RibbonAdaptiveLayoutEngine
             .GetFallbackProtectedGroupIndexes(GetGroupNames(groups), availableWidth)
             .ToHashSet();
 
+    public static HashSet<int> GetRuntimeVisibilityProtectedGroupIndexes(
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        double availableWidth) =>
+        RibbonAdaptivePriorityPlanner
+            .GetRuntimeVisibilityProtectedGroupIndexes(GetGroupNames(groups), availableWidth)
+            .ToHashSet();
+
     public static bool TryCollapseOneMoreGroup(
         RibbonAdaptiveGroupState[] states,
         bool preserveFirstGroup,
@@ -101,6 +111,8 @@ internal static class RibbonAdaptiveLayoutEngine
         double availableWidth)
     {
         var protectedGroupIndexes = GetFallbackProtectedGroupIndexes(groups, availableWidth);
+        var runtimeVisibilityProtectedGroupIndexes = GetRuntimeVisibilityProtectedGroupIndexes(groups, availableWidth);
+        protectedGroupIndexes.UnionWith(runtimeVisibilityProtectedGroupIndexes);
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
                TryCollapseOneMoreGroup(states, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
         {
@@ -110,7 +122,7 @@ internal static class RibbonAdaptiveLayoutEngine
             return;
 
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
-               TryCollapseOneMoreGroup(states, preserveFirstGroup: false))
+               TryCollapseOneMoreGroup(states, preserveFirstGroup: false, runtimeVisibilityProtectedGroupIndexes))
         {
         }
     }

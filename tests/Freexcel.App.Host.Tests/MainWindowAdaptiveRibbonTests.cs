@@ -649,6 +649,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("_ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates");
         source.Should().Contain("SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth)");
         source.Should().Contain("if (!hasCachedCorrection || requiresMeasuredCorrection)");
+        source.Should().NotContain("ApplyRibbonRuntimeVisibilityOverrides");
+        source.Should().NotContain("GetRuntimeVisibilityOverrides(availableWidth, groupNames)");
         source.Should().NotContain("var requiresMeasuredCorrection = correctedStates is null || layout.RequiresMeasuredCorrection;");
         source.Should().NotContain("width <= 2200.0");
         source.Should().NotContain("width += 8.0");

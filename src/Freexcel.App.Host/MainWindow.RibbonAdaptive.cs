@@ -100,7 +100,6 @@ public partial class MainWindow
             ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth);
         }
 
-        ApplyRibbonRuntimeVisibilityOverrides(groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
         if (!hasCachedCorrection || requiresMeasuredCorrection)
@@ -228,6 +227,8 @@ public partial class MainWindow
         double availableWidth)
     {
         var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth);
+        var runtimeVisibilityProtectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth);
+        protectedGroupIndexes.UnionWith(runtimeVisibilityProtectedGroupIndexes);
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
                RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
         {
@@ -236,7 +237,7 @@ public partial class MainWindow
         }
 
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
-               RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false))
+               RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, runtimeVisibilityProtectedGroupIndexes))
         {
             ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
@@ -283,35 +284,6 @@ public partial class MainWindow
         overflows = RibbonRowOverflowsMeasured(activePanel, availableWidth);
         _ribbonMeasuredOverflowCache[overflowCacheKey] = overflows;
         return overflows;
-    }
-
-    private static void ApplyRibbonRuntimeVisibilityOverrides(
-        IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
-        IReadOnlyList<Button> collapsedButtons,
-        RibbonAdaptiveGroupState[] plannedStates,
-        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
-        double availableWidth)
-    {
-        var groupNames = adaptiveGroups.Select(group => group.Name).ToList();
-        foreach (var decision in RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(availableWidth, groupNames))
-        {
-            if (decision.Index < 0 || decision.Index >= adaptiveGroups.Count)
-                continue;
-
-            if (decision.State == RibbonAdaptiveGroupState.Collapsed)
-            {
-                plannedStates[decision.Index] = RibbonAdaptiveGroupState.Collapsed;
-                groupSnapshots[decision.Index].Group.Visibility = Visibility.Collapsed;
-                collapsedButtons[decision.Index].Visibility = Visibility.Visible;
-            }
-            else if (decision.State == RibbonAdaptiveGroupState.IconOnly)
-            {
-                plannedStates[decision.Index] = RibbonAdaptiveGroupState.IconOnly;
-                groupSnapshots[decision.Index].Group.Visibility = Visibility.Visible;
-                collapsedButtons[decision.Index].Visibility = Visibility.Collapsed;
-                ApplyRibbonGroupCompactSnapshot(groupSnapshots[decision.Index], RibbonCompactLevel.IconOnly);
-            }
-        }
     }
 
     private static bool RibbonRowOverflowsMeasured(StackPanel activePanel, double availableWidth)
