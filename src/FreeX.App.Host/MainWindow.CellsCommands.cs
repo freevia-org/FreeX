@@ -247,6 +247,8 @@ public partial class MainWindow
         ApplyStyleDiff(new StyleDiff(Locked: !style.Locked));
     }
 
+    private void FormatCellsMenuItem_Click(object sender, RoutedEventArgs e) => OpenFormatCellsDialog();
+
     private void InsertRowBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
