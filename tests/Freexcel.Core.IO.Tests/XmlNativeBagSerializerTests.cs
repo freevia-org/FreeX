@@ -222,6 +222,23 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void Serialize_InvalidNativeData_ReturnsNull()
+    {
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [" "] = "blank-name",
+                ["invalid name"] = "invalid"
+            },
+            [
+                " ",
+                "<invalid>"
+            ]);
+
+        bagValue.Should().BeNull();
+    }
+
+    [Fact]
     public void ApplyToElement_InvalidBagValue_DoesNotMutateExistingElement()
     {
         var target = new XElement(
