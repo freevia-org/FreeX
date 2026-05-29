@@ -3,7 +3,8 @@ param(
     [string]$ReviewNotesPath = "docs\ICONSET_REVIEW_NOTES.json",
     [string]$OutputPath = "docs\ICONSET_PREVIEW.html",
     [switch]$ValidateExcelLinkAvailability,
-    [switch]$SkipExcelLinkValidation
+    [switch]$SkipExcelLinkValidation,
+    [switch]$Check
 )
 
 Set-StrictMode -Version Latest
@@ -560,5 +561,19 @@ $($htmlRows -join "`n")
 
 [IO.Directory]::CreateDirectory((Split-Path -Parent $outputFullPath)) | Out-Null
 $html = $html -replace "`r`n", "`n" -replace "`r", "`n"
+if ($Check) {
+    if (-not (Test-Path -LiteralPath $outputFullPath)) {
+        throw "Iconset preview is missing: $outputFullPath. Run tools/Generate-IconsetPreview.ps1 to create it."
+    }
+
+    $existing = [IO.File]::ReadAllText($outputFullPath) -replace "`r`n", "`n" -replace "`r", "`n"
+    if ($existing -ne $html) {
+        throw "Iconset preview is stale: $outputFullPath. Run tools/Generate-IconsetPreview.ps1 and commit the updated file."
+    }
+
+    Write-Host "Iconset preview is up to date: $outputFullPath"
+    return
+}
+
 [IO.File]::WriteAllText($outputFullPath, $html, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Wrote $outputFullPath with $($rows.Count) command rows."
