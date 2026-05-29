@@ -126,6 +126,8 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=DATEVALUE(\"2/29/1900\")", 60)]
     [InlineData("=DATEVALUE(\"1900-02-29\")", 60)]
     [InlineData("=DATEVALUE(\"3/1/1900\")", 61)]
+    [InlineData("=DATEVALUE(\"January 2024\")", 45292)]
+    [InlineData("=DATEVALUE(\"Jan-2024\")", 45292)]
     [InlineData("=DATEVALUE(\"2024-01-15\")", 45306)]
     [InlineData("=DATEVALUE(\"1/2/2024 6:00 AM\")", 45293)]
     public void DateValue_ReturnsExcelSerialNumbers(string formula, double expected)
