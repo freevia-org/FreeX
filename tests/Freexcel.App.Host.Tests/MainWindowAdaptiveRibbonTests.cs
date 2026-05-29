@@ -391,8 +391,9 @@ public sealed class MainWindowAdaptiveRibbonTests
         staticNormalizer.IndexOf("_normalizedRibbonStaticTabs.Add(tabItem)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(staticNormalizer.IndexOf("PrepareRibbonTabForImmediateCompaction(tabItem)", StringComparison.Ordinal));
-        layoutChangeNormalizer.Should().NotContain("PrepareSelectedRibbonTabForImmediateCompaction");
-        layoutChangeNormalizer.Should().NotContain("PrepareRibbonTabForImmediateCompaction");
+        method.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true, scheduleFallback: true)");
+        layoutChangeNormalizer.Should().Contain("if (prepareSelectedTab)");
+        layoutChangeNormalizer.Should().Contain("PrepareSelectedRibbonTabForImmediateCompaction();");
         method.Should().Contain("DispatcherPriority.Send");
         method.Should().NotContain("DispatcherPriority.Loaded");
     }
