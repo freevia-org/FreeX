@@ -1620,12 +1620,12 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("CornerRadius=\"0,0,4,4\"");
         xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"3\"");
         xaml.Should().Contain("BorderBrush=\"Transparent\" BorderThickness=\"0\"");
-        xaml.Should().Contain("Width=\"18\" Height=\"18\"");
-        xaml.Should().Contain("VerticalAlignment=\"Center\" VerticalContentAlignment=\"Center\"");
+        xaml.Should().Contain("Width=\"18\" Height=\"28\"");
+        xaml.Should().Contain("VerticalAlignment=\"Stretch\" VerticalContentAlignment=\"Center\"");
         xaml.Should().Contain("FontFamily=\"Segoe UI\"");
         xaml.Should().Contain("<Setter Property=\"FontWeight\" Value=\"SemiBold\"/>");
         xaml.Should().Contain("Panel.ZIndex=\"7\"");
-        xaml.Should().Contain("Panel.ZIndex=\"9\"");
+        xaml.Should().Contain("Panel.ZIndex=\"6\"");
         xaml.Should().Contain("HorizontalAlignment=\"Right\" HorizontalContentAlignment=\"Center\"");
         xaml.Should().Contain("<ScrollBar x:Name=\"HorizontalScroll\" Grid.Column=\"5\"");
         xaml.Should().Contain("VerticalAlignment=\"Center\" Margin=\"0\"");

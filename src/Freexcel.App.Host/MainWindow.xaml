@@ -3399,18 +3399,6 @@
                              AutomationProperties.Name="Worksheet"
                              AutomationProperties.AutomationId="SheetGrid"
                              AutomationProperties.HelpText="Spreadsheet grid. Use arrow keys to navigate cells, F2 to edit, and Tab/Enter to move focus."/>
-                <DockPanel VerticalAlignment="Bottom"
-                           LastChildFill="True"
-                           IsHitTestVisible="False"
-                           Panel.ZIndex="15">
-                    <Border x:Name="GridBottomRuleSpacer"
-                            DockPanel.Dock="Left"
-                            Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"
-                            BorderBrush="{StaticResource FreexcelGreenBrush}"
-                            BorderThickness="0,0,0,1"/>
-                    <Border BorderBrush="{StaticResource FreexcelGreenBrush}"
-                            BorderThickness="0,0,0,1"/>
-                </DockPanel>
                 <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
                 <Canvas x:Name="EditOverlay"
                         IsHitTestVisible="False" Panel.ZIndex="20"/>
@@ -3764,12 +3752,12 @@
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="18" Padding="0"
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="28" Padding="0"
                         FontSize="13" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreexcelGreenDarkBrush}"
                         Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
-                        VerticalAlignment="Center" VerticalContentAlignment="Center"
+                        VerticalAlignment="Stretch" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
                         local:RibbonTooltip.Title="Scroll Tabs Left"
                         local:RibbonTooltip.KeyTip="SL"
@@ -4069,18 +4057,18 @@
                         Height="28"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
-                        Panel.ZIndex="9"
+                        Panel.ZIndex="6"
                         ClipToBounds="False"
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;"
-                        Width="18" Height="18" Padding="0"
+                        Width="18" Height="28" Padding="0"
                         FontSize="13" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreexcelGreenDarkBrush}"
                         Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
-                        VerticalAlignment="Center" VerticalContentAlignment="Center"
+                        VerticalAlignment="Stretch" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
                         local:RibbonTooltip.Title="Scroll Tabs Right"
                         local:RibbonTooltip.KeyTip="SR"
