@@ -95,6 +95,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue PowerScalar(ScalarValue value, double power)
     {
         var number = ToNumber(value);
+        if (!double.IsFinite(number) || !double.IsFinite(power)) return ErrorValue.Num;
         if (number == 0 && power < 0) return ErrorValue.DivByZero;
         if (number == 0 && power == 0) return ErrorValue.Num;
         var result = Math.Pow(number, power);
