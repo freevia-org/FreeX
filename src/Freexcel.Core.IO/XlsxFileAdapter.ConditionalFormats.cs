@@ -71,7 +71,7 @@ public sealed partial class XlsxFileAdapter
                         AppliesTo = appliesTo,
                         Priority = priority,
                         RuleType = CfRuleType.IconSet,
-                        IconSetStyle = iconSet.Attribute("iconSet")?.Value,
+                        IconSetStyle = NormalizeOptionalText(iconSet.Attribute("iconSet")?.Value),
                         IconSetShowValue = !IsFalse(iconSet.Attribute("showValue")?.Value),
                         IconSetReverse = IsTruthy(iconSet.Attribute("reverse")?.Value),
                         FormatIfTrue = formatIfTrue
@@ -96,7 +96,7 @@ public sealed partial class XlsxFileAdapter
                         TopBottomRank = ReadIntAttribute(rule, "rank") ?? 10,
                         TopBottomPercent = IsTruthy(rule.Attribute("percent")?.Value),
                         TextRuleText = rule.Attribute("text")?.Value,
-                        DateOccurringPeriod = rule.Attribute("timePeriod")?.Value,
+                        DateOccurringPeriod = NormalizeOptionalText(rule.Attribute("timePeriod")?.Value),
                         StopIfTrue = IsTruthy(rule.Attribute("stopIfTrue")?.Value),
                         FormulaText = rule.Element(worksheetNs + "formula")?.Value,
                         FormatIfTrue = formatIfTrue
@@ -345,12 +345,15 @@ public sealed partial class XlsxFileAdapter
     {
         foreach (var cfIcon in iconSet.Elements(worksheetNs + "cfIcon"))
         {
-            var iconSetAttr = cfIcon.Attribute("iconSet")?.Value;
+            var iconSetAttr = cfIcon.Attribute("iconSet")?.Value?.Trim();
             var iconId = ReadIntAttribute(cfIcon, "iconId") ?? 0;
-            if (iconSetAttr is not null)
+            if (!string.IsNullOrWhiteSpace(iconSetAttr) && iconId >= 0)
                 yield return new CfIconOverride(iconSetAttr, iconId);
         }
     }
+
+    private static string? NormalizeOptionalText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static ConditionalFormat RemapConditionalFormat(ConditionalFormat source, SheetId sheetId)
     {

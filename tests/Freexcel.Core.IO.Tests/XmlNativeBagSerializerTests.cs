@@ -180,6 +180,24 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void ApplyToElement_NonWrapperBagValue_DoesNotMutateExistingElement()
+    {
+        var target = new XElement(
+            "root",
+            new XAttribute("nativeOnly", "current"),
+            new XElement("existing", new XAttribute("id", "1")));
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(
+            target,
+            "<nativeOnly attr=\"unexpected\"><replacement id=\"2\" /></nativeOnly>",
+            []);
+
+        changed.Should().BeFalse();
+        target.ToString(SaveOptions.DisableFormatting)
+            .Should().Be("<root nativeOnly=\"current\"><existing id=\"1\" /></root>");
+    }
+
+    [Fact]
     public void ApplyToElement_AttributeOnlyBag_DoesNotRemoveExistingChildren()
     {
         var bagValue = XmlNativeBagSerializer.Serialize(
