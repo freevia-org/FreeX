@@ -1039,9 +1039,12 @@ public static partial class BuiltInFunctions
     {
         double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
-        if (dn < 0 || dn > 1029 || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
-        int n = (int)dn; int k = (int)dk;
+        if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
+        int n = (int)Math.Truncate(dn); int k = (int)Math.Truncate(dk);
         if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
+        if (k == 0) return new NumberValue(1);
+        if (k == 1) return new NumberValue(n);
+        if (n > 1029) return ErrorValue.Num;
         if (k > n - k) k = n - k;
         double result = 1;
         for (int i = 0; i < k; i++)
@@ -1060,10 +1063,13 @@ public static partial class BuiltInFunctions
     {
         double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
-        if (dn < 0 || dn > 1029 || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
+        if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
         int n = (int)Math.Truncate(dn);
         int k = (int)Math.Truncate(dk);
         if (n == 0 && k > 0) return ErrorValue.Num;
+        if (k == 0) return new NumberValue(1);
+        if (k == 1) return new NumberValue(n);
+        if (n > 1029) return ErrorValue.Num;
         if (k > 0 && n > 1029 - k + 1) return ErrorValue.Num;
         return CombinPositiveIntegers(n + k - 1, k);
     }
