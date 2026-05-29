@@ -861,7 +861,8 @@ public partial class MainWindow
             {
                 RibbonTabs.SelectedItem = item;
                 RibbonTabs.UpdateLayout();
-                NormalizeRibbonSurface(forceCompact: true);
+                NormalizeRibbonSurfaceAfterTabSelection();
+
                 return true;
             }
         }

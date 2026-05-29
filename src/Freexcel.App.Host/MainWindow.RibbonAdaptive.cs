@@ -843,6 +843,13 @@ public partial class MainWindow
         IconOnly
     }
 
+    private enum RibbonFallbackWork
+    {
+        None,
+        CompactOnly,
+        NormalizeSurface
+    }
+
     private sealed class RibbonCollapsedGroupChevronAdorner : Adorner
     {
         private readonly VisualCollection _children;

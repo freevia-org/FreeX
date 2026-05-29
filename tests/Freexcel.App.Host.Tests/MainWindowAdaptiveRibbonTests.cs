@@ -368,6 +368,7 @@ public sealed class MainWindowAdaptiveRibbonTests
     public void RibbonTabSelection_SchedulesFallbackCompactionBeforeRender()
     {
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
+        var editingSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
         var fields = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         var method = source.Substring(
@@ -382,8 +383,16 @@ public sealed class MainWindowAdaptiveRibbonTests
             source.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal),
             source.IndexOf("private void CompactRibbonSurfaceAfterResize", StringComparison.Ordinal) -
             source.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal));
+        var fallbackScheduler = source.Substring(
+            source.IndexOf("private void QueueRibbonFallback", StringComparison.Ordinal),
+            source.IndexOf("private void CompleteRibbonResizeCompaction", StringComparison.Ordinal) -
+            source.IndexOf("private void QueueRibbonFallback", StringComparison.Ordinal));
+        var keyTipTabSelection = editingSource.Substring(
+            editingSource.IndexOf("private bool SelectRibbonTabByHeader", StringComparison.Ordinal));
 
         fields.Should().Contain("private readonly HashSet<TabItem> _normalizedRibbonStaticTabs = [];");
+        fields.Should().Contain("private bool _ribbonFallbackPending;");
+        fields.Should().Contain("private RibbonFallbackWork _ribbonFallbackWork;");
         source.Should().Contain("NormalizeStaticRibbonSurfaceForSelectedTabOnce();");
         source.Should().Contain("_normalizedRibbonStaticTabs.Add(tabItem)");
         source.Should().Contain("EnumerateRibbonStaticDescendants(root)");
@@ -394,8 +403,52 @@ public sealed class MainWindowAdaptiveRibbonTests
         method.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true, scheduleFallback: true)");
         layoutChangeNormalizer.Should().Contain("if (prepareSelectedTab)");
         layoutChangeNormalizer.Should().Contain("PrepareSelectedRibbonTabForImmediateCompaction();");
-        method.Should().Contain("DispatcherPriority.Send");
+        layoutChangeNormalizer.Should().Contain("QueueRibbonFallback(RibbonFallbackWork.NormalizeSurface)");
+        layoutChangeNormalizer.Should().NotContain("Dispatcher.BeginInvoke");
+        fallbackScheduler.Should().Contain("DispatcherPriority.Send");
+        fallbackScheduler.Should().Contain("MergeRibbonFallbackWork(_ribbonFallbackWork, work)");
+        fallbackScheduler.Should().Contain("pendingWork == RibbonFallbackWork.NormalizeSurface");
+        fallbackScheduler.Should().Contain("NormalizeRibbonSurface(forceCompact: true)");
+        fallbackScheduler.Should().NotContain("PrepareSelectedRibbonTabForImmediateCompaction");
+        fallbackScheduler.Should().NotContain("PrepareRibbonTabForImmediateCompaction");
+        keyTipTabSelection.Should().NotContain("NormalizeRibbonSurface(forceCompact: true);");
+        keyTipTabSelection.Should().Contain("RibbonTabs.UpdateLayout();");
+        keyTipTabSelection.Should().Contain("NormalizeRibbonSurfaceAfterTabSelection();");
+        method.Should().Contain("QueueRibbonFallback");
         method.Should().NotContain("DispatcherPriority.Loaded");
+    }
+
+    [Fact]
+    public void RibbonFallbackScheduler_CoalescesResizeAndLayoutFallbacks()
+    {
+        var ribbonSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
+        var fields = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var adaptiveSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        var layoutChangeNormalizer = ribbonSource.Substring(
+            ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal),
+            ribbonSource.IndexOf("private void CompactRibbonSurfaceAfterResize", StringComparison.Ordinal) -
+            ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal));
+        var resizeCompactor = ribbonSource.Substring(
+            ribbonSource.IndexOf("private void CompactRibbonSurfaceAfterResize", StringComparison.Ordinal),
+            ribbonSource.IndexOf("private void QueueRibbonFallback", StringComparison.Ordinal) -
+            ribbonSource.IndexOf("private void CompactRibbonSurfaceAfterResize", StringComparison.Ordinal));
+        var fallbackScheduler = ribbonSource.Substring(
+            ribbonSource.IndexOf("private void QueueRibbonFallback", StringComparison.Ordinal),
+            ribbonSource.IndexOf("private void CompleteRibbonResizeCompaction", StringComparison.Ordinal) -
+            ribbonSource.IndexOf("private void QueueRibbonFallback", StringComparison.Ordinal));
+
+        fields.Should().Contain("private bool _ribbonFallbackPending;");
+        fields.Should().Contain("private RibbonFallbackWork _ribbonFallbackWork;");
+        fields.Should().NotContain("_ribbonResizeCompactFallbackPending");
+        adaptiveSource.Should().Contain("private enum RibbonFallbackWork");
+        layoutChangeNormalizer.Should().Contain("QueueRibbonFallback(RibbonFallbackWork.NormalizeSurface)");
+        resizeCompactor.Should().Contain("QueueRibbonFallback(RibbonFallbackWork.CompactOnly)");
+        layoutChangeNormalizer.Should().NotContain("Dispatcher.BeginInvoke");
+        resizeCompactor.Should().NotContain("Dispatcher.BeginInvoke");
+        fallbackScheduler.Should().Contain("Dispatcher.BeginInvoke");
+        fallbackScheduler.Should().Contain("current == RibbonFallbackWork.NormalizeSurface || requested == RibbonFallbackWork.NormalizeSurface");
+        fallbackScheduler.Should().Contain("NormalizeRibbonSurface(forceCompact: true)");
+        fallbackScheduler.Should().Contain("UpdateRibbonCompactMode(force: true)");
     }
 
     [Fact]
@@ -507,7 +560,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;");
         fields.Should().Contain("private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];");
         fields.Should().Contain("private bool _ribbonAdaptiveStateDiffInvalidated;");
-        fields.Should().Contain("private bool _ribbonResizeCompactFallbackPending;");
+        fields.Should().Contain("private bool _ribbonFallbackPending;");
         source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
         source.Should().Contain("_ribbonAdaptiveGroupCache");
         source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])");
