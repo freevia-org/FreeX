@@ -67,6 +67,31 @@ public sealed class RibbonIconFactorySvgTests
         largeCandidates.Should().ContainInOrder("paste-large", "paste");
     }
 
+    [Theory]
+    [InlineData("Sort & Filter", "sort-and-filter", "sort")]
+    [InlineData("Find & Select", "find-and-select", "find")]
+    public void CommandIconSlugAliases_NormalizePlainAmpersands(
+        string commandName,
+        string expectedSlug,
+        string expectedAlias)
+    {
+        var slugMethod = typeof(RibbonIconFactory).GetMethod(
+            "ToCommandIconSlug",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var aliasesMethod = typeof(RibbonIconFactory).GetMethod(
+            "GetCommandIconSlugCandidates",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        slugMethod.Should().NotBeNull();
+        aliasesMethod.Should().NotBeNull();
+
+        var slug = (string)slugMethod!.Invoke(null, [commandName])!;
+        var candidates = ((IEnumerable<string>)aliasesMethod!.Invoke(null, [slug])!).ToList();
+
+        slug.Should().Be(expectedSlug);
+        candidates.Should().ContainInOrder(expectedSlug, expectedAlias);
+    }
+
     [Fact]
     public void AppHostProject_CopiesSvgCommandIconsInsteadOfPreRenderedPngs()
     {
