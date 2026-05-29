@@ -72,7 +72,7 @@ public static class InsertFunctionCatalogPlanner
     private static readonly HashSet<string> FinancialFunctions = ["PMT", "NPV", "IRR", "RATE", "PV", "FV", "IPMT", "PPMT", "NPER", "CUMIPMT", "CUMPRINC", "EFFECT", "NOMINAL", "MIRR", "XIRR", "XNPV", "RRI", "PDURATION", "FVSCHEDULE", "DB", "DDB", "VDB", "SYD", "AMORDEGRC", "AMORLINC", "DOLLARDE", "DOLLARFR", "DISC", "INTRATE", "RECEIVED", "ACCRINT", "ACCRINTM", "TBILLEQ", "TBILLPRICE", "TBILLYIELD", "COUPDAYBS", "COUPDAYS", "COUPDAYSNC", "COUPNCD", "COUPNUM", "COUPPCD", "PRICE", "YIELD", "PRICEDISC", "PRICEMAT", "YIELDDISC", "YIELDMAT", "DURATION", "MDURATION", "ODDFPRICE", "ODDFYIELD", "ODDLPRICE", "ODDLYIELD"];
     private static readonly HashSet<string> InformationFunctions = ["ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISREF", "ISFORMULA", "FORMULATEXT", "NA", "CELL", "INFO", "TYPE", "ERROR.TYPE", "N", "ISEVEN", "ISODD"];
     private static readonly HashSet<string> DatabaseFunctions = ["DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET", "DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP", "DVAR", "DVARP"];
-    private static readonly HashSet<string> EngineeringFunctions = ["CONVERT", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX", "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT", "IMCOS", "IMCOSH", "IMCOT", "IMCSC", "IMCSCH", "IMEXP", "IMLN", "IMLOG10", "IMLOG2", "IMPOWER", "IMSEC", "IMSECH", "IMSIN", "IMSINH", "IMSQRT", "IMTAN"];
+    private static readonly HashSet<string> EngineeringFunctions = ["BASE", "BIN2DEC", "BIN2HEX", "BIN2OCT", "BITAND", "BITLSHIFT", "BITOR", "BITRSHIFT", "BITXOR", "COMPLEX", "CONVERT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "DECIMAL", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE", "GESTEP", "HEX2BIN", "HEX2DEC", "HEX2OCT", "IMABS", "IMAGINARY", "IMARGUMENT", "IMCONJUGATE", "IMCOS", "IMCOSH", "IMCOT", "IMCSC", "IMCSCH", "IMDIV", "IMEXP", "IMLN", "IMLOG10", "IMLOG2", "IMPOWER", "IMPRODUCT", "IMREAL", "IMSEC", "IMSECH", "IMSIN", "IMSINH", "IMSQRT", "IMSUB", "IMSUM", "IMTAN", "OCT2BIN", "OCT2DEC", "OCT2HEX"];
 
     private static readonly Dictionary<string, string> KnownDescriptions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -98,8 +98,12 @@ public static class InsertFunctionCatalogPlanner
         ["UNIQUE"] = "Returns unique values from a range or array.",
         ["DSUM"] = "Adds numbers from records that match database criteria.",
         ["DGET"] = "Returns one database record value that matches criteria.",
+        ["COMPLEX"] = "Converts real and imaginary coefficients into a complex number.",
         ["CONVERT"] = "Converts a number from one measurement system to another.",
         ["BITAND"] = "Returns a bitwise AND of two numbers.",
+        ["DELTA"] = "Tests whether two values are equal.",
+        ["GESTEP"] = "Tests whether a number is greater than a threshold value.",
+        ["IMABS"] = "Returns the absolute value of a complex number.",
         ["MAP"] = "Maps a LAMBDA over one or more arrays.",
         ["LAMBDA"] = "Creates a reusable custom function.",
         ["LET"] = "Assigns names to calculation results."
