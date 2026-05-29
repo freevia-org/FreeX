@@ -91,6 +91,23 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void CtrlMouseSelectionHidesValidationDropdownBeforeAddingRange()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var addSelection = selectionSource[
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
+
+        addSelection.Should().Contain("HideValidationDropdown();");
+        addSelection.Should().Contain("SheetGrid.SelectedRanges = ranges;");
+        addSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(addSelection.IndexOf("SheetGrid.SelectedRanges = ranges;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ShiftCellMouseSelectionHidesValidationDropdownBeforeExtendingRange()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
