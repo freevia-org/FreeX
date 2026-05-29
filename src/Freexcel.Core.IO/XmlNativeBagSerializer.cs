@@ -109,12 +109,14 @@ internal static class XmlNativeBagSerializer
 
         if (children.Count > 0)
         {
-            if (target.Elements()
-                .Select(child => child.ToString(SaveOptions.DisableFormatting))
-                .SequenceEqual(children, StringComparer.Ordinal))
+            var targetChildNodesAreElements = target.Nodes().All(node => node is XElement);
+            if (targetChildNodesAreElements
+                && target.Elements()
+                    .Select(child => child.ToString(SaveOptions.DisableFormatting))
+                    .SequenceEqual(children, StringComparer.Ordinal))
                 return changed;
 
-            target.Elements().Remove();
+            target.RemoveNodes();
             changed = true;
             foreach (var childXml in children)
             {
