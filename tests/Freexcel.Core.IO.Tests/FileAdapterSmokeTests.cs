@@ -5906,6 +5906,67 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_DropsInvalidConditionalFormatDataBarLengths()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidDataBarLengthLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 2,
+                  "Operator": 0,
+                  "DataBarMinLength": -1,
+                  "DataBarMaxLength": 101
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.DataBarMinLength.Should().BeNull();
+        rule.DataBarMaxLength.Should().BeNull();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_DropsInvalidConditionalFormatDataBarLengths()
+    {
+        var workbook = new Workbook("CfNativeInvalidDataBarLengthSave");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DataBar,
+            Operator = CfOperator.Equal,
+            DataBarMinLength = -1,
+            DataBarMaxLength = 101
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var savedFormat = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0];
+
+        savedFormat.GetProperty("DataBarMinLength").ValueKind.Should().Be(JsonValueKind.Null);
+        savedFormat.GetProperty("DataBarMaxLength").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_MergedRegions_Survive()
     {
         var workbook = new Workbook("MergeNativeTest");
