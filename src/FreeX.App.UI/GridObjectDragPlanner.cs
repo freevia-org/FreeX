@@ -73,24 +73,120 @@ public static class GridObjectDragPlanner
         if (viewport is null)
             return null;
 
-        foreach (var row in viewport.RowMetrics)
+        if (position.X < rowHeaderWidth || position.Y < columnHeaderHeight)
+            return null;
+
+        if (viewport.SplitPanes is { } splitPanes)
         {
-            var top = row.TopOffset + columnHeaderHeight;
+            var divider = CalculateSplitDividerLayout(viewport, rowHeaderWidth, columnHeaderHeight);
+            var topRows = splitPanes.TopRows ?? [];
+            var leftColumns = splitPanes.LeftColumns ?? [];
+            var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
+            var bottomLeftRows = splitPanes.BottomLeftRows ?? viewport.RowMetrics;
+            var isTop = divider.HorizontalY.HasValue && position.Y < divider.HorizontalY.Value;
+            var isLeft = divider.VerticalX.HasValue && position.X < divider.VerticalX.Value;
+
+            var rows = (isTop, isLeft) switch
+            {
+                (true, _) => topRows,
+                (false, true) => bottomLeftRows,
+                _ => viewport.RowMetrics
+            };
+            var columns = (isTop, isLeft) switch
+            {
+                (_, true) => leftColumns,
+                (true, false) => topRightColumns,
+                _ => viewport.ColMetrics
+            };
+            var rowOrigin = !isTop && divider.HorizontalY.HasValue
+                ? divider.HorizontalY.Value
+                : columnHeaderHeight;
+            var columnOrigin = !isLeft && divider.VerticalX.HasValue
+                ? divider.VerticalX.Value
+                : rowHeaderWidth;
+
+            return HitTestMetrics(rows, columns, position, rowOrigin, columnOrigin);
+        }
+
+        return HitTestMetrics(viewport.RowMetrics, viewport.ColMetrics, position, columnHeaderHeight, rowHeaderWidth);
+    }
+
+    private static CellAddress? HitTestMetrics(
+        IReadOnlyList<RowMetric> rows,
+        IReadOnlyList<ColMetric> columns,
+        Point position,
+        double rowOrigin,
+        double columnOrigin)
+    {
+        foreach (var row in rows)
+        {
+            var top = row.TopOffset + rowOrigin;
             if (position.Y < top)
                 break;
 
             if (position.Y >= top + row.Height)
                 continue;
 
-            foreach (var column in viewport.ColMetrics)
+            foreach (var column in columns)
             {
-                var left = column.LeftOffset + rowHeaderWidth;
+                var left = column.LeftOffset + columnOrigin;
                 if (position.X < left)
                     break;
 
                 if (position.X < left + column.Width)
                     return new CellAddress(default, row.Row, column.Col);
             }
+        }
+
+        return null;
+    }
+
+    private static (double? HorizontalY, double? VerticalX) CalculateSplitDividerLayout(
+        ViewportModel viewport,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        if (viewport.SplitPanes is not { } splitPanes)
+            return (null, null);
+
+        double? horizontalY = null;
+        if (splitPanes.Row.HasValue)
+        {
+            var pinnedRows = splitPanes.TopRows ?? [];
+            horizontalY = pinnedRows.Count > 0
+                ? columnHeaderHeight + pinnedRows.Sum(row => row.Height)
+                : FindRowMetric(viewport.RowMetrics, splitPanes.Row.Value)?.TopOffset + columnHeaderHeight;
+        }
+
+        double? verticalX = null;
+        if (splitPanes.Column.HasValue)
+        {
+            var pinnedColumns = splitPanes.LeftColumns ?? [];
+            verticalX = pinnedColumns.Count > 0
+                ? rowHeaderWidth + pinnedColumns.Sum(column => column.Width)
+                : FindColMetric(viewport.ColMetrics, splitPanes.Column.Value)?.LeftOffset + rowHeaderWidth;
+        }
+
+        return (horizontalY, verticalX);
+    }
+
+    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Row == row)
+                return metric;
+        }
+
+        return null;
+    }
+
+    private static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint column)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Col == column)
+                return metric;
         }
 
         return null;

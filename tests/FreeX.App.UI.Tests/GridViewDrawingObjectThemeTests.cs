@@ -529,6 +529,52 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void GridObjectDragPlanner_HitTestsAnchorCellFromSplitPaneQuadrants()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)],
+                [],
+                [new ColMetric(12, 64, 0), new ColMetric(13, 64, 64)],
+                [new RowMetric(30, 18, 0), new RowMetric(31, 18, 18)]));
+
+        GridObjectDragPlanner.HitTestAnchorCell(
+                viewport,
+                new Point(GridView.RowHeaderWidth + 5, GridView.ColHeaderHeight + 5),
+                GridView.RowHeaderWidth,
+                GridView.ColHeaderHeight)
+            .Should()
+            .Be(new CellAddress(default, 1, 1));
+        GridObjectDragPlanner.HitTestAnchorCell(
+                viewport,
+                new Point(GridView.RowHeaderWidth + 208 + 5, GridView.ColHeaderHeight + 5),
+                GridView.RowHeaderWidth,
+                GridView.ColHeaderHeight)
+            .Should()
+            .Be(new CellAddress(default, 1, 12));
+        GridObjectDragPlanner.HitTestAnchorCell(
+                viewport,
+                new Point(GridView.RowHeaderWidth + 5, GridView.ColHeaderHeight + 58 + 5),
+                GridView.RowHeaderWidth,
+                GridView.ColHeaderHeight)
+            .Should()
+            .Be(new CellAddress(default, 30, 1));
+        GridObjectDragPlanner.HitTestAnchorCell(
+                viewport,
+                new Point(GridView.RowHeaderWidth + 208 + 5, GridView.ColHeaderHeight + 58 + 5),
+                GridView.RowHeaderWidth,
+                GridView.ColHeaderHeight)
+            .Should()
+            .Be(new CellAddress(default, 20, 10));
+    }
+
+    [Fact]
     public void GridObjectDragPlanner_StopsAnchorHitScansOnceSortedMetricsPassPointer()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -536,8 +582,8 @@ public sealed class GridViewDrawingObjectThemeTests
         var anchorHitTest = source[
             source.IndexOf("public static CellAddress? HitTestAnchorCell", StringComparison.Ordinal)..];
 
-        anchorHitTest.Should().Contain("foreach (var row in viewport.RowMetrics)");
-        anchorHitTest.Should().Contain("foreach (var column in viewport.ColMetrics)");
+        anchorHitTest.Should().Contain("foreach (var row in rows)");
+        anchorHitTest.Should().Contain("foreach (var column in columns)");
         anchorHitTest.Should().Contain("if (position.Y < top)");
         anchorHitTest.Should().Contain("break;");
         anchorHitTest.Should().Contain("if (position.X < left)");
