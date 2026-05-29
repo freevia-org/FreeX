@@ -50,22 +50,22 @@ public static class KeyboardInsertDeletePlanner
     {
         switch (input.Trim().ToLowerInvariant())
         {
-            case "right" or "r" when insert:
+            case "right" or "r" or "shift right" or "shift cells right" when insert:
                 choice = KeyboardInsertDeleteDialogChoice.ShiftRight;
                 return true;
-            case "down" or "d" when insert:
+            case "down" or "d" or "shift down" or "shift cells down" when insert:
                 choice = KeyboardInsertDeleteDialogChoice.ShiftDown;
                 return true;
-            case "left" or "l" when !insert:
+            case "left" or "l" or "shift left" or "shift cells left" when !insert:
                 choice = KeyboardInsertDeleteDialogChoice.ShiftLeft;
                 return true;
-            case "up" or "u" when !insert:
+            case "up" or "u" or "shift up" or "shift cells up" when !insert:
                 choice = KeyboardInsertDeleteDialogChoice.ShiftUp;
                 return true;
-            case "row" or "rows" or "entire row":
+            case "row" or "rows" or "entire row" or "entire rows":
                 choice = KeyboardInsertDeleteDialogChoice.EntireRow;
                 return true;
-            case "column" or "columns" or "col" or "cols" or "entire column":
+            case "column" or "columns" or "col" or "cols" or "entire column" or "entire columns":
                 choice = KeyboardInsertDeleteDialogChoice.EntireColumn;
                 return true;
             default:
