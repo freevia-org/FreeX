@@ -14,7 +14,32 @@ public sealed class ToolScriptsPreflightTests
         script.Should().Contain("Get-ChildItem -LiteralPath $resolvedScriptDirectory -Filter \"*.ps1\" -File");
         script.Should().Contain("[System.Management.Automation.Language.Parser]::ParseFile");
         script.Should().Contain("PowerShell syntax validation failed");
+        script.Should().Contain("preflight scripts must set `$ErrorActionPreference = `\"Stop`\".");
+        script.Should().Contain("PowerShell fail-fast validation failed");
         script.Should().Contain("Validated $($scripts.Count) PowerShell tool script(s).");
+    }
+
+    [Fact]
+    public void ToolScriptsPreflight_FailsWhenPreflightScriptOmitsFailFastMode()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-tool-script-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDirectory, "Test-MissingFailFast.ps1"), "Write-Host \"ok\"");
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ScriptDirectory \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("PowerShell fail-fast validation failed");
+            (result.Output + result.Error).Should().Contain("Test-MissingFailFast.ps1");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]
