@@ -163,6 +163,27 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void ApplyToElement_NamespacedNativeAttributes_DoesNotOverwriteModeledAttributes()
+    {
+        var modeledName = XName.Get("modeled", "urn:freexcel:test");
+        var modeledKey = modeledName.ToString();
+        var nativeName = XName.Get("nativeOnly", "urn:freexcel:test");
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [modeledKey] = "native-copy",
+                [nativeName.ToString()] = "preserved"
+            });
+        var target = new XElement("root", new XAttribute(modeledName, "model-value"));
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, [modeledKey]);
+
+        changed.Should().BeTrue();
+        target.Attribute(modeledName)?.Value.Should().Be("model-value");
+        target.Attribute(nativeName)?.Value.Should().Be("preserved");
+    }
+
+    [Fact]
     public void Serialize_InvalidChildXml_PreservesValidNativeData()
     {
         var bagValue = XmlNativeBagSerializer.Serialize(
