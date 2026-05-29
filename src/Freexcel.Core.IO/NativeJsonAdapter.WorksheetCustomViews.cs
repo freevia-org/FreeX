@@ -23,14 +23,14 @@ public sealed partial class NativeJsonAdapter
             sheetDto.ShowFormulas ?? false);
     }
 
-    private static WorksheetCustomViewState ToWorksheetCustomViewState(
+    private static WorksheetCustomViewState? ToWorksheetCustomViewState(
         CustomViewSheetDto sheetDto,
         Workbook workbook,
         IReadOnlyDictionary<string, Sheet> loadedSheetsBySourceName)
     {
         var state = ToWorksheetCustomViewState(sheetDto);
         var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, state.SheetName);
-        return sheet is null ? state : state with { SheetName = sheet.Name };
+        return sheet is null ? null : state with { SheetName = sheet.Name };
     }
 
     private static CustomViewSheetDto ToCustomViewSheetDto(WorksheetCustomViewState state)
