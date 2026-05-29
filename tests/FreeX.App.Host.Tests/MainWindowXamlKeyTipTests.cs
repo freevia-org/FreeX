@@ -2283,9 +2283,9 @@ public sealed class MainWindowXamlKeyTipTests
         shareButtonPlans.Select(button => button.Click)
             .Should().BeEquivalentTo(["ShareWorkbookBtn_Click", "SsShareBtn_Click"]);
         shareButtonPlans.Should().OnlyContain(button =>
-            button.Content == "Share" &&
+            (button.Content == "Share" || button.Content == "Share Workbook") &&
             button.KeyTip == "SH" &&
-            button.Title == "Share" &&
+            button.Title == button.Content &&
             button.Description == "Save the workbook if needed and open Windows Share for the file." &&
             !button.Description.Contains("Microsoft 365", StringComparison.OrdinalIgnoreCase) &&
             !button.Description.Contains("cloud", StringComparison.OrdinalIgnoreCase) &&

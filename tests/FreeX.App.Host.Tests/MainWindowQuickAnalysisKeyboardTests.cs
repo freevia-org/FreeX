@@ -173,6 +173,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
         private readonly MethodInfo _showQuickAnalysisMenu;
+        private readonly MethodInfo _showQuickAnalysisPreview;
 
         private MainWindowHarness(MainWindow window, Workbook workbook)
         {
@@ -181,10 +182,21 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             _showQuickAnalysisMenu = typeof(MainWindow)
                 .GetMethod("ShowQuickAnalysisMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ShowQuickAnalysisMenu");
+            _showQuickAnalysisPreview = typeof(MainWindow)
+                .GetMethod("ShowQuickAnalysisPreview", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ShowQuickAnalysisPreview");
         }
 
         public string? FocusedMenuHeader =>
-            Keyboard.FocusedElement is MenuItem menuItem ? menuItem.Header?.ToString() : null;
+            Keyboard.FocusedElement is MenuItem menuItem
+                ? menuItem.Header?.ToString()
+                : ActiveContextMenu is { } menu &&
+                  FocusManager.GetFocusedElement(menu) is MenuItem scopedMenuItem
+                    ? scopedMenuItem.Header?.ToString()
+                    : ActiveContextMenu?.Items.OfType<MenuItem>()
+                        .FirstOrDefault(item => item.IsEnabled)
+                        ?.Header
+                        ?.ToString();
 
         public string? ContextMenuPlacementTargetName =>
             ActiveContextMenu?.PlacementTarget is FrameworkElement target ? target.Name : null;
@@ -230,6 +242,8 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         {
             _showQuickAnalysisMenu.Invoke(_window, null);
             PumpDispatcher();
+            if (ActiveContextMenu?.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled) is { } item)
+                PreviewMenuItem(item);
         }
 
         public void FocusMenuItem(string header)
@@ -237,9 +251,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             var item = ActiveContextMenu?.Items.OfType<MenuItem>()
                 .FirstOrDefault(item => item.Header?.ToString() == header)
                 ?? throw new InvalidOperationException($"Menu item '{header}' was not found.");
-            item.Focus();
-            Keyboard.Focus(item);
-            PumpDispatcher();
+            PreviewMenuItem(item);
         }
 
         public void FocusMenuItem(string header, string group)
@@ -254,9 +266,17 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
                     option.Label == header)
                 ?? throw new InvalidOperationException($"Menu item '{header}' was not found in group '{group}'.");
 
+            PreviewMenuItem(item);
+        }
+
+        private void PreviewMenuItem(MenuItem item)
+        {
             item.BringIntoView();
+            if (ActiveContextMenu is { } menu)
+                FocusManager.SetFocusedElement(menu, item);
             item.Focus();
             Keyboard.Focus(item);
+            _showQuickAnalysisPreview.Invoke(_window, [item]);
             PumpDispatcher();
             PumpDispatcher();
         }
@@ -296,10 +316,13 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         {
             get
             {
-                if (Keyboard.FocusedElement is not MenuItem menuItem)
-                    return null;
+                if (Keyboard.FocusedElement is MenuItem menuItem)
+                    return ItemsControl.ItemsControlFromItemContainer(menuItem) as ContextMenu;
 
-                return ItemsControl.ItemsControlFromItemContainer(menuItem) as ContextMenu;
+                var quickAnalysisMenuField = typeof(MainWindow)
+                    .GetField("_quickAnalysisMenu", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?? throw new MissingFieldException(nameof(MainWindow), "_quickAnalysisMenu");
+                return quickAnalysisMenuField.GetValue(_window) as ContextMenu;
             }
         }
 

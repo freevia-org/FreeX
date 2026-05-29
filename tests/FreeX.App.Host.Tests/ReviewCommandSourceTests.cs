@@ -16,7 +16,7 @@ public sealed class ReviewCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
         button.Should().Contain($"Content=\"{content}\"");
         button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
@@ -38,7 +38,7 @@ public sealed class ReviewCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
         button.Should().Contain($"Content=\"{content}\"");
         button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
@@ -56,7 +56,7 @@ public sealed class ReviewCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
         button.Should().Contain($"Content=\"{title}\"");
         button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
@@ -89,16 +89,28 @@ public sealed class ReviewCommandSourceTests
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
-    private static string ExtractButtonElementByTitle(string xaml, string title)
+    private static string ExtractButtonElementByTitle(string xaml, string title, string? clickHandler = null)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} review button should be present");
+        var matches = new List<string>();
+        var searchIndex = 0;
+        while (true)
+        {
+            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
+            if (titleIndex < 0)
+                break;
 
-        var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} review command should be a Button");
+            var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
+            start.Should().BeGreaterThanOrEqualTo(0, $"the {title} review command should be a Button");
 
-        var end = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThanOrEqualTo(titleIndex, $"the {title} review button should be self-closing");
-        return xaml.Substring(start, end - start + 2);
+            var end = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
+            end.Should().BeGreaterThanOrEqualTo(titleIndex, $"the {title} review button should be self-closing");
+            matches.Add(xaml.Substring(start, end - start + 2));
+            searchIndex = end + 2;
+        }
+
+        matches.Should().NotBeEmpty($"the {title} review button should be present");
+        return clickHandler is null
+            ? matches[0]
+            : matches.LastOrDefault(button => button.Contains($"Click=\"{clickHandler}\"", StringComparison.Ordinal)) ?? matches[0];
     }
 }
