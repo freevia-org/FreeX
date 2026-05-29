@@ -81,6 +81,17 @@ public sealed class BackstageRecentFileListPlannerTests
     }
 
     [Fact]
+    public void Build_AvoidsLinqPipelinesForRecentFileHotPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "BackstageRecentFileListPlanner.cs"));
+
+        source.Should().NotContain(".Where(");
+        source.Should().NotContain(".OrderByDescending(");
+        source.Should().NotContain(".Select(");
+        source.Should().NotContain(".ToList(");
+    }
+
+    [Fact]
     public void Build_ProvidesUiAutomationTextForRecentPinnedAndRemoveCommands()
     {
         var entries = new[]
