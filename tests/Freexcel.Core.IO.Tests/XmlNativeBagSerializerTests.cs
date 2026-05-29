@@ -163,6 +163,24 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void ApplyToElement_ChildXmlBag_DoesNotRemoveExistingAttributes()
+    {
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            ["<replacement id=\"2\" />"]);
+        var target = new XElement(
+            "root",
+            new XAttribute("nativeOnly", "current"),
+            new XElement("existing", new XAttribute("id", "1")));
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        changed.Should().BeTrue();
+        target.ToString(SaveOptions.DisableFormatting)
+            .Should().Be("<root nativeOnly=\"current\"><replacement id=\"2\" /></root>");
+    }
+
+    [Fact]
     public void ApplyToElement_PreservedChildXml_RetainsCommentsAndProcessingInstructions()
     {
         var childXml = "<ext><?freexcel keep=\"true\"?><!--keep me--><inner /></ext>";
