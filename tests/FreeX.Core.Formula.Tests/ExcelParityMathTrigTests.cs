@@ -215,6 +215,14 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void AngleConversion_NonFiniteResults_ReturnExcelNumError()
+    {
+        _eval.Evaluate("=DEGREES(1E307)", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=DEGREES(1E309)", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=RADIANS(1E309)", MakeSheet()).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void GcdAndLcm_RangeArgumentsScanAllReferencedCellsLikeExcel()
     {
         var sheet = MakeSheet(
