@@ -362,6 +362,25 @@ public class PerformanceBenchmarkTests
             "single-section date/time formats should skip section array and parsed-section scaffolding");
     }
 
+    [Fact]
+    public void Benchmark_DynamicArraySort_AvoidsLinqIndexListScaffolding()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Formula", "BuiltInFunctions.DynamicArrays.cs"));
+
+        source.Should().NotContain(
+            "Enumerable.Range(0, arr.RowCount).ToList()",
+            "SORT and SORTBY row indexes should use compact arrays instead of LINQ List scaffolding");
+        source.Should().NotContain(
+            "Enumerable.Range(0, arr.ColCount).ToList()",
+            "SORT and SORTBY column indexes should use compact arrays instead of LINQ List scaffolding");
+        source.Should().Contain(
+            "Array.Sort(rowIndices",
+            "dynamic-array row sorting should sort the compact index array in place");
+        source.Should().Contain(
+            "Array.Sort(colIndices",
+            "dynamic-array column sorting should sort the compact index array in place");
+    }
+
     /// <summary>
     /// Benchmark: Memory usage for 1,000,000 cells (values only, no formulas).
     /// Target: <200MB
@@ -404,4 +423,18 @@ public class PerformanceBenchmarkTests
             $"1M cells used {memUsed}MB (expected <300MB)");
     }
 
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = dir.Parent;
+        }
+
+        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
+    }
 }

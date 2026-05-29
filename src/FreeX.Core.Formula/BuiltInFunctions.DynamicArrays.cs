@@ -199,8 +199,8 @@ public static partial class BuiltInFunctions
 
         if (!byCol)
         {
-            var rowIndices = Enumerable.Range(0, arr.RowCount).ToList();
-            rowIndices.Sort((a, b) =>
+            var rowIndices = CreateSequentialIndices(arr.RowCount);
+            Array.Sort(rowIndices, (a, b) =>
             {
                 var va = sortIdx < arr.ColCount ? arr.Cells[a, sortIdx] : BlankValue.Instance;
                 var vb = sortIdx < arr.ColCount ? arr.Cells[b, sortIdx] : BlankValue.Instance;
@@ -214,8 +214,8 @@ public static partial class BuiltInFunctions
         }
         else
         {
-            var colIndices = Enumerable.Range(0, arr.ColCount).ToList();
-            colIndices.Sort((a, b) =>
+            var colIndices = CreateSequentialIndices(arr.ColCount);
+            Array.Sort(colIndices, (a, b) =>
             {
                 var va = sortIdx < arr.RowCount ? arr.Cells[sortIdx, a] : BlankValue.Instance;
                 var vb = sortIdx < arr.RowCount ? arr.Cells[sortIdx, b] : BlankValue.Instance;
@@ -294,8 +294,8 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue SortByRows(RangeValue arr, IReadOnlyList<(RangeValue Range, int Order)> keys)
     {
-        var rowIndices = Enumerable.Range(0, arr.RowCount).ToList();
-        rowIndices.Sort((a, b) =>
+        var rowIndices = CreateSequentialIndices(arr.RowCount);
+        Array.Sort(rowIndices, (a, b) =>
         {
             foreach (var key in keys)
             {
@@ -315,8 +315,8 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue SortByColumns(RangeValue arr, IReadOnlyList<(RangeValue Range, int Order)> keys)
     {
-        var colIndices = Enumerable.Range(0, arr.ColCount).ToList();
-        colIndices.Sort((a, b) =>
+        var colIndices = CreateSequentialIndices(arr.ColCount);
+        Array.Sort(colIndices, (a, b) =>
         {
             foreach (var key in keys)
             {
@@ -332,6 +332,15 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < arr.ColCount; c++)
                 result[r, c] = arr.Cells[r, colIndices[c]];
         return new RangeValue(result);
+    }
+
+    private static int[] CreateSequentialIndices(int count)
+    {
+        var indices = new int[count];
+        for (var i = 0; i < indices.Length; i++)
+            indices[i] = i;
+
+        return indices;
     }
 
     private static ScalarValue Take(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
