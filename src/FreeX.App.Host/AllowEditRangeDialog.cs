@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeX.Core.Model;
 
@@ -64,7 +65,9 @@ public sealed class AllowEditRangeDialog : Window
         var existingGroup = new GroupBox { Margin = new Thickness(0, 0, 0, 10) };
         var existingPanel = new DockPanel { Margin = new Thickness(8) };
         _existingRangesBox.ItemsSource = AllowEditRangeDialogPlanner.BuildExistingRangeItems(existingRanges);
-        System.Windows.Automation.AutomationProperties.SetName(_existingRangesBox, "Ranges unlocked by password");
+        AutomationProperties.SetName(_existingRangesBox, "Ranges unlocked by password");
+        AutomationProperties.SetAutomationId(_existingRangesBox, "AllowEditRangeExistingRangesList");
+        AutomationProperties.SetHelpText(_existingRangesBox, "Select an existing editable range to delete.");
         _existingRangesBox.MinHeight = 80;
         _existingRangesBox.SelectionMode = SelectionMode.Single;
         _existingRangesBox.SelectionChanged += (_, _) => UpdateRangeButtons();
@@ -81,6 +84,12 @@ public sealed class AllowEditRangeDialog : Window
         };
         _deleteRangeButton.Click += DeleteSelectedRange_Click;
         _clearRangesButton.Click += ClearAllRanges_Click;
+        AutomationProperties.SetName(_deleteRangeButton, "Delete");
+        AutomationProperties.SetAutomationId(_deleteRangeButton, "AllowEditRangeDeleteButton");
+        AutomationProperties.SetHelpText(_deleteRangeButton, "Delete the selected editable range.");
+        AutomationProperties.SetName(_clearRangesButton, "Clear All");
+        AutomationProperties.SetAutomationId(_clearRangesButton, "AllowEditRangeClearAllButton");
+        AutomationProperties.SetHelpText(_clearRangesButton, "Delete all editable ranges for this worksheet.");
         rangeButtons.Children.Add(_deleteRangeButton);
         rangeButtons.Children.Add(_clearRangesButton);
         DockPanel.SetDock(rangeButtons, Dock.Bottom);
@@ -98,15 +107,18 @@ public sealed class AllowEditRangeDialog : Window
             Margin = new Thickness(0, 0, 6, 0),
             ToolTip = "Collapse dialog and select editable range"
         };
-        System.Windows.Automation.AutomationProperties.SetName(rangePicker, "Select editable range");
-        System.Windows.Automation.AutomationProperties.SetHelpText(
+        AutomationProperties.SetName(rangePicker, "Select editable range");
+        AutomationProperties.SetAutomationId(rangePicker, "AllowEditRangePickerButton");
+        AutomationProperties.SetHelpText(
             rangePicker,
             "Collapse dialog and select the editable range from the worksheet.");
         rangePicker.Click += RangePicker_Click;
         DockPanel.SetDock(rangePicker, Dock.Right);
         rangePanel.Children.Add(rangePicker);
         _rangeBox.Text = defaultRange;
-        System.Windows.Automation.AutomationProperties.SetName(_rangeBox, "Editable range");
+        AutomationProperties.SetName(_rangeBox, "Editable range");
+        AutomationProperties.SetAutomationId(_rangeBox, "AllowEditRangeBox");
+        AutomationProperties.SetHelpText(_rangeBox, "Enter the worksheet range that users can edit while the sheet is protected.");
         rangePanel.Children.Add(_rangeBox);
         group.Content = rangePanel;
         root.Children.Add(group);
