@@ -40,10 +40,21 @@ public static class MenuKeyTipAssigner
         if (!string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item)))
             return;
 
-        var keyTip = CreateKeyTip(item.Header?.ToString(), used);
+        var keyTip = CreateKeyTip(ExtractHeaderText(item.Header), used);
         RibbonTooltip.SetKeyTip(item, keyTip);
         used.Add(keyTip);
     }
+
+    private static string ExtractHeaderText(object? header) =>
+        header switch
+        {
+            null => "",
+            string text => text,
+            AccessText accessText => accessText.Text,
+            TextBlock textBlock => WpfTextContentExtractor.ExtractText(textBlock),
+            ContentControl contentControl => ExtractHeaderText(contentControl.Content),
+            _ => header.ToString() ?? ""
+        };
 
     private static string CreateKeyTip(string? header, IReadOnlyCollection<string> used)
     {
