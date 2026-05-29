@@ -8,6 +8,22 @@ internal static class DelimitedTextWorkbookWriter
 {
     private const int DelimiterBufferLength = 256;
     private static readonly Dictionary<char, string> DelimiterBuffers = new();
+    private static readonly HashSet<string> ErrorTextLiterals = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "#DIV/0!",
+        "#VALUE!",
+        "#REF!",
+        "#NAME?",
+        "#NULL!",
+        "#N/A",
+        "#NUM!",
+        "#CIRCULAR!",
+        "#SPILL!",
+        "#CALC!",
+        "#FIELD!",
+        "#BLOCKED!",
+        "#GETTING_DATA"
+    };
 
     public static void Save(Workbook workbook, Stream stream, char delimiter)
     {
@@ -287,23 +303,8 @@ internal static class DelimitedTextWorkbookWriter
             CultureInfo.GetCultureInfo("en-US"),
             out _);
 
-    private static bool IsErrorLikeText(string value)
-    {
-        var trimmed = value.Trim();
-        return trimmed.Equals("#DIV/0!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#VALUE!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#REF!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#NAME?", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#NULL!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#N/A", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#NUM!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#CIRCULAR!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#SPILL!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#CALC!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#FIELD!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#BLOCKED!", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.Equals("#GETTING_DATA", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsErrorLikeText(string value) =>
+        ErrorTextLiterals.Contains(value.Trim());
 
     private static string FormatCell(Cell cell) =>
         cell.FormulaText is { } formulaText
