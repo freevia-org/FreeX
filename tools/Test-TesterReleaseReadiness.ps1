@@ -102,6 +102,7 @@ foreach ($marker in @(
     "accessibility_screen_reader:",
     "accessibility_uia_catalog:",
     "accessibility_known_issues:",
+    "TestResults/tests.trx",
     "Public-preview promotion requires completed accessibility gate inputs",
     "gh release create",
     "FreeX-latest-win-x64.exe",
@@ -120,6 +121,7 @@ Assert-Contains -Text $distributionPlan -Expected "UI Automation catalog review"
 
 $checklist = Get-Content -LiteralPath $checklistFile -Raw
 Assert-Contains -Text $checklist -Expected "release/progress.json" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "Test result artifact was uploaded, even for failed release-gate attempts." -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Versioned ``.exe``, latest ``.exe``, versioned MSIX, latest MSIX, and checksum artifacts" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Stable latest checksum assets were included for both the ``.exe`` and MSIX packages" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Known accessibility issues" -Label "Tester release checklist"
