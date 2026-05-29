@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -222,6 +223,20 @@ public sealed class AutoFilterDropdownPlannerTests
             "Text Filters");
         menu.Sections[2].Entries.Select(entry => entry.Header).Should().Equal("Search", "(Select All)");
         menu.Sections[3].Entries.Select(entry => entry.Header).Should().Equal("Apple", "Banana");
+    }
+
+    [Fact]
+    public void CreateSections_AvoidsRepeatedEntryLinqScans()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterMenuCatalog.cs"));
+        var createSections = source.Substring(
+            source.IndexOf("public static IReadOnlyList<AutoFilterMenuSection> CreateSections", StringComparison.Ordinal),
+            source.IndexOf("private static IReadOnlyList<AutoFilterMenuEntry> CreateFilterFamilyChildren", StringComparison.Ordinal)
+                - source.IndexOf("public static IReadOnlyList<AutoFilterMenuSection> CreateSections", StringComparison.Ordinal));
+
+        createSections.Should().Contain("foreach (var entry in entries)");
+        createSections.Should().NotContain(".Where(");
+        createSections.Should().NotContain(".ToList()");
     }
 
     [Fact]

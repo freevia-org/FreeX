@@ -54,25 +54,44 @@ internal static class AutoFilterMenuCatalog
             _ => new AutoFilterMenuEntry("Text Filters", AutoFilterMenuEntryKind.FilterFamily, TextFilterCriteria, "Text Filters", CreateFilterFamilyChildren(AutoFilterMenuFilterKind.Text))
         };
 
-    public static IReadOnlyList<AutoFilterMenuSection> CreateSections(IReadOnlyList<AutoFilterMenuEntry> entries) =>
-    [
-        new AutoFilterMenuSection(
-            AutoFilterMenuSectionKind.Sort,
-            "Sort",
-            entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.SortAscending or AutoFilterMenuEntryKind.SortDescending).ToList()),
-        new AutoFilterMenuSection(
-            AutoFilterMenuSectionKind.FilterCommands,
-            "Filter",
-            entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.ClearFilter or AutoFilterMenuEntryKind.FilterByColor or AutoFilterMenuEntryKind.FilterFamily).ToList()),
-        new AutoFilterMenuSection(
-            AutoFilterMenuSectionKind.Search,
-            "Search",
-            entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.Search or AutoFilterMenuEntryKind.SelectAll).ToList()),
-        new AutoFilterMenuSection(
-            AutoFilterMenuSectionKind.Checklist,
-            "Values",
-            entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.ChecklistItem).ToList())
-    ];
+    public static IReadOnlyList<AutoFilterMenuSection> CreateSections(IReadOnlyList<AutoFilterMenuEntry> entries)
+    {
+        var sortEntries = new List<AutoFilterMenuEntry>(2);
+        var filterEntries = new List<AutoFilterMenuEntry>(3);
+        var searchEntries = new List<AutoFilterMenuEntry>(2);
+        var checklistEntries = new List<AutoFilterMenuEntry>(Math.Max(0, entries.Count - 7));
+
+        foreach (var entry in entries)
+        {
+            switch (entry.Kind)
+            {
+                case AutoFilterMenuEntryKind.SortAscending:
+                case AutoFilterMenuEntryKind.SortDescending:
+                    sortEntries.Add(entry);
+                    break;
+                case AutoFilterMenuEntryKind.ClearFilter:
+                case AutoFilterMenuEntryKind.FilterByColor:
+                case AutoFilterMenuEntryKind.FilterFamily:
+                    filterEntries.Add(entry);
+                    break;
+                case AutoFilterMenuEntryKind.Search:
+                case AutoFilterMenuEntryKind.SelectAll:
+                    searchEntries.Add(entry);
+                    break;
+                case AutoFilterMenuEntryKind.ChecklistItem:
+                    checklistEntries.Add(entry);
+                    break;
+            }
+        }
+
+        return
+        [
+            new AutoFilterMenuSection(AutoFilterMenuSectionKind.Sort, "Sort", sortEntries),
+            new AutoFilterMenuSection(AutoFilterMenuSectionKind.FilterCommands, "Filter", filterEntries),
+            new AutoFilterMenuSection(AutoFilterMenuSectionKind.Search, "Search", searchEntries),
+            new AutoFilterMenuSection(AutoFilterMenuSectionKind.Checklist, "Values", checklistEntries)
+        ];
+    }
 
     private static IReadOnlyList<AutoFilterMenuEntry> CreateFilterFamilyChildren(AutoFilterMenuFilterKind filterKind)
     {
