@@ -9,17 +9,27 @@ public static class CopyFromAbovePlanner
         CellAddress target,
         CopyFromAboveMode mode)
     {
-        if (target.Row <= 1)
+        if (!HasSourceRow(target))
             return null;
 
-        var sourceAddress = new CellAddress(target.Sheet, target.Row - 1, target.Col);
-        var source = sheet.GetCell(sourceAddress) ?? Cell.FromValue(BlankValue.Instance);
-        var newCell = mode == CopyFromAboveMode.FormulaOrContent && source.FormulaText is { } formula
-            ? Cell.FromFormula(formula)
-            : Cell.FromValue(source.Value);
+        var source = GetSourceCell(sheet, target);
+        var newCell = CreateCopiedCell(source, mode);
 
         return (target, newCell);
     }
+
+    private static bool HasSourceRow(CellAddress target) => target.Row > 1;
+
+    private static Cell GetSourceCell(Sheet sheet, CellAddress target)
+    {
+        var sourceAddress = new CellAddress(target.Sheet, target.Row - 1, target.Col);
+        return sheet.GetCell(sourceAddress) ?? Cell.FromValue(BlankValue.Instance);
+    }
+
+    private static Cell CreateCopiedCell(Cell source, CopyFromAboveMode mode) =>
+        mode == CopyFromAboveMode.FormulaOrContent && source.FormulaText is { } formula
+            ? Cell.FromFormula(formula)
+            : Cell.FromValue(source.Value);
 }
 
 public enum CopyFromAboveMode
