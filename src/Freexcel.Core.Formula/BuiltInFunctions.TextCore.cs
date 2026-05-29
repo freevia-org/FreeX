@@ -1105,7 +1105,7 @@ public static partial class BuiltInFunctions
             : Math.Min(startNum - 1, text.Length);
         int end = hasSurrogatePair
             ? AdvanceTextElements(text, start, numChars)
-            : Math.Min(start + numChars, text.Length);
+            : start + Math.Min(numChars, text.Length - start);
         return TextResult(text[..start] + newText + text[end..]);
     }
 
@@ -1114,7 +1114,9 @@ public static partial class BuiltInFunctions
         if (startByte > CountDbcsBytes(text) + 1) return ErrorValue.Value;
 
         int start = DbcsByteOffsetToUtf16Index(text, startByte - 1);
-        int end = DbcsByteOffsetToUtf16Index(text, startByte - 1 + numBytes);
+        int byteCount = CountDbcsBytes(text);
+        int endByteOffset = startByte - 1 + Math.Min(numBytes, byteCount - (startByte - 1));
+        int end = DbcsByteOffsetToUtf16Index(text, endByteOffset);
         return TextResult(text[..start] + newText + text[end..]);
     }
 
