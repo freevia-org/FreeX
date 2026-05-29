@@ -38,9 +38,9 @@ public sealed class RibbonTooltipTests
         {
             var menuItem = new MenuItem();
 
-            RibbonTooltip.SetKeyTip(menuItem, " H ");
+            RibbonTooltip.SetKeyTip(menuItem, " h ");
 
-            RibbonTooltip.GetKeyTip(menuItem).Should().Be(" H ");
+            RibbonTooltip.GetKeyTip(menuItem).Should().Be(" h ");
             menuItem.InputGestureText.Should().Be("H");
         });
     }

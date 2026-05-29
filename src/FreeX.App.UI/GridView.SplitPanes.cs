@@ -208,13 +208,22 @@ public partial class GridView
     }
 
     public static SplitDividerHandle HitTestSplitDividerHandle(ViewportModel viewport, Point pos)
+        => HitTestSplitDividerHandle(viewport, pos, double.PositiveInfinity, double.PositiveInfinity);
+
+    public static SplitDividerHandle HitTestSplitDividerHandle(
+        ViewportModel viewport,
+        Point pos,
+        double actualWidth,
+        double actualHeight)
     {
         var dividerLayout = CalculateSplitDividerLayout(viewport);
         var onHorizontal = dividerLayout.HorizontalY is { } horizontalY &&
             pos.X >= 0 &&
+            pos.X <= actualWidth &&
             Math.Abs(pos.Y - horizontalY) <= SplitDividerHitZone;
         var onVertical = dividerLayout.VerticalX is { } verticalX &&
             pos.Y >= 0 &&
+            pos.Y <= actualHeight &&
             Math.Abs(pos.X - verticalX) <= SplitDividerHitZone;
 
         return (onHorizontal, onVertical) switch
