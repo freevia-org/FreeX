@@ -69,7 +69,7 @@ public sealed partial class NativeJsonAdapter
             DataBarNegativeBorderColor = formatDto.DataBarNegativeBorderColor,
             AboveAverage = formatDto.AboveAverage,
             FormulaText = formatDto.FormulaText,
-            IconSetStyle = formatDto.IconSetStyle,
+            IconSetStyle = NormalizeOptionalText(formatDto.IconSetStyle),
             IconSetShowValue = formatDto.IconSetShowValue,
             IconSetReverse = formatDto.IconSetReverse,
             TopBottomRank = ValidTopBottomRankOrDefault(formatDto.TopBottomRank),
@@ -86,7 +86,9 @@ public sealed partial class NativeJsonAdapter
         };
         format.IconSetThresholds.AddRange((formatDto.IconSetThresholds ?? [])
             .Where(threshold => Enum.IsDefined(threshold.Type)));
-        format.IconOverrides.AddRange((formatDto.IconOverrides ?? []).Where(IsValidCfIconOverride));
+        format.IconOverrides.AddRange((formatDto.IconOverrides ?? [])
+            .Select(NormalizeCfIconOverride)
+            .Where(IsValidCfIconOverride));
         return format;
     }
 
@@ -123,11 +125,11 @@ public sealed partial class NativeJsonAdapter
             DataBarNegativeBorderColor = format.DataBarNegativeBorderColor,
             AboveAverage = format.AboveAverage,
             FormulaText = format.FormulaText,
-            IconSetStyle = format.IconSetStyle,
+            IconSetStyle = NormalizeOptionalText(format.IconSetStyle),
             IconSetShowValue = format.IconSetShowValue,
             IconSetReverse = format.IconSetReverse,
             IconSetThresholds = [.. format.IconSetThresholds.Where(threshold => Enum.IsDefined(threshold.Type))],
-            IconOverrides = [.. format.IconOverrides.Where(IsValidCfIconOverride)],
+            IconOverrides = [.. format.IconOverrides.Select(NormalizeCfIconOverride).Where(IsValidCfIconOverride)],
             TopBottomRank = ValidTopBottomRankOrDefault(format.TopBottomRank),
             TopBottomPercent = format.TopBottomPercent,
             TextRuleText = format.TextRuleText,
@@ -152,6 +154,12 @@ public sealed partial class NativeJsonAdapter
 
     private static bool IsValidCfIconOverride(CfIconOverride icon) =>
         !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;
+
+    private static CfIconOverride NormalizeCfIconOverride(CfIconOverride icon) =>
+        icon with { IconSet = icon.IconSet?.Trim() ?? string.Empty };
+
+    private static string? NormalizeOptionalText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static int? ValidDataBarLengthOrNull(int? value) =>
         value is >= 0 and <= 100 ? value : null;

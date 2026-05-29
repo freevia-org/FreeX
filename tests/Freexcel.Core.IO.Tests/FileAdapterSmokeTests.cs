@@ -4923,6 +4923,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_ConditionalFormatIconSetNames_AreTrimmed()
+    {
+        var workbook = new Workbook("CfIconSetTrim");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 3; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+        var format = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            RuleType = CfRuleType.IconSet,
+            Priority = 1,
+            IconSetStyle = "  3TrafficLights1  "
+        };
+        format.IconOverrides.Add(new CfIconOverride("  3Arrows  ", 2));
+        sheet.ConditionalFormats.Add(format);
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var iconSet = worksheetXml.Descendants(worksheetNs + "iconSet").Should().ContainSingle().Subject;
+
+        iconSet.Attribute("iconSet")?.Value.Should().Be("3TrafficLights1");
+        iconSet.Element(worksheetNs + "cfIcon")?.Attribute("iconSet")?.Value.Should().Be("3Arrows");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsAdvancedConditionalFormatNativeMetadata()
     {
         var workbook = new Workbook("CfNativeMetadata");
@@ -5847,6 +5877,71 @@ public partial class FileAdapterSmokeTests
         var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
         rule.IconOverrides.Should().ContainSingle()
             .Which.Should().Be(new CfIconOverride("3Arrows", 2));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_TrimsConditionalFormatIconSetNames()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeTrimmedIconSetLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 6,
+                  "Operator": 0,
+                  "IconSetStyle": "  3TrafficLights1  ",
+                  "IconOverrides": [
+                    { "IconSet": "  3Arrows  ", "IconId": 2 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.IconSetStyle.Should().Be("3TrafficLights1");
+        rule.IconOverrides.Should().ContainSingle()
+            .Which.Should().Be(new CfIconOverride("3Arrows", 2));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_TrimsConditionalFormatIconSetNames()
+    {
+        var workbook = new Workbook("CfNativeTrimmedIconSetSave");
+        var sheet = workbook.AddSheet("S1");
+        var format = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.IconSet,
+            Operator = CfOperator.Equal,
+            IconSetStyle = "  3TrafficLights1  "
+        };
+        format.IconOverrides.Add(new CfIconOverride("  3Arrows  ", 2));
+        sheet.ConditionalFormats.Add(format);
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var savedFormat = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0];
+
+        savedFormat.GetProperty("IconSetStyle").GetString().Should().Be("3TrafficLights1");
+        savedFormat.GetProperty("IconOverrides")[0].GetProperty("IconSet").GetString().Should().Be("3Arrows");
     }
 
     [Fact]
