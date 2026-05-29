@@ -108,8 +108,13 @@ $publishArgs = @(
     "-c", $Configuration,
     "-r", $RuntimeIdentifier,
     "--self-contained", "false",
+    "--disable-build-servers",
     "-p:DebugType=None",
     "-p:DebugSymbols=false",
+    "-p:UseSharedCompilation=false",
+    "-p:NodeReuse=false",
+    "/nr:false",
+    "-m:1",
     "-o", $publishDir
 )
 
