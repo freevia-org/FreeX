@@ -2124,7 +2124,7 @@
                                             <MenuItem Header="Normal"   local:RibbonTooltip.KeyTip="N" Click="MarginNormalMenuItem_Click"/>
                                             <MenuItem Header="Wide"     local:RibbonTooltip.KeyTip="W" Click="MarginWideMenuItem_Click"/>
                                             <MenuItem Header="Narrow"   local:RibbonTooltip.KeyTip="A" Click="MarginNarrowMenuItem_Click"/>
-                                            <MenuItem Header="Custom…"  local:RibbonTooltip.KeyTip="C" Click="MarginCustomMenuItem_Click"/>
+                                            <MenuItem Header="Custom Margins..."  local:RibbonTooltip.KeyTip="C" Click="MarginCustomMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
