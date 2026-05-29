@@ -862,6 +862,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ForecastSheetDialog_PeriodsBoxExposesAutomationMetadata()
+    {
+        var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_periodsBox, \"Forecast periods\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_periodsBox, \"ForecastPeriodsBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_periodsBox, \"Enter the positive whole number of periods to forecast.\");");
+    }
+
+    [Fact]
     public void ForecastSheetDialog_UsesExcelLikeCreateDefaultAction()
     {
         var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
