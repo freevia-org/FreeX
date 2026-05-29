@@ -36,6 +36,21 @@ public sealed class FileSavePlannerTests
     }
 
     [Fact]
+    public void TryResolveExistingPath_TrimsCurrentPathBeforeReturningTarget()
+    {
+        var adapter = new FakeAdapter([
+            new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true)
+        ]);
+
+        var resolved = FileSavePlanner.TryResolveExistingPath("  C:\\Temp\\Book.XLSX  ", [adapter], out var target);
+
+        resolved.Should().BeTrue();
+        target.Should().NotBeNull();
+        target!.Adapter.Should().BeSameAs(adapter);
+        target.Path.Should().Be("C:\\Temp\\Book.XLSX");
+    }
+
+    [Fact]
     public void TryResolveExistingPath_UsesSharedFileFormatResolver()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "FileSavePlanner.cs"));
