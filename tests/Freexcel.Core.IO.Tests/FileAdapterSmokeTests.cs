@@ -6026,6 +6026,124 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_DefaultsInvalidConditionalFormatDateOccurringPeriod()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidDatePeriodLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 13,
+                  "Operator": 0,
+                  "DateOccurringPeriod": "not-a-period"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle()
+            .Which.DateOccurringPeriod.Should().Be("today");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_TrimsConditionalFormatDateOccurringPeriod()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeTrimmedDatePeriodLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 13,
+                  "Operator": 0,
+                  "DateOccurringPeriod": "  last7Days  "
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle()
+            .Which.DateOccurringPeriod.Should().Be("last7Days");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_DefaultsInvalidConditionalFormatDateOccurringPeriod()
+    {
+        var workbook = new Workbook("CfNativeInvalidDatePeriodSave");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DateOccurring,
+            Operator = CfOperator.Equal,
+            DateOccurringPeriod = "not-a-period"
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+
+        document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0]
+            .GetProperty("DateOccurringPeriod")
+            .GetString()
+            .Should().Be("today");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_TrimsConditionalFormatDateOccurringPeriod()
+    {
+        var workbook = new Workbook("CfNativeTrimmedDatePeriodSave");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DateOccurring,
+            Operator = CfOperator.Equal,
+            DateOccurringPeriod = "  last7Days  "
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+
+        document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0]
+            .GetProperty("DateOccurringPeriod")
+            .GetString()
+            .Should().Be("last7Days");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_MergedRegions_Survive()
     {
         var workbook = new Workbook("MergeNativeTest");
