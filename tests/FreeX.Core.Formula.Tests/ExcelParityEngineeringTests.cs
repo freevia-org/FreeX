@@ -429,6 +429,8 @@ public sealed class ExcelParityEngineeringTests
 
     [Theory]
     [InlineData("=COMPLEX(1,2,\"x\")", "#VALUE!")]
+    [InlineData("=COMPLEX(1E309,0)", "#NUM!")]
+    [InlineData("=COMPLEX(0,1E309)", "#NUM!")]
     [InlineData("=IMREAL(\"not complex\")", "#NUM!")]
     [InlineData("=IMARGUMENT(\"not complex\")", "#NUM!")]
     [InlineData("=IMARGUMENT(0)", "#DIV/0!")]
