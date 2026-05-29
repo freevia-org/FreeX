@@ -840,6 +840,8 @@ public partial class MainWindow
 
         e.Handled = true;
         RequestSelectionDragAutoScroll(pos);
+        if (!hitAddr.HasValue)
+            ClearCommentPreview();
 
         if (_selectionAnchor is not { } anchor) return;
         if (hitAddr.HasValue && GetFormulaRangeEntryEditor() is not null)

@@ -168,6 +168,26 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void DragMouseMoveClearsStaleCommentPreviewWhenPointerLeavesCells()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseMove = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseMove", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RequestSelectionDragAutoScroll", StringComparison.Ordinal)];
+
+        mouseMove.Should().Contain("if (!hitAddr.HasValue)");
+        mouseMove.Should().Contain("ClearCommentPreview();");
+        mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.LastIndexOf("if (!hitAddr.HasValue)", StringComparison.Ordinal));
+        mouseMove.LastIndexOf("if (!hitAddr.HasValue)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.LastIndexOf("if (_selectionAnchor is not { } anchor) return;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void FormulaRangeMouseSelectionClearsTransientCellUiBeforeReplacingSelection()
     {
         var formulaReferenceSource = File.ReadAllText(WorkspaceFileLocator.Find(
