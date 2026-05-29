@@ -197,21 +197,22 @@ public sealed partial class ViewportService : IViewportService
         bool hasAnyCellComments)
     {
         var cells = new List<DisplayCell>();
-        var seen = new HashSet<(uint Row, uint Col)>();
+        var dedupeCells = SplitPaneRegionsCanOverlap(topRows, leftColumns, bottomLeftRows, topRightColumns);
+        HashSet<(uint Row, uint Col)>? seen = null;
         var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells;
 
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells);
         }
 
         return cells;
@@ -219,7 +220,8 @@ public sealed partial class ViewportService : IViewportService
 
     private static void AddDisplayCell(
         List<DisplayCell> cells,
-        HashSet<(uint Row, uint Col)> seen,
+        ref HashSet<(uint Row, uint Col)>? seen,
+        bool dedupeCells,
         Workbook workbook,
         Sheet sheet,
         SheetId sheetId,
@@ -231,7 +233,7 @@ public sealed partial class ViewportService : IViewportService
         bool hasAnyCellComments,
         bool hasAnyStyleOnlyCells)
     {
-        if (!seen.Add((row, col)))
+        if (dedupeCells && !AddSeenCell(ref seen, row, col))
             return;
 
         var cell = sheet.GetCell(row, col);
@@ -288,6 +290,56 @@ public sealed partial class ViewportService : IViewportService
             cfIcon,
             HasCellComment(sheet, addr, hasAnyCellComments)));
         }
+    }
+
+    private static bool AddSeenCell(ref HashSet<(uint Row, uint Col)>? seen, uint row, uint col)
+    {
+        seen ??= [];
+        return seen.Add((row, col));
+    }
+
+    private static bool SplitPaneRegionsCanOverlap(
+        IReadOnlyList<RowMetric> topRows,
+        IReadOnlyList<ColMetric> leftColumns,
+        IReadOnlyList<RowMetric> bottomLeftRows,
+        IReadOnlyList<ColMetric> topRightColumns) =>
+        (topRows.Count > 0 && ColumnsOverlap(leftColumns, topRightColumns)) ||
+        (leftColumns.Count > 0 && RowsOverlap(topRows, bottomLeftRows));
+
+    private static bool RowsOverlap(IReadOnlyList<RowMetric> first, IReadOnlyList<RowMetric> second)
+    {
+        for (var firstIndex = 0; firstIndex < first.Count; firstIndex++)
+        {
+            var row = first[firstIndex].Row;
+            for (var secondIndex = 0; secondIndex < second.Count; secondIndex++)
+            {
+                var otherRow = second[secondIndex].Row;
+                if (otherRow == row)
+                    return true;
+                if (otherRow > row)
+                    break;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ColumnsOverlap(IReadOnlyList<ColMetric> first, IReadOnlyList<ColMetric> second)
+    {
+        for (var firstIndex = 0; firstIndex < first.Count; firstIndex++)
+        {
+            var col = first[firstIndex].Col;
+            for (var secondIndex = 0; secondIndex < second.Count; secondIndex++)
+            {
+                var otherCol = second[secondIndex].Col;
+                if (otherCol == col)
+                    return true;
+                if (otherCol > col)
+                    break;
+            }
+        }
+
+        return false;
     }
 
     private static bool HasAnyCellComments(Sheet sheet) =>

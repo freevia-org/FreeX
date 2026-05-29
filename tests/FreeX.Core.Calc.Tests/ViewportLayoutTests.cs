@@ -269,6 +269,32 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_WithOverlappingSplitPaneOffsetsDeduplicatesPaneCells()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SplitRow = 4;
+        sheet.SplitColumn = 4;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("overlap"));
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(
+                1,
+                1,
+                120,
+                160,
+                SplitPaneOffsets: new SplitPaneViewportOffsets(TopRightLeftCol: 1, BottomLeftTopRow: 1)));
+
+        viewport.SplitPanes.Should().NotBeNull();
+        viewport.SplitPanes!.Cells
+            .Where(cell => cell.Row == 1 && cell.Col == 1)
+            .Should().ContainSingle()
+            .Which.DisplayText.Should().Be("overlap");
+    }
+
+    [Fact]
     public void GetViewport_ShowFormulasDisplaysFormulaTextWithEqualsPrefix()
     {
         var workbook = new Workbook("test");
