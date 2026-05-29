@@ -336,6 +336,8 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("ZoomDialog.cs", "public sealed class ZoomDialog", "public sealed record __NoNextZoomDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_zoomBox, \"Custom zoom percent\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_zoomBox, \"ZoomCustomPercentBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_zoomBox, \"Enter a whole zoom percentage from 10 to 400.\");");
     }
 
     [Fact]

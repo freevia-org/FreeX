@@ -1983,7 +1983,7 @@ public sealed class MainWindowSourceHygieneTests
         keyboardFocusSource.Should().Contain("return FocusVisibleTaskPane();");
         keyboardFocusSource.Should().Contain("private bool FocusPivotFieldListPane()");
         keyboardFocusSource.Should().Contain("PivotFieldListPane?.Visibility != Visibility.Visible");
-        keyboardFocusSource.Should().Contain("PivotFieldListSearchBox.Focus()");
+        keyboardFocusSource.Should().Contain("TryFocusTaskPaneElement(PivotFieldListSearchBox)");
         xaml.Should().Contain("x:Name=\"PivotFieldListPane\"");
         xaml.Should().Contain("x:Name=\"PivotFieldListSearchBox\"");
         xaml.Should().Contain("x:Name=\"PivotFieldListCloseBtn\"");
@@ -2001,7 +2001,8 @@ public sealed class MainWindowSourceHygieneTests
         keyboardFocusSource.Should().Contain("FocusSlicerTimelinePane();");
         keyboardFocusSource.Should().Contain("private bool FocusSlicerTimelinePane()");
         keyboardFocusSource.Should().Contain("SlicerTimelinePane?.Visibility != Visibility.Visible");
-        keyboardFocusSource.Should().Contain("SlicerTimelinePaneCloseBtn.Focus()");
+        keyboardFocusSource.Should().Contain("TryFocusTaskPaneElement(SlicerTimelinePaneCloseBtn)");
+        keyboardFocusSource.Should().Contain("DispatcherPriority.Input");
         xaml.Should().Contain("x:Name=\"SlicerTimelinePane\"");
         xaml.Should().Contain("x:Name=\"SlicerTimelinePaneCloseBtn\"");
         xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
