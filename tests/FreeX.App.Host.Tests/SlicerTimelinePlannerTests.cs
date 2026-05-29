@@ -161,4 +161,20 @@ public sealed class SlicerTimelinePlannerTests
         source.Should().Contain("activePivotNames.Contains(pivotTableName)");
         source.Should().NotContain("activeSheet.PivotTables.Any");
     }
+
+    [Fact]
+    public void BuildSlicerTiles_AvoidsLinqMaterializationScaffolding()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SlicerTimelinePlanner.cs"));
+        var buildSlicerTiles = source[
+            source.IndexOf("public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles", StringComparison.Ordinal)..
+            source.IndexOf("public static IReadOnlyList<string> ToggleSlicerSelection", StringComparison.Ordinal)];
+
+        buildSlicerTiles.Should().Contain("new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase)");
+        buildSlicerTiles.Should().Contain("new List<SlicerTileItem>(items.Count)");
+        buildSlicerTiles.Should().NotContain(".ToList()");
+        buildSlicerTiles.Should().NotContain(".Distinct(");
+        buildSlicerTiles.Should().NotContain(".OrderBy(");
+        buildSlicerTiles.Should().NotContain(".Select(");
+    }
 }
