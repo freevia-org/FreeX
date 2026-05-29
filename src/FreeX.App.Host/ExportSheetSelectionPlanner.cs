@@ -18,22 +18,40 @@ internal static class ExportSheetSelectionPlanner
         if (options.Scope == ExportContentScope.Selection)
             return ResolveSingleSheet(workbook, currentSheetId);
 
-        var groupedSet = groupedSheetIds.ToHashSet();
-        groupedSet.Add(currentSheetId);
-        var sheetIds = VisibleSheets(workbook)
-            .Where(sheet => groupedSet.Contains(sheet.Id))
-            .Select(sheet => sheet.Id)
-            .ToList();
+        var sheetIds = ResolveGroupedSheets(workbook, currentSheetId, groupedSheetIds);
 
         return sheetIds.Count == 0
             ? ResolveSingleSheet(workbook, currentSheetId)
             : sheetIds;
     }
 
+    private static IReadOnlyList<SheetId> ResolveGroupedSheets(
+        Workbook workbook,
+        SheetId currentSheetId,
+        IReadOnlyCollection<SheetId> groupedSheetIds)
+    {
+        var groupedSet = GroupedSheetSet(currentSheetId, groupedSheetIds);
+        return VisibleSheetIds(workbook)
+            .Where(groupedSet.Contains)
+            .ToList();
+    }
+
     private static IReadOnlyList<SheetId> ResolveSingleSheet(Workbook workbook, SheetId sheetId) =>
         workbook.GetSheet(sheetId) is { IsHidden: false, IsVeryHidden: false } sheet
             ? [sheet.Id]
             : [];
+
+    private static HashSet<SheetId> GroupedSheetSet(
+        SheetId currentSheetId,
+        IReadOnlyCollection<SheetId> groupedSheetIds)
+    {
+        var groupedSet = groupedSheetIds.ToHashSet();
+        groupedSet.Add(currentSheetId);
+        return groupedSet;
+    }
+
+    private static IEnumerable<SheetId> VisibleSheetIds(Workbook workbook) =>
+        VisibleSheets(workbook).Select(sheet => sheet.Id);
 
     private static IEnumerable<Sheet> VisibleSheets(Workbook workbook) =>
         workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden);
