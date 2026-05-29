@@ -14,12 +14,14 @@ public static class ShareWorkbookPlanner
 {
     public static ShareWorkbookPlan CreatePlan(string? currentFilePath)
     {
-        if (string.IsNullOrWhiteSpace(currentFilePath))
-            return new ShareWorkbookPlan(ShareWorkbookPlanKind.SaveAsBeforeShare, null);
+        return TryGetShareableWorkbookPath(currentFilePath, out var shareablePath)
+            ? new ShareWorkbookPlan(ShareWorkbookPlanKind.ShareExistingFile, shareablePath)
+            : new ShareWorkbookPlan(ShareWorkbookPlanKind.SaveAsBeforeShare, null);
+    }
 
-        if (!File.Exists(currentFilePath))
-            return new ShareWorkbookPlan(ShareWorkbookPlanKind.SaveAsBeforeShare, null);
-
-        return new ShareWorkbookPlan(ShareWorkbookPlanKind.ShareExistingFile, currentFilePath);
+    private static bool TryGetShareableWorkbookPath(string? currentFilePath, out string shareablePath)
+    {
+        shareablePath = currentFilePath ?? "";
+        return !string.IsNullOrWhiteSpace(shareablePath) && File.Exists(shareablePath);
     }
 }
