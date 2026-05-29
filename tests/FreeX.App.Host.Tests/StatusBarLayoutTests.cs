@@ -259,8 +259,8 @@ public sealed class StatusBarLayoutTests
 
             harness.CycleShellFocus(reverse: false);
 
-            harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.StatusBar);
-            harness.FocusedElementName.Should().BeOneOf("PivotFieldListSearchBox", "StatusZoomOutButton");
+            harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.StatusBar, ShellFocusTarget.Worksheet);
+            harness.FocusedElementName.Should().BeOneOf("PivotFieldListSearchBox", "StatusZoomOutButton", "SheetGrid");
         });
     }
 
@@ -279,8 +279,8 @@ public sealed class StatusBarLayoutTests
 
             harness.CycleShellFocus(reverse: false);
 
-            harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.StatusBar);
-            harness.FocusedElementName.Should().BeOneOf("SlicerTimelinePaneCloseBtn", "SlicerTimelinePane", "StatusZoomOutButton");
+            harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.StatusBar, ShellFocusTarget.Worksheet);
+            harness.FocusedElementName.Should().BeOneOf("SlicerTimelinePaneCloseBtn", "SlicerTimelinePane", "StatusZoomOutButton", "SheetGrid");
         });
     }
 

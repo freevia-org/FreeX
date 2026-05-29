@@ -195,6 +195,13 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void Power_NonFiniteArguments_ReturnExcelNumError()
+    {
+        _eval.Evaluate("=POWER(1,1E309)", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=POWER(1E309,0)", MakeSheet()).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void GcdAndLcm_RangeArgumentsScanAllReferencedCellsLikeExcel()
     {
         var sheet = MakeSheet(
