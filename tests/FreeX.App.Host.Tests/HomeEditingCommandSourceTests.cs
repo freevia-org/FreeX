@@ -41,7 +41,7 @@ public sealed class HomeEditingCommandSourceTests
     [InlineData("Clear All", "A", "ClearAllMenuItem_Click")]
     [InlineData("Clear Formats", "F", "ClearFormatsMenuItem_Click")]
     [InlineData("Clear Contents", "C", "ClearValuesMenuItem_Click")]
-    [InlineData("Clear Comments", "M", "ClearCommentsMenuItem_Click")]
+    [InlineData("Clear Comments and Notes", "M", "ClearCommentsMenuItem_Click")]
     [InlineData("Clear Hyperlinks", "H", "ClearHyperlinksMenuItem_Click")]
     [InlineData("Sort A to Z", "A", "SortAZMenuItem_Click")]
     [InlineData("Sort Z to A", "Z", "SortZAMenuItem_Click")]

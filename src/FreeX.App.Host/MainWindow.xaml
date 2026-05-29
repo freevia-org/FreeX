@@ -1149,7 +1149,7 @@
                                                 <MenuItem Header="Clear All"        local:RibbonTooltip.KeyTip="A" Click="ClearAllMenuItem_Click"/>
                                                 <MenuItem Header="Clear Formats"    local:RibbonTooltip.KeyTip="F" Click="ClearFormatsMenuItem_Click"/>
                                                 <MenuItem Header="Clear Contents"   local:RibbonTooltip.KeyTip="C" Click="ClearValuesMenuItem_Click"/>
-                                                <MenuItem Header="Clear Comments"   local:RibbonTooltip.KeyTip="M" Click="ClearCommentsMenuItem_Click"/>
+                                                <MenuItem Header="Clear Comments and Notes" local:RibbonTooltip.KeyTip="M" Click="ClearCommentsMenuItem_Click"/>
                                                 <MenuItem Header="Clear Hyperlinks" local:RibbonTooltip.KeyTip="H" Click="ClearHyperlinksMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>

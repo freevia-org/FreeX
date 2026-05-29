@@ -87,7 +87,7 @@ public sealed class ClearCommentsCommand : IWorkbookCommand
     private Dictionary<CellAddress, string>? _snapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedSnapshot;
 
-    public string Label => "Clear Comments";
+    public string Label => "Clear Comments and Notes";
 
     public ClearCommentsCommand(SheetId sheetId, GridRange range)
     {

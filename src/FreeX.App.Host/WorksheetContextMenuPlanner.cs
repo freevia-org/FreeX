@@ -69,7 +69,7 @@ public static class WorksheetContextMenuPlanner
         WorksheetContextMenuCommand.Separator,
         new("Clear All", WorksheetContextMenuAction.ClearAll, AccessHeader: "Clear _All"),
         new("Clear Formats", WorksheetContextMenuAction.ClearFormats, AccessHeader: "Clear _Formats"),
-        new("Clear Comments", WorksheetContextMenuAction.ClearComments, AccessHeader: "Clear Co_mments"),
+        new("Clear Comments and Notes", WorksheetContextMenuAction.ClearComments, AccessHeader: "Clear Co_mments and Notes"),
         new("Clear Hyperlinks", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "Clear _Hyperlinks", IsEnabled: state.HasHyperlink),
         new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
     ];

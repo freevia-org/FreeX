@@ -69,7 +69,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "Format Cells...",
             "Clear All",
             "Clear Formats",
-            "Clear Comments",
+            "Clear Comments and Notes",
             "Clear Hyperlinks",
             "Clear Contents");
 
@@ -107,7 +107,7 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.AutoFitColumnWidth);
         commands.Single(command => command.Header == "Clear All")
             .Action.Should().Be(WorksheetContextMenuAction.ClearAll);
-        commands.Single(command => command.Header == "Clear Comments")
+        commands.Single(command => command.Header == "Clear Comments and Notes")
             .Action.Should().Be(WorksheetContextMenuAction.ClearComments);
         commands.Single(command => command.Header == "New Comment")
             .Action.Should().Be(WorksheetContextMenuAction.NewComment);
