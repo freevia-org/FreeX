@@ -13,33 +13,48 @@ public static class BackstageRecentFileListPlanner
         Func<string, bool>? pathExists = null)
     {
         pathExists ??= _ => true;
-        var allItems = BuildAllItems(entries, NormalizeFilter(filter), pathExists);
+        var normalizedFilter = NormalizeFilter(filter);
+        var eligibleEntries = new List<RecentFileEntry>();
+        foreach (var entry in entries)
+        {
+            if (pathExists(entry.Path))
+            {
+                eligibleEntries.Add(entry);
+            }
+        }
+
+        eligibleEntries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));
+
+        var allItems = new List<RecentFileViewModel>(eligibleEntries.Count);
+        var recentItems = new List<RecentFileViewModel>(eligibleEntries.Count);
+        var pinnedItems = new List<RecentFileViewModel>(eligibleEntries.Count);
+        foreach (var entry in eligibleEntries)
+        {
+            var item = new RecentFileViewModel(entry);
+            if (!MatchesFilter(item, normalizedFilter))
+            {
+                continue;
+            }
+
+            allItems.Add(item);
+            if (item.IsPinned)
+            {
+                pinnedItems.Add(item);
+            }
+            else
+            {
+                recentItems.Add(item);
+            }
+        }
 
         return new BackstageRecentFileListPlan(
             allItems,
-            GetRecentItems(allItems),
-            GetPinnedItems(allItems));
+            recentItems,
+            pinnedItems);
     }
 
     private static string? NormalizeFilter(string? filter) =>
         string.IsNullOrWhiteSpace(filter) ? null : filter.Trim();
-
-    private static List<RecentFileViewModel> BuildAllItems(
-        IEnumerable<RecentFileEntry> entries,
-        string? normalizedFilter,
-        Func<string, bool> pathExists) =>
-        entries
-            .Where(entry => pathExists(entry.Path))
-            .OrderByDescending(entry => entry.LastOpened)
-            .Select(entry => new RecentFileViewModel(entry))
-            .Where(item => MatchesFilter(item, normalizedFilter))
-            .ToList();
-
-    private static List<RecentFileViewModel> GetRecentItems(IEnumerable<RecentFileViewModel> items) =>
-        items.Where(item => !item.IsPinned).ToList();
-
-    private static List<RecentFileViewModel> GetPinnedItems(IEnumerable<RecentFileViewModel> items) =>
-        items.Where(item => item.IsPinned).ToList();
 
     private static bool MatchesFilter(RecentFileViewModel item, string? filter) =>
         filter is null ||

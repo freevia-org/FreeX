@@ -6,6 +6,31 @@ namespace FreeX.App.Host.Tests;
 public sealed class InsertCommandSourceTests
 {
     [Theory]
+    [InlineData("PivotTable", "PivotTable", "PT", "PivotTableBtn_Click")]
+    [InlineData("Recommended PivotTables", "Recommended", "RP", "RecommendedPivotTablesMenuItem_Click")]
+    [InlineData("Table", "Table", "TB", "TableBtn_Click")]
+    [InlineData("Pictures", "Pictures", "IP", "InsertPictureBtn_Click")]
+    [InlineData("Shapes", "Shapes", "SH", "DrawRectBtn_Click")]
+    [InlineData("Line Sparkline", "Line", "SL", "SparklineLineBtn_Click")]
+    [InlineData("Column Sparkline", "Column", "SK", "SparklineColumnBtn_Click")]
+    [InlineData("Win/Loss Sparkline", "Win/Loss", "SW", "SparklineWinLossBtn_Click")]
+    [InlineData("Insert Slicer", "Slicer", "SF", "PivotInsertSlicerBtn_Click")]
+    [InlineData("Insert Timeline", "Timeline", "IT", "PivotInsertTimelineBtn_Click")]
+    public void InsertTablesIllustrationsSparklineAndFilterCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
+        string title,
+        string content,
+        string keyTip,
+        string handler)
+    {
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+
+        button.Should().Contain($"Content=\"{content}\"");
+        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
+        button.Should().Contain($"Click=\"{handler}\"");
+    }
+
+    [Theory]
     [InlineData("Link", "Link", "K", "InsertLinkBtn_Click")]
     [InlineData("Comment", "Comment", "C2", "InsertCommentBtn_Click")]
     [InlineData("Text Box", "Text Box", "TX", "DrawTextBtn_Click")]
@@ -26,6 +51,20 @@ public sealed class InsertCommandSourceTests
     }
 
     [Theory]
+    [InlineData("Get Add-ins", "GA")]
+    [InlineData("My Add-ins", "AI")]
+    [InlineData("3D Map", "3D")]
+    public void InsertDeferredAddInAndTourCommands_RemainDisabledWithoutClickHandlers(string title, string keyTip)
+    {
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+
+        button.Should().Contain("IsEnabled=\"False\"");
+        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
+        button.Should().NotContain("Click=");
+    }
+
+    [Theory]
     [InlineData("Object", "O")]
     [InlineData("Equation", "EQ")]
     public void InsertDeferredTextAndSymbolCommands_RemainDisabledWithoutClickHandlers(string title, string keyTip)
@@ -36,6 +75,49 @@ public sealed class InsertCommandSourceTests
         button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().NotContain("Click=");
+    }
+
+    [Fact]
+    public void InsertShapesButton_ExposesExpectedShapeMenuRoutes()
+    {
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), "Shapes");
+
+        button.Should().Contain("<MenuItem Header=\"Rectangle\" local:RibbonTooltip.KeyTip=\"R\" Click=\"DrawRectBtn_Click\"/>");
+        button.Should().Contain("<MenuItem Header=\"Ellipse\" local:RibbonTooltip.KeyTip=\"E\" Click=\"DrawEllipseBtn_Click\"/>");
+        button.Should().Contain("<MenuItem Header=\"Line\" local:RibbonTooltip.KeyTip=\"L\" Click=\"DrawLineBtn_Click\"/>");
+    }
+
+    [Fact]
+    public void InsertTablesIllustrationsSparklineAndFilterHandlers_RouteThroughExpectedCommandsAndDialogs()
+    {
+        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.InsertCommands.cs"));
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var pivotSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotCommands.cs"));
+
+        insertSource.Should().Contain("private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);");
+        insertSource.Should().Contain("private void RecommendedPivotTablesMenuItem_Click(object sender, RoutedEventArgs e) => PivotTableBtn_Click(sender, e);");
+        insertSource.Should().Contain("private void SparklineLineBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"line\");");
+        insertSource.Should().Contain("private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"column\");");
+        insertSource.Should().Contain("private void SparklineWinLossBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"winloss\");");
+        insertSource.Should().Contain("new SparklineDialog(");
+        insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)");
+
+        drawingSource.Should().Contain("private void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
+        drawingSource.Should().Contain("new InsertPictureCommand(");
+        drawingSource.Should().Contain("private void DrawRectBtn_Click(object sender, RoutedEventArgs e) => InsertDrawingShape(DrawingShapeKind.Rectangle);");
+        drawingSource.Should().Contain("private void DrawEllipseBtn_Click(object sender, RoutedEventArgs e) => InsertDrawingShape(DrawingShapeKind.Ellipse);");
+        drawingSource.Should().Contain("private void DrawLineBtn_Click(object sender, RoutedEventArgs e) => InsertDrawingShape(DrawingShapeKind.Line);");
+
+        pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
+        pivotSource.Should().Contain("new PivotTableDialog(");
+        pivotSource.Should().Contain("new AddPivotTableCommand(");
+        pivotSource.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)");
+        pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
+        pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");
+        pivotSource.Should().Contain("private void PivotInsertTimelineBtn_Click(object sender, RoutedEventArgs e)");
+        pivotSource.Should().Contain("new InsertTimelineDialog(headers, fieldName)");
+        pivotSource.Should().Contain("new AddTimelineCommand(dialog.Result.TimelineName, pivotTable.Name, dialog.Result.DateFieldName)");
     }
 
     [Fact]
