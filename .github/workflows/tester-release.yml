@@ -338,6 +338,7 @@ jobs:
           Download the stable latest asset: FreeX-latest-win-x64.exe
           Checksum for the latest single-file asset: FreeX-latest-win-x64.exe.sha256
           MSIX package: FreeX-latest-win-x64.msix
+          Checksum for the latest MSIX package: FreeX-latest-win-x64.msix.sha256
 
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
           The MSIX package is signed when the release workflow has certificate secrets configured; otherwise it remains unsigned for local packaging validation. Installer trust validation and Store submission remain release-gate tasks.
