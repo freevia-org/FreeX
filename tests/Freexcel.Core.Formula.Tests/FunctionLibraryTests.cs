@@ -5930,6 +5930,14 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Replace_StartNumPastAppendBoundary_ReturnsValueError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPLACE(\"abc\",5,0,\"x\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPLACEB(\"A\u754cB\",6,0,\"x\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Replace_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var text = new string('x', 32767);
