@@ -20,6 +20,14 @@ public partial class MainWindow : Window
     private const double MaximizedSafeInsetDip = 8.0;
     private const double SheetTabNavScrollAmount = 140.0;
     private const double SheetTabScrollEpsilon = 0.5;
+    private const double SheetTabMinimumViewportWidth = 80.0;
+    private const double SheetTabMinimumHorizontalScrollbarWidth = 180.0;
+    private const double SheetTabPreferredHorizontalScrollbarRatio = 0.36;
+    private const double SheetTabPreferredHorizontalScrollbarMaxWidth = 420.0;
+    private const double SheetTabOverlapWidth = 16.0;
+    private const double SheetTabRightNavigationReserveWidth = 27.0;
+    private const double SheetTabGridRuleTop = 1.0;
+    private const double SheetTabGridRuleStrokeThickness = 1.8;
     private const int ResizeViewportRefreshDelayMilliseconds = 140;
 
     private readonly ILogger<MainWindow> _logger;
