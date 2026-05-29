@@ -4,7 +4,7 @@ namespace FreeX.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
-    private static WorksheetAutoFilterModel? ToWorksheetAutoFilter(WorksheetAutoFilterDto? dto)
+    private static WorksheetAutoFilterModel? ToWorksheetAutoFilter(WorksheetAutoFilterDto? dto, SheetId sheetId)
     {
         if (dto is null ||
             (string.IsNullOrWhiteSpace(dto.Reference) &&
@@ -14,14 +14,22 @@ public sealed partial class NativeJsonAdapter
             return null;
         }
 
-        var autoFilter = new WorksheetAutoFilterModel(dto.Reference, dto.NativeXml)
+        var reference = ValidAutoFilterReferenceOrNull(dto.Reference, sheetId);
+        var hasNativePayload =
+            !string.IsNullOrWhiteSpace(dto.NativeXml) ||
+            dto.NativeAttributes?.Count > 0 ||
+            dto.NativeChildXmls?.Any(xml => !string.IsNullOrWhiteSpace(xml)) == true;
+        if (reference is null && !hasNativePayload)
+            return null;
+
+        var autoFilter = new WorksheetAutoFilterModel(reference, dto.NativeXml)
         {
             NativeAttributes = CleanNativeAttributes(dto.NativeAttributes),
             NativeChildXmls = dto.NativeChildXmls?
                 .Where(xml => !string.IsNullOrWhiteSpace(xml))
                 .ToArray()
         };
-        foreach (var column in dto.FilterColumns ?? [])
+        foreach (var column in reference is null ? [] : dto.FilterColumns ?? [])
         {
             if (column.ColumnId >= 0)
             {
@@ -100,21 +108,31 @@ public sealed partial class NativeJsonAdapter
         return autoFilter;
     }
 
-    private static WorksheetAutoFilterDto? ToWorksheetAutoFilterDto(WorksheetAutoFilterModel? autoFilter) =>
-        autoFilter is null
-            ? null
-            : new WorksheetAutoFilterDto
-            {
-                Reference = autoFilter.Reference,
-                NativeXml = autoFilter.NativeXml,
-                NativeAttributes = CleanNativeAttributesForSave(autoFilter.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)),
-                NativeChildXmls = autoFilter.NativeChildXmls?
-                    .Where(xml => !string.IsNullOrWhiteSpace(xml))
-                    .ToList(),
-                FilterColumns = autoFilter.FilterColumns
-                    .Where(column => column.ColumnId >= 0)
-                    .Select(column => new WorksheetAutoFilterColumnDto
-                    {
+    private static WorksheetAutoFilterDto? ToWorksheetAutoFilterDto(WorksheetAutoFilterModel? autoFilter, SheetId sheetId)
+    {
+        if (autoFilter is null)
+            return null;
+
+        var reference = ValidAutoFilterReferenceOrNull(autoFilter.Reference, sheetId);
+        var hasNativePayload =
+            !string.IsNullOrWhiteSpace(autoFilter.NativeXml) ||
+            autoFilter.NativeAttributes?.Count > 0 ||
+            autoFilter.NativeChildXmls?.Any(xml => !string.IsNullOrWhiteSpace(xml)) == true;
+        if (reference is null && !hasNativePayload)
+            return null;
+
+        return new WorksheetAutoFilterDto
+        {
+            Reference = reference,
+            NativeXml = autoFilter.NativeXml,
+            NativeAttributes = CleanNativeAttributesForSave(autoFilter.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)),
+            NativeChildXmls = autoFilter.NativeChildXmls?
+                .Where(xml => !string.IsNullOrWhiteSpace(xml))
+                .ToList(),
+            FilterColumns = (reference is null ? [] : autoFilter.FilterColumns)
+                .Where(column => column.ColumnId >= 0)
+                .Select(column => new WorksheetAutoFilterColumnDto
+                {
                         ColumnId = column.ColumnId,
                         Values = column.Values.Where(value => !string.IsNullOrWhiteSpace(value)).ToList(),
                         IncludeBlank = column.IncludeBlank,
@@ -191,6 +209,23 @@ public sealed partial class NativeJsonAdapter
                             },
                         NativeFilterXmls = column.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToList(),
                         NativeAttributes = CleanNativeAttributesForSave(column.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
-                    }).ToList()
-            };
+                }).ToList()
+        };
+    }
+
+    private static string? ValidAutoFilterReferenceOrNull(string? reference, SheetId sheetId)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return null;
+
+        try
+        {
+            var range = GridRange.Parse(reference, sheetId);
+            return IsValidRangeOnSheet(range, sheetId) ? range.ToString() : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
 }
