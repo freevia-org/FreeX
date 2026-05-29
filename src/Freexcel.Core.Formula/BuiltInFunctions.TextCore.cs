@@ -1100,6 +1100,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue ReplaceText(string text, int startNum, int numChars, string newText)
     {
         bool hasSurrogatePair = ContainsSurrogatePair(text);
+        int length = hasSurrogatePair ? CountTextElements(text) : text.Length;
+        if (startNum > length + 1) return ErrorValue.Value;
+
         int start = hasSurrogatePair
             ? TextElementIndexFromOneBasedPosition(text, startNum)
             : Math.Min(startNum - 1, text.Length);
@@ -1111,6 +1114,8 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue ReplaceBText(string text, int startByte, int numBytes, string newText)
     {
+        if (startByte > CountDbcsBytes(text) + 1) return ErrorValue.Value;
+
         int start = DbcsByteOffsetToUtf16Index(text, startByte - 1);
         int end = DbcsByteOffsetToUtf16Index(text, startByte - 1 + numBytes);
         return TextResult(text[..start] + newText + text[end..]);
