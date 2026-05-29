@@ -32,6 +32,7 @@ public partial class MainWindow
         if (availableWidth <= 0)
             return;
 
+        _ribbonMeasuredOverflowCache.Clear();
         var cacheKey = controlCacheKey;
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups;
         double fixedChromeWidth;
@@ -56,9 +57,13 @@ public partial class MainWindow
             _ribbonAdaptiveGroupCache = adaptiveGroups;
             _ribbonAdaptiveFixedChromeWidthCache = fixedChromeWidth;
             _ribbonCorrectedStateCache.Clear();
+            _ribbonMeasuredOverflowCache.Clear();
         }
 
         UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);
+        if (_ribbonAdaptiveStateDiffInvalidated)
+            _ribbonMeasuredOverflowCache.Clear();
+
         var layout = RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth);
         var layoutStates = layout.States.ToArray();
         var plannedStates = layoutStates.ToArray();
@@ -88,11 +93,11 @@ public partial class MainWindow
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||
             layout.RequiresMeasuredCorrection &&
-            (!hasCachedCorrection || RibbonRowOverflowsMeasured(activePanel, availableWidth));
+            (!hasCachedCorrection || RibbonRowOverflowsMeasuredCached(activePanel, cacheKey, availableWidth, plannedStates));
         if (requiresMeasuredCorrection)
         {
-            ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
-            ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
+            ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth);
+            ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth);
         }
 
         ApplyRibbonRuntimeVisibilityOverrides(groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
@@ -150,6 +155,7 @@ public partial class MainWindow
         _lastRibbonAdaptiveAppliedStates = null;
         _lastRibbonCollapsedFootprintMode = null;
         _ribbonCorrectedStateCache.Clear();
+        _ribbonMeasuredOverflowCache.Clear();
         return groups;
     }
 
@@ -212,23 +218,24 @@ public partial class MainWindow
         return Math.Max(0, availableWidth ?? 0);
     }
 
-    private static void ApplyRibbonMeasuredOverflowFallback(
+    private void ApplyRibbonMeasuredOverflowFallback(
         StackPanel activePanel,
         IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
         RibbonAdaptiveGroupState[] plannedStates,
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        string measurementCacheKey,
         double availableWidth)
     {
         var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth);
-        while (RibbonRowOverflowsMeasured(activePanel, availableWidth) &&
+        while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
                RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
         {
             ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
 
-        while (RibbonRowOverflowsMeasured(activePanel, availableWidth) &&
+        while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
                RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false))
         {
             ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
@@ -236,12 +243,13 @@ public partial class MainWindow
         }
     }
 
-    private static void ApplyRibbonMeasuredExpansionFallback(
+    private void ApplyRibbonMeasuredExpansionFallback(
         StackPanel activePanel,
         IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
         RibbonAdaptiveGroupState[] plannedStates,
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        string measurementCacheKey,
         double availableWidth)
     {
         foreach (var index in RibbonAdaptiveLayoutEngine.GetExpandableGroupIndexes(adaptiveGroups, availableWidth))
@@ -253,13 +261,28 @@ public partial class MainWindow
             plannedStates[index] = expandedState;
             ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
-            if (!RibbonRowOverflowsMeasured(activePanel, availableWidth))
+            if (!RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
                 continue;
 
             plannedStates[index] = currentState;
             ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
+    }
+
+    private bool RibbonRowOverflowsMeasuredCached(
+        StackPanel activePanel,
+        string measurementCacheKey,
+        double availableWidth,
+        IReadOnlyList<RibbonAdaptiveGroupState> states)
+    {
+        var overflowCacheKey = CreateRibbonMeasuredOverflowCacheKey(measurementCacheKey, availableWidth, states);
+        if (_ribbonMeasuredOverflowCache.TryGetValue(overflowCacheKey, out var overflows))
+            return overflows;
+
+        overflows = RibbonRowOverflowsMeasured(activePanel, availableWidth);
+        _ribbonMeasuredOverflowCache[overflowCacheKey] = overflows;
+        return overflows;
     }
 
     private static void ApplyRibbonRuntimeVisibilityOverrides(
@@ -320,6 +343,20 @@ public partial class MainWindow
             measurementCacheKey,
             Math.Round(availableWidth, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
             string.Join(",", states.Select(state => ((int)state).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+
+    private static string CreateRibbonMeasuredOverflowCacheKey(
+        string measurementCacheKey,
+        double availableWidth,
+        IReadOnlyList<RibbonAdaptiveGroupState> states)
+    {
+        var footprintMode = GetCollapsedRibbonFootprintMode(availableWidth);
+        return string.Join(
+            "|",
+            measurementCacheKey,
+            Math.Round(availableWidth, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            footprintMode,
+            string.Join(",", states.Select(state => ((int)state).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+    }
 
     private static void ApplyRibbonAdaptiveStates(
         IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,

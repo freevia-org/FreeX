@@ -581,6 +581,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private IReadOnlyList<RibbonCompactGroupSnapshot>? _ribbonCompactGroupSnapshotCache;");
         fields.Should().Contain("private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;");
         fields.Should().Contain("private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];");
+        fields.Should().Contain("private readonly Dictionary<string, bool> _ribbonMeasuredOverflowCache = [];");
         fields.Should().Contain("private bool _ribbonAdaptiveStateDiffInvalidated;");
         fields.Should().Contain("private bool _ribbonFallbackPending;");
         source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
@@ -600,7 +601,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("_ribbonAdaptiveScrollViewerCache");
         source.Should().Contain("ribbonScrollViewer ??= FindVisualAncestor<ScrollViewer>(activePanel)");
         source.Should().Contain("RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth)");
-        source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, availableWidth)");
+        source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth)");
         source.Should().Contain("private IReadOnlyList<RibbonCompactGroupSnapshot> GetCachedRibbonCompactGroupSnapshots");
         source.Should().Contain("private static void ApplyRibbonGroupCompactSnapshot(RibbonCompactGroupSnapshot snapshot");
         source.Should().Contain("private static void ApplyRibbonButtonCompactSnapshot(RibbonCompactButtonSnapshot snapshot");
@@ -608,7 +609,11 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("cachedCorrectionNeedsExpansion = RibbonStatesAreMoreCollapsedThan(plannedStates, layoutStates);");
         source.Should().Contain("var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||");
         source.Should().Contain("layout.RequiresMeasuredCorrection &&");
-        source.Should().Contain("(!hasCachedCorrection || RibbonRowOverflowsMeasured(activePanel, availableWidth));");
+        source.Should().Contain("(!hasCachedCorrection || RibbonRowOverflowsMeasuredCached(activePanel, cacheKey, availableWidth, plannedStates));");
+        source.Should().Contain("CreateRibbonMeasuredOverflowCacheKey(measurementCacheKey, availableWidth, states)");
+        source.Should().Contain("_ribbonMeasuredOverflowCache.TryGetValue(overflowCacheKey, out var overflows)");
+        source.Should().Contain("_ribbonMeasuredOverflowCache[overflowCacheKey] = overflows;");
+        source.Should().Contain("_ribbonMeasuredOverflowCache.Clear();");
         source.Should().Contain("private static bool RibbonStatesAreMoreCollapsedThan");
         source.Should().Contain("CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates)");
         source.Should().Contain("_ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates");
