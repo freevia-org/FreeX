@@ -109,6 +109,17 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void Deserialize_NonWrapperValue_DoesNotReturnNativeData()
+    {
+        const string bagValue = "<nativeOnly attr=\"unexpected\"><replacement id=\"2\" /></nativeOnly>";
+
+        var (roundTripAttrs, roundTripChildren) = XmlNativeBagSerializer.Deserialize(bagValue);
+
+        roundTripAttrs.Should().BeEmpty();
+        roundTripChildren.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ApplyToElement_NativeAttributes_DoesNotOverwriteModeledAttributes()
     {
         var bagValue = XmlNativeBagSerializer.Serialize(
