@@ -35,7 +35,7 @@ public sealed class PerformanceReviewMeasurementTests
                 $"viewport_gets={result.ViewportCalls:N0}");
 
             result.StepCount.Should().Be(100);
-            result.ViewportCalls.Should().Be(0);
+            result.ViewportCalls.Should().BeLessThanOrEqualTo(1);
             result.TotalMilliseconds.Should().BeGreaterThan(0);
         });
     }

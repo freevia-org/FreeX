@@ -37,7 +37,7 @@ public sealed class ReleaseProgressMetadataTests
         var workflow = File.ReadAllText(WorkspaceFileLocator.Find(".github", "workflows", "tester-release.yml"));
 
         workflow.Should().Contain("if ($overallCompletion -ge 99) { $minor = 9 }");
-        workflow.Should().Contain("elseif ($overallCompletion -ge 96) { $minor = 8 }");
+        workflow.Should().Contain("elseif ($overallCompletion -ge 95) { $minor = 8 }");
         workflow.Should().Contain("elseif ($overallCompletion -ge 93) { $minor = 7 }");
         workflow.Should().Contain("elseif ($overallCompletion -ge 90) { $minor = 6 }");
         workflow.Should().Contain("else { $minor = 5 }");
@@ -57,7 +57,7 @@ public sealed class ReleaseProgressMetadataTests
     {
         if (overallCompletion >= 99)
             return 9;
-        if (overallCompletion >= 96)
+        if (overallCompletion >= 95)
             return 8;
         if (overallCompletion >= 93)
             return 7;

@@ -16,16 +16,27 @@ public sealed partial class XlsxFileAdapter
                 : null;
             if (stream.TryGetBuffer(out var buffer))
             {
-                var copiedBytes = buffer.AsSpan(buffer.Offset, buffer.Count).ToArray();
+                var copiedBytes = buffer.Array is not null &&
+                    stream.Length <= int.MaxValue &&
+                    buffer.Offset >= 0 &&
+                    buffer.Offset + (int)stream.Length <= buffer.Array.Length
+                    ? buffer.Array.AsSpan(buffer.Offset, (int)stream.Length).ToArray()
+                    : ReadBytes(stream);
                 return new XlsxSourcePackage(copiedBytes, 0, copiedBytes.Length, fingerprint);
             }
 
+            var bytes = ReadBytes(stream);
+            return new XlsxSourcePackage(bytes, 0, bytes.Length, fingerprint);
+        }
+
+        private static byte[] ReadBytes(MemoryStream stream)
+        {
             var bytes = new byte[stream.Length];
             var previousPosition = stream.Position;
             stream.Position = 0;
             stream.ReadExactly(bytes);
             stream.Position = previousPosition;
-            return new XlsxSourcePackage(bytes, 0, bytes.Length, fingerprint);
+            return bytes;
         }
 
         public MemoryStream OpenRead() => new(Buffer, Offset, Count, writable: false);

@@ -127,7 +127,7 @@ jobs:
             }
 
             if ($overallCompletion -ge 99) { $minor = 9 }
-            elseif ($overallCompletion -ge 96) { $minor = 8 }
+            elseif ($overallCompletion -ge 95) { $minor = 8 }
             elseif ($overallCompletion -ge 93) { $minor = 7 }
             elseif ($overallCompletion -ge 90) { $minor = 6 }
             else { $minor = 5 }

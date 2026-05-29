@@ -76,7 +76,7 @@ public static partial class BuiltInFunctions
                 .AddMonths(month - 1)
                 .AddDays(day - 1);
             double serial = DateToSerial(dt);
-            if (serial < 0) return ErrorValue.Num;
+            if (serial < 1) return ErrorValue.Num;
             if (year == 1900 && month >= 3 && dt < new DateTime(1900, 3, 1))
                 return new NumberValue(serial + 1);
             if (year == 1900 && month == 3 && day == 0)

@@ -303,8 +303,19 @@ internal sealed class FreexcelUiRun : IDisposable
 
     private void BringToForeground()
     {
-        Native.SetForegroundWindow(_window).Should().BeTrue("UIE2E input must target the Freexcel window");
-        Thread.Sleep(80);
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            Native.ShowWindow(_window, Native.SW_RESTORE);
+            Native.SetForegroundWindow(_window);
+            var rect = GetWindowRect();
+            Native.SetCursorPos(rect.Left + 16, rect.Top + 16);
+            Native.mouse_event(Native.LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+            Native.mouse_event(Native.LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(80);
+            if (Native.ForegroundWindowBelongsToProcess(_process.Id))
+                return;
+        }
+
         Native.ForegroundWindowBelongsToProcess(_process.Id)
             .Should()
             .BeTrue("global keyboard and mouse input must not leak into another process");

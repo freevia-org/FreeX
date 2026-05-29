@@ -377,7 +377,7 @@ public sealed partial class DocumentationIndexTests
     private static string GetExpectedTesterReleaseStream(int overallCompletion)
     {
         var minor = overallCompletion >= 99 ? 9
-            : overallCompletion >= 96 ? 8
+            : overallCompletion >= 95 ? 8
             : overallCompletion >= 93 ? 7
             : overallCompletion >= 90 ? 6
             : 5;
