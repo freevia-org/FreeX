@@ -302,6 +302,24 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void ApplyToElement_MatchingChildXmlWithNestedCommentsAndProcessingInstructions_DoesNotReportChange()
+    {
+        var childXml = "<ext><?freexcel keep=\"true\"?><!--keep me--><inner /></ext>";
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [childXml]);
+        var target = new XElement(
+            "root",
+            XElement.Parse(childXml, LoadOptions.PreserveWhitespace));
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        changed.Should().BeFalse();
+        target.ToString(SaveOptions.DisableFormatting)
+            .Should().Be("<root><ext><?freexcel keep=\"true\"?><!--keep me--><inner /></ext></root>");
+    }
+
+    [Fact]
     public void ApplyToElement_PreservedChildXml_RemovesStaleNonElementChildNodes()
     {
         var bagValue = XmlNativeBagSerializer.Serialize(
