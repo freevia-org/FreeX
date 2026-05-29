@@ -5,64 +5,74 @@ internal static class RibbonAdaptivePriorityPlanner
     public static IReadOnlyList<RibbonAdaptiveGroupState> ApplyRuntimePriorityStates(
         double availableWidth,
         IReadOnlyList<string> groupNames,
-        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates) =>
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,
+        string? selectedTabHeader = null) =>
         ApplyRuntimeOverrides(
             plannedStates,
-            GetRuntimeStateOverrides(availableWidth, groupNames));
+            GetRuntimeStateOverrides(availableWidth, groupNames, selectedTabHeader));
 
     public static IReadOnlyList<RibbonAdaptiveGroupState> ApplyRuntimeVisibilityStates(
         double availableWidth,
         IReadOnlyList<string> groupNames,
-        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates) =>
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,
+        string? selectedTabHeader = null) =>
         ApplyRuntimeOverrides(
             plannedStates,
-            GetRuntimeVisibilityOverrides(availableWidth, groupNames));
+            GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader));
 
     public static IReadOnlyList<RibbonAdaptiveRuntimeStateOverride> GetRuntimeStateOverrides(
         double availableWidth,
-        IReadOnlyList<string> groupNames) =>
-        RibbonAdaptiveTabProfiles.GetRuntimeStateOverrides(availableWidth, groupNames);
+        IReadOnlyList<string> groupNames,
+        string? selectedTabHeader = null) =>
+        RibbonAdaptiveTabProfiles.GetRuntimeStateOverrides(availableWidth, groupNames, selectedTabHeader);
 
     public static IReadOnlyList<RibbonAdaptiveRuntimeStateOverride> GetRuntimeVisibilityOverrides(
         double availableWidth,
-        IReadOnlyList<string> groupNames) =>
-        RibbonAdaptiveTabProfiles.GetRuntimeVisibilityOverrides(availableWidth, groupNames);
+        IReadOnlyList<string> groupNames,
+        string? selectedTabHeader = null) =>
+        RibbonAdaptiveTabProfiles.GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader);
 
     public static IReadOnlySet<int> GetFallbackProtectedGroupIndexes(
         IReadOnlyList<string> groupNames,
-        double availableWidth) =>
-        RibbonAdaptiveTabProfiles.GetFallbackProtectedGroupIndexes(groupNames, availableWidth);
+        double availableWidth,
+        string? selectedTabHeader = null) =>
+        RibbonAdaptiveTabProfiles.GetFallbackProtectedGroupIndexes(groupNames, availableWidth, selectedTabHeader);
 
     public static IReadOnlySet<int> GetRuntimeVisibilityProtectedGroupIndexes(
         IReadOnlyList<string> groupNames,
-        double availableWidth) =>
-        GetRuntimeVisibilityOverrides(availableWidth, groupNames)
+        double availableWidth,
+        string? selectedTabHeader = null) =>
+        GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader)
             .Where(decision => decision.State != RibbonAdaptiveGroupState.Collapsed)
             .Select(decision => decision.Index)
             .ToHashSet();
 
     public static IReadOnlyList<int> GetExpandableGroupIndexes(
         IReadOnlyList<string> groupNames,
-        double availableWidth)
+        double availableWidth,
+        string? selectedTabHeader = null)
     {
-        var runtimeOverrideIndexes = GetRuntimeStateOverrides(availableWidth, groupNames)
-            .Concat(GetRuntimeVisibilityOverrides(availableWidth, groupNames))
+        var runtimeOverrideIndexes = GetRuntimeStateOverrides(availableWidth, groupNames, selectedTabHeader)
+            .Concat(GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader))
             .Select(decision => decision.Index)
             .ToHashSet();
 
         return RibbonAdaptiveTabProfiles
-            .GetExpandableGroupIndexes(groupNames, availableWidth)
+            .GetExpandableGroupIndexes(groupNames, availableWidth, selectedTabHeader)
             .Where(index => !runtimeOverrideIndexes.Contains(index))
             .ToList();
     }
 
-    public static bool RequiresMeasuredCorrection(IReadOnlyList<string> groupNames) =>
-        RibbonAdaptiveTabProfiles.RequiresMeasuredCorrection(groupNames);
+    public static bool RequiresMeasuredCorrection(
+        IReadOnlyList<string> groupNames,
+        string? selectedTabHeader = null) =>
+        RibbonAdaptiveTabProfiles.RequiresMeasuredCorrection(groupNames, selectedTabHeader);
 
     public static IReadOnlyList<string> GetPriorityProtectedGroupNames(
         IReadOnlyList<string> groupNames,
-        double availableWidth) =>
-        RibbonAdaptiveTabProfiles.GetPriorityProtectedGroupNames(groupNames, availableWidth);
+        double availableWidth,
+        string? selectedTabHeader = null) =>
+        RibbonAdaptiveTabProfiles.GetPriorityProtectedGroupNames(groupNames, availableWidth, selectedTabHeader);
 
     private static IReadOnlyList<RibbonAdaptiveGroupState> ApplyRuntimeOverrides(
         IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,

@@ -618,8 +618,9 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("_ribbonAdaptiveGroupCache");
         source.Should().Contain("GetCachedRibbonCompactGroupSnapshots(groups, controlCacheKey)");
         source.Should().Contain("MeasureRibbonAdaptiveGroup(snapshot, collapsedButtons[index])");
-        source.Should().Contain("UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);");
-        source.Should().Contain("RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth)");
+        source.Should().Contain("var selectedTabHeader = GetRibbonAdaptiveTabHeader(activePanel);");
+        source.Should().Contain("UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth, selectedTabHeader);");
+        source.Should().Contain("RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth, selectedTabHeader)");
         source.Should().Contain("var layoutStates = layout.States.ToArray();");
         source.Should().Contain("GetCachedRibbonAdaptiveGroups(activePanel)");
         source.Should().Contain("GetCachedRibbonCollapsedGroupButtons(activePanel, groups, controlCacheKey)");
@@ -630,8 +631,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("_ribbonAdaptiveActivePanelCacheByTab[tabItem] = activePanel;");
         source.Should().Contain("_ribbonAdaptiveScrollViewerCache");
         source.Should().Contain("ribbonScrollViewer ??= FindVisualAncestor<ScrollViewer>(activePanel)");
-        source.Should().Contain("RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth)");
-        source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth)");
+        source.Should().Contain("RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth, selectedTabHeader)");
+        source.Should().Contain("ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader)");
         source.Should().Contain("private IReadOnlyList<RibbonCompactGroupSnapshot> GetCachedRibbonCompactGroupSnapshots");
         source.Should().Contain("private static void ApplyRibbonGroupCompactSnapshot(RibbonCompactGroupSnapshot snapshot");
         source.Should().Contain("private static void ApplyRibbonButtonCompactSnapshot(RibbonCompactButtonSnapshot snapshot");
