@@ -94,8 +94,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(packageStream);
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
-        closedXmlPackageStream.Position = 0;
-        var sheetXmlLayout = LoadSheetXmlLayout(closedXmlPackageStream);
+        packageStream.Position = 0;
+        var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
         var workbook = new Workbook("Untitled");
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = uses1904DateSystem;
