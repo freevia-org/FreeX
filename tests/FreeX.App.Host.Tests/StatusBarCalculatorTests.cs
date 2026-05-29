@@ -106,8 +106,8 @@ public sealed class StatusBarCalculatorTests
             "sheet.CellCount < totalCells",
             "status calculations should choose the cheaper scan direction for both sparse whole-column and dense bounded selections");
         source.Should().Contain(
-            "sheet.GetOccupiedCells()",
-            "sparse status-bar selections should enumerate occupied coordinates without constructing address objects");
+            "sheet.GetOccupiedCellMap()",
+            "sparse status-bar selections should enumerate occupied cell entries without constructing address objects or repeating dictionary lookups");
         source.Should().Contain(
             "sheet.GetValue(row, col)",
             "small status-bar selections should clip to the used range and scan by primitive coordinates");

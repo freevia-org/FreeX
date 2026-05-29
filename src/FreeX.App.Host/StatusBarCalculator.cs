@@ -24,10 +24,11 @@ public static class StatusBarCalculator
 
         if (sheet.CellCount < totalCells)
         {
-            foreach (var (row, col) in sheet.GetOccupiedCells())
+            foreach (var entry in sheet.GetOccupiedCellMap())
             {
-                if (Contains(scanRange, row, col) && sheet.GetCell(row, col) is { } cell)
-                    Accumulate(cell.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
+                var (row, col) = entry.Key;
+                if (Contains(scanRange, row, col))
+                    Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
             }
         }
         else
