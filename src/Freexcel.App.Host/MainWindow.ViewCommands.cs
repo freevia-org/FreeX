@@ -279,7 +279,13 @@ public partial class MainWindow
             if (dialog.ShowDialog() != true)
                 return;
 
-            ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(dialog.Result.ZoomPercent);
+            var zoomPercent = ZoomSelectionPlanner.CalculateDialogZoomPercent(
+                dialog.Result,
+                SheetGrid.ActualWidth,
+                SheetGrid.ActualHeight,
+                SheetGrid.SelectedRange?.ColCount ?? 1,
+                SheetGrid.SelectedRange?.RowCount ?? 1);
+            ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
         }
         finally
         {
