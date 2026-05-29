@@ -780,14 +780,17 @@ public partial class MainWindow
         if (RibbonTabs.SelectedItem is not TabItem tabItem)
             return null;
 
+        if (TryGetCachedActiveRibbonPanel(tabItem, out var cachedPanel))
+            return cachedPanel;
+
         if (string.Equals(tabItem.Header?.ToString(), "Home", StringComparison.Ordinal) &&
             HomeRibbonPanel is not null)
         {
-            return HomeRibbonPanel;
+            return CacheActiveRibbonPanel(tabItem, HomeRibbonPanel);
         }
 
         var contentRoot = GetRibbonTabContentRoot(tabItem);
-        return EnumerateVisualDescendants(contentRoot)
+        var activePanel = EnumerateVisualDescendants(contentRoot)
             .Concat(EnumerateLogicalDescendants(contentRoot))
             .OfType<StackPanel>()
             .Distinct()
@@ -796,6 +799,38 @@ public partial class MainWindow
             .OrderByDescending(panel => panel.Children.OfType<DependencyObject>().Count(RibbonMetadata.IsRibbonGroup))
             .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
                                      panel.Children.OfType<DependencyObject>().Any(RibbonMetadata.IsRibbonGroup));
+        return CacheActiveRibbonPanel(tabItem, activePanel);
+    }
+
+    private bool TryGetCachedActiveRibbonPanel(TabItem tabItem, out StackPanel? activePanel)
+    {
+        if (ReferenceEquals(_ribbonAdaptiveActivePanelCacheTab, tabItem) &&
+            _ribbonAdaptiveActivePanelCache is { IsVisible: true } cachedPanel)
+        {
+            activePanel = cachedPanel;
+            return true;
+        }
+
+        activePanel = null;
+        return false;
+    }
+
+    private StackPanel? CacheActiveRibbonPanel(TabItem tabItem, StackPanel? activePanel)
+    {
+        if (activePanel is null)
+        {
+            if (ReferenceEquals(_ribbonAdaptiveActivePanelCacheTab, tabItem))
+            {
+                _ribbonAdaptiveActivePanelCacheTab = null;
+                _ribbonAdaptiveActivePanelCache = null;
+            }
+
+            return null;
+        }
+
+        _ribbonAdaptiveActivePanelCacheTab = tabItem;
+        _ribbonAdaptiveActivePanelCache = activePanel;
+        return activePanel;
     }
 
     private static DependencyObject GetRibbonTabContentRoot(TabItem tabItem) =>

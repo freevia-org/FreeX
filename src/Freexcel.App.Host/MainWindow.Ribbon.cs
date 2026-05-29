@@ -128,7 +128,7 @@ public partial class MainWindow
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
         _ribbonResizeNormalizationRequired = true;
-        NormalizeRibbonSurfaceAfterLayoutChange();
+        NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true, scheduleFallback: true);
     }
 
     private void NormalizeRibbonSurfaceAfterResize()
@@ -140,10 +140,13 @@ public partial class MainWindow
     }
 
     private void NormalizeRibbonSurfaceAfterLayoutChange()
-        => NormalizeRibbonSurfaceAfterLayoutChange(scheduleFallback: true);
+        => NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: false, scheduleFallback: true);
 
-    private void NormalizeRibbonSurfaceAfterLayoutChange(bool scheduleFallback)
+    private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab, bool scheduleFallback)
     {
+        if (prepareSelectedTab)
+            PrepareSelectedRibbonTabForImmediateCompaction();
+
         NormalizeRibbonSurface(forceCompact: true);
         if (!scheduleFallback)
             return;
@@ -151,6 +154,9 @@ public partial class MainWindow
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
+                if (prepareSelectedTab)
+                    PrepareSelectedRibbonTabForImmediateCompaction();
+
                 NormalizeRibbonSurface(forceCompact: true);
             }),
             DispatcherPriority.Send);
