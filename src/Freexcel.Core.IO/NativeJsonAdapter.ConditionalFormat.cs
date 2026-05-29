@@ -54,9 +54,9 @@ public sealed partial class NativeJsonAdapter
             MidThresholdGreaterThanOrEqual = formatDto.MidThresholdGreaterThanOrEqual,
             MaxThresholdGreaterThanOrEqual = formatDto.MaxThresholdGreaterThanOrEqual,
             DataBarColor = formatDto.DataBarColor,
-            DataBarMinThresholdType = formatDto.DataBarMinThresholdType,
+            DataBarMinThresholdType = ValidCfThresholdTypeOrDefault(formatDto.DataBarMinThresholdType, CfThresholdType.Min),
             DataBarMinThresholdValue = formatDto.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = formatDto.DataBarMaxThresholdType,
+            DataBarMaxThresholdType = ValidCfThresholdTypeOrDefault(formatDto.DataBarMaxThresholdType, CfThresholdType.Max),
             DataBarMaxThresholdValue = formatDto.DataBarMaxThresholdValue,
             DataBarShowValue = formatDto.DataBarShowValue,
             DataBarMinLength = formatDto.DataBarMinLength,
@@ -84,7 +84,8 @@ public sealed partial class NativeJsonAdapter
             NativeContainerAttributes = formatDto.NativeContainerAttributes,
             NativeContainerChildXmls = formatDto.NativeContainerChildXmls
         };
-        format.IconSetThresholds.AddRange(formatDto.IconSetThresholds ?? []);
+        format.IconSetThresholds.AddRange((formatDto.IconSetThresholds ?? [])
+            .Where(threshold => Enum.IsDefined(threshold.Type)));
         format.IconOverrides.AddRange(formatDto.IconOverrides ?? []);
         return format;
     }
@@ -145,4 +146,7 @@ public sealed partial class NativeJsonAdapter
 
     private static bool IsSupportedConditionalFormat(ConditionalFormatDto format) =>
         Enum.IsDefined(format.RuleType) && Enum.IsDefined(format.Operator);
+
+    private static CfThresholdType ValidCfThresholdTypeOrDefault(CfThresholdType value, CfThresholdType fallback) =>
+        Enum.IsDefined(value) ? value : fallback;
 }
