@@ -15,10 +15,14 @@
                     Content="_OK"
                     Width="78"
                     Margin="0,0,8,0"
+                    AutomationProperties.AutomationId="PivotValueFieldSettingsOkButton"
+                    AutomationProperties.HelpText="Apply the value field settings."
                     IsDefault="True"
                     Click="OkButton_Click"/>
             <Button Content="_Cancel"
                     Width="78"
+                    AutomationProperties.AutomationId="PivotValueFieldSettingsCancelButton"
+                    AutomationProperties.HelpText="Close the Value Field Settings dialog without applying changes."
                     IsCancel="True"/>
         </StackPanel>
 
@@ -41,7 +45,9 @@
                        Margin="0,0,8,0"/>
                 <TextBox x:Name="CustomNameBox"
                          Grid.Column="1"
-                         AutomationProperties.Name="Custom name"/>
+                         AutomationProperties.Name="Custom name"
+                         AutomationProperties.AutomationId="PivotValueCustomNameBox"
+                         AutomationProperties.HelpText="Enter the display name for the value field."/>
             </Grid>
 
             <TabControl x:Name="ValueFieldTabs" Grid.Row="1">
@@ -53,7 +59,9 @@
                                Margin="0,0,0,6"/>
                         <ComboBox x:Name="SummaryFunctionBox"
                                   Height="24"
-                                  AutomationProperties.Name="Summarize value field by"/>
+                                  AutomationProperties.Name="Summarize value field by"
+                                  AutomationProperties.AutomationId="PivotValueSummaryFunctionBox"
+                                  AutomationProperties.HelpText="Choose the summary calculation for the value field."/>
                     </StackPanel>
                 </TabItem>
                 <TabItem x:Name="ShowValuesAsTab" Header="Show Values _As">
@@ -65,6 +73,8 @@
                         <ComboBox x:Name="ShowValuesAsBox"
                                   Height="24"
                                   AutomationProperties.Name="Show values as"
+                                  AutomationProperties.AutomationId="PivotValueShowValuesAsBox"
+                                  AutomationProperties.HelpText="Choose how the value field is displayed in the PivotTable."
                                   SelectionChanged="ShowValuesAsBox_SelectionChanged"/>
                         <StackPanel x:Name="BaseFieldPanel"
                                     Visibility="Collapsed"
@@ -75,7 +85,9 @@
                                    Margin="0,10,0,6"/>
                             <ComboBox x:Name="BaseFieldBox"
                                       Height="24"
-                                      AutomationProperties.Name="Base field"/>
+                                      AutomationProperties.Name="Base field"
+                                      AutomationProperties.AutomationId="PivotValueBaseFieldBox"
+                                      AutomationProperties.HelpText="Choose the base field for the selected show-values-as calculation."/>
                         </StackPanel>
                         <StackPanel x:Name="BaseItemPanel"
                                     Visibility="Collapsed"
@@ -86,7 +98,9 @@
                                    Margin="0,10,0,6"/>
                             <TextBox x:Name="BaseItemBox"
                                      Height="24"
-                                     AutomationProperties.Name="Base item"/>
+                                     AutomationProperties.Name="Base item"
+                                     AutomationProperties.AutomationId="PivotValueBaseItemBox"
+                                     AutomationProperties.HelpText="Enter the base item for the selected show-values-as calculation."/>
                         </StackPanel>
                     </StackPanel>
                 </TabItem>
@@ -99,21 +113,29 @@
                         <ComboBox x:Name="NumberFormatPresetBox"
                                   Height="24"
                                   AutomationProperties.Name="Number format preset"
+                                  AutomationProperties.AutomationId="PivotValueNumberFormatPresetBox"
+                                  AutomationProperties.HelpText="Choose the number format applied to the value field."
                                   SelectionChanged="NumberFormatPresetBox_SelectionChanged"/>
                         <Button x:Name="NumberFormatButton"
                                 Content="_Number Format..."
                                 Width="128"
                                 HorizontalAlignment="Left"
                                 Margin="0,12,0,0"
+                                AutomationProperties.AutomationId="PivotValueNumberFormatButton"
+                                AutomationProperties.HelpText="Open Format Cells to choose a detailed number format."
                                 Click="NumberFormatButton_Click"/>
                         <TextBox x:Name="NumberFormatBox"
                                  Height="24"
                                  Visibility="Collapsed"
-                                 AutomationProperties.Name="Number format ID"/>
+                                 AutomationProperties.Name="Number format ID"
+                                 AutomationProperties.AutomationId="PivotValueNumberFormatIdBox"
+                                 AutomationProperties.HelpText="Stores the built-in number format ID for the value field."/>
                         <TextBox x:Name="NumberFormatCodeBox"
                                  Height="24"
                                  Visibility="Collapsed"
-                                 AutomationProperties.Name="Custom format code"/>
+                                 AutomationProperties.Name="Custom format code"
+                                 AutomationProperties.AutomationId="PivotValueCustomFormatCodeBox"
+                                 AutomationProperties.HelpText="Stores the custom number format code for the value field."/>
                     </StackPanel>
                 </TabItem>
             </TabControl>
