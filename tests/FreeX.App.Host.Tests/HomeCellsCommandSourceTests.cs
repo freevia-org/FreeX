@@ -41,6 +41,7 @@ public sealed class HomeCellsCommandSourceTests
     [InlineData("Unhide Columns", "N", "FormatUnhideColMenuItem_Click")]
     [InlineData("Protect Sheet...", "P", "FormatProtectSheetMenuItem_Click")]
     [InlineData("Lock Cell", "L", "FormatLockCellMenuItem_Click")]
+    [InlineData("Format Cells...", "F", "FormatCellsMenuItem_Click")]
     public void CellsMenuItems_ExposeExpectedKeyTipsAndHandlers(
         string header,
         string keyTip,
@@ -77,6 +78,7 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
         source.Should().Contain("private void FormatProtectSheetMenuItem_Click(object sender, RoutedEventArgs e) { ProtectSheetBtn_Click(sender, e); }");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(Locked: !style.Locked))");
+        source.Should().Contain("private void FormatCellsMenuItem_Click(object sender, RoutedEventArgs e) => OpenFormatCellsDialog();");
         source.Should().Contain("private void OpenFormatCellsDialog(FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)");
         source.Should().Contain("FormatCellsMergePlanner.IsSelectionMerged(sheet, range)");
         source.Should().Contain("FormatCellsMergePlanner.CreateMergeCommands(sheet, sheetId, sheetRange, shouldMerge)");

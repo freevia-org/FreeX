@@ -1054,6 +1054,8 @@
                                             <Separator/>
                                             <MenuItem Header="Protect Sheet..."       local:RibbonTooltip.KeyTip="P" Click="FormatProtectSheetMenuItem_Click"/>
                                             <MenuItem Header="Lock Cell"              local:RibbonTooltip.KeyTip="L" Click="FormatLockCellMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Format Cells..."        local:RibbonTooltip.KeyTip="F" Click="FormatCellsMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
