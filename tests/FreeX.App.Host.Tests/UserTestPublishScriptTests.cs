@@ -31,9 +31,12 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("\"-r\", $RuntimeIdentifier");
         script.Should().Contain("$LASTEXITCODE");
         script.Should().Contain("$artifactExePath = Join-Path $artifactRoot \"$artifactName.exe\"");
+        script.Should().Contain("$artifactExeHashPath = \"$artifactExePath.sha256\"");
+        script.Should().Contain("Remove-Item -LiteralPath $artifactExeHashPath -Force");
         script.Should().Contain("Move-Item -LiteralPath $launchExePath -Destination $artifactExePath");
         script.Should().Contain("Remove-Item -LiteralPath $publishDir -Recurse -Force");
         script.Should().Contain("Write-Host \"Created $artifactExePath\"");
+        script.Should().Contain("Write-Host \"Created $artifactExeHashPath\"");
         script.Should().Contain("Local diagnostics:");
         script.Should().Contain("%LOCALAPPDATA%\\FreeX\\Diagnostics");
         script.Should().Contain("FREEX_DIAGNOSTICS=0");
@@ -51,6 +54,8 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("set \"APP_EXE=%APP_DIR%$launchExeName\"");
         script.Should().Contain("Compress-Archive");
         script.Should().Contain("Test-Path -LiteralPath $zipPath");
+        script.Should().Contain("$zipHashPath = \"$zipPath.sha256\"");
+        script.Should().Contain("Remove-Item -LiteralPath $zipHashPath -Force");
         script.Should().Contain("Get-FileHash");
     }
 
@@ -68,6 +73,8 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("$msixParts[$i - 1] += $carry");
         script.Should().Contain("throw \"MSIX version part '$($msixParts[0])' is outside the 0-65535 range.\"");
         script.Should().Contain("$msixVersion = ConvertTo-MsixPackageVersion -DisplayVersion $Version");
+        script.Should().Contain("$artifactMsixHashPath = \"$artifactMsixPath.sha256\"");
+        script.Should().Contain("Remove-Item -LiteralPath $artifactMsixHashPath -Force");
     }
 
     [Fact]
