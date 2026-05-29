@@ -542,6 +542,8 @@ public sealed class MainWindowAdaptiveRibbonTests
     {
         var ribbonSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
         var adaptiveSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        var xaml = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var iconResources = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "IconResources.xaml"));
         var resources = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "MainWindowResources.xaml"));
         var footprintUpdater = adaptiveSource.Substring(
             adaptiveSource.IndexOf("private static void SetCollapsedRibbonButtonFootprint", StringComparison.Ordinal),
@@ -562,6 +564,10 @@ public sealed class MainWindowAdaptiveRibbonTests
         footprintUpdater.Should().NotContain("EnumerateVisualDescendants");
         footprintUpdater.Should().NotContain("EnumerateLogicalDescendants");
         resources.Should().Contain("Property=\"local:RibbonMetadata.Role\" Value=\"RibbonGroup\"");
+        xaml.Should().NotContain("Tag=\"RibbonLabel\"");
+        xaml.Should().NotContain("Tag=\"RibbonCompact:");
+        iconResources.Should().NotContain("Property=\"Tag\" Value=\"RibbonLabel\"");
+        iconResources.Should().Contain("Property=\"local:RibbonMetadata.Role\" Value=\"CommandLabel\"");
     }
 
     [Fact]

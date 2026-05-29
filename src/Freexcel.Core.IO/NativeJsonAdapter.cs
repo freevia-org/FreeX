@@ -60,10 +60,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             if (IsSupportedFormulaErrorCode(errorCode))
                 workbook.DisabledFormulaErrorCodes.Add(errorCode);
 
+        var sheetIndex = 1;
         foreach (var sDto in dto.Sheets ?? [])
         {
-            if (string.IsNullOrEmpty(sDto?.Name)) continue;
-            var sheet = workbook.AddSheet(sDto.Name);
+            if (sDto is null) continue;
+            var sheet = workbook.AddSheet(UniqueSheetName(workbook, sDto.Name, sheetIndex++));
             sheet.IsHidden = sDto.IsHidden;
             sheet.TabColor = sDto.TabColor is { } tabColor ? ParseColor(tabColor) : null;
             sheet.IsProtected = sDto.IsProtected;
@@ -426,6 +427,35 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         }
 
         return workbook;
+    }
+
+    private static string UniqueSheetName(Workbook workbook, string? rawName, int index)
+    {
+        var baseName = string.IsNullOrWhiteSpace(rawName) ? $"Sheet{index}" : rawName;
+        baseName = SanitizeSheetName(baseName);
+        var candidate = baseName;
+        var suffix = 1;
+        while (workbook.ValidateSheetName(candidate) is not null)
+        {
+            var marker = $" ({suffix++})";
+            candidate = string.Concat(baseName.AsSpan(0, Math.Min(baseName.Length, 31 - marker.Length)), marker);
+        }
+
+        return candidate;
+    }
+
+    private static string SanitizeSheetName(string value)
+    {
+        Span<char> invalid = [':', '\\', '/', '?', '*', '[', ']'];
+        var builder = new System.Text.StringBuilder(value.Length);
+        foreach (var ch in value)
+            builder.Append(invalid.Contains(ch) ? '_' : ch);
+
+        var sanitized = builder.ToString().Trim('\'');
+        if (string.IsNullOrWhiteSpace(sanitized))
+            return "Sheet";
+
+        return sanitized.Length <= 31 ? sanitized : sanitized[..31];
     }
 
     private static string FormatColor(CellColor color) => NativeJsonColorMapper.FormatColor(color);

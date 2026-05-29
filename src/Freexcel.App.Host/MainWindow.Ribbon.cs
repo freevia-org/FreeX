@@ -29,7 +29,7 @@ public partial class MainWindow
                 button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
             var fullWidth = button.Width is > 0 ? button.Width : Math.Max(button.ActualWidth, 64);
             var compactWidth = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 24;
-            SetRibbonCompactWidthTag(button, fullWidth, compactWidth);
+            SetRibbonCompactWidths(button, fullWidth, compactWidth);
 
             button.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
             button.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
@@ -460,7 +460,7 @@ public partial class MainWindow
 
         element.Width = 26;
         element.Height = 26;
-        SetRibbonCompactWidthTag(button, 26, 24);
+        SetRibbonCompactWidths(button, 26, 24);
         element.Margin = new Thickness(1, 0, 1, 0);
         if (button is Control control)
             control.Padding = new Thickness(1);
@@ -489,7 +489,7 @@ public partial class MainWindow
 
         element.Width = GetSmallRibbonCommandWidth(commandName);
         element.Height = 24;
-        SetRibbonCompactWidthTag(button, element.Width, 24);
+        SetRibbonCompactWidths(button, element.Width, 24);
         if (button is Control control)
             control.Padding = new Thickness(4, 2, 4, 2);
         button.Content = CreateRibbonCommandContent(commandName, commandName, RibbonCommandLayoutKind.Small);
@@ -545,7 +545,7 @@ public partial class MainWindow
             if (!hadUnreplacedIcon && hadRibbonCommandLabel)
                 commandButton.Width = Math.Max(commandButton.Width, GetIconLabelRowRibbonCommandWidth(label));
         }
-        SetRibbonCompactWidthTag(
+        SetRibbonCompactWidths(
             commandButton,
             commandButton.Width is > 0 ? commandButton.Width : Math.Max(commandButton.ActualWidth, 64),
             layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 24);
@@ -616,7 +616,7 @@ public partial class MainWindow
             var tallLabel = FindRibbonContentLabel(button.Content) ?? GetRibbonButtonTitleOrLabel(button);
             element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, GetLargeRibbonCommandWidth(tallLabel));
             element.Height = Math.Max(element.Height is > 0 ? element.Height : 0, 76);
-            SetRibbonCompactWidthTag(button, element.Width, 38);
+            SetRibbonCompactWidths(button, element.Width, 38);
             return;
         }
 
@@ -635,10 +635,10 @@ public partial class MainWindow
 
         element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, minWidth);
         element.Height = Math.Max(element.Height is > 0 ? element.Height : 0, 24);
-        SetRibbonCompactWidthTag(button, element.Width, 24);
+        SetRibbonCompactWidths(button, element.Width, 24);
     }
 
-    private static void SetRibbonCompactWidthTag(ButtonBase button, double fullWidth, double compactWidth)
+    private static void SetRibbonCompactWidths(ButtonBase button, double fullWidth, double compactWidth)
     {
         RibbonMetadata.SetCompactWidths(button, fullWidth, compactWidth);
     }
@@ -1134,7 +1134,7 @@ public partial class MainWindow
         var label = FindRibbonContentLabel(button.Content) ?? commandName;
         button.Height = 24;
         button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
-        SetRibbonCompactWidthTag(button, button.Width, 24);
+        SetRibbonCompactWidths(button, button.Width, 24);
         button.Padding = new Thickness(4, 2, 4, 2);
         button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
         button.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
