@@ -51,6 +51,9 @@ public static class PageMarginGuideLayoutPlanner
 
         foreach (var metric in metrics)
         {
+            if (metric.Row > bottomRow)
+                break;
+
             if (foundTop is null && metric.Row == topRow)
                 foundTop = metric;
 
@@ -82,6 +85,9 @@ public static class PageMarginGuideLayoutPlanner
 
         foreach (var metric in metrics)
         {
+            if (metric.Col > rightColumn)
+                break;
+
             if (foundLeft is null && metric.Col == leftColumn)
                 foundLeft = metric;
 
