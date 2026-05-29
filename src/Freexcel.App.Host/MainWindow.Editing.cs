@@ -859,8 +859,9 @@ public partial class MainWindow
             if (item is TabItem { Header: string tabHeader } &&
                 string.Equals(tabHeader, header, StringComparison.OrdinalIgnoreCase))
             {
+                var selectionChanged = !ReferenceEquals(RibbonTabs.SelectedItem, item);
                 RibbonTabs.SelectedItem = item;
-                RibbonTabs.UpdateLayout();
+                UpdateRibbonLayoutIfNeeded(RibbonTabs, force: selectionChanged);
                 NormalizeRibbonSurfaceAfterTabSelection();
 
                 return true;

@@ -60,12 +60,17 @@ public partial class MainWindow
 
         UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);
         var layout = RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth);
-        var plannedStates = layout.States.ToArray();
+        var layoutStates = layout.States.ToArray();
+        var plannedStates = layoutStates.ToArray();
 
         var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStates);
         var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);
+        var cachedCorrectionNeedsExpansion = false;
         if (hasCachedCorrection && correctedStates is not null)
+        {
             plannedStates = correctedStates.ToArray();
+            cachedCorrectionNeedsExpansion = RibbonStatesAreMoreCollapsedThan(plannedStates, layoutStates);
+        }
 
         var appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
         if (!force &&
@@ -81,9 +86,9 @@ public partial class MainWindow
             plannedStates,
             _ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates);
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
-        var requiresMeasuredCorrection = layout.RequiresMeasuredCorrection
-            ? !hasCachedCorrection || RibbonRowOverflowsMeasured(activePanel, availableWidth)
-            : !hasCachedCorrection && RibbonRowOverflowsMeasured(activePanel, availableWidth);
+        var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||
+            layout.RequiresMeasuredCorrection &&
+            (!hasCachedCorrection || RibbonRowOverflowsMeasured(activePanel, availableWidth));
         if (requiresMeasuredCorrection)
         {
             ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
@@ -101,6 +106,20 @@ public partial class MainWindow
 
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
         _ribbonCompact = compacted;
+    }
+
+    private static bool RibbonStatesAreMoreCollapsedThan(
+        IReadOnlyList<RibbonAdaptiveGroupState> states,
+        IReadOnlyList<RibbonAdaptiveGroupState> baselineStates)
+    {
+        var count = Math.Min(states.Count, baselineStates.Count);
+        for (var i = 0; i < count; i++)
+        {
+            if ((int)states[i] > (int)baselineStates[i])
+                return true;
+        }
+
+        return false;
     }
 
     private static IReadOnlyList<FrameworkElement> GetRibbonAdaptiveGroups(StackPanel activePanel) =>

@@ -383,6 +383,10 @@ public sealed class MainWindowAdaptiveRibbonTests
             source.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal),
             source.IndexOf("private void CompactRibbonSurfaceAfterResize", StringComparison.Ordinal) -
             source.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal));
+        var layoutReadiness = source.Substring(
+            source.IndexOf("private static void UpdateRibbonLayoutIfNeeded", StringComparison.Ordinal),
+            source.IndexOf("private void ConfigureInsertRibbonSurface", StringComparison.Ordinal) -
+            source.IndexOf("private static void UpdateRibbonLayoutIfNeeded", StringComparison.Ordinal));
         var fallbackScheduler = source.Substring(
             source.IndexOf("private void QueueRibbonFallback", StringComparison.Ordinal),
             source.IndexOf("private void CompleteRibbonResizeCompaction", StringComparison.Ordinal) -
@@ -406,9 +410,16 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("ApplyToolbarDropdownWhiteBackgrounds(surface);");
         staticNormalizer.IndexOf("_normalizedRibbonStaticTabs.Add(tabItem)", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(staticNormalizer.IndexOf("PrepareRibbonTabForImmediateCompaction(tabItem)", StringComparison.Ordinal));
+            .BeLessThan(staticNormalizer.IndexOf("PrepareRibbonTabForImmediateCompaction(tabItem, forceLayout: true)", StringComparison.Ordinal));
+        staticNormalizer.Should().Contain("PrepareRibbonTabForImmediateCompaction(tabItem, forceLayout: true)");
         staticNormalizer.Should().Contain("CaptureRibbonStaticSurface(root)");
         staticNormalizer.Should().NotContain("EnumerateRibbonStaticDescendants(root)");
+        source.Should().Contain("UpdateRibbonLayoutIfNeeded(content, force: forceLayout);");
+        layoutReadiness.Should().Contain("bool force = false");
+        layoutReadiness.Should().Contain("if (force ||");
+        layoutReadiness.Should().Contain("!element.IsMeasureValid");
+        layoutReadiness.Should().Contain("!element.IsArrangeValid");
+        layoutReadiness.Should().Contain("element.UpdateLayout();");
         method.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true, scheduleFallback: true)");
         layoutChangeNormalizer.Should().Contain("if (prepareSelectedTab)");
         layoutChangeNormalizer.Should().Contain("PrepareSelectedRibbonTabForImmediateCompaction();");
@@ -421,7 +432,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         fallbackScheduler.Should().NotContain("PrepareSelectedRibbonTabForImmediateCompaction");
         fallbackScheduler.Should().NotContain("PrepareRibbonTabForImmediateCompaction");
         keyTipTabSelection.Should().NotContain("NormalizeRibbonSurface(forceCompact: true);");
-        keyTipTabSelection.Should().Contain("RibbonTabs.UpdateLayout();");
+        keyTipTabSelection.Should().Contain("var selectionChanged = !ReferenceEquals(RibbonTabs.SelectedItem, item);");
+        keyTipTabSelection.Should().Contain("UpdateRibbonLayoutIfNeeded(RibbonTabs, force: selectionChanged);");
         keyTipTabSelection.Should().Contain("NormalizeRibbonSurfaceAfterTabSelection();");
         method.Should().Contain("QueueRibbonFallback");
         method.Should().NotContain("DispatcherPriority.Loaded");
@@ -577,6 +589,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("MeasureRibbonAdaptiveGroup(snapshot, collapsedButtons[index])");
         source.Should().Contain("UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);");
         source.Should().Contain("RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth)");
+        source.Should().Contain("var layoutStates = layout.States.ToArray();");
         source.Should().Contain("GetCachedRibbonAdaptiveGroups(activePanel)");
         source.Should().Contain("GetCachedRibbonCollapsedGroupButtons(activePanel, groups, controlCacheKey)");
         source.Should().Contain("TryGetCachedActiveRibbonPanel(tabItem, out var cachedPanel)");
@@ -592,9 +605,11 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("private static void ApplyRibbonGroupCompactSnapshot(RibbonCompactGroupSnapshot snapshot");
         source.Should().Contain("private static void ApplyRibbonButtonCompactSnapshot(RibbonCompactButtonSnapshot snapshot");
         source.Should().Contain("var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);");
-        source.Should().Contain("var requiresMeasuredCorrection = layout.RequiresMeasuredCorrection");
-        source.Should().Contain("? !hasCachedCorrection || RibbonRowOverflowsMeasured(activePanel, availableWidth)");
-        source.Should().Contain(": !hasCachedCorrection && RibbonRowOverflowsMeasured(activePanel, availableWidth);");
+        source.Should().Contain("cachedCorrectionNeedsExpansion = RibbonStatesAreMoreCollapsedThan(plannedStates, layoutStates);");
+        source.Should().Contain("var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||");
+        source.Should().Contain("layout.RequiresMeasuredCorrection &&");
+        source.Should().Contain("(!hasCachedCorrection || RibbonRowOverflowsMeasured(activePanel, availableWidth));");
+        source.Should().Contain("private static bool RibbonStatesAreMoreCollapsedThan");
         source.Should().Contain("CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates)");
         source.Should().Contain("_ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates");
         source.Should().Contain("SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth)");

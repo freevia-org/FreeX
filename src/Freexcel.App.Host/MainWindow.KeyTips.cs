@@ -130,7 +130,7 @@ public partial class MainWindow
         if (KeyTipOverlay == null || RootGrid == null)
             return;
 
-        RootGrid.UpdateLayout();
+        UpdateRibbonLayoutIfNeeded(RootGrid);
         KeyTipOverlay.Children.Clear();
 
         foreach (var element in EnumerateVisualDescendants(RootGrid).OfType<FrameworkElement>())

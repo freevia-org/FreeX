@@ -76,7 +76,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
-    public void RequiresMeasuredCorrection_DetectsDataRibbonPrioritySet()
+    public void RequiresMeasuredCorrection_DetectsTabsThatNeedMeasuredOverflowGuard()
     {
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
                 ["Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools"])
@@ -86,6 +86,16 @@ public sealed class RibbonAdaptivePriorityPlannerTests
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
                 ["Tables", "Illustrations", "Charts"])
             .Should()
-            .BeFalse();
+            .BeTrue("Insert needs measured correction to avoid clipping at common Excel widths");
+
+        RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
+                ["Tools", "Pens", "Convert", "Arrange", "Format"])
+            .Should()
+            .BeTrue("Draw needs measured correction to avoid clipping at common Excel widths");
+
+        RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
+                ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing"])
+            .Should()
+            .BeFalse("Home should trust its deterministic profile so transient measured overflow does not collapse primary groups");
     }
 }

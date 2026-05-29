@@ -45,7 +45,8 @@ internal static class RibbonAdaptiveTabProfiles
             ProtectedGroups:
             [
                 Protected(double.PositiveInfinity, ["Tables"])
-            ]),
+            ],
+            RequiresMeasuredCorrection: true),
         new(
             Name: "Formulas",
             RequiredGroups: ["Function Library", "Formula Auditing"],
@@ -139,7 +140,8 @@ internal static class RibbonAdaptiveTabProfiles
                 Rule(760, collapseFromIndex: 0),
                 Rule(1120, collapseFromIndex: 3),
                 Rule(1320, collapseFromIndex: 3)
-            ]),
+            ],
+            RequiresMeasuredCorrection: true),
         new(
             Name: "Tiny",
             RequiredGroups: [],
