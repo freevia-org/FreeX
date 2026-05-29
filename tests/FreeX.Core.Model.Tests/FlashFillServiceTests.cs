@@ -1018,6 +1018,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameTitlesAndSuffixes_AbbreviatesCleanedNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Dr. Ada Lovelace Jr.", "A. Lovelace"),
+                ("Prof Grace Hopper Sr.", "G. Hopper")
+            ],
+            ["Ms. Katherine Johnson III"]);
+
+        result.Should().BeEquivalentTo(["K. Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameTitlesAndSuffixes_ReturnsNullUnlessRemainingHasBoth()
     {
         var result = FlashFillService.Fill(
@@ -1041,6 +1054,19 @@ public sealed class FlashFillServiceTests
             ["Katherine Coleman Johnson Sr."]);
 
         result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownNameSuffixes_ExtractsLastNameFromCleanedVariableLengthNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace Jr.", "Lovelace"),
+                ("Grace Hopper Sr.", "Hopper")
+            ],
+            ["Katherine Coleman Johnson III"]);
+
+        result.Should().BeEquivalentTo(["Johnson"], o => o.WithStrictOrdering());
     }
 
     [Fact]

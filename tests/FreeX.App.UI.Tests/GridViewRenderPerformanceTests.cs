@@ -400,7 +400,27 @@ public sealed class GridViewRenderPerformanceTests
 
         calculateLayout.Should().Contain("FindRowMetric(viewport.RowMetrics, splitRow)");
         calculateLayout.Should().Contain("FindColMetric(viewport.ColMetrics, splitColumn)");
+        calculateLayout.Should().Contain("SumRowHeights(pinnedRows)");
+        calculateLayout.Should().Contain("SumColumnWidths(pinnedColumns)");
         calculateLayout.Should().NotContain("FirstOrDefault");
+        calculateLayout.Should().NotContain(".Sum(");
+        source.Should().NotContain(".Sum(");
+    }
+
+    [Fact]
+    public void SplitPaneDividerHandles_ReuseFrozenStaticPen()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var splitPanesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var renderHandles = splitPanesSource[
+            splitPanesSource.IndexOf("private void RenderSplitDividerHandles", StringComparison.Ordinal)..
+            splitPanesSource.IndexOf("private void RenderSplitPaneScrollbarChrome", StringComparison.Ordinal)];
+
+        gridViewSource.Should().Contain("private static readonly Brush SplitDividerHandleBrush = MakeBrush(112, 112, 112);");
+        gridViewSource.Should().Contain("private static readonly Pen SplitDividerHandlePen = MakePen(SplitDividerHandleBrush, 1);");
+        renderHandles.Should().Contain("SplitDividerHandlePen");
+        renderHandles.Should().NotContain("MakeBrush(");
+        renderHandles.Should().NotContain("new Pen(");
     }
 
     [Fact]
