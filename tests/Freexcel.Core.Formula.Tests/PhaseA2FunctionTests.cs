@@ -251,6 +251,16 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Cell_OmittedReference_UsesCurrentFormulaCell()
+    {
+        var (wb, sheet) = MakeWb((4, 3, new TextValue("current")));
+        var currentCell = new CellAddress(sheet.Id, 4, 3);
+
+        _eval.Evaluate("=CELL(\"address\")", sheet, wb, currentCell).Should().Be(new TextValue("$C$4"));
+        _eval.Evaluate("=CELL(\"contents\")", sheet, wb, currentCell).Should().Be(new TextValue("current"));
+    }
+
+    [Fact]
     public void Cell_Address_OffsetReference_ReturnsTargetAddress()
     {
         var (wb, sheet) = MakeWb();
