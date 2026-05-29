@@ -267,8 +267,8 @@ public sealed partial class NativeJsonAdapter
                     .ToList(),
                 Charts = s.Charts.Select(ToChartDto).ToList(),
                 DataValidations = s.DataValidations
-                    .Where(IsSupportedDataValidation)
-                    .Select(ToDataValidationDto)
+                    .Where(validation => IsDataValidationOnSheet(validation, s.Id) && IsSupportedDataValidation(validation))
+                    .Select(validation => ToDataValidationDto(validation, s.Id))
                     .ToList(),
                 ConditionalFormats = ToConditionalFormatDtos(s.ConditionalFormats, s.Id),
                 Cells = s.EnumerateCells().Select(entry => new CellDto
