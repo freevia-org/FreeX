@@ -1755,7 +1755,7 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Link" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertLinkBtn_Click"
-                                        local:RibbonTooltip.Title="Insert Link"
+                                        local:RibbonTooltip.Title="Link"
                                         local:RibbonTooltip.KeyTip="K"
                                         local:RibbonTooltip.Description="Insert a hyperlink to a web page, file, or location in the workbook."/>
                             </StackPanel>
