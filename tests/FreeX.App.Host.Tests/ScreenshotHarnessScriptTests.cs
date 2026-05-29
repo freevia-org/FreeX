@@ -57,6 +57,26 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Height = $captureH");
     }
 
+    [Fact]
+    public void FreeXScreenshotScript_FailsFastWhenReleaseHostIsMissing()
+    {
+        var script = ReadScript("screenshot_ribbon.ps1");
+
+        script.Should().Contain("Test-Path -LiteralPath $exe");
+        script.Should().Contain("FreeX executable was not found at $exe. Build the Release host before running tools\\screenshot_ribbon.ps1.");
+        script.Should().Contain("$proc = Start-Process -FilePath $exe -PassThru");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_FailsFastWhenExcelIsMissing()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("Test-Path -LiteralPath $exe");
+        script.Should().Contain("Excel executable was not found at $exe. Install Microsoft Excel or update tools\\screenshot_excel.ps1 before running this capture.");
+        script.Should().Contain("Start-Process -FilePath $exe -ArgumentList \"/e\"");
+    }
+
     private static string ReadScript(string scriptName) =>
         File.ReadAllText(WorkspaceFileLocator.Find("tools", scriptName));
 }

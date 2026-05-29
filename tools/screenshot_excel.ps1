@@ -72,6 +72,10 @@ Write-Host "Screen DPI: $dpi  Scale: $scale"
 
 # Launch Excel with a blank workbook to skip start screen
 $exe = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
+if (-not (Test-Path -LiteralPath $exe)) {
+    throw "Excel executable was not found at $exe. Install Microsoft Excel or update tools\screenshot_excel.ps1 before running this capture."
+}
+
 Start-Process -FilePath $exe -ArgumentList "/e"
 Write-Host "Launched Excel (searching by class XLMAIN)"
 
