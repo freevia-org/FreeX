@@ -73,14 +73,15 @@ public static partial class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
 
+        var coeffsAreScalarArgument = args[3] is not RangeValue;
         var coeffs = args[3] is RangeValue coeffRange
             ? coeffRange
             : SingleCellArray(args[3]);
 
-        return MapTernaryTextArgs(args[0], args[1], args[2], (xValue, nValue, mValue) => SeriesSumScalar(xValue, nValue, mValue, coeffs));
+        return MapTernaryTextArgs(args[0], args[1], args[2], (xValue, nValue, mValue) => SeriesSumScalar(xValue, nValue, mValue, coeffs, coeffsAreScalarArgument));
     }
 
-    private static ScalarValue SeriesSumScalar(ScalarValue xValue, ScalarValue nValue, ScalarValue mValue, RangeValue coeffs)
+    private static ScalarValue SeriesSumScalar(ScalarValue xValue, ScalarValue nValue, ScalarValue mValue, RangeValue coeffs, bool coeffsAreScalarArgument)
     {
         double n = ToNumber(nValue);
         double m = ToNumber(mValue);
@@ -96,7 +97,14 @@ public static partial class BuiltInFunctions
         {
             if (cell is ErrorValue ec) return ec;
             if (cell is BlankValue) { i++; continue; }
-            if (!TryCellNumber(cell, out double a)) return ErrorValue.Value;
+            if (!TryCellNumber(cell, out double a))
+            {
+                if (!coeffsAreScalarArgument)
+                    return ErrorValue.Value;
+
+                try { a = ToNumber(cell); }
+                catch (FormulaEvalException) { return ErrorValue.Value; }
+            }
             sum += a * Math.Pow(x, n + i * m);
             i++;
         }
