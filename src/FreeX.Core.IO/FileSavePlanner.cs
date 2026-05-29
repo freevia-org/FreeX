@@ -13,7 +13,8 @@ public static class FileSavePlanner
         if (string.IsNullOrWhiteSpace(currentFilePath))
             return false;
 
-        var extension = Path.GetExtension(currentFilePath);
+        var savePath = currentFilePath.Trim();
+        var extension = Path.GetExtension(savePath);
         if (string.IsNullOrWhiteSpace(extension))
             return false;
 
@@ -21,7 +22,7 @@ public static class FileSavePlanner
         if (adapter is null)
             return false;
 
-        target = new FileSaveTarget(currentFilePath, adapter);
+        target = new FileSaveTarget(savePath, adapter);
         return true;
     }
 }

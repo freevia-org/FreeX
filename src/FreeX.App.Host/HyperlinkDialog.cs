@@ -27,6 +27,7 @@ public sealed class HyperlinkDialog : Window
     private readonly Button _screenTipButton = new() { Content = "_ScreenTip..." };
     private readonly Button _bookmarkButton = new() { Content = "_Bookmark..." };
     private readonly ListBox _linkTypes = new();
+    private readonly Label _targetLabel;
     private string _screenTip = "";
     private string _bookmark = "";
 
@@ -62,8 +63,9 @@ public sealed class HyperlinkDialog : Window
         var grid = DialogGrid(3);
         AddTextRow(grid, 0, "Text to _display:", _displayBox, displayText);
         AutomationProperties.SetName(_displayBox, "Text to display");
-        AddTextRow(grid, 1, "_Address:", _targetBox, target);
-        AutomationProperties.SetName(_targetBox, "Address");
+        _targetLabel = AddTextRow(grid, 1, "_Address:", _targetBox, target);
+        _linkTypes.SelectionChanged += (_, _) => UpdateTargetFieldForLinkType();
+        UpdateTargetFieldForLinkType();
         _screenTipButton.Click += ScreenTipButton_Click;
         _bookmarkButton.Click += BookmarkButton_Click;
         AutomationProperties.SetName(_screenTipButton, "Set ScreenTip");
@@ -147,6 +149,21 @@ public sealed class HyperlinkDialog : Window
         3 => HyperlinkLinkType.EmailAddress,
         _ => HyperlinkLinkType.ExistingFileOrWebPage
     };
+
+    private void UpdateTargetFieldForLinkType()
+    {
+        var (label, automationName, helpText) = SelectedLinkType switch
+        {
+            HyperlinkLinkType.CreateNewDocument => ("Name of new _document:", "Name of new document", "Enter the name of the new document to create."),
+            HyperlinkLinkType.PlaceInThisDocument => ("Type the cell _reference:", "Cell reference or defined name", "Enter a cell reference or defined name in this workbook."),
+            HyperlinkLinkType.EmailAddress => ("_E-mail address:", "E-mail address", "Enter the email address for the hyperlink."),
+            _ => ("_Address:", "Address", "Enter the file path or web page address for the hyperlink.")
+        };
+
+        _targetLabel.Content = label;
+        AutomationProperties.SetName(_targetBox, automationName);
+        AutomationProperties.SetHelpText(_targetBox, helpText);
+    }
 
     private void Accept()
     {
@@ -236,23 +253,25 @@ public sealed class HyperlinkDialog : Window
         return grid;
     }
 
-    private static void AddTextRow(Grid grid, int row, string label, TextBox box, string value)
+    private static Label AddTextRow(Grid grid, int row, string label, TextBox box, string value)
     {
-        grid.Children.Add(new Label
+        var labelControl = new Label
         {
             Content = label,
             Target = box,
             Padding = new Thickness(0),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 8)
-        });
-        Grid.SetRow(grid.Children[^1], row);
-        Grid.SetColumn(grid.Children[^1], 0);
+        };
+        grid.Children.Add(labelControl);
+        Grid.SetRow(labelControl, row);
+        Grid.SetColumn(labelControl, 0);
 
         box.Text = value;
         box.Margin = new Thickness(0, 0, 0, 8);
         grid.Children.Add(box);
         Grid.SetRow(box, row);
         Grid.SetColumn(box, 1);
+        return labelControl;
     }
 }
