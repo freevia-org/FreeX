@@ -1,5 +1,9 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using FluentAssertions;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
@@ -75,6 +79,47 @@ public sealed class ThreadedCommentDialogTests
         labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
     }
 
+    [Fact]
+    public void ExistingThread_RuntimeControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ThreadedComment("Root note", "Quinn")
+            {
+                Replies = [new CommentReply("Existing reply", "Codex")]
+            };
+            var dialog = new ThreadedCommentDialog("Sheet1!A1", existing);
+
+            try
+            {
+                var textBoxes = FindLogicalDescendants<TextBox>(dialog)
+                    .ToDictionary(AutomationProperties.GetAutomationId);
+                var buttons = FindLogicalDescendants<Button>(dialog)
+                    .ToDictionary(AutomationProperties.GetAutomationId);
+                var resolvedBox = FindLogicalDescendants<CheckBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentResolvedBox");
+
+                AutomationProperties.GetName(textBoxes["ThreadedCommentRootBox"]).Should().Be("Edit comment");
+                AutomationProperties.GetHelpText(textBoxes["ThreadedCommentRootBox"]).Should().Be("Edit the root comment text.");
+                AutomationProperties.GetName(textBoxes["ThreadedCommentReplyBox"]).Should().Be("Reply");
+                AutomationProperties.GetHelpText(textBoxes["ThreadedCommentReplyBox"]).Should().Be("Enter an optional reply to the threaded comment. Press Ctrl+Enter to reply.");
+
+                buttons["ThreadedCommentReplyButton"].IsDefault.Should().BeTrue();
+                AutomationProperties.GetName(buttons["ThreadedCommentReplyButton"]).Should().Be("Reply to comment");
+                AutomationProperties.GetHelpText(buttons["ThreadedCommentReplyButton"]).Should().Be("Add a reply to the threaded comment.");
+                buttons["ThreadedCommentCancelButton"].IsCancel.Should().BeTrue();
+                AutomationProperties.GetName(buttons["ThreadedCommentCancelButton"]).Should().Be("Cancel");
+
+                AutomationProperties.GetName(resolvedBox).Should().Be("Mark as resolved");
+                AutomationProperties.GetHelpText(resolvedBox).Should().Be("Mark the threaded comment as resolved.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     private static string ReadThreadedCommentDialogSource()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ThreadedCommentDialog.cs"));
@@ -91,5 +136,17 @@ public sealed class ThreadedCommentDialogTests
         underscoreIndex.Should().BeLessThan(label.Length - 1, $"label '{label}' should include a character after '_'");
 
         return char.ToUpperInvariant(label[underscoreIndex + 1]);
+    }
+
+    private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindLogicalDescendants<T>(child))
+                yield return descendant;
+        }
     }
 }
