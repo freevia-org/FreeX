@@ -276,6 +276,21 @@ public sealed class RibbonIconFactorySvgTests
         emptyShells.Should().BeEmpty("visible command SVG assets should render actual geometry, not blank placeholders");
     }
 
+    [Fact]
+    public void RibbonIconVariantGenerator_ProcessesBaseIconsDeterministicallyAndReportsActualCount()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "generate-ribbon-icon-variants.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        script.Should().Contain("Sort-Object Name");
+        script.Should().Contain("$generatedCount = 0");
+        script.Should().Contain("$generatedCount++");
+        script.Should().Contain("Generated $generatedCount native ribbon SVG variants.");
+        script.Should().NotContain("Generated $($baseFiles.Count * 2) native ribbon SVG variants.");
+        script.Any(ch => ch > 0x7f).Should().BeFalse(
+            "the generator must stay ASCII-safe for Windows PowerShell source decoding");
+    }
+
     [Theory]
     [InlineData("get-add-ins.svg")]
     [InlineData("my-add-ins.svg")]
