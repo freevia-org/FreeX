@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 
 namespace FreeX.App.Host;
@@ -34,6 +35,15 @@ public sealed class CustomViewNameDialog : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var label = new Label { Content = "_Name:", Target = _nameBox, Margin = new Thickness(0, 0, 0, 4) };
         _nameBox.Text = Result.ViewName;
+        AutomationProperties.SetName(_nameBox, "Custom view name");
+        AutomationProperties.SetAutomationId(_nameBox, "CustomViewNameBox");
+        AutomationProperties.SetHelpText(_nameBox, "Enter the name for the custom workbook view.");
+        AutomationProperties.SetName(_printSettingsBox, "Print settings");
+        AutomationProperties.SetAutomationId(_printSettingsBox, "CustomViewPrintSettingsCheckBox");
+        AutomationProperties.SetHelpText(_printSettingsBox, "Include print settings in the custom view.");
+        AutomationProperties.SetName(_hiddenFilterSettingsBox, "Hidden rows, columns and filter settings");
+        AutomationProperties.SetAutomationId(_hiddenFilterSettingsBox, "CustomViewHiddenFilterSettingsCheckBox");
+        AutomationProperties.SetHelpText(_hiddenFilterSettingsBox, "Include hidden rows, hidden columns, and filter settings in the custom view.");
         _printSettingsBox.Margin = new Thickness(0, 8, 0, 4);
         _hiddenFilterSettingsBox.Margin = new Thickness(0, 0, 0, 4);
         var buttons = new StackPanel

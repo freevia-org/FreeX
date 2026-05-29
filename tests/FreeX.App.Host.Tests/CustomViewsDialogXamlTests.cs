@@ -152,6 +152,22 @@ public sealed class CustomViewsDialogXamlTests
     }
 
     [Fact]
+    public void CustomViewNameDialog_FieldsExposeAutomationMetadata()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_nameBox, \"Custom view name\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_nameBox, \"CustomViewNameBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_nameBox, \"Enter the name for the custom workbook view.\");");
+        source.Should().Contain("AutomationProperties.SetName(_printSettingsBox, \"Print settings\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_printSettingsBox, \"CustomViewPrintSettingsCheckBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_printSettingsBox, \"Include print settings in the custom view.\");");
+        source.Should().Contain("AutomationProperties.SetName(_hiddenFilterSettingsBox, \"Hidden rows, columns and filter settings\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_hiddenFilterSettingsBox, \"CustomViewHiddenFilterSettingsCheckBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_hiddenFilterSettingsBox, \"Include hidden rows, hidden columns, and filter settings in the custom view.\");");
+    }
+
+    [Fact]
     public void CustomViewNameDialog_CreateResult_TrimsViewName()
     {
         CustomViewNameDialog.CreateResult("  Quarter Close  ", includePrintSettings: false, includeHiddenRowsColumnsAndFilterSettings: true)
