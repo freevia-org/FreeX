@@ -14,6 +14,9 @@ public static class MenuKeyTipAssigner
 
         foreach (var item in items)
             AssignMissingKeyTip(item, used);
+
+        foreach (var item in items)
+            AssignUniqueKeyTips(item.Items.OfType<MenuItem>());
     }
 
     private static void PreserveExistingKeyTip(MenuItem item, HashSet<string> used)
