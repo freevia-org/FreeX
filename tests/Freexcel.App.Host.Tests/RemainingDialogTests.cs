@@ -950,6 +950,8 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_locationPickerButton");
         source.Should().Contain("Select Data Range");
         source.Should().Contain("Select Location Range");
+        source.Should().Contain("AutomationProperties.SetName(_dataRangePickerButton, \"Select sparkline data range\");");
+        source.Should().Contain("AutomationProperties.SetName(_locationPickerButton, \"Select sparkline location range\");");
         source.Should().Contain("RequestRangeSelection");
     }
 
@@ -959,7 +961,7 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("new Label { Content = \"_Data range:\", Target = _dataRangeBox");
-        source.Should().Contain("new Label { Content = \"_Location:\", Target = _locationBox");
+        source.Should().Contain("new Label { Content = \"_Location range:\", Target = _locationBox");
         source.Should().Contain("new Label { Content = \"Sparkline _type:\", Target = _kindBox");
     }
 
@@ -969,7 +971,7 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("AutomationProperties.SetName(_dataRangeBox, \"Sparkline data range\");");
-        source.Should().Contain("AutomationProperties.SetName(_locationBox, \"Sparkline location\");");
+        source.Should().Contain("AutomationProperties.SetName(_locationBox, \"Sparkline location range\");");
     }
 
     [Fact]
