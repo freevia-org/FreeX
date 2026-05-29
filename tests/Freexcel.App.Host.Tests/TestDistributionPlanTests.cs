@@ -46,6 +46,24 @@ public sealed class TestDistributionPlanTests
     }
 
     [Fact]
+    public void DistributionPlan_DocumentsCanonicalBuildVerificationCommands()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md"));
+
+        source.Should().Contain("## Canonical Build Verification");
+        source.Should().Contain("dotnet restore Freexcel.slnx");
+        source.Should().Contain("dotnet build Freexcel.slnx --configuration Release --no-restore");
+        source.Should().Contain("dotnet test Freexcel.slnx --configuration Release --no-build");
+        source.Should().Contain("--disable-build-servers");
+        source.Should().Contain("-p:UseSharedCompilation=false");
+        source.Should().Contain("-p:NodeReuse=false");
+        source.Should().Contain("/nr:false");
+        source.Should().Contain("-m:1");
+        source.Should().Contain("zero failed tests");
+        source.Should().Contain("stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process");
+    }
+
+    [Fact]
     public void DistributionPlan_DocumentsAccessibilityValidationGate()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md"));
