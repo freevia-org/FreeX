@@ -98,6 +98,37 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         });
     }
 
+    [Fact]
+    public void WindowResize_UsesCachedBreakpointsBeforeCompactingRibbon()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+
+            harness.SelectRibbonTab("Home", 1280);
+            harness.UpdateCompact(force: true);
+            harness.ResetDiagnostics();
+            harness.ResetFallbackDiagnostics();
+
+            harness.SetWidth(1275);
+
+            harness.FallbackDiagnostics.RequestCount.Should().Be(0);
+            harness.Diagnostics.GroupMeasurementCount.Should().Be(0);
+            harness.Diagnostics.ResizeThresholdRebuildCount.Should().Be(0);
+            harness.Diagnostics.AppliedStateSkipCount.Should().Be(0);
+
+            harness.ResetDiagnostics();
+            harness.ResetFallbackDiagnostics();
+
+            harness.SetWidth(700);
+
+            harness.FallbackDiagnostics.RequestCount.Should().Be(1);
+            harness.FallbackDiagnostics.LastRequestedWork.Should().Be("CompactOnly");
+            harness.Diagnostics.GroupMeasurementCount.Should().Be(0);
+            harness.Diagnostics.ResizeThresholdRebuildCount.Should().Be(0);
+        });
+    }
+
     private sealed class RibbonAdaptiveDiagnosticsHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -116,6 +147,8 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         }
 
         public RibbonAdaptiveDiagnosticsSnapshot Diagnostics => _window.GetRibbonAdaptiveDiagnosticsForTests();
+
+        public RibbonFallbackDiagnosticsSnapshot FallbackDiagnostics => _window.GetRibbonFallbackDiagnosticsForTests();
 
         public IReadOnlyList<string> VisibleRibbonGroupNames =>
             (_window.FindName("RibbonTabs") as TabControl)?.SelectedItem is TabItem selectedTab
@@ -173,6 +206,9 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
 
         public void ResetDiagnostics(bool resetSelectedStaticNormalization = false) =>
             _window.ResetRibbonAdaptiveDiagnosticsForTests(resetSelectedStaticNormalization);
+
+        public void ResetFallbackDiagnostics() =>
+            _window.ResetRibbonFallbackDiagnosticsForTests();
 
         public static RibbonAdaptiveDiagnosticsHarness Create()
         {

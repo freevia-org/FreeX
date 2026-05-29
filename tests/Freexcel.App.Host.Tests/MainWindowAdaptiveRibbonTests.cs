@@ -365,42 +365,6 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void WindowResize_UsesCachedRibbonBreakpointsBeforeAdaptiveUpdate()
-    {
-        var workbookUiState = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
-        var ribbonSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
-
-        var sizeChanged = workbookUiState.Substring(
-            workbookUiState.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal),
-            workbookUiState.IndexOf("private string FormatCellReference", StringComparison.Ordinal) -
-            workbookUiState.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal));
-        var resizeNormalizer = ribbonSource.Substring(
-            ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterResize", StringComparison.Ordinal),
-            ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal) -
-            ribbonSource.IndexOf("private void NormalizeRibbonSurfaceAfterResize", StringComparison.Ordinal));
-        var resizeWidthResolver = ribbonSource.Substring(
-            ribbonSource.IndexOf("private double GetCurrentRibbonResizeWidth", StringComparison.Ordinal),
-            ribbonSource.IndexOf("private void PrepareSelectedRibbonTabForImmediateCompaction", StringComparison.Ordinal) -
-            ribbonSource.IndexOf("private double GetCurrentRibbonResizeWidth", StringComparison.Ordinal));
-        var resizeGate = ribbonSource.Substring(
-            ribbonSource.IndexOf("private bool ShouldNormalizeRibbonSurfaceForResize", StringComparison.Ordinal),
-            ribbonSource.IndexOf("private double GetCurrentRibbonResizeWidth", StringComparison.Ordinal) -
-            ribbonSource.IndexOf("private bool ShouldNormalizeRibbonSurfaceForResize", StringComparison.Ordinal));
-
-        sizeChanged.Should().Contain("NormalizeRibbonSurfaceAfterResize();");
-        sizeChanged.Should().Contain("ScheduleViewportResizeRefresh();");
-        sizeChanged.Should().Contain("if (e.WidthChanged)");
-        sizeChanged.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange");
-        resizeNormalizer.Should().Contain("ShouldNormalizeRibbonSurfaceForResize()");
-        resizeNormalizer.Should().Contain("CompactRibbonSurfaceAfterResize(scheduleFallback: !_isInWindowResizeMoveLoop)");
-        resizeNormalizer.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange");
-        resizeNormalizer.Should().NotContain("UpdateRibbonCompactMode();");
-        resizeGate.Should().Contain("_ribbonResizeThresholds");
-        resizeWidthResolver.Should().Contain("TryGetCachedRibbonResizeWidth(out var cachedWidth)");
-        resizeWidthResolver.Should().Contain("IsCachedRibbonSurfaceSelected()");
-    }
-
-    [Fact]
     public void WindowResize_DebouncesViewportRefreshUntilResizeIdle()
     {
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
