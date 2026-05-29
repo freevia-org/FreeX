@@ -145,6 +145,29 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void RangeMouseSelectionClearsStaleCommentPreviewBeforeReplacingSelection()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var extendSelection = selectionSource[
+            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+        var addSelection = selectionSource[
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
+
+        extendSelection.Should().Contain("ClearCommentPreview();");
+        addSelection.Should().Contain("ClearCommentPreview();");
+        extendSelection.IndexOf("ClearCommentPreview();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(extendSelection.IndexOf("SheetGrid.SelectedRange = new GridRange(", StringComparison.Ordinal));
+        addSelection.IndexOf("ClearCommentPreview();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(addSelection.IndexOf("SheetGrid.SelectedRanges = ranges;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void FormulaRangeMouseSelectionClearsTransientCellUiBeforeReplacingSelection()
     {
         var formulaReferenceSource = File.ReadAllText(WorkspaceFileLocator.Find(

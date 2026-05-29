@@ -742,6 +742,7 @@ public partial class MainWindow
     private void ExtendSelection(CellAddress anchor, CellAddress to)
     {
         HideValidationDropdown();
+        ClearCommentPreview();
 
         _selectionCursor = to;
         SheetGrid.SelectedRanges = null;
@@ -757,6 +758,7 @@ public partial class MainWindow
     private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
     {
         HideValidationDropdown();
+        ClearCommentPreview();
 
         var ranges = SheetGrid.SelectedRanges is { Count: > 0 }
             ? SheetGrid.SelectedRanges.ToList()
