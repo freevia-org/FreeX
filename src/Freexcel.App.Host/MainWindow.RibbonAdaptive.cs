@@ -60,9 +60,8 @@ public partial class MainWindow
         var plannedStates = layout.States.ToArray();
 
         var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStates);
-        var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);
-        if (hasCachedCorrection)
-            plannedStates = correctedStates!.ToArray();
+        if (_ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates))
+            plannedStates = correctedStates.ToArray();
 
         var appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
         if (!force &&
@@ -78,7 +77,7 @@ public partial class MainWindow
             plannedStates,
             _ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates);
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
-        var requiresMeasuredCorrection = !hasCachedCorrection && layout.RequiresMeasuredCorrection;
+        var requiresMeasuredCorrection = correctedStates is null || layout.RequiresMeasuredCorrection;
         if (requiresMeasuredCorrection)
         {
             ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
@@ -88,7 +87,7 @@ public partial class MainWindow
         ApplyRibbonRuntimeVisibilityOverrides(groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
-        if (!hasCachedCorrection)
+        if (correctedStates is null)
             _ribbonCorrectedStateCache[correctionCacheKey] = plannedStates.ToArray();
         _lastRibbonAdaptiveAppliedStateKey = appliedStateKey;
         _lastRibbonAdaptiveAppliedStates = plannedStates.ToArray();
