@@ -38,12 +38,19 @@ public static class RibbonTooltip
 
     public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip, out MenuItem? openedSubmenu)
     {
+        var normalizedKeyTip = NormalizeKeyTip(keyTip);
+        if (normalizedKeyTip is null)
+        {
+            openedSubmenu = null;
+            return false;
+        }
+
         foreach (var item in menu.Items.OfType<MenuItem>())
         {
             if (!item.IsEnabled)
                 continue;
 
-            if (string.Equals(GetKeyTip(item), keyTip, StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(NormalizeKeyTip(GetKeyTip(item)), normalizedKeyTip, StringComparison.OrdinalIgnoreCase) &&
                 item.Items.Count > 0)
             {
                 item.IsSubmenuOpen = true;
@@ -55,7 +62,7 @@ public static class RibbonTooltip
             if (item.Items.Count > 0)
                 item.IsSubmenuOpen = true;
 
-            if (TryOpenSubmenuForKeyTip(item, keyTip, out openedSubmenu))
+            if (TryOpenSubmenuForKeyTip(item, normalizedKeyTip, out openedSubmenu))
             {
                 item.IsSubmenuOpen = true;
                 if (openedSubmenu is not null)
@@ -69,6 +76,9 @@ public static class RibbonTooltip
         openedSubmenu = null;
         return false;
     }
+
+    private static string? NormalizeKeyTip(string? keyTip) =>
+        string.IsNullOrWhiteSpace(keyTip) ? null : keyTip.Trim();
 
     private static void OnKeyTipChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
