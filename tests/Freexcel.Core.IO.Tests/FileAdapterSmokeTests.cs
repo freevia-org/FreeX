@@ -5675,6 +5675,52 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsCrossSheetDataValidationRanges()
+    {
+        var workbook = new Workbook("DvCrossSheetRangeSaveTest");
+        var sheet = workbook.AddSheet("S1");
+        var otherSheet = workbook.AddSheet("S2");
+        var validation = new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            Type = DvType.List,
+            Formula1 = "Apple,Banana,Cherry",
+            AlertStyle = DvAlertStyle.Information
+        };
+        validation.AdditionalRanges.Add(new GridRange(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 5, 2)));
+        validation.AdditionalRanges.Add(new GridRange(
+            new CellAddress(otherSheet.Id, 1, 3),
+            new CellAddress(otherSheet.Id, 5, 3)));
+        sheet.DataValidations.Add(validation);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(otherSheet.Id, 1, 4),
+                new CellAddress(otherSheet.Id, 5, 4)),
+            Type = DvType.List,
+            Formula1 = "Apple,Banana,Cherry",
+            AlertStyle = DvAlertStyle.Information
+        });
+
+        var ms = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var validationElement = worksheetXml.Root!
+            .Element(worksheetNs + "dataValidations")!
+            .Element(worksheetNs + "dataValidation")!;
+        validationElement.Attribute("sqref")!.Value.Should().Be("A1:B5");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_DataValidationRule_Survives()
     {
         var workbook = new Workbook("DvNativeTest");
@@ -6461,6 +6507,43 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_NormalizesConditionalFormatDataBarAxisPosition()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeDataBarAxisPositionLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 2,
+                  "Operator": 0,
+                  "DataBarAxisPosition": "  middle  "
+                },
+                {
+                  "AppliesTo": "B1:B5",
+                  "RuleType": 2,
+                  "Operator": 0,
+                  "DataBarAxisPosition": "invalid"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rules = loaded.GetSheetAt(0).ConditionalFormats;
+        rules[0].DataBarAxisPosition.Should().Be("middle");
+        rules[1].DataBarAxisPosition.Should().BeNull();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Save_DropsInvalidConditionalFormatDataBarLengths()
     {
         var workbook = new Workbook("CfNativeInvalidDataBarLengthSave");
@@ -6487,6 +6570,44 @@ public partial class FileAdapterSmokeTests
 
         savedFormat.GetProperty("DataBarMinLength").ValueKind.Should().Be(JsonValueKind.Null);
         savedFormat.GetProperty("DataBarMaxLength").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_NormalizesConditionalFormatDataBarAxisPosition()
+    {
+        var workbook = new Workbook("CfNativeDataBarAxisPositionSave");
+        var sheet = workbook.AddSheet("S1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.DataBar,
+            Operator = CfOperator.Equal,
+            DataBarAxisPosition = "  middle  "
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.DataBar,
+            Operator = CfOperator.Equal,
+            DataBarAxisPosition = "invalid"
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var formats = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")
+            .EnumerateArray()
+            .ToList();
+
+        formats[0].GetProperty("DataBarAxisPosition").GetString().Should().Be("middle");
+        formats[1].GetProperty("DataBarAxisPosition").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
     [Fact]

@@ -19,7 +19,7 @@ public partial class MainWindow
     private void ThemeBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
 
     private void ThemeOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
@@ -41,7 +41,7 @@ public partial class MainWindow
     private void ThemeColorsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
 
     private void ThemeColorsOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
@@ -59,7 +59,7 @@ public partial class MainWindow
     private void ThemeFontsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
 
     private void ThemeFontsOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
@@ -77,7 +77,7 @@ public partial class MainWindow
     private void ThemeEffectsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
 
     private void ThemeEffectsOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
@@ -103,7 +103,7 @@ public partial class MainWindow
     private void BackgroundBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
 
     private void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)

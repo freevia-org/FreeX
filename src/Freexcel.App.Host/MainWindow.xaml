@@ -2322,28 +2322,34 @@
                                             local:RibbonTooltip.Description="Insert a function you have used recently."/>
                                     <StackPanel Orientation="Horizontal">
                                         <Button Content="Financial" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaFinancialBtn_Click"
+                                                local:RibbonMetadata.DropdownMenuButton="True"
                                                 local:RibbonTooltip.Title="Financial"
                                                 local:RibbonTooltip.KeyTip="Y"
                                                 local:RibbonTooltip.Description="Browse and insert financial functions like PMT, NPV, and IRR."/>
                                         <Button Content="Logical"  Width="56" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaLogicalBtn_Click"
+                                                local:RibbonMetadata.DropdownMenuButton="True"
                                                 local:RibbonTooltip.Title="Logical Functions"
                                                 local:RibbonTooltip.KeyTip="L"
                                                 local:RibbonTooltip.Description="Browse and insert logical functions like IF, AND, OR, and NOT."/>
                                         <Button Content="Text"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaTextBtn_Click"
+                                                local:RibbonMetadata.DropdownMenuButton="True"
                                                 local:RibbonTooltip.Title="Text Functions"
                                                 local:RibbonTooltip.KeyTip="TF"
                                                 local:RibbonTooltip.Description="Browse and insert text manipulation functions like LEFT, MID, and TRIM."/>
                                         <Button Content="Date"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaDateBtn_Click"
+                                                local:RibbonMetadata.DropdownMenuButton="True"
                                                 local:RibbonTooltip.Title="Date &amp; Time"
                                                 local:RibbonTooltip.KeyTip="DT"
                                                 local:RibbonTooltip.Description="Browse and insert date and time functions like TODAY and NOW."/>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
                                         <Button Content="Lookup"   Width="56" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaLookupBtn_Click"
+                                                local:RibbonMetadata.DropdownMenuButton="True"
                                                 local:RibbonTooltip.Title="Lookup &amp; Reference"
                                                 local:RibbonTooltip.KeyTip="K"
                                                 local:RibbonTooltip.Description="Browse and insert lookup functions like VLOOKUP, HLOOKUP, and INDEX."/>
                                         <Button Content="Math"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaMathBtn_Click"
+                                                local:RibbonMetadata.DropdownMenuButton="True"
                                                 local:RibbonTooltip.Title="Math &amp; Trig"
                                                 local:RibbonTooltip.KeyTip="MT"
                                                 local:RibbonTooltip.Description="Browse and insert math and trigonometry functions."/>
@@ -2371,6 +2377,7 @@
                                         local:RibbonTooltip.KeyTip="DN"
                                         local:RibbonTooltip.Description="Assign a name to a cell or range so you can refer to it in formulas."/>
                                 <Button Content="Use in Formula" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UseInFormulaBtn_Click"
+                                        local:RibbonMetadata.DropdownMenuButton="True"
                                         local:RibbonTooltip.Title="Use in Formula"
                                         local:RibbonTooltip.KeyTip="I"
                                         local:RibbonTooltip.Description="Insert a defined name into the formula you are currently editing."/>

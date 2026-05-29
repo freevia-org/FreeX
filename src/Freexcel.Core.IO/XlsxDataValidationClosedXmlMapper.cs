@@ -99,6 +99,8 @@ internal static class XlsxDataValidationClosedXmlMapper
         {
             if (!Enum.IsDefined(dv.Type) || !Enum.IsDefined(dv.Operator) || !Enum.IsDefined(dv.AlertStyle))
                 continue;
+            if (dv.AppliesTo.Start.Sheet != sheet.Id || dv.AppliesTo.End.Sheet != sheet.Id)
+                continue;
 
             try
             {
@@ -106,8 +108,12 @@ internal static class XlsxDataValidationClosedXmlMapper
 #pragma warning disable CS0618 // SetDataValidation is obsolete in newer ClosedXML but CreateDataValidation may not exist in 0.105
                 var xlDv = xlRange.CreateDataValidation();
 #pragma warning restore CS0618
-                foreach (var additionalRange in dv.AdditionalRanges)
+                foreach (var additionalRange in dv.AdditionalRanges.Where(range =>
+                    range.Start.Sheet == sheet.Id &&
+                    range.End.Sheet == sheet.Id))
+                {
                     xlDv.AddRange(xlSheet.Range(ToA1Range(additionalRange)));
+                }
 
                 xlDv.IgnoreBlanks = dv.AllowBlank;
                 xlDv.InCellDropdown = dv.ShowDropdown;
