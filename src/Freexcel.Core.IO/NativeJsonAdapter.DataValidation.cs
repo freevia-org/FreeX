@@ -57,12 +57,15 @@ public sealed partial class NativeJsonAdapter
         }
     }
 
-    private static DataValidationDto ToDataValidationDto(DataValidation validation) => new()
+    private static DataValidationDto ToDataValidationDto(DataValidation validation, SheetId sheetId) => new()
     {
         AppliesTo = validation.AppliesTo.ToString(),
         AdditionalRanges = validation.AdditionalRanges.Count == 0
             ? null
-            : validation.AdditionalRanges.Select(range => range.ToString()).ToList(),
+            : validation.AdditionalRanges
+                .Where(range => range.Start.Sheet == sheetId && range.End.Sheet == sheetId)
+                .Select(range => range.ToString())
+                .ToList(),
         Type = validation.Type,
         Operator = validation.Operator,
         Formula1 = validation.Formula1,
@@ -86,6 +89,10 @@ public sealed partial class NativeJsonAdapter
         Enum.IsDefined(validation.Type) &&
         Enum.IsDefined(validation.Operator) &&
         Enum.IsDefined(validation.AlertStyle);
+
+    private static bool IsDataValidationOnSheet(DataValidation validation, SheetId sheetId) =>
+        validation.AppliesTo.Start.Sheet == sheetId &&
+        validation.AppliesTo.End.Sheet == sheetId;
 
     private static bool IsSupportedDataValidation(DataValidationDto validation) =>
         Enum.IsDefined(validation.Type) &&

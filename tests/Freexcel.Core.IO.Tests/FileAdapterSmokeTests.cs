@@ -5787,6 +5787,58 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Save_SkipsCrossSheetDataValidationRanges()
+    {
+        var workbook = new Workbook("DvNativeCrossSheetSave");
+        var sheet = workbook.AddSheet("S1");
+        var otherSheet = workbook.AddSheet("S2");
+        var validRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 1));
+        var otherSheetRange = new GridRange(
+            new CellAddress(otherSheet.Id, 1, 1),
+            new CellAddress(otherSheet.Id, 5, 1));
+        var validRule = new DataValidation
+        {
+            AppliesTo = validRange,
+            Type = DvType.Time,
+            Operator = DvOperator.Between,
+            AlertStyle = DvAlertStyle.Warning,
+            Formula1 = "09:00",
+            Formula2 = "17:30"
+        };
+        validRule.AdditionalRanges.Add(new GridRange(
+            new CellAddress(sheet.Id, 1, 3),
+            new CellAddress(sheet.Id, 5, 3)));
+        validRule.AdditionalRanges.Add(otherSheetRange);
+        sheet.DataValidations.Add(validRule);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = otherSheetRange,
+            Type = DvType.Time,
+            Operator = DvOperator.Between,
+            AlertStyle = DvAlertStyle.Warning
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var validations = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("DataValidations")
+            .EnumerateArray()
+            .ToList();
+
+        validations.Should().ContainSingle();
+        validations[0].GetProperty("AppliesTo").GetString().Should().Be("A1:A5");
+        validations[0].GetProperty("AdditionalRanges").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetString().Should().Be("C1:C5");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_ConditionalFormatRule_Survives()
     {
         var workbook = new Workbook("CfNativeTest");
