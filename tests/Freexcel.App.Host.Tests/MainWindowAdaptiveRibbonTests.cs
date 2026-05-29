@@ -395,11 +395,20 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private RibbonFallbackWork _ribbonFallbackWork;");
         source.Should().Contain("NormalizeStaticRibbonSurfaceForSelectedTabOnce();");
         source.Should().Contain("_normalizedRibbonStaticTabs.Add(tabItem)");
-        source.Should().Contain("EnumerateRibbonStaticDescendants(root)");
-        source.Should().Contain("NormalizeRibbonGroupMetadata(root);");
+        source.Should().Contain("var surface = CaptureRibbonStaticSurface(root);");
+        source.Should().Contain("NormalizeRibbonGroupMetadata(surface);");
+        source.Should().Contain("NormalizeRibbonCommandButtons(surface);");
+        source.Should().Contain("NormalizeExistingRibbonIconText(surface);");
+        source.Should().Contain("ConfigureInsertRibbonSurface(surface);");
+        source.Should().Contain("NormalizeRibbonCommandGroups(surface);");
+        source.Should().Contain("AlignRibbonIconColumns(surface);");
+        source.Should().Contain("HideRibbonScrollBars(root, surface);");
+        source.Should().Contain("ApplyToolbarDropdownWhiteBackgrounds(surface);");
         staticNormalizer.IndexOf("_normalizedRibbonStaticTabs.Add(tabItem)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(staticNormalizer.IndexOf("PrepareRibbonTabForImmediateCompaction(tabItem)", StringComparison.Ordinal));
+        staticNormalizer.Should().Contain("CaptureRibbonStaticSurface(root)");
+        staticNormalizer.Should().NotContain("EnumerateRibbonStaticDescendants(root)");
         method.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true, scheduleFallback: true)");
         layoutChangeNormalizer.Should().Contain("if (prepareSelectedTab)");
         layoutChangeNormalizer.Should().Contain("PrepareSelectedRibbonTabForImmediateCompaction();");
@@ -621,8 +630,10 @@ public sealed class MainWindowAdaptiveRibbonTests
             adaptiveSource.IndexOf("private void SetCollapsedRibbonButtonFootprintIfNeeded", StringComparison.Ordinal) -
             adaptiveSource.IndexOf("private static void SetCollapsedRibbonButtonFootprint", StringComparison.Ordinal));
 
-        ribbonSource.Should().Contain("NormalizeRibbonGroupMetadata(root);");
-        ribbonSource.Should().Contain("EnumerateRibbonStaticDescendants(root).OfType<ButtonBase>()");
+        ribbonSource.Should().Contain("NormalizeRibbonGroupMetadata(surface);");
+        ribbonSource.Should().Contain("private sealed class RibbonStaticSurfaceSnapshot");
+        ribbonSource.Should().Contain("ButtonBases = descendants.OfType<ButtonBase>().ToList();");
+        ribbonSource.Should().Contain("StackPanels = descendants.OfType<StackPanel>().ToList();");
         ribbonSource.Should().NotContain("EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>()");
         ribbonSource.Should().NotContain("EnumerateVisualDescendants(this).OfType<ButtonBase>()");
         adaptiveSource.Should().Contain("RibbonMetadata.IsRibbonGroup(e)");
