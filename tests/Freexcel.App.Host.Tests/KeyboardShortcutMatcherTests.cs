@@ -124,8 +124,10 @@ public sealed class KeyboardShortcutMatcherTests
     [Theory]
     [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Alt, true)]
     [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Alt, true)]
+    [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt, false)]
     [InlineData(Key.V, Key.None, ModifierKeys.Control, false)]
     [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt, false)]
     [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false)]
     [InlineData(Key.C, Key.V, ModifierKeys.Control | ModifierKeys.Alt, false)]
     public void IsPasteSpecialShortcut_RecognizesExcelCtrlAltVOnly(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
