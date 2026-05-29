@@ -27,7 +27,11 @@ internal static class XlsxClosedXmlCellMapper
 
     public static string NormalizeFormulaText(string formulaText)
     {
-        return formulaText
+        var normalized = formulaText.StartsWith("=", StringComparison.Ordinal)
+            ? formulaText[1..]
+            : formulaText;
+
+        return normalized
             .Replace("_xlfn.", "", StringComparison.OrdinalIgnoreCase)
             .Replace("_xlws.", "", StringComparison.OrdinalIgnoreCase);
     }

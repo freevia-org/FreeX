@@ -39,7 +39,7 @@ public sealed partial class XlsxFileAdapter
 
                 if (cell.HasFormula)
                 {
-                    xlCell.FormulaA1 = cell.FormulaText;
+                    xlCell.FormulaA1 = XlsxClosedXmlCellMapper.NormalizeFormulaText(cell.FormulaText!);
                 }
                 else if (cell.Value is not BlankValue)
                 {

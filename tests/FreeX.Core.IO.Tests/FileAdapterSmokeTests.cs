@@ -548,6 +548,37 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxFileAdapter_Save_StripsLeadingEqualsFromFormulaText()
+    {
+        var workbook = new Workbook("FormulaPrefixXlsx");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromFormula("=A1*2"));
+
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            worksheetXml.Descendants(worksheetNs + "c")
+                .Single(cell => (string?)cell.Attribute("r") == "B1")
+                .Element(worksheetNs + "f")!
+                .Value
+                .Should().Be("A1*2");
+        }
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+
+        loaded.GetSheetAt(0).GetCell(1, 2)!.FormulaText.Should().Be("A1*2");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WatchedCells()
     {
         var workbook = new Workbook("WatchTest");
