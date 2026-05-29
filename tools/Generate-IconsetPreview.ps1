@@ -2,6 +2,7 @@ param(
     [string]$SourceInventory = "docs\TOOLBAR_ICON_DESIGN_INVENTORY.md",
     [string]$ReviewNotesPath = "docs\ICONSET_REVIEW_NOTES.json",
     [string]$OutputPath = "docs\ICONSET_PREVIEW.html",
+    [switch]$ValidateExcelLinkAvailability,
     [switch]$SkipExcelLinkValidation
 )
 
@@ -295,7 +296,7 @@ function Test-ExcelIconName {
         return $false
     }
 
-    if ($SkipExcelLinkValidation) {
+    if ($SkipExcelLinkValidation -or -not $ValidateExcelLinkAvailability) {
         return $true
     }
 
