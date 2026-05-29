@@ -86,7 +86,7 @@ public sealed partial class NativeJsonAdapter
         };
         format.IconSetThresholds.AddRange((formatDto.IconSetThresholds ?? [])
             .Where(threshold => Enum.IsDefined(threshold.Type)));
-        format.IconOverrides.AddRange(formatDto.IconOverrides ?? []);
+        format.IconOverrides.AddRange((formatDto.IconOverrides ?? []).Where(IsValidCfIconOverride));
         return format;
     }
 
@@ -127,7 +127,7 @@ public sealed partial class NativeJsonAdapter
             IconSetShowValue = format.IconSetShowValue,
             IconSetReverse = format.IconSetReverse,
             IconSetThresholds = [.. format.IconSetThresholds],
-            IconOverrides = [.. format.IconOverrides],
+            IconOverrides = [.. format.IconOverrides.Where(IsValidCfIconOverride)],
             TopBottomRank = format.TopBottomRank,
             TopBottomPercent = format.TopBottomPercent,
             TextRuleText = format.TextRuleText,
@@ -149,4 +149,7 @@ public sealed partial class NativeJsonAdapter
 
     private static CfThresholdType ValidCfThresholdTypeOrDefault(CfThresholdType value, CfThresholdType fallback) =>
         Enum.IsDefined(value) ? value : fallback;
+
+    private static bool IsValidCfIconOverride(CfIconOverride icon) =>
+        !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;
 }
