@@ -35,44 +35,12 @@ public static class SelectionRangeService
         if (usedRange is null)
             return null;
 
-        var top = activeCell.Row;
-        var bottom = activeCell.Row;
-        var left = activeCell.Col;
-        var right = activeCell.Col;
         var contentIndex = ContentIndex.CreateIfWorthwhile(sheet, usedRange.Value);
-
-        var changed = true;
-        while (changed)
-        {
-            changed = false;
-            if (top > usedRange.Value.Start.Row && RowHasContent(sheet, contentIndex, top - 1, left, right))
-            {
-                top--;
-                changed = true;
-            }
-
-            if (bottom < usedRange.Value.End.Row && RowHasContent(sheet, contentIndex, bottom + 1, left, right))
-            {
-                bottom++;
-                changed = true;
-            }
-
-            if (left > usedRange.Value.Start.Col && ColumnHasContent(sheet, contentIndex, left - 1, top, bottom))
-            {
-                left--;
-                changed = true;
-            }
-
-            if (right < usedRange.Value.End.Col && ColumnHasContent(sheet, contentIndex, right + 1, top, bottom))
-            {
-                right++;
-                changed = true;
-            }
-        }
+        var bounds = ExpandCurrentRegionBounds(sheet, contentIndex, usedRange.Value, activeCell);
 
         return new GridRange(
-            new CellAddress(activeCell.Sheet, top, left),
-            new CellAddress(activeCell.Sheet, bottom, right));
+            new CellAddress(activeCell.Sheet, bounds.Top, bounds.Left),
+            new CellAddress(activeCell.Sheet, bounds.Bottom, bounds.Right));
     }
 
     public static IReadOnlyList<GridRange> CompressAddresses(IEnumerable<CellAddress> addresses)
@@ -147,8 +115,50 @@ public static class SelectionRangeService
         return false;
     }
 
+    private static CurrentRegionBounds ExpandCurrentRegionBounds(
+        Sheet sheet,
+        ContentIndex? contentIndex,
+        GridRange usedRange,
+        CellAddress activeCell)
+    {
+        var bounds = new CurrentRegionBounds(activeCell.Row, activeCell.Row, activeCell.Col, activeCell.Col);
+
+        var changed = true;
+        while (changed)
+        {
+            changed = false;
+            if (bounds.Top > usedRange.Start.Row && RowHasContent(sheet, contentIndex, bounds.Top - 1, bounds.Left, bounds.Right))
+            {
+                bounds = bounds with { Top = bounds.Top - 1 };
+                changed = true;
+            }
+
+            if (bounds.Bottom < usedRange.End.Row && RowHasContent(sheet, contentIndex, bounds.Bottom + 1, bounds.Left, bounds.Right))
+            {
+                bounds = bounds with { Bottom = bounds.Bottom + 1 };
+                changed = true;
+            }
+
+            if (bounds.Left > usedRange.Start.Col && ColumnHasContent(sheet, contentIndex, bounds.Left - 1, bounds.Top, bounds.Bottom))
+            {
+                bounds = bounds with { Left = bounds.Left - 1 };
+                changed = true;
+            }
+
+            if (bounds.Right < usedRange.End.Col && ColumnHasContent(sheet, contentIndex, bounds.Right + 1, bounds.Top, bounds.Bottom))
+            {
+                bounds = bounds with { Right = bounds.Right + 1 };
+                changed = true;
+            }
+        }
+
+        return bounds;
+    }
+
     private static bool HasCellContent(Cell? cell) =>
         cell is not null && (cell.HasFormula || cell.Value is not BlankValue);
+
+    private readonly record struct CurrentRegionBounds(uint Top, uint Bottom, uint Left, uint Right);
 
     private sealed class ContentIndex
     {
