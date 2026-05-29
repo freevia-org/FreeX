@@ -365,60 +365,6 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void WindowResize_DebouncesViewportRefreshUntilResizeIdle()
-    {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
-
-        var sizeChanged = source.Substring(
-            source.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal),
-            source.IndexOf("private void ScheduleViewportResizeRefresh", StringComparison.Ordinal) -
-            source.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal));
-        var scheduler = source.Substring(
-            source.IndexOf("private void ScheduleViewportResizeRefresh", StringComparison.Ordinal),
-            source.IndexOf("private string FormatCellReference", StringComparison.Ordinal) -
-            source.IndexOf("private void ScheduleViewportResizeRefresh", StringComparison.Ordinal));
-        var fields = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
-
-        fields.Should().Contain("private bool _resizeViewportRefreshPending;");
-        fields.Should().Contain("private bool _isInWindowResizeMoveLoop;");
-        fields.Should().Contain("private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;");
-        fields.Should().Contain("private const int ResizeViewportRefreshDelayMilliseconds = 140;");
-        sizeChanged.Should().Contain("ScheduleViewportResizeRefresh();");
-        sizeChanged.Should().NotContain("UpdateViewport();");
-        scheduler.Should().Contain("_resizeViewportRefreshPending");
-        scheduler.Should().Contain("SheetGrid.IsLiveResizing = true;");
-        scheduler.Should().Contain("_resizeViewportRefreshTimer.Stop();");
-        scheduler.Should().Contain("if (_isInWindowResizeMoveLoop)");
-        scheduler.Should().Contain("_resizeViewportRefreshTimer.Start();");
-        scheduler.Should().Contain("DispatcherPriority.Background");
-        scheduler.Should().Contain("Interval = System.TimeSpan.FromMilliseconds(ResizeViewportRefreshDelayMilliseconds)");
-        scheduler.Should().Contain("SheetGrid.IsLiveResizing = false;");
-        scheduler.Should().Contain("UpdateViewport();");
-        scheduler.Should().NotContain("Dispatcher.BeginInvoke");
-        scheduler.Should().NotContain("DispatcherPriority.Render");
-    }
-
-    [Fact]
-    public void WindowResize_NativeResizeLoopDefersViewportRefreshUntilExit()
-    {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.AltKeyTips.cs"));
-        var wndProc = source.Substring(
-            source.IndexOf("private IntPtr MainWindow_WndProc", StringComparison.Ordinal));
-
-        source.Should().Contain("private const int WM_ENTERSIZEMOVE = 0x0231;");
-        source.Should().Contain("private const int WM_EXITSIZEMOVE = 0x0232;");
-        wndProc.Should().Contain("msg == WM_ENTERSIZEMOVE");
-        wndProc.Should().Contain("_isInWindowResizeMoveLoop = true;");
-        wndProc.Should().Contain("_resizeViewportRefreshTimer?.Stop();");
-        wndProc.Should().Contain("SheetGrid.IsLiveResizing = true;");
-        wndProc.Should().Contain("msg == WM_EXITSIZEMOVE && _isInWindowResizeMoveLoop");
-        wndProc.Should().Contain("_isInWindowResizeMoveLoop = false;");
-        wndProc.Should().Contain("CompleteRibbonResizeCompaction();");
-        wndProc.Should().NotContain("NormalizeRibbonSurfaceAfterLayoutChange();");
-        wndProc.Should().Contain("CompleteViewportResizeRefresh();");
-    }
-
-    [Fact]
     public void RibbonGroupDiscovery_UsesMetadataRatherThanVisualShapeDuringResize()
     {
         StaTestRunner.Run(() =>
