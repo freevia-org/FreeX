@@ -54,6 +54,12 @@ public sealed class StandaloneAltKeyTipTrackerTests
     [InlineData(0x2C)]
     [InlineData(0x48)]
     [InlineData(0x70)]
+    [InlineData(0x73)]
+    [InlineData(0x75)]
+    [InlineData(0x79)]
+    [InlineData(0x7A)]
+    [InlineData(0x7B)]
+    [InlineData(0x5D)]
     public void IsAltVirtualKey_RejectsNonAltSystemChordKeys(int virtualKey)
     {
         StandaloneAltKeyTipTracker.IsAltVirtualKey(virtualKey).Should().BeFalse();
