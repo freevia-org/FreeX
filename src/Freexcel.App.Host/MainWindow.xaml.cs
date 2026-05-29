@@ -106,6 +106,14 @@ public partial class MainWindow : Window
     private bool _ribbonAdaptiveStateDiffInvalidated;
     private bool _ribbonFallbackPending;
     private RibbonFallbackWork _ribbonFallbackWork;
+    private int _ribbonFallbackRequestCount;
+    private int _ribbonFallbackPostedCount;
+    private int _ribbonFallbackExecutedCount;
+    private int _ribbonFallbackForcedNormalizeCount;
+    private int _ribbonFallbackForcedCompactCount;
+    private RibbonFallbackWork _lastRibbonFallbackRequestedWork;
+    private RibbonFallbackWork _lastRibbonFallbackMergedWork;
+    private RibbonFallbackWork _lastRibbonFallbackExecutedWork;
     private bool _suppressRibbonSelectionChangedNormalization;
     private bool _ribbonResizeCompactionPendingOnExit;
     private bool _resizeViewportRefreshPending;

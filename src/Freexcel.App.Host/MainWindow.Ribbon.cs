@@ -213,24 +213,61 @@ public partial class MainWindow
         if (work == RibbonFallbackWork.None)
             return;
 
+        _ribbonFallbackRequestCount++;
+        _lastRibbonFallbackRequestedWork = work;
         _ribbonFallbackWork = MergeRibbonFallbackWork(_ribbonFallbackWork, work);
+        _lastRibbonFallbackMergedWork = _ribbonFallbackWork;
         if (_ribbonFallbackPending)
             return;
 
         _ribbonFallbackPending = true;
+        _ribbonFallbackPostedCount++;
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
                 var pendingWork = _ribbonFallbackWork;
                 _ribbonFallbackWork = RibbonFallbackWork.None;
                 _ribbonFallbackPending = false;
+                _ribbonFallbackExecutedCount++;
+                _lastRibbonFallbackExecutedWork = pendingWork;
 
                 if (pendingWork == RibbonFallbackWork.NormalizeSurface)
+                {
+                    _ribbonFallbackForcedNormalizeCount++;
                     NormalizeRibbonSurface(forceCompact: true);
+                }
                 else if (pendingWork == RibbonFallbackWork.CompactOnly)
+                {
+                    _ribbonFallbackForcedCompactCount++;
                     UpdateRibbonCompactMode(force: true);
+                }
             }),
             DispatcherPriority.Send);
+    }
+
+    internal RibbonFallbackDiagnosticsSnapshot GetRibbonFallbackDiagnosticsForTests() =>
+        new(
+            _ribbonFallbackRequestCount,
+            _ribbonFallbackPostedCount,
+            _ribbonFallbackExecutedCount,
+            _ribbonFallbackForcedNormalizeCount,
+            _ribbonFallbackForcedCompactCount,
+            _lastRibbonFallbackRequestedWork.ToString(),
+            _lastRibbonFallbackMergedWork.ToString(),
+            _lastRibbonFallbackExecutedWork.ToString(),
+            _ribbonFallbackPending,
+            _ribbonResizeCompactionPendingOnExit);
+
+    internal void ResetRibbonFallbackDiagnosticsForTests()
+    {
+        _ribbonFallbackRequestCount = 0;
+        _ribbonFallbackPostedCount = 0;
+        _ribbonFallbackExecutedCount = 0;
+        _ribbonFallbackForcedNormalizeCount = 0;
+        _ribbonFallbackForcedCompactCount = 0;
+        _lastRibbonFallbackRequestedWork = RibbonFallbackWork.None;
+        _lastRibbonFallbackMergedWork = RibbonFallbackWork.None;
+        _lastRibbonFallbackExecutedWork = RibbonFallbackWork.None;
     }
 
     private static RibbonFallbackWork MergeRibbonFallbackWork(RibbonFallbackWork current, RibbonFallbackWork requested) =>

@@ -72,6 +72,34 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void Plan_UsesSelectedTabHeaderWhenOptionalDataGroupsAreHidden()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Get & Transform Data", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Sort & Filter", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Data Tools", 300, 200, 70, 40)
+        };
+
+        RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20)
+            .States
+            .Should()
+            .Equal(
+                RibbonAdaptiveGroupState.Full,
+                RibbonAdaptiveGroupState.Collapsed,
+                RibbonAdaptiveGroupState.Collapsed);
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20, selectedTabHeader: "Data");
+
+        layout.States.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.IconOnly,
+            RibbonAdaptiveGroupState.IconOnly);
+        layout.PlannedWidth.Should().Be(250);
+        layout.RequiresMeasuredCorrection.Should().BeTrue();
+    }
+
+    [Fact]
     public void Plan_AppliesInsertRuntimeVisibilityStateBeforeMeasuringPlannedWidth()
     {
         var groups = new[]

@@ -42,6 +42,25 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
+    public void RuntimeVisibilityOverrides_UseSelectedTabHeaderWhenOptionalDataGroupsAreHidden()
+    {
+        var groupNames = new[] { "Get & Transform Data", "Sort & Filter", "Data Tools" };
+
+        RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(1120, groupNames)
+            .Should()
+            .BeEmpty("the reduced group set no longer carries the full Data tab signature");
+
+        var decisions = RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(
+            1120,
+            groupNames,
+            selectedTabHeader: "Data");
+
+        decisions.Should().ContainSingle(decision =>
+            decision.Index == Array.IndexOf(groupNames, "Data Tools") &&
+            decision.State == RibbonAdaptiveGroupState.IconOnly);
+    }
+
+    [Fact]
     public void ApplyRuntimeVisibilityStates_ContributesDataToolsIconOnlyStateToPurePlan()
     {
         var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
@@ -74,6 +93,24 @@ public sealed class RibbonAdaptivePriorityPlannerTests
         RibbonAdaptivePriorityPlanner.GetFallbackProtectedGroupIndexes(groupNames, 760)
             .Should()
             .BeEmpty();
+    }
+
+    [Fact]
+    public void FallbackProtectedGroupIndexes_UseSelectedTabHeaderWhenOptionalDataGroupsAreHidden()
+    {
+        var groupNames = new[] { "Get & Transform Data", "Sort & Filter", "Data Tools" };
+
+        RibbonAdaptivePriorityPlanner.GetFallbackProtectedGroupIndexes(groupNames, 1120)
+            .Should()
+            .BeEmpty();
+
+        RibbonAdaptivePriorityPlanner.GetFallbackProtectedGroupIndexes(groupNames, 1120, selectedTabHeader: "Data")
+            .Should()
+            .BeEquivalentTo(
+                [
+                    Array.IndexOf(groupNames, "Sort & Filter"),
+                    Array.IndexOf(groupNames, "Data Tools")
+                ]);
     }
 
     [Fact]
