@@ -213,4 +213,22 @@ public sealed class XmlNativeBagSerializerTests
             .ToString(SaveOptions.DisableFormatting)
             .Should().Be(childXml);
     }
+
+    [Fact]
+    public void ApplyToElement_PreservedChildXml_RetainsCDataSections()
+    {
+        var childXml = "<ext><formula><![CDATA[A1<B1 && C1>D1]]></formula></ext>";
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [childXml]);
+        var target = new XElement("root");
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        changed.Should().BeTrue();
+        target.Elements().Should().ContainSingle();
+        target.Elements().Single()
+            .ToString(SaveOptions.DisableFormatting)
+            .Should().Be(childXml);
+    }
 }
