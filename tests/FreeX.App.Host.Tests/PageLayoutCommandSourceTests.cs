@@ -39,6 +39,7 @@ public sealed class PageLayoutCommandSourceTests
     [InlineData("Normal", "N", "MarginNormalMenuItem_Click")]
     [InlineData("Wide", "W", "MarginWideMenuItem_Click")]
     [InlineData("Narrow", "A", "MarginNarrowMenuItem_Click")]
+    [InlineData("Custom Margins...", "C", "MarginCustomMenuItem_Click")]
     [InlineData("Portrait", "P", "OrientPortraitMenuItem_Click")]
     [InlineData("Landscape", "L", "OrientLandscapeMenuItem_Click")]
     [InlineData("Letter (8.5x11)", "L", "SizeLetter_Click")]
