@@ -208,7 +208,6 @@ public partial class MainWindow
 
         var rowHeaderWidth = SheetGrid.ActualRowHeaderWidth;
         SheetTabsLeadingSpacer.Width = rowHeaderWidth;
-        GridBottomRuleSpacer.Width = rowHeaderWidth;
 
         SheetTabsControl.Measure(new Size(double.PositiveInfinity, SheetTabsRowGrid.ActualHeight));
         AddSheetButton.Measure(new Size(double.PositiveInfinity, SheetTabsRowGrid.ActualHeight));
