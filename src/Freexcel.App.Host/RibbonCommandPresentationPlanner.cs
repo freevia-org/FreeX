@@ -68,11 +68,6 @@ public static partial class RibbonCommandPresentationPlanner
                        "stock";
     }
 
-    public static bool TryParseCompactWidths(string tag, out double fullWidth, out double compactWidth)
-    {
-        return RibbonMetadata.TryParseCompactTag(tag, out fullWidth, out compactWidth);
-    }
-
     private static bool IsInsertChartType(string name) =>
         name is "column chart" or
                 "stacked column chart" or
