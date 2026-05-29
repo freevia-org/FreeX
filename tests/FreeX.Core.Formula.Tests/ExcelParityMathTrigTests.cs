@@ -374,6 +374,21 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void SumXFunctions_IgnoreReferencedTextLogicalAndBlankPairsButIncludeZeros()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)),
+            (2, 1, new TextValue("ignored")), (2, 2, new NumberValue(20)),
+            (3, 1, new BoolValue(true)), (3, 2, new NumberValue(30)),
+            (4, 2, new NumberValue(40)),
+            (5, 1, new NumberValue(0)), (5, 2, new NumberValue(2)));
+
+        Number("=SUMXMY2(A1:A5,B1:B5)", sheet).Should().Be(85);
+        Number("=SUMX2MY2(A1:A5,B1:B5)", sheet).Should().Be(-103);
+        Number("=SUMX2PY2(A1:A5,B1:B5)", sheet).Should().Be(105);
+    }
+
+    [Fact]
     public void MathPhaseA1Functions_RangeArguments_SpillElementwise()
     {
         var sheet = MakeSheet(
