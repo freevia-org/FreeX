@@ -5967,6 +5967,65 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_DefaultsInvalidConditionalFormatTopBottomRank()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidTopBottomRankLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 4,
+                  "Operator": 0,
+                  "TopBottomRank": 0
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle()
+            .Which.TopBottomRank.Should().Be(10);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_DefaultsInvalidConditionalFormatTopBottomRank()
+    {
+        var workbook = new Workbook("CfNativeInvalidTopBottomRankSave");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.Top10,
+            Operator = CfOperator.Equal,
+            TopBottomRank = 1001
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+
+        document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0]
+            .GetProperty("TopBottomRank")
+            .GetInt32()
+            .Should().Be(10);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_MergedRegions_Survive()
     {
         var workbook = new Workbook("MergeNativeTest");

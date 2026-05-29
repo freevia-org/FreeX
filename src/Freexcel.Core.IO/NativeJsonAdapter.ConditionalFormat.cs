@@ -72,7 +72,7 @@ public sealed partial class NativeJsonAdapter
             IconSetStyle = formatDto.IconSetStyle,
             IconSetShowValue = formatDto.IconSetShowValue,
             IconSetReverse = formatDto.IconSetReverse,
-            TopBottomRank = formatDto.TopBottomRank,
+            TopBottomRank = ValidTopBottomRankOrDefault(formatDto.TopBottomRank),
             TopBottomPercent = formatDto.TopBottomPercent,
             TextRuleText = formatDto.TextRuleText,
             DateOccurringPeriod = formatDto.DateOccurringPeriod,
@@ -128,7 +128,7 @@ public sealed partial class NativeJsonAdapter
             IconSetReverse = format.IconSetReverse,
             IconSetThresholds = [.. format.IconSetThresholds.Where(threshold => Enum.IsDefined(threshold.Type))],
             IconOverrides = [.. format.IconOverrides.Where(IsValidCfIconOverride)],
-            TopBottomRank = format.TopBottomRank,
+            TopBottomRank = ValidTopBottomRankOrDefault(format.TopBottomRank),
             TopBottomPercent = format.TopBottomPercent,
             TextRuleText = format.TextRuleText,
             DateOccurringPeriod = format.DateOccurringPeriod,
@@ -155,4 +155,7 @@ public sealed partial class NativeJsonAdapter
 
     private static int? ValidDataBarLengthOrNull(int? value) =>
         value is >= 0 and <= 100 ? value : null;
+
+    private static int ValidTopBottomRankOrDefault(int value) =>
+        value is >= 1 and <= 1000 ? value : 10;
 }
