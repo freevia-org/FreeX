@@ -78,7 +78,7 @@ public sealed partial class NativeJsonAdapter
             WatchedCells = workbook.WatchedCells.Select(address =>
             {
                 var sheet = workbook.Sheets.FirstOrDefault(s => s.Id.Equals(address.Sheet));
-                return sheet is null
+                return sheet is null || !IsValidAddressOnSheet(address, sheet.Id)
                     ? null
                     : new WatchedCellDto { SheetName = sheet.Name, Address = address.ToA1() };
             }).OfType<WatchedCellDto>().ToList(),
@@ -92,7 +92,7 @@ public sealed partial class NativeJsonAdapter
                 ChangingCells = scenario.ChangingCells.Select(change =>
                 {
                     var sheet = workbook.Sheets.FirstOrDefault(s => s.Id.Equals(change.Address.Sheet));
-                    return sheet is null
+                    return sheet is null || !IsValidAddressOnSheet(change.Address, sheet.Id)
                         ? null
                         : new ScenarioCellDto
                         {
@@ -242,15 +242,15 @@ public sealed partial class NativeJsonAdapter
                     .Select(range => range.ToString())
                     .ToList(),
                 Comments = s.Comments
-                    .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
+                    .Where(pair => IsValidAddressOnSheet(pair.Key, s.Id) && pair.Value is not null)
                     .Select(ToCommentDto)
                     .ToList(),
                 ThreadedComments = s.ThreadedComments
-                    .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
+                    .Where(pair => IsValidAddressOnSheet(pair.Key, s.Id) && pair.Value is not null)
                     .Select(ToThreadedCommentDto)
                     .ToList(),
                 Hyperlinks = s.Hyperlinks
-                    .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
+                    .Where(pair => IsValidAddressOnSheet(pair.Key, s.Id) && pair.Value is not null)
                     .Select(pair => ToHyperlinkDto(s, pair))
                     .ToList(),
                 AllowEditRanges = s.AllowEditRanges
@@ -283,15 +283,17 @@ public sealed partial class NativeJsonAdapter
                     .Select(validation => ToDataValidationDto(validation, s.Id))
                     .ToList(),
                 ConditionalFormats = ToConditionalFormatDtos(s.ConditionalFormats, s.Id),
-                Cells = s.EnumerateCells().Select(entry => new CellDto
-                {
-                    Address   = entry.Address.ToA1(),
-                    Value     = NativeJsonScalarValueMapper.Serialize(entry.Cell.Value),
-                    ValueType = NativeJsonScalarValueMapper.GetValueType(entry.Cell.Value),
-                    Formula   = entry.Cell.HasFormula ? entry.Cell.FormulaText : null,
-                    IgnoreFormulaError = entry.Cell.IgnoreFormulaError,
-                    Style = FromCellStyle(workbook.GetStyle(entry.Cell.StyleId))
-                }).ToList(),
+                Cells = s.EnumerateCells()
+                    .Where(entry => IsValidAddressOnSheet(entry.Address, s.Id))
+                    .Select(entry => new CellDto
+                    {
+                        Address   = entry.Address.ToA1(),
+                        Value     = NativeJsonScalarValueMapper.Serialize(entry.Cell.Value),
+                        ValueType = NativeJsonScalarValueMapper.GetValueType(entry.Cell.Value),
+                        Formula   = entry.Cell.HasFormula ? entry.Cell.FormulaText : null,
+                        IgnoreFormulaError = entry.Cell.IgnoreFormulaError,
+                        Style = FromCellStyle(workbook.GetStyle(entry.Cell.StyleId))
+                    }).ToList(),
                 StyleOnlyCells = s.GetStyleOnlyEntries()
                     .Where(entry => NativeJsonValueSanitizer.IsValidRowIndex(entry.Key.Row) && NativeJsonValueSanitizer.IsValidColumnIndex(entry.Key.Col))
                     .Select(entry => new StyleOnlyCellDto
@@ -306,5 +308,9 @@ public sealed partial class NativeJsonAdapter
 
         JsonSerializer.Serialize(stream, dto, SaveOptions);
     }
-}
 
+    private static bool IsValidAddressOnSheet(CellAddress address, SheetId sheetId) =>
+        address.Sheet == sheetId &&
+        NativeJsonValueSanitizer.IsValidRowIndex(address.Row) &&
+        NativeJsonValueSanitizer.IsValidColumnIndex(address.Col);
+}

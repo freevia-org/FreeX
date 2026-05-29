@@ -308,6 +308,54 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_SkipsOutOfBoundsNativeJsonCellAddresses()
+    {
+        var workbook = new Workbook("InvalidAddresses");
+        var sheet = workbook.AddSheet("Sheet1");
+        var valid = new CellAddress(sheet.Id, 1, 1);
+        var invalidRow = new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 1);
+        var invalidColumn = new CellAddress(sheet.Id, 1, CellAddress.MaxCol + 1);
+
+        sheet.SetCell(valid, new TextValue("kept"));
+        sheet.SetCell(invalidRow, new TextValue("dropped"));
+        sheet.Comments[valid] = "kept";
+        sheet.Comments[invalidRow] = "dropped";
+        sheet.ThreadedComments[valid] = new ThreadedComment("kept");
+        sheet.ThreadedComments[invalidColumn] = new ThreadedComment("dropped");
+        sheet.Hyperlinks[valid] = "https://example.invalid/kept";
+        sheet.Hyperlinks[invalidColumn] = "https://example.invalid/dropped";
+        workbook.WatchedCells.Add(valid);
+        workbook.WatchedCells.Add(invalidRow);
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Mixed",
+            [
+                new ScenarioCellValue(valid, new TextValue("kept")),
+                new ScenarioCellValue(invalidColumn, new TextValue("dropped"))
+            ]));
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        using var document = JsonDocument.Parse(stream.ToArray());
+
+        var root = document.RootElement;
+        root.GetProperty("WatchedCells").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
+        root.GetProperty("Scenarios").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("ChangingCells").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
+
+        var sheetJson = root.GetProperty("Sheets").EnumerateArray().Single();
+        sheetJson.GetProperty("Cells").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
+        sheetJson.GetProperty("Comments").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
+        sheetJson.GetProperty("ThreadedComments").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
+        sheetJson.GetProperty("Hyperlinks").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
+    }
+
+    [Fact]
     public void Load_RejectsUnsupportedFutureNativeJsonSchema()
     {
         const string futureJson = """
