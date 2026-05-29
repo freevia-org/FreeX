@@ -32,6 +32,20 @@ public sealed class RibbonTooltipTests
     }
 
     [Fact]
+    public void KeyTip_OnMenuItem_NormalizesDisplayedInputGestureText()
+    {
+        RunSta(() =>
+        {
+            var menuItem = new MenuItem();
+
+            RibbonTooltip.SetKeyTip(menuItem, " H ");
+
+            RibbonTooltip.GetKeyTip(menuItem).Should().Be(" H ");
+            menuItem.InputGestureText.Should().Be("H");
+        });
+    }
+
+    [Fact]
     public void KeyTip_OnMenuItem_ClearsInputGestureTextWhenCleared()
     {
         RunSta(() =>
