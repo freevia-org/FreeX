@@ -1751,6 +1751,10 @@ public sealed class FormulaEvaluator
                 : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
             return new BoolValue(cell?.HasFormula == true);
         }
+        if (arg is FullColumnRangeRefNode fullColumnRangeRef)
+            return EvaluateIsFormula(new FunctionCallNode(node.FunctionName, [ToRangeRef(fullColumnRangeRef)]), context);
+        if (arg is FullRowRangeRefNode fullRowRangeRef)
+            return EvaluateIsFormula(new FunctionCallNode(node.FunctionName, [ToRangeRef(fullRowRangeRef)]), context);
         if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
         {
             var reference = EvaluateReferenceReturningFunction(fn, context);
@@ -1784,6 +1788,24 @@ public sealed class FormulaEvaluator
             cell = rangeRef.SheetName is not null
                 ? context.TryGetCell(rangeRef.SheetName, rangeRef.Start.Row, rangeRef.Start.ColumnNumber)
                 : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
+        }
+        else if (arg is FullColumnRangeRefNode fullColumnRangeRef)
+        {
+            var range = ToRangeRef(fullColumnRangeRef);
+            if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+                return ErrorValue.Ref;
+            cell = range.SheetName is not null
+                ? context.TryGetCell(range.SheetName, range.Start.Row, range.Start.ColumnNumber)
+                : context.TryGetCell(range.Start.Row, range.Start.ColumnNumber);
+        }
+        else if (arg is FullRowRangeRefNode fullRowRangeRef)
+        {
+            var range = ToRangeRef(fullRowRangeRef);
+            if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+                return ErrorValue.Ref;
+            cell = range.SheetName is not null
+                ? context.TryGetCell(range.SheetName, range.Start.Row, range.Start.ColumnNumber)
+                : context.TryGetCell(range.Start.Row, range.Start.ColumnNumber);
         }
         else if (arg is NamedRangeNode nm)
         {

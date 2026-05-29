@@ -40,6 +40,18 @@ public sealed class ExcelParityInformationTests
     }
 
     [Fact]
+    public void FormulaPredicates_UseTopLeftCellForFullRowAndColumnReferences()
+    {
+        var sheet = Sheet();
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "2+3");
+
+        _eval.Evaluate("=ISFORMULA(A:A)", sheet).Should().Be(new BoolValue(true));
+        _eval.Evaluate("=ISFORMULA(1:1)", sheet).Should().Be(new BoolValue(true));
+        _eval.Evaluate("=FORMULATEXT(A:A)", sheet).Should().Be(new TextValue("=2+3"));
+        _eval.Evaluate("=FORMULATEXT(1:1)", sheet).Should().Be(new TextValue("=2+3"));
+    }
+
+    [Fact]
     public void IsErrAndIsNonText_SpillOverRanges()
     {
         var sheet = Sheet();
