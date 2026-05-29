@@ -1107,14 +1107,7 @@ public static partial class BuiltInFunctions
         if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
         int n = (int)Math.Truncate(dn); int k = (int)Math.Truncate(dk);
         if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
-        if (k == 0) return new NumberValue(1);
-        if (k == 1) return new NumberValue(n);
-        if (n > 1029) return ErrorValue.Num;
-        if (k > n - k) k = n - k;
-        double result = 1;
-        for (int i = 0; i < k; i++)
-            result = result * (n - i) / (i + 1);
-        return NumberResult(Math.Round(result));
+        return CombinPositiveIntegers(n, k);
     }
 
     private static ScalarValue Combina(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1181,6 +1174,7 @@ public static partial class BuiltInFunctions
     {
         if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
         if (k > n - k) k = n - k;
+        if (k > 1029) return ErrorValue.Num;
         double result = 1;
         for (int i = 0; i < k; i++)
             result = result * (n - i) / (i + 1);

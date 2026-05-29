@@ -70,6 +70,8 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=ODD(1.2)", 3)]
     [InlineData("=ODD(-1.2)", -3)]
     [InlineData("=COMBIN(1030,1)", 1030)]
+    [InlineData("=COMBIN(1030,2)", 529935)]
+    [InlineData("=COMBIN(2000,2)", 1999000)]
     [InlineData("=COMBIN(1030,0)", 1)]
     [InlineData("=COMBINA(4,3)", 20)]
     [InlineData("=COMBINA(10,3)", 220)]
