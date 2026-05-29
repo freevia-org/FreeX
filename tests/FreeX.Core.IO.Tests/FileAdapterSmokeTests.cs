@@ -12962,6 +12962,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RemovesWorksheetSingleXmlCellsWhenModelIsEmpty()
+    {
+        var workbook = new Workbook("SingleXmlCellsEmptyModelRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSingleXmlCells(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SingleXmlCells.Should().NotBeNull();
+        loadedSheet.SingleXmlCells = new WorksheetSingleXmlCellsModel();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!.Element(worksheetNs + "singleXmlCells").Should().BeNull();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorksheetSingleXmlCells()
     {
         var workbook = new Workbook("SingleXmlCellsNativeJson");

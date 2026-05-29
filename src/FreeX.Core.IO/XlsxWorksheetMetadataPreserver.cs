@@ -595,7 +595,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             return sheet.DataConsolidation is null;
 
         if (sourceBlockName == workbookNs + "singleXmlCells")
-            return sheet.SingleXmlCells is null;
+            return sheet.SingleXmlCells is null || IsEmpty(sheet.SingleXmlCells);
 
         if (sourceBlockName == workbookNs + "smartTags")
             return sheet.SmartTags is null;
@@ -608,5 +608,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
         return false;
     }
-}
 
+    private static bool IsEmpty(WorksheetSingleXmlCellsModel model) =>
+        model.NativeAttributes.Count == 0 && model.Cells.Count == 0;
+}
