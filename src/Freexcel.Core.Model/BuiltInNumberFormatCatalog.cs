@@ -45,17 +45,20 @@ public static class BuiltInNumberFormatCatalog
         new(49, "@")
     ];
 
+    private static readonly IReadOnlyDictionary<int, string> FormatCodesById =
+        Formats.Where(format => format.NumberFormatId is { })
+            .ToDictionary(format => format.NumberFormatId!.Value, format => format.FormatCode);
+
+    private static readonly IReadOnlyDictionary<string, int?> NumberFormatIdsByCode =
+        Formats.GroupBy(format => format.FormatCode, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().NumberFormatId, StringComparer.OrdinalIgnoreCase);
+
     public static bool TryResolveFormatCode(int? numberFormatId, out string formatCode)
     {
-        var definition = Formats.FirstOrDefault(format => format.NumberFormatId == numberFormatId);
-        if (definition is null)
-        {
-            formatCode = "";
-            return false;
-        }
+        if (numberFormatId is null)
+            return ResolveGeneral(out formatCode);
 
-        formatCode = definition.FormatCode;
-        return true;
+        return FormatCodesById.TryGetValue(numberFormatId.Value, out formatCode!) || Missing(out formatCode);
     }
 
     public static int? ResolveNumberFormatIdForCode(string? formatCode) =>
@@ -70,12 +73,18 @@ public static class BuiltInNumberFormatCatalog
             return false;
 
         var trimmed = formatCode.Trim();
-        var definition = Formats.FirstOrDefault(format =>
-            string.Equals(format.FormatCode, trimmed, StringComparison.OrdinalIgnoreCase));
-        if (definition is null)
-            return false;
+        return NumberFormatIdsByCode.TryGetValue(trimmed, out numberFormatId);
+    }
 
-        numberFormatId = definition.NumberFormatId;
+    private static bool ResolveGeneral(out string formatCode)
+    {
+        formatCode = "General";
         return true;
+    }
+
+    private static bool Missing(out string formatCode)
+    {
+        formatCode = "";
+        return false;
     }
 }
