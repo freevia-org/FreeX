@@ -815,7 +815,7 @@ public static partial class BuiltInFunctions
     {
         var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
-        return new NumberValue(n * 180.0 / Math.PI);
+        return NumberResult(n * 180.0 / Math.PI);
     }
 
     private static ScalarValue Radians(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -829,7 +829,7 @@ public static partial class BuiltInFunctions
     {
         var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
-        return new NumberValue(n * Math.PI / 180.0);
+        return NumberResult(n * Math.PI / 180.0);
     }
 
     private static ScalarValue Product(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
