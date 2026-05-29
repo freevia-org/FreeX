@@ -243,11 +243,28 @@ public sealed partial class ViewportService : IViewportService
                 return;
 
             var styleOnlyId = sheet.GetStyleOnly(row, col);
+            var addr = new CellAddress(sheetId, row, col);
             if (!styleOnlyId.HasValue)
+            {
+                if (HasCellComment(sheet, addr, hasAnyCellComments))
+                {
+                    cells.Add(new DisplayCell(
+                        row,
+                        col,
+                        BlankValue.Instance,
+                        "",
+                        null,
+                        StyleId.Default,
+                        null,
+                        workbook.GetStyle(StyleId.Default),
+                        null,
+                        true));
+                }
+
                 return;
+            }
 
             var style = workbook.GetStyle(styleOnlyId.Value);
-            var addr = new CellAddress(sheetId, row, col);
             var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfContext);
             if (cfStyle != null)
                 style = MergeStyles(style, cfStyle);

@@ -254,6 +254,20 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_StripsQuotedTextMarkersForPercentagesAndErrors()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"'12%\"\t\"'#N/A\"\t\"'#FIELD!\"\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("12%"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("#N/A"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new TextValue("#FIELD!"));
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForWhitespacePaddedBooleans()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');

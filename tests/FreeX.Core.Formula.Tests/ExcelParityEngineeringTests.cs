@@ -184,6 +184,15 @@ public sealed class ExcelParityEngineeringTests
         AssertColumn(_eval.Evaluate("=CONVERT(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(100), new NumberValue(7200));
     }
 
+    [Theory]
+    [InlineData("=CONVERT(1,\"mn\",\"sec\")", 60)]
+    [InlineData("=CONVERT(1,\"min\",\"sec\")", 60)]
+    [InlineData("=CONVERT(90,\"mn\",\"hr\")", 1.5)]
+    public void Convert_MinuteUnitAliasesMatchExcelTimeUnits(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
     [Fact]
     public void Convert_MismatchedUnitArgument_ReturnsValueError()
     {

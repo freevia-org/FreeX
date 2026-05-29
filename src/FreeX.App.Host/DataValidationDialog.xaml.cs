@@ -26,10 +26,19 @@ public partial class DataValidationDialog : Window
     public string? LastValidationError { get; private set; }
     public bool ClearRequested { get; private set; }
     public bool ApplyToSameSettings { get; private set; }
-    public string? SelectionSource { get; set; }
+    public string? SelectionSource
+    {
+        get => _selectionSource;
+        set
+        {
+            _selectionSource = value;
+            UpdateVisibility();
+        }
+    }
     public DataValidationRangeSelectionRequest? RangeSelectionRequest { get; private set; }
     private readonly Guid _resultId = Guid.NewGuid();
     private readonly Action<DataValidationRangeSelectionRequest>? _requestRangeSelection;
+    private string? _selectionSource;
 
     public DataValidationDialog(Action<DataValidationRangeSelectionRequest>? requestRangeSelection = null)
     {

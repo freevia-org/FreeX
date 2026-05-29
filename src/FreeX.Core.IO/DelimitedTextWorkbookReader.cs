@@ -212,9 +212,12 @@ internal static partial class DelimitedTextWorkbookReader
             return false;
 
         var candidate = field.Value[1..];
+        var trimmedCandidate = candidate.Trim();
         if (!IsBooleanLikeText(candidate) &&
+            !TryReadError(trimmedCandidate, out _) &&
             !TryParseIsoDateTime(candidate, out _) &&
             !TryParseTime(candidate, out _) &&
+            !TryParsePercentage(trimmedCandidate, out _) &&
             !TryParseCurrency(candidate, out _) &&
             !double.TryParse(candidate, NumberStyles.Any, CultureInfo.InvariantCulture, out _))
         {

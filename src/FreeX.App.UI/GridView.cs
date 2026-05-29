@@ -147,6 +147,8 @@ public partial class GridView : FrameworkElement
     private static readonly Pen PageMarginRulerHandlePen = MakePen(MakeBrush(75, 75, 75), 1);
     private static readonly Brush PageMarginRulerHandleBrush = MakeBrush(238, 238, 238);
     private static readonly Pen SplitPanePen = MakeSplitPanePen();
+    private static readonly Brush SplitDividerHandleBrush = MakeBrush(112, 112, 112);
+    private static readonly Pen SplitDividerHandlePen = MakePen(SplitDividerHandleBrush, 1);
     private static readonly Brush SplitScrollbarTrackBrush = MakeBrush(244, 244, 244);
     private static readonly Brush SplitScrollbarThumbBrush = MakeBrush(188, 188, 188);
     private static readonly Pen SplitScrollbarPen = MakePen(MakeBrush(196, 196, 196), 1);

@@ -1052,10 +1052,10 @@
                                             <MenuItem Header="Hide Columns"           local:RibbonTooltip.KeyTip="D" Click="FormatHideColMenuItem_Click"/>
                                             <MenuItem Header="Unhide Columns"         local:RibbonTooltip.KeyTip="N" Click="FormatUnhideColMenuItem_Click"/>
                                             <Separator/>
-                                            <MenuItem Header="Rename Sheet"           local:RibbonTooltip.KeyTip="R" Click="FormatRenameSheetMenuItem_Click"/>
-                                            <MenuItem Header="Tab Color"              local:RibbonTooltip.KeyTip="T" Click="FormatTabColorMenuItem_Click"/>
+                                            <MenuItem Header="Rename Sheet"           local:RibbonTooltip.KeyTip="E" Click="FormatRenameSheetMenuItem_Click"/>
+                                            <MenuItem Header="Tab Color"              local:RibbonTooltip.KeyTip="TC" Click="FormatTabColorMenuItem_Click"/>
                                             <MenuItem Header="Hide Sheet"             local:RibbonTooltip.KeyTip="S" Click="FormatHideSheetMenuItem_Click"/>
-                                            <MenuItem Header="Unhide Sheet..."        local:RibbonTooltip.KeyTip="T" Click="FormatUnhideSheetMenuItem_Click"/>
+                                            <MenuItem Header="Unhide Sheet..."        local:RibbonTooltip.KeyTip="Y" Click="FormatUnhideSheetMenuItem_Click"/>
                                             <Separator/>
                                             <MenuItem Header="Protect Sheet..."       local:RibbonTooltip.KeyTip="P" Click="FormatProtectSheetMenuItem_Click"/>
                                             <MenuItem Header="Lock Cell"              local:RibbonTooltip.KeyTip="L" Click="FormatLockCellMenuItem_Click"/>
@@ -1775,7 +1775,7 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Comment" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
-                                        local:RibbonTooltip.Title="Comment"
+                                        local:RibbonTooltip.Title="New Comment"
                                         local:RibbonTooltip.KeyTip="C2"
                                         local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell."/>
                             </StackPanel>
@@ -2512,7 +2512,7 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Refresh All" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshAllBtn_Click"
                                         local:RibbonTooltip.Title="Refresh All"
-                                        local:RibbonTooltip.KeyTip="R"
+                                        local:RibbonTooltip.KeyTip="FA"
                                         local:RibbonTooltip.Description="Recalculate formulas and refresh FreeX-managed workbook data. External data connections and Power Query are excluded."/>
                                 <Button Content="Queries &amp; Connections" Width="128" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Queries &amp; Connections"

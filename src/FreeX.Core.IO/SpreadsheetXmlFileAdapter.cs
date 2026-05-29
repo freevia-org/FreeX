@@ -79,10 +79,24 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         document.Save(writer);
     }
 
-    internal static Workbook LoadTransformed(Stream sourceXml, Stream stylesheet)
+    public static Workbook LoadTransformed(Stream sourceXml, Stream stylesheet)
+        => LoadTransformed(sourceXml, stylesheet, XsltWorkbookTransform.DefaultMaxOutputBytes);
+
+    public static Workbook LoadTransformed(Stream sourceXml, Stream stylesheet, long maxOutputBytes)
     {
-        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(sourceXml, stylesheet);
-        return new SpreadsheetXmlFileAdapter().Load(transformed);
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(sourceXml, stylesheet, maxOutputBytes);
+        try
+        {
+            return new SpreadsheetXmlFileAdapter().Load(transformed);
+        }
+        catch (XmlException ex)
+        {
+            throw new InvalidDataException("The XSLT transform output could not be read as XML Spreadsheet 2003.", ex);
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new InvalidDataException("The XSLT transform output is not a valid Excel XML Spreadsheet 2003 workbook.", ex);
+        }
     }
 
     private static XDocument LoadDocument(Stream stream)

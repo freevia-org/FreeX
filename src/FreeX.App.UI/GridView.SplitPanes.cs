@@ -28,20 +28,16 @@ public partial class GridView
 
     private void RenderSplitDividerHandles(DrawingContext dc, SplitDividerLayout layout)
     {
-        var brush = MakeBrush(112, 112, 112);
-        var pen = new Pen(brush, 1);
-        pen.Freeze();
-
         if (layout.HorizontalY is { } horizontalY)
         {
-            dc.DrawRectangle(Brushes.White, pen, new Rect(0, horizontalY - 4, ActualRowHeaderWidth, 8));
-            dc.DrawLine(pen, new Point(8, horizontalY), new Point(ActualRowHeaderWidth - 8, horizontalY));
+            dc.DrawRectangle(Brushes.White, SplitDividerHandlePen, new Rect(0, horizontalY - 4, ActualRowHeaderWidth, 8));
+            dc.DrawLine(SplitDividerHandlePen, new Point(8, horizontalY), new Point(ActualRowHeaderWidth - 8, horizontalY));
         }
 
         if (layout.VerticalX is { } verticalX)
         {
-            dc.DrawRectangle(Brushes.White, pen, new Rect(verticalX - 4, 0, 8, EffectiveColHeaderHeight));
-            dc.DrawLine(pen, new Point(verticalX, 6), new Point(verticalX, EffectiveColHeaderHeight - 6));
+            dc.DrawRectangle(Brushes.White, SplitDividerHandlePen, new Rect(verticalX - 4, 0, 8, EffectiveColHeaderHeight));
+            dc.DrawLine(SplitDividerHandlePen, new Point(verticalX, 6), new Point(verticalX, EffectiveColHeaderHeight - 6));
         }
     }
 
@@ -75,7 +71,7 @@ public partial class GridView
             {
                 var pinnedRows = splitPanes.TopRows ?? [];
                 horizontalY = pinnedRows.Count > 0
-                    ? ColHeaderHeight + pinnedRows.Sum(row => row.Height)
+                    ? ColHeaderHeight + SumRowHeights(pinnedRows)
                     : FindRowMetric(viewport.RowMetrics, splitRow)?.TopOffset + ColHeaderHeight;
             }
 
@@ -83,12 +79,30 @@ public partial class GridView
             {
                 var pinnedColumns = splitPanes.LeftColumns ?? [];
                 verticalX = pinnedColumns.Count > 0
-                    ? CalculateRowHeaderWidth(viewport) + pinnedColumns.Sum(column => column.Width)
+                    ? CalculateRowHeaderWidth(viewport) + SumColumnWidths(pinnedColumns)
                     : FindColMetric(viewport.ColMetrics, splitColumn)?.LeftOffset + CalculateRowHeaderWidth(viewport);
             }
         }
 
         return new SplitDividerLayout(horizontalY, verticalX);
+    }
+
+    private static double SumRowHeights(IReadOnlyList<RowMetric> rows)
+    {
+        double height = 0;
+        foreach (var row in rows)
+            height += row.Height;
+
+        return height;
+    }
+
+    private static double SumColumnWidths(IReadOnlyList<ColMetric> columns)
+    {
+        double width = 0;
+        foreach (var column in columns)
+            width += column.Width;
+
+        return width;
     }
 
     private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
@@ -262,7 +276,7 @@ public partial class GridView
         IReadOnlyList<RowMetric> mainRows,
         double y)
     {
-        var topHeight = topRows.Sum(row => row.Height);
+        var topHeight = SumRowHeights(topRows);
         if (y < ColHeaderHeight)
             return null;
 
@@ -292,7 +306,7 @@ public partial class GridView
         double x,
         double ActualRowHeaderWidth)
     {
-        var leftWidth = leftColumns.Sum(column => column.Width);
+        var leftWidth = SumColumnWidths(leftColumns);
         if (x < ActualRowHeaderWidth)
             return null;
 

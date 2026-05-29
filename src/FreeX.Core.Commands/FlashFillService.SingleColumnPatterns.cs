@@ -4,6 +4,8 @@ namespace FreeX.Core.Commands;
 
 public static partial class FlashFillService
 {
+    private delegate bool NameCleaner(string source, out string name);
+
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', ';', ':', '|', '-', '_', '@', '.', '/', '\\'];
     private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "-", "/", "|"];
@@ -440,19 +442,69 @@ public static partial class FlashFillService
 
     private static Func<string, string?>? TryKnownTitleAndSuffixRemoval(IReadOnlyList<(string Source, string Expected)> examples)
     {
-        if (!examples.All(e =>
-                TryRemoveKnownNameTitle(e.Source, out var withoutTitle) &&
-                TryRemoveKnownNameSuffix(withoutTitle, out var name) &&
-                name == e.Expected))
+        if (!examples.All(e => TryRemoveKnownNameTitleAndSuffix(e.Source, out var name) && name == e.Expected))
         {
             return null;
         }
 
-        return source =>
-            TryRemoveKnownNameTitle(source, out var withoutTitle) &&
-            TryRemoveKnownNameSuffix(withoutTitle, out var name)
-                ? name
-                : null;
+        return source => TryRemoveKnownNameTitleAndSuffix(source, out var name) ? name : null;
+    }
+
+    private static Func<string, string?>? TryKnownNameCleanupDerivedPattern(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var cleaner in new NameCleaner[]
+                 {
+                     TryRemoveKnownNameTitleAndSuffix,
+                     TryRemoveKnownNameTitle,
+                     TryRemoveKnownNameSuffix
+                 })
+        {
+            var cleanedExamples = new List<(string Source, string Expected)>(examples.Count);
+            foreach (var (source, expected) in examples)
+            {
+                if (!cleaner(source, out var cleaned))
+                {
+                    cleanedExamples.Clear();
+                    break;
+                }
+
+                cleanedExamples.Add((cleaned, expected));
+            }
+
+            if (cleanedExamples.Count != examples.Count ||
+                cleanedExamples.All(e => e.Source == e.Expected))
+            {
+                continue;
+            }
+
+            var patternFn =
+                TryNameAbbreviations(cleanedExamples)
+                ?? TryThreeTokenNameInitial(cleanedExamples)
+                ?? TryThreeTokenNameDropMiddle(cleanedExamples)
+                ?? TryDelimitedPartReorder(cleanedExamples)
+                ?? TryFinalWhitespaceToken(cleanedExamples)
+                ?? TryExtractByDelimiter(cleanedExamples);
+
+            if (patternFn is null)
+                continue;
+
+            return source => cleaner(source, out var cleaned) ? patternFn(cleaned) : null;
+        }
+
+        return null;
+    }
+
+    private static bool TryRemoveKnownNameTitleAndSuffix(string source, out string name)
+    {
+        name = string.Empty;
+        if (!TryRemoveKnownNameTitle(source, out var withoutTitle) ||
+            !TryRemoveKnownNameSuffix(withoutTitle, out name))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static bool TryRemoveKnownNameTitle(string source, out string name)

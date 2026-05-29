@@ -509,6 +509,37 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void SelectionSourceSetter_RefreshesUseSelectionVisibilityForExistingListRule()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new DataValidation
+            {
+                Type = DvType.List,
+                Formula1 = "Old,Values"
+            };
+            var dialog = new DataValidationDialog(existing)
+            {
+                SelectionSource = "=Sheet1!$B$2:$B$8"
+            };
+            dialog.Show();
+            try
+            {
+                var useSelection = GetControl<Button>(dialog, "UseSelectionButton");
+                useSelection.Visibility.Should().Be(Visibility.Visible);
+
+                InvokePrivate(dialog, "UseSelectionButton_Click");
+
+                GetControl<TextBox>(dialog, "Formula1Box").Text.Should().Be("=Sheet1!$B$2:$B$8");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void SourcePickerButton_RaisesRangeSelectionRequestWithoutPreseededSelection()
     {
         StaTestRunner.Run(() =>
