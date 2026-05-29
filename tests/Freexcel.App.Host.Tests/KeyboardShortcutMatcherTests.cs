@@ -374,6 +374,24 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.Oem3)]
+    [InlineData(Key.D1)]
+    [InlineData(Key.D2)]
+    [InlineData(Key.D3)]
+    [InlineData(Key.D4)]
+    [InlineData(Key.D5)]
+    [InlineData(Key.D6)]
+    public void TryGetNumberFormatShortcut_DoesNotStealAltModifiedChords(Key key)
+    {
+        var result = KeyboardShortcutMatcher.TryGetNumberFormatShortcut(
+            key,
+            ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt,
+            out _);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData(Key.B, ModifierKeys.Control, FontToggleShortcut.Bold)]
     [InlineData(Key.D2, ModifierKeys.Control, FontToggleShortcut.Bold)]
     [InlineData(Key.I, ModifierKeys.Control, FontToggleShortcut.Italic)]
@@ -416,6 +434,19 @@ public sealed class KeyboardShortcutMatcherTests
         result.Should().Be(expected is not null);
         if (expected is not null)
             shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.D7)]
+    [InlineData(Key.OemMinus)]
+    public void TryGetBorderShortcut_DoesNotStealAltModifiedChords(Key key)
+    {
+        var result = KeyboardShortcutMatcher.TryGetBorderShortcut(
+            key,
+            ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt,
+            out _);
+
+        result.Should().BeFalse();
     }
 
     private static IEnumerable<(Key Key, ModifierKeys Modifiers)> EnumeratePhysicalChords()
