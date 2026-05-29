@@ -55,11 +55,14 @@ internal static class RibbonAdaptiveLayoutEngine
             thresholds.Add(layout.PlannedWidth);
         }
 
-        return thresholds
-            .Where(width => width > 0)
-            .Distinct()
-            .OrderBy(width => width)
-            .ToList();
+        var positiveThresholds = new List<double>(thresholds.Count);
+        foreach (var width in thresholds)
+        {
+            if (width > 0)
+                positiveThresholds.Add(width);
+        }
+
+        return positiveThresholds;
     }
 
     public static IReadOnlyList<int> GetExpandableGroupIndexes(
