@@ -1720,8 +1720,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("AutoFitPlanner.PlanColumnWidths");
         source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
         source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
-        dimensionPlanner.Should().Contain("new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
-        dimensionPlanner.Should().Contain("new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
+        dimensionPlanner.Should().Contain("if (plans.Count == 1)");
+        dimensionPlanner.Should().Contain("return createCommand(plans[0]);");
         dimensionPlanner.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
         dimensionPlanner.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
         source.Should().NotContain("return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
